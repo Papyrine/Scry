@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <!--
+    Wires the Scry source generator. A consuming project only needs to:
+      1. Set <ScryModelDll> to the path of the server model's built DLL.
+      2. Add a <ProjectReference ... ReferenceOutputAssembly="false" /> to the model project for
+         build ordering (NOT a real reference).
+    This props file surfaces the path to the generator and folds the DLL's content hash into a
+    compiler-visible property so the generator re-reads it exactly when the model changes.
+  -->
+  <ItemGroup>
+    <CompilerVisibleProperty Include="ScryModelDll" />
+    <CompilerVisibleProperty Include="ScryModelStamp" />
+  </ItemGroup>
+
+  <Target Name="ComputeScryStamp"
+          AfterTargets="ResolveProjectReferences"
+          BeforeTargets="GenerateMSBuildEditorConfig;CoreCompile"
+          Condition="'$(ScryModelDll)' != '' and Exists('$(ScryModelDll)')">
+    <GetFileHash Files="$(ScryModelDll)" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="ScryModelStamp" />
+    </GetFileHash>
+  </Target>
+
+  <Target Name="EnsureScryModel"
+          BeforeTargets="CoreCompile"
+          Condition="'$(ScryModelDll)' != '' and !Exists('$(ScryModelDll)')">
+    <Error Text="Scry: the model assembly '$(ScryModelDll)' was not found. Ensure the model project is referenced with ReferenceOutputAssembly=&quot;false&quot; so it builds first." />
+  </Target>
+</Project>

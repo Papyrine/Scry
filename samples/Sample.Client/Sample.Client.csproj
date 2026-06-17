@@ -5,33 +5,33 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
     <!-- The server model, pointed at by path. NOT referenced. -->
-    <SkryModelDll>$(MSBuildThisFileDirectory)..\Sample.Model\bin\$(Configuration)\net10.0\Sample.Model.dll</SkryModelDll>
+    <ScryModelDll>$(MSBuildThisFileDirectory)..\Sample.Model\bin\$(Configuration)\net10.0\Sample.Model.dll</ScryModelDll>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" PrivateAssets="all" />
-    <ProjectReference Include="..\..\src\Skry.Client\Skry.Client.csproj" />
+    <ProjectReference Include="..\..\src\Scry.Client\Scry.Client.csproj" />
   </ItemGroup>
 
   <!--
-    Generator wiring. When consuming the Skry.Client NuGet package this is automatic
+    Generator wiring. When consuming the Scry.Client NuGet package this is automatic
     (buildTransitive props); with project references it is set up explicitly here.
   -->
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Skry.SourceGenerator\Skry.SourceGenerator.csproj"
+    <ProjectReference Include="..\..\src\Scry.SourceGenerator\Scry.SourceGenerator.csproj"
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\Sample.Model\Sample.Model.csproj" ReferenceOutputAssembly="false" />
-    <CompilerVisibleProperty Include="SkryModelDll" />
-    <CompilerVisibleProperty Include="SkryModelStamp" />
+    <CompilerVisibleProperty Include="ScryModelDll" />
+    <CompilerVisibleProperty Include="ScryModelStamp" />
   </ItemGroup>
 
-  <Target Name="ComputeSkryStamp"
+  <Target Name="ComputeScryStamp"
           AfterTargets="ResolveProjectReferences"
           BeforeTargets="GenerateMSBuildEditorConfig;CoreCompile"
-          Condition="Exists('$(SkryModelDll)')">
-    <GetFileHash Files="$(SkryModelDll)" Algorithm="SHA256">
-      <Output TaskParameter="Hash" PropertyName="SkryModelStamp" />
+          Condition="Exists('$(ScryModelDll)')">
+    <GetFileHash Files="$(ScryModelDll)" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="ScryModelStamp" />
     </GetFileHash>
   </Target>
 </Project>

@@ -1,4 +1,4 @@
-using Skry;
+using Scry;
 
 namespace Sample.Model;
 

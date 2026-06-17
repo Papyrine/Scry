@@ -3,7 +3,7 @@
     <File Path="Directory.Packages.props" />
   </Folder>
   <Project Path="IntegrationTests.csproj" />
-  <Project Path="../src/Skry.Server/Skry.Server.csproj" />
-  <Project Path="../src/Skry.Client/Skry.Client.csproj" />
+  <Project Path="../src/Scry.Server/Scry.Server.csproj" />
+  <Project Path="../src/Scry.Client/Scry.Client.csproj" />
   <Project Path="../samples/Sample.Model/Sample.Model.csproj" />
 </Solution>

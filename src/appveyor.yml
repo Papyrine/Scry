@@ -6,9 +6,9 @@ environment:
 build_script:
 - appveyor DownloadFile https://dot.net/v1/dotnet-install.ps1
 - pwsh: ./dotnet-install.ps1 -JSonFile global.json -Architecture x64 -InstallDir 'C:\Program Files\dotnet'
-- dotnet build src/Skry.slnx --configuration Release
+- dotnet build src/Scry.slnx --configuration Release
 - dotnet build IntegrationTests/IntegrationTests.slnx --configuration Release -p:GeneratePackageOnBuild=false
-- dotnet test src/Skry.slnx --configuration Release --no-build
+- dotnet test src/Scry.slnx --configuration Release --no-build
 - dotnet test IntegrationTests/IntegrationTests.slnx --configuration Release --no-build
 on_failure:
   - ps: |

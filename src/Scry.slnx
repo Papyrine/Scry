@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="../.gitattributes" />
+    <File Path="../global.json" />
+    <File Path="../readme.md" />
+    <File Path="../.editorconfig" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+  </Folder>
+  <Project Path="Scry.Annotations/Scry.Annotations.csproj" />
+  <Project Path="Scry.Wire/Scry.Wire.csproj" />
+  <Project Path="Scry.Client/Scry.Client.csproj" />
+  <Project Path="Scry.Server/Scry.Server.csproj" />
+  <Project Path="Scry.SourceGenerator/Scry.SourceGenerator.csproj" />
+  <Project Path="Scry.SourceGenerator.Tests/Scry.SourceGenerator.Tests.csproj" />
+  <Project Path="Scry.Tests/Scry.Tests.csproj" />
+</Solution>

@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using Skry;
+using Scry;
 using Sample.Model;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,7 +9,7 @@ builder.WebHost.UseStaticWebAssets();
 
 builder.Services.AddDbContext<SampleContext>(options => options.UseSqlite("Data Source=sample.db"));
 
-builder.Services.AddSkry(options =>
+builder.Services.AddScry(options =>
 {
     options.UseModel<SampleContext>();
     options.AddPocoSource<Holiday>(_ => Holiday.Seed());
@@ -26,7 +26,7 @@ using (var scope = app.Services.CreateScope())
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 
-app.MapSkry("/api/query");
+app.MapScry("/api/query");
 app.MapFallbackToFile("index.html");
 
 app.Run();

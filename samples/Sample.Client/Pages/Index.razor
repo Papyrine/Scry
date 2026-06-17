@@ -1,11 +1,11 @@
 @page "/"
-@inject SkryQuery Query
+@inject ScryQuery Query
 
-<PageTitle>Skry Sample</PageTitle>
+<PageTitle>Scry Sample</PageTitle>
 
-<h1>Skry Sample</h1>
+<h1>Scry Sample</h1>
 <p>
-    These tables are produced by writing ordinary LINQ in the browser. Skry serializes the query,
+    These tables are produced by writing ordinary LINQ in the browser. Scry serializes the query,
     sends it to the server, executes it against EF Core, and returns only the requested shape.
 </p>
 
@@ -76,12 +76,12 @@ else
                 .Where(e => e.Active)
                 .OrderBy(e => e.Name)
                 .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
-                .ToSkryListAsync();
+                .ToScryListAsync();
 
             regions = await Query.Order
                 .GroupBy(o => o.Region)
                 .Select(g => new RegionSummary(g.Key, g.Sum(x => x.Amount), g.Count()))
-                .ToSkryListAsync();
+                .ToScryListAsync();
         }
         catch (Exception exception)
         {
