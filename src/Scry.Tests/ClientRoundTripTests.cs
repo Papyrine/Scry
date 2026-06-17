@@ -1,4 +1,3 @@
-using Scry;
 using Scry.Client;
 
 namespace Scry.Tests;

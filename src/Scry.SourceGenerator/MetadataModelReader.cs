@@ -1,7 +1,3 @@
-using System.Reflection;
-
-namespace Scry.SourceGenerator;
-
 /// <summary>
 /// Reads the allow-listed query surface from a server model assembly using
 /// <see cref="MetadataReader"/> — metadata only, never loading or executing the assembly.

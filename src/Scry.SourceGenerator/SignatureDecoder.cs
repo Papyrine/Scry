@@ -1,7 +1,3 @@
-using System.Reflection.Metadata.Ecma335;
-
-namespace Scry.SourceGenerator;
-
 /// <summary>A minimal decoded representation of a property's type, enough to classify and emit it.</summary>
 abstract record DecodedType;
 
