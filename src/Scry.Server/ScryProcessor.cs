@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Scry.Wire;
 
 namespace Scry;
 

@@ -1,6 +1,3 @@
-using System.Net.Http;
-using Microsoft.Extensions.DependencyInjection;
-
 namespace Scry.Client;
 
 /// <summary>Registration helpers for the Scry client.</summary>

@@ -1,8 +1,3 @@
-using System.Globalization;
-using System.Linq.Expressions;
-using System.Reflection;
-using Scry.Wire;
-
 namespace Scry;
 
 /// <summary>
@@ -163,7 +158,7 @@ sealed class ExpressionBuilder(ScrySchema schema)
         // Infer the constant's type from the typed (non-constant) operand.
         Expression left;
         Expression right;
-        if (binary.Left is ConstExpr && binary.Right is not ConstExpr)
+        if (binary is {Left: ConstExpr, Right: not ConstExpr})
         {
             right = Build(binary.Right, parameter, null);
             left = Build(binary.Left, parameter, right.Type);
@@ -328,7 +323,7 @@ sealed class ExpressionBuilder(ScrySchema schema)
             ClrTypeTag.Decimal => typeof(decimal),
             ClrTypeTag.Double => typeof(double),
             ClrTypeTag.DateTime => typeof(DateTime),
-            ClrTypeTag.DateOnly => typeof(DateOnly),
+            ClrTypeTag.DateOnly => typeof(Date),
             ClrTypeTag.Guid => typeof(Guid),
             _ => typeof(string)
         };
@@ -376,14 +371,14 @@ sealed class ExpressionBuilder(ScrySchema schema)
             return DateTime.Parse(value, culture, DateTimeStyles.RoundtripKind);
         }
 
-        if (underlying == typeof(DateOnly))
+        if (underlying == typeof(Date))
         {
-            return DateOnly.Parse(value, culture);
+            return Date.Parse(value, culture);
         }
 
-        if (underlying == typeof(TimeOnly))
+        if (underlying == typeof(Time))
         {
-            return TimeOnly.Parse(value, culture);
+            return Time.Parse(value, culture);
         }
 
         if (underlying == typeof(DateTimeOffset))

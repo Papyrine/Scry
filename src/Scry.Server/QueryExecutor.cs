@@ -1,7 +1,5 @@
-using System.Linq.Expressions;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using Scry.Wire;
 
 namespace Scry;
 
@@ -124,7 +122,7 @@ sealed class QueryExecutor(ScrySchema schema, ScryOptions options)
         return (ApplySelect(query, plan.Selector), plan);
     }
 
-    IQueryable ApplyPolicy(IQueryable query, ScrySource source, DbContext db, IServiceProvider services)
+    static IQueryable ApplyPolicy(IQueryable query, ScrySource source, DbContext db, IServiceProvider services)
     {
         if (source.PolicyType is not { } policyType)
         {

@@ -1,8 +1,3 @@
-using System.Globalization;
-using System.Linq.Expressions;
-using System.Reflection;
-using Scry.Wire;
-
 namespace Scry.Client;
 
 /// <summary>
@@ -166,37 +161,41 @@ sealed class QueryTranslator
 
     Expr TranslateExpr(Expression expression, ParameterExpression root)
     {
-        switch (expression)
+        while (true)
         {
-            case UnaryExpression { NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked } convert:
-                return TranslateExpr(convert.Operand, root);
+            switch (expression)
+            {
+                case UnaryExpression {NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked} convert:
+                    expression = convert.Operand;
+                    continue;
 
-            case UnaryExpression { NodeType: ExpressionType.Not } not:
-                return new UnaryExpr(UnaryOp.Not, TranslateExpr(not.Operand, root));
+                case UnaryExpression {NodeType: ExpressionType.Not} not:
+                    return new UnaryExpr(UnaryOp.Not, TranslateExpr(not.Operand, root));
 
-            case UnaryExpression { NodeType: ExpressionType.Negate } negate:
-                return new UnaryExpr(UnaryOp.Negate, TranslateExpr(negate.Operand, root));
+                case UnaryExpression {NodeType: ExpressionType.Negate} negate:
+                    return new UnaryExpr(UnaryOp.Negate, TranslateExpr(negate.Operand, root));
 
-            case BinaryExpression binary:
-                return new BinaryExpr(MapBinary(binary.NodeType), TranslateExpr(binary.Left, root), TranslateExpr(binary.Right, root));
+                case BinaryExpression binary:
+                    return new BinaryExpr(MapBinary(binary.NodeType), TranslateExpr(binary.Left, root), TranslateExpr(binary.Right, root));
 
-            case MemberExpression member when IsDatePart(member, out var function):
-                return new CallExpr(function, TranslateExpr(member.Expression!, root), []);
+                case MemberExpression member when IsDatePart(member, out var function):
+                    return new CallExpr(function, TranslateExpr(member.Expression!, root), []);
 
-            case MemberExpression member when IsRooted(member, root):
-                return new MemberExpr(MemberPath(member));
+                case MemberExpression member when IsRooted(member, root):
+                    return new MemberExpr(MemberPath(member));
 
-            case MemberExpression member:
-                return ConstantOf(Evaluate(member));
+                case MemberExpression member:
+                    return ConstantOf(Evaluate(member));
 
-            case ConstantExpression constant:
-                return ConstantOf(constant.Value);
+                case ConstantExpression constant:
+                    return ConstantOf(constant.Value);
 
-            case MethodCallExpression call:
-                return TranslateMethod(call, root);
+                case MethodCallExpression call:
+                    return TranslateMethod(call, root);
 
-            default:
-                throw Unsupported(expression);
+                default:
+                    throw Unsupported(expression);
+            }
         }
     }
 
@@ -228,7 +227,7 @@ sealed class QueryTranslator
     static bool IsDatePart(MemberExpression member, out KnownFunction function)
     {
         var declaring = member.Member.DeclaringType;
-        if (member.Expression is not null && (declaring == typeof(DateTime) || declaring == typeof(DateOnly)))
+        if (member.Expression is not null && (declaring == typeof(DateTime) || declaring == typeof(Date)))
         {
             switch (member.Member.Name)
             {
@@ -343,7 +342,7 @@ sealed class QueryTranslator
             double number => new(number.ToString(culture), ClrTypeTag.Double),
             float number => new(number.ToString(culture), ClrTypeTag.Double),
             DateTime date => new(date.ToString("o", culture), ClrTypeTag.DateTime),
-            DateOnly date => new(date.ToString("yyyy-MM-dd", culture), ClrTypeTag.DateOnly),
+            Date date => new(date.ToString("yyyy-MM-dd", culture), ClrTypeTag.DateOnly),
             Guid guid => new(guid.ToString(), ClrTypeTag.Guid),
             _ => new(Convert.ToString(value, culture) ?? "", ClrTypeTag.String)
         };

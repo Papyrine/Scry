@@ -1,15 +1,10 @@
-using System.Net.Http;
-using System.Net.Http.Json;
-using System.Text;
-using Scry.Wire;
-
 namespace Scry.Client;
 
 /// <summary>
 /// The client entry point. Exposes allow-listed sources as <see cref="IQueryable{T}"/> and sends
 /// translated queries to the server via a pluggable transport.
 /// </summary>
-public sealed class ScryClient(Func<QueryRequest, CancellationToken, Task<QueryResponse>> transport)
+public sealed class ScryClient(Func<QueryRequest, Cancel, Task<QueryResponse>> transport)
 {
     /// <summary>Creates a client that POSTs queries to an HTTP endpoint.</summary>
     public static ScryClient ForHttp(HttpClient http, string endpoint) =>
@@ -19,20 +14,20 @@ public sealed class ScryClient(Func<QueryRequest, CancellationToken, Task<QueryR
     public IQueryable<T> Source<T>(string name) =>
         new ScryQueryable<T>(new ScryQueryProvider(this, name));
 
-    internal Task<QueryResponse> SendAsync(QueryRequest request, CancellationToken token) =>
-        transport(request, token);
+    internal Task<QueryResponse> SendAsync(QueryRequest request, Cancel cancel) =>
+        transport(request, cancel);
 
     static async Task<QueryResponse> PostAsync(
         HttpClient http,
         string endpoint,
         QueryRequest request,
-        CancellationToken token)
+        Cancel cancel)
     {
         var json = ScryJson.Serialize(request);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
-        using var message = await http.PostAsync(endpoint, content, token);
+        using var message = await http.PostAsync(endpoint, content, cancel);
 
-        var body = await message.Content.ReadAsStringAsync(token);
+        var body = await message.Content.ReadAsStringAsync(cancel);
         if (!message.IsSuccessStatusCode)
         {
             throw new ScryRequestException((int)message.StatusCode, body);

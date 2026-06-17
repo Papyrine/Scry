@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Scry.Wire;
 
 namespace Scry;
 
@@ -62,11 +61,11 @@ public static class ScryServiceExtensions
         }
     }
 
-    static async Task WriteError(HttpContext context, int status, string message)
+    static Task WriteError(HttpContext context, int status, string message)
     {
         context.Response.StatusCode = status;
         context.Response.ContentType = "application/json";
-        await context.Response.WriteAsJsonAsync(new ScryError(message), context.RequestAborted);
+        return context.Response.WriteAsJsonAsync(new ScryError(message), context.RequestAborted);
     }
 
     sealed record ScryError(string Error);

@@ -1,5 +1,3 @@
-using Scry.Wire;
-
 namespace Scry;
 
 /// <summary>
