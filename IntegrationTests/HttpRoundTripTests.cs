@@ -7,8 +7,8 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
-using Pneumatic;
-using Pneumatic.Client;
+using Skry;
+using Skry.Client;
 
 namespace IntegrationTests;
 
@@ -45,7 +45,7 @@ public class HttpRoundTripTests
 {
     WebApplication app = null!;
     HttpClient http = null!;
-    PneumaticClient client = null!;
+    SkryClient client = null!;
     string dbPath = null!;
 
     record EmployeeRow(string Name, Status Status, string? Manager, string Department);
@@ -57,12 +57,12 @@ public class HttpRoundTripTests
     [OneTimeSetUp]
     public async Task StartServer()
     {
-        dbPath = Path.Combine(Path.GetTempPath(), $"pneumatic_it_{Guid.NewGuid():N}.db");
+        dbPath = Path.Combine(Path.GetTempPath(), $"skry_it_{Guid.NewGuid():N}.db");
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Services.AddDbContext<Sample.Model.SampleContext>(options => options.UseSqlite($"Data Source={dbPath}"));
-        builder.Services.AddPneumatic(options =>
+        builder.Services.AddSkry(options =>
         {
             options.UseModel<Sample.Model.SampleContext>();
             options.AddPocoSource<Sample.Model.Holiday>(_ => Sample.Model.Holiday.Seed());
@@ -75,11 +75,11 @@ public class HttpRoundTripTests
             Sample.Model.SampleContext.Initialize(scope.ServiceProvider.GetRequiredService<Sample.Model.SampleContext>());
         }
 
-        app.MapPneumatic("/api/query");
+        app.MapSkry("/api/query");
         await app.StartAsync();
 
         http = app.GetTestClient();
-        client = PneumaticClient.ForHttp(http, "/api/query");
+        client = SkryClient.ForHttp(http, "/api/query");
     }
 
     [OneTimeTearDown]
@@ -111,7 +111,7 @@ public class HttpRoundTripTests
             .Where(e => e.Active)
             .OrderBy(e => e.Name)
             .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
-            .ToPneumaticListAsync();
+            .ToSkryListAsync();
 
         Assert.That(rows.Select(_ => _.Name), Is.EqualTo(activeEmployeeNames));
         Assert.That(rows[0].Manager, Is.EqualTo("Alice"));
@@ -125,7 +125,7 @@ public class HttpRoundTripTests
         var regions = await client.Source<Order>("Order")
             .GroupBy(o => o.Region)
             .Select(g => new RegionSummary(g.Key, g.Sum(x => x.Amount), g.Count()))
-            .ToPneumaticListAsync();
+            .ToSkryListAsync();
 
         var north = regions.Single(_ => _.Region == "North");
         Assert.That(north.Total, Is.EqualTo(350m));
@@ -137,7 +137,7 @@ public class HttpRoundTripTests
     {
         var count = await client.Source<Employee>("Employee")
             .Where(e => e.Active)
-            .CountPneumaticAsync();
+            .CountSkryAsync();
 
         Assert.That(count, Is.EqualTo(3));
     }
@@ -161,7 +161,7 @@ public class HttpRoundTripTests
         // The client cannot even name Salary (no such member on the client model), so attempts to
         // reach hidden data must come as raw requests, which the server rejects (see the 400 test).
         // Here we confirm an unknown root is rejected through the typed client path.
-        Assert.ThrowsAsync<PneumaticRequestException>(() =>
-            client.Source<Employee>("Secret").ToPneumaticListAsync());
+        Assert.ThrowsAsync<SkryRequestException>(() =>
+            client.Source<Employee>("Secret").ToSkryListAsync());
     }
 }

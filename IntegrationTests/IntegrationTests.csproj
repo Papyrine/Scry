@@ -12,8 +12,8 @@
     <PackageReference Include="NUnit3TestAdapter" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
-    <ProjectReference Include="..\src\Pneumatic.Server\Pneumatic.Server.csproj" />
-    <ProjectReference Include="..\src\Pneumatic.Client\Pneumatic.Client.csproj" />
+    <ProjectReference Include="..\src\Skry.Server\Skry.Server.csproj" />
+    <ProjectReference Include="..\src\Skry.Client\Skry.Client.csproj" />
     <ProjectReference Include="..\samples\Sample.Model\Sample.Model.csproj" />
   </ItemGroup>
 </Project>

@@ -1,6 +1,6 @@
 End User License Agreement
 
-This Open Source Maintenance Fee Agreement ("Agreement") is a legal agreement between you ("User") and Papyrine ("Project") for the use of Pneumatic ("Software"), an open source software project licensed under the MIT ("OSI License"), an OSI-approved open source license. Project offers a Binary Release of the Software to Users in exchange for a maintenance fee ("Fee"). "Binary Release" refers to pre-compiled executable versions of the Software provided by Project. By accessing or using the Binary Release, User agrees to be bound by the terms of this Agreement.
+This Open Source Maintenance Fee Agreement ("Agreement") is a legal agreement between you ("User") and Papyrine ("Project") for the use of Skry ("Software"), an open source software project licensed under the MIT ("OSI License"), an OSI-approved open source license. Project offers a Binary Release of the Software to Users in exchange for a maintenance fee ("Fee"). "Binary Release" refers to pre-compiled executable versions of the Software provided by Project. By accessing or using the Binary Release, User agrees to be bound by the terms of this Agreement.
 
 1. Applicability
 

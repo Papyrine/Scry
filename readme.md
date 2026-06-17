@@ -1,10 +1,10 @@
-# Pneumatic
+# Skry
 
 Type-safe, serializable LINQ from a client to a server-side EF Core model.
 
 When a UI evolves quickly, server-side querying usually forces a choice between hand-coding a
 bespoke endpoint and contract per use case, or adopting GraphQL/OData and shaping queries with a
-separate query language. Pneumatic removes that trade-off while keeping everything in C# and
+separate query language. Skry removes that trade-off while keeping everything in C# and
 strongly typed end to end:
 
 1. The EF Core model lives **server-side**. The client never references it — it is *pointed at by path*.
@@ -23,11 +23,11 @@ server stays in full control of which types, properties, shapes, and rows can ev
 
 | Package | Purpose |
 | --- | --- |
-| `Pneumatic.Annotations` | Allow-list attributes applied to the server model. |
-| `Pneumatic.Wire` | The serializable query AST shared by client and server. |
-| `Pneumatic.Client` | Client-side `IQueryable` provider (no EF dependency). |
-| `Pneumatic.Server` | Server-side validation + execution against EF Core. |
-| `Pneumatic.SourceGenerator` | Generates client query DTOs from the server model. |
+| `Skry.Annotations` | Allow-list attributes applied to the server model. |
+| `Skry.Wire` | The serializable query AST shared by client and server. |
+| `Skry.Client` | Client-side `IQueryable` provider (no EF dependency). |
+| `Skry.Server` | Server-side validation + execution against EF Core. |
+| `Skry.SourceGenerator` | Generates client query DTOs from the server model. |
 
 ## License
 

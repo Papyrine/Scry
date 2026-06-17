@@ -8,7 +8,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" />
-    <ProjectReference Include="..\..\src\Pneumatic.Server\Pneumatic.Server.csproj" />
+    <ProjectReference Include="..\..\src\Skry.Server\Skry.Server.csproj" />
     <ProjectReference Include="..\Sample.Model\Sample.Model.csproj" />
     <ProjectReference Include="..\Sample.Client\Sample.Client.csproj" />
   </ItemGroup>

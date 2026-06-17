@@ -1,11 +1,11 @@
 @page "/"
-@inject PneumaticQuery Query
+@inject SkryQuery Query
 
-<PageTitle>Pneumatic Sample</PageTitle>
+<PageTitle>Skry Sample</PageTitle>
 
-<h1>Pneumatic Sample</h1>
+<h1>Skry Sample</h1>
 <p>
-    These tables are produced by writing ordinary LINQ in the browser. Pneumatic serializes the query,
+    These tables are produced by writing ordinary LINQ in the browser. Skry serializes the query,
     sends it to the server, executes it against EF Core, and returns only the requested shape.
 </p>
 
@@ -76,12 +76,12 @@ else
                 .Where(e => e.Active)
                 .OrderBy(e => e.Name)
                 .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
-                .ToPneumaticListAsync();
+                .ToSkryListAsync();
 
             regions = await Query.Order
                 .GroupBy(o => o.Region)
                 .Select(g => new RegionSummary(g.Key, g.Sum(x => x.Amount), g.Count()))
-                .ToPneumaticListAsync();
+                .ToSkryListAsync();
         }
         catch (Exception exception)
         {
