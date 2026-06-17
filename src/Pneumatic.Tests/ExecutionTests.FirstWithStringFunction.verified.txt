@@ -1,0 +1,12 @@
+﻿{
+  "version": 1,
+  "kind": "Single",
+  "payload": {
+    "id": 4,
+    "name": "Bob",
+    "status": "PartTime",
+    "active": false,
+    "managerId": 1,
+    "departmentId": 2
+  }
+}

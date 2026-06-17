@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <IsPackable>false</IsPackable>
+    <!-- Track the package version so each release ships a distinct assembly identity;
+         otherwise Rider's analyzer host caches a frozen generator and serves stale
+         generated code after a consumer upgrades. Safe for a Roslyn component (never
+         referenced at runtime). -->
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <!-- RS1035: the generator deliberately reads the model DLL from disk (the path-not-reference
+         design). RS1041: target-framework guidance for analyzers. -->
+    <NoWarn>$(NoWarn);RS1041;RS1035</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
+    <!-- System.Reflection.Metadata / System.Collections.Immutable flow transitively from
+         Microsoft.CodeAnalysis and are always provided by the analyzer host at runtime. -->
+  </ItemGroup>
+</Project>

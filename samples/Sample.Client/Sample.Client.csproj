@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <!-- The server model, pointed at by path. NOT referenced. -->
+    <PneumaticModelDll>$(MSBuildThisFileDirectory)..\Sample.Model\bin\$(Configuration)\net10.0\Sample.Model.dll</PneumaticModelDll>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" PrivateAssets="all" />
+    <ProjectReference Include="..\..\src\Pneumatic.Client\Pneumatic.Client.csproj" />
+  </ItemGroup>
+
+  <!--
+    Generator wiring. When consuming the Pneumatic.Client NuGet package this is automatic
+    (buildTransitive props); with project references it is set up explicitly here.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Pneumatic.SourceGenerator\Pneumatic.SourceGenerator.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Sample.Model\Sample.Model.csproj" ReferenceOutputAssembly="false" />
+    <CompilerVisibleProperty Include="PneumaticModelDll" />
+    <CompilerVisibleProperty Include="PneumaticModelStamp" />
+  </ItemGroup>
+
+  <Target Name="ComputePneumaticStamp"
+          AfterTargets="ResolveProjectReferences"
+          BeforeTargets="GenerateMSBuildEditorConfig;CoreCompile"
+          Condition="Exists('$(PneumaticModelDll)')">
+    <GetFileHash Files="$(PneumaticModelDll)" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="PneumaticModelStamp" />
+    </GetFileHash>
+  </Target>
+</Project>

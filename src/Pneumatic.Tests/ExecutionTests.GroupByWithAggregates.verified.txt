@@ -1,0 +1,16 @@
+﻿{
+  "version": 1,
+  "kind": "List",
+  "payload": [
+    {
+      "region": "North",
+      "total": 350.0,
+      "count": 2
+    },
+    {
+      "region": "South",
+      "total": 75.0,
+      "count": 1
+    }
+  ]
+}

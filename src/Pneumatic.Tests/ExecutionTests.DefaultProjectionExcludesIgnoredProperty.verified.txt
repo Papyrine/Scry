@@ -1,0 +1,38 @@
+﻿{
+  "version": 1,
+  "kind": "List",
+  "payload": [
+    {
+      "id": 3,
+      "name": "Aaron",
+      "status": "FullTime",
+      "active": true,
+      "managerId": 1,
+      "departmentId": 1
+    },
+    {
+      "id": 1,
+      "name": "Alice",
+      "status": "FullTime",
+      "active": true,
+      "managerId": null,
+      "departmentId": 1
+    },
+    {
+      "id": 4,
+      "name": "Bob",
+      "status": "PartTime",
+      "active": false,
+      "managerId": 1,
+      "departmentId": 2
+    },
+    {
+      "id": 2,
+      "name": "Carol",
+      "status": "Contractor",
+      "active": true,
+      "managerId": null,
+      "departmentId": 2
+    }
+  ]
+}

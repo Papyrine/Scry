@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Packages.props" />
+  </Folder>
+  <Project Path="IntegrationTests.csproj" />
+  <Project Path="../src/Pneumatic.Server/Pneumatic.Server.csproj" />
+  <Project Path="../src/Pneumatic.Client/Pneumatic.Client.csproj" />
+  <Project Path="../samples/Sample.Model/Sample.Model.csproj" />
+</Solution>

@@ -1,0 +1,20 @@
+﻿{
+  "version": 1,
+  "kind": "List",
+  "payload": [
+    {
+      "name": "Aaron",
+      "managerName": "Alice",
+      "department": {
+        "name": "Engineering"
+      }
+    },
+    {
+      "name": "Alice",
+      "managerName": null,
+      "department": {
+        "name": "Engineering"
+      }
+    }
+  ]
+}

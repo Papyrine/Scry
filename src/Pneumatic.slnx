@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="../.gitattributes" />
+    <File Path="../global.json" />
+    <File Path="../readme.md" />
+    <File Path="../.editorconfig" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+  </Folder>
+  <Project Path="Pneumatic.Annotations/Pneumatic.Annotations.csproj" />
+  <Project Path="Pneumatic.Wire/Pneumatic.Wire.csproj" />
+  <Project Path="Pneumatic.Client/Pneumatic.Client.csproj" />
+  <Project Path="Pneumatic.Server/Pneumatic.Server.csproj" />
+  <Project Path="Pneumatic.SourceGenerator/Pneumatic.SourceGenerator.csproj" />
+  <Project Path="Pneumatic.SourceGenerator.Tests/Pneumatic.SourceGenerator.Tests.csproj" />
+  <Project Path="Pneumatic.Tests/Pneumatic.Tests.csproj" />
+</Solution>

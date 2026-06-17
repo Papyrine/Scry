@@ -1,0 +1,15 @@
+﻿{
+  "version": 1,
+  "kind": "List",
+  "payload": [
+    {
+      "name": "New Year"
+    },
+    {
+      "name": "Workers Day"
+    },
+    {
+      "name": "Christmas"
+    }
+  ]
+}

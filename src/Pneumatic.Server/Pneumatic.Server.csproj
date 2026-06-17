@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <PackageReadmeFile>nuget-readme.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Polyfill" PrivateAssets="all" />
+    <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
+    <PackageReference Include="SponsorCheck" PrivateAssets="all" />
+    <ProjectReference Include="..\Pneumatic.Wire\Pneumatic.Wire.csproj" />
+    <ProjectReference Include="..\Pneumatic.Annotations\Pneumatic.Annotations.csproj" />
+    <None Include="nuget-readme.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

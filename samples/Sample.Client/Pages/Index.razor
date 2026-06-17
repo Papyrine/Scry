@@ -1,0 +1,91 @@
+@page "/"
+@inject PneumaticQuery Query
+
+<PageTitle>Pneumatic Sample</PageTitle>
+
+<h1>Pneumatic Sample</h1>
+<p>
+    These tables are produced by writing ordinary LINQ in the browser. Pneumatic serializes the query,
+    sends it to the server, executes it against EF Core, and returns only the requested shape.
+</p>
+
+@if (error is not null)
+{
+    <p class="error" role="alert">@error</p>
+}
+
+<h2>Active employees</h2>
+@if (employees is null)
+{
+    <p>Loading…</p>
+}
+else
+{
+    <table>
+        <thead>
+            <tr><th>Name</th><th>Status</th><th>Manager</th><th>Department</th></tr>
+        </thead>
+        <tbody>
+        @foreach (var row in employees)
+        {
+            <tr>
+                <td>@row.Name</td>
+                <td>@row.Status</td>
+                <td>@(row.Manager ?? "—")</td>
+                <td>@row.Department</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+<h2>Orders by region</h2>
+@if (regions is null)
+{
+    <p>Loading…</p>
+}
+else
+{
+    <table>
+        <thead>
+            <tr><th>Region</th><th>Total</th><th>Orders</th></tr>
+        </thead>
+        <tbody>
+        @foreach (var region in regions)
+        {
+            <tr><td>@region.Region</td><td>@region.Total</td><td>@region.Count</td></tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code {
+    record EmployeeRow(string Name, Status Status, string? Manager, string Department);
+
+    record RegionSummary(string Region, decimal Total, int Count);
+
+    List<EmployeeRow>? employees;
+    List<RegionSummary>? regions;
+    string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            employees = await Query.Employee
+                .Where(e => e.Active)
+                .OrderBy(e => e.Name)
+                .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
+                .ToPneumaticListAsync();
+
+            regions = await Query.Order
+                .GroupBy(o => o.Region)
+                .Select(g => new RegionSummary(g.Key, g.Sum(x => x.Amount), g.Count()))
+                .ToPneumaticListAsync();
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+        }
+    }
+}

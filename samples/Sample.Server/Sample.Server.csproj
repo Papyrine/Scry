@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" />
+    <ProjectReference Include="..\..\src\Pneumatic.Server\Pneumatic.Server.csproj" />
+    <ProjectReference Include="..\Sample.Model\Sample.Model.csproj" />
+    <ProjectReference Include="..\Sample.Client\Sample.Client.csproj" />
+  </ItemGroup>
+</Project>

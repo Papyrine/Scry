@@ -1,0 +1,15 @@
+﻿{
+  "version": 1,
+  "kind": "List",
+  "payload": [
+    {
+      "name": "Aaron"
+    },
+    {
+      "name": "Alice"
+    },
+    {
+      "name": "Carol"
+    }
+  ]
+}

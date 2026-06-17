@@ -1,0 +1,10 @@
+<Project>
+  <!--
+    ProjectDefaults sets AssemblyOriginatorKeyFile to $(SolutionDir)key.snk, which breaks when the
+    src projects are built as dependencies of another solution (samples, IntegrationTests). Pin the
+    key to src/key.snk absolutely. This file is imported after package props, so it wins.
+  -->
+  <PropertyGroup Condition="'$(SignAssembly)' == 'true'">
+    <AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)key.snk</AssemblyOriginatorKeyFile>
+  </PropertyGroup>
+</Project>

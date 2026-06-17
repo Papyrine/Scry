@@ -1,0 +1,1 @@
+﻿{"version":1,"root":"Employees","pipeline":[{"$type":"where","predicate":{"$type":"unary","op":"Not","operand":{"$type":"call","function":"StringIsNullOrEmpty","target":{"$type":"member","path":["Name"]},"arguments":[]}}},{"$type":"first","orDefault":true,"predicate":{"$type":"member","path":["Active"]}}]}

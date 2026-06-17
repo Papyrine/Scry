@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <PackageReadmeFile>nuget-readme.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
+    <None Include="nuget-readme.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

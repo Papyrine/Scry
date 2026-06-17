@@ -1,0 +1,11 @@
+global using System;
+global using System.Collections;
+global using System.Collections.Generic;
+global using System.Collections.Immutable;
+global using System.IO;
+global using System.Linq;
+global using System.Reflection.Metadata;
+global using System.Reflection.PortableExecutable;
+global using System.Text;
+global using Microsoft.CodeAnalysis;
+global using Microsoft.CodeAnalysis.Diagnostics;
