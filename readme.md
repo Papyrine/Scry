@@ -32,3 +32,8 @@ server stays in full control of which types, properties, shapes, and rows can ev
 ## License
 
 Source is MIT. Binary releases are subject to the [Open Source Maintenance Fee](OsmfEula.txt).
+
+
+## Icon 
+
+Crystal Ball by https://thenounproject.com/creator/akagami.telu23
