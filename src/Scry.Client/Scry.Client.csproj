@@ -19,4 +19,12 @@
     <None Include="buildTransitive\Scry.Client.props" Pack="true" PackagePath="build\" />
     <None Include="nuget-readme.md" Pack="true" PackagePath="\" />
   </ItemGroup>
+  <!-- The generator multi-targets (netstandard2.0;net10.0) and we pack both flavours, but the
+       ProjectReference above only forces the net10.0 inner build (TFM negotiation picks the flavour
+       compatible with this net10.0 project). Build the generator's outer build so the netstandard2.0
+       DLL exists before pack — regardless of solution build vs. direct dotnet pack. -->
+  <Target Name="BuildSourceGeneratorAllTfms" BeforeTargets="Build;Pack">
+    <MSBuild Projects="..\Scry.SourceGenerator\Scry.SourceGenerator.csproj"
+             Properties="Configuration=$(Configuration)" />
+  </Target>
 </Project>
