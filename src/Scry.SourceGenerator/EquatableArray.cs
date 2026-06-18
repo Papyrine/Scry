@@ -1,5 +1,3 @@
-namespace Scry.SourceGenerator;
-
 /// <summary>
 /// An immutable array wrapper with structural equality for incremental generator caching.
 /// </summary>

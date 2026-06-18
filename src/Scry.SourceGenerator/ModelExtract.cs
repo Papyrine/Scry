@@ -1,5 +1,3 @@
-namespace Scry.SourceGenerator;
-
 /// <summary>
 /// The allow-listed model surface extracted from the server model assembly. Structural equality
 /// (via <see cref="EquatableArray{T}"/>) lets the incremental pipeline skip regeneration when an

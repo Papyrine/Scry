@@ -1,6 +1,3 @@
-using System.Text.Json;
-using Scry;
-
 namespace Scry.Tests;
 
 [TestFixture]
@@ -19,13 +16,13 @@ public class ExecutionTests
                         new ConstExpr("FullTime", ClrTypeTag.Enum))),
                 new OrderByOp(new MemberExpr(["Name"]), Descending: false),
                 new SelectOp(
-                    new Projection(
+                    new(
                     [
                         new("Name", new ExprValue(new MemberExpr(["Name"]))),
                         new("ManagerName", new ExprValue(new MemberExpr(["Manager", "Name"]))),
                         new("Department", new NestedValue(
                             ["Department"],
-                            new Projection([new("Name", new ExprValue(new MemberExpr(["Name"])))])))
+                            new([new("Name", new ExprValue(new MemberExpr(["Name"])))])))
                     ]))
             ]);
 
@@ -53,7 +50,7 @@ public class ExecutionTests
             [
                 new GroupByOp([new MemberExpr(["Region"])]),
                 new SelectOp(
-                    new Projection(
+                    new(
                     [
                         new("Region", new ExprValue(new MemberExpr(["Region"]))),
                         new("Total", new ExprValue(new AggregateExpr(AggregateFn.Sum, new MemberExpr(["Amount"])))),
@@ -75,7 +72,7 @@ public class ExecutionTests
                         KnownFunction.StringContains,
                         new MemberExpr(["Name"]),
                         [new ConstExpr("a", ClrTypeTag.String)])),
-                new SelectOp(new Projection([new("Name", new ExprValue(new MemberExpr(["Name"])))]))
+                new SelectOp(new([new("Name", new ExprValue(new MemberExpr(["Name"])))]))
             ]);
 
         return VerifyResponse(request);
