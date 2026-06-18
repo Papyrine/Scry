@@ -1,7 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using Scry;
-using Sample.Model;
-
 var builder = WebApplication.CreateBuilder(args);
 
 // Serve the Blazor client's static web assets even when not running in the Development environment.
@@ -12,7 +8,7 @@ builder.Services.AddDbContext<SampleContext>(options => options.UseSqlite("Data 
 builder.Services.AddScry(options =>
 {
     options.UseModel<SampleContext>();
-    options.AddPocoSource<Holiday>(_ => Holiday.Seed());
+    options.AddPocoSource(_ => Holiday.Seed());
     options.MaxPageSize = 200;
 });
 

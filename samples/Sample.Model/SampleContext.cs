@@ -1,5 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-
 namespace Sample.Model;
 
 public sealed class SampleContext(DbContextOptions<SampleContext> options) :
