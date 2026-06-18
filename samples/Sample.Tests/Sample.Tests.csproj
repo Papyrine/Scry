@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NUnit" />
+    <PackageReference Include="NUnit3TestAdapter" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.Playwright" />
+    <PackageReference Include="Verify.NUnit" />
+    <PackageReference Include="Verify.DiffPlex" />
+    <PackageReference Include="Verify.Bunit" />
+    <PackageReference Include="Verify.Playwright" />
+    <PackageReference Include="Verify.Http" />
+    <!-- Reference the whole app: builds the server (which the Playwright test launches) and
+         exposes the generated ScryQuery + Index page (which the bUnit tests render). -->
+    <ProjectReference Include="..\Sample.Server\Sample.Server.csproj" />
+    <ProjectReference Include="..\Sample.Client\Sample.Client.csproj" />
+    <ProjectReference Include="..\Sample.Model\Sample.Model.csproj" />
+  </ItemGroup>
+</Project>

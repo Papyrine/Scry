@@ -1,0 +1,9 @@
+﻿[
+  {
+    RequestUri: http://localhost/api/query,
+    RequestMethod: POST,
+    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"expr","expression":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"expr","expression":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"expr","expression":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"expr","expression":{"$type":"member","path":["Department","Name"]}}}]}}]},
+    ResponseStatus: OK 200,
+    ResponseContent: {"version":1,"kind":"List","payload":[{"name":"Aaron","status":"FullTime","manager":"Alice","department":"Engineering"},{"name":"Alice","status":"FullTime","manager":null,"department":"Engineering"},{"name":"Carol","status":"Contractor","manager":null,"department":"Sales"}]}
+  }
+]

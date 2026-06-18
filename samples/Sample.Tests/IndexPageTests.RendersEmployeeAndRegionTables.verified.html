@@ -1,0 +1,57 @@
+﻿<h1>Scry Sample</h1>
+<p>
+  These tables are produced by writing ordinary LINQ in the browser. Scry serializes the query,     sends it to the server, executes it against EF Core, and returns only the requested shape.
+</p>
+<h2>Active employees</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Status</th>
+      <th>Manager</th>
+      <th>Department</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Aaron</td>
+      <td>FullTime</td>
+      <td>Alice</td>
+      <td>Engineering</td>
+    </tr>
+    <tr>
+      <td>Alice</td>
+      <td>FullTime</td>
+      <td>—</td>
+      <td>Engineering</td>
+    </tr>
+    <tr>
+      <td>Carol</td>
+      <td>Contractor</td>
+      <td>—</td>
+      <td>Sales</td>
+    </tr>
+  </tbody>
+</table>
+<h2>Orders by region</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Region</th>
+      <th>Total</th>
+      <th>Orders</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>North</td>
+      <td>350.0</td>
+      <td>2</td>
+    </tr>
+    <tr>
+      <td>South</td>
+      <td>75.0</td>
+      <td>1</td>
+    </tr>
+  </tbody>
+</table>

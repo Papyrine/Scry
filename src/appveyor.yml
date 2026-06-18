@@ -11,6 +11,8 @@ build_script:
 - dotnet build samples/Scry.Samples.slnx --configuration Release -p:GeneratePackageOnBuild=false
 - dotnet test src/Scry.slnx --configuration Release --no-build
 - dotnet test IntegrationTests/IntegrationTests.slnx --configuration Release --no-build
+# Browser tests snapshot a screenshot, which is environment sensitive; run them locally, not in CI.
+- dotnet test samples/Scry.Samples.slnx --configuration Release --no-build --filter "TestCategory!=Browser"
 on_failure:
   - ps: |
       $root = (Get-Location).Path

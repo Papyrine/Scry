@@ -5,4 +5,5 @@
   <Project Path="Sample.Model/Sample.Model.csproj" />
   <Project Path="Sample.Server/Sample.Server.csproj" />
   <Project Path="Sample.Client/Sample.Client.csproj" />
+  <Project Path="Sample.Tests/Sample.Tests.csproj" />
 </Solution>

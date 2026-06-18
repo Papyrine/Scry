@@ -1,0 +1,11 @@
+global using System.Net.Http;
+global using System.Threading.Tasks;
+global using Microsoft.AspNetCore.Builder;
+global using Microsoft.AspNetCore.TestHost;
+global using Microsoft.EntityFrameworkCore;
+global using Microsoft.Extensions.DependencyInjection;
+global using NUnit.Framework;
+global using Scry;
+global using Scry.Client;
+global using Scry.Generated;
+global using static VerifyNUnit.Verifier;
