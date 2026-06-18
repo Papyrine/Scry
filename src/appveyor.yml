@@ -8,6 +8,7 @@ build_script:
 - pwsh: ./dotnet-install.ps1 -JSonFile global.json -Architecture x64 -InstallDir 'C:\Program Files\dotnet'
 - dotnet build src/Scry.slnx --configuration Release
 - dotnet build IntegrationTests/IntegrationTests.slnx --configuration Release -p:GeneratePackageOnBuild=false
+- dotnet build samples/Scry.Samples.slnx --configuration Release -p:GeneratePackageOnBuild=false
 - dotnet test src/Scry.slnx --configuration Release --no-build
 - dotnet test IntegrationTests/IntegrationTests.slnx --configuration Release --no-build
 on_failure:
