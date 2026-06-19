@@ -23,7 +23,13 @@ app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 
 app.MapScry("/api/query");
-app.MapScryExplorer("/scry");
+app.MapScryExplorer(options =>
+{
+    options.Route = "/scry";
+    // This sample always exposes the explorer. The default guard is Development-only — in a real
+    // app, run in Development or set EnableGuard to your own check (e.g. an admin authorization).
+    options.EnableGuard = _ => true;
+});
 app.MapFallbackToFile("index.html");
 
 app.Run();

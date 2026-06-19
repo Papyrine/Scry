@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Completion;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Host.Mef;
+using Microsoft.CodeAnalysis.QuickInfo;
 using Microsoft.CodeAnalysis.Text;
 
 namespace Scry.Explorer.Ui.Roslyn;
@@ -14,6 +15,10 @@ sealed record ScryCompletion(string Label, string Kind, int ReplaceStart, int Re
 
 /// <summary>A Roslyn diagnostic within the user's code: message, span (in editor coordinates), severity.</summary>
 sealed record ScryDiagnostic(string Message, int Start, int End, bool IsError);
+
+/// <summary>Hover (QuickInfo) text for the symbol at a position, plus the span it covers (editor coords).</summary>
+sealed record ScryHover(string Text, int Start, int End);
+
 
 /// <summary>
 /// An in-browser Roslyn workspace over the synthesized query models. The user's query expression is
@@ -125,6 +130,40 @@ sealed class RoslynWorkspace
         }
 
         return diagnostics;
+    }
+
+    /// <summary>Returns hover (QuickInfo) text for the symbol at <paramref name="caret"/>, or null.</summary>
+    public async Task<ScryHover?> GetHoverAsync(string code, int caret)
+    {
+        var solution = workspace.CurrentSolution.WithDocumentText(
+            editorDocumentId,
+            SourceText.From(Header + code + Footer));
+
+        var document = solution.GetDocument(editorDocumentId)!;
+        var service = QuickInfoService.GetService(document);
+        if (service is null)
+        {
+            return null;
+        }
+
+        var info = await service.GetQuickInfoAsync(document, Header.Length + caret);
+        if (info is null)
+        {
+            return null;
+        }
+
+        var text = string.Join(
+            "\n\n",
+            info.Sections.Select(_ => _.Text).Where(_ => !string.IsNullOrEmpty(_)));
+        if (string.IsNullOrEmpty(text))
+        {
+            return null;
+        }
+
+        return new(
+            text,
+            Math.Clamp(info.Span.Start - Header.Length, 0, code.Length),
+            Math.Clamp(info.Span.End - Header.Length, 0, code.Length));
     }
 
     static MefHostServices CreateHost()

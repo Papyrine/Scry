@@ -185,6 +185,7 @@
 
         var provider = new CompletionItemProvider(["."], ProvideCompletions);
         await BlazorMonaco.Languages.Global.RegisterCompletionItemProvider(JS, "csharp", provider);
+        await BlazorMonaco.Languages.Global.RegisterHoverProviderAsync(JS, "csharp", ProvideHover);
 
         // Surface completions immediately (and gives the tests a deterministic hook).
         await Complete();
@@ -220,6 +221,35 @@
         catch
         {
             return new() { Suggestions = [] };
+        }
+    }
+
+    async Task<Hover> ProvideHover(string modelUri, Position position, HoverContext context)
+    {
+        try
+        {
+            if (workspace is null)
+            {
+                return null!;
+            }
+
+            var model = await BlazorMonaco.Editor.Global.GetModel(JS, modelUri);
+            var text = await model.GetValue(EndOfLinePreference.LF, false);
+            var hover = await workspace.GetHoverAsync(text, ToOffset(text, position.LineNumber, position.Column));
+            if (hover is null)
+            {
+                return null!;
+            }
+
+            return new Hover
+            {
+                Contents = [new MarkdownString { Value = hover.Text }],
+                Range = ToRange(text, hover.Start, hover.End)
+            };
+        }
+        catch
+        {
+            return null!;
         }
     }
 

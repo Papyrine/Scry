@@ -18,7 +18,7 @@ public class IndexPageTests
         context.Services.AddSingleton<ScryQuery>();
 
         var page = context.Render<IndexPage>();
-        page.WaitForState(() => page.FindAll("table").Count == 3, TimeSpan.FromSeconds(10));
+        await page.WaitForStateAsync(() => page.FindAll("table").Count == 3, TimeSpan.FromSeconds(10));
 
         await Verify(page);
     }
@@ -35,7 +35,7 @@ public class IndexPageTests
         context.Services.AddSingleton<ScryQuery>();
 
         var page = context.Render<IndexPage>();
-        page.WaitForState(() => page.FindAll("p.error").Count == 1, TimeSpan.FromSeconds(10));
+        await page.WaitForStateAsync(() => page.FindAll("p.error").Count == 1, TimeSpan.FromSeconds(10));
 
         await Verify(page);
     }
