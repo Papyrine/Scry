@@ -34,6 +34,6 @@ server stays in full control of which types, properties, shapes, and rows can ev
 Source is MIT. Binary releases are subject to the [Open Source Maintenance Fee](OsmfEula.txt).
 
 
-## Icon 
+## Icon
 
-Crystal Ball by https://thenounproject.com/creator/akagami.telu23
+[Ripple](https://thenounproject.com/icon/ripple-2664516/) by [Zach Bogart](https://thenounproject.com/creator/zachbogart/) via [The Noun Project](https://thenounproject.com)
