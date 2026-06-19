@@ -189,6 +189,11 @@ public class UiSnapshotTests
         var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
         Assert.That(table, Does.Contain("Aaron"));
         Assert.That(table, Does.Contain("FullTime"));
+
+        // Stage 3: the executed query is recorded in history.
+        await page.WaitForSelectorAsync("[data-testid='history'] li", new() { Timeout = 10_000 });
+        var historyText = await page.Locator("[data-testid='history']").InnerTextAsync();
+        Assert.That(historyText, Does.Contain("Query.Employee.Where"));
     }
 
     // Stage 3: invalid code surfaces Roslyn diagnostics as Monaco markers (editor squiggles).

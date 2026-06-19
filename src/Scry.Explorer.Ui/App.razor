@@ -10,8 +10,8 @@
 
 <h1 data-testid="explorer-title">Scry Explorer</h1>
 <p>
-    Write LINQ against the allow-listed sources. Completion is powered by Roslyn running in the
-    browser against the server's introspected schema.
+    Write LINQ against the allow-listed sources, run it, and inspect the wire request. Completion is
+    powered by Roslyn running in the browser against the server's introspected schema.
 </p>
 
 @if (error is not null)
@@ -32,6 +32,17 @@
         <span> Loading schema…</span>
     }
 </div>
+
+@if (history.Count > 0)
+{
+    <h3>History</h3>
+    <ul data-testid="history">
+        @foreach (var item in history)
+        {
+            <li><a href="#" @onclick:preventDefault @onclick="() => LoadQuery(item)">@item</a></li>
+        }
+    </ul>
+}
 
 @if (wireJson is not null)
 {
@@ -87,8 +98,12 @@
     bool editorReady;
     bool registered;
 
+    const string HistoryKey = "scry-history";
+    List<string> history = [];
+
     protected override async Task OnInitializedAsync()
     {
+        history = await LoadHistory();
         try
         {
             var json = await Http.GetStringAsync("introspect");
@@ -114,8 +129,9 @@
             error = null;
             resultColumns = null;
             resultRows = null;
+            var code = await editor.GetValue();
             executor ??= await SnippetExecutor.CreateAsync(Http, introspection);
-            var request = executor.Translate(await editor.GetValue());
+            var request = executor.Translate(code);
             var json = ScryJson.Serialize(request);
             wireJson = Prettify(json);
 
@@ -126,6 +142,8 @@
 
             if (response.IsSuccessStatusCode)
             {
+                AddHistory(code);
+                await SaveHistory();
                 var parsed = ScryJson.DeserializeResponse(body);
                 if (parsed.Kind == ResultKind.List)
                 {
@@ -265,6 +283,40 @@
             error = exception.Message;
         }
     }
+
+    async Task<List<string>> LoadHistory()
+    {
+        try
+        {
+            var json = await JS.InvokeAsync<string?>("localStorage.getItem", HistoryKey);
+            return string.IsNullOrEmpty(json) ? [] : JsonSerializer.Deserialize<List<string>>(json) ?? [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    Task SaveHistory() =>
+        JS.InvokeVoidAsync("localStorage.setItem", HistoryKey, JsonSerializer.Serialize(history)).AsTask();
+
+    void AddHistory(string query)
+    {
+        query = query.Trim();
+        if (query.Length == 0)
+        {
+            return;
+        }
+
+        history.Remove(query);
+        history.Insert(0, query);
+        if (history.Count > 10)
+        {
+            history.RemoveRange(10, history.Count - 10);
+        }
+    }
+
+    Task LoadQuery(string query) => editor.SetValue(query);
 
     static string Prettify(string json)
     {

@@ -3,13 +3,16 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <!-- TODO(packaging): flip to packable once serving stabilizes (needs nuget-readme + pack config). -->
-    <IsPackable>false</IsPackable>
+    <PackageReadmeFile>nuget-readme.md</PackageReadmeFile>
+    <Description>An opt-in, browser-Roslyn query explorer (GraphiQL-style) for the Scry server API: write LINQ with IntelliSense, inspect the wire request, and run it.</Description>
     <ExplorerUiPublishDir>$(MSBuildThisFileDirectory)..\Scry.Explorer.Ui\bin\$(Configuration)\net10.0\publish\wwwroot</ExplorerUiPublishDir>
   </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
+    <PackageReference Include="SponsorCheck" PrivateAssets="all" />
     <ProjectReference Include="..\Scry.Server\Scry.Server.csproj" />
+    <None Include="nuget-readme.md" Pack="true" PackagePath="\" />
   </ItemGroup>
   <!--
     Publish the Blazor WASM UI and embed its published wwwroot (verbatim, paths preserved) as
@@ -18,7 +21,8 @@
 
     The UI is intentionally NOT in any solution: this package is its sole builder, so it restores +
     publishes the UI in isolation (avoiding the obj-cache contention of a parallel solution build).
-    TODO(perf): add Inputs/Outputs incrementality so this does not republish on every build.
+    The UI publish is itself incremental, so unchanged UI source is a near no-op; a UI change
+    re-publishes and re-embeds (CoreCompile sees the newer assets).
   -->
   <Target Name="EmbedExplorerUi" BeforeTargets="AssignTargetPaths"
           Condition="'$(ScryExplorerUiEmbedded)' != 'true'">
@@ -35,8 +39,12 @@
     <ItemGroup>
       <!-- Two-step with qualified metadata: a single glob Include with unqualified %(Filename) does
            not batch inside a target, so every item collapses to the same LogicalName. -->
-      <_ScryExplorerUiFile Include="$(ExplorerUiPublishDir)\**\*.*" />
+      <!-- Exclude the pre-compressed (.br/.gz) copies: the serving endpoint only serves the
+           uncompressed assets, so embedding the compressed variants would ~triple the payload. -->
+      <_ScryExplorerUiFile Include="$(ExplorerUiPublishDir)\**\*.*"
+                           Exclude="$(ExplorerUiPublishDir)\**\*.br;$(ExplorerUiPublishDir)\**\*.gz" />
       <EmbeddedResource Include="@(_ScryExplorerUiFile)"
+                        WithCulture="false"
                         LogicalName="scryui/%(_ScryExplorerUiFile.RecursiveDir)%(_ScryExplorerUiFile.Filename)%(_ScryExplorerUiFile.Extension)" />
     </ItemGroup>
   </Target>
