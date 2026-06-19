@@ -54,7 +54,12 @@ public static class ScryQueryableExtensions
             : response.Payload.Deserialize<T>(ScryJson.Options);
     }
 
-    static Task<QueryResponse> Send<T>(IQueryable<T> source, QueryOp? terminal, Cancel cancel)
+    /// <summary>
+    /// Translates a captured Scry query into its wire <see cref="QueryRequest"/> without executing it.
+    /// Intended for tooling that needs to inspect or forward the serialized query (e.g. the query
+    /// explorer); the terminal operators above are what application code normally uses.
+    /// </summary>
+    public static QueryRequest ToScryRequest<T>(this IQueryable<T> source, QueryOp? terminal = null)
     {
         if (source.Provider is not ScryQueryProvider provider)
         {
@@ -67,7 +72,17 @@ public static class ScryQueryableExtensions
             pipeline.Add(terminal);
         }
 
-        return provider.Client.SendAsync(QueryRequest.Create(provider.Root, pipeline), cancel);
+        return QueryRequest.Create(provider.Root, pipeline);
+    }
+
+    static Task<QueryResponse> Send<T>(IQueryable<T> source, QueryOp? terminal, Cancel cancel)
+    {
+        if (source.Provider is not ScryQueryProvider provider)
+        {
+            throw new InvalidOperationException("This IQueryable is not a Scry source.");
+        }
+
+        return provider.Client.SendAsync(source.ToScryRequest(terminal), cancel);
     }
 
     static void EnsureKind(QueryResponse response, ResultKind expected)

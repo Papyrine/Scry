@@ -1,0 +1,148 @@
+﻿{
+  Version: 1,
+  MaxPageSize: 1000,
+  Sources: [
+    {
+      Name: Department,
+      Kind: Entity,
+      ModelName: DepartmentQueryModel
+    },
+    {
+      Name: Employee,
+      Kind: Entity,
+      ModelName: EmployeeQueryModel
+    },
+    {
+      Name: Holiday,
+      Kind: Poco,
+      ModelName: HolidayQueryModel
+    },
+    {
+      Name: Order,
+      Kind: Entity,
+      ModelName: OrderQueryModel
+    }
+  ],
+  Types: [
+    {
+      ModelName: DepartmentQueryModel,
+      Members: [
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false
+        }
+      ]
+    },
+    {
+      ModelName: EmployeeQueryModel,
+      Members: [
+        {
+          Name: Active,
+          TypeDisplay: bool,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        },
+        {
+          Name: Department,
+          TypeDisplay: DepartmentQueryModel?,
+          NeedsNullDefault: false,
+          IsNavigation: true
+        },
+        {
+          Name: DepartmentId,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        },
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        },
+        {
+          Name: Manager,
+          TypeDisplay: EmployeeQueryModel?,
+          NeedsNullDefault: false,
+          IsNavigation: true
+        },
+        {
+          Name: ManagerId,
+          TypeDisplay: int?,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false
+        },
+        {
+          Name: Status,
+          TypeDisplay: Status,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        }
+      ]
+    },
+    {
+      ModelName: HolidayQueryModel,
+      Members: [
+        {
+          Name: Date,
+          TypeDisplay: global::System.DateOnly,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false
+        }
+      ]
+    },
+    {
+      ModelName: OrderQueryModel,
+      Members: [
+        {
+          Name: Amount,
+          TypeDisplay: decimal,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        },
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        },
+        {
+          Name: Region,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false
+        }
+      ]
+    }
+  ],
+  Enums: [
+    {
+      Name: Status,
+      Values: [
+        FullTime,
+        PartTime,
+        Contractor
+      ]
+    }
+  ]
+}

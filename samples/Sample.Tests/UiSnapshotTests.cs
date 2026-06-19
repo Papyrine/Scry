@@ -39,8 +39,9 @@ public class UiSnapshotTests
         };
         server.StartInfo.ArgumentList.Add(LocateServerDll());
         server.StartInfo.Environment["ASPNETCORE_URLS"] = baseUrl;
-        // The server calls UseStaticWebAssets(), so the WASM client is served outside Development too.
-        server.StartInfo.Environment["DOTNET_ENVIRONMENT"] = "Production";
+        // Development so the (Development-only) Scry explorer is reachable; the server's explicit
+        // UseStaticWebAssets() call means the WASM client is served in this environment too.
+        server.StartInfo.Environment["DOTNET_ENVIRONMENT"] = "Development";
         server.Start();
 
         await WaitForServer(port);
@@ -86,9 +87,79 @@ public class UiSnapshotTests
 
         // Wait until the WebAssembly app has run its queries and rendered both result tables.
         await page.WaitForSelectorAsync("table tbody tr");
-        await Assertions.Expect(page.Locator("table")).ToHaveCountAsync(2);
+        await Assertions.Expect(page.Locator("table")).ToHaveCountAsync(3);
 
-        await Verify(page);
+        // Snapshot the real WebAssembly-rendered DOM (not a screenshot): pixel screenshots differ
+        // across machines/OS font rendering and can't run in CI, but the rendered markup is stable.
+        var rendered = await page.Locator("#app").InnerHTMLAsync();
+        await Verify(rendered);
+    }
+
+    // The explorer fetches GET {route}/introspect on load to learn the queryable schema. Exercises the
+    // endpoint end-to-end (routing, Development guard, ScryJson serialization) against the live server.
+    [Test]
+    public async Task ExplorerIntrospectionEndpoint()
+    {
+        using var http = new HttpClient();
+        var json = await http.GetStringAsync($"{baseUrl}/scry/introspect");
+
+        await Verify(json);
+    }
+
+    // Verifies the Scry explorer (a separate Blazor WASM app, embedded in and served by the
+    // Scry.Server.Explorer package under /scry) boots from the embedded assets in a real browser.
+    [Test]
+    public async Task ExplorerBoots()
+    {
+        var page = await browser.NewPageAsync();
+        await page.GotoAsync($"{baseUrl}/scry");
+
+        // Allow the WASM runtime to download and boot before asserting the app rendered.
+        await page.WaitForSelectorAsync("[data-testid='explorer-title']", new() { Timeout = 30_000 });
+        var title = page.Locator("[data-testid='explorer-title']");
+        await Assertions.Expect(title).ToHaveTextAsync("Scry Explorer");
+
+        // The Monaco editor mounts only if the embedded _content/BlazorMonaco assets are served.
+        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
+    }
+
+    // Proves Roslyn runs in the browser and completes against the introspected schema: the explorer
+    // auto-runs completion for "Query.Employee.Where(e => e." on load and should offer Employee members.
+    [Test]
+    public async Task ExplorerCompletion()
+    {
+        var page = await browser.NewPageAsync();
+        await page.GotoAsync($"{baseUrl}/scry");
+
+        // Roslyn init + first completion in the WASM interpreter is slow on a cold load.
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
+        var items = await page.Locator("[data-testid='completions'] li").AllInnerTextsAsync();
+
+        Assert.That(items, Does.Contain("Active"));
+        Assert.That(items, Does.Contain("Name"));
+        Assert.That(items, Does.Contain("Status"));
+        Assert.That(items, Does.Contain("Manager"));
+    }
+
+    // Proves the inline Monaco IntelliSense dropdown is wired to the Roslyn provider.
+    [Test]
+    public async Task ExplorerInlineSuggestions()
+    {
+        var page = await browser.NewPageAsync();
+        await page.GotoAsync($"{baseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
+        // Wait for the schema to load (provider registered) — the auto-run completion list appears.
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
+
+        // Place the caret at the end (after "e.") and trigger IntelliSense via Monaco's API.
+        await page.EvaluateAsync(
+            "() => { const e = monaco.editor.getEditors()[0]; e.focus(); const m = e.getModel();" +
+            " e.setPosition({ lineNumber: 1, column: m.getLineMaxColumn(1) });" +
+            " e.trigger('test', 'editor.action.triggerSuggest', {}); }");
+
+        await page.WaitForSelectorAsync(".suggest-widget .monaco-list-row", new() { Timeout = 30_000 });
+        var rows = await page.Locator(".suggest-widget .monaco-list-row").AllInnerTextsAsync();
+        Assert.That(rows.Any(_ => _.Contains("Active")), Is.True, $"suggest rows: {string.Join(" | ", rows)}");
     }
 
     static string LocateServerDll()

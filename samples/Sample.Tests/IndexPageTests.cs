@@ -18,7 +18,7 @@ public class IndexPageTests
         context.Services.AddSingleton<ScryQuery>();
 
         var page = context.Render<IndexPage>();
-        page.WaitForState(() => page.FindAll("table").Count == 2, TimeSpan.FromSeconds(10));
+        page.WaitForState(() => page.FindAll("table").Count == 3, TimeSpan.FromSeconds(10));
 
         await Verify(page);
     }

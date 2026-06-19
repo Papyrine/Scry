@@ -23,6 +23,7 @@ app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 
 app.MapScry("/api/query");
+app.MapScryExplorer("/scry");
 app.MapFallbackToFile("index.html");
 
 app.Run();

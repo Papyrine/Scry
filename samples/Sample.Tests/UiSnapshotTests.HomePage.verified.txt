@@ -1,12 +1,4 @@
-﻿<!DOCTYPE html><html lang="en" style="--blazor-load-percentage: 100%; --blazor-load-percentage-text: &quot;100%&quot;;"><head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <base href="/">
-    <link rel="stylesheet" href="css/app.css">
-<!--!--><!--!--><!--!--><title>Scry Sample</title><!--!--><!--!--><!--!--></head>
-<body>
-    <div id="app"><!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!-->
+﻿<!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!-->
 
 <!--!--><h1 tabindex="-1">Scry Sample</h1>
 <!--!--><p>
@@ -23,13 +15,6 @@
                 <td>Contractor</td><!--!-->
                 <td>—</td><!--!-->
                 <td>Sales</td></tr></tbody></table><!--!--><h2>Orders by region</h2><table><!--!--><thead><tr><th>Region</th><th>Total</th><th>Orders</th></tr></thead>
-        <tbody><tr><td>North</td><td>350.0</td><td>2</td></tr><tr><td>South</td><td>75.0</td><td>1</td></tr></tbody></table><!--!-->
-        <!--!--></div>
-    <div id="blazor-error-ui">
-        An unhandled error has occurred.
-        <a href="" class="reload">Reload</a>
-    </div>
-    <script src="_framework/blazor.webassembly.js"></script>
-
-
-</body></html>
+        <tbody><tr><td>North</td><td>350.0</td><td>2</td></tr><tr><td>South</td><td>75.0</td><td>1</td></tr></tbody></table><h2>FullTime full-timers (top 2)</h2><table><!--!--><thead><tr><th>Name</th><th>Manager</th><th>Department</th></tr></thead>
+        <tbody><tr><td>Aaron</td><td>Alice</td><td>Engineering</td></tr><tr><td>Alice</td><td>—</td><td>Engineering</td></tr></tbody></table><!--!-->
+        <!--!-->

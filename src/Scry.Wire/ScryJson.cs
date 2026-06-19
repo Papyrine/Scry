@@ -34,6 +34,9 @@ public static class ScryJson
     public static string Serialize(QueryResponse response) =>
         JsonSerializer.Serialize(response, Options);
 
+    public static string Serialize(ScryIntrospection introspection) =>
+        JsonSerializer.Serialize(introspection, Options);
+
     public static QueryRequest DeserializeRequest(string json) =>
         Deserialize<QueryRequest>(json, "request");
 
