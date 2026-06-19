@@ -60,6 +60,96 @@ sealed class ScrySchema
     public bool TryGetType(Type type, out ScryTypeMeta meta) =>
         types.TryGetValue(type, out meta!);
 
+    /// <summary>
+    /// Projects the allow-list into the public introspection contract. Type displays mirror the
+    /// source generator's emission exactly, so a client can synthesize byte-compatible query models.
+    /// Ordered for deterministic output.
+    /// </summary>
+    public ScryIntrospection Describe(ScryOptions options)
+    {
+        var enums = new Dictionary<string, ScryEnumInfo>(StringComparer.Ordinal);
+
+        var typeInfos = types.Values
+            .OrderBy(_ => _.ClrType.Name, StringComparer.Ordinal)
+            .Select(meta => new ScryTypeInfo(
+                $"{meta.ClrType.Name}QueryModel",
+                meta.Members.Values
+                    .OrderBy(_ => _.Name, StringComparer.Ordinal)
+                    .Select(member => DescribeMember(member, enums))
+                    .ToList()))
+            .ToList();
+
+        var sourceInfos = sources.Values
+            .OrderBy(_ => _.Name, StringComparer.Ordinal)
+            .Select(_ => new ScrySourceInfo(_.Name, _.Kind.ToString(), $"{_.ClrType.Name}QueryModel"))
+            .ToList();
+
+        var enumInfos = enums.Values
+            .OrderBy(_ => _.Name, StringComparer.Ordinal)
+            .ToList();
+
+        return new(ScryIntrospection.CurrentVersion, options.MaxPageSize, sourceInfos, typeInfos, enumInfos);
+    }
+
+    static ScryMemberInfo DescribeMember(ScryMember member, Dictionary<string, ScryEnumInfo> enums)
+    {
+        if (member.Kind == MemberKind.Navigation)
+        {
+            return new(member.Name, $"{member.Type.Name}QueryModel?", NeedsNullDefault: false, IsNavigation: true);
+        }
+
+        var underlying = Nullable.GetUnderlyingType(member.Type);
+        var nullable = underlying is not null;
+        var actual = underlying ?? member.Type;
+
+        if (actual.IsEnum)
+        {
+            if (!enums.ContainsKey(actual.Name))
+            {
+                enums[actual.Name] = new(actual.Name, Enum.GetNames(actual));
+            }
+
+            return new(member.Name, nullable ? $"{actual.Name}?" : actual.Name, NeedsNullDefault: false, IsNavigation: false);
+        }
+
+        var display = ScalarDisplay(actual);
+        if (display == "string")
+        {
+            // A non-nullable string needs ' = null!;' to satisfy nullable analysis, matching the generator.
+            return new(member.Name, "string", NeedsNullDefault: true, IsNavigation: false);
+        }
+
+        return new(member.Name, nullable ? $"{display}?" : display, NeedsNullDefault: false, IsNavigation: false);
+    }
+
+    // Mirrors MetadataModelReader's PrimitiveKeyword + ScalarKeyword so introspection type displays
+    // are identical to generated code.
+    static string ScalarDisplay(Type type) =>
+        type.FullName switch
+        {
+            "System.Boolean" => "bool",
+            "System.Char" => "char",
+            "System.SByte" => "sbyte",
+            "System.Byte" => "byte",
+            "System.Int16" => "short",
+            "System.UInt16" => "ushort",
+            "System.Int32" => "int",
+            "System.UInt32" => "uint",
+            "System.Int64" => "long",
+            "System.UInt64" => "ulong",
+            "System.Single" => "float",
+            "System.Double" => "double",
+            "System.String" => "string",
+            "System.Decimal" => "decimal",
+            "System.DateTime" => "global::System.DateTime",
+            "System.DateOnly" => "global::System.DateOnly",
+            "System.TimeOnly" => "global::System.TimeOnly",
+            "System.DateTimeOffset" => "global::System.DateTimeOffset",
+            "System.TimeSpan" => "global::System.TimeSpan",
+            "System.Guid" => "global::System.Guid",
+            _ => type.Name
+        };
+
     public static ScrySchema Build(ScryOptions options)
     {
         if (options.ContextType is not { } contextType)

@@ -1,0 +1,92 @@
+﻿{
+  Version: 1,
+  Root: Employee,
+  Pipeline: [
+    {
+      Predicate: {
+        Op: AndAlso,
+        Left: {
+          Op: AndAlso,
+          Left: {
+            Path: [
+              Active
+            ]
+          },
+          Right: {
+            Left: {
+              Path: [
+                Status
+              ]
+            },
+            Right: {
+              Value: FullTime,
+              Tag: Enum
+            }
+          }
+        },
+        Right: {
+          Function: StringStartsWith,
+          Target: {
+            Path: [
+              Name
+            ]
+          },
+          Arguments: [
+            {
+              Value: A,
+              Tag: String
+            }
+          ]
+        }
+      }
+    },
+    {
+      Key: {
+        Path: [
+          Name
+        ]
+      },
+      Descending: false
+    },
+    {
+      Count: 5
+    },
+    {
+      Projection: {
+        Members: [
+          {
+            Name: Name,
+            Value: {
+              Expression: {
+                Path: [
+                  Name
+                ]
+              }
+            }
+          },
+          {
+            Name: Status,
+            Value: {
+              Expression: {
+                Path: [
+                  Status
+                ]
+              }
+            }
+          },
+          {
+            Name: ManagerName,
+            Value: {
+              Expression: {
+                Path: [
+                  Manager,
+                  Name
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

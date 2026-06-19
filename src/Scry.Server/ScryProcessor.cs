@@ -10,9 +10,18 @@ namespace Scry;
 public sealed class ScryProcessor
 {
     readonly QueryExecutor executor;
+    readonly ScrySchema schema;
+    readonly ScryOptions options;
 
-    internal ScryProcessor(ScrySchema schema, ScryOptions options) =>
+    internal ScryProcessor(ScrySchema schema, ScryOptions options)
+    {
+        this.schema = schema;
+        this.options = options;
         executor = new(schema, options);
+    }
+
+    /// <summary>Describes the allow-listed query surface for tooling (the query explorer).</summary>
+    public ScryIntrospection Describe() => schema.Describe(options);
 
     /// <summary>Builds a processor from configuration (e.g. for tests or non-DI hosting).</summary>
     public static ScryProcessor Create(Action<ScryOptions> configure)

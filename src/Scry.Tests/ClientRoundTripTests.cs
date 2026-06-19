@@ -10,6 +10,29 @@ public class ClientRoundTripTests
     record OrderSummary(string Region, decimal Total, int Count);
 
     [Test]
+    public Task ToScryRequestTranslatesWithoutExecuting()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // Closure-captured values (wanted, prefix, take) force the translator's
+        // Expression.Compile().DynamicInvoke() evaluation path — the same path the browser explorer
+        // exercises in WebAssembly.
+        var wanted = Status.FullTime;
+        var prefix = "A";
+        var take = 5;
+
+        var request = client.Source<Employee>("Employee")
+            .Where(e => e.Active && e.Status == wanted && e.Name.StartsWith(prefix))
+            .OrderBy(e => e.Name)
+            .Take(take)
+            .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name))
+            .ToScryRequest();
+
+        return Verify(request);
+    }
+
+    [Test]
     public async Task WhereOrderBySelect()
     {
         using var context = TestContext.CreateSeeded();

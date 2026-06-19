@@ -59,13 +59,39 @@ else
     </table>
 }
 
+<h2>@status full-timers (top @top)</h2>
+@if (fullTimers is null)
+{
+    <p>Loading…</p>
+}
+else
+{
+    <table>
+        <thead>
+            <tr><th>Name</th><th>Manager</th><th>Department</th></tr>
+        </thead>
+        <tbody>
+        @foreach (var row in fullTimers)
+        {
+            <tr><td>@row.Name</td><td>@(row.Manager ?? "—")</td><td>@row.Department</td></tr>
+        }
+        </tbody>
+    </table>
+}
+
 @code {
     record EmployeeRow(string Name, Status Status, string? Manager, string Department);
 
     record RegionSummary(string Region, decimal Total, int Count);
 
+    // Captured as locals so the LINQ below closes over them — the query is parameterized at runtime
+    // rather than hard-coded, exactly how an app would build a filtered query.
+    readonly Status status = Status.FullTime;
+    readonly int top = 2;
+
     List<EmployeeRow>? employees;
     List<RegionSummary>? regions;
+    List<EmployeeRow>? fullTimers;
     string? error;
 
     protected override async Task OnInitializedAsync()
@@ -81,6 +107,13 @@ else
             regions = await Query.Order
                 .GroupBy(o => o.Region)
                 .Select(g => new RegionSummary(g.Key, g.Sum(x => x.Amount), g.Count()))
+                .ToScryListAsync();
+
+            fullTimers = await Query.Employee
+                .Where(e => e.Status == status)
+                .OrderBy(e => e.Name)
+                .Take(top)
+                .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
                 .ToScryListAsync();
         }
         catch (Exception exception)

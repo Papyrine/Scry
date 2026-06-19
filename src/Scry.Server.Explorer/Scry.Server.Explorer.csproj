@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- TODO(packaging): flip to packable once serving stabilizes (needs nuget-readme + pack config). -->
+    <IsPackable>false</IsPackable>
+    <ExplorerUiPublishDir>$(MSBuildThisFileDirectory)..\Scry.Explorer.Ui\bin\$(Configuration)\net10.0\publish\wwwroot</ExplorerUiPublishDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="..\Scry.Server\Scry.Server.csproj" />
+  </ItemGroup>
+  <!--
+    Publish the Blazor WASM UI and embed its published wwwroot (verbatim, paths preserved) as
+    manifest resources, so the explorer is fully self-contained inside this package — no static
+    web assets manifest required at the consumer. Runs before compile so CoreCompile embeds them.
+
+    The UI is intentionally NOT in any solution: this package is its sole builder, so it restores +
+    publishes the UI in isolation (avoiding the obj-cache contention of a parallel solution build).
+    TODO(perf): add Inputs/Outputs incrementality so this does not republish on every build.
+  -->
+  <Target Name="EmbedExplorerUi" BeforeTargets="AssignTargetPaths"
+          Condition="'$(ScryExplorerUiEmbedded)' != 'true'">
+    <!-- AssignTargetPaths can run several times per build; embed exactly once. -->
+    <PropertyGroup>
+      <ScryExplorerUiEmbedded>true</ScryExplorerUiEmbedded>
+    </PropertyGroup>
+    <MSBuild Projects="..\Scry.Explorer.Ui\Scry.Explorer.Ui.csproj"
+             Targets="Restore"
+             Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="..\Scry.Explorer.Ui\Scry.Explorer.Ui.csproj"
+             Targets="Publish"
+             Properties="Configuration=$(Configuration);TargetFramework=net10.0" />
+    <ItemGroup>
+      <!-- Two-step with qualified metadata: a single glob Include with unqualified %(Filename) does
+           not batch inside a target, so every item collapses to the same LogicalName. -->
+      <_ScryExplorerUiFile Include="$(ExplorerUiPublishDir)\**\*.*" />
+      <EmbeddedResource Include="@(_ScryExplorerUiFile)"
+                        LogicalName="scryui/%(_ScryExplorerUiFile.RecursiveDir)%(_ScryExplorerUiFile.Filename)%(_ScryExplorerUiFile.Extension)" />
+    </ItemGroup>
+  </Target>
+</Project>

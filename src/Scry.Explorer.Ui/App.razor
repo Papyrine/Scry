@@ -1,0 +1,209 @@
+@inject HttpClient Http
+@inject IJSRuntime JS
+@using System.Text.Json
+@using BlazorMonaco
+@using BlazorMonaco.Editor
+@using BlazorMonaco.Languages
+
+<PageTitle>Scry Explorer</PageTitle>
+
+<h1 data-testid="explorer-title">Scry Explorer</h1>
+<p>
+    Write LINQ against the allow-listed sources. Completion is powered by Roslyn running in the
+    browser against the server's introspected schema.
+</p>
+
+@if (error is not null)
+{
+    <p class="error" role="alert" data-testid="error">@error</p>
+}
+
+<div style="height:160px;border:1px solid #ccc;">
+    <StandaloneCodeEditor @ref="editor" Id="scry-editor" ConstructionOptions="EditorOptions" OnDidInit="OnEditorInit" />
+</div>
+
+<div>
+    <button data-testid="complete" @onclick="Complete" disabled="@(workspace is null)">Complete at end</button>
+    @if (workspace is null && error is null)
+    {
+        <span> Loading schema…</span>
+    }
+</div>
+
+@if (completions is not null)
+{
+    <ul data-testid="completions">
+        @foreach (var item in completions)
+        {
+            <li>@item</li>
+        }
+    </ul>
+}
+
+@code {
+    const string Sample = "Query.Employee.Where(e => e.";
+
+    StandaloneCodeEditor editor = null!;
+    RoslynWorkspace? workspace;
+    IReadOnlyList<string>? completions;
+    string? error;
+    bool editorReady;
+    bool registered;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var json = await Http.GetStringAsync("introspect");
+            var introspection = JsonSerializer.Deserialize<ScryIntrospection>(json, ScryJson.Options)!;
+            workspace = RoslynWorkspace.Create(ModelSynthesizer.Synthesize(introspection));
+            await TryRegister();
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+        }
+    }
+
+    StandaloneEditorConstructionOptions EditorOptions(StandaloneCodeEditor _) => new()
+    {
+        Language = "csharp",
+        Value = Sample,
+        AutomaticLayout = true,
+        Minimap = new EditorMinimapOptions { Enabled = false }
+    };
+
+    async Task OnEditorInit()
+    {
+        editorReady = true;
+        await TryRegister();
+    }
+
+    // Register the completion provider once both the workspace (schema) and the editor are ready.
+    async Task TryRegister()
+    {
+        if (registered || !editorReady || workspace is null)
+        {
+            return;
+        }
+
+        registered = true;
+
+        var provider = new CompletionItemProvider(["."], ProvideCompletions);
+        await BlazorMonaco.Languages.Global.RegisterCompletionItemProvider(JS, "csharp", provider);
+
+        // Surface completions immediately (and gives the tests a deterministic hook).
+        await Complete();
+    }
+
+    async Task<CompletionList> ProvideCompletions(string modelUri, Position position, CompletionContext context)
+    {
+        if (workspace is null)
+        {
+            return new() { Suggestions = [] };
+        }
+
+        var model = await BlazorMonaco.Editor.Global.GetModel(JS, modelUri);
+        var text = await model.GetValue(EndOfLinePreference.LF, false);
+        var caret = ToOffset(text, position.LineNumber, position.Column);
+
+        var items = await workspace.CompleteAsync(text, caret);
+        return new()
+        {
+            Suggestions = items.Select(item => new CompletionItem
+            {
+                LabelAsString = item.Label,
+                Kind = MapKind(item.Kind),
+                InsertText = item.Label,
+                RangeAsObject = ToRange(text, item.ReplaceStart, item.ReplaceEnd)
+            }).ToList()
+        };
+    }
+
+    async Task Complete()
+    {
+        if (workspace is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var text = await editor.GetValue();
+            var items = await workspace.CompleteAsync(text, text.Length);
+            completions = items.Select(_ => _.Label).ToList();
+            StateHasChanged();
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+        }
+    }
+
+    static int ToOffset(string text, int line, int column)
+    {
+        var offset = 0;
+        var currentLine = 1;
+        while (currentLine < line && offset < text.Length)
+        {
+            if (text[offset] == '\n')
+            {
+                currentLine++;
+            }
+
+            offset++;
+        }
+
+        return offset + (column - 1);
+    }
+
+    static BlazorMonaco.Range ToRange(string text, int start, int end)
+    {
+        var (startLine, startColumn) = ToLineColumn(text, start);
+        var (endLine, endColumn) = ToLineColumn(text, end);
+        return new()
+        {
+            StartLineNumber = startLine,
+            StartColumn = startColumn,
+            EndLineNumber = endLine,
+            EndColumn = endColumn
+        };
+    }
+
+    static (int Line, int Column) ToLineColumn(string text, int offset)
+    {
+        var line = 1;
+        var column = 1;
+        for (var i = 0; i < offset && i < text.Length; i++)
+        {
+            if (text[i] == '\n')
+            {
+                line++;
+                column = 1;
+            }
+            else
+            {
+                column++;
+            }
+        }
+
+        return (line, column);
+    }
+
+    static CompletionItemKind MapKind(string tag) =>
+        tag switch
+        {
+            "Property" => CompletionItemKind.Property,
+            "Field" => CompletionItemKind.Field,
+            "Method" => CompletionItemKind.Method,
+            "Class" => CompletionItemKind.Class,
+            "Structure" => CompletionItemKind.Struct,
+            "Interface" => CompletionItemKind.Interface,
+            "Enum" => CompletionItemKind.Enum,
+            "EnumMember" => CompletionItemKind.EnumMember,
+            "Keyword" => CompletionItemKind.Keyword,
+            "Namespace" => CompletionItemKind.Module,
+            "Local" or "Parameter" or "RangeVariable" => CompletionItemKind.Variable,
+            _ => CompletionItemKind.Text
+        };
+}
