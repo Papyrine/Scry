@@ -196,6 +196,78 @@ public class UiSnapshotTests
         Assert.That(historyText, Does.Contain("Query.Employee.Where"));
     }
 
+    // Full interactive walkthrough with screenshots (manual/local verification, not part of CI).
+    [Test, Explicit]
+    public async Task ExplorerWalkthrough()
+    {
+        var dir = Directory.CreateTempSubdirectory("scry_walk_").FullName;
+        var log = new List<string>();
+        var page = await browser.NewPageAsync(new() { ViewportSize = new() { Width = 1600, Height = 1000 } });
+        var consoleErrors = new List<string>();
+        page.Console += (_, m) => { if (m.Type == "error") consoleErrors.Add(m.Text); };
+
+        await page.GotoAsync($"{baseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
+        log.Add("✓ editor booted, schema loaded");
+        await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "1-loaded.png"), FullPage = true });
+
+        // Inline IntelliSense dropdown.
+        await page.EvaluateAsync(
+            "() => { const e = monaco.editor.getEditors()[0]; e.setValue('Query.Employee.Where(e => e.'); e.focus();" +
+            " e.setPosition({ lineNumber: 1, column: e.getModel().getLineMaxColumn(1) });" +
+            " e.trigger('t', 'editor.action.triggerSuggest', {}); }");
+        await page.WaitForSelectorAsync(".suggest-widget .monaco-list-row", new() { Timeout = 20_000 });
+        await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "2-intellisense.png") });
+        var suggest = await page.Locator(".suggest-widget .monaco-list-row").AllInnerTextsAsync();
+        log.Add($"✓ IntelliSense dropdown: {string.Join(", ", suggest)}");
+        await page.Keyboard.PressAsync("Escape");
+
+        // Run a complete query.
+        await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(e => e.Active).OrderBy(e => e.Name).Select(e => new { e.Name, e.Status })')");
+        await page.Locator("[data-testid='run']").ClickAsync();
+        await page.WaitForSelectorAsync("[data-testid='result-table']", new() { Timeout = 60_000 });
+        await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "3-run.png"), FullPage = true });
+        var wire = await page.Locator("[data-testid='wire']").InnerTextAsync();
+        var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
+        log.Add($"✓ run: wireHasEmployee={wire.Contains("Employee")}, table=[{table.Replace("\n", " ").Trim()}]");
+
+        // Diagnostics.
+        await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(e => e.Nope)')");
+        await page.WaitForFunctionAsync("() => monaco.editor.getModelMarkers({}).length > 0", null, new() { Timeout = 20_000 });
+        var markerMsg = await page.EvaluateAsync<string>("() => monaco.editor.getModelMarkers({}).map(m => m.message).join(' | ')");
+        log.Add($"✓ diagnostics: {markerMsg}");
+
+        // Hover.
+        await page.EvaluateAsync("() => { const e = monaco.editor.getEditors()[0]; e.setValue('Query.Employee.Where(e => e.Active)'); e.layout(); }");
+        await Task.Delay(500);
+        var pt = await page.EvaluateAsync<float[]>(
+            "() => { const e = monaco.editor.getEditors()[0];" +
+            " const a = e.getScrolledVisiblePosition({ lineNumber: 1, column: 29 });" +
+            " const b = e.getScrolledVisiblePosition({ lineNumber: 1, column: 35 });" +
+            " const r = e.getDomNode().getBoundingClientRect();" +
+            " return [r.left + (a.left + b.left) / 2, r.top + a.top + a.height / 2]; }");
+        await page.Mouse.MoveAsync(pt[0] - 80, pt[1]);
+        await page.Mouse.MoveAsync(pt[0], pt[1], new() { Steps = 10 });
+        await Task.Delay(1800);
+        await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "4-hover.png") });
+        var hoverCount = await page.Locator(".monaco-hover:not(.hidden)").CountAsync();
+        var hoverText = await page.Locator(".monaco-hover").CountAsync() > 0 ? await page.Locator(".monaco-hover").InnerTextAsync() : "(no widget)";
+        log.Add($"{(hoverCount > 0 ? "✓" : "✗")} hover: visible={hoverCount}, text=[{hoverText.Replace("\n", " ").Trim()}]");
+
+        log.Add($"console errors: {(consoleErrors.Count == 0 ? "none" : string.Join(" || ", consoleErrors))}");
+        await File.WriteAllLinesAsync(Path.Combine(dir, "results.txt"), log);
+        TestContext.Out.WriteLine($"Walkthrough screenshots + results: {dir}");
+        TestContext.Out.WriteLine(string.Join("\n", log));
+
+        // Assert the headlessly-verifiable features. Hover needs a real browser (Monaco renders the
+        // editor text clipped headless, so the mouse can't land on a token to trigger it).
+        Assert.That(suggest, Does.Contain("Active"), "IntelliSense dropdown");
+        Assert.That(wire, Does.Contain("Employee"), "wire request");
+        Assert.That(table, Does.Contain("Aaron"), "result table");
+        Assert.That(markerMsg, Does.Contain("Nope"), "diagnostics");
+    }
+
     // Stage 3: invalid code surfaces Roslyn diagnostics as Monaco markers (editor squiggles).
     [Test]
     public async Task ExplorerDiagnostics()

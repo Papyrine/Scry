@@ -5,7 +5,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Completion;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Host.Mef;
-using Microsoft.CodeAnalysis.QuickInfo;
 using Microsoft.CodeAnalysis.Text;
 
 namespace Scry.Explorer.Ui.Roslyn;
@@ -132,7 +131,11 @@ sealed class RoslynWorkspace
         return diagnostics;
     }
 
-    /// <summary>Returns hover (QuickInfo) text for the symbol at <paramref name="caret"/>, or null.</summary>
+    /// <summary>
+    /// Returns hover text for the symbol at <paramref name="caret"/>, or null. Uses the semantic model
+    /// directly (not QuickInfoService) because QuickInfo touches Roslyn's persistent storage, which
+    /// throws PlatformNotSupportedException on WebAssembly (Process.GetCurrentProcess is unavailable).
+    /// </summary>
     public async Task<ScryHover?> GetHoverAsync(string code, int caret)
     {
         var solution = workspace.CurrentSolution.WithDocumentText(
@@ -140,30 +143,32 @@ sealed class RoslynWorkspace
             SourceText.From(Header + code + Footer));
 
         var document = solution.GetDocument(editorDocumentId)!;
-        var service = QuickInfoService.GetService(document);
-        if (service is null)
+        var root = await document.GetSyntaxRootAsync();
+        var model = await document.GetSemanticModelAsync();
+        if (root is null || model is null)
         {
             return null;
         }
 
-        var info = await service.GetQuickInfoAsync(document, Header.Length + caret);
-        if (info is null)
+        var token = root.FindToken(Header.Length + caret);
+        if (token.Parent is not { } node)
         {
             return null;
         }
 
-        var text = string.Join(
-            "\n\n",
-            info.Sections.Select(_ => _.Text).Where(_ => !string.IsNullOrEmpty(_)));
-        if (string.IsNullOrEmpty(text))
+        var info = model.GetSymbolInfo(node);
+        var symbol = info.Symbol
+            ?? info.CandidateSymbols.FirstOrDefault()
+            ?? model.GetDeclaredSymbol(node);
+        if (symbol is null)
         {
             return null;
         }
 
         return new(
-            text,
-            Math.Clamp(info.Span.Start - Header.Length, 0, code.Length),
-            Math.Clamp(info.Span.End - Header.Length, 0, code.Length));
+            symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+            Math.Clamp(token.SpanStart - Header.Length, 0, code.Length),
+            Math.Clamp(token.Span.End - Header.Length, 0, code.Length));
     }
 
     static MefHostServices CreateHost()
