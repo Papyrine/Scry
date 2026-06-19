@@ -12,6 +12,9 @@ namespace Scry.Explorer.Ui.Roslyn;
 /// <summary>A completion offered by Roslyn: its label, Roslyn tag (kind), and the span it replaces.</summary>
 sealed record ScryCompletion(string Label, string Kind, int ReplaceStart, int ReplaceEnd);
 
+/// <summary>A Roslyn diagnostic within the user's code: message, span (in editor coordinates), severity.</summary>
+sealed record ScryDiagnostic(string Message, int Start, int End, bool IsError);
+
 /// <summary>
 /// An in-browser Roslyn workspace over the synthesized query models. The user's query expression is
 /// wrapped in a method body so the C# <see cref="CompletionService"/> can offer members against the
@@ -81,6 +84,47 @@ sealed class RoslynWorkspace
         return completions.ItemsList
             .Select(_ => new ScryCompletion(_.DisplayText, _.Tags.FirstOrDefault() ?? "", start, caret))
             .ToList();
+    }
+
+    /// <summary>Returns errors/warnings within the user's code (offsets in <paramref name="code"/> coordinates).</summary>
+    public async Task<IReadOnlyList<ScryDiagnostic>> DiagnoseAsync(string code)
+    {
+        var solution = workspace.CurrentSolution.WithDocumentText(
+            editorDocumentId,
+            SourceText.From(Header + code + Footer));
+
+        var document = solution.GetDocument(editorDocumentId)!;
+        var model = await document.GetSemanticModelAsync();
+        if (model is null)
+        {
+            return [];
+        }
+
+        var userStart = Header.Length;
+        var userEnd = userStart + code.Length;
+        var diagnostics = new List<ScryDiagnostic>();
+        foreach (var diagnostic in model.GetDiagnostics())
+        {
+            if (diagnostic.Severity is not (DiagnosticSeverity.Error or DiagnosticSeverity.Warning))
+            {
+                continue;
+            }
+
+            var span = diagnostic.Location.SourceSpan;
+            // Only surface diagnostics anchored in the user's expression, not the generated wrapper.
+            if (span.Start < userStart || span.Start > userEnd)
+            {
+                continue;
+            }
+
+            diagnostics.Add(new(
+                diagnostic.GetMessage(),
+                Math.Clamp(span.Start - userStart, 0, code.Length),
+                Math.Clamp(span.End - userStart, 0, code.Length),
+                diagnostic.Severity == DiagnosticSeverity.Error));
+        }
+
+        return diagnostics;
     }
 
     static MefHostServices CreateHost()

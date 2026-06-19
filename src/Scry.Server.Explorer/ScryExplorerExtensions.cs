@@ -73,7 +73,8 @@ public static class ScryExplorerExtensions
             return Results.NotFound();
         }
 
-        return Results.Content(ScryJson.Serialize(processor.Describe()), "application/json");
+        var introspection = processor.Describe() with { QueryEndpoint = options.QueryEndpoint };
+        return Results.Content(ScryJson.Serialize(introspection), "application/json");
     }
 
     static IResult Index(ScryExplorerOptions options, string basePath, ExplorerAssets assets)

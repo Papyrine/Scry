@@ -16,6 +16,9 @@ public sealed record ScryIntrospection(
 {
     /// <summary>Current introspection contract version.</summary>
     public const int CurrentVersion = 1;
+
+    /// <summary>The query endpoint the explorer POSTs translated requests to (set by the explorer host).</summary>
+    public string QueryEndpoint { get; init; } = "/api/query";
 }
 
 /// <summary>A queryable source (the root of a query): its name, kind, and the model type it yields.</summary>

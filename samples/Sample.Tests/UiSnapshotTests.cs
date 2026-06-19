@@ -162,6 +162,52 @@ public class UiSnapshotTests
         Assert.That(rows.Any(_ => _.Contains("Active")), Is.True, $"suggest rows: {string.Join(" | ", rows)}");
     }
 
+    // Proves end-to-end execution: the browser compiles + runs the query, translates it to the wire
+    // format, POSTs it to /api/query, and renders the server's result.
+    [Test]
+    public async Task ExplorerRun()
+    {
+        var page = await browser.NewPageAsync();
+        await page.GotoAsync($"{baseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
+
+        // Set a complete query, then run it.
+        await page.EvaluateAsync(
+            "() => monaco.editor.getEditors()[0].setValue(\"Query.Employee.Where(e => e.Active).OrderBy(e => e.Name).Select(e => new { e.Name, e.Status })\")");
+        await page.Locator("[data-testid='run']").ClickAsync();
+
+        await page.WaitForSelectorAsync("[data-testid='result-table']", new() { Timeout = 60_000 });
+        var wire = await page.Locator("[data-testid='wire']").InnerTextAsync();
+        var result = await page.Locator("[data-testid='result']").InnerTextAsync();
+
+        Assert.That(wire, Does.Contain("\"root\": \"Employee\"").Or.Contain("\"root\":\"Employee\""));
+        Assert.That(result, Does.Contain("Aaron"));
+        Assert.That(result, Does.Contain("Carol"));
+
+        // Stage 3: results render as a table too.
+        var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
+        Assert.That(table, Does.Contain("Aaron"));
+        Assert.That(table, Does.Contain("FullTime"));
+    }
+
+    // Stage 3: invalid code surfaces Roslyn diagnostics as Monaco markers (editor squiggles).
+    [Test]
+    public async Task ExplorerDiagnostics()
+    {
+        var page = await browser.NewPageAsync();
+        await page.GotoAsync($"{baseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
+
+        // 'Nope' is not a member of the Employee model → a diagnostic marker should appear.
+        await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(e => e.Nope)')");
+        await page.WaitForFunctionAsync("() => monaco.editor.getModelMarkers({}).length > 0", null, new() { Timeout = 30_000 });
+
+        var count = await page.EvaluateAsync<int>("() => monaco.editor.getModelMarkers({}).length");
+        Assert.That(count, Is.GreaterThan(0));
+    }
+
     static string LocateServerDll()
     {
         // .../samples/Sample.Tests/bin/<config>/<tfm>/ — mirror <config>/<tfm> onto the server output.

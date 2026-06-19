@@ -11,6 +11,9 @@
     <RunAOTCompilation>false</RunAOTCompilation>
     <!-- Roslyn is reflection/MEF heavy; trimming strips it. A dev tool can afford the larger payload. -->
     <PublishTrimmed>false</PublishTrimmed>
+    <!-- Stable _framework filenames so the executor can fetch Scry.Client.dll / Scry.Wire.dll as
+         Roslyn metadata references for compiling + running the user's query. -->
+    <WasmFingerprintAssets>false</WasmFingerprintAssets>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" />

@@ -10,7 +10,11 @@ namespace Scry.Explorer.Ui.Roslyn;
 /// </summary>
 static class ModelSynthesizer
 {
-    public static string Synthesize(ScryIntrospection introspection)
+    /// <param name="executable">
+    /// When true, emit a real client-backed <c>ScryQuery</c> (for compiling + running a query); when
+    /// false, emit a shape-only facade sufficient for completion (no Scry.Client dependency).
+    /// </param>
+    public static string Synthesize(ScryIntrospection introspection, bool executable = false)
     {
         var builder = new StringBuilder();
         builder.AppendLine("#nullable enable");
@@ -44,13 +48,26 @@ static class ModelSynthesizer
             builder.AppendLine();
         }
 
-        // For completion the facade only needs the right shape; execution (Stage 2) uses the real
-        // client-backed ScryQuery.
         builder.AppendLine("public sealed class ScryQuery");
         builder.AppendLine("{");
-        foreach (var source in introspection.Sources)
+        if (executable)
         {
-            builder.AppendLine($"    public global::System.Linq.IQueryable<{source.ModelName}> {source.Name} => null!;");
+            // Mirrors the generator: each source is backed by the real client so the captured query
+            // can be translated via ToScryRequest.
+            builder.AppendLine("    readonly global::Scry.Client.ScryClient client;");
+            builder.AppendLine("    public ScryQuery(global::Scry.Client.ScryClient client) => this.client = client;");
+            foreach (var source in introspection.Sources)
+            {
+                builder.AppendLine($"    public global::System.Linq.IQueryable<{source.ModelName}> {source.Name} => client.Source<{source.ModelName}>(\"{source.Name}\");");
+            }
+        }
+        else
+        {
+            // Completion only needs the shape — no Scry.Client dependency.
+            foreach (var source in introspection.Sources)
+            {
+                builder.AppendLine($"    public global::System.Linq.IQueryable<{source.ModelName}> {source.Name} => null!;");
+            }
         }
 
         builder.AppendLine("}");

@@ -1,5 +1,6 @@
 @inject HttpClient Http
 @inject IJSRuntime JS
+@using System.Text
 @using System.Text.Json
 @using BlazorMonaco
 @using BlazorMonaco.Editor
@@ -19,16 +20,46 @@
 }
 
 <div style="height:160px;border:1px solid #ccc;">
-    <StandaloneCodeEditor @ref="editor" Id="scry-editor" ConstructionOptions="EditorOptions" OnDidInit="OnEditorInit" />
+    <StandaloneCodeEditor @ref="editor" Id="scry-editor" ConstructionOptions="EditorOptions"
+                          OnDidInit="OnEditorInit" OnDidChangeModelContent="OnContentChanged" />
 </div>
 
 <div>
+    <button data-testid="run" @onclick="Run" disabled="@(introspection is null)">Run</button>
     <button data-testid="complete" @onclick="Complete" disabled="@(workspace is null)">Complete at end</button>
     @if (workspace is null && error is null)
     {
         <span> Loading schema…</span>
     }
 </div>
+
+@if (wireJson is not null)
+{
+    <h3>Wire request</h3>
+    <pre data-testid="wire">@wireJson</pre>
+}
+
+@if (resultColumns is not null)
+{
+    <h3>Result</h3>
+    <table data-testid="result-table">
+        <thead>
+            <tr>@foreach (var column in resultColumns) { <th>@column</th> }</tr>
+        </thead>
+        <tbody>
+        @foreach (var row in resultRows!)
+        {
+            <tr>@foreach (var cell in row) { <td>@cell</td> }</tr>
+        }
+        </tbody>
+    </table>
+}
+
+@if (resultJson is not null)
+{
+    <h3>Response</h3>
+    <pre data-testid="result">@resultJson</pre>
+}
 
 @if (completions is not null)
 {
@@ -45,7 +76,13 @@
 
     StandaloneCodeEditor editor = null!;
     RoslynWorkspace? workspace;
+    ScryIntrospection? introspection;
+    SnippetExecutor? executor;
     IReadOnlyList<string>? completions;
+    string? wireJson;
+    string? resultJson;
+    List<string>? resultColumns;
+    List<List<string>>? resultRows;
     string? error;
     bool editorReady;
     bool registered;
@@ -55,7 +92,7 @@
         try
         {
             var json = await Http.GetStringAsync("introspect");
-            var introspection = JsonSerializer.Deserialize<ScryIntrospection>(json, ScryJson.Options)!;
+            introspection = JsonSerializer.Deserialize<ScryIntrospection>(json, ScryJson.Options)!;
             workspace = RoslynWorkspace.Create(ModelSynthesizer.Synthesize(introspection));
             await TryRegister();
         }
@@ -63,6 +100,45 @@
         {
             error = exception.Message;
         }
+    }
+
+    async Task Run()
+    {
+        if (introspection is null)
+        {
+            return;
+        }
+
+        try
+        {
+            error = null;
+            resultColumns = null;
+            resultRows = null;
+            executor ??= await SnippetExecutor.CreateAsync(Http, introspection);
+            var request = executor.Translate(await editor.GetValue());
+            var json = ScryJson.Serialize(request);
+            wireJson = Prettify(json);
+
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+            using var response = await Http.PostAsync(introspection.QueryEndpoint, content);
+            var body = await response.Content.ReadAsStringAsync();
+            resultJson = Prettify(body);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var parsed = ScryJson.DeserializeResponse(body);
+                if (parsed.Kind == ResultKind.List)
+                {
+                    BuildTable(parsed.Payload);
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+        }
+
+        StateHasChanged();
     }
 
     StandaloneEditorConstructionOptions EditorOptions(StandaloneCodeEditor _) => new()
@@ -98,26 +174,76 @@
 
     async Task<CompletionList> ProvideCompletions(string modelUri, Position position, CompletionContext context)
     {
-        if (workspace is null)
+        // Monaco invokes this on every keystroke/trigger; never let an exception escape into the
+        // JS interop boundary (it would surface as an unhandled Blazor error).
+        try
+        {
+            if (workspace is null)
+            {
+                return new() { Suggestions = [] };
+            }
+
+            var model = await BlazorMonaco.Editor.Global.GetModel(JS, modelUri);
+            var text = await model.GetValue(EndOfLinePreference.LF, false);
+            var caret = ToOffset(text, position.LineNumber, position.Column);
+
+            var items = await workspace.CompleteAsync(text, caret);
+            return new()
+            {
+                Suggestions = items.Select(item => new CompletionItem
+                {
+                    LabelAsString = item.Label,
+                    Kind = MapKind(item.Kind),
+                    InsertText = item.Label,
+                    RangeAsObject = ToRange(text, item.ReplaceStart, item.ReplaceEnd)
+                }).ToList()
+            };
+        }
+        catch
         {
             return new() { Suggestions = [] };
         }
+    }
 
-        var model = await BlazorMonaco.Editor.Global.GetModel(JS, modelUri);
-        var text = await model.GetValue(EndOfLinePreference.LF, false);
-        var caret = ToOffset(text, position.LineNumber, position.Column);
-
-        var items = await workspace.CompleteAsync(text, caret);
-        return new()
+    // Re-run diagnostics on edit and surface them as editor squiggles.
+    async Task OnContentChanged(ModelContentChangedEvent _)
+    {
+        if (workspace is null)
         {
-            Suggestions = items.Select(item => new CompletionItem
+            return;
+        }
+
+        try
+        {
+            var text = await editor.GetValue();
+            var diagnostics = await workspace.DiagnoseAsync(text);
+            var markers = diagnostics.Select(diagnostic =>
             {
-                LabelAsString = item.Label,
-                Kind = MapKind(item.Kind),
-                InsertText = item.Label,
-                RangeAsObject = ToRange(text, item.ReplaceStart, item.ReplaceEnd)
-            }).ToList()
-        };
+                var (startLine, startColumn) = ToLineColumn(text, diagnostic.Start);
+                var (endLine, endColumn) = ToLineColumn(text, diagnostic.End);
+                if (endLine == startLine && endColumn <= startColumn)
+                {
+                    endColumn = startColumn + 1;
+                }
+
+                return new MarkerData
+                {
+                    Message = diagnostic.Message,
+                    Severity = diagnostic.IsError ? MarkerSeverity.Error : MarkerSeverity.Warning,
+                    StartLineNumber = startLine,
+                    StartColumn = startColumn,
+                    EndLineNumber = endLine,
+                    EndColumn = endColumn
+                };
+            }).ToList();
+
+            var model = await editor.GetModel();
+            await BlazorMonaco.Editor.Global.SetModelMarkers(JS, model, "scry", markers);
+        }
+        catch
+        {
+            // Diagnostics are best-effort; never disrupt typing.
+        }
     }
 
     async Task Complete()
@@ -138,6 +264,47 @@
         {
             error = exception.Message;
         }
+    }
+
+    static string Prettify(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return JsonSerializer.Serialize(document.RootElement, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return json;
+        }
+    }
+
+    void BuildTable(JsonElement payload)
+    {
+        if (payload.ValueKind != JsonValueKind.Array)
+        {
+            return;
+        }
+
+        var columns = new List<string>();
+        var rows = new List<List<string>>();
+        foreach (var row in payload.EnumerateArray())
+        {
+            if (row.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            if (columns.Count == 0)
+            {
+                columns.AddRange(row.EnumerateObject().Select(_ => _.Name));
+            }
+
+            rows.Add(row.EnumerateObject().Select(_ => _.Value.ToString()).ToList());
+        }
+
+        resultColumns = columns;
+        resultRows = rows;
     }
 
     static int ToOffset(string text, int line, int column)

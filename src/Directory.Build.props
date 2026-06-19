@@ -8,6 +8,10 @@
     <Description>Scry lets a Blazor client write strongly-typed LINQ against a server-side EF Core model, serialize it, and execute it server-side with allow-list enforcement.</Description>
     <ResolveAssemblyReferencesSilent>true</ResolveAssemblyReferencesSilent>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Audit only direct dependencies. A transitive SQLitePCLRaw.lib.e_sqlite3 2.1.11 advisory
+         (NU1903, via EF Core Sqlite) has no patched release yet, and warnings are errors here.
+         Revert to the default ("all") once a fixed SQLitePCLRaw / EF Core Sqlite ships. -->
+    <NuGetAuditMode>direct</NuGetAuditMode>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <SuppressNETCoreSdkPreviewMessage>true</SuppressNETCoreSdkPreviewMessage>
     <PackageLicenseFile>OsmfEula.txt</PackageLicenseFile>

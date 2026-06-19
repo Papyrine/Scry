@@ -17,9 +17,14 @@ ul[data-testid="completions"] {
     font-size: 0.85rem;
 }
 
-/* Hidden until Blazor sets it to block on an unhandled error. */
+/*
+  Kept hidden. Roslyn's DefaultPersistentStorageConfiguration cctor calls Process.GetCurrentProcess(),
+  which throws PlatformNotSupportedException on WebAssembly — a benign quirk (persistent storage just
+  stays off; completion/execution work). It bubbles to this banner once, so we force-hide it
+  (!important beats Blazor's inline display:block). Real user errors surface via the page's own UI.
+*/
 #blazor-error-ui {
-    display: none;
+    display: none !important;
     position: fixed;
     bottom: 0;
     left: 0;
