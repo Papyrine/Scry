@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <!--
+    The browser-Roslyn layer for the explorer: synthesizes the query models, hosts an AdhocWorkspace
+    for completion/diagnostics/hover, and compiles+translates user snippets. Kept as its own library
+    (not in Scry.Explorer.Ui) so it can be unit-tested in-process (no browser) and reused by the
+    explorer's Web Worker host.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Features" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />
+    <PackageReference Include="Basic.Reference.Assemblies.Net100" />
+    <ProjectReference Include="..\Scry.Client\Scry.Client.csproj" />
+    <ProjectReference Include="..\Scry.Wire\Scry.Wire.csproj" />
+  </ItemGroup>
+</Project>

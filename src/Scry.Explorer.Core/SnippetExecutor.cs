@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Scry.Client;
 using Scry.Wire;
 
-namespace Scry.Explorer.Ui.Roslyn;
+namespace Scry.Explorer.Core;
 
 /// <summary>
 /// Compiles a user's query expression in the browser, runs it against a capturing client to build
@@ -17,7 +17,7 @@ namespace Scry.Explorer.Ui.Roslyn;
 /// <c>.CountScryAsync()</c>, or plain LINQ <c>.ToList()</c>) is recognised and folded into the wire
 /// request as its <see cref="QueryOp"/> terminal.
 /// </summary>
-sealed class SnippetExecutor
+public sealed class SnippetExecutor
 {
     readonly IReadOnlyList<MetadataReference> references;
     readonly string generatedSource;

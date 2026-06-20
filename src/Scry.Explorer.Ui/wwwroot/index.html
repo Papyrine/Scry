@@ -8,6 +8,12 @@
     <base href="__SCRY_BASE__" />
     <link href="css/app.css" rel="stylesheet" />
     <link href="_content/BlazorMonaco/lib/monaco-editor/min/vs/editor/editor.main.css" rel="stylesheet" />
+    <!-- Apply the saved theme before first paint so the loading screen doesn't flash light in dark mode. -->
+    <script>
+        (function () {
+            try { document.documentElement.dataset.theme = localStorage.getItem('scry-theme') || 'system'; } catch (e) { }
+        })();
+    </script>
 </head>
 <body>
     <div id="app">
@@ -20,6 +26,7 @@
     <script src="_content/BlazorMonaco/jsInterop.js"></script>
     <script src="_content/BlazorMonaco/lib/monaco-editor/min/vs/loader.js"></script>
     <script src="_content/BlazorMonaco/lib/monaco-editor/min/vs/editor/editor.main.js"></script>
+    <script src="js/scry.js"></script>
     <script src="_framework/blazor.webassembly.js"></script>
 </body>
 </html>

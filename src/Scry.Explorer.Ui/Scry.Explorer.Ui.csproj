@@ -21,11 +21,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Features" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />
-    <PackageReference Include="Basic.Reference.Assemblies.Net100" />
     <PackageReference Include="BlazorMonaco" />
-    <ProjectReference Include="..\Scry.Client\Scry.Client.csproj" />
+    <ProjectReference Include="..\Scry.Explorer.Core\Scry.Explorer.Core.csproj" />
     <ProjectReference Include="..\Scry.Wire\Scry.Wire.csproj" />
   </ItemGroup>
 </Project>

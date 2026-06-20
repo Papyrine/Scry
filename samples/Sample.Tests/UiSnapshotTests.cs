@@ -121,6 +121,10 @@ public class UiSnapshotTests
 
         // The Monaco editor mounts only if the embedded _content/BlazorMonaco assets are served.
         await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
+
+        // The action buttons carry explanatory tooltips.
+        var completeTooltip = await page.Locator("[data-testid='complete']").GetAttributeAsync("title");
+        Assert.That(completeTooltip, Does.Contain("IntelliSense"));
     }
 
     // Regression test for the editor-height bug. Monaco does not size itself: its host element needs
@@ -309,6 +313,49 @@ public class UiSnapshotTests
         Assert.That(table, Does.Contain("Aaron"));
     }
 
+    // Dark mode: the toggle retints Monaco (vs-dark class) + the page (data-theme), and the choice
+    // persists across a reload (localStorage + the pre-paint data-theme script + the editor option).
+    [Test]
+    public async Task ExplorerDarkMode()
+    {
+        var page = await browser.NewPageAsync();
+        await page.GotoAsync($"{baseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
+
+        // System → Light → Dark (deterministic regardless of the OS preference).
+        var toggle = page.Locator("[data-testid='theme-toggle']");
+        await toggle.ClickAsync();
+        await toggle.ClickAsync();
+
+        await page.WaitForFunctionAsync(
+            "() => document.documentElement.dataset.theme === 'dark'", null, new() { Timeout = 10_000 });
+        await page.WaitForSelectorAsync(".monaco-editor.vs-dark", new() { Timeout = 10_000 });
+
+        await page.ReloadAsync();
+        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
+        var theme = await page.EvaluateAsync<string>("() => document.documentElement.dataset.theme");
+        Assert.That(theme, Is.EqualTo("dark"), "theme should persist across reload");
+        await page.WaitForSelectorAsync(".monaco-editor.vs-dark", new() { Timeout = 10_000 });
+    }
+
+    // The Ctrl+Enter editor action runs the query without clicking Run.
+    [Test]
+    public async Task ExplorerRunViaKeyboard()
+    {
+        var page = await browser.NewPageAsync();
+        await page.GotoAsync($"{baseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
+
+        await page.EvaluateAsync(
+            "() => { const e = monaco.editor.getEditors()[0]; e.setValue('Query.Employee.ToList()'); e.focus(); }");
+        await page.Keyboard.PressAsync("Control+Enter");
+
+        await page.WaitForSelectorAsync("[data-testid='result-table']", new() { Timeout = 60_000 });
+        var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
+        Assert.That(table, Does.Contain("Aaron"));
+    }
+
     // Full interactive walkthrough with screenshots (manual/local verification, not part of CI).
     [Test, Explicit]
     public async Task ExplorerWalkthrough()
@@ -353,6 +400,13 @@ public class UiSnapshotTests
         var countWire = await page.Locator("[data-testid='wire']").InnerTextAsync();
         var countScalar = await page.Locator("[data-testid='result-scalar']").InnerTextAsync();
         log.Add($"✓ count terminal: wireHasCount={countWire.Contains("\"count\"")}, scalar={countScalar.Trim()}");
+
+        // Toggle to dark mode (System → Light → Dark) and capture it.
+        await page.Locator("[data-testid='theme-toggle']").ClickAsync();
+        await page.Locator("[data-testid='theme-toggle']").ClickAsync();
+        await page.WaitForSelectorAsync(".monaco-editor.vs-dark", new() { Timeout = 10_000 });
+        await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "5-dark.png"), FullPage = true });
+        log.Add($"✓ dark mode: dataTheme={await page.EvaluateAsync<string>("() => document.documentElement.dataset.theme")}");
 
         // Diagnostics.
         await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(e => e.Nope)')");

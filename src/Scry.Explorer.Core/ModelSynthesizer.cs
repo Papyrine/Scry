@@ -1,14 +1,14 @@
 using System.Text;
 using Scry.Wire;
 
-namespace Scry.Explorer.Ui.Roslyn;
+namespace Scry.Explorer.Core;
 
 /// <summary>
 /// Turns a <see cref="ScryIntrospection"/> into the C# source the design-time generator would emit:
 /// the re-emitted enums, one query-model class per type, and a <c>ScryQuery</c> facade exposing each
 /// source as <see cref="IQueryable{T}"/>. Compiled in-browser so Roslyn can complete against it.
 /// </summary>
-static class ModelSynthesizer
+public static class ModelSynthesizer
 {
     /// <param name="executable">
     /// When true, emit a real client-backed <c>ScryQuery</c> (for compiling + running a query); when

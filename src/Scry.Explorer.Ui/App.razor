@@ -2,10 +2,12 @@
 @inject IJSRuntime JS
 @using System.Text
 @using System.Text.Json
+@using System.Threading
 @using BlazorMonaco
 @using BlazorMonaco.Editor
 @using BlazorMonaco.Languages
 @using Microsoft.CodeAnalysis
+@using Microsoft.JSInterop
 
 <PageTitle>Scry Explorer</PageTitle>
 
@@ -23,13 +25,17 @@
 <StandaloneCodeEditor @ref="editor" Id="scry-editor" CssClass="scry-editor" ConstructionOptions="EditorOptions"
                       OnDidInit="OnEditorInit" OnDidChangeModelContent="OnContentChanged" />
 
-<div>
-    <button data-testid="run" @onclick="Run" disabled="@(introspection is null)">Run</button>
-    <button data-testid="complete" @onclick="Complete" disabled="@(workspace is null)">Complete at end</button>
+<div class="actions">
+    <button data-testid="run" @onclick="Run" disabled="@(introspection is null)"
+            title="Translate the query to a wire request and run it against the server (Ctrl+Enter).">Run</button>
+    <button data-testid="complete" @onclick="Complete" disabled="@(workspace is null)"
+            title="Lists every C# completion available at the end of the query text — the same Roslyn engine as the inline IntelliSense dropdown, shown here as a list. Ignores the cursor position.">Complete at end</button>
     @if (workspace is null && error is null)
     {
-        <span> Loading schema…</span>
+        <span class="muted">Loading schema…</span>
     }
+    <button class="theme-toggle icon-btn" data-testid="theme-toggle" @onclick="CycleTheme"
+            title="Cycle theme: System → Light → Dark">@ThemeLabel</button>
 </div>
 
 @if (history.Count > 0)
@@ -45,7 +51,10 @@
 
 @if (wireJson is not null)
 {
-    <h3>Wire request</h3>
+    <div class="pane-head">
+        <h3>Wire request</h3>
+        <button class="icon-btn" @onclick='() => Copy(wireJson!, "wire")'>@(copied == "wire" ? "✓ Copied" : "Copy")</button>
+    </div>
     <pre data-testid="wire">@wireJson</pre>
 }
 
@@ -73,7 +82,10 @@
 
 @if (resultJson is not null)
 {
-    <h3>Response</h3>
+    <div class="pane-head">
+        <h3>Response</h3>
+        <button class="icon-btn" @onclick='() => Copy(resultJson!, "response")'>@(copied == "response" ? "✓ Copied" : "Copy")</button>
+    </div>
     <pre data-testid="result">@resultJson</pre>
 }
 
@@ -105,8 +117,24 @@
     bool editorReady;
     bool registered;
 
+    string themeMode = "system";
+    bool resolvedDark;
+    string? copied;
+
     const string HistoryKey = "scry-history";
     List<string> history = [];
+
+    // Resolve the saved theme synchronously before the editor is created, so it is built with the
+    // correct Monaco theme (no light-flash). IJSInProcessRuntime is available on Blazor WASM.
+    protected override void OnInitialized()
+    {
+        if (JS is IJSInProcessRuntime js)
+        {
+            themeMode = js.Invoke<string?>("localStorage.getItem", "scry-theme") ?? "system";
+            resolvedDark = ResolveDark(js);
+            js.InvokeVoid("scry.setDataTheme", themeMode);
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -181,13 +209,57 @@
         Language = "csharp",
         Value = Sample,
         AutomaticLayout = true,
+        Theme = resolvedDark ? "vs-dark" : "vs",
         Minimap = new EditorMinimapOptions { Enabled = false }
     };
 
     async Task OnEditorInit()
     {
         editorReady = true;
+
+        // Ctrl/Cmd+Enter runs the query from inside the editor.
+        await editor.AddAction(new ActionDescriptor
+        {
+            Id = "scry-run",
+            Label = "Run Scry query",
+            ContextMenuGroupId = "navigation",
+            Keybindings = [(int)KeyMod.CtrlCmd | (int)BlazorMonaco.KeyCode.Enter],
+            Run = _ => InvokeAsync(Run)
+        });
+
         await TryRegister();
+    }
+
+    string ThemeLabel => themeMode switch { "light" => "☀ Light", "dark" => "🌙 Dark", _ => "🌓 System" };
+
+    bool ResolveDark(IJSInProcessRuntime js) =>
+        themeMode == "dark" || (themeMode != "light" && js.Invoke<bool>("scry.systemDark"));
+
+    // Cycle System → Light → Dark, persist, and retint both the page (data-theme) and Monaco (global).
+    async Task CycleTheme()
+    {
+        themeMode = themeMode switch { "system" => "light", "light" => "dark", _ => "system" };
+        if (JS is IJSInProcessRuntime js)
+        {
+            js.InvokeVoid("localStorage.setItem", "scry-theme", themeMode);
+            js.InvokeVoid("scry.setDataTheme", themeMode);
+            resolvedDark = ResolveDark(js);
+        }
+
+        await BlazorMonaco.Editor.Global.SetTheme(JS, resolvedDark ? "vs-dark" : "vs");
+    }
+
+    async Task Copy(string text, string key)
+    {
+        await JS.InvokeVoidAsync("scry.copy", text);
+        copied = key;
+        StateHasChanged();
+        await Task.Delay(1500);
+        if (copied == key)
+        {
+            copied = null;
+            StateHasChanged();
+        }
     }
 
     // Register the completion provider once both the workspace (schema) and the editor are ready.
@@ -270,7 +342,10 @@
         }
     }
 
-    // Re-run diagnostics on edit and surface them as editor squiggles.
+    CancellationTokenSource? diagnosticsCts;
+
+    // Re-run diagnostics on edit and surface them as editor squiggles. Debounced so a burst of
+    // keystrokes coalesces into a single Roslyn pass, and a superseded run is dropped.
     async Task OnContentChanged(ModelContentChangedEvent _)
     {
         if (workspace is null)
@@ -278,10 +353,20 @@
             return;
         }
 
+        diagnosticsCts?.Cancel();
+        var cts = diagnosticsCts = new CancellationTokenSource();
+
         try
         {
+            await Task.Delay(300, cts.Token);
+
             var text = await editor.GetValue();
             var diagnostics = await workspace.DiagnoseAsync(text);
+            if (cts.Token.IsCancellationRequested)
+            {
+                return;
+            }
+
             var markers = diagnostics.Select(diagnostic =>
             {
                 var (startLine, startColumn) = ToLineColumn(text, diagnostic.Start);

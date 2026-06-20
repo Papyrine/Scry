@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <!--
+    In-process tests of the browser-Roslyn layer (Scry.Explorer.Core): completion, diagnostics, and
+    snippet translation run on the desktop test host (no browser, no server) by feeding the workspace
+    on-disk Scry.Client/Scry.Wire metadata references. Sub-second and deterministic; the Playwright
+    suite in samples/Sample.Tests stays as the thin "actually runs in WASM" smoke layer.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NUnit" />
+    <PackageReference Include="NUnit3TestAdapter" />
+    <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
+    <ProjectReference Include="..\Scry.Explorer.Core\Scry.Explorer.Core.csproj" />
+    <ProjectReference Include="..\Scry.Client\Scry.Client.csproj" />
+    <ProjectReference Include="..\Scry.Wire\Scry.Wire.csproj" />
+  </ItemGroup>
+</Project>

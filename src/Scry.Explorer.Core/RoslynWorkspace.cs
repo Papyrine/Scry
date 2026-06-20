@@ -7,16 +7,16 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Host.Mef;
 using Microsoft.CodeAnalysis.Text;
 
-namespace Scry.Explorer.Ui.Roslyn;
+namespace Scry.Explorer.Core;
 
 /// <summary>A completion offered by Roslyn: its label, Roslyn tag (kind), and the span it replaces.</summary>
-sealed record ScryCompletion(string Label, string Kind, int ReplaceStart, int ReplaceEnd);
+public sealed record ScryCompletion(string Label, string Kind, int ReplaceStart, int ReplaceEnd);
 
 /// <summary>A Roslyn diagnostic within the user's code: message, span (in editor coordinates), severity.</summary>
-sealed record ScryDiagnostic(string Message, int Start, int End, bool IsError);
+public sealed record ScryDiagnostic(string Message, int Start, int End, bool IsError);
 
 /// <summary>Hover (QuickInfo) text for the symbol at a position, plus the span it covers (editor coords).</summary>
-sealed record ScryHover(string Text, int Start, int End);
+public sealed record ScryHover(string Text, int Start, int End);
 
 
 /// <summary>
@@ -24,7 +24,7 @@ sealed record ScryHover(string Text, int Start, int End);
 /// wrapped in a method body so the C# <see cref="CompletionService"/> can offer members against the
 /// allow-listed surface (e.g. <c>Query.Employee.Where(e =&gt; e.</c> → Active, Name, Status, ...).
 /// </summary>
-sealed class RoslynWorkspace
+public sealed class RoslynWorkspace
 {
     // The user's expression is spliced between these so it is a legal method body. The usings make
     // LINQ operators (System.Linq), the synthesized models/enums (Scry.Generated), and the Scry
