@@ -165,6 +165,29 @@ public class UiSnapshotTests
         Assert.That(items, Does.Contain("Manager"));
     }
 
+    // Full terminal support: the Scry terminal operators are discoverable via IntelliSense — completing
+    // against the queryable itself (not a lambda member) offers ToScryListAsync/FirstScryAsync/etc.
+    [Test]
+    public async Task ExplorerCompletesTerminals()
+    {
+        var page = await browser.NewPageAsync();
+        await page.GotoAsync($"{baseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
+
+        await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('Query.Employee.')");
+        await page.Locator("[data-testid='complete']").ClickAsync();
+
+        await page.WaitForFunctionAsync(
+            "() => Array.from(document.querySelectorAll(\"[data-testid='completions'] li\")).some(li => li.textContent === 'ToScryListAsync')",
+            null, new() { Timeout = 30_000 });
+        var items = await page.Locator("[data-testid='completions'] li").AllInnerTextsAsync();
+
+        Assert.That(items, Does.Contain("ToScryListAsync"));
+        Assert.That(items, Does.Contain("FirstScryAsync"));
+        Assert.That(items, Does.Contain("CountScryAsync"));
+    }
+
     // Proves the inline Monaco IntelliSense dropdown is wired to the Roslyn provider.
     [Test]
     public async Task ExplorerInlineSuggestions()
@@ -220,6 +243,72 @@ public class UiSnapshotTests
         Assert.That(historyText, Does.Contain("Query.Employee.Where"));
     }
 
+    // Terminal support: a plain LINQ '.ToList()' (the habitual way to ask for all rows) is folded into
+    // an enumerate-all list request rather than enumerating synchronously (which would deadlock WASM).
+    [Test]
+    public async Task ExplorerRunToList()
+    {
+        var page = await browser.NewPageAsync();
+        await page.GotoAsync($"{baseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
+
+        await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('Query.Employee.ToList()')");
+        await page.Locator("[data-testid='run']").ClickAsync();
+
+        await page.WaitForSelectorAsync("[data-testid='result-table']", new() { Timeout = 60_000 });
+        var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
+        // No Where → all four employees, including the inactive Bob.
+        Assert.That(table, Does.Contain("Aaron"));
+        Assert.That(table, Does.Contain("Bob"));
+    }
+
+    // Terminal support: a scalar terminal (CountScryAsync) is reflected as a 'count' op in the wire
+    // request and rendered as a scalar result.
+    [Test]
+    public async Task ExplorerRunCount()
+    {
+        var page = await browser.NewPageAsync();
+        await page.GotoAsync($"{baseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
+
+        await page.EvaluateAsync(
+            "() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(e => e.Active).CountScryAsync()')");
+        await page.Locator("[data-testid='run']").ClickAsync();
+
+        await page.WaitForSelectorAsync("[data-testid='result-scalar']", new() { Timeout = 60_000 });
+        var wire = await page.Locator("[data-testid='wire']").InnerTextAsync();
+        var scalar = await page.Locator("[data-testid='result-scalar']").InnerTextAsync();
+
+        Assert.That(wire, Does.Contain("\"count\""));
+        // Three active employees (Alice, Aaron, Carol).
+        Assert.That(scalar.Trim(), Is.EqualTo("3"));
+    }
+
+    // Terminal support: a single-element terminal (FirstScryAsync) is reflected as a 'first' op and
+    // rendered as a one-row result.
+    [Test]
+    public async Task ExplorerRunFirst()
+    {
+        var page = await browser.NewPageAsync();
+        await page.GotoAsync($"{baseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
+
+        await page.EvaluateAsync(
+            "() => monaco.editor.getEditors()[0].setValue(\"Query.Employee.Where(e => e.Active).OrderBy(e => e.Name).Select(e => new { e.Name, e.Status }).FirstScryAsync()\")");
+        await page.Locator("[data-testid='run']").ClickAsync();
+
+        await page.WaitForSelectorAsync("[data-testid='result-table']", new() { Timeout = 60_000 });
+        var wire = await page.Locator("[data-testid='wire']").InnerTextAsync();
+        var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
+
+        Assert.That(wire, Does.Contain("\"first\""));
+        // First active employee alphabetically.
+        Assert.That(table, Does.Contain("Aaron"));
+    }
+
     // Full interactive walkthrough with screenshots (manual/local verification, not part of CI).
     [Test, Explicit]
     public async Task ExplorerWalkthrough()
@@ -255,6 +344,15 @@ public class UiSnapshotTests
         var wire = await page.Locator("[data-testid='wire']").InnerTextAsync();
         var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
         log.Add($"✓ run: wireHasEmployee={wire.Contains("Employee")}, table=[{table.Replace("\n", " ").Trim()}]");
+
+        // Run a terminal query (scalar count) and capture the scalar rendering.
+        await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(e => e.Active).CountScryAsync()')");
+        await page.Locator("[data-testid='run']").ClickAsync();
+        await page.WaitForSelectorAsync("[data-testid='result-scalar']", new() { Timeout = 60_000 });
+        await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "3b-count.png"), FullPage = true });
+        var countWire = await page.Locator("[data-testid='wire']").InnerTextAsync();
+        var countScalar = await page.Locator("[data-testid='result-scalar']").InnerTextAsync();
+        log.Add($"✓ count terminal: wireHasCount={countWire.Contains("\"count\"")}, scalar={countScalar.Trim()}");
 
         // Diagnostics.
         await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(e => e.Nope)')");

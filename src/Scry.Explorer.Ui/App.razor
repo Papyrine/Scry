@@ -5,6 +5,7 @@
 @using BlazorMonaco
 @using BlazorMonaco.Editor
 @using BlazorMonaco.Languages
+@using Microsoft.CodeAnalysis
 
 <PageTitle>Scry Explorer</PageTitle>
 
@@ -64,6 +65,12 @@
     </table>
 }
 
+@if (scalarResult is not null)
+{
+    <h3>Result</h3>
+    <p data-testid="result-scalar">@scalarResult</p>
+}
+
 @if (resultJson is not null)
 {
     <h3>Response</h3>
@@ -87,11 +94,13 @@
     RoslynWorkspace? workspace;
     ScryIntrospection? introspection;
     SnippetExecutor? executor;
+    IReadOnlyList<MetadataReference>? scryReferences;
     IReadOnlyList<string>? completions;
     string? wireJson;
     string? resultJson;
     List<string>? resultColumns;
     List<List<string>>? resultRows;
+    string? scalarResult;
     string? error;
     bool editorReady;
     bool registered;
@@ -106,7 +115,8 @@
         {
             var json = await Http.GetStringAsync("introspect");
             introspection = JsonSerializer.Deserialize<ScryIntrospection>(json, ScryJson.Options)!;
-            workspace = RoslynWorkspace.Create(ModelSynthesizer.Synthesize(introspection));
+            scryReferences = await SnippetExecutor.FetchReferencesAsync(Http);
+            workspace = RoslynWorkspace.Create(ModelSynthesizer.Synthesize(introspection), scryReferences);
             await TryRegister();
         }
         catch (Exception exception)
@@ -117,7 +127,7 @@
 
     async Task Run()
     {
-        if (introspection is null)
+        if (introspection is null || scryReferences is null)
         {
             return;
         }
@@ -127,8 +137,9 @@
             error = null;
             resultColumns = null;
             resultRows = null;
+            scalarResult = null;
             var code = await editor.GetValue();
-            executor ??= await SnippetExecutor.CreateAsync(Http, introspection);
+            executor ??= SnippetExecutor.Create(introspection, scryReferences);
             var request = executor.Translate(code);
             var json = ScryJson.Serialize(request);
             wireJson = Prettify(json);
@@ -143,9 +154,17 @@
                 AddHistory(code);
                 await SaveHistory();
                 var parsed = ScryJson.DeserializeResponse(body);
-                if (parsed.Kind == ResultKind.List)
+                switch (parsed.Kind)
                 {
-                    BuildTable(parsed.Payload);
+                    case ResultKind.List:
+                        BuildTable(parsed.Payload);
+                        break;
+                    case ResultKind.Single:
+                        BuildSingle(parsed.Payload);
+                        break;
+                    case ResultKind.Scalar:
+                        scalarResult = parsed.Payload.GetRawText();
+                        break;
                 }
             }
         }
@@ -385,6 +404,26 @@
 
         resultColumns = columns;
         resultRows = rows;
+    }
+
+    // A Single result is one projected object (or null) — render it as a one-row table, reusing the
+    // list-result markup; null / a bare scalar falls back to the scalar line.
+    void BuildSingle(JsonElement payload)
+    {
+        if (payload.ValueKind == JsonValueKind.Null)
+        {
+            scalarResult = "(no result)";
+            return;
+        }
+
+        if (payload.ValueKind != JsonValueKind.Object)
+        {
+            scalarResult = payload.GetRawText();
+            return;
+        }
+
+        resultColumns = payload.EnumerateObject().Select(_ => _.Name).ToList();
+        resultRows = [payload.EnumerateObject().Select(_ => _.Value.ToString()).ToList()];
     }
 
     static int ToOffset(string text, int line, int column)

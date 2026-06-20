@@ -27,9 +27,11 @@ sealed record ScryHover(string Text, int Start, int End);
 sealed class RoslynWorkspace
 {
     // The user's expression is spliced between these so it is a legal method body. The usings make
-    // LINQ operators (System.Linq) and the synthesized models/enums (Scry.Generated) resolve.
+    // LINQ operators (System.Linq), the synthesized models/enums (Scry.Generated), and the Scry
+    // terminal operators (Scry.Client: ToScryListAsync/FirstScryAsync/CountScryAsync/...) resolve —
+    // so completion offers them and diagnostics do not falsely flag them.
     const string Header =
-        "using System;\nusing System.Linq;\nusing System.Collections.Generic;\nusing Scry.Generated;\nnamespace Scry.Editor;\nstatic class Editor\n{\n    static object Run(global::Scry.Generated.ScryQuery Query)\n    {\n        return ";
+        "using System;\nusing System.Linq;\nusing System.Collections.Generic;\nusing Scry.Generated;\nusing Scry.Client;\nnamespace Scry.Editor;\nstatic class Editor\n{\n    static object Run(global::Scry.Generated.ScryQuery Query)\n    {\n        return ";
     const string Footer = ";\n    }\n}\n";
 
     readonly AdhocWorkspace workspace;
@@ -41,7 +43,11 @@ sealed class RoslynWorkspace
         this.editorDocumentId = editorDocumentId;
     }
 
-    public static RoslynWorkspace Create(string generatedSource)
+    /// <param name="scryReferences">
+    /// Scry.Client + Scry.Wire metadata references, so the terminal operators (extension methods on
+    /// <see cref="IQueryable{T}"/>) resolve for completion and diagnostics.
+    /// </param>
+    public static RoslynWorkspace Create(string generatedSource, IReadOnlyList<MetadataReference> scryReferences)
     {
         var workspace = new AdhocWorkspace(CreateHost());
 
@@ -53,7 +59,7 @@ sealed class RoslynWorkspace
             language: LanguageNames.CSharp,
             compilationOptions: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
                 .WithConcurrentBuild(false),
-            metadataReferences: Net100.References.All);
+            metadataReferences: [.. Net100.References.All, .. scryReferences]);
 
         var project = workspace.AddProject(projectInfo);
         workspace.AddDocument(project.Id, "Generated.cs", SourceText.From(generatedSource));
@@ -93,6 +99,10 @@ sealed class RoslynWorkspace
     /// <summary>Returns errors/warnings within the user's code (offsets in <paramref name="code"/> coordinates).</summary>
     public async Task<IReadOnlyList<ScryDiagnostic>> DiagnoseAsync(string code)
     {
+        // A trailing ';' is harmless to Run (the executor strips it) but would otherwise splice into
+        // "return <code>;" as an empty, unreachable statement and surface a spurious warning.
+        code = code.TrimEnd().TrimEnd(';').TrimEnd();
+
         var solution = workspace.CurrentSolution.WithDocumentText(
             editorDocumentId,
             SourceText.From(Header + code + Footer));
