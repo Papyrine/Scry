@@ -11,6 +11,16 @@ html, body {
     color: #b00020;
 }
 
+/*
+  Monaco does not size itself — its host element must have an explicit height or it lays out into a
+  ~0-height box (you see a clipped sliver and cannot click/type into it). StandaloneCodeEditor renders
+  this element with the CssClass we pass, so the height belongs here, not on a wrapper div.
+*/
+.scry-editor {
+    height: 360px;
+    border: 1px solid #ccc;
+}
+
 ul[data-testid="completions"] {
     columns: 4;
     font-family: ui-monospace, "Cascadia Code", Consolas, monospace;

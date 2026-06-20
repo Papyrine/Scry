@@ -19,10 +19,8 @@
     <p class="error" role="alert" data-testid="error">@error</p>
 }
 
-<div style="height:160px;border:1px solid #ccc;">
-    <StandaloneCodeEditor @ref="editor" Id="scry-editor" ConstructionOptions="EditorOptions"
-                          OnDidInit="OnEditorInit" OnDidChangeModelContent="OnContentChanged" />
-</div>
+<StandaloneCodeEditor @ref="editor" Id="scry-editor" CssClass="scry-editor" ConstructionOptions="EditorOptions"
+                      OnDidInit="OnEditorInit" OnDidChangeModelContent="OnContentChanged" />
 
 <div>
     <button data-testid="run" @onclick="Run" disabled="@(introspection is null)">Run</button>

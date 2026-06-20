@@ -123,6 +123,30 @@ public class UiSnapshotTests
         await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
     }
 
+    // Regression test for the editor-height bug. Monaco does not size itself: its host element needs
+    // an explicit height, or it lays out into a ~0-height box that renders a clipped sliver and
+    // silently swallows clicks/keystrokes — you cannot type into it. Asserts the host has a real
+    // height and that clicking into the editor and typing actually updates the model.
+    [Test]
+    public async Task ExplorerEditorAcceptsTyping()
+    {
+        var page = await browser.NewPageAsync();
+        await page.GotoAsync($"{baseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
+
+        var height = await page.EvaluateAsync<double>(
+            "() => document.querySelector('.scry-editor').getBoundingClientRect().height");
+        Assert.That(height, Is.GreaterThan(100), "editor host height (the bug rendered it ~0)");
+
+        // Type the way a user does: click into the editor to focus it, then type on the keyboard.
+        await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('')");
+        await page.Locator(".monaco-editor").ClickAsync();
+        await page.Keyboard.TypeAsync("Query");
+
+        var value = await page.EvaluateAsync<string>("() => monaco.editor.getEditors()[0].getValue()");
+        Assert.That(value, Is.EqualTo("Query"), "typed text should reach the editor model");
+    }
+
     // Proves Roslyn runs in the browser and completes against the introspected schema: the explorer
     // auto-runs completion for "Query.Employee.Where(e => e." on load and should offer Employee members.
     [Test]
@@ -252,7 +276,10 @@ public class UiSnapshotTests
         await Task.Delay(1800);
         await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "4-hover.png") });
         var hoverCount = await page.Locator(".monaco-hover:not(.hidden)").CountAsync();
-        var hoverText = await page.Locator(".monaco-hover").CountAsync() > 0 ? await page.Locator(".monaco-hover").InnerTextAsync() : "(no widget)";
+        // A fully laid-out editor has several .monaco-hover widgets (glyph-margin + content), so the
+        // locator is not strict-safe — read the first one's text purely for the diagnostic log.
+        var hoverWidgets = page.Locator(".monaco-hover");
+        var hoverText = await hoverWidgets.CountAsync() > 0 ? await hoverWidgets.First.InnerTextAsync() : "(no widget)";
         log.Add($"{(hoverCount > 0 ? "✓" : "✗")} hover: visible={hoverCount}, text=[{hoverText.Replace("\n", " ").Trim()}]");
 
         log.Add($"console errors: {(consoleErrors.Count == 0 ? "none" : string.Join(" || ", consoleErrors))}");
