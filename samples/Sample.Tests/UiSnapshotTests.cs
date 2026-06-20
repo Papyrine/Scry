@@ -1,9 +1,4 @@
-using System.Diagnostics;
-using System.Net;
-using System.Net.Sockets;
-using Microsoft.Playwright;
 
-namespace Sample.Tests;
 
 // Launches the real Sample.Server (the same DLL `dotnet run` would execute) and drives it with a
 // headless Chromium browser, snapshotting the live WebAssembly UI as HTML + a screenshot.
@@ -53,11 +48,13 @@ public class UiSnapshotTests
     [OneTimeTearDown]
     public async Task Stop()
     {
+        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
         if (browser is not null)
         {
             await browser.DisposeAsync();
         }
 
+        // ReSharper disable once ConditionalAccessQualifierIsNonNullableAccordingToAPIContract
         playwright?.Dispose();
 
         if (server is { HasExited: false })
@@ -67,6 +64,7 @@ public class UiSnapshotTests
             server.WaitForExit(milliseconds: 5000);
         }
 
+        // ReSharper disable once ConditionalAccessQualifierIsNonNullableAccordingToAPIContract
         server?.Dispose();
 
         try
@@ -436,8 +434,8 @@ public class UiSnapshotTests
 
         log.Add($"console errors: {(consoleErrors.Count == 0 ? "none" : string.Join(" || ", consoleErrors))}");
         await File.WriteAllLinesAsync(Path.Combine(dir, "results.txt"), log);
-        TestContext.Out.WriteLine($"Walkthrough screenshots + results: {dir}");
-        TestContext.Out.WriteLine(string.Join("\n", log));
+        await TestContext.Out.WriteLineAsync($"Walkthrough screenshots + results: {dir}");
+        await TestContext.Out.WriteLineAsync(string.Join("\n", log));
 
         // Assert the headlessly-verifiable features. Hover needs a real browser (Monaco renders the
         // editor text clipped headless, so the mouse can't land on a token to trigger it).

@@ -9,8 +9,20 @@ public class Holiday
 
     public static IEnumerable<Holiday> Seed() =>
     [
-        new() { Name = "New Year", Date = new(2026, 1, 1) },
-        new() { Name = "Workers Day", Date = new(2026, 5, 1) },
-        new() { Name = "Christmas", Date = new(2026, 12, 25) }
+        new()
+        {
+            Name = "New Year",
+            Date = new(2026, 1, 1)
+        },
+        new()
+        {
+            Name = "Workers Day",
+            Date = new(2026, 5, 1)
+        },
+        new()
+        {
+            Name = "Christmas",
+            Date = new(2026, 12, 25)
+        }
     ];
 }

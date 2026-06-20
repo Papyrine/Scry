@@ -35,21 +35,63 @@ public sealed class SampleContext(DbContextOptions<SampleContext> options) :
 
     static void Seed(SampleContext context)
     {
-        var engineering = new Department { Name = "Engineering" };
-        var sales = new Department { Name = "Sales" };
+        var engineering = new Department {Name = "Engineering"};
+        var sales = new Department {Name = "Sales"};
         context.Departments.AddRange(engineering, sales);
 
-        var alice = new Employee { Name = "Alice", Status = Status.FullTime, Active = true, Department = engineering, Salary = 200_000 };
+        var alice = new Employee
+        {
+            Name = "Alice",
+            Status = Status.FullTime,
+            Active = true,
+            Department = engineering,
+            Salary = 200_000
+        };
         context.Employees.Add(alice);
         context.Employees.AddRange(
-            new() { Name = "Aaron", Status = Status.FullTime, Active = true, Department = engineering, Manager = alice, Salary = 150_000 },
-            new() { Name = "Bob", Status = Status.PartTime, Active = false, Department = sales, Manager = alice, Salary = 90_000 },
-            new() { Name = "Carol", Status = Status.Contractor, Active = true, Department = sales, Salary = 120_000 });
+            new()
+            {
+                Name = "Aaron",
+                Status = Status.FullTime,
+                Active = true,
+                Department = engineering,
+                Manager = alice,
+                Salary = 150_000
+            },
+            new()
+            {
+                Name = "Bob",
+                Status = Status.PartTime,
+                Active = false,
+                Department = sales,
+                Manager = alice,
+                Salary = 90_000
+            },
+            new()
+            {
+                Name = "Carol",
+                Status = Status.Contractor,
+                Active = true,
+                Department = sales,
+                Salary = 120_000
+            });
 
         context.Orders.AddRange(
-            new() { Region = "North", Amount = 100m },
-            new() { Region = "North", Amount = 250m },
-            new() { Region = "South", Amount = 75m });
+            new()
+            {
+                Region = "North",
+                Amount = 100m
+            },
+            new()
+            {
+                Region = "North",
+                Amount = 250m
+            },
+            new()
+            {
+                Region = "South",
+                Amount = 75m
+            });
 
         context.SaveChanges();
     }

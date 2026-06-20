@@ -1,8 +1,6 @@
 using System.Runtime.CompilerServices;
 using VerifyTests.DiffPlex;
 
-namespace Sample.Tests;
-
 public static class ModuleInitializer
 {
     [ModuleInitializer]
