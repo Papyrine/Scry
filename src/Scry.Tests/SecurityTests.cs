@@ -1,5 +1,3 @@
-using Scry;
-
 namespace Scry.Tests;
 
 [TestFixture]
@@ -42,7 +40,7 @@ public class SecurityTests
     public void RejectsAggregateWithoutGroupBy() =>
         AssertRejected(QueryRequest.Create(
             "Order",
-            [new SelectOp(new Projection([new("Total", new ExprValue(new AggregateExpr(AggregateFn.Sum, new MemberExpr(["Amount"]))))]))]));
+            [new SelectOp(new([new("Total", new ExprValue(new AggregateExpr(AggregateFn.Sum, new MemberExpr(["Amount"]))))]))]));
 
     [Test]
     public void RejectsThenByWithoutOrderBy() =>
@@ -54,7 +52,7 @@ public class SecurityTests
 
     [Test]
     public void RejectsUnsupportedWireVersion() =>
-        AssertRejected(new QueryRequest(99, "Employee", []));
+        AssertRejected(new(99, "Employee", []));
 
     [Test]
     public void RejectsGroupedProjectionReferencingNonKey() =>
@@ -62,7 +60,7 @@ public class SecurityTests
             "Order",
             [
                 new GroupByOp([new MemberExpr(["Region"])]),
-                new SelectOp(new Projection([new("Amount", new ExprValue(new MemberExpr(["Amount"])))]))
+                new SelectOp(new([new("Amount", new ExprValue(new MemberExpr(["Amount"])))]))
             ]));
 
     static void AssertRejected(QueryRequest request, Action<ScryOptions>? extra = null)

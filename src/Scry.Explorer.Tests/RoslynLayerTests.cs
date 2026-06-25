@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using NUnit.Framework;
 using Scry.Client;
@@ -17,25 +13,25 @@ namespace Scry.Explorer.Tests;
 public class RoslynLayerTests
 {
     // A small allow-listed surface mirroring the sample's Employee model (no server/EF needed).
-    static readonly ScryIntrospection Introspection = new(
+    static ScryIntrospection introspection = new(
         ScryIntrospection.CurrentVersion,
         MaxPageSize: 200,
-        Sources: [new ScrySourceInfo("Employee", "EfCore", "EmployeeQueryModel")],
+        Sources: [new("Employee", "EfCore", "EmployeeQueryModel")],
         Types:
         [
-            new ScryTypeInfo("EmployeeQueryModel",
+            new("EmployeeQueryModel",
             [
-                new ScryMemberInfo("Name", "string", NeedsNullDefault: true, IsNavigation: false),
-                new ScryMemberInfo("Active", "bool", NeedsNullDefault: false, IsNavigation: false),
-                new ScryMemberInfo("Status", "Status", NeedsNullDefault: false, IsNavigation: false),
-                new ScryMemberInfo("Manager", "EmployeeQueryModel?", NeedsNullDefault: false, IsNavigation: true)
+                new("Name", "string", NeedsNullDefault: true, IsNavigation: false),
+                new("Active", "bool", NeedsNullDefault: false, IsNavigation: false),
+                new("Status", "Status", NeedsNullDefault: false, IsNavigation: false),
+                new("Manager", "EmployeeQueryModel?", NeedsNullDefault: false, IsNavigation: true)
             ])
         ],
-        Enums: [new ScryEnumInfo("Status", ["FullTime", "PartTime", "Contractor"])]);
+        Enums: [new("Status", ["FullTime", "PartTime", "Contractor"])]);
 
     // The real Scry.Client/Scry.Wire assemblies on disk become the snippet's metadata references —
     // exactly what the browser fetches from _framework, minus the HTTP.
-    static readonly IReadOnlyList<MetadataReference> ScryReferences =
+    static IReadOnlyList<MetadataReference> scryReferences =
     [
         MetadataReference.CreateFromFile(typeof(ScryClient).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(QueryRequest).Assembly.Location)
@@ -43,16 +39,16 @@ public class RoslynLayerTests
 
     // Shared across tests: building the MEF host / executor is the expensive part, and both are used
     // through functional (non-mutating) APIs, so they are safe to reuse.
-    static readonly RoslynWorkspace Workspace =
-        RoslynWorkspace.Create(ModelSynthesizer.Synthesize(Introspection), ScryReferences);
+    static readonly RoslynWorkspace workspace =
+        RoslynWorkspace.Create(ModelSynthesizer.Synthesize(introspection), scryReferences);
 
-    static readonly SnippetExecutor Executor = SnippetExecutor.Create(Introspection, ScryReferences);
+    static readonly SnippetExecutor executor = SnippetExecutor.Create(introspection, scryReferences);
 
     [Test]
     public async Task CompletesModelMembersAfterLambdaDot()
     {
         const string code = "Query.Employee.Where(e => e.";
-        var labels = (await Workspace.CompleteAsync(code, code.Length)).Select(_ => _.Label).ToList();
+        var labels = (await workspace.CompleteAsync(code, code.Length)).Select(_ => _.Label).ToList();
 
         Assert.That(labels, Does.Contain("Active"));
         Assert.That(labels, Does.Contain("Name"));
@@ -64,7 +60,7 @@ public class RoslynLayerTests
     public async Task CompletesTerminalsAfterQueryable()
     {
         const string code = "Query.Employee.";
-        var labels = (await Workspace.CompleteAsync(code, code.Length)).Select(_ => _.Label).ToList();
+        var labels = (await workspace.CompleteAsync(code, code.Length)).Select(_ => _.Label).ToList();
 
         Assert.That(labels, Does.Contain("Where"));
         Assert.That(labels, Does.Contain("ToScryListAsync"));
@@ -75,7 +71,7 @@ public class RoslynLayerTests
     [Test]
     public async Task DiagnosesUnknownMember()
     {
-        var diagnostics = await Workspace.DiagnoseAsync("Query.Employee.Where(e => e.Nope)");
+        var diagnostics = await workspace.DiagnoseAsync("Query.Employee.Where(e => e.Nope)");
 
         Assert.That(diagnostics.Any(_ => _.IsError && _.Message.Contains("Nope")), Is.True);
     }
@@ -83,7 +79,7 @@ public class RoslynLayerTests
     [Test]
     public async Task ValidQueryHasNoDiagnostics()
     {
-        var diagnostics = await Workspace.DiagnoseAsync(
+        var diagnostics = await workspace.DiagnoseAsync(
             "Query.Employee.Where(e => e.Active).Select(e => new { e.Name })");
 
         Assert.That(diagnostics, Is.Empty);
@@ -92,7 +88,7 @@ public class RoslynLayerTests
     [Test]
     public void TranslatesWhereSelectToWire()
     {
-        var request = Executor.Translate(
+        var request = executor.Translate(
             "Query.Employee.Where(e => e.Active).Select(e => new { e.Name, e.Status })");
 
         Assert.That(request.Root, Is.EqualTo("Employee"));
@@ -113,7 +109,7 @@ public class RoslynLayerTests
     [TestCase("Query.Employee.AnyScryAsync()", typeof(AnyOp))]
     public void TranslatesTerminalToWireOp(string query, Type? terminalOp)
     {
-        var request = Executor.Translate(query);
+        var request = executor.Translate(query);
 
         Assert.That(request.Root, Is.EqualTo("Employee"));
         if (terminalOp is null)
@@ -132,7 +128,7 @@ public class RoslynLayerTests
     [Test]
     public void SynthesizesExecutableModel()
     {
-        var source = ModelSynthesizer.Synthesize(Introspection, executable: true);
+        var source = ModelSynthesizer.Synthesize(introspection, executable: true);
 
         Assert.That(source, Does.Contain("public enum Status"));
         Assert.That(source, Does.Contain("public sealed class EmployeeQueryModel"));

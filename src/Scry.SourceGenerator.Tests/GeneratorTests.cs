@@ -1,9 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
-using Scry;
-
-namespace Scry.SourceGenerator.Tests;
 
 [TestFixture]
 public class GeneratorTests

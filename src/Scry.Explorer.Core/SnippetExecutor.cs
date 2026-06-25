@@ -1,4 +1,3 @@
-using System.Net.Http;
 using System.Reflection;
 using Basic.Reference.Assemblies;
 using Microsoft.CodeAnalysis;
@@ -89,7 +88,7 @@ public sealed class SnippetExecutor
     // Recognised zero-argument terminal operators → their wire QueryOp ("" = enumerate to a list).
     // Both the Scry async terminals (the real client API) and the plain-LINQ equivalents are accepted,
     // so habitual `.ToList()`/`.Count()`/`.First()` work too.
-    static readonly Dictionary<string, string> Terminals = new(StringComparer.Ordinal)
+    static Dictionary<string, string> terminals = new(StringComparer.Ordinal)
     {
         ["ToScryListAsync"] = "",
         ["ToList"] = "",
@@ -124,9 +123,8 @@ public sealed class SnippetExecutor
             expression = awaited.Expression;
         }
 
-        if (expression is InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax member } invocation &&
-            invocation.ArgumentList.Arguments.Count == 0 &&
-            Terminals.TryGetValue(member.Name.Identifier.ValueText, out var terminal))
+        if (expression is InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax member, ArgumentList.Arguments.Count: 0} &&
+            terminals.TryGetValue(member.Name.Identifier.ValueText, out var terminal))
         {
             return (member.Expression.ToString(), terminal);
         }

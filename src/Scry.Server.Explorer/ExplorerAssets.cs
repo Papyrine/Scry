@@ -1,5 +1,3 @@
-using System.Reflection;
-
 namespace Scry;
 
 /// <summary>
@@ -9,9 +7,9 @@ namespace Scry;
 /// </summary>
 sealed class ExplorerAssets
 {
-    const string Prefix = "scryui/";
+    const string prefix = "scryui/";
 
-    static readonly Lazy<ExplorerAssets> lazy = new(() => new ExplorerAssets());
+    static readonly Lazy<ExplorerAssets> lazy = new(() => new());
 
     public static ExplorerAssets Instance => lazy.Value;
 
@@ -22,12 +20,12 @@ sealed class ExplorerAssets
     {
         foreach (var name in assembly.GetManifestResourceNames())
         {
-            if (!name.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase))
+            if (!name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            pathToResource[Normalize(name[Prefix.Length..])] = name;
+            pathToResource[Normalize(name[prefix.Length..])] = name;
         }
     }
 

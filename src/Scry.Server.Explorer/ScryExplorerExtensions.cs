@@ -55,7 +55,7 @@ public static class ScryExplorerExtensions
         // A path without a file extension is a client-side route (or the root) — serve the SPA host.
         if (path.Length == 0 || Path.GetExtension(path).Length == 0)
         {
-            return Index(options, basePath, assets);
+            return Index(basePath, assets);
         }
 
         if (assets.TryOpen(path, out var stream, out var contentType))
@@ -77,7 +77,7 @@ public static class ScryExplorerExtensions
         return Results.Content(ScryJson.Serialize(introspection), "application/json");
     }
 
-    static IResult Index(ScryExplorerOptions options, string basePath, ExplorerAssets assets)
+    static IResult Index(string basePath, ExplorerAssets assets)
     {
         var html = assets.ReadText("index.html")
             .Replace("__SCRY_BASE__", basePath + "/");

@@ -25,7 +25,7 @@ public class WireSerializationTests
                 new SkipOp(10),
                 new TakeOp(50),
                 new SelectOp(
-                    new Projection(
+                    new(
                     [
                         new("Name", new ExprValue(new MemberExpr(["Name"]))),
                         new("ManagerName", new ExprValue(new MemberExpr(["Manager", "Name"]))),
@@ -33,7 +33,7 @@ public class WireSerializationTests
                             "Manager",
                             new NestedValue(
                                 ["Manager"],
-                                new Projection([new("Name", new ExprValue(new MemberExpr(["Name"])))])))
+                                new([new("Name", new ExprValue(new MemberExpr(["Name"])))])))
                     ]))
             ]);
 
@@ -53,7 +53,7 @@ public class WireSerializationTests
                         new ConstExpr("0", ClrTypeTag.Decimal))),
                 new GroupByOp([new MemberExpr(["Region"])]),
                 new SelectOp(
-                    new Projection(
+                    new(
                     [
                         new("Region", new ExprValue(new MemberExpr(["Region"]))),
                         new("Total", new ExprValue(new AggregateExpr(AggregateFn.Sum, new MemberExpr(["Amount"])))),

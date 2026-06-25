@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using VerifyTests.DiffPlex;
 
 namespace Scry.SourceGenerator.Tests;

@@ -1,6 +1,5 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Scry;
 
 namespace Scry.Tests;
 
@@ -49,7 +48,7 @@ public class Order
 public class Holiday
 {
     public string Name { get; set; } = "";
-    public DateOnly Date { get; set; }
+    public Date Date { get; set; }
 
     public static IEnumerable<Holiday> Seed() =>
     [

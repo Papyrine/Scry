@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Microsoft.EntityFrameworkCore;
 
 namespace Scry;
 
@@ -137,7 +136,7 @@ sealed class QueryExecutor(ScrySchema schema, ScryOptions options)
 
         var filter = typeof(IReturnablePolicy<>)
             .MakeGenericType(source.ClrType)
-            .GetMethod(nameof(IReturnablePolicy<object>.Filter))!;
+            .GetMethod(nameof(IReturnablePolicy<>.Filter))!;
         var context = new ScryPolicyContext(services, db);
         return (IQueryable)filter.Invoke(policy, [query, context])!;
     }

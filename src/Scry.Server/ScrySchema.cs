@@ -1,48 +1,4 @@
-using System.Reflection;
-using Microsoft.EntityFrameworkCore;
-
 namespace Scry;
-
-/// <summary>How a member of a queryable type may be used.</summary>
-enum MemberKind
-{
-    /// <summary>A scalar/enum/string value — usable in predicates, ordering and projection leaves.</summary>
-    Scalar,
-
-    /// <summary>A reference navigation to another queryable type — traversable in a member path.</summary>
-    Navigation
-}
-
-/// <summary>An allow-listed member of a queryable type.</summary>
-sealed class ScryMember(string name, PropertyInfo property, MemberKind kind)
-{
-    public string Name { get; } = name;
-    public PropertyInfo Property { get; } = property;
-    public Type Type { get; } = property.PropertyType;
-    public MemberKind Kind { get; } = kind;
-}
-
-/// <summary>The allow-listed surface of a queryable CLR type.</summary>
-sealed class ScryTypeMeta(Type clrType)
-{
-    public Type ClrType { get; } = clrType;
-    public Dictionary<string, ScryMember> Members { get; } = new(StringComparer.Ordinal);
-}
-
-/// <summary>A registered queryable source (entity, view, or POCO).</summary>
-sealed class ScrySource(
-    string name,
-    Type clrType,
-    SourceKind kind,
-    Type? policyType,
-    Func<DbContext, IServiceProvider, IQueryable> resolve)
-{
-    public string Name { get; } = name;
-    public Type ClrType { get; } = clrType;
-    public SourceKind Kind { get; } = kind;
-    public Type? PolicyType { get; } = policyType;
-    public Func<DbContext, IServiceProvider, IQueryable> Resolve { get; } = resolve;
-}
 
 /// <summary>
 /// The server's authoritative allow-list, built once from the model assembly's annotations. The
@@ -274,8 +230,8 @@ sealed class ScrySchema
         return underlying == typeof(string) ||
                underlying == typeof(decimal) ||
                underlying == typeof(DateTime) ||
-               underlying == typeof(DateOnly) ||
-               underlying == typeof(TimeOnly) ||
+               underlying == typeof(Date) ||
+               underlying == typeof(Time) ||
                underlying == typeof(DateTimeOffset) ||
                underlying == typeof(TimeSpan) ||
                underlying == typeof(Guid);

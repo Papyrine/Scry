@@ -115,7 +115,7 @@ public class ExecutionTests
             "Employee",
             [
                 new OrderByOp(new MemberExpr(["Name"]), false),
-                new SelectOp(new Projection([new("Name", new ExprValue(new MemberExpr(["Name"])))]))
+                new SelectOp(new([new("Name", new ExprValue(new MemberExpr(["Name"])))]))
             ]);
 
         using var context = TestContext.CreateSeeded();
