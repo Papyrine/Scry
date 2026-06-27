@@ -60,10 +60,7 @@ sealed class ScrySchema
 
         if (actual.IsEnum)
         {
-            if (!enums.ContainsKey(actual.Name))
-            {
-                enums[actual.Name] = new(actual.Name, Enum.GetNames(actual));
-            }
+            enums.TryAdd(actual.Name, new(actual.Name, Enum.GetNames(actual)));
 
             return new(member.Name, nullable ? $"{actual.Name}?" : actual.Name, NeedsNullDefault: false, IsNavigation: false);
         }
