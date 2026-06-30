@@ -1,12 +1,12 @@
 ﻿[
   {
     Region: North,
-    Total: 350.0,
+    Total: 350.00,
     Count: 2
   },
   {
     Region: South,
-    Total: 75.0,
+    Total: 75.00,
     Count: 1
   }
 ]

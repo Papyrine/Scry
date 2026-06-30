@@ -1,4 +1,4 @@
-using Microsoft.Data.Sqlite;
+using EfLocalDb;
 using Microsoft.EntityFrameworkCore;
 
 namespace Scry.Tests;
@@ -73,20 +73,30 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<Order> Orders => Set<Order>();
 
-    public static TestContext CreateSeeded()
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
+        configurationBuilder.Properties<decimal>().HavePrecision(18, 2);
+
+    static SqlInstance<TestContext> sqlInstance = null!;
+    static SqlDatabase<TestContext> database = null!;
+
+    // Every test in this assembly is read-only against the same seed, so the whole fixture shares a
+    // single LocalDB database built once by DatabaseSetup. CreateSeeded hands out a fresh context over
+    // that database, which keeps it synchronous and leaves the call sites unchanged.
+    public static async Task InitializeAsync()
     {
-        var connection = new SqliteConnection("DataSource=:memory:");
-        connection.Open();
-
-        var options = new DbContextOptionsBuilder<TestContext>()
-            .UseSqlite(connection)
-            .Options;
-
-        var context = new TestContext(options);
-        context.Database.EnsureCreated();
-        Seed(context);
-        return context;
+        sqlInstance = new(_ => new TestContext(_.Options));
+        database = await sqlInstance.Build();
+        Seed(database.Context);
     }
+
+    public static async Task ShutdownAsync()
+    {
+        await database.DisposeAsync();
+        sqlInstance.Dispose();
+    }
+
+    public static TestContext CreateSeeded() =>
+        database.NewConnectionOwnedDbContext();
 
     static void Seed(TestContext context)
     {

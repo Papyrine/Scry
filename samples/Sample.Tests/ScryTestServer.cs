@@ -1,28 +1,37 @@
-using Microsoft.Data.Sqlite;
+using EfLocalDb;
 using Sample.Model;
 
 /// <summary>
 /// An in-process Scry server wired up exactly like <c>Sample.Server</c>'s <c>Program.cs</c>, but
 /// hosted on <see cref="TestServer"/> so tests can drive the real query pipeline without a socket.
+/// Each instance runs against its own LocalDB database, cloned from a seeded template.
 /// </summary>
 public sealed class ScryTestServer : IAsyncDisposable
 {
-    readonly WebApplication app;
-    readonly string dbPath;
+    static readonly SqlInstance<SampleContext> sqlInstance = new(
+        constructInstance: _ => new SampleContext(_.Options),
+        buildTemplate: _ =>
+        {
+            SampleContext.Initialize(_);
+            return Task.CompletedTask;
+        });
 
-    ScryTestServer(WebApplication app, string dbPath)
+    readonly WebApplication app;
+    readonly SqlDatabase<SampleContext> database;
+
+    ScryTestServer(WebApplication app, SqlDatabase<SampleContext> database)
     {
         this.app = app;
-        this.dbPath = dbPath;
+        this.database = database;
     }
 
     public static async Task<ScryTestServer> StartAsync()
     {
-        var dbPath = Path.Combine(Path.GetTempPath(), $"scry_sample_{Guid.NewGuid():N}.db");
+        var database = await sqlInstance.Build();
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
-        builder.Services.AddDbContext<SampleContext>(options => options.UseSqlite($"Data Source={dbPath}"));
+        builder.Services.AddDbContext<SampleContext>(options => options.UseSqlServer(database.ConnectionString));
         builder.Services.AddScry(options =>
         {
             options.UseModel<SampleContext>();
@@ -31,15 +40,10 @@ public sealed class ScryTestServer : IAsyncDisposable
         });
 
         var app = builder.Build();
-        using (var scope = app.Services.CreateScope())
-        {
-            SampleContext.Initialize(scope.ServiceProvider.GetRequiredService<SampleContext>());
-        }
-
         app.MapScry("/api/query");
         await app.StartAsync();
 
-        return new(app, dbPath);
+        return new(app, database);
     }
 
     /// <summary>An <see cref="HttpClient"/> bound to the test server, rooted at the query endpoint.</summary>
@@ -55,19 +59,6 @@ public sealed class ScryTestServer : IAsyncDisposable
     {
         await app.StopAsync();
         await app.DisposeAsync();
-
-        // The SQLite connection pool may still hold the temp file; release it before deleting.
-        SqliteConnection.ClearAllPools();
-        try
-        {
-            if (File.Exists(dbPath))
-            {
-                File.Delete(dbPath);
-            }
-        }
-        catch (IOException)
-        {
-            // Best-effort cleanup of a temp file.
-        }
+        await database.DisposeAsync();
     }
 }

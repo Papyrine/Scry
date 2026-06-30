@@ -13,6 +13,9 @@ public sealed class SampleContext(DbContextOptions<SampleContext> options) :
             .HasNoKey()
             .ToView("EmployeeSummary");
 
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
+        configurationBuilder.Properties<decimal>().HavePrecision(18, 2);
+
     public static void Initialize(SampleContext context)
     {
         context.Database.EnsureCreated();
@@ -25,7 +28,7 @@ public sealed class SampleContext(DbContextOptions<SampleContext> options) :
         // EnsureCreated does not manage views; create it once the tables and data exist.
         context.Database.ExecuteSqlRaw(
             """
-            CREATE VIEW IF NOT EXISTS EmployeeSummary AS
+            CREATE OR ALTER VIEW EmployeeSummary AS
             SELECT d.Name AS Department, COUNT(e.Id) AS Headcount
             FROM Departments d
             LEFT JOIN Employees e ON e.DepartmentId = d.Id

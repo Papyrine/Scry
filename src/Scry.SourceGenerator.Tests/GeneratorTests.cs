@@ -61,35 +61,28 @@ public class GeneratorTests
             references,
             new(OutputKind.DynamicallyLinkedLibrary));
 
-        var dllPath = Path.Combine(Path.GetTempPath(), $"ScryModel_{Guid.NewGuid():N}.dll");
-        try
-        {
-            var emit = modelCompilation.Emit(dllPath);
-            Assert.That(emit.Success, Is.True, () => string.Join("\n", emit.Diagnostics));
+        var dllPath = new TempFile("dll");
+        var emit = modelCompilation.Emit(dllPath);
+        Assert.That(emit.Success, Is.True, () => string.Join("\n", emit.Diagnostics));
 
-            var consumer = CSharpCompilation.Create(
-                "Consumer",
-                [CSharpSyntaxTree.ParseText("// consumer")],
-                references,
-                new(OutputKind.DynamicallyLinkedLibrary));
+        var consumer = CSharpCompilation.Create(
+            "Consumer",
+            [CSharpSyntaxTree.ParseText("// consumer")],
+            references,
+            new(OutputKind.DynamicallyLinkedLibrary));
 
-            var generator = new ScryGenerator();
-            GeneratorDriver driver = CSharpGeneratorDriver.Create(
-                generators: [generator.AsSourceGenerator()],
-                additionalTexts: null,
-                parseOptions: null,
-                optionsProvider: new TestOptionsProvider(new() { ["build_property.ScryModelDll"] = dllPath }));
-
-            driver = driver.RunGenerators(consumer);
-            return Verify(driver);
-        }
-        finally
-        {
-            if (File.Exists(dllPath))
+        var generator = new ScryGenerator();
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            generators: [generator.AsSourceGenerator()],
+            additionalTexts: null,
+            parseOptions: null,
+            optionsProvider: new TestOptionsProvider(new()
             {
-                File.Delete(dllPath);
-            }
-        }
+                ["build_property.ScryModelDll"] = dllPath
+            }));
+
+        driver = driver.RunGenerators(consumer);
+        return Verify(driver);
     }
 
     static List<MetadataReference> ReferenceAssemblies()

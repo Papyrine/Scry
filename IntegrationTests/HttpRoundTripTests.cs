@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using EfLocalDb;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -43,10 +44,18 @@ public class Order
 [TestFixture]
 public class HttpRoundTripTests
 {
+    static readonly SqlInstance<Sample.Model.SampleContext> sqlInstance = new(
+        constructInstance: _ => new Sample.Model.SampleContext(_.Options),
+        buildTemplate: _ =>
+        {
+            Sample.Model.SampleContext.Initialize(_);
+            return Task.CompletedTask;
+        });
+
     WebApplication app = null!;
     HttpClient http = null!;
     ScryClient client = null!;
-    string dbPath = null!;
+    SqlDatabase<Sample.Model.SampleContext> database = null!;
 
     record EmployeeRow(string Name, Status Status, string? Manager, string Department);
 
@@ -57,11 +66,11 @@ public class HttpRoundTripTests
     [OneTimeSetUp]
     public async Task StartServer()
     {
-        dbPath = Path.Combine(Path.GetTempPath(), $"scry_it_{Guid.NewGuid():N}.db");
+        database = await sqlInstance.Build();
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
-        builder.Services.AddDbContext<Sample.Model.SampleContext>(options => options.UseSqlite($"Data Source={dbPath}"));
+        builder.Services.AddDbContext<Sample.Model.SampleContext>(options => options.UseSqlServer(database.ConnectionString));
         builder.Services.AddScry(options =>
         {
             options.UseModel<Sample.Model.SampleContext>();
@@ -70,11 +79,6 @@ public class HttpRoundTripTests
         });
 
         app = builder.Build();
-        using (var scope = app.Services.CreateScope())
-        {
-            Sample.Model.SampleContext.Initialize(scope.ServiceProvider.GetRequiredService<Sample.Model.SampleContext>());
-        }
-
         app.MapScry("/api/query");
         await app.StartAsync();
 
@@ -88,20 +92,7 @@ public class HttpRoundTripTests
         await app.StopAsync();
         await app.DisposeAsync();
         http.Dispose();
-
-        // The SQLite connection pool may still hold the temp file; release it before deleting.
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-        try
-        {
-            if (File.Exists(dbPath))
-            {
-                File.Delete(dbPath);
-            }
-        }
-        catch (IOException)
-        {
-            // Best-effort cleanup of a temp file.
-        }
+        await database.DisposeAsync();
     }
 
     [Test]

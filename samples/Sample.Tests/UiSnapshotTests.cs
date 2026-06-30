@@ -20,7 +20,7 @@ public class UiSnapshotTests
         var port = GetFreePort();
         baseUrl = $"http://127.0.0.1:{port}";
 
-        // Run from a throwaway directory so the server's SQLite file does not land in the repo.
+        // Run the server from a throwaway working directory so nothing it writes lands in the repo.
         workDir = Directory.CreateTempSubdirectory("scry_ui_").FullName;
 
         server = new()
@@ -60,7 +60,7 @@ public class UiSnapshotTests
         if (server is { HasExited: false })
         {
             server.Kill(entireProcessTree: true);
-            // Let the process release its SQLite file before the directory is removed.
+            // Give the process a moment to exit before the working directory is removed.
             server.WaitForExit(milliseconds: 5000);
         }
 

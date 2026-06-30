@@ -3,7 +3,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Serve the Blazor client's static web assets even when not running in the Development environment.
 builder.WebHost.UseStaticWebAssets();
 
-builder.Services.AddDbContext<SampleContext>(_ => _.UseSqlite("Data Source=sample.db"));
+builder.Services.AddDbContext<SampleContext>(_ => _.UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=ScrySample;Trusted_Connection=True;Encrypt=False"));
 
 builder.Services.AddScry(
     _ =>
