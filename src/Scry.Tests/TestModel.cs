@@ -1,6 +1,3 @@
-using EfLocalDb;
-using Microsoft.EntityFrameworkCore;
-
 namespace Scry.Tests;
 
 public enum Status
@@ -84,7 +81,7 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
     // that database, which keeps it synchronous and leaves the call sites unchanged.
     public static async Task InitializeAsync()
     {
-        sqlInstance = new(_ => new TestContext(_.Options));
+        sqlInstance = new(_ => new(_.Options));
         database = await sqlInstance.Build();
         Seed(database.Context);
     }

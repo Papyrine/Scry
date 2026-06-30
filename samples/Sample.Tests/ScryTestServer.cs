@@ -1,4 +1,3 @@
-using EfLocalDb;
 using Sample.Model;
 
 /// <summary>
@@ -9,7 +8,7 @@ using Sample.Model;
 public sealed class ScryTestServer : IAsyncDisposable
 {
     static readonly SqlInstance<SampleContext> sqlInstance = new(
-        constructInstance: _ => new SampleContext(_.Options),
+        constructInstance: _ => new(_.Options),
         buildTemplate: _ =>
         {
             SampleContext.Initialize(_);
