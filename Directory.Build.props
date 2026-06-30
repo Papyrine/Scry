@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <!-- Security policy for the IntegrationTests and samples solutions. The src tree has its own
+       Directory.Build.props (which already sets TreatWarningsAsErrors), so MSBuild stops there and
+       this file does not apply to it. Audit the full transitive dependency graph and turn any
+       moderate-or-higher vulnerability advisory into a build error, so CI cannot report success
+       while a known-vulnerable package is referenced. -->
+  <PropertyGroup>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <WarningsAsErrors>$(WarningsAsErrors);NU1902;NU1903;NU1904</WarningsAsErrors>
+  </PropertyGroup>
+</Project>
