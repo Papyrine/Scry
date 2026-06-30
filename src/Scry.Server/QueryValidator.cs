@@ -244,43 +244,50 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
 
     void ValidateExpr(Expr expr, Type elementType, int depth)
     {
-        if (depth > options.MaxExpressionDepth)
+        while (true)
         {
-            throw Reject("Expression nesting is too deep.");
-        }
+            if (depth > options.MaxExpressionDepth)
+            {
+                throw Reject("Expression nesting is too deep.");
+            }
 
-        switch (expr)
-        {
-            case MemberExpr member:
-                ResolvePath(member.Path, elementType, requireScalar: false, "Member");
-                break;
+            switch (expr)
+            {
+                case MemberExpr member:
+                    ResolvePath(member.Path, elementType, requireScalar: false, "Member");
+                    break;
 
-            case ConstExpr:
-                break;
+                case ConstExpr:
+                    break;
 
-            case BinaryExpr binary:
-                ValidateExpr(binary.Left, elementType, depth + 1);
-                ValidateExpr(binary.Right, elementType, depth + 1);
-                break;
+                case BinaryExpr binary:
+                    ValidateExpr(binary.Left, elementType, depth + 1);
+                    expr = binary.Right;
+                    depth += 1;
+                    continue;
 
-            case UnaryExpr unary:
-                ValidateExpr(unary.Operand, elementType, depth + 1);
-                break;
+                case UnaryExpr unary:
+                    expr = unary.Operand;
+                    depth += 1;
+                    continue;
 
-            case CallExpr call:
-                ValidateExpr(call.Target, elementType, depth + 1);
-                foreach (var argument in call.Arguments)
-                {
-                    ValidateExpr(argument, elementType, depth + 1);
-                }
+                case CallExpr call:
+                    ValidateExpr(call.Target, elementType, depth + 1);
+                    foreach (var argument in call.Arguments)
+                    {
+                        ValidateExpr(argument, elementType, depth + 1);
+                    }
 
-                break;
+                    break;
 
-            case AggregateExpr:
-                throw Reject("Aggregates are only allowed as a projection member in a grouped Select.");
+                case AggregateExpr:
+                    throw Reject("Aggregates are only allowed as a projection member in a grouped Select.");
 
-            default:
-                throw Reject($"Unsupported expression '{expr.GetType().Name}'.");
+                default:
+                    throw Reject($"Unsupported expression '{expr.GetType().Name}'.");
+            }
+
+            break;
         }
     }
 

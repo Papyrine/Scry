@@ -1,8 +1,3 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.DependencyInjection;
-
 namespace Scry;
 
 /// <summary>Registration and endpoint wiring for the Scry server.</summary>
@@ -67,5 +62,6 @@ public static class ScryServiceExtensions
         return context.Response.WriteAsJsonAsync(new ScryError(message), context.RequestAborted);
     }
 
+    // ReSharper disable once NotAccessedPositionalProperty.Local
     sealed record ScryError(string Error);
 }
