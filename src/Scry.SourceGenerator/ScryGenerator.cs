@@ -29,10 +29,16 @@ public class ScryGenerator :
         context.RegisterSourceOutput(model, Emit);
     }
 
-    static string? GetProperty(AnalyzerConfigOptionsProvider provider, string key) =>
-        provider.GlobalOptions.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
-            ? value
-            : null;
+    static string? GetProperty(AnalyzerConfigOptionsProvider provider, string key)
+    {
+        if (provider.GlobalOptions.TryGetValue(key, out var value) &&
+            !string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        return null;
+    }
 
     static readonly DiagnosticDescriptor readFailed = new(
         "SCRY001",
