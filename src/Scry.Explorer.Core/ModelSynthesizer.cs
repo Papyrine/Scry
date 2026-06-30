@@ -14,14 +14,20 @@ public static class ModelSynthesizer
     public static string Synthesize(ScryIntrospection introspection, bool executable = false)
     {
         var builder = new StringBuilder();
-        builder.AppendLine("#nullable enable");
-        builder.AppendLine("namespace Scry.Generated;");
+        builder.AppendLine(
+            """
+            #nullable enable
+            namespace Scry.Generated;
+            """);
         builder.AppendLine();
 
         foreach (var enumeration in introspection.Enums)
         {
-            builder.AppendLine($"public enum {enumeration.Name}");
-            builder.AppendLine("{");
+            builder.AppendLine(
+                $$"""
+                public enum {{enumeration.Name}}
+                {
+                """);
             foreach (var value in enumeration.Values)
             {
                 builder.AppendLine($"    {value},");
@@ -33,8 +39,11 @@ public static class ModelSynthesizer
 
         foreach (var type in introspection.Types)
         {
-            builder.AppendLine($"public sealed class {type.ModelName}");
-            builder.AppendLine("{");
+            builder.AppendLine(
+                $$"""
+                public sealed class {{type.ModelName}}
+                {
+                """);
             foreach (var member in type.Members)
             {
                 var initializer = member.NeedsNullDefault ? " = null!;" : "";
@@ -45,14 +54,20 @@ public static class ModelSynthesizer
             builder.AppendLine();
         }
 
-        builder.AppendLine("public sealed class ScryQuery");
-        builder.AppendLine("{");
+        builder.AppendLine(
+            """
+            public sealed class ScryQuery
+            {
+            """);
         if (executable)
         {
             // Mirrors the generator: each source is backed by the real client so the captured query
             // can be translated via ToScryRequest.
-            builder.AppendLine("    readonly global::Scry.Client.ScryClient client;");
-            builder.AppendLine("    public ScryQuery(global::Scry.Client.ScryClient client) => this.client = client;");
+            builder.AppendLine(
+                """
+                    readonly global::Scry.Client.ScryClient client;
+                    public ScryQuery(global::Scry.Client.ScryClient client) => this.client = client;
+                """);
             foreach (var source in introspection.Sources)
             {
                 builder.AppendLine($"    public global::System.Linq.IQueryable<{source.ModelName}> {source.Name} => client.Source<{source.ModelName}>(\"{source.Name}\");");

@@ -19,6 +19,7 @@ static class MetadataModelReader
 
         try
         {
+            // ReSharper disable once RedundantSuppressNullableWarningExpression
             var bytes = File.ReadAllBytes(dllPath!);
             using var pe = new PEReader([..bytes]);
             var reader = pe.GetMetadataReader();
