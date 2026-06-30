@@ -4,6 +4,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
+    <!-- The server model, pointed at by path for the Scry generator. It is also referenced
+         normally below because this project hosts the server in-process. -->
+    <ScryModelDll>$(MSBuildThisFileDirectory)..\samples\Sample.Model\bin\$(Configuration)\net10.0\Sample.Model.dll</ScryModelDll>
   </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
@@ -17,4 +20,25 @@
     <ProjectReference Include="..\src\Scry.Client\Scry.Client.csproj" />
     <ProjectReference Include="..\samples\Sample.Model\Sample.Model.csproj" />
   </ItemGroup>
+
+  <!--
+    Scry generator wiring. Emits the client query models (EmployeeQueryModel, OrderQueryModel, ...),
+    the re-emitted enums, and the ScryQuery entry point from the Sample.Model assembly, which is read
+    by path (never referenced by the generator). Mirrors the setup in samples/Sample.Client.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\src\Scry.SourceGenerator\Scry.SourceGenerator.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <CompilerVisibleProperty Include="ScryModelDll" />
+    <CompilerVisibleProperty Include="ScryModelStamp" />
+  </ItemGroup>
+
+  <Target Name="ComputeScryStamp"
+          AfterTargets="ResolveProjectReferences"
+          BeforeTargets="GenerateMSBuildEditorConfig;CoreCompile"
+          Condition="Exists('$(ScryModelDll)')">
+    <GetFileHash Files="$(ScryModelDll)" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="ScryModelStamp" />
+    </GetFileHash>
+  </Target>
 </Project>

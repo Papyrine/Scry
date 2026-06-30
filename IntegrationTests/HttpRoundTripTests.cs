@@ -12,6 +12,7 @@ public class HttpRoundTripTests
     WebApplication app = null!;
     HttpClient http = null!;
     ScryClient client = null!;
+    ScryQuery query = null!;
     SqlDatabase<Sample.Model.SampleContext> database = null!;
 
     record EmployeeRow(string Name, Status Status, string? Manager, string Department);
@@ -40,6 +41,7 @@ public class HttpRoundTripTests
 
         http = app.GetTestClient();
         client = ScryClient.ForHttp(http, "/api/query");
+        query = new(client);
     }
 
     [OneTimeTearDown]
@@ -54,7 +56,7 @@ public class HttpRoundTripTests
     [Test]
     public async Task EmployeesProjectionOverHttp()
     {
-        var rows = await client.Source<Employee>("Employee")
+        var rows = await query.Employee
             .Where(e => e.Active)
             .OrderBy(e => e.Name)
             .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
@@ -69,7 +71,7 @@ public class HttpRoundTripTests
     [Test]
     public async Task GroupedAggregateOverHttp()
     {
-        var regions = await client.Source<Order>("Order")
+        var regions = await query.Order
             .GroupBy(o => o.Region)
             .Select(g => new RegionSummary(g.Key, g.Sum(x => x.Amount), g.Count()))
             .ToScryListAsync();
@@ -82,7 +84,7 @@ public class HttpRoundTripTests
     [Test]
     public async Task CountOverHttp()
     {
-        var count = await client.Source<Employee>("Employee")
+        var count = await query.Employee
             .Where(e => e.Active)
             .CountScryAsync();
 
@@ -104,9 +106,9 @@ public class HttpRoundTripTests
 
     [Test]
     public void DisallowedPropertyThrowsThroughClient() =>
-        // The client cannot even name Salary (no such member on the client model), so attempts to
-        // reach hidden data must come as raw requests, which the server rejects (see the 400 test).
-        // Here we confirm an unknown root is rejected through the typed client path.
+        // The generated client model has no Salary member (the server marks it [QueryIgnore]), so
+        // attempts to reach hidden data must come as raw requests, which the server rejects (see the
+        // 400 test). Here we confirm an unknown root is rejected through the typed client path.
         Assert.ThrowsAsync<ScryRequestException>(() =>
-            client.Source<Employee>("Secret").ToScryListAsync());
+            client.Source<EmployeeQueryModel>("Secret").ToScryListAsync());
 }
