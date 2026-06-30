@@ -4,7 +4,7 @@ namespace Scry;
 /// Configures the server-side query executor: which model to expose, in-memory POCO sources,
 /// row-level policies, and resource limits enforced during validation.
 /// </summary>
-public sealed class ScryOptions
+public sealed class ScryOptions(Type contextType)
 {
     /// <summary>Maximum number of rows a single query may request via <c>Take</c>. Default 1000.</summary>
     public int MaxPageSize { get; set; } = 1000;
@@ -18,17 +18,11 @@ public sealed class ScryOptions
     /// <summary>Maximum expression nesting depth in a predicate. Default 32.</summary>
     public int MaxExpressionDepth { get; set; } = 32;
 
-    internal Type? ContextType { get; private set; }
+    internal Type ContextType { get; private set; } = contextType;
 
     internal Dictionary<Type, Func<IServiceProvider, IQueryable>> PocoSources { get; } = [];
 
     internal Dictionary<Type, Type> Policies { get; } = [];
-
-    /// <summary>Exposes the entities, views, and POCOs declared in the model assembly of
-    /// <typeparamref name="TContext"/>. Tables and views are resolved from this context.</summary>
-    public void UseModel<TContext>()
-        where TContext : DbContext =>
-        ContextType = typeof(TContext);
 
     /// <summary>Registers the data for a <c>[QueryablePoco]</c> source, resolved per request.</summary>
     public void AddPocoSource<T>(Func<IServiceProvider, IEnumerable<T>> factory)

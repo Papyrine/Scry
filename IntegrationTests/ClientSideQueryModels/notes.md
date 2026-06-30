@@ -1,0 +1,1 @@
+what a generated client would expose. Distinct from the server types

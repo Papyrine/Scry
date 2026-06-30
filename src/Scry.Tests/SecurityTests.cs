@@ -66,9 +66,8 @@ public class SecurityTests
     static void AssertRejected(QueryRequest request, Action<ScryOptions>? extra = null)
     {
         using var context = TestContext.CreateSeeded();
-        var processor = ScryProcessor.Create(options =>
+        var processor = ScryProcessor.Create<TestContext>(options =>
         {
-            options.UseModel<TestContext>();
             options.AddPocoSource<Holiday>(_ => Holiday.Seed());
             extra?.Invoke(options);
         });

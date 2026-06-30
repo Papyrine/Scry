@@ -4,9 +4,10 @@ namespace Scry;
 public static class ScryServiceExtensions
 {
     /// <summary>Registers the query executor and builds the allow-list schema from the model.</summary>
-    public static IServiceCollection AddScry(this IServiceCollection services, Action<ScryOptions> configure)
+    public static IServiceCollection AddScry<TContext>(this IServiceCollection services, Action<ScryOptions> configure)
+        where TContext : DbContext
     {
-        var options = new ScryOptions();
+        var options = new ScryOptions(typeof(TContext));
         configure(options);
 
         var schema = ScrySchema.Build(options);
@@ -34,7 +35,7 @@ public static class ScryServiceExtensions
         try
         {
             var request = ScryJson.DeserializeRequest(body);
-            var db = (DbContext)services.GetRequiredService(options.ContextType!);
+            var db = (DbContext)services.GetRequiredService(options.ContextType);
             var response = processor.Execute(request, db, services);
 
             context.Response.ContentType = "application/json";

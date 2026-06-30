@@ -1,0 +1,11 @@
+﻿// Global using directives
+
+global using System.Net;
+global using System.Text;
+global using Microsoft.AspNetCore.Builder;
+global using Microsoft.AspNetCore.TestHost;
+global using Microsoft.EntityFrameworkCore;
+global using Microsoft.Extensions.DependencyInjection;
+global using NUnit.Framework;
+global using Scry;
+global using Scry.Client;

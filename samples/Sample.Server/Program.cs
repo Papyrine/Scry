@@ -5,10 +5,9 @@ builder.WebHost.UseStaticWebAssets();
 
 builder.Services.AddDbContext<SampleContext>(_ => _.UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=ScrySample;Trusted_Connection=True;Encrypt=False"));
 
-builder.Services.AddScry(
+builder.Services.AddScry<SampleContext>(
     _ =>
     {
-        _.UseModel<SampleContext>();
         _.AddPocoSource(_ => Holiday.Seed());
         _.MaxPageSize = 200;
     });

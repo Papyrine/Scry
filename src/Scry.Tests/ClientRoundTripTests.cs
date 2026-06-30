@@ -122,11 +122,8 @@ public class ClientRoundTripTests
 
     static ScryClient ClientFor(TestContext context)
     {
-        var processor = ScryProcessor.Create(options =>
-        {
-            options.UseModel<TestContext>();
-            options.AddPocoSource<Holiday>(_ => Holiday.Seed());
-        });
+        var processor = ScryProcessor.Create<TestContext>(
+            _ => _.AddPocoSource<Holiday>(_ => Holiday.Seed()));
 
         return new((request, _) => Task.FromResult(processor.Execute(request, context)));
     }

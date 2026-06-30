@@ -1,51 +1,8 @@
-using System.Net;
-using System.Net.Http;
-using System.Text;
-using EfLocalDb;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.TestHost;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using NUnit.Framework;
-using Scry;
-using Scry.Client;
-
-namespace IntegrationTests;
-
-// Client-side query models (what a generated client would expose). Distinct from the server types.
-public enum Status
-{
-    FullTime,
-    PartTime,
-    Contractor
-}
-
-public class Department
-{
-    public string Name { get; set; } = "";
-}
-
-public class Employee
-{
-    public string Name { get; set; } = "";
-    public Status Status { get; set; }
-    public bool Active { get; set; }
-    public Employee? Manager { get; set; }
-    public Department? Department { get; set; }
-}
-
-public class Order
-{
-    public string Region { get; set; } = "";
-    public decimal Amount { get; set; }
-}
-
 [TestFixture]
 public class HttpRoundTripTests
 {
     static readonly SqlInstance<Sample.Model.SampleContext> sqlInstance = new(
-        constructInstance: _ => new Sample.Model.SampleContext(_.Options),
+        constructInstance: _ => new(_.Options),
         buildTemplate: _ =>
         {
             Sample.Model.SampleContext.Initialize(_);
@@ -70,11 +27,10 @@ public class HttpRoundTripTests
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
-        builder.Services.AddDbContext<Sample.Model.SampleContext>(options => options.UseSqlServer(database.ConnectionString));
-        builder.Services.AddScry(options =>
+        builder.Services.AddDbContext<Sample.Model.SampleContext>(_ => _.UseSqlServer(database.ConnectionString));
+        builder.Services.AddScry<Sample.Model.SampleContext>(options =>
         {
-            options.UseModel<Sample.Model.SampleContext>();
-            options.AddPocoSource<Sample.Model.Holiday>(_ => Sample.Model.Holiday.Seed());
+            options.AddPocoSource(_ => Sample.Model.Holiday.Seed());
             options.MaxPageSize = 200;
         });
 
@@ -147,12 +103,10 @@ public class HttpRoundTripTests
     }
 
     [Test]
-    public void DisallowedPropertyThrowsThroughClient()
-    {
+    public void DisallowedPropertyThrowsThroughClient() =>
         // The client cannot even name Salary (no such member on the client model), so attempts to
         // reach hidden data must come as raw requests, which the server rejects (see the 400 test).
         // Here we confirm an unknown root is rejected through the typed client path.
         Assert.ThrowsAsync<ScryRequestException>(() =>
             client.Source<Employee>("Secret").ToScryListAsync());
-    }
 }

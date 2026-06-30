@@ -131,9 +131,8 @@ public class ExecutionTests
     }
 
     static ScryProcessor Processor(Action<ScryOptions>? extra = null) =>
-        ScryProcessor.Create(options =>
+        ScryProcessor.Create<TestContext>(options =>
         {
-            options.UseModel<TestContext>();
             options.AddPocoSource<Holiday>(_ => Holiday.Seed());
             extra?.Invoke(options);
         });

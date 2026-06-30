@@ -22,9 +22,10 @@ public sealed class ScryProcessor
     public ScryIntrospection Describe() => schema.Describe(options);
 
     /// <summary>Builds a processor from configuration (e.g. for tests or non-DI hosting).</summary>
-    public static ScryProcessor Create(Action<ScryOptions> configure)
+    public static ScryProcessor Create<TContext>(Action<ScryOptions> configure)
+        where TContext : DbContext
     {
-        var options = new ScryOptions();
+        var options = new ScryOptions(typeof(TContext));
         configure(options);
         return new(ScrySchema.Build(options), options);
     }

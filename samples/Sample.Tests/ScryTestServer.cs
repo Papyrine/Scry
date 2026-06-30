@@ -7,7 +7,7 @@ using Sample.Model;
 /// </summary>
 public sealed class ScryTestServer : IAsyncDisposable
 {
-    static readonly SqlInstance<SampleContext> sqlInstance = new(
+    static SqlInstance<SampleContext> sqlInstance = new(
         constructInstance: _ => new(_.Options),
         buildTemplate: _ =>
         {
@@ -15,8 +15,8 @@ public sealed class ScryTestServer : IAsyncDisposable
             return Task.CompletedTask;
         });
 
-    readonly WebApplication app;
-    readonly SqlDatabase<SampleContext> database;
+    WebApplication app;
+    SqlDatabase<SampleContext> database;
 
     ScryTestServer(WebApplication app, SqlDatabase<SampleContext> database)
     {
@@ -30,10 +30,9 @@ public sealed class ScryTestServer : IAsyncDisposable
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
-        builder.Services.AddDbContext<SampleContext>(options => options.UseSqlServer(database.ConnectionString));
-        builder.Services.AddScry(options =>
+        builder.Services.AddDbContext<SampleContext>(_ => _.UseSqlServer(database.ConnectionString));
+        builder.Services.AddScry<SampleContext>(options =>
         {
-            options.UseModel<SampleContext>();
             options.AddPocoSource(_ => Holiday.Seed());
             options.MaxPageSize = 200;
         });
