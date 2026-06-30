@@ -38,8 +38,14 @@ public sealed class SampleContext(DbContextOptions<SampleContext> options) :
 
     static void Seed(SampleContext context)
     {
-        var engineering = new Department {Name = "Engineering"};
-        var sales = new Department {Name = "Sales"};
+        var engineering = new Department
+        {
+            Name = "Engineering"
+        };
+        var sales = new Department
+        {
+            Name = "Sales"
+        };
         context.Departments.AddRange(engineering, sales);
 
         var alice = new Employee
