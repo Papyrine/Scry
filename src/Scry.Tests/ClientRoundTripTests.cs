@@ -1,13 +1,14 @@
-using Scry.Client;
-
 namespace Scry.Tests;
 
 [TestFixture]
 public class ClientRoundTripTests
 {
+    // ReSharper disable NotAccessedPositionalProperty.Local
     record EmployeeRow(string Name, Status Status, string? ManagerName);
 
     record OrderSummary(string Region, decimal Total, int Count);
+
+    // ReSharper restore NotAccessedPositionalProperty.Local
 
     [Test]
     public Task ToScryRequestTranslatesWithoutExecuting()
@@ -23,10 +24,12 @@ public class ClientRoundTripTests
         var take = 5;
 
         var request = client.Source<Employee>("Employee")
-            .Where(e => e.Active && e.Status == wanted && e.Name.StartsWith(prefix))
-            .OrderBy(e => e.Name)
+            .Where(_ => _.Active &&
+                        _.Status == wanted &&
+                        _.Name.StartsWith(prefix))
+            .OrderBy(_ => _.Name)
             .Take(take)
-            .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name))
+            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
             .ToScryRequest();
 
         return Verify(request);
@@ -35,14 +38,15 @@ public class ClientRoundTripTests
     [Test]
     public async Task WhereOrderBySelect()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
         var prefix = "A";
 
         var rows = await client.Source<Employee>("Employee")
-            .Where(e => e.Status == Status.FullTime && e.Name.StartsWith(prefix))
-            .OrderBy(e => e.Name)
-            .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name))
+            .Where(_ => _.Status == Status.FullTime &&
+                        _.Name.StartsWith(prefix))
+            .OrderBy(_ => _.Name)
+            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
             .ToScryListAsync();
 
         await Verify(rows);
@@ -51,12 +55,12 @@ public class ClientRoundTripTests
     [Test]
     public async Task GroupByAggregate()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var rows = await client.Source<Order>("Order")
-            .GroupBy(o => o.Region)
-            .Select(g => new OrderSummary(g.Key, g.Sum(x => x.Amount), g.Count()))
+            .GroupBy(_ => _.Region)
+            .Select(_ => new OrderSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
             .ToScryListAsync();
 
         await Verify(rows);
@@ -65,13 +69,13 @@ public class ClientRoundTripTests
     [Test]
     public async Task ClosureCapturedConstant()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
         var wanted = Status.Contractor;
 
         var rows = await client.Source<Employee>("Employee")
-            .Where(e => e.Status == wanted)
-            .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name))
+            .Where(_ => _.Status == wanted)
+            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
             .ToScryListAsync();
 
         await Verify(rows);
@@ -80,11 +84,11 @@ public class ClientRoundTripTests
     [Test]
     public async Task CountTerminal()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var count = await client.Source<Employee>("Employee")
-            .Where(e => e.Active)
+            .Where(_ => _.Active)
             .CountScryAsync();
 
         await Assert.ThatAsync(() => Task.FromResult(count), Is.EqualTo(3));
@@ -93,12 +97,12 @@ public class ClientRoundTripTests
     [Test]
     public async Task AnyTerminal()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
         var prefix = "Z";
 
         var any = await client.Source<Employee>("Employee")
-            .Where(e => e.Name.StartsWith(prefix))
+            .Where(_ => _.Name.StartsWith(prefix))
             .AnyScryAsync();
 
         Assert.That(any, Is.False);
@@ -111,7 +115,9 @@ public class ClientRoundTripTests
         var client = ClientFor(context);
 
         Assert.ThrowsAsync<NotSupportedException>(() =>
-            client.Source<Employee>("Employee").Select(e => e.Name).ToScryListAsync());
+            client.Source<Employee>("Employee")
+                .Select(_ => _.Name)
+                .ToScryListAsync());
     }
 
     static ScryClient ClientFor(TestContext context)

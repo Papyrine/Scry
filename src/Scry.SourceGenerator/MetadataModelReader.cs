@@ -31,7 +31,7 @@ static class MetadataModelReader
                 {
                     var simpleName = reader.GetString(type.Name);
                     var fullName = FullName(reader, type);
-                    discovered.Add(new(handle, type, fullName, $"{simpleName}QueryModel", kind, sourceName));
+                    discovered.Add(new(type, fullName, $"{simpleName}QueryModel", kind, sourceName));
                 }
             }
 
@@ -288,7 +288,6 @@ static class MetadataModelReader
         };
 
     readonly record struct Discovered(
-        TypeDefinitionHandle Handle,
         TypeDefinition Type,
         string FullName,
         string ModelName,
