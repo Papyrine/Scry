@@ -9,5 +9,5 @@ var rows = await Query.Employees
     .Where(e => e.Status == Status.FullTime && e.Name.StartsWith("A"))
     .OrderBy(e => e.Name)
     .Select(e => new Row(e.Name, e.Status, e.Manager!.Name))
-    .ToScryListAsync();
+    .ToListAsync();
 ```

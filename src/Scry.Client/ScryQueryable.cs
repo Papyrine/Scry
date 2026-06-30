@@ -26,8 +26,8 @@ sealed class ScryQueryProvider(ScryClient client, string root) :
         throw NotSupported();
 
     static NotSupportedException NotSupported() =>
-        new("Scry queries do not execute synchronously. Use ToScryListAsync, " +
-            "FirstScryAsync, CountScryAsync, etc.");
+        new("Scry queries do not execute synchronously. Use ToListAsync, " +
+            "FirstAsync, CountAsync, etc.");
 }
 
 /// <summary>A deferred, capture-only queryable. Enumerating it synchronously is not supported.</summary>
@@ -54,7 +54,7 @@ sealed class ScryQueryable<T> :
     public IQueryProvider Provider => provider;
 
     public IEnumerator<T> GetEnumerator() =>
-        throw new NotSupportedException("Use ToScryListAsync to execute a Scry query.");
+        throw new NotSupportedException("Use ToListAsync to execute a Scry query.");
 
     IEnumerator IEnumerable.GetEnumerator() =>
         GetEnumerator();

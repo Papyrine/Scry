@@ -11,8 +11,8 @@ namespace Scry.Explorer.Core;
 /// Compiles a user's query expression in the browser, runs it against a capturing client to build
 /// the LINQ expression tree, and reuses <see cref="ScryQueryableExtensions.ToScryRequest{T}"/> to
 /// produce the wire <see cref="QueryRequest"/> — the same translation the production client performs.
-/// A trailing terminal operator (e.g. <c>.ToScryListAsync()</c>, <c>.FirstScryAsync()</c>,
-/// <c>.CountScryAsync()</c>, or plain LINQ <c>.ToList()</c>) is recognised and folded into the wire
+/// A trailing terminal operator (e.g. <c>.ToListAsync()</c>, <c>.FirstAsync()</c>,
+/// <c>.CountAsync()</c>, or plain LINQ <c>.ToList()</c>) is recognised and folded into the wire
 /// request as its <see cref="QueryOp"/> terminal.
 /// </summary>
 public sealed class SnippetExecutor
@@ -89,20 +89,20 @@ public sealed class SnippetExecutor
     // so habitual `.ToList()`/`.Count()`/`.First()` work too.
     static Dictionary<string, string> terminals = new(StringComparer.Ordinal)
     {
-        ["ToScryListAsync"] = "",
+        ["ToListAsync"] = "",
         ["ToList"] = "",
         ["ToArray"] = "",
-        ["FirstScryAsync"] = "new global::Scry.Wire.FirstOp(false, null)",
+        ["FirstAsync"] = "new global::Scry.Wire.FirstOp(false, null)",
         ["First"] = "new global::Scry.Wire.FirstOp(false, null)",
-        ["FirstOrDefaultScryAsync"] = "new global::Scry.Wire.FirstOp(true, null)",
+        ["FirstOrDefaultAsync"] = "new global::Scry.Wire.FirstOp(true, null)",
         ["FirstOrDefault"] = "new global::Scry.Wire.FirstOp(true, null)",
-        ["SingleScryAsync"] = "new global::Scry.Wire.SingleOp(false, null)",
+        ["SingleAsync"] = "new global::Scry.Wire.SingleOp(false, null)",
         ["Single"] = "new global::Scry.Wire.SingleOp(false, null)",
-        ["SingleOrDefaultScryAsync"] = "new global::Scry.Wire.SingleOp(true, null)",
+        ["SingleOrDefaultAsync"] = "new global::Scry.Wire.SingleOp(true, null)",
         ["SingleOrDefault"] = "new global::Scry.Wire.SingleOp(true, null)",
-        ["CountScryAsync"] = "new global::Scry.Wire.CountOp()",
+        ["CountAsync"] = "new global::Scry.Wire.CountOp()",
         ["Count"] = "new global::Scry.Wire.CountOp()",
-        ["AnyScryAsync"] = "new global::Scry.Wire.AnyOp(null)",
+        ["AnyAsync"] = "new global::Scry.Wire.AnyOp(null)",
         ["Any"] = "new global::Scry.Wire.AnyOp(null)"
     };
 

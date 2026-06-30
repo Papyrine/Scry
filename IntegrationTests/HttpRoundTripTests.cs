@@ -1,3 +1,7 @@
+// UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
+// Core's own ToListAsync/CountAsync IQueryable extensions and collide with the Scry client terminals.
+using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
+
 [TestFixture]
 public class HttpRoundTripTests
 {
@@ -60,7 +64,7 @@ public class HttpRoundTripTests
             .Where(e => e.Active)
             .OrderBy(e => e.Name)
             .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
-            .ToScryListAsync();
+            .ToListAsync();
 
         Assert.That(rows.Select(_ => _.Name), Is.EqualTo(activeEmployeeNames));
         Assert.That(rows[0].Manager, Is.EqualTo("Alice"));
@@ -74,7 +78,7 @@ public class HttpRoundTripTests
         var regions = await query.Order
             .GroupBy(o => o.Region)
             .Select(g => new RegionSummary(g.Key, g.Sum(x => x.Amount), g.Count()))
-            .ToScryListAsync();
+            .ToListAsync();
 
         var north = regions.Single(_ => _.Region == "North");
         Assert.That(north.Total, Is.EqualTo(350m));
@@ -86,7 +90,7 @@ public class HttpRoundTripTests
     {
         var count = await query.Employee
             .Where(e => e.Active)
-            .CountScryAsync();
+            .CountAsync();
 
         Assert.That(count, Is.EqualTo(3));
     }
@@ -110,5 +114,5 @@ public class HttpRoundTripTests
         // attempts to reach hidden data must come as raw requests, which the server rejects (see the
         // 400 test). Here we confirm an unknown root is rejected through the typed client path.
         Assert.ThrowsAsync<ScryRequestException>(() =>
-            client.Source<EmployeeQueryModel>("Secret").ToScryListAsync());
+            client.Source<EmployeeQueryModel>("Secret").ToListAsync());
 }

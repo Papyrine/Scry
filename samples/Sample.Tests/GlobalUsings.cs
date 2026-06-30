@@ -5,7 +5,6 @@ global using System.Net.Sockets;
 global using System.Threading.Tasks;
 global using Microsoft.AspNetCore.Builder;
 global using Microsoft.AspNetCore.TestHost;
-global using Microsoft.EntityFrameworkCore;
 global using Microsoft.Extensions.DependencyInjection;
 global using Microsoft.Playwright;
 global using NUnit.Framework;

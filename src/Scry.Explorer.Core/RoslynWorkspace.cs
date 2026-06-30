@@ -28,7 +28,7 @@ public sealed class RoslynWorkspace
 {
     // The user's expression is spliced between these so it is a legal method body. The usings make
     // LINQ operators (System.Linq), the synthesized models/enums (Scry.Generated), and the Scry
-    // terminal operators (Scry.Client: ToScryListAsync/FirstScryAsync/CountScryAsync/...) resolve —
+    // terminal operators (Scry.Client: ToListAsync/FirstAsync/CountAsync/...) resolve —
     // so completion offers them and diagnostics do not falsely flag them.
     const string Header =
         "using System;\nusing System.Linq;\nusing System.Collections.Generic;\nusing Scry.Generated;\nusing Scry.Client;\nnamespace Scry.Editor;\nstatic class Editor\n{\n    static object Run(global::Scry.Generated.ScryQuery Query)\n    {\n        return ";

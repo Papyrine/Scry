@@ -47,7 +47,7 @@ public class ClientRoundTripTests
                         _.Name.StartsWith(prefix))
             .OrderBy(_ => _.Name)
             .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
-            .ToScryListAsync();
+            .ToListAsync();
 
         await Verify(rows);
     }
@@ -61,7 +61,7 @@ public class ClientRoundTripTests
         var rows = await client.Source<Order>("Order")
             .GroupBy(_ => _.Region)
             .Select(_ => new OrderSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
-            .ToScryListAsync();
+            .ToListAsync();
 
         await Verify(rows);
     }
@@ -76,7 +76,7 @@ public class ClientRoundTripTests
         var rows = await client.Source<Employee>("Employee")
             .Where(_ => _.Status == wanted)
             .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
-            .ToScryListAsync();
+            .ToListAsync();
 
         await Verify(rows);
     }
@@ -89,7 +89,7 @@ public class ClientRoundTripTests
 
         var count = await client.Source<Employee>("Employee")
             .Where(_ => _.Active)
-            .CountScryAsync();
+            .CountAsync();
 
         await Assert.ThatAsync(() => Task.FromResult(count), Is.EqualTo(3));
     }
@@ -103,7 +103,7 @@ public class ClientRoundTripTests
 
         var any = await client.Source<Employee>("Employee")
             .Where(_ => _.Name.StartsWith(prefix))
-            .AnyScryAsync();
+            .AnyAsync();
 
         Assert.That(any, Is.False);
     }
@@ -117,7 +117,7 @@ public class ClientRoundTripTests
         Assert.ThrowsAsync<NotSupportedException>(() =>
             client.Source<Employee>("Employee")
                 .Select(_ => _.Name)
-                .ToScryListAsync());
+                .ToListAsync());
     }
 
     static ScryClient ClientFor(TestContext context)

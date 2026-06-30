@@ -6,7 +6,7 @@ namespace Scry.Client;
 public static class ScryQueryableExtensions
 {
     /// <summary>Executes the query and returns all rows.</summary>
-    public static async Task<List<T>> ToScryListAsync<T>(this IQueryable<T> source, Cancel cancel = default)
+    public static async Task<List<T>> ToListAsync<T>(this IQueryable<T> source, Cancel cancel = default)
     {
         var response = await Send(source, terminal: null, cancel);
         EnsureKind(response, ResultKind.List);
@@ -14,23 +14,23 @@ public static class ScryQueryableExtensions
     }
 
     /// <summary>Executes the query and returns the first row, or default if empty.</summary>
-    public static Task<T?> FirstOrDefaultScryAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>
+    public static Task<T?> FirstOrDefaultAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>
         Single(source, new FirstOp(OrDefault: true, Predicate: null), cancel);
 
     /// <summary>Executes the query and returns the first row.</summary>
-    public static Task<T?> FirstScryAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>
+    public static Task<T?> FirstAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>
         Single(source, new FirstOp(OrDefault: false, Predicate: null), cancel);
 
     /// <summary>Executes the query and returns the single row, or default if empty.</summary>
-    public static Task<T?> SingleOrDefaultScryAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>
+    public static Task<T?> SingleOrDefaultAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>
         Single(source, new SingleOp(OrDefault: true, Predicate: null), cancel);
 
     /// <summary>Executes the query and returns the single row.</summary>
-    public static Task<T?> SingleScryAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>
+    public static Task<T?> SingleAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>
         Single(source, new SingleOp(OrDefault: false, Predicate: null), cancel);
 
     /// <summary>Executes the query and returns the row count.</summary>
-    public static async Task<int> CountScryAsync<T>(this IQueryable<T> source, Cancel cancel = default)
+    public static async Task<int> CountAsync<T>(this IQueryable<T> source, Cancel cancel = default)
     {
         var response = await Send(source, new CountOp(), cancel);
         EnsureKind(response, ResultKind.Scalar);
@@ -38,7 +38,7 @@ public static class ScryQueryableExtensions
     }
 
     /// <summary>Executes the query and returns whether any rows match.</summary>
-    public static async Task<bool> AnyScryAsync<T>(this IQueryable<T> source, Cancel cancel = default)
+    public static async Task<bool> AnyAsync<T>(this IQueryable<T> source, Cancel cancel = default)
     {
         var response = await Send(source, new AnyOp(Predicate: null), cancel);
         EnsureKind(response, ResultKind.Scalar);

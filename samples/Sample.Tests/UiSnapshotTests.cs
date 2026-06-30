@@ -168,7 +168,7 @@ public class UiSnapshotTests
     }
 
     // Full terminal support: the Scry terminal operators are discoverable via IntelliSense — completing
-    // against the queryable itself (not a lambda member) offers ToScryListAsync/FirstScryAsync/etc.
+    // against the queryable itself (not a lambda member) offers ToListAsync/FirstAsync/etc.
     [Test]
     public async Task ExplorerCompletesTerminals()
     {
@@ -181,13 +181,13 @@ public class UiSnapshotTests
         await page.Locator("[data-testid='complete']").ClickAsync();
 
         await page.WaitForFunctionAsync(
-            "() => Array.from(document.querySelectorAll(\"[data-testid='completions'] li\")).some(li => li.textContent === 'ToScryListAsync')",
+            "() => Array.from(document.querySelectorAll(\"[data-testid='completions'] li\")).some(li => li.textContent === 'ToListAsync')",
             null, new() { Timeout = 30_000 });
         var items = await page.Locator("[data-testid='completions'] li").AllInnerTextsAsync();
 
-        Assert.That(items, Does.Contain("ToScryListAsync"));
-        Assert.That(items, Does.Contain("FirstScryAsync"));
-        Assert.That(items, Does.Contain("CountScryAsync"));
+        Assert.That(items, Does.Contain("ToListAsync"));
+        Assert.That(items, Does.Contain("FirstAsync"));
+        Assert.That(items, Does.Contain("CountAsync"));
     }
 
     // Proves the inline Monaco IntelliSense dropdown is wired to the Roslyn provider.
@@ -265,7 +265,7 @@ public class UiSnapshotTests
         Assert.That(table, Does.Contain("Bob"));
     }
 
-    // Terminal support: a scalar terminal (CountScryAsync) is reflected as a 'count' op in the wire
+    // Terminal support: a scalar terminal (CountAsync) is reflected as a 'count' op in the wire
     // request and rendered as a scalar result.
     [Test]
     public async Task ExplorerRunCount()
@@ -276,7 +276,7 @@ public class UiSnapshotTests
         await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
 
         await page.EvaluateAsync(
-            "() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(e => e.Active).CountScryAsync()')");
+            "() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(e => e.Active).CountAsync()')");
         await page.Locator("[data-testid='run']").ClickAsync();
 
         await page.WaitForSelectorAsync("[data-testid='result-scalar']", new() { Timeout = 60_000 });
@@ -288,7 +288,7 @@ public class UiSnapshotTests
         Assert.That(scalar.Trim(), Is.EqualTo("3"));
     }
 
-    // Terminal support: a single-element terminal (FirstScryAsync) is reflected as a 'first' op and
+    // Terminal support: a single-element terminal (FirstAsync) is reflected as a 'first' op and
     // rendered as a one-row result.
     [Test]
     public async Task ExplorerRunFirst()
@@ -299,7 +299,7 @@ public class UiSnapshotTests
         await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
 
         await page.EvaluateAsync(
-            "() => monaco.editor.getEditors()[0].setValue(\"Query.Employee.Where(e => e.Active).OrderBy(e => e.Name).Select(e => new { e.Name, e.Status }).FirstScryAsync()\")");
+            "() => monaco.editor.getEditors()[0].setValue(\"Query.Employee.Where(e => e.Active).OrderBy(e => e.Name).Select(e => new { e.Name, e.Status }).FirstAsync()\")");
         await page.Locator("[data-testid='run']").ClickAsync();
 
         await page.WaitForSelectorAsync("[data-testid='result-table']", new() { Timeout = 60_000 });
@@ -391,7 +391,7 @@ public class UiSnapshotTests
         log.Add($"✓ run: wireHasEmployee={wire.Contains("Employee")}, table=[{table.Replace("\n", " ").Trim()}]");
 
         // Run a terminal query (scalar count) and capture the scalar rendering.
-        await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(e => e.Active).CountScryAsync()')");
+        await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(e => e.Active).CountAsync()')");
         await page.Locator("[data-testid='run']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='result-scalar']", new() { Timeout = 60_000 });
         await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "3b-count.png"), FullPage = true });

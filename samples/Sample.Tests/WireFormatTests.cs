@@ -26,7 +26,7 @@ public class WireFormatTests
             .Where(_ => _.Active)
             .OrderBy(_ => _.Name)
             .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
-            .ToScryListAsync();
+            .ToListAsync();
 
         await Verify(recording.Sends);
     }

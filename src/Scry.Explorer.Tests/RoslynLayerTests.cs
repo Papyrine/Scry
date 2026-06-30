@@ -63,9 +63,9 @@ public class RoslynLayerTests
         var labels = (await workspace.CompleteAsync(code, code.Length)).Select(_ => _.Label).ToList();
 
         Assert.That(labels, Does.Contain("Where"));
-        Assert.That(labels, Does.Contain("ToScryListAsync"));
-        Assert.That(labels, Does.Contain("FirstScryAsync"));
-        Assert.That(labels, Does.Contain("CountScryAsync"));
+        Assert.That(labels, Does.Contain("ToListAsync"));
+        Assert.That(labels, Does.Contain("FirstAsync"));
+        Assert.That(labels, Does.Contain("CountAsync"));
     }
 
     [Test]
@@ -100,13 +100,13 @@ public class RoslynLayerTests
     // LINQ) folds into the right wire QueryOp; a bare/list terminal adds none. Trailing ';' tolerated.
     [TestCase("Query.Employee.ToList()", null)]
     [TestCase("Query.Employee.ToList();", null)]
-    [TestCase("Query.Employee.ToScryListAsync()", null)]
-    [TestCase("Query.Employee.CountScryAsync()", typeof(CountOp))]
+    [TestCase("Query.Employee.ToListAsync()", null)]
+    [TestCase("Query.Employee.CountAsync()", typeof(CountOp))]
     [TestCase("Query.Employee.Count()", typeof(CountOp))]
-    [TestCase("Query.Employee.Where(e => e.Active).CountScryAsync()", typeof(CountOp))]
-    [TestCase("Query.Employee.FirstScryAsync()", typeof(FirstOp))]
-    [TestCase("Query.Employee.SingleScryAsync()", typeof(SingleOp))]
-    [TestCase("Query.Employee.AnyScryAsync()", typeof(AnyOp))]
+    [TestCase("Query.Employee.Where(e => e.Active).CountAsync()", typeof(CountOp))]
+    [TestCase("Query.Employee.FirstAsync()", typeof(FirstOp))]
+    [TestCase("Query.Employee.SingleAsync()", typeof(SingleOp))]
+    [TestCase("Query.Employee.AnyAsync()", typeof(AnyOp))]
     public void TranslatesTerminalToWireOp(string query, Type? terminalOp)
     {
         var request = executor.Translate(query);

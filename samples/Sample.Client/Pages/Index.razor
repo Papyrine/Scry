@@ -102,19 +102,19 @@ else
                 .Where(e => e.Active)
                 .OrderBy(e => e.Name)
                 .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
-                .ToScryListAsync();
+                .ToListAsync();
 
             regions = await Query.Order
                 .GroupBy(o => o.Region)
                 .Select(g => new RegionSummary(g.Key, g.Sum(x => x.Amount), g.Count()))
-                .ToScryListAsync();
+                .ToListAsync();
 
             fullTimers = await Query.Employee
                 .Where(e => e.Status == status)
                 .OrderBy(e => e.Name)
                 .Take(top)
                 .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
-                .ToScryListAsync();
+                .ToListAsync();
         }
         catch (Exception exception)
         {

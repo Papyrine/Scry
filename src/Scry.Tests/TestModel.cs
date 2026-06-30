@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+
 namespace Scry.Tests;
 
 public enum Status
