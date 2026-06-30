@@ -1,5 +1,3 @@
-namespace Scry;
-
 /// <summary>
 /// Rebinds a validated query AST onto real CLR <see cref="Expression"/> trees over the server's
 /// entity types. This is the only place CLR types are introduced — always from the schema, never
@@ -150,9 +148,12 @@ sealed class ExpressionBuilder(ScrySchema schema)
         {
             var leftBool = Build(binary.Left, parameter, typeof(bool));
             var rightBool = Build(binary.Right, parameter, typeof(bool));
-            return binary.Op == BinaryOp.AndAlso
-                ? Expression.AndAlso(leftBool, rightBool)
-                : Expression.OrElse(leftBool, rightBool);
+            if (binary.Op == BinaryOp.AndAlso)
+            {
+                return Expression.AndAlso(leftBool, rightBool);
+            }
+
+            return Expression.OrElse(leftBool, rightBool);
         }
 
         // Infer the constant's type from the typed (non-constant) operand.
@@ -223,12 +224,17 @@ sealed class ExpressionBuilder(ScrySchema schema)
         var target = expected ?? TagToType(constant.Tag);
         var underlying = Nullable.GetUnderlyingType(target) ?? target;
 
-        if (constant.Value is null || constant.Tag == ClrTypeTag.Null)
+        if (constant.Value is null ||
+            constant.Tag == ClrTypeTag.Null)
         {
-            var nullable = target.IsValueType && Nullable.GetUnderlyingType(target) is null
-                ? typeof(Nullable<>).MakeGenericType(target)
-                : target;
-            return Expression.Constant(null, nullable);
+            if (target.IsValueType &&
+                Nullable.GetUnderlyingType(target) is null)
+            {
+                var nullable = typeof(Nullable<>).MakeGenericType(target);
+                return Expression.Constant(null, nullable);
+            }
+
+            return Expression.Constant(null, target);
         }
 
         var parsed = ParseValue(constant.Value, underlying);
@@ -393,11 +399,4 @@ sealed class ExpressionBuilder(ScrySchema schema)
 
         return Convert.ChangeType(value, underlying, culture);
     }
-}
-
-/// <summary>A built projection selector plus the JSON paths each array slot maps to.</summary>
-sealed class ProjectionPlan(LambdaExpression selector, IReadOnlyList<IReadOnlyList<string>> shape)
-{
-    public LambdaExpression Selector { get; } = selector;
-    public IReadOnlyList<IReadOnlyList<string>> Shape { get; } = shape;
 }

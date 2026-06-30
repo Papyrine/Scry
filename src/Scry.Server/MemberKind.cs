@@ -1,5 +1,3 @@
-namespace Scry;
-
 /// <summary>How a member of a queryable type may be used.</summary>
 enum MemberKind
 {

@@ -1,5 +1,3 @@
-namespace Scry;
-
 /// <summary>The allow-listed surface of a queryable CLR type.</summary>
 sealed class ScryTypeMeta(Type clrType)
 {

@@ -1,5 +1,3 @@
-namespace Scry;
-
 /// <summary>
 /// The server's authoritative allow-list, built once from the model assembly's annotations. The
 /// generator and the server derive the same surface from the same attributes; this is the runtime

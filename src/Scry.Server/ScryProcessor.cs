@@ -7,9 +7,9 @@ namespace Scry;
 /// </summary>
 public sealed class ScryProcessor
 {
-    readonly QueryExecutor executor;
-    readonly ScrySchema schema;
-    readonly ScryOptions options;
+    QueryExecutor executor;
+    ScrySchema schema;
+    ScryOptions options;
 
     internal ScryProcessor(ScrySchema schema, ScryOptions options)
     {
@@ -30,18 +30,10 @@ public sealed class ScryProcessor
     }
 
     /// <summary>Validates and executes a request, returning the shaped result.</summary>
-    public QueryResponse Execute(QueryRequest request, DbContext db, IServiceProvider services) =>
-        executor.Execute(request, db, services);
+    public QueryResponse Execute(QueryRequest request, DbContext data, IServiceProvider services) =>
+        executor.Execute(request, data, services);
 
     /// <summary>Executes a request without a service provider (no DI-resolved policies).</summary>
-    public QueryResponse Execute(QueryRequest request, DbContext db) =>
-        Execute(request, db, EmptyServiceProvider.Instance);
-}
-
-sealed class EmptyServiceProvider :
-    IServiceProvider
-{
-    public static readonly EmptyServiceProvider Instance = new();
-
-    public object? GetService(Type serviceType) => null;
+    public QueryResponse Execute(QueryRequest request, DbContext data) =>
+        Execute(request, data, EmptyServiceProvider.Instance);
 }

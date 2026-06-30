@@ -1,15 +1,11 @@
-using System.Text.Json;
-
-namespace Scry;
-
 /// <summary>
 /// Orchestrates the full server pipeline for one request: validate against the allow-list, resolve
 /// the source, apply the row policy, rebind the AST to an EF query, execute, and shape the result.
 /// </summary>
 sealed class QueryExecutor(ScrySchema schema, ScryOptions options)
 {
-    readonly QueryValidator validator = new(schema, options);
-    readonly ExpressionBuilder builder = new(schema);
+    QueryValidator validator = new(schema, options);
+    ExpressionBuilder builder = new(schema);
 
     public QueryResponse Execute(QueryRequest request, DbContext db, IServiceProvider services)
     {

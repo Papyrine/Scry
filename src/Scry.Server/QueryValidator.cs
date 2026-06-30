@@ -1,5 +1,3 @@
-namespace Scry;
-
 /// <summary>
 /// The authoritative server-side gate. Walks an incoming query AST and rejects anything that is not
 /// allow-listed or exceeds a resource limit — independent of whatever code the client was generated
@@ -199,7 +197,8 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
                 case ExprValue { Expression: MemberExpr memberExpr }:
                     if (grouped)
                     {
-                        if (groupKeys is null || !groupKeys.Any(_ => PathEquals(_.Path, memberExpr.Path)))
+                        if (groupKeys is null ||
+                            !groupKeys.Any(_ => PathEquals(_.Path, memberExpr.Path)))
                         {
                             throw Reject("A grouped projection may only reference the group key or aggregates.");
                         }
