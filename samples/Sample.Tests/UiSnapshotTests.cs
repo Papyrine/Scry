@@ -167,6 +167,69 @@ public class UiSnapshotTests
         Assert.That(items, Does.Contain("Manager"));
     }
 
+    // Regression guard for the class of failure where a Microsoft.CodeAnalysis (Roslyn) or runtime upgrade
+    // breaks the in-browser completion engine at RUNTIME on the mono-wasm interpreter. The in-process Roslyn
+    // tests (Scry.Explorer.Tests) run on desktop CoreCLR and stay green even when WASM is broken, so only a
+    // real browser can catch this. Roslyn 5.6.0 regressed here: its completion path tripped a fatal
+    // StackOverflowException (infinite System.Threading.Volatile.ReadBarrier recursion) that killed the WASM
+    // runtime, so completions never rendered — and every other Explorer test failed only as an opaque 90s
+    // "waiting for completions" timeout. This test watches the browser console for a fatal unhandled exception
+    // and fails FAST with a message that names the cause. See the pin note in src/Directory.Packages.props.
+    [Test]
+    public async Task ExplorerCompletionDoesNotCrashWasmRuntime()
+    {
+        var page = await browser.NewPageAsync();
+
+        // Blazor logs unhandled .NET exceptions to console.error; the mono runtime prints
+        // "FATAL UNHANDLED EXCEPTION" for a stack overflow; a boot-time asset failure aborts with
+        // "Failed to start platform". Any of these means the runtime died — not that completion is slow.
+        // (The benign PlatformNotSupportedException from Roslyn's persistent-storage probe logs a plain
+        // "Unhandled Exception:" without these markers, and is deliberately not treated as fatal.)
+        var fatal = new List<string>();
+        void Watch(string text)
+        {
+            foreach (var marker in (string[])["StackOverflowException", "FATAL UNHANDLED EXCEPTION", "Failed to start platform"])
+            {
+                if (text.Contains(marker, StringComparison.Ordinal))
+                {
+                    fatal.Add(text);
+                    return;
+                }
+            }
+        }
+
+        page.Console += (_, message) => { if (message.Type == "error") Watch(message.Text); };
+        page.PageError += (_, error) => Watch(error);
+
+        await page.GotoAsync($"{baseUrl}/scry");
+
+        // Race the two outcomes so a crash is reported in seconds (with a descriptive message) instead of a
+        // blind 90s wait: either the completion list renders (runtime healthy) or a fatal error is logged.
+        var deadline = DateTime.UtcNow.AddSeconds(90);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (fatal.Count > 0)
+            {
+                Assert.Fail(
+                    $"The Scry Explorer WASM runtime crashed during boot/completion: {fatal[0]}\n" +
+                    "A Microsoft.CodeAnalysis (Roslyn) or .NET runtime upgrade likely regressed in-browser " +
+                    "completion on the mono-wasm interpreter. See the pin note in src/Directory.Packages.props.");
+            }
+
+            if (await page.Locator("[data-testid='completions'] li").CountAsync() > 0)
+            {
+                break;
+            }
+
+            await Task.Delay(500);
+        }
+
+        // The runtime is alive AND completion produced results against the introspected schema.
+        var items = await page.Locator("[data-testid='completions'] li").AllInnerTextsAsync();
+        Assert.That(fatal, Is.Empty, $"fatal WASM runtime error(s): {string.Join(" || ", fatal)}");
+        Assert.That(items, Does.Contain("Name"), "in-browser Roslyn completion returned no schema members");
+    }
+
     // Full terminal support: the Scry terminal operators are discoverable via IntelliSense — completing
     // against the queryable itself (not a lambda member) offers ToListAsync/FirstAsync/etc.
     [Test]

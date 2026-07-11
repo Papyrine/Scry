@@ -11,10 +11,18 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.9" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.9" />
     <PackageVersion Include="EfLocalDb" Version="24.1.3" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.6.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Features" Version="5.6.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.6.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="5.6.0" />
+    <!-- Pinned to 5.3.0 (do not bump without testing the WASM explorer). The next published version, 5.6.0,
+         trips a mono-wasm interpreter bug: System.Threading.Volatile.ReadBarrier recurses infinitely (fatal,
+         uncatchable StackOverflowException) the first time the in-browser Roslyn completion runs, killing the
+         Blazor WASM explorer — every Explorer UI test (samples/Sample.Tests) then times out. The in-process
+         Roslyn layer (Scry.Explorer.Tests, desktop CoreCLR) is unaffected, so `dotnet test` on src/ stays green
+         and hides it. nuget.org publishes no 5.4.x/5.5.x, so 5.3.0 is the newest usable version; revisit when a
+         later Microsoft.CodeAnalysis (or a runtime that fixes the intrinsic) ships. RunAOTCompilation is off in
+         Scry.Explorer.Ui (the interpreter is required), which is exactly where the intrinsic breaks. -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.3.0" Pinned="true" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Features" Version="5.3.0" Pinned="true" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.3.0" Pinned="true" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="5.3.0" Pinned="true" />
     <PackageVersion Include="Basic.Reference.Assemblies.Net100" Version="1.8.9" />
     <PackageVersion Include="BlazorMonaco" Version="3.5.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
