@@ -10,7 +10,7 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
-    <PackageVersion Include="EfLocalDb" Version="24.1.4" />
+    <PackageVersion Include="EfLocalDb" Version="25.0.0" />
     <!-- Pinned to 5.3.0 (do not bump without testing the WASM explorer). The next published version, 5.6.0,
          trips a mono-wasm interpreter bug: System.Threading.Volatile.ReadBarrier recurses infinitely (fatal,
          uncatchable StackOverflowException) the first time the in-browser Roslyn completion runs, killing the
@@ -23,17 +23,17 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Features" Version="5.3.0" Pinned="true" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.3.0" Pinned="true" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="5.3.0" Pinned="true" />
-    <PackageVersion Include="Basic.Reference.Assemblies.Net100" Version="1.8.9" />
+    <PackageVersion Include="Basic.Reference.Assemblies.Net100" Version="1.8.10" />
     <PackageVersion Include="BlazorMonaco" Version="3.5.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
     <PackageVersion Include="NUnit" Version="4.6.1" />
     <PackageVersion Include="NUnit3TestAdapter" Version="6.2.0" />
-    <PackageVersion Include="Verify" Version="31.24.1" />
-    <PackageVersion Include="Verify.NUnit" Version="31.24.1" />
+    <PackageVersion Include="Verify" Version="31.26.0" />
+    <PackageVersion Include="Verify.NUnit" Version="31.26.0" />
     <PackageVersion Include="Verify.DiffPlex" Version="3.3.1" />
     <PackageVersion Include="Verify.SourceGenerators" Version="2.5.0" />
-    <PackageVersion Include="Polyfill" Version="10.11.2" />
-    <PackageVersion Include="ProjectDefaults" Version="1.0.174" />
+    <PackageVersion Include="Polyfill" Version="11.0.1" />
+    <PackageVersion Include="ProjectDefaults" Version="1.0.175" />
     <PackageVersion Include="SponsorCheck" Version="0.14.0" GitHubSponsorsAccount="Papyrine" SponsorOwner="Papyrine" CheckTransitiveReferences="true" SponsorLandingUrl="https://github.com/sponsors/Papyrine" />
     <SponsorExemption Include="MaintainerConsulting" Message="Organizations that have engaged any of the core maintainers of Papyrine in consulting work could be exempt from the Maintenance Fee for 6 months from the final date of that work." />
     <SponsorExemption Include="SmallRevenue" Message="Consumers under US$10,000 annual gross revenue are exempt." />
