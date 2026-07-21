@@ -9,10 +9,24 @@ build_script:
 - dotnet build src/Scry.slnx --configuration Release
 - dotnet build IntegrationTests/IntegrationTests.slnx --configuration Release -p:GeneratePackageOnBuild=false
 - dotnet build samples/Scry.Samples.slnx --configuration Release -p:GeneratePackageOnBuild=false
-- dotnet test src/Scry.slnx --configuration Release --no-build
-- dotnet test IntegrationTests/IntegrationTests.slnx --configuration Release --no-build
-# Includes the headless-browser tests; VerifyPlaywright.Initialize(installPlaywright:true) fetches Chromium.
-- dotnet test samples/Scry.Samples.slnx --configuration Release --no-build
+- pwsh: |
+    # All three suites run before reporting, so one failing suite does not hide the results of
+    # the others, and the trx from every suite is uploaded even when an earlier one fails.
+    $testExit = 0
+    dotnet test src/Scry.slnx --configuration Release --no-build --logger trx
+    if ($LASTEXITCODE -ne 0) { $testExit = $LASTEXITCODE }
+    dotnet test IntegrationTests/IntegrationTests.slnx --configuration Release --no-build --logger trx
+    if ($LASTEXITCODE -ne 0) { $testExit = $LASTEXITCODE }
+    # Includes the headless-browser tests; VerifyPlaywright.Initialize(installPlaywright:true) fetches Chromium.
+    dotnet test samples/Scry.Samples.slnx --configuration Release --no-build --logger trx
+    if ($LASTEXITCODE -ne 0) { $testExit = $LASTEXITCODE }
+    $url = "https://ci.appveyor.com/api/testresults/mstest/$($env:APPVEYOR_JOB_ID)"
+    Get-ChildItem -Recurse -Filter *.trx | ForEach-Object {
+      Write-Host "Uploading test results: $($_.FullName)"
+      try { (New-Object System.Net.WebClient).UploadFile($url, $_.FullName) }
+      catch { Write-Host "Failed to upload test results: $_" }
+    }
+    if ($testExit -ne 0) { exit $testExit }
 on_failure:
   - ps: |
       $root = (Get-Location).Path
