@@ -30,9 +30,28 @@ public sealed class RoslynWorkspace
     // LINQ operators (System.Linq), the synthesized models/enums (Scry.Generated), and the Scry
     // terminal operators (Scry.Client: ToListAsync/FirstAsync/CountAsync/...) resolve —
     // so completion offers them and diagnostics do not falsely flag them.
-    const string Header =
-        "using System;\nusing System.Linq;\nusing System.Collections.Generic;\nusing Scry.Generated;\nusing Scry.Client;\nnamespace Scry.Editor;\nstatic class Editor\n{\n    static object Run(global::Scry.Generated.ScryQuery Query)\n    {\n        return ";
-    const string Footer = ";\n    }\n}\n";
+    const string header =
+        """
+        using System;
+        using System.Linq;
+        using System.Collections.Generic;
+        using Scry.Generated;
+        using Scry.Client;
+        namespace Scry.Editor;
+        static class Editor
+        {
+            static object Run(global::Scry.Generated.ScryQuery Query)
+            {
+                return 
+        """;
+
+    const string Footer =
+        """
+        ;
+            }
+        }
+
+        """;
 
     readonly AdhocWorkspace workspace;
     readonly DocumentId editorDocumentId;
@@ -63,7 +82,7 @@ public sealed class RoslynWorkspace
 
         var project = workspace.AddProject(projectInfo);
         workspace.AddDocument(project.Id, "Generated.cs", SourceText.From(generatedSource));
-        var editor = workspace.AddDocument(project.Id, "Editor.cs", SourceText.From(Header + Footer));
+        var editor = workspace.AddDocument(project.Id, "Editor.cs", SourceText.From(header + Footer));
 
         return new(workspace, editor.Id);
     }
@@ -73,7 +92,7 @@ public sealed class RoslynWorkspace
     {
         var solution = workspace.CurrentSolution.WithDocumentText(
             editorDocumentId,
-            SourceText.From(Header + code + Footer));
+            SourceText.From(header + code + Footer));
 
         var document = solution.GetDocument(editorDocumentId)!;
         var service = CompletionService.GetService(document);
@@ -82,7 +101,7 @@ public sealed class RoslynWorkspace
             return [];
         }
 
-        var completions = await service.GetCompletionsAsync(document, Header.Length + caret);
+        var completions = await service.GetCompletionsAsync(document, header.Length + caret);
 
         // The range to replace is the identifier currently being typed (empty right after a '.').
         var start = caret;
@@ -105,7 +124,7 @@ public sealed class RoslynWorkspace
 
         var solution = workspace.CurrentSolution.WithDocumentText(
             editorDocumentId,
-            SourceText.From(Header + code + Footer));
+            SourceText.From(header + code + Footer));
 
         var document = solution.GetDocument(editorDocumentId)!;
         var model = await document.GetSemanticModelAsync();
@@ -114,7 +133,7 @@ public sealed class RoslynWorkspace
             return [];
         }
 
-        var userStart = Header.Length;
+        var userStart = header.Length;
         var userEnd = userStart + code.Length;
         var diagnostics = new List<ScryDiagnostic>();
         foreach (var diagnostic in model.GetDiagnostics())
@@ -150,7 +169,7 @@ public sealed class RoslynWorkspace
     {
         var solution = workspace.CurrentSolution.WithDocumentText(
             editorDocumentId,
-            SourceText.From(Header + code + Footer));
+            SourceText.From(header + code + Footer));
 
         var document = solution.GetDocument(editorDocumentId)!;
         var root = await document.GetSyntaxRootAsync();
@@ -160,7 +179,7 @@ public sealed class RoslynWorkspace
             return null;
         }
 
-        var token = root.FindToken(Header.Length + caret);
+        var token = root.FindToken(header.Length + caret);
         if (token.Parent is not { } node)
         {
             return null;
@@ -168,8 +187,8 @@ public sealed class RoslynWorkspace
 
         var info = model.GetSymbolInfo(node);
         var symbol = info.Symbol
-            ?? info.CandidateSymbols.FirstOrDefault()
-            ?? model.GetDeclaredSymbol(node);
+                     ?? info.CandidateSymbols.FirstOrDefault()
+                     ?? model.GetDeclaredSymbol(node);
         if (symbol is null)
         {
             return null;
@@ -177,8 +196,8 @@ public sealed class RoslynWorkspace
 
         return new(
             symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
-            Math.Clamp(token.SpanStart - Header.Length, 0, code.Length),
-            Math.Clamp(token.Span.End - Header.Length, 0, code.Length));
+            Math.Clamp(token.SpanStart - header.Length, 0, code.Length),
+            Math.Clamp(token.Span.End - header.Length, 0, code.Length));
     }
 
     static MefHostServices CreateHost()

@@ -14,6 +14,11 @@ it, and inspect the results.
 
 It is off unless mapped, and Development-only by default.
 
+![The explorer after running a query: the LINQ, the serialized wire request, the result table, and the raw response](images/explorer-run.png)
+
+One screen shows the whole pipeline: the LINQ you wrote, the wire request it translated to, the rows
+the server returned, and the raw response envelope.
+
 ## Mapping it
 
 ```cs
@@ -269,7 +274,12 @@ enums. It carries **no** policies, resolvers, connection details, or CLR interna
 
 Because `TypeDisplay` matches the generator's emission exactly, the explorer can synthesize an
 identical set of query models in the browser, compile them with Roslyn, and offer completion against
-the real allow-listed surface.
+the real allow-listed surface — which is what makes this real IntelliSense rather than a word list:
+
+![Monaco's completion dropdown listing the allow-listed Employee members](images/explorer-intellisense.png)
+
+Note what is offered and what is not: `Active`, `Department`, `Manager`, `Name`, `Status` — but no
+`Salary`, because it is `[QueryIgnore]`d and therefore never reaches the introspection contract.
 
 You can produce the same contract programmatically:
 
@@ -303,3 +313,22 @@ nothing to configure beyond the route.
 
 Because the explorer reveals the complete queryable schema, leaving it mapped in production means
 publishing that schema to anyone who passes the guard. The Development-only default is deliberate.
+
+## Regenerating the screenshots
+
+Unlike every other code block in these docs, the two images above are **not** merged from source at
+build time — they are captured from a real browser and committed under `docs/images/`. They will
+therefore drift silently when the explorer UI changes; refresh them when it does.
+
+`ExplorerWalkthrough` in `samples/Sample.Tests/UiSnapshotTests.cs` drives the live explorer with
+Playwright and writes the raw captures to a temp directory (it is `[Explicit]`, so it does not run in
+a normal test pass, and the fixture is `[Category("Browser")]` so CI can opt out — pixel output is
+environment sensitive):
+
+```bash
+dotnet test samples/Sample.Tests --filter "FullyQualifiedName~ExplorerWalkthrough"
+```
+
+It prints the output directory. `1-loaded.png`, `2-intellisense.png`, `3-run.png`, `3b-count.png`,
+`4-hover.png`, and `5-dark.png` are captured; the two used here are `2-intellisense` and `3-run`,
+trimmed of trailing whitespace and with the empty interior of the editor box spliced out.

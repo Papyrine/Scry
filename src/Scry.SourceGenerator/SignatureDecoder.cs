@@ -85,6 +85,13 @@ sealed class SignatureDecoder :
 
     public bool IsSystemType(DecodedType type) => false;
 
-    static string Combine(string ns, string name) =>
-        ns.Length == 0 ? name : $"{ns}.{name}";
+    static string Combine(string ns, string name)
+    {
+        if (ns.Length == 0)
+        {
+            return name;
+        }
+
+        return $"{ns}.{name}";
+    }
 }

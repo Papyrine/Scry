@@ -115,6 +115,21 @@ employees = await Query.Employee
 <sup><a href='/samples/Sample.Client/Pages/Index.razor#L103-L109' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
+## Query explorer
+
+An opt-in, GraphiQL-style explorer ships in `Scry.Server.Explorer`. It runs Roslyn in the browser, so
+you get real IntelliSense and diagnostics against the allow-listed schema, and can see exactly what
+goes on the wire:
+
+```csharp
+app.MapScryExplorer("/scry");
+```
+
+![The Scry explorer: LINQ, the serialized wire request, the result table, and the raw response](docs/images/explorer-run.png)
+
+It is off unless mapped, and Development-only by default. See
+[Query explorer](docs/explorer.md).
+
 ## Documentation
 
 - [Getting started](docs/getting-started.md)
