@@ -11,14 +11,27 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
     <PackageVersion Include="EfLocalDb" Version="25.0.0" />
-    <!-- Pinned to 5.3.0 (do not bump without testing the WASM explorer). The next published version, 5.6.0,
-         trips a mono-wasm interpreter bug: System.Threading.Volatile.ReadBarrier recurses infinitely (fatal,
-         uncatchable StackOverflowException) the first time the in-browser Roslyn completion runs, killing the
-         Blazor WASM explorer — every Explorer UI test (samples/Sample.Tests) then times out. The in-process
-         Roslyn layer (Scry.Explorer.Tests, desktop CoreCLR) is unaffected, so `dotnet test` on src/ stays green
-         and hides it. nuget.org publishes no 5.4.x/5.5.x, so 5.3.0 is the newest usable version; revisit when a
-         later Microsoft.CodeAnalysis (or a runtime that fixes the intrinsic) ships. RunAOTCompilation is off in
-         Scry.Explorer.Ui (the interpreter is required), which is exactly where the intrinsic breaks. -->
+    <!-- Pinned to 5.3.0 (do not bump without running the Explorer UI tests). 5.6.0 is the next published
+         version — nuget.org has no 5.4.x/5.5.x — and it calls System.Threading.Volatile.ReadBarrier, which
+         the net10 mono-wasm interpreter does not implement: the managed fallback recurses into itself and
+         kills the Blazor WASM explorer with a fatal, uncatchable StackOverflowException the first time
+         in-browser completion runs. RunAOTCompilation is off in Scry.Explorer.Ui (the interpreter is
+         required for QueryTranslator's Expression.Compile), which is exactly where the intrinsic breaks.
+
+         That intrinsic is fixed by dotnet/runtime#124538 (issue dotnet/runtime#124477) and ships in .NET 11
+         — but do NOT reach for net11 as the way out. Verified against 11.0.0-preview.6: the barrier crash is
+         gone, and Roslyn still cannot run in the browser, for two further reasons, both filed:
+           dotnet/roslyn#84615    AdhocWorkspace.AddProject takes a blocking SemaphoreSlim.Wait, which net11
+                                  rejects on single-threaded wasm. Reproduces on 5.3.0 too, so pinning is no
+                                  defence — the explorer cannot even construct its workspace.
+           dotnet/runtime#131311  WasmEnableThreads=true, the documented way to permit blocking waits, makes
+                                  the net11 runtime fail to start at all.
+         Stay on net10 + 5.3.0 until both are resolved.
+
+         Mind the blind spot common to all three: the in-process Roslyn layer (Scry.Explorer.Tests, desktop
+         CoreCLR) is unaffected by every one of them, so `dotnet test` on src/ stays green and hides the
+         breakage. Only the Explorer UI tests in samples/Sample.Tests catch it, and they present as timeouts
+         rather than errors. -->
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.3.0" Pinned="true" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Features" Version="5.3.0" Pinned="true" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.3.0" Pinned="true" />
