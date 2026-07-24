@@ -8,6 +8,9 @@ rows.
 
 snippet: serverRegistration
 
+`AddPocoSource` registers the data for a `[QueryablePoco]` type — see
+[POCO sources](#poco-sources) below. `MaxPageSize` is one of the [limits](#options).
+
 `AddScry<TContext>`:
 
 - Scans `typeof(TContext).Assembly` for types carrying `[Queryable]`, `[QueryableView]`, or

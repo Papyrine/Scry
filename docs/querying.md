@@ -15,9 +15,9 @@ sent to the server when a terminal operator is awaited.
 <a id='snippet-clientQuery'></a>
 ```razor
 employees = await Query.Employee
-    .Where(e => e.Active)
-    .OrderBy(e => e.Name)
-    .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
+    .Where(_ => _.Active)
+    .OrderBy(_ => _.Name)
+    .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
 <sup><a href='/samples/Sample.Client/Pages/Index.razor#L103-L109' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
@@ -120,7 +120,7 @@ with `Where` first:
 
 ```cs
 var count = await Query.Employee
-    .Where(e => e.Active)
+    .Where(_ => _.Active)
     .CountAsync();
 ```
 
@@ -156,7 +156,7 @@ selector, or a projection leaf, subject to the position rules further down.
 A path rooted at the lambda parameter, traversing reference navigations:
 
 ```cs
-.Where(e => e.Manager!.Department!.Name == "Engineering")
+.Where(_ => _.Manager!.Department!.Name == "Engineering")
 ```
 
 becomes the member path `["Manager", "Department", "Name"]`. Path length is capped by
@@ -254,10 +254,10 @@ parameterizable at runtime:
 <a id='snippet-clientClosureCapture'></a>
 ```razor
 fullTimers = await Query.Employee
-    .Where(e => e.Status == status)
-    .OrderBy(e => e.Name)
+    .Where(_ => _.Status == status)
+    .OrderBy(_ => _.Name)
     .Take(top)
-    .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
+    .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
 <sup><a href='/samples/Sample.Client/Pages/Index.razor#L118-L125' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
@@ -265,7 +265,7 @@ fullTimers = await Query.Employee
 
 `status` and `top` are locals; the translator compiles and invokes those sub-expressions, then emits
 their values. Calls to your own methods are fine on this path as long as they do not touch the query
-parameter — `.Where(e => e.Name == BuildName())` sends the *result* of `BuildName()`.
+parameter — `.Where(_ => _.Name == BuildName())` sends the *result* of `BuildName()`.
 
 A constant is carried as an invariant-culture string plus a type tag, and reconciled against the
 member type at the comparison site on the server. Enums travel as their **name**, not their numeric
@@ -276,15 +276,15 @@ value.
 A `Select` must construct an object. Anonymous types, records, and object initializers all work:
 
 ```cs
-.Select(e => new { e.Name, Manager = e.Manager!.Name })
-.Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
-.Select(e => new EmployeeRow { Name = e.Name, Department = e.Department!.Name })
+.Select(_ => new { _.Name, Manager = _.Manager!.Name })
+.Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
+.Select(_ => new EmployeeRow { Name = _.Name, Department = _.Department!.Name })
 ```
 
 Projecting a bare value does not work:
 
 ```cs
-.Select(e => e.Name) // NotSupportedException
+.Select(_ => _.Name) // NotSupportedException
 ```
 
 ```
@@ -295,7 +295,7 @@ For a record or constructor call, member names come from the constructor paramet
 — `new EmployeeRow(name: ...)` produces the member `Name`.
 
 Every projection leaf must resolve to an allow-listed **scalar**. A navigation cannot be projected
-whole; project the scalar you want out of it (`e.Department!.Name`).
+whole; project the scalar you want out of it (`_.Department!.Name`).
 
 ### Without a `Select`
 
@@ -336,7 +336,7 @@ The wire format can nest a projection under a navigation, producing nested JSON:
 
 The client translator always emits flat member paths, so this shape is reachable by constructing the
 AST directly rather than from LINQ. From LINQ, name the leaf instead —
-`Department = e.Department!.Name`.
+`Department = _.Department!.Name`.
 
 ## Grouping and aggregates
 
@@ -347,8 +347,8 @@ aggregates:
 <a id='snippet-clientGroupBy'></a>
 ```razor
 regions = await Query.Order
-    .GroupBy(o => o.Region)
-    .Select(g => new RegionSummary(g.Key, g.Sum(x => x.Amount), g.Count()))
+    .GroupBy(_ => _.Region)
+    .Select(_ => new RegionSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
     .ToListAsync();
 ```
 <sup><a href='/samples/Sample.Client/Pages/Index.razor#L111-L116' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
@@ -372,11 +372,11 @@ public enum AggregateFn
 
 | C# | Aggregate |
 | --- | --- |
-| `g.Count()` | `Count` |
-| `g.Sum(x => x.Amount)` | `Sum` |
-| `g.Average(x => x.Amount)` | `Average` |
-| `g.Min(x => x.Amount)` | `Min` |
-| `g.Max(x => x.Amount)` | `Max` |
+| `_.Count()` | `Count` |
+| `_.Sum(_ => _.Amount)` | `Sum` |
+| `_.Average(_ => _.Amount)` | `Average` |
+| `_.Min(_ => _.Amount)` | `Min` |
+| `_.Max(_ => _.Amount)` | `Max` |
 
 Constraints:
 

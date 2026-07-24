@@ -61,9 +61,9 @@ public class HttpRoundTripTests
     public async Task EmployeesProjectionOverHttp()
     {
         var rows = await query.Employee
-            .Where(e => e.Active)
-            .OrderBy(e => e.Name)
-            .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
+            .Where(_ => _.Active)
+            .OrderBy(_ => _.Name)
+            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
             .ToListAsync();
 
         Assert.That(rows.Select(_ => _.Name), Is.EqualTo(activeEmployeeNames));
@@ -76,8 +76,8 @@ public class HttpRoundTripTests
     public async Task GroupedAggregateOverHttp()
     {
         var regions = await query.Order
-            .GroupBy(o => o.Region)
-            .Select(g => new RegionSummary(g.Key, g.Sum(x => x.Amount), g.Count()))
+            .GroupBy(_ => _.Region)
+            .Select(_ => new RegionSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
             .ToListAsync();
 
         var north = regions.Single(_ => _.Region == "North");
@@ -89,7 +89,7 @@ public class HttpRoundTripTests
     public async Task CountOverHttp()
     {
         var count = await query.Employee
-            .Where(e => e.Active)
+            .Where(_ => _.Active)
             .CountAsync();
 
         Assert.That(count, Is.EqualTo(3));

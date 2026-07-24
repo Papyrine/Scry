@@ -6,6 +6,9 @@ policies, executes against a `DbContext`, and returns projected rows.
 
 snippet: serverRegistration
 
+`AddPocoSource` supplies the rows for a `[QueryablePoco]` type — see
+[POCO sources](https://github.com/Papyrine/Scry/blob/main/docs/server.md#poco-sources).
+
 snippet: mapScry
 
 Docs: [Server](https://github.com/Papyrine/Scry/blob/main/docs/server.md) ·

@@ -102,25 +102,25 @@ else
         {
             // begin-snippet: clientQuery
             employees = await Query.Employee
-                .Where(e => e.Active)
-                .OrderBy(e => e.Name)
-                .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
+                .Where(_ => _.Active)
+                .OrderBy(_ => _.Name)
+                .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
                 .ToListAsync();
             // end-snippet
 
             // begin-snippet: clientGroupBy
             regions = await Query.Order
-                .GroupBy(o => o.Region)
-                .Select(g => new RegionSummary(g.Key, g.Sum(x => x.Amount), g.Count()))
+                .GroupBy(_ => _.Region)
+                .Select(_ => new RegionSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
                 .ToListAsync();
             // end-snippet
 
             // begin-snippet: clientClosureCapture
             fullTimers = await Query.Employee
-                .Where(e => e.Status == status)
-                .OrderBy(e => e.Name)
+                .Where(_ => _.Status == status)
+                .OrderBy(_ => _.Name)
                 .Take(top)
-                .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
+                .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
                 .ToListAsync();
             // end-snippet
         }

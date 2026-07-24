@@ -9,6 +9,8 @@ builder.Services.AddDbContext<SampleContext>(_ => _.UseSqlServer("Server=(locald
 builder.Services.AddScry<SampleContext>(
     _ =>
     {
+        // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
+        // [QueryablePoco] type must be registered here or AddScry throws at startup.
         _.AddPocoSource(_ => Holiday.Seed());
         _.MaxPageSize = 200;
     });

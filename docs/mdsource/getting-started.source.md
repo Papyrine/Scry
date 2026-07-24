@@ -38,6 +38,9 @@ snippet: serverRegistration
 `AddScry<TContext>` scans `typeof(TContext).Assembly` once at startup, builds the allow-list schema,
 and registers it as a singleton along with the `ScryProcessor`.
 
+`AddPocoSource` is what supplies the rows for a `[QueryablePoco]` type, which has no table for the
+server to read — see [POCO sources](server.md#poco-sources) for the fixed and per-request forms.
+
 Then map the endpoint:
 
 snippet: mapScry

@@ -137,20 +137,20 @@ public class UiSnapshotTests
         await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
 
         var height = await page.EvaluateAsync<double>(
-            "() => document.querySelector('.scry-editor').getBoundingClientRect().height");
+            """() => document.querySelector('.scry-editor').getBoundingClientRect().height""");
         Assert.That(height, Is.GreaterThan(100), "editor host height (the bug rendered it ~0)");
 
         // Type the way a user does: click into the editor to focus it, then type on the keyboard.
-        await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('')");
+        await page.EvaluateAsync("""() => monaco.editor.getEditors()[0].setValue('')""");
         await page.Locator(".monaco-editor").ClickAsync();
         await page.Keyboard.TypeAsync("Query");
 
-        var value = await page.EvaluateAsync<string>("() => monaco.editor.getEditors()[0].getValue()");
+        var value = await page.EvaluateAsync<string>("""() => monaco.editor.getEditors()[0].getValue()""");
         Assert.That(value, Is.EqualTo("Query"), "typed text should reach the editor model");
     }
 
     // Proves Roslyn runs in the browser and completes against the introspected schema: the explorer
-    // auto-runs completion for "Query.Employee.Where(e => e." on load and should offer Employee members.
+    // auto-runs completion for "Query.Employee.Where(_ => _." on load and should offer Employee members.
     [Test]
     public async Task ExplorerCompletion()
     {
@@ -240,7 +240,7 @@ public class UiSnapshotTests
         await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
         await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
 
-        await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('Query.Employee.')");
+        await page.EvaluateAsync("""() => monaco.editor.getEditors()[0].setValue('Query.Employee.')""");
         await page.Locator("[data-testid='complete']").ClickAsync();
 
         await page.WaitForFunctionAsync(
@@ -265,9 +265,15 @@ public class UiSnapshotTests
 
         // Place the caret at the end (after "e.") and trigger IntelliSense via Monaco's API.
         await page.EvaluateAsync(
-            "() => { const e = monaco.editor.getEditors()[0]; e.focus(); const m = e.getModel();" +
-            " e.setPosition({ lineNumber: 1, column: m.getLineMaxColumn(1) });" +
-            " e.trigger('test', 'editor.action.triggerSuggest', {}); }");
+            """
+            () => {
+                const editor = monaco.editor.getEditors()[0];
+                editor.focus();
+                const model = editor.getModel();
+                editor.setPosition({ lineNumber: 1, column: model.getLineMaxColumn(1) });
+                editor.trigger('test', 'editor.action.triggerSuggest', {});
+            }
+            """);
 
         await page.WaitForSelectorAsync(".suggest-widget .monaco-list-row", new() { Timeout = 30_000 });
         var rows = await page.Locator(".suggest-widget .monaco-list-row").AllInnerTextsAsync();
@@ -286,7 +292,10 @@ public class UiSnapshotTests
 
         // Set a complete query, then run it.
         await page.EvaluateAsync(
-            "() => monaco.editor.getEditors()[0].setValue(\"Query.Employee.Where(e => e.Active).OrderBy(e => e.Name).Select(e => new { e.Name, e.Status })\")");
+            """
+            () => monaco.editor.getEditors()[0].setValue(
+                "Query.Employee.Where(_ => _.Active).OrderBy(_ => _.Name).Select(_ => new { _.Name, _.Status })")
+            """);
         await page.Locator("[data-testid='run']").ClickAsync();
 
         await page.WaitForSelectorAsync("[data-testid='result-table']", new() { Timeout = 60_000 });
@@ -318,7 +327,7 @@ public class UiSnapshotTests
         await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
         await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
 
-        await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('Query.Employee.ToList()')");
+        await page.EvaluateAsync("""() => monaco.editor.getEditors()[0].setValue('Query.Employee.ToList()')""");
         await page.Locator("[data-testid='run']").ClickAsync();
 
         await page.WaitForSelectorAsync("[data-testid='result-table']", new() { Timeout = 60_000 });
@@ -339,7 +348,7 @@ public class UiSnapshotTests
         await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
 
         await page.EvaluateAsync(
-            "() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(e => e.Active).CountAsync()')");
+            """() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(_ => _.Active).CountAsync()')""");
         await page.Locator("[data-testid='run']").ClickAsync();
 
         await page.WaitForSelectorAsync("[data-testid='result-scalar']", new() { Timeout = 60_000 });
@@ -362,7 +371,10 @@ public class UiSnapshotTests
         await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
 
         await page.EvaluateAsync(
-            "() => monaco.editor.getEditors()[0].setValue(\"Query.Employee.Where(e => e.Active).OrderBy(e => e.Name).Select(e => new { e.Name, e.Status }).FirstAsync()\")");
+            """
+            () => monaco.editor.getEditors()[0].setValue(
+                "Query.Employee.Where(_ => _.Active).OrderBy(_ => _.Name).Select(_ => new { _.Name, _.Status }).FirstAsync()")
+            """);
         await page.Locator("[data-testid='run']").ClickAsync();
 
         await page.WaitForSelectorAsync("[data-testid='result-table']", new() { Timeout = 60_000 });
@@ -394,7 +406,7 @@ public class UiSnapshotTests
 
         await page.ReloadAsync();
         await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
-        var theme = await page.EvaluateAsync<string>("() => document.documentElement.dataset.theme");
+        var theme = await page.EvaluateAsync<string>("""() => document.documentElement.dataset.theme""");
         Assert.That(theme, Is.EqualTo("dark"), "theme should persist across reload");
         await page.WaitForSelectorAsync(".monaco-editor.vs-dark", new() { Timeout = 10_000 });
     }
@@ -409,7 +421,13 @@ public class UiSnapshotTests
         await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
 
         await page.EvaluateAsync(
-            "() => { const e = monaco.editor.getEditors()[0]; e.setValue('Query.Employee.ToList()'); e.focus(); }");
+            """
+            () => {
+                const editor = monaco.editor.getEditors()[0];
+                editor.setValue('Query.Employee.ToList()');
+                editor.focus();
+            }
+            """);
         await page.Keyboard.PressAsync("Control+Enter");
 
         await page.WaitForSelectorAsync("[data-testid='result-table']", new() { Timeout = 60_000 });
@@ -435,9 +453,15 @@ public class UiSnapshotTests
 
         // Inline IntelliSense dropdown.
         await page.EvaluateAsync(
-            "() => { const e = monaco.editor.getEditors()[0]; e.setValue('Query.Employee.Where(e => e.'); e.focus();" +
-            " e.setPosition({ lineNumber: 1, column: e.getModel().getLineMaxColumn(1) });" +
-            " e.trigger('t', 'editor.action.triggerSuggest', {}); }");
+            """
+            () => {
+                const editor = monaco.editor.getEditors()[0];
+                editor.setValue('Query.Employee.Where(_ => _.');
+                editor.focus();
+                editor.setPosition({ lineNumber: 1, column: editor.getModel().getLineMaxColumn(1) });
+                editor.trigger('t', 'editor.action.triggerSuggest', {});
+            }
+            """);
         await page.WaitForSelectorAsync(".suggest-widget .monaco-list-row", new() { Timeout = 20_000 });
         await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "2-intellisense.png") });
         var suggest = await page.Locator(".suggest-widget .monaco-list-row").AllInnerTextsAsync();
@@ -445,7 +469,11 @@ public class UiSnapshotTests
         await page.Keyboard.PressAsync("Escape");
 
         // Run a complete query.
-        await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(e => e.Active).OrderBy(e => e.Name).Select(e => new { e.Name, e.Status })')");
+        await page.EvaluateAsync(
+            """
+            () => monaco.editor.getEditors()[0].setValue(
+                'Query.Employee.Where(_ => _.Active).OrderBy(_ => _.Name).Select(_ => new { _.Name, _.Status })')
+            """);
         await page.Locator("[data-testid='run']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='result-table']", new() { Timeout = 60_000 });
         await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "3-run.png"), FullPage = true });
@@ -454,7 +482,8 @@ public class UiSnapshotTests
         log.Add($"✓ run: wireHasEmployee={wire.Contains("Employee")}, table=[{table.Replace("\n", " ").Trim()}]");
 
         // Run a terminal query (scalar count) and capture the scalar rendering.
-        await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(e => e.Active).CountAsync()')");
+        await page.EvaluateAsync(
+            """() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(_ => _.Active).CountAsync()')""");
         await page.Locator("[data-testid='run']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='result-scalar']", new() { Timeout = 60_000 });
         await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "3b-count.png"), FullPage = true });
@@ -467,23 +496,40 @@ public class UiSnapshotTests
         await page.Locator("[data-testid='theme-toggle']").ClickAsync();
         await page.WaitForSelectorAsync(".monaco-editor.vs-dark", new() { Timeout = 10_000 });
         await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "5-dark.png"), FullPage = true });
-        log.Add($"✓ dark mode: dataTheme={await page.EvaluateAsync<string>("() => document.documentElement.dataset.theme")}");
+        var dataTheme = await page.EvaluateAsync<string>("""() => document.documentElement.dataset.theme""");
+        log.Add($"✓ dark mode: dataTheme={dataTheme}");
 
         // Diagnostics.
-        await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(e => e.Nope)')");
+        await page.EvaluateAsync(
+            """() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(_ => _.Nope)')""");
         await page.WaitForFunctionAsync("() => monaco.editor.getModelMarkers({}).length > 0", null, new() { Timeout = 20_000 });
-        var markerMsg = await page.EvaluateAsync<string>("() => monaco.editor.getModelMarkers({}).map(m => m.message).join(' | ')");
+        var markerMsg = await page.EvaluateAsync<string>(
+            """() => monaco.editor.getModelMarkers({}).map(m => m.message).join(' | ')""");
         log.Add($"✓ diagnostics: {markerMsg}");
 
         // Hover.
-        await page.EvaluateAsync("() => { const e = monaco.editor.getEditors()[0]; e.setValue('Query.Employee.Where(e => e.Active)'); e.layout(); }");
+        await page.EvaluateAsync(
+            """
+            () => {
+                const editor = monaco.editor.getEditors()[0];
+                editor.setValue('Query.Employee.Where(_ => _.Active)');
+                editor.layout();
+            }
+            """);
         await Task.Delay(500);
         var pt = await page.EvaluateAsync<float[]>(
-            "() => { const e = monaco.editor.getEditors()[0];" +
-            " const a = e.getScrolledVisiblePosition({ lineNumber: 1, column: 29 });" +
-            " const b = e.getScrolledVisiblePosition({ lineNumber: 1, column: 35 });" +
-            " const r = e.getDomNode().getBoundingClientRect();" +
-            " return [r.left + (a.left + b.left) / 2, r.top + a.top + a.height / 2]; }");
+            """
+            () => {
+                const editor = monaco.editor.getEditors()[0];
+                const start = editor.getScrolledVisiblePosition({ lineNumber: 1, column: 29 });
+                const end = editor.getScrolledVisiblePosition({ lineNumber: 1, column: 35 });
+                const bounds = editor.getDomNode().getBoundingClientRect();
+                return [
+                    bounds.left + (start.left + end.left) / 2,
+                    bounds.top + start.top + start.height / 2
+                ];
+            }
+            """);
         await page.Mouse.MoveAsync(pt[0] - 80, pt[1]);
         await page.Mouse.MoveAsync(pt[0], pt[1], new() { Steps = 10 });
         await Task.Delay(1800);
@@ -518,10 +564,11 @@ public class UiSnapshotTests
         await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
 
         // 'Nope' is not a member of the Employee model → a diagnostic marker should appear.
-        await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(e => e.Nope)')");
+        await page.EvaluateAsync(
+            """() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(_ => _.Nope)')""");
         await page.WaitForFunctionAsync("() => monaco.editor.getModelMarkers({}).length > 0", null, new() { Timeout = 30_000 });
 
-        var count = await page.EvaluateAsync<int>("() => monaco.editor.getModelMarkers({}).length");
+        var count = await page.EvaluateAsync<int>("""() => monaco.editor.getModelMarkers({}).length""");
         Assert.That(count, Is.GreaterThan(0));
     }
 

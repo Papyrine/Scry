@@ -7,7 +7,9 @@ it, and inspect the results.
 
 It is off unless mapped, and Development-only by default.
 
-![The explorer after running a query: the LINQ, the serialized wire request, the result table, and the raw response](images/explorer-run.png)
+<img src="images/explorer-run.png" border="1"
+     alt="The explorer after running a query: the LINQ, the serialized wire request, the result table, and the raw response">
+
 
 One screen shows the whole pipeline: the LINQ you wrote, the wire request it translated to, the rows
 the server returned, and the raw response envelope.
@@ -42,7 +44,7 @@ app.MapScryExplorer(options =>
 {
     options.Route = "/scry";
     options.QueryEndpoint = "/api/query";
-    options.EnableGuard = context => context.User.IsInRole("admin");
+    options.EnableGuard = _ => _.User.IsInRole("admin");
 });
 ```
 
@@ -63,7 +65,9 @@ Because `TypeDisplay` matches the generator's emission exactly, the explorer can
 identical set of query models in the browser, compile them with Roslyn, and offer completion against
 the real allow-listed surface — which is what makes this real IntelliSense rather than a word list:
 
-![Monaco's completion dropdown listing the allow-listed Employee members](images/explorer-intellisense.png)
+<img src="images/explorer-intellisense.png" border="1"
+     alt="Monaco's completion dropdown listing the allow-listed Employee members">
+
 
 Note what is offered and what is not: `Active`, `Department`, `Manager`, `Name`, `Status` — but no
 `Salary`, because it is `[QueryIgnore]`d and therefore never reaches the introspection contract.
@@ -117,5 +121,14 @@ dotnet test samples/Sample.Tests --filter "FullyQualifiedName~ExplorerWalkthroug
 ```
 
 It prints the output directory. `1-loaded.png`, `2-intellisense.png`, `3-run.png`, `3b-count.png`,
-`4-hover.png`, and `5-dark.png` are captured; the two used here are `2-intellisense` and `3-run`,
-trimmed of trailing whitespace and with the empty interior of the editor box spliced out.
+`4-hover.png`, and `5-dark.png` are captured; the two used here are `2-intellisense` and `3-run`.
+
+Two post-processing steps are applied to each before committing:
+
+1. Trailing whitespace trimmed (the captures are full-page, so most of the height is blank).
+2. The empty interior of the Monaco editor box spliced out — it renders a fixed height regardless of
+   how little code it holds.
+
+The frame around each image comes from an `<img border="1">` in the markdown rather than from the
+pixels. Note that a `style` attribute would not work here: GitHub's markdown sanitizer strips
+`style`, while `border` is on its allowed-attribute list.

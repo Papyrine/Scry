@@ -145,22 +145,24 @@ protected override void OnModelCreating(ModelBuilder modelBuilder) =>
 builder.Services.AddScry<SampleContext>(
     _ =>
     {
+        // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
+        // [QueryablePoco] type must be registered here or AddScry throws at startup.
         _.AddPocoSource(_ => Holiday.Seed());
         _.MaxPageSize = 200;
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L8-L15' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L8-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-`Holiday` has no table, so its data is registered explicitly. `MaxPageSize` is lowered from the
-default 1000 to 200.
+`Holiday` has no table, so its data is registered explicitly — see
+[POCO sources](server.md#poco-sources). `MaxPageSize` is lowered from the default 1000 to 200.
 
 <!-- snippet: mapScry -->
 <a id='snippet-mapScry'></a>
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L27-L29' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L29-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: mapExplorer -->
@@ -175,7 +177,7 @@ app.MapScryExplorer(
         _.EnableGuard = _ => true;
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L30-L39' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L32-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The sample always exposes the explorer so it can be browsed without setting an environment. A real
@@ -254,9 +256,9 @@ A filter, an ordering, and a projection that reaches through two navigations:
 <a id='snippet-clientQuery'></a>
 ```razor
 employees = await Query.Employee
-    .Where(e => e.Active)
-    .OrderBy(e => e.Name)
-    .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
+    .Where(_ => _.Active)
+    .OrderBy(_ => _.Name)
+    .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
 <sup><a href='/samples/Sample.Client/Pages/Index.razor#L103-L109' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
@@ -268,8 +270,8 @@ A group-by with aggregates:
 <a id='snippet-clientGroupBy'></a>
 ```razor
 regions = await Query.Order
-    .GroupBy(o => o.Region)
-    .Select(g => new RegionSummary(g.Key, g.Sum(x => x.Amount), g.Count()))
+    .GroupBy(_ => _.Region)
+    .Select(_ => new RegionSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
     .ToListAsync();
 ```
 <sup><a href='/samples/Sample.Client/Pages/Index.razor#L111-L116' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
@@ -282,10 +284,10 @@ as constants, which is how an app builds a filtered query at runtime:
 <a id='snippet-clientClosureCapture'></a>
 ```razor
 fullTimers = await Query.Employee
-    .Where(e => e.Status == status)
-    .OrderBy(e => e.Name)
+    .Where(_ => _.Status == status)
+    .OrderBy(_ => _.Name)
     .Take(top)
-    .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
+    .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
 <sup><a href='/samples/Sample.Client/Pages/Index.razor#L118-L125' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>

@@ -27,7 +27,7 @@ app.MapScryExplorer(options =>
 {
     options.Route = "/scry";
     options.QueryEndpoint = "/api/query";
-    options.EnableGuard = context => context.User.IsInRole("admin");
+    options.EnableGuard = _ => _.User.IsInRole("admin");
 });
 ```
 

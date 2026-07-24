@@ -75,19 +75,24 @@ Register and map on the server:
 builder.Services.AddScry<SampleContext>(
     _ =>
     {
+        // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
+        // [QueryablePoco] type must be registered here or AddScry throws at startup.
         _.AddPocoSource(_ => Holiday.Seed());
         _.MaxPageSize = 200;
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L8-L15' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L8-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
+
+`AddPocoSource` supplies the rows for a `[QueryablePoco]` type — see
+[POCO sources](docs/server.md#poco-sources).
 
 <!-- snippet: mapScry -->
 <a id='snippet-mapScry'></a>
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L27-L29' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L29-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Point the client at the model by path — no reference:
@@ -107,9 +112,9 @@ Then write LINQ:
 <a id='snippet-clientQuery'></a>
 ```razor
 employees = await Query.Employee
-    .Where(e => e.Active)
-    .OrderBy(e => e.Name)
-    .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
+    .Where(_ => _.Active)
+    .OrderBy(_ => _.Name)
+    .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
 <sup><a href='/samples/Sample.Client/Pages/Index.razor#L103-L109' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
@@ -125,7 +130,9 @@ goes on the wire:
 app.MapScryExplorer("/scry");
 ```
 
-![The Scry explorer: LINQ, the serialized wire request, the result table, and the raw response](docs/images/explorer-run.png)
+<img src="docs/images/explorer-run.png" border="1"
+     alt="The Scry explorer: LINQ, the serialized wire request, the result table, and the raw response">
+
 
 It is off unless mapped, and Development-only by default. See
 [Query explorer](docs/explorer.md).

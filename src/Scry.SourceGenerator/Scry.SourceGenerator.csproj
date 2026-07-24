@@ -7,8 +7,10 @@
     <!-- Track the package version so each release ships a distinct assembly identity;
          otherwise Rider's analyzer host caches a frozen generator and serves stale
          generated code after a consumer upgrades. Safe for a Roslyn component (never
-         referenced at runtime). -->
-    <AssemblyVersion>$(Version)</AssemblyVersion>
+         referenced at runtime). AssemblyVersion is numeric-only, so any prerelease
+         suffix is stripped — note that means 1.0.0-beta.1 and 1.0.0-beta.2 share an
+         identity, and Rider may need a restart when moving between them. -->
+    <AssemblyVersion>$([System.Text.RegularExpressions.Regex]::Replace('$(Version)', '-.*$', ''))</AssemblyVersion>
     <!-- RS1035: the generator deliberately reads the model DLL from disk (the path-not-reference
          design). RS1041: target-framework guidance for analyzers. -->
     <NoWarn>$(NoWarn);RS1041;RS1035</NoWarn>

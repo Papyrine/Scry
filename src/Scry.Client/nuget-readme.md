@@ -41,9 +41,9 @@ builder.Services.AddScoped<ScryQuery>();
 <a id='snippet-clientQuery'></a>
 ```razor
 employees = await Query.Employee
-    .Where(e => e.Active)
-    .OrderBy(e => e.Name)
-    .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
+    .Where(_ => _.Active)
+    .OrderBy(_ => _.Name)
+    .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
 <sup><a href='/samples/Sample.Client/Pages/Index.razor#L103-L109' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>

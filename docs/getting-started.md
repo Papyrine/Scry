@@ -93,15 +93,20 @@ Register the `DbContext` as usual, then register Scry against it:
 builder.Services.AddScry<SampleContext>(
     _ =>
     {
+        // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
+        // [QueryablePoco] type must be registered here or AddScry throws at startup.
         _.AddPocoSource(_ => Holiday.Seed());
         _.MaxPageSize = 200;
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L8-L15' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L8-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddScry<TContext>` scans `typeof(TContext).Assembly` once at startup, builds the allow-list schema,
 and registers it as a singleton along with the `ScryProcessor`.
+
+`AddPocoSource` is what supplies the rows for a `[QueryablePoco]` type, which has no table for the
+server to read — see [POCO sources](server.md#poco-sources) for the fixed and per-request forms.
 
 Then map the endpoint:
 
@@ -110,7 +115,7 @@ Then map the endpoint:
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L27-L29' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L29-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 That is a single HTTP `POST` endpoint which accepts a serialized query and returns the projected
@@ -183,9 +188,9 @@ then write ordinary LINQ:
 <a id='snippet-clientQuery'></a>
 ```razor
 employees = await Query.Employee
-    .Where(e => e.Active)
-    .OrderBy(e => e.Name)
-    .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
+    .Where(_ => _.Active)
+    .OrderBy(_ => _.Name)
+    .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
 <sup><a href='/samples/Sample.Client/Pages/Index.razor#L103-L109' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>

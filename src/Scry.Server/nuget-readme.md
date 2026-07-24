@@ -17,19 +17,24 @@ policies, executes against a `DbContext`, and returns projected rows.
 builder.Services.AddScry<SampleContext>(
     _ =>
     {
+        // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
+        // [QueryablePoco] type must be registered here or AddScry throws at startup.
         _.AddPocoSource(_ => Holiday.Seed());
         _.MaxPageSize = 200;
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L8-L15' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L8-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
+
+`AddPocoSource` supplies the rows for a `[QueryablePoco]` type — see
+[POCO sources](https://github.com/Papyrine/Scry/blob/main/docs/server.md#poco-sources).
 
 <!-- snippet: mapScry -->
 <a id='snippet-mapScry'></a>
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L27-L29' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L29-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Docs: [Server](https://github.com/Papyrine/Scry/blob/main/docs/server.md) ·

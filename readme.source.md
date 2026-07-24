@@ -41,6 +41,9 @@ Register and map on the server:
 
 snippet: serverRegistration
 
+`AddPocoSource` supplies the rows for a `[QueryablePoco]` type — see
+[POCO sources](docs/server.md#poco-sources).
+
 snippet: mapScry
 
 Point the client at the model by path — no reference:
@@ -61,7 +64,9 @@ goes on the wire:
 app.MapScryExplorer("/scry");
 ```
 
-![The Scry explorer: LINQ, the serialized wire request, the result table, and the raw response](docs/images/explorer-run.png)
+<img src="docs/images/explorer-run.png" border="1"
+     alt="The Scry explorer: LINQ, the serialized wire request, the result table, and the raw response">
+
 
 It is off unless mapped, and Development-only by default. See
 [Query explorer](docs/explorer.md).

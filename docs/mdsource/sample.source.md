@@ -42,8 +42,8 @@ snippet: dbContext
 
 snippet: serverRegistration
 
-`Holiday` has no table, so its data is registered explicitly. `MaxPageSize` is lowered from the
-default 1000 to 200.
+`Holiday` has no table, so its data is registered explicitly — see
+[POCO sources](server.md#poco-sources). `MaxPageSize` is lowered from the default 1000 to 200.
 
 snippet: mapScry
 
