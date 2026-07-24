@@ -25,9 +25,9 @@ sealed class ScrySchema
 
         var typeInfos = types.Values
             .OrderBy(_ => _.ClrType.Name, StringComparer.Ordinal)
-            .Select(meta => new ScryTypeInfo(
-                $"{meta.ClrType.Name}QueryModel",
-                meta.Members.Values
+            .Select(_ => new ScryTypeInfo(
+                $"{_.ClrType.Name}QueryModel",
+                _.Members.Values
                     .OrderBy(_ => _.Name, StringComparer.Ordinal)
                     .Select(member => DescribeMember(member, enums))
                     .ToList()))

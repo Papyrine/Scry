@@ -47,7 +47,7 @@ public class RoslynLayerTests
     [Test]
     public async Task CompletesModelMembersAfterLambdaDot()
     {
-        const string code = "Query.Employee.Where(e => e.";
+        const string code = "Query.Employee.Where(_ => _.";
         var labels = (await workspace.CompleteAsync(code, code.Length)).Select(_ => _.Label).ToList();
 
         Assert.That(labels, Does.Contain("Active"));
@@ -89,7 +89,7 @@ public class RoslynLayerTests
     public void TranslatesWhereSelectToWire()
     {
         var request = executor.Translate(
-            "Query.Employee.Where(e => e.Active).Select(e => new { e.Name, e.Status })");
+            "Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name, _.Status })");
 
         Assert.That(request.Root, Is.EqualTo("Employee"));
         Assert.That(request.Pipeline.Any(_ => _ is WhereOp), Is.True, "where op");
@@ -103,7 +103,7 @@ public class RoslynLayerTests
     [TestCase("Query.Employee.ToListAsync()", null)]
     [TestCase("Query.Employee.CountAsync()", typeof(CountOp))]
     [TestCase("Query.Employee.Count()", typeof(CountOp))]
-    [TestCase("Query.Employee.Where(e => e.Active).CountAsync()", typeof(CountOp))]
+    [TestCase("Query.Employee.Where(_ => _.Active).CountAsync()", typeof(CountOp))]
     [TestCase("Query.Employee.FirstAsync()", typeof(FirstOp))]
     [TestCase("Query.Employee.SingleAsync()", typeof(SingleOp))]
     [TestCase("Query.Employee.AnyAsync()", typeof(AnyOp))]

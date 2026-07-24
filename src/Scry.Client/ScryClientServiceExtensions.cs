@@ -9,7 +9,7 @@ public static class ScryClientServiceExtensions
     /// </summary>
     public static IServiceCollection AddScryClient(this IServiceCollection services, string endpoint)
     {
-        services.AddScoped(provider => ScryClient.ForHttp(provider.GetRequiredService<HttpClient>(), endpoint));
+        services.AddScoped(_ => ScryClient.ForHttp(_.GetRequiredService<HttpClient>(), endpoint));
         return services;
     }
 }

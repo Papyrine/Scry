@@ -132,17 +132,19 @@ public sealed class SnippetExecutor
     }
 
     static string Wrap(string expression, string terminal) =>
-        """
-        using System;
-        using System.Linq;
-        using System.Collections.Generic;
-        using Scry.Client;
-        using Scry.Wire;
-        using Scry.Generated;
-        namespace Scry.Editor;
-        public static class Runner
-        {
-            public static global::Scry.Wire.QueryRequest Run(global::Scry.Generated.ScryQuery Query)
-                => (
-        """ + expression + ").ToScryRequest(" + terminal + ");\n}\n";
+        $$"""
+          using System;
+          using System.Linq;
+          using System.Collections.Generic;
+          using Scry.Client;
+          using Scry.Wire;
+          using Scry.Generated;
+          namespace Scry.Editor;
+          public static class Runner
+          {
+              public static global::Scry.Wire.QueryRequest Run(global::Scry.Generated.ScryQuery Query)
+                  => ({{expression}}).ToScryRequest({{terminal}});
+          }
+
+          """;
 }

@@ -12,7 +12,7 @@ public static class ScryExplorerExtensions
     public static IEndpointConventionBuilder MapScryExplorer(
         this IEndpointRouteBuilder endpoints,
         string route = "/scry") =>
-        endpoints.MapScryExplorer(options => options.Route = route);
+        endpoints.MapScryExplorer(_ => _.Route = route);
 
     /// <summary>Maps the Scry query explorer with explicit <see cref="ScryExplorerOptions"/>.</summary>
     public static IEndpointConventionBuilder MapScryExplorer(
@@ -31,7 +31,7 @@ public static class ScryExplorerExtensions
             Introspect(context, options, processor));
         // The cast forces the RouteHandler (Delegate) overload; a bare HttpContext=>IResult lambda
         // would otherwise bind to the RequestDelegate overload and fail to compile.
-        group.MapGet("", (Func<HttpContext, IResult>)(context => Serve(context, path: null, options, basePath, assets)));
+        group.MapGet("", (Func<HttpContext, IResult>)(_ => Serve(_, path: null, options, basePath, assets)));
         group.MapGet("/{**path}", (HttpContext context, string path) =>
             Serve(context, path, options, basePath, assets));
         return group;

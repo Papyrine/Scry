@@ -246,7 +246,13 @@ sealed class ExpressionBuilder(ScrySchema schema)
         if (aggregate.Function == AggregateFn.Count)
         {
             var count = typeof(Enumerable).GetMethods()
-                .Single(_ => _ is { Name: "Count", IsGenericMethodDefinition: true } && _.GetParameters().Length == 1)
+                .Single(_ =>
+                    _ is
+                    {
+                        Name: "Count",
+                        IsGenericMethodDefinition: true
+                    } &&
+                    _.GetParameters().Length == 1)
                 .MakeGenericMethod(elementType);
             return Expression.Call(count, group);
         }
