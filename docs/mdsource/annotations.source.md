@@ -19,17 +19,43 @@ clients, and a request naming it is rejected as an unknown source.
 
 snippet: queryableEntity
 
-The source name exposed to clients is the **type name** — `Employee`. That is what appears as the
-`root` of a wire request, as the property name on the generated `ScryQuery`, and in the introspection
-output.
+The source name exposed to clients defaults to the **type name** — `Employee`. That is what appears
+as the `root` of a wire request, as the property name on the generated `ScryQuery`, and in the
+introspection output.
 
 If the type also carries EF Core's `[Keyless]`, Scry classifies it as a view rather than an entity.
 The two are resolved identically (`DbContext.Set<T>()`); the distinction is reported through
 introspection so tooling can label it.
 
-> The `Name` property on `[Queryable]`, `[QueryableView]`, and `[QueryablePoco]` is declared but not
-> yet honoured. In the current version both the generator and the server derive the source name from
-> the type name unconditionally. Renaming a source is not supported yet.
+## Naming a source
+
+The source name is part of the **wire contract**. Renaming the CLR type would otherwise change the
+`root` of every request and break already-deployed clients, so all three opt-in attributes take a
+`Name` that decouples the two:
+
+snippet: namedSource
+
+The generated entry point exposes the configured name, while the **model class name stays derived
+from the CLR type**:
+
+snippet: GeneratorTests.NamedSources#ScryQuery.g.verified.cs
+
+That split is deliberate. `Name` governs the public vocabulary; `{Type}QueryModel` stays tied to the
+type so the server's introspection output and the generator's emission keep matching exactly — which
+is what lets the [explorer](explorer.md) synthesize an identical model.
+
+The server derives the same name, so its introspection stays in step with generated client code:
+
+snippet: namedSourceTest
+
+Details:
+
+- A blank or whitespace-only `Name` is treated as unset and falls back to the type name.
+- Names are compared with ordinal case sensitivity.
+- Two sources resolving to the same name is an error on both sides: the generator reports `SCRY002`
+  and emits nothing, and the server throws `Duplicate queryable source name '...'` at startup. Note
+  that this is reachable without `Name` too — two same-named types in different namespaces collide
+  the same way.
 
 ## `[QueryableView]`
 

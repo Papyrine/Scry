@@ -1,0 +1,16 @@
+﻿{
+  Diagnostics: [
+    {
+      Message: Two queryable types resolve to the source name 'Staff'. Set a distinct [Queryable(Name = "...")] on one of them.,
+      Severity: Error,
+      Descriptor: {
+        Id: SCRY002,
+        Title: Duplicate Scry source name,
+        MessageFormat: Two queryable types resolve to the source name '{0}'. Set a distinct [Queryable(Name = "...")] on one of them.,
+        Category: Scry,
+        DefaultSeverity: Error,
+        IsEnabledByDefault: true
+      }
+    }
+  ]
+}

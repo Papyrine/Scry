@@ -111,6 +111,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Name: Order,
       Kind: Entity,
       ModelName: OrderQueryModel
+    },
+    {
+      Name: Region,
+      Kind: Entity,
+      ModelName: SalesRegionQueryModel
     }
   ],
   Types: [
@@ -223,6 +228,23 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false
         }
       ]
+    },
+    {
+      ModelName: SalesRegionQueryModel,
+      Members: [
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false
+        }
+      ]
     }
   ],
   Enums: [
@@ -238,7 +260,7 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
   QueryEndpoint: /api/query
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L149' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L171' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names,

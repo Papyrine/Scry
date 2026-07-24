@@ -52,6 +52,68 @@ public class GeneratorTests
         return VerifyGenerated(model);
     }
 
+    [Test]
+    public Task NamedSources()
+    {
+        const string model = """
+            using Scry;
+
+            namespace Sample.Model;
+
+            [Queryable(Name = "Staff")]
+            public class Employee
+            {
+                public int Id { get; set; }
+                public string Name { get; set; } = "";
+            }
+
+            [QueryableView(Name = "Headcount")]
+            public class EmployeeSummary
+            {
+                public int Total { get; set; }
+            }
+
+            [QueryablePoco(Name = "PublicHoliday")]
+            public class Holiday
+            {
+                public string Name { get; set; } = "";
+            }
+
+            // A blank name is treated as unset, so this stays 'Order'.
+            [Queryable(Name = "  ")]
+            public class Order
+            {
+                public decimal Amount { get; set; }
+            }
+            """;
+
+        return VerifyGenerated(model);
+    }
+
+    [Test]
+    public Task DuplicateSourceNameIsReported()
+    {
+        const string model = """
+            using Scry;
+
+            namespace Sample.Model;
+
+            [Queryable(Name = "Staff")]
+            public class Employee
+            {
+                public int Id { get; set; }
+            }
+
+            [Queryable(Name = "Staff")]
+            public class Contractor
+            {
+                public int Id { get; set; }
+            }
+            """;
+
+        return VerifyGenerated(model);
+    }
+
     static Task VerifyGenerated(string modelSource)
     {
         var references = ReferenceAssemblies();

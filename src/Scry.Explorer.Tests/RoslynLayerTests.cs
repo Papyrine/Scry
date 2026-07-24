@@ -71,7 +71,7 @@ public class RoslynLayerTests
     [Test]
     public async Task DiagnosesUnknownMember()
     {
-        var diagnostics = await workspace.DiagnoseAsync("Query.Employee.Where(e => e.Nope)");
+        var diagnostics = await workspace.DiagnoseAsync("Query.Employee.Where(_ => _.Nope)");
 
         Assert.That(diagnostics.Any(_ => _.IsError && _.Message.Contains("Nope")), Is.True);
     }
@@ -80,7 +80,7 @@ public class RoslynLayerTests
     public async Task ValidQueryHasNoDiagnostics()
     {
         var diagnostics = await workspace.DiagnoseAsync(
-            "Query.Employee.Where(e => e.Active).Select(e => new { e.Name })");
+            "Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name })");
 
         Assert.That(diagnostics, Is.Empty);
     }

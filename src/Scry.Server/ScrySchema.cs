@@ -145,30 +145,46 @@ sealed class ScrySchema
 
     static bool TryClassify(Type type, out SourceKind kind, out string name)
     {
-        // v1: the source name is the type name, matching the generator (which reads metadata only).
+        // The source name defaults to the type name and is overridden by the attribute's Name. This
+        // must stay in lockstep with the generator's MetadataModelReader.TryClassify, which derives
+        // the same name from metadata alone.
         kind = default;
         name = type.Name;
 
-        if (type.GetCustomAttribute<QueryablePocoAttribute>() is not null)
+        if (type.GetCustomAttribute<QueryablePocoAttribute>() is { } poco)
         {
             kind = SourceKind.Poco;
+            name = Named(poco.Name, name);
             return true;
         }
 
-        if (type.GetCustomAttribute<QueryableViewAttribute>() is not null)
+        if (type.GetCustomAttribute<QueryableViewAttribute>() is { } view)
         {
             kind = SourceKind.View;
+            name = Named(view.Name, name);
             return true;
         }
 
-        if (type.GetCustomAttribute<QueryableAttribute>() is not null)
+        if (type.GetCustomAttribute<QueryableAttribute>() is { } queryable)
         {
             // EF [Keyless] on a [Queryable] type means it is a view.
             kind = IsKeyless(type) ? SourceKind.View : SourceKind.Entity;
+            name = Named(queryable.Name, name);
             return true;
         }
 
         return false;
+    }
+
+    // A blank Name is treated as unset, matching the generator.
+    static string Named(string? configured, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(configured))
+        {
+            return fallback;
+        }
+
+        return configured;
     }
 
     static bool IsKeyless(Type type) =>

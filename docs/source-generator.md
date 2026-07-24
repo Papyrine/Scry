@@ -242,9 +242,14 @@ builder.Services.AddScoped<ScryQuery>();
 | ID | Severity | Meaning |
 | --- | --- | --- |
 | `SCRY001` | Error | Failed to read the Scry model assembly. The message carries the underlying reason. |
+| `SCRY002` | Error | Two queryable types resolve to the same source name. |
 
 `SCRY001` is reported when the DLL exists but cannot be parsed — corrupt, truncated, or not a managed
 assembly.
+
+`SCRY002` guards the source-name clash that would otherwise emit duplicate properties on `ScryQuery`
+and surface as a `CS0102` on generated code the user cannot see. Give one of the types a distinct
+[`Name`](annotations.md#naming-a-source). The server rejects the same clash at startup.
 
 ## Troubleshooting
 

@@ -55,8 +55,11 @@ public sealed record QueryRequest(int Version, string Root, IReadOnlyList<QueryO
 | Field | Meaning |
 | --- | --- |
 | `version` | Wire format version. The server rejects anything newer than it understands. |
-| `root` | The source name — the allow-listed type name. |
+| `root` | The source name — the allow-listed type name, or the attribute's [`Name`](annotations.md#naming-a-source) when set. |
 | `pipeline` | Ordered operators, applied left to right. |
+
+Because `root` is part of the contract, prefer setting `Name` over relying on the type name if the
+CLR type is likely to be renamed.
 
 `QueryRequest.Create(root, pipeline)` stamps the current version.
 

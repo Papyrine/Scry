@@ -21,6 +21,11 @@
       Name: Order,
       Kind: Entity,
       ModelName: OrderQueryModel
+    },
+    {
+      Name: Region,
+      Kind: Entity,
+      ModelName: SalesRegionQueryModel
     }
   ],
   Types: [
@@ -128,6 +133,23 @@
         },
         {
           Name: Region,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false
+        }
+      ]
+    },
+    {
+      ModelName: SalesRegionQueryModel,
+      Members: [
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        },
+        {
+          Name: Name,
           TypeDisplay: string,
           NeedsNullDefault: true,
           IsNavigation: false

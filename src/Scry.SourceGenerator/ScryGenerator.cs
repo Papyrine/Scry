@@ -48,6 +48,14 @@ public class ScryGenerator :
         DiagnosticSeverity.Error,
         true);
 
+    static readonly DiagnosticDescriptor duplicateSource = new(
+        "SCRY002",
+        "Duplicate Scry source name",
+        "Two queryable types resolve to the source name '{0}'. Set a distinct [Queryable(Name = \"...\")] on one of them.",
+        "Scry",
+        DiagnosticSeverity.Error,
+        true);
+
     static void Emit(SourceProductionContext context, ModelExtract extract)
     {
         if (extract.Error is { } error)
@@ -57,6 +65,24 @@ public class ScryGenerator :
         }
 
         if (extract.Sources.Length == 0)
+        {
+            return;
+        }
+
+        // Emitting duplicates would otherwise surface as a CS0102 on generated code the user cannot
+        // see. The server rejects the same clash at startup.
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var duplicated = false;
+        foreach (var source in extract.Sources)
+        {
+            if (!seen.Add(source.SourceName))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(duplicateSource, Location.None, source.SourceName));
+                duplicated = true;
+            }
+        }
+
+        if (duplicated)
         {
             return;
         }

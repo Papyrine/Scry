@@ -59,11 +59,11 @@ Sample.Model (EF Core + [Queryable])
 
 | Package | Purpose |
 | --- | --- |
-| `Scry.Annotations` | Allow-list attributes applied to the server model. |
-| `Scry.Wire` | The serializable query AST shared by client and server. |
-| `Scry.Client` | Client-side `IQueryable` provider (no EF dependency). Ships the source generator. |
-| `Scry.Server` | Server-side validation + execution against EF Core. |
-| `Scry.Server.Explorer` | Opt-in query explorer UI. |
+| [Scry.Annotations](https://nuget.org/packages/Scry.Annotations/) | Allow-list attributes applied to the server model. |
+| [Scry.Wire](https://nuget.org/packages/Scry.Wire/) | The serializable query AST shared by client and server. |
+| [Scry.Client](https://nuget.org/packages/Scry.Client/) | Client-side `IQueryable` provider (no EF dependency). Ships the source generator. |
+| [Scry.Server](https://nuget.org/packages/Scry.Server/) | Server-side validation + execution against EF Core. |
+| [Scry.Server.Explorer](https://nuget.org/packages/Scry.Server.Explorer/) | Opt-in query explorer UI. |
 
 `Scry.SourceGenerator` is not published on its own — it is packed inside `Scry.Client` as an
 analyzer, so referencing `Scry.Client` is all a client project needs.

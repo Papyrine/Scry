@@ -24,11 +24,12 @@ static class MetadataModelReader
             using var pe = new PEReader([..bytes]);
             var reader = pe.GetMetadataReader();
 
+            var decoder = new SignatureDecoder();
             var discovered = new List<Discovered>();
             foreach (var handle in reader.TypeDefinitions)
             {
                 var type = reader.GetTypeDefinition(handle);
-                if (TryClassify(reader, type, out var kind, out var sourceName))
+                if (TryClassify(reader, type, decoder, out var kind, out var sourceName))
                 {
                     var simpleName = reader.GetString(type.Name);
                     var fullName = FullName(reader, type);
@@ -37,7 +38,6 @@ static class MetadataModelReader
             }
 
             var modelByFullName = discovered.ToDictionary(_ => _.FullName, _ => _.ModelName, StringComparer.Ordinal);
-            var decoder = new SignatureDecoder();
             var enums = new Dictionary<string, EnumInfo>(StringComparer.Ordinal);
 
             var sources = ImmutableArray.CreateBuilder<SourceInfo>();
@@ -149,13 +149,19 @@ static class MetadataModelReader
         return name;
     }
 
-    static bool TryClassify(MetadataReader reader, TypeDefinition type, out SourceKind kind, out string sourceName)
+    static bool TryClassify(
+        MetadataReader reader,
+        TypeDefinition type,
+        SignatureDecoder decoder,
+        out SourceKind kind,
+        out string sourceName)
     {
         kind = default;
         sourceName = reader.GetString(type.Name);
 
         SourceKind? found = null;
         var keyless = false;
+        string? configuredName = null;
 
         foreach (var attributeHandle in type.GetCustomAttributes())
         {
@@ -164,12 +170,15 @@ static class MetadataModelReader
             {
                 case queryableAttribute:
                     found ??= SourceKind.Entity;
+                    configuredName ??= NameArgument(attribute, decoder);
                     break;
                 case queryableViewAttribute:
                     found = SourceKind.View;
+                    configuredName = NameArgument(attribute, decoder) ?? configuredName;
                     break;
                 case queryablePocoAttribute:
                     found = SourceKind.Poco;
+                    configuredName = NameArgument(attribute, decoder) ?? configuredName;
                     break;
                 case keylessAttribute:
                     keyless = true;
@@ -182,20 +191,55 @@ static class MetadataModelReader
             return false;
         }
 
+        if (configuredName is not null)
+        {
+            sourceName = configuredName;
+        }
+
         kind = sourceKind == SourceKind.Entity && keyless ? SourceKind.View : sourceKind;
         return true;
+    }
+
+    /// <summary>
+    /// Reads the <c>Name</c> named argument off a queryable attribute, or null when it is absent or
+    /// blank. A malformed attribute blob is treated as "no name" rather than failing the build.
+    /// </summary>
+    static string? NameArgument(CustomAttribute attribute, SignatureDecoder decoder)
+    {
+        try
+        {
+            foreach (var argument in attribute.DecodeValue(decoder).NamedArguments)
+            {
+                if (argument is
+                    {
+                        Name: "Name",
+                        Value: string value
+                    } &&
+                    !string.IsNullOrWhiteSpace(value))
+                {
+                    return value;
+                }
+            }
+        }
+        catch (BadImageFormatException)
+        {
+        }
+
+        return null;
     }
 
     static bool IsEnum(MetadataReader reader, TypeDefinitionHandle handle)
     {
         var definition = reader.GetTypeDefinition(handle);
-        if (definition.BaseType.IsNil || definition.BaseType.Kind != HandleKind.TypeReference)
+        if (definition.BaseType.IsNil ||
+            definition.BaseType.Kind != HandleKind.TypeReference)
         {
             return false;
         }
 
         var baseType = reader.GetTypeReference((TypeReferenceHandle)definition.BaseType);
-        return reader.GetString(baseType.Namespace) == "System" && reader.GetString(baseType.Name) == "Enum";
+        return reader.GetString(baseType.Namespace) == "System" &&
+               reader.GetString(baseType.Name) == "Enum";
     }
 
     static bool HasPublicInstanceGetter(MetadataReader reader, PropertyDefinition property)
@@ -207,8 +251,9 @@ static class MetadataModelReader
         }
 
         var method = reader.GetMethodDefinition(getter);
-        return (method.Attributes & MethodAttributes.MemberAccessMask) == MethodAttributes.Public &&
-               (method.Attributes & MethodAttributes.Static) == 0;
+        var attributes = method.Attributes;
+        return (attributes & MethodAttributes.MemberAccessMask) == MethodAttributes.Public &&
+               (attributes & MethodAttributes.Static) == 0;
     }
 
     static bool HasAttribute(MetadataReader reader, CustomAttributeHandleCollection attributes, string fullName)

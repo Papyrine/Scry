@@ -6,3 +6,4 @@
 Rule ID | Category | Severity | Notes
 --------|----------|----------|------
 SCRY001 | Scry | Error | Failed to read the Scry model assembly
+SCRY002 | Scry | Error | Duplicate Scry source name

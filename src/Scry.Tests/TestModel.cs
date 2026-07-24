@@ -43,6 +43,19 @@ public class Order
     public decimal Amount { get; set; }
 }
 
+// begin-snippet: namedSource
+/// <summary>
+/// Exposed to clients as 'Region', so the CLR type can be renamed without changing the wire
+/// contract. Has no DbSet — nothing queries it; it exists to pin the naming behaviour.
+/// </summary>
+[Queryable(Name = "Region")]
+public class SalesRegion
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+}
+// end-snippet
+
 [QueryablePoco]
 public class Holiday
 {

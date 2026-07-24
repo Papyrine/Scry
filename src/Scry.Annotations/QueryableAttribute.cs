@@ -10,7 +10,9 @@ public sealed class QueryableAttribute :
     Attribute
 {
     /// <summary>
-    /// Overrides the source name exposed to clients. Defaults to the type name.
+    /// Overrides the source name exposed to clients — the <c>root</c> of a wire request and the
+    /// property emitted on the generated query entry point. Defaults to the type name, so setting it
+    /// lets the server type be renamed without breaking deployed clients. Blank is treated as unset.
     /// </summary>
     public string? Name { get; set; }
 }
