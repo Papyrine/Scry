@@ -95,6 +95,7 @@ public class HttpRoundTripTests
         Assert.That(count, Is.EqualTo(3));
     }
 
+    // begin-snippet: rawRequestRejected
     [Test]
     public async Task DisallowedPropertyRejectedWith400()
     {
@@ -107,6 +108,7 @@ public class HttpRoundTripTests
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
+    // end-snippet
 
     [Test]
     public void DisallowedPropertyThrowsThroughClient() =>

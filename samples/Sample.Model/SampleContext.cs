@@ -3,6 +3,7 @@ namespace Sample.Model;
 public sealed class SampleContext(DbContextOptions<SampleContext> options) :
     DbContext(options)
 {
+    // begin-snippet: dbContext
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<Order> Orders => Set<Order>();
@@ -12,6 +13,7 @@ public sealed class SampleContext(DbContextOptions<SampleContext> options) :
         modelBuilder.Entity<EmployeeSummary>()
             .HasNoKey()
             .ToView("EmployeeSummary");
+    // end-snippet
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
         configurationBuilder.Properties<decimal>().HavePrecision(18, 2);

@@ -5,12 +5,14 @@ builder.WebHost.UseStaticWebAssets();
 
 builder.Services.AddDbContext<SampleContext>(_ => _.UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=ScrySample;Trusted_Connection=True;Encrypt=False"));
 
+// begin-snippet: serverRegistration
 builder.Services.AddScry<SampleContext>(
     _ =>
     {
         _.AddPocoSource(_ => Holiday.Seed());
         _.MaxPageSize = 200;
     });
+// end-snippet
 
 var app = builder.Build();
 
@@ -22,7 +24,10 @@ using (var scope = app.Services.CreateScope())
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 
+// begin-snippet: mapScry
 app.MapScry("/api/query");
+// end-snippet
+// begin-snippet: mapExplorer
 app.MapScryExplorer(
     _ =>
     {
@@ -31,6 +36,7 @@ app.MapScryExplorer(
         // app, run in Development or set EnableGuard to your own check (e.g. an admin authorization).
         _.EnableGuard = _ => true;
     });
+// end-snippet
 app.MapFallbackToFile("index.html");
 
 app.Run();

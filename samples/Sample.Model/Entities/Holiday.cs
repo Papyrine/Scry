@@ -1,5 +1,6 @@
 namespace Sample.Model;
 
+// begin-snippet: queryablePoco
 /// <summary>A POCO that is not part of the persisted model.</summary>
 [QueryablePoco]
 public class Holiday
@@ -26,3 +27,4 @@ public class Holiday
         }
     ];
 }
+// end-snippet

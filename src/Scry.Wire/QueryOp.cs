@@ -7,6 +7,7 @@ namespace Scry.Wire;
 /// validates pipeline well-formedness (e.g. <c>ThenBy</c> only after <c>OrderBy</c>, aggregates only
 /// in a projection following <c>GroupBy</c>, at most one terminal).
 /// </summary>
+// begin-snippet: wireOperators
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(WhereOp), "where")]
 [JsonDerivedType(typeof(OrderByOp), "orderBy")]
@@ -20,6 +21,7 @@ namespace Scry.Wire;
 [JsonDerivedType(typeof(FirstOp), "first")]
 [JsonDerivedType(typeof(SingleOp), "single")]
 public abstract record QueryOp;
+// end-snippet
 
 /// <summary>Filters the sequence by a predicate.</summary>
 public sealed record WhereOp(Expr Predicate) :

@@ -6,7 +6,9 @@ namespace Scry;
 /// soft-delete, row security). Register via <see cref="ScryOptions.AddPolicy{TEntity,TPolicy}"/>
 /// or the <c>[ReturnableWith]</c> attribute.
 /// </summary>
+// begin-snippet: returnablePolicyInterface
 public interface IReturnablePolicy<T>
 {
     IQueryable<T> Filter(IQueryable<T> source, ScryPolicyContext context);
 }
+// end-snippet

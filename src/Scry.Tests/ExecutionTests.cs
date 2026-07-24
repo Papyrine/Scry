@@ -119,7 +119,9 @@ public class ExecutionTests
             ]);
 
         using var context = TestContext.CreateSeeded();
+        // begin-snippet: addPolicy
         var response = Processor(_ => _.AddPolicy<Employee, ActiveOnlyPolicy>()).Execute(request, context);
+        // end-snippet
         return Verify(Pretty(ScryJson.Serialize(response)));
     }
 
@@ -130,12 +132,14 @@ public class ExecutionTests
         return Verify(Pretty(ScryJson.Serialize(response)));
     }
 
+    // begin-snippet: processorCreate
     static ScryProcessor Processor(Action<ScryOptions>? extra = null) =>
         ScryProcessor.Create<TestContext>(options =>
         {
             options.AddPocoSource<Holiday>(_ => Holiday.Seed());
             extra?.Invoke(options);
         });
+    // end-snippet
 
     static readonly JsonSerializerOptions indented = new() { WriteIndented = true };
 

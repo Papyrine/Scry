@@ -1,5 +1,6 @@
 ﻿namespace Sample.Model;
 
+// begin-snippet: queryableEntity
 [Queryable]
 public class Employee
 {
@@ -18,3 +19,4 @@ public class Employee
     [QueryIgnore]
     public decimal Salary { get; set; }
 }
+// end-snippet

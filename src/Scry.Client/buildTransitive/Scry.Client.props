@@ -8,6 +8,7 @@
     This props file surfaces the path to the generator and folds the DLL's content hash into a
     compiler-visible property so the generator re-reads it exactly when the model changes.
   -->
+  <!-- begin-snippet: buildTransitiveProps -->
   <ItemGroup>
     <CompilerVisibleProperty Include="ScryModelDll" />
     <CompilerVisibleProperty Include="ScryModelStamp" />
@@ -27,4 +28,5 @@
           Condition="'$(ScryModelDll)' != '' and !Exists('$(ScryModelDll)')">
     <Error Text="Scry: the model assembly '$(ScryModelDll)' was not found. Ensure the model project is referenced with ReferenceOutputAssembly=&quot;false&quot; so it builds first." />
   </Target>
+  <!-- end-snippet -->
 </Project>

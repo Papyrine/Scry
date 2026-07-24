@@ -80,9 +80,11 @@ else
 }
 
 @code {
+    // begin-snippet: clientProjectionTypes
     record EmployeeRow(string Name, Status Status, string? Manager, string Department);
 
     record RegionSummary(string Region, decimal Total, int Count);
+    // end-snippet
 
     // Captured as locals so the LINQ below closes over them — the query is parameterized at runtime
     // rather than hard-coded, exactly how an app would build a filtered query.
@@ -98,23 +100,29 @@ else
     {
         try
         {
+            // begin-snippet: clientQuery
             employees = await Query.Employee
                 .Where(e => e.Active)
                 .OrderBy(e => e.Name)
                 .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
                 .ToListAsync();
+            // end-snippet
 
+            // begin-snippet: clientGroupBy
             regions = await Query.Order
                 .GroupBy(o => o.Region)
                 .Select(g => new RegionSummary(g.Key, g.Sum(x => x.Amount), g.Count()))
                 .ToListAsync();
+            // end-snippet
 
+            // begin-snippet: clientClosureCapture
             fullTimers = await Query.Employee
                 .Where(e => e.Status == status)
                 .OrderBy(e => e.Name)
                 .Take(top)
                 .Select(e => new EmployeeRow(e.Name, e.Status, e.Manager!.Name, e.Department!.Name))
                 .ToListAsync();
+            // end-snippet
         }
         catch (Exception exception)
         {

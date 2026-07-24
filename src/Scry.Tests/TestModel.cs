@@ -57,6 +57,7 @@ public class Holiday
     ];
 }
 
+// begin-snippet: returnablePolicy
 /// <summary>A row policy that scopes <see cref="Employee"/> queries to active rows only.</summary>
 public sealed class ActiveOnlyPolicy :
     IReturnablePolicy<Employee>
@@ -64,6 +65,7 @@ public sealed class ActiveOnlyPolicy :
     public IQueryable<Employee> Filter(IQueryable<Employee> source, ScryPolicyContext context) =>
         source.Where(_ => _.Active);
 }
+// end-snippet
 
 public sealed class TestContext(DbContextOptions<TestContext> options) :
     DbContext(options)

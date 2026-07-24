@@ -6,6 +6,7 @@ namespace Scry;
 /// </summary>
 public sealed class ScryOptions(Type contextType)
 {
+    // begin-snippet: scryOptionsLimits
     /// <summary>Maximum number of rows a single query may request via <c>Take</c>. Default 1000.</summary>
     public int MaxPageSize { get; set; } = 1000;
 
@@ -17,6 +18,7 @@ public sealed class ScryOptions(Type contextType)
 
     /// <summary>Maximum expression nesting depth in a predicate. Default 32.</summary>
     public int MaxExpressionDepth { get; set; } = 32;
+    // end-snippet
 
     internal Type ContextType { get; private set; } = contextType;
 

@@ -23,6 +23,7 @@ public class ClientRoundTripTests
         var prefix = "A";
         var take = 5;
 
+        // begin-snippet: translateWithoutExecuting
         var request = client.Source<Employee>("Employee")
             .Where(_ => _.Active &&
                         _.Status == wanted &&
@@ -31,6 +32,7 @@ public class ClientRoundTripTests
             .Take(take)
             .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
             .ToScryRequest();
+        // end-snippet
 
         return Verify(request);
     }
@@ -120,6 +122,7 @@ public class ClientRoundTripTests
                 .ToListAsync());
     }
 
+    // begin-snippet: inProcessClient
     static ScryClient ClientFor(TestContext context)
     {
         var processor = ScryProcessor.Create<TestContext>(
@@ -127,4 +130,5 @@ public class ClientRoundTripTests
 
         return new((request, _) => Task.FromResult(processor.Execute(request, context)));
     }
+    // end-snippet
 }

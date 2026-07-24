@@ -3,6 +3,7 @@ namespace Scry.Tests;
 [TestFixture]
 public class SecurityTests
 {
+    // begin-snippet: rejectIgnoredProperty
     [Test]
     public void RejectsIgnoredProperty() =>
         AssertRejected(QueryRequest.Create(
@@ -13,6 +14,7 @@ public class SecurityTests
                     new MemberExpr(["Salary"]),
                     new ConstExpr("100", ClrTypeTag.Decimal)))
             ]));
+    // end-snippet
 
     [Test]
     public void RejectsUnknownRoot() =>

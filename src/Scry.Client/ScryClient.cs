@@ -6,6 +6,7 @@ namespace Scry.Client;
 /// </summary>
 public sealed class ScryClient(Func<QueryRequest, Cancel, Task<QueryResponse>> transport)
 {
+    // begin-snippet: scryClientApi
     /// <summary>Creates a client that POSTs queries to an HTTP endpoint.</summary>
     public static ScryClient ForHttp(HttpClient http, string endpoint) =>
         new((request, token) => PostAsync(http, endpoint, request, token));
@@ -13,6 +14,7 @@ public sealed class ScryClient(Func<QueryRequest, Cancel, Task<QueryResponse>> t
     /// <summary>Returns an <see cref="IQueryable{T}"/> backed by the named allow-listed source.</summary>
     public IQueryable<T> Source<T>(string name) =>
         new ScryQueryable<T>(new(this, name));
+    // end-snippet
 
     internal Task<QueryResponse> SendAsync(QueryRequest request, Cancel cancel) =>
         transport(request, cancel);

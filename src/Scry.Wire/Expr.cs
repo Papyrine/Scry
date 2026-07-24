@@ -6,6 +6,7 @@ namespace Scry.Wire;
 /// A value expression used in predicates and projections. The set of node types is closed, so the
 /// server can exhaustively validate every query — there is no way to encode an arbitrary method call.
 /// </summary>
+// begin-snippet: wireExpressions
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(MemberExpr), "member")]
 [JsonDerivedType(typeof(ConstExpr), "const")]
@@ -14,6 +15,7 @@ namespace Scry.Wire;
 [JsonDerivedType(typeof(CallExpr), "call")]
 [JsonDerivedType(typeof(AggregateExpr), "aggregate")]
 public abstract record Expr;
+// end-snippet
 
 /// <summary>
 /// A navigation path of allow-listed property names, e.g. <c>["Manager", "Name"]</c>. Each segment

@@ -7,6 +7,7 @@ namespace Scry;
 /// <summary>Configures the opt-in Scry query explorer mapped by <see cref="ScryExplorerExtensions.MapScryExplorer(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder, System.Action{ScryExplorerOptions})"/>.</summary>
 public sealed class ScryExplorerOptions
 {
+    // begin-snippet: explorerOptions
     /// <summary>Sub-path the explorer UI is served under. Default <c>/scry</c>.</summary>
     public string Route { get; set; } = "/scry";
 
@@ -19,6 +20,7 @@ public sealed class ScryExplorerOptions
     /// opts in explicitly (e.g. behind an admin authorization check).
     /// </summary>
     public Func<HttpContext, bool> EnableGuard { get; set; } = DevelopmentOnly;
+    // end-snippet
 
     /// <summary>The default <see cref="EnableGuard"/>: enabled only in the Development environment.</summary>
     public static bool DevelopmentOnly(HttpContext context) =>

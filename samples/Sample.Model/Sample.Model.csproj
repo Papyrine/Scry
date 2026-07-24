@@ -5,9 +5,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
+  <!-- begin-snippet: modelProjectReferences -->
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <ProjectReference Include="..\..\src\Scry.Annotations\Scry.Annotations.csproj" />
   </ItemGroup>
+  <!-- end-snippet -->
 </Project>

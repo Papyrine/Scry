@@ -12,6 +12,9 @@
     <PackageReference Include="NaughtyStrings" />
     <PackageReference Include="EfLocalDb" />
     <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
+    <!-- Merges snippets from source into the markdown under /docs. Building this project
+         regenerates /readme.md and /docs/*.md from their .source.md counterparts. -->
+    <PackageReference Include="MarkdownSnippets.MsBuild" PrivateAssets="all" />
     <ProjectReference Include="..\Scry.Wire\Scry.Wire.csproj" />
     <ProjectReference Include="..\Scry.Annotations\Scry.Annotations.csproj" />
     <ProjectReference Include="..\Scry.Server\Scry.Server.csproj" />
