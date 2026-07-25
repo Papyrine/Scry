@@ -235,39 +235,39 @@ The UI declares whatever shapes it wants:
 
 <!-- snippet: clientProjectionTypes -->
 <a id='snippet-clientProjectionTypes'></a>
-```razor
+```cs
 record EmployeeRow(string Name, Status Status, string? Manager, string Department);
 
 record RegionSummary(string Region, decimal Total, int Count);
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor#L83-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientProjectionTypes' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L8-L12' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientProjectionTypes' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A filter, an ordering, and a projection that reaches through two navigations:
 
 <!-- snippet: clientQuery -->
 <a id='snippet-clientQuery'></a>
-```razor
+```cs
 employees = await Query.Employee
     .Where(_ => _.Active)
     .OrderBy(_ => _.Name)
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor#L103-L109' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L28-L34' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A group-by with aggregates:
 
 <!-- snippet: clientGroupBy -->
 <a id='snippet-clientGroupBy'></a>
-```razor
+```cs
 regions = await Query.Order
     .GroupBy(_ => _.Region)
     .Select(_ => new RegionSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor#L111-L116' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L36-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 And a query parameterized by closure-captured locals — the values are evaluated client-side and sent
@@ -275,7 +275,7 @@ as constants, which is how an app builds a filtered query at runtime:
 
 <!-- snippet: clientClosureCapture -->
 <a id='snippet-clientClosureCapture'></a>
-```razor
+```cs
 fullTimers = await Query.Employee
     .Where(_ => _.Status == status)
     .OrderBy(_ => _.Name)
@@ -283,7 +283,7 @@ fullTimers = await Query.Employee
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor#L118-L125' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L43-L50' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ## What the traffic looks like

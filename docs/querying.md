@@ -6,14 +6,14 @@ sent to the server when a terminal operator is awaited.
 
 <!-- snippet: clientQuery -->
 <a id='snippet-clientQuery'></a>
-```razor
+```cs
 employees = await Query.Employee
     .Where(_ => _.Active)
     .OrderBy(_ => _.Name)
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor#L103-L109' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L28-L34' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The supported surface is deliberately closed. Anything outside it fails fast with a clear
@@ -245,7 +245,7 @@ parameterizable at runtime:
 
 <!-- snippet: clientClosureCapture -->
 <a id='snippet-clientClosureCapture'></a>
-```razor
+```cs
 fullTimers = await Query.Employee
     .Where(_ => _.Status == status)
     .OrderBy(_ => _.Name)
@@ -253,7 +253,7 @@ fullTimers = await Query.Employee
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor#L118-L125' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L43-L50' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `status` and `top` are locals; the translator compiles and invokes those sub-expressions, then emits
@@ -338,13 +338,13 @@ aggregates:
 
 <!-- snippet: clientGroupBy -->
 <a id='snippet-clientGroupBy'></a>
-```razor
+```cs
 regions = await Query.Order
     .GroupBy(_ => _.Region)
     .Select(_ => new RegionSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor#L111-L116' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L36-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: wireAggregates -->

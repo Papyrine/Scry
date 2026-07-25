@@ -1,6 +1,4 @@
-﻿// Global using directives
-
-global using System.Net;
+﻿global using System.Net;
 global using System.Text;
 global using Microsoft.AspNetCore.Builder;
 global using Microsoft.AspNetCore.TestHost;

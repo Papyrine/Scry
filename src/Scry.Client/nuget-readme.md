@@ -32,14 +32,14 @@ builder.Services.AddScoped<ScryQuery>();
 
 <!-- snippet: clientQuery -->
 <a id='snippet-clientQuery'></a>
-```razor
+```cs
 employees = await Query.Employee
     .Where(_ => _.Active)
     .OrderBy(_ => _.Name)
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor#L103-L109' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L28-L34' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Docs: [Getting started](https://github.com/Papyrine/Scry/blob/main/docs/getting-started.md) ·

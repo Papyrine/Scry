@@ -8,16 +8,17 @@ separate query language. Scry removes that trade-off while keeping everything in
 strongly typed end to end:
 
 1. The EF Core model lives **server-side**. The client never references it — it is *pointed at by path*.
-2. A **source generator** in the client reads the model assembly directly by path
+1. A **source generator** in the client reads the model assembly directly by path
    (`System.Reflection.Metadata`), applies an **allow-list**, and generates strongly-typed client
    query DTOs plus a queryable entry point.
-3. The UI writes ordinary **LINQ** against the generated types.
-4. The LINQ is captured and **serialized to a restricted query AST**.
-5. The server **deserializes, re-validates against the allow-list at runtime, rebinds to the real EF
+1. The UI writes ordinary **LINQ** against the generated types.
+1. The LINQ is captured and **serialized to a restricted query AST**.
+1. The server **deserializes, re-validates against the allow-list at runtime, rebinds to the real EF
    types, executes**, and returns the projected rows.
 
 Add or extend a query by writing LINQ in the client — no new endpoint, no new contract — while the
 server stays in full control of which types, properties, shapes, and rows can ever be returned.
+
 
 ## Packages
 
@@ -30,6 +31,7 @@ server stays in full control of which types, properties, shapes, and rows can ev
 | [Scry.Server.Explorer](https://nuget.org/packages/Scry.Server.Explorer/) | Opt-in, GraphiQL-style query explorer. |
 
 `Scry.SourceGenerator` is packed inside `Scry.Client` rather than published separately.
+
 
 ## At a glance
 
@@ -103,15 +105,16 @@ Then write LINQ:
 
 <!-- snippet: clientQuery -->
 <a id='snippet-clientQuery'></a>
-```razor
+```cs
 employees = await Query.Employee
     .Where(_ => _.Active)
     .OrderBy(_ => _.Name)
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor#L103-L109' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L28-L34' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
+
 
 ## Query explorer
 
@@ -126,9 +129,9 @@ app.MapScryExplorer("/scry");
 <img src="docs/images/explorer-run.png" border="1"
      alt="The Scry explorer: LINQ, the serialized wire request, the result table, and the raw response">
 
-
 It is off unless mapped, and Development-only by default. See
 [Query explorer](docs/explorer.md).
+
 
 ## Documentation
 
@@ -142,6 +145,7 @@ It is off unless mapped, and Development-only by default. See
 - [Wire format](docs/wire-format.md)
 - [Query explorer](docs/explorer.md)
 - [Sample](docs/sample.md)
+
 
 ## License
 
