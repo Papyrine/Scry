@@ -12,4 +12,12 @@ static class PageExtensions
             {
                 Timeout = seconds * 1000
             });
+
+    /// <summary>
+    /// Sets the Monaco editor's content. The query travels as a Playwright argument rather than being
+    /// embedded in the evaluated JS, so a long query is never wrapped into a (syntactically invalid)
+    /// multi-line JS string literal by the formatter.
+    /// </summary>
+    public static Task SetEditorValueAsync(this IPage page, string query) =>
+        page.EvaluateAsync("query => monaco.editor.getEditors()[0].setValue(query)", query);
 }
