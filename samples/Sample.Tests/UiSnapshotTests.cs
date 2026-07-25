@@ -113,12 +113,12 @@ public class UiSnapshotTests
         await page.GotoAsync($"{baseUrl}/scry");
 
         // Allow the WASM runtime to download and boot before asserting the app rendered.
-        await page.WaitForSelectorAsync("[data-testid='explorer-title']", new() { Timeout = 30_000 });
+        await page.WaitForSelectorAsync("[data-testid='explorer-title']", 30);
         var title = page.Locator("[data-testid='explorer-title']");
         await Assertions.Expect(title).ToHaveTextAsync("Scry Explorer");
 
         // The Monaco editor mounts only if the embedded _content/BlazorMonaco assets are served.
-        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
 
         // The action buttons carry explanatory tooltips.
         var completeTooltip = await page.Locator("[data-testid='complete']").GetAttributeAsync("title");
@@ -135,10 +135,10 @@ public class UiSnapshotTests
     {
         var page = await browser.NewPageAsync();
         await page.GotoAsync($"{baseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
         // Wait for the schema to load so the fully-initialised shell (enabled buttons, no "Loading
         // schema…") is what gets captured, then strip the volatile inner content.
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
         var markup = await page.EvaluateAsync<string>(
             """
@@ -181,7 +181,7 @@ public class UiSnapshotTests
     {
         var page = await browser.NewPageAsync();
         await page.GotoAsync($"{baseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
 
         var height = await page.EvaluateAsync<double>(
             "() => document.querySelector('.scry-editor').getBoundingClientRect().height");
@@ -205,7 +205,7 @@ public class UiSnapshotTests
         await page.GotoAsync($"{baseUrl}/scry");
 
         // Roslyn init + first completion in the WASM interpreter is slow on a cold load.
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
         var items = await page.Locator("[data-testid='completions'] li").AllInnerTextsAsync();
 
         Assert.That(items, Does.Contain("Active"));
@@ -290,8 +290,8 @@ public class UiSnapshotTests
     {
         var page = await browser.NewPageAsync();
         await page.GotoAsync($"{baseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
         await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('Query.Employee.')");
         await page.Locator("[data-testid='complete']").ClickAsync();
@@ -312,9 +312,9 @@ public class UiSnapshotTests
     {
         var page = await browser.NewPageAsync();
         await page.GotoAsync($"{baseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
         // Wait for the schema to load (provider registered) — the auto-run completion list appears.
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
         // Place the caret at the end (after "e.") and trigger IntelliSense via Monaco's API.
         await page.EvaluateAsync(
@@ -328,7 +328,7 @@ public class UiSnapshotTests
             }
             """);
 
-        await page.WaitForSelectorAsync(".suggest-widget .monaco-list-row", new() { Timeout = 30_000 });
+        await page.WaitForSelectorAsync(".suggest-widget .monaco-list-row", 30);
         var rows = await page.Locator(".suggest-widget .monaco-list-row").AllInnerTextsAsync();
         Assert.That(rows.Any(_ => _.Contains("Active")), Is.True, $"suggest rows: {string.Join(" | ", rows)}");
     }
@@ -340,34 +340,18 @@ public class UiSnapshotTests
     {
         var page = await browser.NewPageAsync();
         await page.GotoAsync($"{baseUrl}/scry");
-        await page.WaitForSelectorAsync(
-            ".monaco-editor",
-            new()
-            {
-                Timeout = 30_000
-            });
-        await page.WaitForSelectorAsync(
-            "[data-testid='completions'] li",
-            new()
-            {
-                Timeout = 90_000
-            });
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
         // Set a complete query, then run it.
         await page.EvaluateAsync(
             """
             () => monaco.editor.getEditors()[0].setValue(
-                "Query.Employee.Where(_ => _.Active).OrderBy(_ => _.Name)
-                .Select(_ => new { _.Name, _.Status })")
+                "Query.Employee.Where(_ => _.Active).OrderBy(_ => _.Name).Select(_ => new { _.Name, _.Status })")
             """);
         await page.Locator("[data-testid='run']").ClickAsync();
 
-        await page.WaitForSelectorAsync(
-            "[data-testid='result-table']",
-            new()
-            {
-                Timeout = 60_000
-            });
+        await page.WaitForSelectorAsync("[data-testid='result-table']", 60);
         var wire = await page.Locator("[data-testid='wire']").InnerTextAsync();
         var result = await page.Locator("[data-testid='result']").InnerTextAsync();
 
@@ -381,12 +365,7 @@ public class UiSnapshotTests
         Assert.That(table, Does.Contain("FullTime"));
 
         // Stage 3: the executed query is recorded in history.
-        await page.WaitForSelectorAsync(
-            "[data-testid='history'] li",
-            new()
-            {
-                Timeout = 10_000
-            });
+        await page.WaitForSelectorAsync("[data-testid='history'] li", 10);
         var historyText = await page.Locator("[data-testid='history']").InnerTextAsync();
         Assert.That(historyText, Does.Contain("Query.Employee.Where"));
     }
@@ -398,28 +377,13 @@ public class UiSnapshotTests
     {
         var page = await browser.NewPageAsync();
         await page.GotoAsync($"{baseUrl}/scry");
-        await page.WaitForSelectorAsync(
-            ".monaco-editor",
-            new()
-            {
-                Timeout = 30_000
-            });
-        await page.WaitForSelectorAsync(
-            "[data-testid='completions'] li",
-            new()
-            {
-                Timeout = 90_000
-            });
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
         await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('Query.Employee.ToList()')");
         await page.Locator("[data-testid='run']").ClickAsync();
 
-        await page.WaitForSelectorAsync(
-            "[data-testid='result-table']",
-            new()
-            {
-                Timeout = 60_000
-            });
+        await page.WaitForSelectorAsync("[data-testid='result-table']", 60);
         var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
         // No Where → all four employees, including the inactive Bob.
         Assert.That(table, Does.Contain("Aaron"));
@@ -433,29 +397,14 @@ public class UiSnapshotTests
     {
         var page = await browser.NewPageAsync();
         await page.GotoAsync($"{baseUrl}/scry");
-        await page.WaitForSelectorAsync(
-            ".monaco-editor",
-            new()
-            {
-                Timeout = 30_000
-            });
-        await page.WaitForSelectorAsync(
-            "[data-testid='completions'] li",
-            new()
-            {
-                Timeout = 90_000
-            });
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
         await page.EvaluateAsync(
             "() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(_ => _.Active).CountAsync()')");
         await page.Locator("[data-testid='run']").ClickAsync();
 
-        await page.WaitForSelectorAsync(
-            "[data-testid='result-scalar']",
-            new()
-            {
-                Timeout = 60_000
-            });
+        await page.WaitForSelectorAsync("[data-testid='result-scalar']", 60);
         var wire = await page.Locator("[data-testid='wire']").InnerTextAsync();
         var scalar = await page.Locator("[data-testid='result-scalar']").InnerTextAsync();
 
@@ -471,18 +420,8 @@ public class UiSnapshotTests
     {
         var page = await browser.NewPageAsync();
         await page.GotoAsync($"{baseUrl}/scry");
-        await page.WaitForSelectorAsync(
-            ".monaco-editor",
-            new()
-            {
-                Timeout = 30_000
-            });
-        await page.WaitForSelectorAsync(
-            "[data-testid='completions'] li",
-            new()
-            {
-                Timeout = 90_000
-            });
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
         await page.EvaluateAsync(
             """
@@ -491,12 +430,7 @@ public class UiSnapshotTests
             """);
         await page.Locator("[data-testid='run']").ClickAsync();
 
-        await page.WaitForSelectorAsync(
-            "[data-testid='result-table']",
-            new()
-            {
-                Timeout = 60_000
-            });
+        await page.WaitForSelectorAsync("[data-testid='result-table']", 60);
         var wire = await page.Locator("[data-testid='wire']").InnerTextAsync();
         var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
 
@@ -512,12 +446,7 @@ public class UiSnapshotTests
     {
         var page = await browser.NewPageAsync();
         await page.GotoAsync($"{baseUrl}/scry");
-        await page.WaitForSelectorAsync(
-            ".monaco-editor",
-            new()
-            {
-                Timeout = 30_000
-            });
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
 
         // System → Light → Dark (deterministic regardless of the OS preference).
         var toggle = page.Locator("[data-testid='theme-toggle']");
@@ -531,18 +460,13 @@ public class UiSnapshotTests
             {
                 Timeout = 10_000
             });
-        await page.WaitForSelectorAsync(
-            ".monaco-editor.vs-dark",
-            new()
-            {
-                Timeout = 10_000
-            });
+        await page.WaitForSelectorAsync(".monaco-editor.vs-dark", 10);
 
         await page.ReloadAsync();
-        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
         var theme = await page.EvaluateAsync<string>("() => document.documentElement.dataset.theme");
         Assert.That(theme, Is.EqualTo("dark"), "theme should persist across reload");
-        await page.WaitForSelectorAsync(".monaco-editor.vs-dark", new() { Timeout = 10_000 });
+        await page.WaitForSelectorAsync(".monaco-editor.vs-dark", 10);
     }
 
     // The Ctrl+Enter editor action runs the query without clicking Run.
@@ -551,8 +475,8 @@ public class UiSnapshotTests
     {
         var page = await browser.NewPageAsync();
         await page.GotoAsync($"{baseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
         await page.EvaluateAsync(
             """
@@ -564,7 +488,7 @@ public class UiSnapshotTests
             """);
         await page.Keyboard.PressAsync("Control+Enter");
 
-        await page.WaitForSelectorAsync("[data-testid='result-table']", new() { Timeout = 60_000 });
+        await page.WaitForSelectorAsync("[data-testid='result-table']", 60);
         var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
         Assert.That(table, Does.Contain("Aaron"));
     }
@@ -580,8 +504,8 @@ public class UiSnapshotTests
         page.Console += (_, m) => { if (m.Type == "error") consoleErrors.Add(m.Text); };
 
         await page.GotoAsync($"{baseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
         log.Add("✓ editor booted, schema loaded");
         await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "1-loaded.png"), FullPage = true });
 
@@ -596,7 +520,7 @@ public class UiSnapshotTests
                 editor.trigger('t', 'editor.action.triggerSuggest', {});
             }
             """);
-        await page.WaitForSelectorAsync(".suggest-widget .monaco-list-row", new() { Timeout = 20_000 });
+        await page.WaitForSelectorAsync(".suggest-widget .monaco-list-row", 20);
         await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "2-intellisense.png") });
         var suggest = await page.Locator(".suggest-widget .monaco-list-row").AllInnerTextsAsync();
         log.Add($"✓ IntelliSense dropdown: {string.Join(", ", suggest)}");
@@ -609,7 +533,7 @@ public class UiSnapshotTests
                 'Query.Employee.Where(_ => _.Active).OrderBy(_ => _.Name).Select(_ => new { _.Name, _.Status })')
             """);
         await page.Locator("[data-testid='run']").ClickAsync();
-        await page.WaitForSelectorAsync("[data-testid='result-table']", new() { Timeout = 60_000 });
+        await page.WaitForSelectorAsync("[data-testid='result-table']", 60);
         await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "3-run.png"), FullPage = true });
         var wire = await page.Locator("[data-testid='wire']").InnerTextAsync();
         var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
@@ -619,7 +543,7 @@ public class UiSnapshotTests
         await page.EvaluateAsync(
             "() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(_ => _.Active).CountAsync()')");
         await page.Locator("[data-testid='run']").ClickAsync();
-        await page.WaitForSelectorAsync("[data-testid='result-scalar']", new() { Timeout = 60_000 });
+        await page.WaitForSelectorAsync("[data-testid='result-scalar']", 60);
         await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "3b-count.png"), FullPage = true });
         var countWire = await page.Locator("[data-testid='wire']").InnerTextAsync();
         var countScalar = await page.Locator("[data-testid='result-scalar']").InnerTextAsync();
@@ -628,7 +552,7 @@ public class UiSnapshotTests
         // Toggle to dark mode (System → Light → Dark) and capture it.
         await page.Locator("[data-testid='theme-toggle']").ClickAsync();
         await page.Locator("[data-testid='theme-toggle']").ClickAsync();
-        await page.WaitForSelectorAsync(".monaco-editor.vs-dark", new() { Timeout = 10_000 });
+        await page.WaitForSelectorAsync(".monaco-editor.vs-dark", 10);
         await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "5-dark.png"), FullPage = true });
         var dataTheme = await page.EvaluateAsync<string>("() => document.documentElement.dataset.theme");
         log.Add($"✓ dark mode: dataTheme={dataTheme}");
@@ -694,8 +618,8 @@ public class UiSnapshotTests
     {
         var page = await browser.NewPageAsync();
         await page.GotoAsync($"{baseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
         // 'Nope' is not a member of the Employee model → a diagnostic marker should appear.
         await page.EvaluateAsync(

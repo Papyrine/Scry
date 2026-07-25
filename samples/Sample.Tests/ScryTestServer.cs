@@ -6,7 +6,8 @@ using Sample.Model;
 /// hosted on <see cref="TestServer"/> so tests can drive the real query pipeline without a socket.
 /// Each instance runs against its own LocalDB database, cloned from a seeded template.
 /// </summary>
-public sealed class ScryTestServer : IAsyncDisposable
+public sealed class ScryTestServer :
+    IAsyncDisposable
 {
     static SqlInstance<SampleContext> sqlInstance = new(
         constructInstance: _ => new(_.Options),
@@ -46,13 +47,16 @@ public sealed class ScryTestServer : IAsyncDisposable
     }
 
     /// <summary>An <see cref="HttpClient"/> bound to the test server, rooted at the query endpoint.</summary>
-    public HttpClient CreateClient() => app.GetTestClient();
+    public HttpClient CreateClient() =>
+        app.GetTestClient();
 
     /// <summary>The raw handler, for composing into a custom <see cref="HttpClient"/> pipeline.</summary>
-    public HttpMessageHandler CreateHandler() => app.GetTestServer().CreateHandler();
+    public HttpMessageHandler CreateHandler() =>
+        app.GetTestServer().CreateHandler();
 
     /// <summary>A <see cref="ScryClient"/> pointed at the live query endpoint.</summary>
-    public ScryClient CreateScryClient() => ScryClient.ForHttp(CreateClient(), "/api/query");
+    public ScryClient CreateScryClient() =>
+        ScryClient.ForHttp(CreateClient(), "/api/query");
 
     public async ValueTask DisposeAsync()
     {
