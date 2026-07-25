@@ -102,32 +102,32 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
     {
       Name: Department,
       Kind: Entity,
-      ModelName: DepartmentQueryModel
+      Model: DepartmentQueryModel
     },
     {
       Name: Employee,
       Kind: Entity,
-      ModelName: EmployeeQueryModel
+      Model: EmployeeQueryModel
     },
     {
       Name: Holiday,
       Kind: Poco,
-      ModelName: HolidayQueryModel
+      Model: HolidayQueryModel
     },
     {
       Name: Order,
       Kind: Entity,
-      ModelName: OrderQueryModel
+      Model: OrderQueryModel
     },
     {
       Name: Region,
       Kind: Entity,
-      ModelName: SalesRegionQueryModel
+      Model: SalesRegionQueryModel
     }
   ],
   Types: [
     {
-      ModelName: DepartmentQueryModel,
+      Model: DepartmentQueryModel,
       Members: [
         {
           Name: Id,
@@ -144,7 +144,7 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       ]
     },
     {
-      ModelName: EmployeeQueryModel,
+      Model: EmployeeQueryModel,
       Members: [
         {
           Name: Active,
@@ -197,7 +197,7 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       ]
     },
     {
-      ModelName: HolidayQueryModel,
+      Model: HolidayQueryModel,
       Members: [
         {
           Name: Date,
@@ -214,7 +214,7 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       ]
     },
     {
-      ModelName: OrderQueryModel,
+      Model: OrderQueryModel,
       Members: [
         {
           Name: Amount,
@@ -237,7 +237,7 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       ]
     },
     {
-      ModelName: SalesRegionQueryModel,
+      Model: SalesRegionQueryModel,
       Members: [
         {
           Name: Id,

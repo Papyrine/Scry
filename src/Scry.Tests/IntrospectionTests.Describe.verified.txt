@@ -5,32 +5,32 @@
     {
       Name: Department,
       Kind: Entity,
-      ModelName: DepartmentQueryModel
+      Model: DepartmentQueryModel
     },
     {
       Name: Employee,
       Kind: Entity,
-      ModelName: EmployeeQueryModel
+      Model: EmployeeQueryModel
     },
     {
       Name: Holiday,
       Kind: Poco,
-      ModelName: HolidayQueryModel
+      Model: HolidayQueryModel
     },
     {
       Name: Order,
       Kind: Entity,
-      ModelName: OrderQueryModel
+      Model: OrderQueryModel
     },
     {
       Name: Region,
       Kind: Entity,
-      ModelName: SalesRegionQueryModel
+      Model: SalesRegionQueryModel
     }
   ],
   Types: [
     {
-      ModelName: DepartmentQueryModel,
+      Model: DepartmentQueryModel,
       Members: [
         {
           Name: Id,
@@ -47,7 +47,7 @@
       ]
     },
     {
-      ModelName: EmployeeQueryModel,
+      Model: EmployeeQueryModel,
       Members: [
         {
           Name: Active,
@@ -100,7 +100,7 @@
       ]
     },
     {
-      ModelName: HolidayQueryModel,
+      Model: HolidayQueryModel,
       Members: [
         {
           Name: Date,
@@ -117,7 +117,7 @@
       ]
     },
     {
-      ModelName: OrderQueryModel,
+      Model: OrderQueryModel,
       Members: [
         {
           Name: Amount,
@@ -140,7 +140,7 @@
       ]
     },
     {
-      ModelName: SalesRegionQueryModel,
+      Model: SalesRegionQueryModel,
       Members: [
         {
           Name: Id,

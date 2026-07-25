@@ -20,10 +20,10 @@ public sealed record ScryIntrospection(
 }
 
 /// <summary>A queryable source (the root of a query): its name, kind, and the model type it yields.</summary>
-public sealed record ScrySourceInfo(string Name, string Kind, string ModelName);
+public sealed record ScrySourceInfo(string Name, string Kind, string Model);
 
 /// <summary>A generated client query-model type and its allow-listed members.</summary>
-public sealed record ScryTypeInfo(string ModelName, IReadOnlyList<ScryMemberInfo> Members);
+public sealed record ScryTypeInfo(string Model, IReadOnlyList<ScryMemberInfo> Members);
 
 /// <summary>
 /// An allow-listed member. <see cref="TypeDisplay"/> is the exact C# the source generator would emit

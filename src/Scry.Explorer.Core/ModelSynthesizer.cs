@@ -41,7 +41,7 @@ public static class ModelSynthesizer
         {
             builder.AppendLine(
                 $$"""
-                public sealed class {{type.ModelName}}
+                public sealed class {{type.Model}}
                 {
                 """);
             foreach (var member in type.Members)
@@ -70,7 +70,7 @@ public static class ModelSynthesizer
                 """);
             foreach (var source in introspection.Sources)
             {
-                builder.AppendLine($"    public global::System.Linq.IQueryable<{source.ModelName}> {source.Name} => client.Source<{source.ModelName}>(\"{source.Name}\");");
+                builder.AppendLine($"    public global::System.Linq.IQueryable<{source.Model}> {source.Name} => client.Source<{source.Model}>(\"{source.Name}\");");
             }
         }
         else
@@ -78,7 +78,7 @@ public static class ModelSynthesizer
             // Completion only needs the shape — no Scry.Client dependency.
             foreach (var source in introspection.Sources)
             {
-                builder.AppendLine($"    public global::System.Linq.IQueryable<{source.ModelName}> {source.Name} => null!;");
+                builder.AppendLine($"    public global::System.Linq.IQueryable<{source.Model}> {source.Name} => null!;");
             }
         }
 

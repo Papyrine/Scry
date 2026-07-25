@@ -132,7 +132,7 @@ public void NameOverridesSourceNameButNotModelName()
     // generated model stays SalesRegionQueryModel and the server's introspection agrees with
     // what the generator emits.
     var region = sources.Single(_ => _.Name == "Region");
-    Assert.That(region.ModelName, Is.EqualTo("SalesRegionQueryModel"));
+    Assert.That(region.Model, Is.EqualTo("SalesRegionQueryModel"));
     Assert.That(region.Kind, Is.EqualTo("Entity"));
     Assert.That(sources.Select(_ => _.Name), Does.Not.Contain("SalesRegion"));
 }
