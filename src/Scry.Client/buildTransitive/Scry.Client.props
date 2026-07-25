@@ -26,7 +26,8 @@
   <Target Name="EnsureScryModel"
           BeforeTargets="CoreCompile"
           Condition="'$(ScryModelDll)' != '' and !Exists('$(ScryModelDll)')">
-    <Error Text="Scry: the model assembly '$(ScryModelDll)' was not found. Ensure the model project is referenced with ReferenceOutputAssembly=&quot;false&quot; so it builds first." />
+    <Error Text="Scry: the model assembly '$(ScryModelDll)' was not found.
+Reference the model project with ReferenceOutputAssembly=&quot;false&quot; so it builds first." />
   </Target>
   <!-- end-snippet -->
 </Project>

@@ -100,7 +100,21 @@ public class HttpRoundTripTests
     public async Task DisallowedPropertyRejectedWith400()
     {
         const string json = """
-            {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"GreaterThan","left":{"$type":"member","path":["Salary"]},"right":{"$type":"const","value":"100","tag":"Decimal"}}}]}
+            {
+              "version": 1,
+              "root": "Employee",
+              "pipeline": [
+                {
+                  "$type": "where",
+                  "predicate": {
+                    "$type": "binary",
+                    "op": "GreaterThan",
+                    "left": { "$type": "member", "path": ["Salary"] },
+                    "right": { "$type": "const", "value": "100", "tag": "Decimal" }
+                  }
+                }
+              ]
+            }
             """;
 
         using var content = new StringContent(json, Encoding.UTF8, "application/json");

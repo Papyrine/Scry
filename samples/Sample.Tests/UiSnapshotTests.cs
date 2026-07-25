@@ -137,15 +137,15 @@ public class UiSnapshotTests
         await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
 
         var height = await page.EvaluateAsync<double>(
-            """() => document.querySelector('.scry-editor').getBoundingClientRect().height""");
+            "() => document.querySelector('.scry-editor').getBoundingClientRect().height");
         Assert.That(height, Is.GreaterThan(100), "editor host height (the bug rendered it ~0)");
 
         // Type the way a user does: click into the editor to focus it, then type on the keyboard.
-        await page.EvaluateAsync("""() => monaco.editor.getEditors()[0].setValue('')""");
+        await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('')");
         await page.Locator(".monaco-editor").ClickAsync();
         await page.Keyboard.TypeAsync("Query");
 
-        var value = await page.EvaluateAsync<string>("""() => monaco.editor.getEditors()[0].getValue()""");
+        var value = await page.EvaluateAsync<string>("() => monaco.editor.getEditors()[0].getValue()");
         Assert.That(value, Is.EqualTo("Query"), "typed text should reach the editor model");
     }
 
@@ -240,7 +240,7 @@ public class UiSnapshotTests
         await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
         await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
 
-        await page.EvaluateAsync("""() => monaco.editor.getEditors()[0].setValue('Query.Employee.')""");
+        await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('Query.Employee.')");
         await page.Locator("[data-testid='complete']").ClickAsync();
 
         await page.WaitForFunctionAsync(
@@ -327,7 +327,7 @@ public class UiSnapshotTests
         await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
         await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
 
-        await page.EvaluateAsync("""() => monaco.editor.getEditors()[0].setValue('Query.Employee.ToList()')""");
+        await page.EvaluateAsync("() => monaco.editor.getEditors()[0].setValue('Query.Employee.ToList()')");
         await page.Locator("[data-testid='run']").ClickAsync();
 
         await page.WaitForSelectorAsync("[data-testid='result-table']", new() { Timeout = 60_000 });
@@ -348,7 +348,7 @@ public class UiSnapshotTests
         await page.WaitForSelectorAsync("[data-testid='completions'] li", new() { Timeout = 90_000 });
 
         await page.EvaluateAsync(
-            """() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(_ => _.Active).CountAsync()')""");
+            "() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(_ => _.Active).CountAsync()')");
         await page.Locator("[data-testid='run']").ClickAsync();
 
         await page.WaitForSelectorAsync("[data-testid='result-scalar']", new() { Timeout = 60_000 });
@@ -406,7 +406,7 @@ public class UiSnapshotTests
 
         await page.ReloadAsync();
         await page.WaitForSelectorAsync(".monaco-editor", new() { Timeout = 30_000 });
-        var theme = await page.EvaluateAsync<string>("""() => document.documentElement.dataset.theme""");
+        var theme = await page.EvaluateAsync<string>("() => document.documentElement.dataset.theme");
         Assert.That(theme, Is.EqualTo("dark"), "theme should persist across reload");
         await page.WaitForSelectorAsync(".monaco-editor.vs-dark", new() { Timeout = 10_000 });
     }
@@ -483,7 +483,7 @@ public class UiSnapshotTests
 
         // Run a terminal query (scalar count) and capture the scalar rendering.
         await page.EvaluateAsync(
-            """() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(_ => _.Active).CountAsync()')""");
+            "() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(_ => _.Active).CountAsync()')");
         await page.Locator("[data-testid='run']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='result-scalar']", new() { Timeout = 60_000 });
         await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "3b-count.png"), FullPage = true });
@@ -496,15 +496,15 @@ public class UiSnapshotTests
         await page.Locator("[data-testid='theme-toggle']").ClickAsync();
         await page.WaitForSelectorAsync(".monaco-editor.vs-dark", new() { Timeout = 10_000 });
         await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "5-dark.png"), FullPage = true });
-        var dataTheme = await page.EvaluateAsync<string>("""() => document.documentElement.dataset.theme""");
+        var dataTheme = await page.EvaluateAsync<string>("() => document.documentElement.dataset.theme");
         log.Add($"✓ dark mode: dataTheme={dataTheme}");
 
         // Diagnostics.
         await page.EvaluateAsync(
-            """() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(_ => _.Nope)')""");
+            "() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(_ => _.Nope)')");
         await page.WaitForFunctionAsync("() => monaco.editor.getModelMarkers({}).length > 0", null, new() { Timeout = 20_000 });
         var markerMsg = await page.EvaluateAsync<string>(
-            """() => monaco.editor.getModelMarkers({}).map(m => m.message).join(' | ')""");
+            "() => monaco.editor.getModelMarkers({}).map(m => m.message).join(' | ')");
         log.Add($"✓ diagnostics: {markerMsg}");
 
         // Hover.
@@ -565,10 +565,10 @@ public class UiSnapshotTests
 
         // 'Nope' is not a member of the Employee model → a diagnostic marker should appear.
         await page.EvaluateAsync(
-            """() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(_ => _.Nope)')""");
+            "() => monaco.editor.getEditors()[0].setValue('Query.Employee.Where(_ => _.Nope)')");
         await page.WaitForFunctionAsync("() => monaco.editor.getModelMarkers({}).length > 0", null, new() { Timeout = 30_000 });
 
-        var count = await page.EvaluateAsync<int>("""() => monaco.editor.getModelMarkers({}).length""");
+        var count = await page.EvaluateAsync<int>("() => monaco.editor.getModelMarkers({}).length");
         Assert.That(count, Is.GreaterThan(0));
     }
 
