@@ -93,9 +93,10 @@ sealed class QueryTranslator
     {
         var members = new List<ProjectionMember>();
         var names = ProjectionNames(construction);
-        for (var i = 0; i < construction.Arguments.Count; i++)
+        var arguments = construction.Arguments;
+        for (var i = 0; i < arguments.Count; i++)
         {
-            members.Add(new(names[i], ProjectionValue(construction.Arguments[i], parameter, grouped)));
+            members.Add(new(names[i], ProjectionValue(arguments[i], parameter, grouped)));
         }
 
         return new(members);
@@ -121,7 +122,10 @@ sealed class QueryTranslator
     {
         if (grouped)
         {
-            if (expression is MemberExpression { Member.Name: "Key" } memberKey &&
+            if (expression is MemberExpression
+                {
+                    Member.Name: "Key"
+                } memberKey &&
                 memberKey.Expression == parameter)
             {
                 return new ExprValue(new MemberExpr(groupKey ?? throw new NotSupportedException("No group key in scope.")));
@@ -227,7 +231,9 @@ sealed class QueryTranslator
     static bool IsDatePart(MemberExpression member, out KnownFunction function)
     {
         var declaring = member.Member.DeclaringType;
-        if (member.Expression is not null && (declaring == typeof(DateTime) || declaring == typeof(Date)))
+        if (member.Expression is not null &&
+            (declaring == typeof(DateTime) ||
+             declaring == typeof(Date)))
         {
             switch (member.Member.Name)
             {
@@ -284,7 +290,10 @@ sealed class QueryTranslator
     static LambdaExpression Lambda(Expression expression) =>
         expression switch
         {
-            UnaryExpression { Operand: LambdaExpression lambda } => lambda,
+            UnaryExpression
+            {
+                Operand: LambdaExpression lambda
+            } => lambda,
             LambdaExpression lambda => lambda,
             _ => throw new NotSupportedException("Expected a lambda expression.")
         };
@@ -298,7 +307,9 @@ sealed class QueryTranslator
 
         if (construction.Constructor is { } constructor)
         {
-            return constructor.GetParameters().Select(_ => Capitalize(_.Name!)).ToArray();
+            return constructor.GetParameters()
+                .Select(_ => Capitalize(_.Name!))
+                .ToArray();
         }
 
         throw new NotSupportedException("Cannot determine projection member names.");

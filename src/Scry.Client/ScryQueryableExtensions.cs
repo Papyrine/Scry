@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 namespace Scry.Client;
 
 /// <summary>Async terminal operators that execute a captured Scry query against the server.</summary>
@@ -49,9 +47,13 @@ public static class ScryQueryableExtensions
     {
         var response = await Send(source, terminal, cancel);
         EnsureKind(response, ResultKind.Single);
-        return response.Payload.ValueKind == JsonValueKind.Null
-            ? default
-            : response.Payload.Deserialize<T>(ScryJson.Options);
+        var payload = response.Payload;
+        if (payload.ValueKind == JsonValueKind.Null)
+        {
+            return default;
+        }
+
+        return payload.Deserialize<T>(ScryJson.Options);
     }
 
     /// <summary>

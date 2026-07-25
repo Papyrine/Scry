@@ -6,5 +6,10 @@ static class PageExtensions
     /// seconds — a terser overload of Playwright's millisecond options-object form.
     /// </summary>
     public static Task<IElementHandle?> WaitForSelectorAsync(this IPage page, string selector, int seconds) =>
-        page.WaitForSelectorAsync(selector, new() { Timeout = seconds * 1000 });
+        page.WaitForSelectorAsync(
+            selector,
+            new()
+            {
+                Timeout = seconds * 1000
+            });
 }

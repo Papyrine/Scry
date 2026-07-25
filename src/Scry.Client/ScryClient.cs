@@ -30,11 +30,11 @@ public sealed class ScryClient(Func<QueryRequest, Cancel, Task<QueryResponse>> t
         using var message = await http.PostAsync(endpoint, content, cancel);
 
         var body = await message.Content.ReadAsStringAsync(cancel);
-        if (!message.IsSuccessStatusCode)
+        if (message.IsSuccessStatusCode)
         {
-            throw new ScryRequestException((int)message.StatusCode, body);
+            return ScryJson.DeserializeResponse(body);
         }
 
-        return ScryJson.DeserializeResponse(body);
+        throw new ScryRequestException((int) message.StatusCode, body);
     }
 }
