@@ -108,7 +108,7 @@ sealed class ExpressionBuilder(ScrySchema schema)
                     break;
 
                 default:
-                    throw new type("Unsupported projection member.");
+                    throw new ScryValidationException("Unsupported projection member.");
             }
         }
     }
