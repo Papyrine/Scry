@@ -206,12 +206,12 @@ sealed class ExpressionBuilder(ScrySchema schema)
 
         return call.Function switch
         {
-            KnownFunction.StringContains => Expression.Call(target, StringMethod("Contains", typeof(string)), arguments[0]),
-            KnownFunction.StringStartsWith => Expression.Call(target, StringMethod("StartsWith", typeof(string)), arguments[0]),
-            KnownFunction.StringEndsWith => Expression.Call(target, StringMethod("EndsWith", typeof(string)), arguments[0]),
-            KnownFunction.StringToLower => Expression.Call(target, StringMethod("ToLower")),
-            KnownFunction.StringToUpper => Expression.Call(target, StringMethod("ToUpper")),
-            KnownFunction.StringIsNullOrEmpty => Expression.Call(typeof(string), nameof(string.IsNullOrEmpty), null, target),
+            KnownFunction.StringContains => Expression.Call(target, stringContains, arguments[0]),
+            KnownFunction.StringStartsWith => Expression.Call(target, stringStartsWith, arguments[0]),
+            KnownFunction.StringEndsWith => Expression.Call(target, stringEndsWith, arguments[0]),
+            KnownFunction.StringToLower => Expression.Call(target, stringToLower),
+            KnownFunction.StringToUpper => Expression.Call(target, stringToUpper),
+            KnownFunction.StringIsNullOrEmpty => Expression.Call(stringIsNullOrEmpty, target),
             KnownFunction.DateYear => Expression.Property(target, "Year"),
             KnownFunction.DateMonth => Expression.Property(target, "Month"),
             KnownFunction.DateDay => Expression.Property(target, "Day"),
@@ -245,16 +245,7 @@ sealed class ExpressionBuilder(ScrySchema schema)
     {
         if (aggregate.Function == AggregateFn.Count)
         {
-            var count = typeof(Enumerable).GetMethods()
-                .Single(_ =>
-                    _ is
-                    {
-                        Name: "Count",
-                        IsGenericMethodDefinition: true
-                    } &&
-                    _.GetParameters().Length == 1)
-                .MakeGenericMethod(elementType);
-            return Expression.Call(count, group);
+            return Expression.Call(enumerableCount.MakeGenericMethod(elementType), group);
         }
 
         if (aggregate.Selector is not MemberExpr memberExpr)
@@ -278,22 +269,30 @@ sealed class ExpressionBuilder(ScrySchema schema)
     }
 
     static MethodInfo SumOrAverage(string name, Type elementType, Type selectorReturnType) =>
-        typeof(Enumerable).GetMethods()
-            .Single(_ =>
-                _.Name == name &&
-                _.IsGenericMethodDefinition &&
-                _.GetParameters().Length == 2 &&
-                _.GetParameters()[1].ParameterType.GetGenericArguments()[1] == selectorReturnType)
-            .MakeGenericMethod(elementType);
+        aggregateMethods.GetOrAdd(
+            (name, elementType, selectorReturnType),
+            // Sum/Average have one selector overload per numeric type (int, decimal, …), generic only
+            // in the source element — pick it by the selector's return type, then close it.
+            key => typeof(Enumerable).GetMethods()
+                .Single(_ =>
+                    _.Name == key.name &&
+                    _.IsGenericMethodDefinition &&
+                    _.GetParameters().Length == 2 &&
+                    _.GetParameters()[1].ParameterType.GetGenericArguments()[1] == key.result)
+                .MakeGenericMethod(key.element));
 
     static MethodInfo MinOrMax(string name, Type elementType, Type selectorReturnType) =>
-        typeof(Enumerable).GetMethods()
-            .Single(_ =>
-                _.Name == name &&
-                _.IsGenericMethodDefinition &&
-                _.GetGenericArguments().Length == 2 &&
-                _.GetParameters().Length == 2)
-            .MakeGenericMethod(elementType, selectorReturnType);
+        aggregateMethods.GetOrAdd(
+            (name, elementType, selectorReturnType),
+            // Min/Max use the fully generic Min<TSource,TResult>(source, selector) overload, closed
+            // over both the element and the selector's return type.
+            key => typeof(Enumerable).GetMethods()
+                .Single(_ =>
+                    _.Name == key.name &&
+                    _.IsGenericMethodDefinition &&
+                    _.GetGenericArguments().Length == 2 &&
+                    _.GetParameters().Length == 2)
+                .MakeGenericMethod(key.element, key.result));
 
     static Expression ToObjectArray(List<Expression> leaves) =>
         Expression.NewArrayInit(typeof(object), leaves.Select(Box));
@@ -320,6 +319,27 @@ sealed class ExpressionBuilder(ScrySchema schema)
             left = Expression.Convert(left, right.Type);
         }
     }
+
+    // The methods the builder can emit are a fixed, deterministic set, so scanning string/Enumerable
+    // metadata on every query is wasted work. Resolve them once. One ExpressionBuilder is shared across
+    // all concurrent requests (it hangs off the singleton ScryProcessor), so these caches are static
+    // and thread-safe.
+    static readonly MethodInfo stringContains = StringMethod("Contains", typeof(string));
+    static readonly MethodInfo stringStartsWith = StringMethod("StartsWith", typeof(string));
+    static readonly MethodInfo stringEndsWith = StringMethod("EndsWith", typeof(string));
+    static readonly MethodInfo stringToLower = StringMethod("ToLower");
+    static readonly MethodInfo stringToUpper = StringMethod("ToUpper");
+    static readonly MethodInfo stringIsNullOrEmpty = StringMethod("IsNullOrEmpty", typeof(string));
+
+    // The generic Count<TSource>(source) definition is type-independent; only MakeGenericMethod varies.
+    static readonly MethodInfo enumerableCount = typeof(Enumerable).GetMethods()
+        .Single(_ =>
+            _ is { Name: "Count", IsGenericMethodDefinition: true } &&
+            _.GetParameters().Length == 1);
+
+    // Closed Sum/Average/Min/Max methods, keyed by (name, element type, selector return type). The
+    // key space is bounded by the queryable schema, so this never grows unboundedly.
+    static readonly ConcurrentDictionary<(string name, Type element, Type result), MethodInfo> aggregateMethods = new();
 
     static MethodInfo StringMethod(string name, params Type[] parameters) =>
         typeof(string).GetMethod(name, parameters) ??

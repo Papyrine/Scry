@@ -117,6 +117,9 @@ sealed class QueryExecutor(ScrySchema schema, ScryOptions options)
         return (ApplySelect(query, plan.Selector), plan);
     }
 
+    // The IReturnablePolicy<T>.Filter method, keyed by the policied source type. Bounded by the schema.
+    static readonly ConcurrentDictionary<Type, MethodInfo> policyFilters = new();
+
     static IQueryable ApplyPolicy(IQueryable query, ScrySource source, DbContext db, IServiceProvider services)
     {
         if (source.PolicyType is not { } policyType)
@@ -130,28 +133,24 @@ sealed class QueryExecutor(ScrySchema schema, ScryOptions options)
             throw new InvalidOperationException($"Could not create policy '{policyType.Name}'.");
         }
 
-        var filter = typeof(IReturnablePolicy<>)
-            .MakeGenericType(source.ClrType)
-            .GetMethod(nameof(IReturnablePolicy<>.Filter))!;
+        var filter = policyFilters.GetOrAdd(
+            source.ClrType,
+            clrType => typeof(IReturnablePolicy<>)
+                .MakeGenericType(clrType)
+                .GetMethod(nameof(IReturnablePolicy<>.Filter))!);
         var context = new ScryPolicyContext(services, db);
         return (IQueryable)filter.Invoke(policy, [query, context])!;
     }
 
     static IQueryable Apply(IQueryable query, string method, LambdaExpression argument) =>
         query.Provider.CreateQuery(
-            Expression.Call(
-                typeof(Queryable),
-                method,
-                [query.ElementType],
-                query.Expression,
-                Expression.Quote(argument)));
+            CallQueryable(method, [query.ElementType], query.Expression, Expression.Quote(argument)));
 
     static IQueryable ApplyOrder(IQueryable query, LambdaExpression keySelector, bool descending, bool then)
     {
         var method = (then ? "ThenBy" : "OrderBy") + (descending ? "Descending" : "");
         return query.Provider.CreateQuery(
-            Expression.Call(
-                typeof(Queryable),
+            CallQueryable(
                 method,
                 [query.ElementType, keySelector.ReturnType],
                 query.Expression,
@@ -160,34 +159,41 @@ sealed class QueryExecutor(ScrySchema schema, ScryOptions options)
 
     static IQueryable ApplyPaging(IQueryable query, string method, int count) =>
         query.Provider.CreateQuery(
-            Expression.Call(
-                typeof(Queryable),
-                method,
-                [query.ElementType],
-                query.Expression,
-                Expression.Constant(count)));
+            CallQueryable(method, [query.ElementType], query.Expression, Expression.Constant(count)));
 
     static IQueryable ApplyGroupBy(IQueryable query, LambdaExpression keySelector, Type elementType, Type keyType) =>
         query.Provider.CreateQuery(
-            Expression.Call(
-                typeof(Queryable),
-                "GroupBy",
-                [elementType, keyType],
-                query.Expression,
-                Expression.Quote(keySelector)));
+            CallQueryable("GroupBy", [elementType, keyType], query.Expression, Expression.Quote(keySelector)));
 
     static IQueryable ApplySelect(IQueryable query, LambdaExpression selector) =>
         query.Provider.CreateQuery(
-            Expression.Call(
-                typeof(Queryable),
-                "Select",
-                [query.ElementType, typeof(object[])],
-                query.Expression,
-                Expression.Quote(selector)));
+            CallQueryable("Select", [query.ElementType, typeof(object[])], query.Expression, Expression.Quote(selector)));
 
     static T Execute<T>(IQueryable query, string method) =>
         (T)query.Provider.Execute(
-            Expression.Call(typeof(Queryable), method, [query.ElementType], query.Expression))!;
+            CallQueryable(method, [query.ElementType], query.Expression))!;
+
+    static readonly ConcurrentDictionary<string, MethodInfo> queryableMethods = new();
+
+    /// <summary>
+    /// Builds a call to a generic <see cref="Queryable"/> method. Each method name is used with exactly
+    /// one overload shape here, so the first call lets the framework's name-based binder pick the right
+    /// overload, then caches its open generic definition. Later calls close that definition over
+    /// <paramref name="typeArgs"/> and bind directly — skipping the metadata scan and overload
+    /// resolution the name-based <see cref="Expression.Call(Type, string, Type[], Expression[])"/> does
+    /// on every invocation.
+    /// </summary>
+    static Expression CallQueryable(string method, Type[] typeArgs, params Expression[] arguments)
+    {
+        if (queryableMethods.TryGetValue(method, out var open))
+        {
+            return Expression.Call(open.MakeGenericMethod(typeArgs), arguments);
+        }
+
+        var call = Expression.Call(typeof(Queryable), method, typeArgs, arguments);
+        queryableMethods.TryAdd(method, call.Method.GetGenericMethodDefinition());
+        return call;
+    }
 
     static object[]? ExecuteRow(IQueryable projected, string method)
     {
