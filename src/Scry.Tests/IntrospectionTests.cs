@@ -29,6 +29,22 @@ public class IntrospectionTests
     // end-snippet
 
     [Test]
+    public void QueryableViewIsClassifiedAsView()
+    {
+        var source = Processor().Describe().Sources.Single(_ => _.Name == "DepartmentHeadcount");
+        Assert.That(source.Kind, Is.EqualTo("View"));
+    }
+
+    [Test]
+    public void KeylessQueryableIsClassifiedAsView()
+    {
+        // [Queryable] on an EF [Keyless] type is the documented equivalent of [QueryableView], and
+        // must classify identically. The two branches live in ScrySchema.TryClassify.
+        var source = Processor().Describe().Sources.Single(_ => _.Name == "RegionSummary");
+        Assert.That(source.Kind, Is.EqualTo("View"));
+    }
+
+    [Test]
     public void UnnamedSourcesFallBackToTheTypeName() =>
         Assert.That(
             Processor().Describe().Sources.Select(_ => _.Name),

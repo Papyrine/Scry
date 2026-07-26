@@ -99,6 +99,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Model: DepartmentQueryModel
     },
     {
+      Name: DepartmentHeadcount,
+      Kind: View,
+      Model: DepartmentHeadcountQueryModel
+    },
+    {
       Name: Employee,
       Kind: Entity,
       Model: EmployeeQueryModel
@@ -117,6 +122,16 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Name: Region,
       Kind: Entity,
       Model: SalesRegionQueryModel
+    },
+    {
+      Name: RegionSummary,
+      Kind: View,
+      Model: RegionSummaryQueryModel
+    },
+    {
+      Name: Ticket,
+      Kind: Entity,
+      Model: TicketQueryModel
     }
   ],
   Types: [
@@ -133,6 +148,23 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           Name: Name,
           TypeDisplay: string,
           NeedsNullDefault: true,
+          IsNavigation: false
+        }
+      ]
+    },
+    {
+      Model: DepartmentHeadcountQueryModel,
+      Members: [
+        {
+          Name: Department,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false
+        },
+        {
+          Name: Headcount,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
           IsNavigation: false
         }
       ]
@@ -231,11 +263,51 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       ]
     },
     {
+      Model: RegionSummaryQueryModel,
+      Members: [
+        {
+          Name: Region,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false
+        },
+        {
+          Name: Total,
+          TypeDisplay: decimal,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        }
+      ]
+    },
+    {
       Model: SalesRegionQueryModel,
       Members: [
         {
           Name: Id,
           TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false
+        }
+      ]
+    },
+    {
+      Model: TicketQueryModel,
+      Members: [
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        },
+        {
+          Name: IsOpen,
+          TypeDisplay: bool,
           NeedsNullDefault: false,
           IsNavigation: false
         },
@@ -261,7 +333,7 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
   QueryEndpoint: /api/query
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L171' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L243' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names,

@@ -66,7 +66,7 @@ public sealed class SnippetExecutor
                     .Where(_ => _.Severity == DiagnosticSeverity.Error)
                     .Take(3)
                     .Select(_ => _.GetMessage()));
-            throw new InvalidOperationException($"Could not compile the query: {message}");
+            throw new Exception($"Could not compile the query: {message}");
         }
 
         var assembly = Assembly.Load(stream.ToArray());

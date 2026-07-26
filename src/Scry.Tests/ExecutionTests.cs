@@ -125,6 +125,37 @@ public class ExecutionTests
         return Verify(Pretty(ScryJson.Serialize(response)));
     }
 
+    [Test]
+    public void ReturnableWithAttributeScopesRows()
+    {
+        // Ticket carries [ReturnableWith(typeof(OpenTicketsOnlyPolicy))] and no programmatic policy is
+        // registered, so the attribute-declared policy must scope the result to open tickets.
+        var request = QueryRequest.Create("Ticket", [new OrderByOp(new MemberNode(["Name"]), false)]);
+
+        using var context = TestContext.CreateSeeded();
+        var json = ScryJson.Serialize(Processor().Execute(request, context));
+
+        Assert.That(json, Does.Contain("Login bug"));
+        Assert.That(json, Does.Contain("Signup crash"));
+        Assert.That(json, Does.Not.Contain("Old typo"));
+    }
+
+    [Test]
+    public void AddPolicyOverridesReturnableWithAttribute()
+    {
+        // A programmatic AddPolicy must win over the [ReturnableWith] attribute. ClosedTicketsOnlyPolicy
+        // is the inverse of the attribute's policy, so the flipped result set proves which one ran.
+        var request = QueryRequest.Create("Ticket", [new OrderByOp(new MemberNode(["Name"]), false)]);
+
+        using var context = TestContext.CreateSeeded();
+        var json = ScryJson.Serialize(
+            Processor(_ => _.AddPolicy<Ticket, ClosedTicketsOnlyPolicy>()).Execute(request, context));
+
+        Assert.That(json, Does.Contain("Old typo"));
+        Assert.That(json, Does.Not.Contain("Login bug"));
+        Assert.That(json, Does.Not.Contain("Signup crash"));
+    }
+
     static Task VerifyResponse(QueryRequest request)
     {
         using var context = TestContext.CreateSeeded();

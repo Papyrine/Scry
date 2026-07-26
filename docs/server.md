@@ -136,7 +136,7 @@ static ScryProcessor Processor(Action<ScryOptions>? extra = null) =>
         extra?.Invoke(options);
     });
 ```
-<sup><a href='/src/Scry.Tests/ExecutionTests.cs#L135-L142' title='Snippet source file'>snippet source</a> | <a href='#snippet-processorCreate' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExecutionTests.cs#L166-L173' title='Snippet source file'>snippet source</a> | <a href='#snippet-processorCreate' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Execute a request against any `DbContext` instance:

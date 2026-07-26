@@ -8,6 +8,11 @@
       Model: DepartmentQueryModel
     },
     {
+      Name: DepartmentHeadcount,
+      Kind: View,
+      Model: DepartmentHeadcountQueryModel
+    },
+    {
       Name: Employee,
       Kind: Entity,
       Model: EmployeeQueryModel
@@ -26,6 +31,16 @@
       Name: Region,
       Kind: Entity,
       Model: SalesRegionQueryModel
+    },
+    {
+      Name: RegionSummary,
+      Kind: View,
+      Model: RegionSummaryQueryModel
+    },
+    {
+      Name: Ticket,
+      Kind: Entity,
+      Model: TicketQueryModel
     }
   ],
   Types: [
@@ -42,6 +57,23 @@
           Name: Name,
           TypeDisplay: string,
           NeedsNullDefault: true,
+          IsNavigation: false
+        }
+      ]
+    },
+    {
+      Model: DepartmentHeadcountQueryModel,
+      Members: [
+        {
+          Name: Department,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false
+        },
+        {
+          Name: Headcount,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
           IsNavigation: false
         }
       ]
@@ -140,11 +172,51 @@
       ]
     },
     {
+      Model: RegionSummaryQueryModel,
+      Members: [
+        {
+          Name: Region,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false
+        },
+        {
+          Name: Total,
+          TypeDisplay: decimal,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        }
+      ]
+    },
+    {
       Model: SalesRegionQueryModel,
       Members: [
         {
           Name: Id,
           TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false
+        }
+      ]
+    },
+    {
+      Model: TicketQueryModel,
+      Members: [
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        },
+        {
+          Name: IsOpen,
+          TypeDisplay: bool,
           NeedsNullDefault: false,
           IsNavigation: false
         },

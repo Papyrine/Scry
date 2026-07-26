@@ -43,6 +43,19 @@ public class Order
     public decimal Amount { get; set; }
 }
 
+/// <summary>
+/// Carries its row policy via the [ReturnableWith] attribute rather than a programmatic AddPolicy,
+/// exercising the attribute-discovery branch of ScrySchema.ResolvePolicy.
+/// </summary>
+[Queryable]
+[ReturnableWith(typeof(OpenTicketsOnlyPolicy))]
+public class Ticket
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public bool IsOpen { get; set; }
+}
+
 // begin-snippet: namedSource
 /// <summary>
 /// Exposed to clients as 'Region', so the CLR type can be renamed without changing the wire
@@ -55,6 +68,29 @@ public class SalesRegion
     public string Name { get; set; } = "";
 }
 // end-snippet
+
+/// <summary>
+/// A keyless view opted in with [QueryableView]; introspection must report it with Kind 'View'. Has
+/// no DbSet — nothing queries it; it exists to pin the view-classification behaviour.
+/// </summary>
+[QueryableView]
+public class DepartmentHeadcount
+{
+    public string Department { get; set; } = "";
+    public int Headcount { get; set; }
+}
+
+/// <summary>
+/// Opted in with [Queryable] but marked EF [Keyless], which the schema treats as a view — the
+/// documented equivalent of [QueryableView]. Pins that classification path.
+/// </summary>
+[Queryable]
+[Keyless]
+public class RegionSummary
+{
+    public string Region { get; set; } = "";
+    public decimal Total { get; set; }
+}
 
 [QueryablePoco]
 public class Holiday
@@ -80,12 +116,32 @@ public sealed class ActiveOnlyPolicy :
 }
 // end-snippet
 
+/// <summary>The [ReturnableWith] policy on <see cref="Ticket"/>: scopes queries to open tickets.</summary>
+public sealed class OpenTicketsOnlyPolicy :
+    IReturnablePolicy<Ticket>
+{
+    public IQueryable<Ticket> Filter(IQueryable<Ticket> source, ScryPolicyContext context) =>
+        source.Where(_ => _.IsOpen);
+}
+
+/// <summary>
+/// The inverse policy, registered via AddPolicy to prove it overrides <see cref="Ticket"/>'s
+/// [ReturnableWith] attribute.
+/// </summary>
+public sealed class ClosedTicketsOnlyPolicy :
+    IReturnablePolicy<Ticket>
+{
+    public IQueryable<Ticket> Filter(IQueryable<Ticket> source, ScryPolicyContext context) =>
+        source.Where(_ => !_.IsOpen);
+}
+
 public sealed class TestContext(DbContextOptions<TestContext> options) :
     DbContext(options)
 {
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<Order> Orders => Set<Order>();
+    public DbSet<Ticket> Tickets => Set<Ticket>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
         configurationBuilder.Properties<decimal>().HavePrecision(18, 2);
@@ -129,6 +185,11 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
             new() { Region = "North", Amount = 100m },
             new() { Region = "North", Amount = 250m },
             new() { Region = "South", Amount = 75m });
+
+        context.Tickets.AddRange(
+            new() { Name = "Login bug", IsOpen = true },
+            new() { Name = "Signup crash", IsOpen = true },
+            new() { Name = "Old typo", IsOpen = false });
 
         context.SaveChanges();
     }

@@ -107,7 +107,7 @@ sealed class ScrySchema
     {
         if (options.ContextType is not { } contextType)
         {
-            throw new InvalidOperationException(
+            throw new Exception(
                 "No model configured. Call options.UseModel<TContext>() in AddScry.");
         }
 
@@ -136,7 +136,7 @@ sealed class ScrySchema
         {
             if (schema.sources.ContainsKey(name))
             {
-                throw new InvalidOperationException($"Duplicate queryable source name '{name}'.");
+                throw new Exception($"Duplicate queryable source name '{name}'.");
             }
 
             schema.sources[name] = new(name, type, kind, policy, BuildResolver(type, kind, options));
@@ -267,7 +267,7 @@ sealed class ScrySchema
                 return (_, services) => factory(services);
             }
 
-            throw new InvalidOperationException(
+            throw new Exception(
                 $"POCO source '{type.Name}' has no data registered. Call options.AddPocoSource<{type.Name}>(...).");
         }
 

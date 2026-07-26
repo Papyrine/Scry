@@ -23,7 +23,11 @@ public class HttpRoundTripTests
 
     record RegionSummary(string Region, decimal Total, int Count);
 
+    record HeadcountRow(string Department, int Headcount);
+
     static readonly string[] activeEmployeeNames = ["Aaron", "Alice", "Carol"];
+
+    static readonly string[] departmentNames = ["Engineering", "Sales"];
 
     [OneTimeSetUp]
     public async Task StartServer()
@@ -70,6 +74,21 @@ public class HttpRoundTripTests
         Assert.That(rows[0].Manager, Is.EqualTo("Alice"));
         Assert.That(rows[1].Manager, Is.Null);
         Assert.That(rows[0].Department, Is.EqualTo("Engineering"));
+    }
+
+    [Test]
+    public async Task ViewProjectionOverHttp()
+    {
+        // EmployeeSummary is a keyless [QueryableView] mapped to a SQL view. This confirms a view
+        // round-trips the full pipeline: source discovery, validation, EF Set<T> against the view,
+        // projection, and HTTP. The seed puts two employees in each of the two departments.
+        var rows = await query.EmployeeSummary
+            .OrderBy(_ => _.Department)
+            .Select(_ => new HeadcountRow(_.Department, _.Headcount))
+            .ToListAsync();
+
+        Assert.That(rows.Select(_ => _.Department), Is.EqualTo(departmentNames));
+        Assert.That(rows.Sum(_ => _.Headcount), Is.EqualTo(4));
     }
 
     [Test]

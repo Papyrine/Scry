@@ -65,7 +65,7 @@ public static class ScryQueryableExtensions
     {
         if (source.Provider is not ScryQueryProvider provider)
         {
-            throw new InvalidOperationException("This IQueryable is not a Scry source.");
+            throw new Exception("This IQueryable is not a Scry source.");
         }
 
         var pipeline = new List<QueryOp>(QueryTranslator.Translate(source.Expression));
@@ -81,7 +81,7 @@ public static class ScryQueryableExtensions
     {
         if (source.Provider is not ScryQueryProvider provider)
         {
-            throw new InvalidOperationException("This IQueryable is not a Scry source.");
+            throw new Exception("This IQueryable is not a Scry source.");
         }
 
         return provider.Client.SendAsync(source.ToScryRequest(terminal), cancel);

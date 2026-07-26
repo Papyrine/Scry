@@ -130,7 +130,7 @@ sealed class QueryExecutor(ScrySchema schema, ScryOptions options)
         var policy = services.GetService(policyType) ?? Activator.CreateInstance(policyType);
         if (policy is null)
         {
-            throw new InvalidOperationException($"Could not create policy '{policyType.Name}'.");
+            throw new Exception($"Could not create policy '{policyType.Name}'.");
         }
 
         var filter = policyFilters.GetOrAdd(
@@ -204,7 +204,7 @@ sealed class QueryExecutor(ScrySchema schema, ScryOptions options)
             "FirstOrDefault" => typed.FirstOrDefault(),
             "Single" => typed.Single(),
             "SingleOrDefault" => typed.SingleOrDefault(),
-            _ => throw new InvalidOperationException($"Unknown row method '{method}'.")
+            _ => throw new Exception($"Unknown row method '{method}'.")
         };
     }
 
