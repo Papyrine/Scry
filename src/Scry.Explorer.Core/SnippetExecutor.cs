@@ -1,10 +1,3 @@
-using System.Reflection;
-using Basic.Reference.Assemblies;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Scry.Client;
-
 namespace Scry.Explorer.Core;
 
 /// <summary>
@@ -17,8 +10,8 @@ namespace Scry.Explorer.Core;
 /// </summary>
 public sealed class SnippetExecutor
 {
-    readonly IReadOnlyList<MetadataReference> references;
-    readonly string generatedSource;
+    IReadOnlyList<MetadataReference> references;
+    string generatedSource;
 
     SnippetExecutor(IReadOnlyList<MetadataReference> references, string generatedSource)
     {
@@ -46,7 +39,9 @@ public sealed class SnippetExecutor
     public static SnippetExecutor Create(
         ScryIntrospection introspection,
         IReadOnlyList<MetadataReference> scryReferences) =>
-        new([.. Net100.References.All, .. scryReferences], ModelSynthesizer.Synthesize(introspection, executable: true));
+        new(
+            [.. Net100.References.All, .. scryReferences],
+            ModelSynthesizer.Synthesize(introspection, executable: true));
 
     public QueryRequest Translate(string userExpression)
     {

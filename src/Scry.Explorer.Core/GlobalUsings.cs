@@ -1,2 +1,11 @@
-﻿global using System.Text;
+﻿global using System.Reflection;
+global using System.Text;
+global using Basic.Reference.Assemblies;
+global using Microsoft.CodeAnalysis;
+global using Microsoft.CodeAnalysis.Completion;
+global using Microsoft.CodeAnalysis.CSharp;
+global using Microsoft.CodeAnalysis.Host.Mef;
+global using Microsoft.CodeAnalysis.Text;
 global using Scry.Wire;
+global using Microsoft.CodeAnalysis.CSharp.Syntax;
+global using Scry.Client;

@@ -1,12 +1,3 @@
-using System.Collections.Immutable;
-using System.Reflection;
-using Basic.Reference.Assemblies;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.Completion;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.Host.Mef;
-using Microsoft.CodeAnalysis.Text;
-
 namespace Scry.Explorer.Core;
 
 /// <summary>A completion offered by Roslyn: its label, Roslyn tag (kind), and the span it replaces.</summary>

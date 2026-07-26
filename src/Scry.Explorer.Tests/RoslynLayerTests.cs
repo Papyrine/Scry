@@ -1,11 +1,3 @@
-using Microsoft.CodeAnalysis;
-using NUnit.Framework;
-using Scry.Client;
-using Scry.Explorer.Core;
-using Scry.Wire;
-
-namespace Scry.Explorer.Tests;
-
 // In-process tests of the browser-Roslyn layer. These run on the desktop host (not WASM), so they are
 // fast and deterministic — they cover the completion/diagnostics/translation LOGIC. The Playwright
 // suite (samples/Sample.Tests) remains the thin layer that proves it all actually works inside WASM.
