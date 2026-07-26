@@ -9,10 +9,10 @@ public class SecurityTests
         AssertRejected(QueryRequest.Create(
             "Employee",
             [
-                new WhereOp(new BinaryExpr(
+                new WhereOp(new BinaryNode(
                     BinaryOp.GreaterThan,
-                    new MemberExpr(["Salary"]),
-                    new ConstExpr("100", ClrTypeTag.Decimal)))
+                    new MemberNode(["Salary"]),
+                    new ConstNode("100", ClrTypeTag.Decimal)))
             ]));
     // end-snippet
 
@@ -24,13 +24,13 @@ public class SecurityTests
     public void RejectsUnknownProperty() =>
         AssertRejected(QueryRequest.Create(
             "Employee",
-            [new WhereOp(new BinaryExpr(BinaryOp.Equal, new MemberExpr(["Ssn"]), new ConstExpr("x", ClrTypeTag.String)))]));
+            [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Ssn"]), new ConstNode("x", ClrTypeTag.String)))]));
 
     [Test]
     public void RejectsTraversalThroughScalar() =>
         AssertRejected(QueryRequest.Create(
             "Employee",
-            [new WhereOp(new BinaryExpr(BinaryOp.Equal, new MemberExpr(["Name", "Length"]), new ConstExpr("3", ClrTypeTag.Int32)))]));
+            [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Name", "Length"]), new ConstNode("3", ClrTypeTag.Int32)))]));
 
     [Test]
     public void RejectsTakeOverMaxPageSize() =>
@@ -42,11 +42,11 @@ public class SecurityTests
     public void RejectsAggregateWithoutGroupBy() =>
         AssertRejected(QueryRequest.Create(
             "Order",
-            [new SelectOp(new([new("Total", new ExprValue(new AggregateExpr(AggregateFn.Sum, new MemberExpr(["Amount"]))))]))]));
+            [new SelectOp(new([new("Total", new ExprValue(new AggregateNode(AggregateFn.Sum, new MemberNode(["Amount"]))))]))]));
 
     [Test]
     public void RejectsThenByWithoutOrderBy() =>
-        AssertRejected(QueryRequest.Create("Employee", [new ThenByOp(new MemberExpr(["Name"]), false)]));
+        AssertRejected(QueryRequest.Create("Employee", [new ThenByOp(new MemberNode(["Name"]), false)]));
 
     [Test]
     public void RejectsOperatorAfterTerminal() =>
@@ -61,8 +61,8 @@ public class SecurityTests
         AssertRejected(QueryRequest.Create(
             "Order",
             [
-                new GroupByOp([new MemberExpr(["Region"])]),
-                new SelectOp(new([new("Amount", new ExprValue(new MemberExpr(["Amount"])))]))
+                new GroupByOp([new MemberNode(["Region"])]),
+                new SelectOp(new([new("Amount", new ExprValue(new MemberNode(["Amount"])))]))
             ]));
 
     static void AssertRejected(QueryRequest request, Action<ScryOptions>? extra = null)

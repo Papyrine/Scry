@@ -6,7 +6,7 @@
 sealed class ExpressionBuilder(ScrySchema schema)
 {
     /// <summary>Builds a predicate lambda <c>TElement =&gt; bool</c>.</summary>
-    public LambdaExpression BuildPredicate(Expr predicate, Type elementType)
+    public LambdaExpression BuildPredicate(Node predicate, Type elementType)
     {
         var parameter = Expression.Parameter(elementType, "e");
         var body = Build(predicate, parameter, typeof(bool));
@@ -14,7 +14,7 @@ sealed class ExpressionBuilder(ScrySchema schema)
     }
 
     /// <summary>Builds a key selector lambda <c>TElement =&gt; TKey</c>.</summary>
-    public LambdaExpression BuildKeySelector(Expr key, Type elementType)
+    public LambdaExpression BuildKeySelector(Node key, Type elementType)
     {
         var parameter = Expression.Parameter(elementType, "e");
         var body = Build(key, parameter, null);
@@ -72,8 +72,8 @@ sealed class ExpressionBuilder(ScrySchema schema)
             var expression = ((ExprValue)member.Value).Expression;
             var leaf = expression switch
             {
-                AggregateExpr aggregate => BuildAggregate(aggregate, parameter, elementType),
-                MemberExpr => Expression.Property(parameter, "Key"),
+                AggregateNode aggregate => BuildAggregate(aggregate, parameter, elementType),
+                MemberNode => Expression.Property(parameter, "Key"),
                 _ => throw new ScryValidationException("Unsupported grouped projection member.")
             };
 
@@ -97,7 +97,7 @@ sealed class ExpressionBuilder(ScrySchema schema)
             var jsonPath = jsonPrefix.Append(member.Name).ToArray();
             switch (member.Value)
             {
-                case ExprValue { Expression: MemberExpr memberExpr }:
+                case ExprValue { Expression: MemberNode memberExpr }:
                     leaves.Add(BuildMemberAccess(root, memberExpr.Path));
                     shape.Add(jsonPath);
                     break;
@@ -113,14 +113,14 @@ sealed class ExpressionBuilder(ScrySchema schema)
         }
     }
 
-    Expression Build(Expr expr, ParameterExpression parameter, Type? expected) =>
+    Expression Build(Node expr, ParameterExpression parameter, Type? expected) =>
         expr switch
         {
-            MemberExpr member => BuildMemberAccess(parameter, member.Path),
-            ConstExpr constant => BuildConstant(constant, expected),
-            BinaryExpr binary => BuildBinary(binary, parameter),
-            UnaryExpr unary => BuildUnary(unary, parameter),
-            CallExpr call => BuildCall(call, parameter),
+            MemberNode member => BuildMemberAccess(parameter, member.Path),
+            ConstNode constant => BuildConstant(constant, expected),
+            BinaryNode binary => BuildBinary(binary, parameter),
+            UnaryNode unary => BuildUnary(unary, parameter),
+            CallNode call => BuildCall(call, parameter),
             _ => throw new ScryValidationException($"Unsupported expression '{expr.GetType().Name}'.")
         };
 
@@ -142,7 +142,7 @@ sealed class ExpressionBuilder(ScrySchema schema)
         return expression;
     }
 
-    Expression BuildBinary(BinaryExpr binary, ParameterExpression parameter)
+    Expression BuildBinary(BinaryNode binary, ParameterExpression parameter)
     {
         if (binary.Op is BinaryOp.AndAlso or BinaryOp.OrElse)
         {
@@ -159,7 +159,7 @@ sealed class ExpressionBuilder(ScrySchema schema)
         // Infer the constant's type from the typed (non-constant) operand.
         Expression left;
         Expression right;
-        if (binary is {Left: ConstExpr, Right: not ConstExpr})
+        if (binary is {Left: ConstNode, Right: not ConstNode})
         {
             right = Build(binary.Right, parameter, null);
             left = Build(binary.Left, parameter, right.Type);
@@ -188,7 +188,7 @@ sealed class ExpressionBuilder(ScrySchema schema)
         };
     }
 
-    Expression BuildUnary(UnaryExpr unary, ParameterExpression parameter)
+    Expression BuildUnary(UnaryNode unary, ParameterExpression parameter)
     {
         var operand = Build(unary.Operand, parameter, unary.Op == UnaryOp.Not ? typeof(bool) : null);
         return unary.Op switch
@@ -199,7 +199,7 @@ sealed class ExpressionBuilder(ScrySchema schema)
         };
     }
 
-    Expression BuildCall(CallExpr call, ParameterExpression parameter)
+    Expression BuildCall(CallNode call, ParameterExpression parameter)
     {
         var target = Build(call.Target, parameter, null);
         var arguments = call.Arguments.Select(_ => Build(_, parameter, typeof(string))).ToArray();
@@ -219,7 +219,7 @@ sealed class ExpressionBuilder(ScrySchema schema)
         };
     }
 
-    static Expression BuildConstant(ConstExpr constant, Type? expected)
+    static Expression BuildConstant(ConstNode constant, Type? expected)
     {
         var target = expected ?? TagToType(constant.Tag);
         var underlying = Nullable.GetUnderlyingType(target) ?? target;
@@ -241,14 +241,14 @@ sealed class ExpressionBuilder(ScrySchema schema)
         return Expression.Constant(parsed, underlying);
     }
 
-    Expression BuildAggregate(AggregateExpr aggregate, ParameterExpression group, Type elementType)
+    Expression BuildAggregate(AggregateNode aggregate, ParameterExpression group, Type elementType)
     {
         if (aggregate.Function == AggregateFn.Count)
         {
             return Expression.Call(enumerableCount.MakeGenericMethod(elementType), group);
         }
 
-        if (aggregate.Selector is not MemberExpr memberExpr)
+        if (aggregate.Selector is not MemberNode memberExpr)
         {
             throw new ScryValidationException($"Aggregate '{aggregate.Function}' requires a member selector.");
         }

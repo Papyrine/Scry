@@ -10,30 +10,30 @@ public class WireSerializationTests
             "Employees",
             [
                 new WhereOp(
-                    new BinaryExpr(
+                    new BinaryNode(
                         BinaryOp.AndAlso,
-                        new BinaryExpr(
+                        new BinaryNode(
                             BinaryOp.Equal,
-                            new MemberExpr(["Status"]),
-                            new ConstExpr("FullTime", ClrTypeTag.Enum)),
-                        new CallExpr(
+                            new MemberNode(["Status"]),
+                            new ConstNode("FullTime", ClrTypeTag.Enum)),
+                        new CallNode(
                             KnownFunction.StringStartsWith,
-                            new MemberExpr(["Name"]),
-                            [new ConstExpr("A", ClrTypeTag.String)]))),
-                new OrderByOp(new MemberExpr(["Name"]), Descending: false),
-                new ThenByOp(new MemberExpr(["Id"]), Descending: true),
+                            new MemberNode(["Name"]),
+                            [new ConstNode("A", ClrTypeTag.String)]))),
+                new OrderByOp(new MemberNode(["Name"]), Descending: false),
+                new ThenByOp(new MemberNode(["Id"]), Descending: true),
                 new SkipOp(10),
                 new TakeOp(50),
                 new SelectOp(
                     new(
                     [
-                        new("Name", new ExprValue(new MemberExpr(["Name"]))),
-                        new("ManagerName", new ExprValue(new MemberExpr(["Manager", "Name"]))),
+                        new("Name", new ExprValue(new MemberNode(["Name"]))),
+                        new("ManagerName", new ExprValue(new MemberNode(["Manager", "Name"]))),
                         new(
                             "Manager",
                             new NestedValue(
                                 ["Manager"],
-                                new([new("Name", new ExprValue(new MemberExpr(["Name"])))])))
+                                new([new("Name", new ExprValue(new MemberNode(["Name"])))])))
                     ]))
             ]);
 
@@ -47,17 +47,17 @@ public class WireSerializationTests
             "Orders",
             [
                 new WhereOp(
-                    new BinaryExpr(
+                    new BinaryNode(
                         BinaryOp.GreaterThan,
-                        new MemberExpr(["Amount"]),
-                        new ConstExpr("0", ClrTypeTag.Decimal))),
-                new GroupByOp([new MemberExpr(["Region"])]),
+                        new MemberNode(["Amount"]),
+                        new ConstNode("0", ClrTypeTag.Decimal))),
+                new GroupByOp([new MemberNode(["Region"])]),
                 new SelectOp(
                     new(
                     [
-                        new("Region", new ExprValue(new MemberExpr(["Region"]))),
-                        new("Total", new ExprValue(new AggregateExpr(AggregateFn.Sum, new MemberExpr(["Amount"])))),
-                        new("Count", new ExprValue(new AggregateExpr(AggregateFn.Count, Selector: null)))
+                        new("Region", new ExprValue(new MemberNode(["Region"]))),
+                        new("Total", new ExprValue(new AggregateNode(AggregateFn.Sum, new MemberNode(["Amount"])))),
+                        new("Count", new ExprValue(new AggregateNode(AggregateFn.Count, Selector: null)))
                     ]))
             ]);
 
@@ -71,10 +71,10 @@ public class WireSerializationTests
             "Employees",
             [
                 new WhereOp(
-                    new UnaryExpr(
+                    new UnaryNode(
                         UnaryOp.Not,
-                        new CallExpr(KnownFunction.StringIsNullOrEmpty, new MemberExpr(["Name"]), []))),
-                new FirstOp(OrDefault: true, new MemberExpr(["Active"]))
+                        new CallNode(KnownFunction.StringIsNullOrEmpty, new MemberNode(["Name"]), []))),
+                new FirstOp(OrDefault: true, new MemberNode(["Active"]))
             ]);
 
         return VerifyRoundTrip(request);

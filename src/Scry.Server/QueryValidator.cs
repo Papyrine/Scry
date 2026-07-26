@@ -32,7 +32,7 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
         var sawGroupBy = false;
         var sawSelect = false;
         var terminalIndex = -1;
-        IReadOnlyList<MemberExpr>? groupKeys = null;
+        IReadOnlyList<MemberNode>? groupKeys = null;
 
         for (var i = 0; i < pipeline.Count; i++)
         {
@@ -101,7 +101,7 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
                         ValidateScalar(key, rootType, "GroupBy key");
                     }
 
-                    groupKeys = [..groupBy.Keys.OfType<MemberExpr>()];
+                    groupKeys = [..groupBy.Keys.OfType<MemberNode>()];
                     sawGroupBy = true;
                     break;
 
@@ -145,7 +145,7 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
         }
     }
 
-    void ValidateTerminalPredicate(Expr? predicate, Type rootType, bool sawSelect)
+    void ValidateTerminalPredicate(Node? predicate, Type rootType, bool sawSelect)
     {
         if (predicate is null)
         {
@@ -164,7 +164,7 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
         Projection projection,
         Type rootType,
         bool grouped,
-        IReadOnlyList<MemberExpr>? groupKeys,
+        IReadOnlyList<MemberNode>? groupKeys,
         int depth)
     {
         if (depth > options.MaxNavigationDepth)
@@ -181,7 +181,7 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
         {
             switch (member.Value)
             {
-                case ExprValue { Expression: AggregateExpr aggregate }:
+                case ExprValue { Expression: AggregateNode aggregate }:
                     if (!grouped)
                     {
                         throw Reject("Aggregates are only allowed in a Select following GroupBy.");
@@ -194,7 +194,7 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
 
                     break;
 
-                case ExprValue { Expression: MemberExpr memberExpr }:
+                case ExprValue { Expression: MemberNode memberExpr }:
                     if (grouped)
                     {
                         if (groupKeys is null ||
@@ -229,19 +229,19 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
         }
     }
 
-    void ValidatePredicate(Expr expr, Type elementType) =>
+    void ValidatePredicate(Node expr, Type elementType) =>
         ValidateExpr(expr, elementType, depth: 0);
 
-    void ValidateScalar(Expr expr, Type elementType, string what)
+    void ValidateScalar(Node expr, Type elementType, string what)
     {
         ValidateExpr(expr, elementType, depth: 0);
-        if (expr is MemberExpr member)
+        if (expr is MemberNode member)
         {
             ResolvePath(member.Path, elementType, requireScalar: true, what);
         }
     }
 
-    void ValidateExpr(Expr expr, Type elementType, int depth)
+    void ValidateExpr(Node expr, Type elementType, int depth)
     {
         while (true)
         {
@@ -252,25 +252,25 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
 
             switch (expr)
             {
-                case MemberExpr member:
+                case MemberNode member:
                     ResolvePath(member.Path, elementType, requireScalar: false, "Member");
                     break;
 
-                case ConstExpr:
+                case ConstNode:
                     break;
 
-                case BinaryExpr binary:
+                case BinaryNode binary:
                     ValidateExpr(binary.Left, elementType, depth + 1);
                     expr = binary.Right;
                     depth += 1;
                     continue;
 
-                case UnaryExpr unary:
+                case UnaryNode unary:
                     expr = unary.Operand;
                     depth += 1;
                     continue;
 
-                case CallExpr call:
+                case CallNode call:
                     ValidateExpr(call.Target, elementType, depth + 1);
                     foreach (var argument in call.Arguments)
                     {
@@ -279,7 +279,7 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
 
                     break;
 
-                case AggregateExpr:
+                case AggregateNode:
                     throw Reject("Aggregates are only allowed as a projection member in a grouped Select.");
 
                 default:

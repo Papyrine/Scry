@@ -16,7 +16,7 @@ public abstract record ProjectionValue;
 // end-snippet
 
 /// <summary>A projection member backed by an expression (a member path or an aggregate).</summary>
-public sealed record ExprValue(Expr Expression) :
+public sealed record ExprValue(Node Expression) :
     ProjectionValue;
 
 /// <summary>A projection member backed by a nested projection into a navigation property.</summary>

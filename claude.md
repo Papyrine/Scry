@@ -75,13 +75,13 @@ The pipeline crosses four projects. Key files to read at each stage:
   and `ToScryRequest`, which run `QueryTranslator` to turn the captured expression tree into the wire
   AST and POST it via `ScryClient`.
 - `QueryTranslator` is the core client-side translator: it walks the captured method-call chain into
-  an ordered `IReadOnlyList<QueryOp>`, maps rooted member access to `MemberExpr` paths, compiles &
-  evaluates closure values into `ConstExpr`, maps string/date methods to the closed `KnownFunction`
+  an ordered `IReadOnlyList<QueryOp>`, maps rooted member access to `MemberNode` paths, compiles &
+  evaluates closure values into `ConstNode`, maps string/date methods to the closed `KnownFunction`
   set, and throws `NotSupportedException` for anything outside the supported operator set.
 
 **Wire AST — `Scry.Wire` (shared by client and server, no EF).**
 - `QueryRequest` (version + root source name + pipeline), `QueryOp` (the closed operator set incl.
-  terminals), `Expr` (the closed expression set), `Enums.cs` (`KnownFunction` — the only callable
+  terminals), `Node` (the closed expression set), `Enums.cs` (`KnownFunction` — the only callable
   functions), `QueryResponse`, `ScryIntrospection`, `ScryJson` (the shared `JsonSerializerOptions`).
   Polymorphism uses a `$type` discriminator; unknown discriminators **fail** deserialization rather
   than being ignored. Adding a wire node means editing the `[JsonDerivedType]` list here.

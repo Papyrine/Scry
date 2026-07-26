@@ -10,19 +10,19 @@ public class ExecutionTests
             "Employee",
             [
                 new WhereOp(
-                    new BinaryExpr(
+                    new BinaryNode(
                         BinaryOp.Equal,
-                        new MemberExpr(["Status"]),
-                        new ConstExpr("FullTime", ClrTypeTag.Enum))),
-                new OrderByOp(new MemberExpr(["Name"]), Descending: false),
+                        new MemberNode(["Status"]),
+                        new ConstNode("FullTime", ClrTypeTag.Enum))),
+                new OrderByOp(new MemberNode(["Name"]), Descending: false),
                 new SelectOp(
                     new(
                     [
-                        new("Name", new ExprValue(new MemberExpr(["Name"]))),
-                        new("ManagerName", new ExprValue(new MemberExpr(["Manager", "Name"]))),
+                        new("Name", new ExprValue(new MemberNode(["Name"]))),
+                        new("ManagerName", new ExprValue(new MemberNode(["Manager", "Name"]))),
                         new("Department", new NestedValue(
                             ["Department"],
-                            new([new("Name", new ExprValue(new MemberExpr(["Name"])))])))
+                            new([new("Name", new ExprValue(new MemberNode(["Name"])))])))
                     ]))
             ]);
 
@@ -32,7 +32,7 @@ public class ExecutionTests
     [Test]
     public async Task DefaultProjectionExcludesIgnoredProperty()
     {
-        var request = QueryRequest.Create("Employee", [new OrderByOp(new MemberExpr(["Name"]), false)]);
+        var request = QueryRequest.Create("Employee", [new OrderByOp(new MemberNode(["Name"]), false)]);
 
         using var context = TestContext.CreateSeeded();
         var response = Processor().Execute(request, context);
@@ -48,13 +48,13 @@ public class ExecutionTests
         var request = QueryRequest.Create(
             "Order",
             [
-                new GroupByOp([new MemberExpr(["Region"])]),
+                new GroupByOp([new MemberNode(["Region"])]),
                 new SelectOp(
                     new(
                     [
-                        new("Region", new ExprValue(new MemberExpr(["Region"]))),
-                        new("Total", new ExprValue(new AggregateExpr(AggregateFn.Sum, new MemberExpr(["Amount"])))),
-                        new("Count", new ExprValue(new AggregateExpr(AggregateFn.Count, Selector: null)))
+                        new("Region", new ExprValue(new MemberNode(["Region"]))),
+                        new("Total", new ExprValue(new AggregateNode(AggregateFn.Sum, new MemberNode(["Amount"])))),
+                        new("Count", new ExprValue(new AggregateNode(AggregateFn.Count, Selector: null)))
                     ]))
             ]);
 
@@ -68,11 +68,11 @@ public class ExecutionTests
             "Holiday",
             [
                 new WhereOp(
-                    new CallExpr(
+                    new CallNode(
                         KnownFunction.StringContains,
-                        new MemberExpr(["Name"]),
-                        [new ConstExpr("a", ClrTypeTag.String)])),
-                new SelectOp(new([new("Name", new ExprValue(new MemberExpr(["Name"])))]))
+                        new MemberNode(["Name"]),
+                        [new ConstNode("a", ClrTypeTag.String)])),
+                new SelectOp(new([new("Name", new ExprValue(new MemberNode(["Name"])))]))
             ]);
 
         return VerifyResponse(request);
@@ -84,7 +84,7 @@ public class ExecutionTests
         var request = QueryRequest.Create(
             "Employee",
             [
-                new WhereOp(new MemberExpr(["Active"])),
+                new WhereOp(new MemberNode(["Active"])),
                 new CountOp()
             ]);
 
@@ -97,11 +97,11 @@ public class ExecutionTests
         var request = QueryRequest.Create(
             "Employee",
             [
-                new OrderByOp(new MemberExpr(["Name"]), false),
-                new FirstOp(OrDefault: true, new CallExpr(
+                new OrderByOp(new MemberNode(["Name"]), false),
+                new FirstOp(OrDefault: true, new CallNode(
                     KnownFunction.StringStartsWith,
-                    new MemberExpr(["Name"]),
-                    [new ConstExpr("B", ClrTypeTag.String)]))
+                    new MemberNode(["Name"]),
+                    [new ConstNode("B", ClrTypeTag.String)]))
             ]);
 
         return VerifyResponse(request);
@@ -114,8 +114,8 @@ public class ExecutionTests
         var request = QueryRequest.Create(
             "Employee",
             [
-                new OrderByOp(new MemberExpr(["Name"]), false),
-                new SelectOp(new([new("Name", new ExprValue(new MemberExpr(["Name"])))]))
+                new OrderByOp(new MemberNode(["Name"]), false),
+                new SelectOp(new([new("Name", new ExprValue(new MemberNode(["Name"])))]))
             ]);
 
         using var context = TestContext.CreateSeeded();

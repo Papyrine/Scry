@@ -55,7 +55,7 @@ sealed class QueryTranslator
             case "GroupBy":
                 var keyLambda = Lambda(call.Arguments[1]);
                 var key = TranslateExpr(keyLambda.Body, keyLambda.Parameters[0]);
-                groupKey = (key as MemberExpr)?.Path ??
+                groupKey = (key as MemberNode)?.Path ??
                            throw new NotSupportedException("GroupBy key must be a member access.");
                 return new GroupByOp([key]);
 
@@ -67,7 +67,7 @@ sealed class QueryTranslator
         }
     }
 
-    Expr TranslateKey(MethodCallExpression call)
+    Node TranslateKey(MethodCallExpression call)
     {
         var lambda = Lambda(call.Arguments[1]);
         return TranslateExpr(lambda.Body, lambda.Parameters[0]);
@@ -126,7 +126,7 @@ sealed class QueryTranslator
                 } memberKey &&
                 memberKey.Expression == parameter)
             {
-                return new ExprValue(new MemberExpr(groupKey ?? throw new NotSupportedException("No group key in scope.")));
+                return new ExprValue(new MemberNode(groupKey ?? throw new NotSupportedException("No group key in scope.")));
             }
 
             if (expression is MethodCallExpression aggregate)
@@ -140,7 +140,7 @@ sealed class QueryTranslator
         return new ExprValue(TranslateExpr(expression, parameter));
     }
 
-    AggregateExpr TranslateAggregate(MethodCallExpression call)
+    AggregateNode TranslateAggregate(MethodCallExpression call)
     {
         if (call.Method.Name == "Count")
         {
@@ -161,7 +161,7 @@ sealed class QueryTranslator
         return new(function, member);
     }
 
-    Expr TranslateExpr(Expression expression, ParameterExpression root)
+    Node TranslateExpr(Expression expression, ParameterExpression root)
     {
         while (true)
         {
@@ -172,19 +172,19 @@ sealed class QueryTranslator
                     continue;
 
                 case UnaryExpression {NodeType: ExpressionType.Not} not:
-                    return new UnaryExpr(UnaryOp.Not, TranslateExpr(not.Operand, root));
+                    return new UnaryNode(UnaryOp.Not, TranslateExpr(not.Operand, root));
 
                 case UnaryExpression {NodeType: ExpressionType.Negate} negate:
-                    return new UnaryExpr(UnaryOp.Negate, TranslateExpr(negate.Operand, root));
+                    return new UnaryNode(UnaryOp.Negate, TranslateExpr(negate.Operand, root));
 
                 case BinaryExpression binary:
-                    return new BinaryExpr(MapBinary(binary.NodeType), TranslateExpr(binary.Left, root), TranslateExpr(binary.Right, root));
+                    return new BinaryNode(MapBinary(binary.NodeType), TranslateExpr(binary.Left, root), TranslateExpr(binary.Right, root));
 
                 case MemberExpression member when IsDatePart(member, out var function):
-                    return new CallExpr(function, TranslateExpr(member.Expression!, root), []);
+                    return new CallNode(function, TranslateExpr(member.Expression!, root), []);
 
                 case MemberExpression member when IsRooted(member, root):
-                    return new MemberExpr(MemberPath(member));
+                    return new MemberNode(MemberPath(member));
 
                 case MemberExpression member:
                     return ConstantOf(Evaluate(member));
@@ -201,18 +201,18 @@ sealed class QueryTranslator
         }
     }
 
-    Expr TranslateMethod(MethodCallExpression call, ParameterExpression root)
+    Node TranslateMethod(MethodCallExpression call, ParameterExpression root)
     {
         if (call.Method.DeclaringType == typeof(string))
         {
             return call.Method.Name switch
             {
-                "Contains" => new CallExpr(KnownFunction.StringContains, TranslateExpr(call.Object!, root), [TranslateExpr(call.Arguments[0], root)]),
-                "StartsWith" => new CallExpr(KnownFunction.StringStartsWith, TranslateExpr(call.Object!, root), [TranslateExpr(call.Arguments[0], root)]),
-                "EndsWith" => new CallExpr(KnownFunction.StringEndsWith, TranslateExpr(call.Object!, root), [TranslateExpr(call.Arguments[0], root)]),
-                "ToLower" => new CallExpr(KnownFunction.StringToLower, TranslateExpr(call.Object!, root), []),
-                "ToUpper" => new CallExpr(KnownFunction.StringToUpper, TranslateExpr(call.Object!, root), []),
-                "IsNullOrEmpty" => new CallExpr(KnownFunction.StringIsNullOrEmpty, TranslateExpr(call.Arguments[0], root), []),
+                "Contains" => new CallNode(KnownFunction.StringContains, TranslateExpr(call.Object!, root), [TranslateExpr(call.Arguments[0], root)]),
+                "StartsWith" => new CallNode(KnownFunction.StringStartsWith, TranslateExpr(call.Object!, root), [TranslateExpr(call.Arguments[0], root)]),
+                "EndsWith" => new CallNode(KnownFunction.StringEndsWith, TranslateExpr(call.Object!, root), [TranslateExpr(call.Arguments[0], root)]),
+                "ToLower" => new CallNode(KnownFunction.StringToLower, TranslateExpr(call.Object!, root), []),
+                "ToUpper" => new CallNode(KnownFunction.StringToUpper, TranslateExpr(call.Object!, root), []),
+                "IsNullOrEmpty" => new CallNode(KnownFunction.StringIsNullOrEmpty, TranslateExpr(call.Arguments[0], root), []),
                 _ => throw Unsupported(call)
             };
         }
@@ -334,7 +334,7 @@ sealed class QueryTranslator
             _ => throw new NotSupportedException($"Binary operator '{type}' is not supported.")
         };
 
-    static ConstExpr ConstantOf(object? value)
+    static ConstNode ConstantOf(object? value)
     {
         var culture = CultureInfo.InvariantCulture;
         return value switch

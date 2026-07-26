@@ -80,17 +80,17 @@ public abstract record QueryOp;
 
 | `$type` | Payload | Meaning |
 | --- | --- | --- |
-| `where` | `predicate: Expr` | Filter. |
-| `orderBy` | `key: Expr`, `descending: bool` | Primary ordering. |
-| `thenBy` | `key: Expr`, `descending: bool` | Secondary ordering. Must follow `orderBy`. |
+| `where` | `predicate: Node` | Filter. |
+| `orderBy` | `key: Node`, `descending: bool` | Primary ordering. |
+| `thenBy` | `key: Node`, `descending: bool` | Secondary ordering. Must follow `orderBy`. |
 | `skip` | `count: int` | Skip elements. |
 | `take` | `count: int` | Take at most `count`, capped by `MaxPageSize`. |
-| `groupBy` | `keys: Expr[]` | Group. Exactly one key is supported. |
+| `groupBy` | `keys: Node[]` | Group. Exactly one key is supported. |
 | `select` | `projection: Projection` | Project to the requested shape. |
 | `count` | — | Terminal, scalar. |
-| `any` | `predicate: Expr?` | Terminal, scalar. |
-| `first` | `orDefault: bool`, `predicate: Expr?` | Terminal, single. |
-| `single` | `orDefault: bool`, `predicate: Expr?` | Terminal, single. |
+| `any` | `predicate: Node?` | Terminal, scalar. |
+| `first` | `orDefault: bool`, `predicate: Node?` | Terminal, single. |
+| `single` | `orDefault: bool`, `predicate: Node?` | Terminal, single. |
 
 At most one terminal, and nothing may follow it.
 
@@ -100,15 +100,15 @@ At most one terminal, and nothing may follow it.
 <a id='snippet-wireExpressions'></a>
 ```cs
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
-[JsonDerivedType(typeof(MemberExpr), "member")]
-[JsonDerivedType(typeof(ConstExpr), "const")]
-[JsonDerivedType(typeof(BinaryExpr), "binary")]
-[JsonDerivedType(typeof(UnaryExpr), "unary")]
-[JsonDerivedType(typeof(CallExpr), "call")]
-[JsonDerivedType(typeof(AggregateExpr), "aggregate")]
-public abstract record Expr;
+[JsonDerivedType(typeof(MemberNode), "member")]
+[JsonDerivedType(typeof(ConstNode), "const")]
+[JsonDerivedType(typeof(BinaryNode), "binary")]
+[JsonDerivedType(typeof(UnaryNode), "unary")]
+[JsonDerivedType(typeof(CallNode), "call")]
+[JsonDerivedType(typeof(AggregateNode), "aggregate")]
+public abstract record Node;
 ```
-<sup><a href='/src/Scry.Wire/Expressions/Expr.cs#L7-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ### `member`
@@ -286,7 +286,7 @@ public abstract record ProjectionValue;
 
 | `$type` | Payload | Produces |
 | --- | --- | --- |
-| `expr` | `expression: Expr` | A scalar leaf, or an aggregate in a grouped select. |
+| `expr` | `expression: Node` | A scalar leaf, or an aggregate in a grouped select. |
 | `nested` | `path: string[]`, `projection: Projection` | A nested JSON object built from a navigation. |
 
 A projection must have at least one member. Nested projections are not allowed in a grouped select,

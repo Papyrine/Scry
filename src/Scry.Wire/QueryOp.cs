@@ -22,15 +22,15 @@ public abstract record QueryOp;
 // end-snippet
 
 /// <summary>Filters the sequence by a predicate.</summary>
-public sealed record WhereOp(Expr Predicate) :
+public sealed record WhereOp(Node Predicate) :
     QueryOp;
 
 /// <summary>Orders the sequence by a key. Must be the first ordering operator.</summary>
-public sealed record OrderByOp(Expr Key, bool Descending) :
+public sealed record OrderByOp(Node Key, bool Descending) :
     QueryOp;
 
 /// <summary>Adds a secondary ordering. Only valid after an <see cref="OrderByOp"/>.</summary>
-public sealed record ThenByOp(Expr Key, bool Descending) :
+public sealed record ThenByOp(Node Key, bool Descending) :
     QueryOp;
 
 /// <summary>Skips a number of elements.</summary>
@@ -47,7 +47,7 @@ public sealed record SelectOp(Projection Projection) :
 
 /// <summary>Groups the sequence by one or more keys. A following <see cref="SelectOp"/> may use
 /// aggregates and the group key.</summary>
-public sealed record GroupByOp(IReadOnlyList<Expr> Keys) :
+public sealed record GroupByOp(IReadOnlyList<Node> Keys) :
     QueryOp;
 
 /// <summary>Terminal: returns the element count as a scalar.</summary>
@@ -55,13 +55,13 @@ public sealed record CountOp :
     QueryOp;
 
 /// <summary>Terminal: returns whether any element matches the optional predicate.</summary>
-public sealed record AnyOp(Expr? Predicate) :
+public sealed record AnyOp(Node? Predicate) :
     QueryOp;
 
 /// <summary>Terminal: returns the first element (or default) optionally matching a predicate.</summary>
-public sealed record FirstOp(bool OrDefault, Expr? Predicate) :
+public sealed record FirstOp(bool OrDefault, Node? Predicate) :
     QueryOp;
 
 /// <summary>Terminal: returns the single element (or default) optionally matching a predicate.</summary>
-public sealed record SingleOp(bool OrDefault, Expr? Predicate) :
+public sealed record SingleOp(bool OrDefault, Node? Predicate) :
     QueryOp;
