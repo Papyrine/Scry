@@ -29,7 +29,7 @@ sealed class ScrySchema
                 $"{_.ClrType.Name}QueryModel",
                 _.Members.Values
                     .OrderBy(_ => _.Name, StringComparer.Ordinal)
-                    .Select(member => DescribeMember(member, enums))
+                    .Select(_ => DescribeMember(_, enums))
                     .ToList()))
             .ToList();
 
