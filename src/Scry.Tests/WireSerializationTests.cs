@@ -92,6 +92,24 @@ public class WireSerializationTests
     public void MalformedJsonFailsClosed() =>
         Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest("{ not json"));
 
+    [Test]
+    public void NewerResponseVersionFailsClosed()
+    {
+        var json = $$"""{"version":{{WireFormat.Version + 1}},"kind":"Scalar","payload":1}""";
+
+        var exception = Assert.Throws<ScryWireException>(() => ScryJson.DeserializeResponse(json));
+        Assert.That(exception!.Message, Does.Contain($"wire version {WireFormat.Version + 1}"));
+    }
+
+    [Test]
+    public void CurrentResponseVersionIsAccepted()
+    {
+        var json = ScryJson.Serialize(QueryResponse.Create(ResultKind.Scalar, JsonSerializer.SerializeToElement(1)));
+
+        var response = ScryJson.DeserializeResponse(json);
+        Assert.That(response.Version, Is.EqualTo(WireFormat.Version));
+    }
+
     static Task VerifyRoundTrip(QueryRequest request)
     {
         var json = ScryJson.Serialize(request);
