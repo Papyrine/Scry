@@ -20,6 +20,64 @@ Add or extend a query by writing LINQ in the client — no new endpoint, no new 
 server stays in full control of which types, properties, shapes, and rows can ever be returned.
 
 
+## How it works
+
+At **build time** the source generator reads the model assembly by path and emits strongly-typed
+client query types from the allow-listed surface only. At **run time** the client's LINQ is captured
+and serialized to a restricted AST, and the server re-validates that AST against the allow-list before
+it ever touches EF Core. The client never references the model, and never executes the query.
+
+```mermaid
+flowchart TB
+    subgraph model["Server model"]
+        EF["EF Core model<br/>+ Scry.Annotations<br/>([Queryable], [QueryIgnore], …)"]
+        DLL["Model DLL"]
+        EF --> DLL
+    end
+
+    subgraph client["Client (no EF dependency)"]
+        direction TB
+        GEN["Source generator<br/>reads DLL by path via<br/>System.Reflection.Metadata"]
+        GENTYPES["Generated query types<br/>(Scry.Generated)"]
+        LINQ["UI writes LINQ"]
+        CAPTURE["QueryProvider<br/>captures expression tree<br/>(never executed here)"]
+        TRANS["QueryTranslator<br/>→ restricted query AST"]
+        GEN --> GENTYPES
+        GENTYPES --> LINQ
+        LINQ --> CAPTURE
+        CAPTURE --> TRANS
+    end
+
+    subgraph wire["Scry.Wire"]
+        REQ["QueryRequest AST<br/>(closed operator + node set)"]
+    end
+
+    subgraph server["Server"]
+        direction TB
+        SCHEMA["Schema.Build<br/>allow-list from the real model"]
+        VALID["QueryValidator<br/>authoritative gate<br/>(runs to completion first)"]
+        BUILD["ExpressionBuilder<br/>rebind to real EF types"]
+        EXEC["QueryExecutor + ProjectionPlan<br/>execute + shape rows"]
+        DB[("EF Core → database")]
+        SCHEMA -.-> VALID
+        VALID --> BUILD
+        BUILD --> EXEC
+        EXEC --> DB
+    end
+
+    DLL -. "by path, never referenced" .-> GEN
+    EF -. reflected at startup .-> SCHEMA
+    TRANS -- "serialize + POST" --> REQ
+    REQ -- deserialize --> VALID
+    DB -- projected rows --> RESP["QueryResponse"]
+    RESP -- rows --> LINQ
+```
+
+The build-time path (dotted, model → generator) and the runtime request path (solid) never share a
+reference: the only things that cross the boundary are the model DLL *by path* and the serialized wire
+AST. See [docs/security.md](docs/security.md) for the full threat model.
+
+
 ## Packages
 
 | Package | Purpose |
