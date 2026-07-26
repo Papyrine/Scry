@@ -391,7 +391,27 @@ The pipeline is validated as a whole. In order:
 3. At most one `Select`.
 4. At most one terminal, and nothing after it.
 
-`ThenBy` without a preceding `OrderBy` is rejected. So is any operator after a terminal.
+The legal operator orderings form a small state machine — every absent edge is an illegal ordering:<!-- include: pipeline-order. path: /docs/includes/pipeline-order.include.md -->
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Source
+    Source --> Restricting: Where / OrderBy / ThenBy / Skip / Take
+    Restricting --> Restricting: (any order, any number)
+    Source --> Grouped: GroupBy
+    Restricting --> Grouped: GroupBy
+    Source --> Projected: Select
+    Restricting --> Projected: Select
+    Grouped --> Projected: Select (mandatory)
+    Source --> [*]: terminal
+    Restricting --> [*]: terminal
+    Projected --> [*]: terminal
+```
+
+Nothing filters, orders, skips, or takes after `GroupBy`; a `GroupBy` cannot reach a terminal without
+a `Select` in between; and there is no second `GroupBy` or `Select`. `ThenBy` without a preceding
+`OrderBy` is rejected, and nothing may follow a terminal.<!-- endInclude -->
 
 ## Errors
 

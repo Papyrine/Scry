@@ -359,6 +359,33 @@ var introspection = processor.Describe();
 
 ## How it works
 
+Everything except two HTTP calls happens **in the browser**: the schema is fetched once, the model is
+synthesized and compiled with Roslyn locally, and only an already-translated wire request crosses to
+the server — the same endpoint any client POSTs to.
+
+```mermaid
+sequenceDiagram
+    box Browser (Blazor WASM)
+        participant UI as Explorer UI
+        participant Synth as ModelSynthesizer
+        participant Roslyn as RoslynWorkspace
+        participant Exec as SnippetExecutor
+    end
+    participant Server
+
+    UI->>Server: GET {Route}/introspect
+    Server-->>UI: schema contract
+    UI->>Synth: build query models from contract
+    Synth->>Roslyn: same C# the generator emits
+    Note over Roslyn: compiles in-browser —<br/>real IntelliSense + diagnostics
+    UI->>Exec: user's LINQ snippet
+    Note over Exec: compile, run vs capturing client,<br/>ToScryRequest (production translation)
+    Exec-->>UI: serialized wire request
+    UI->>Server: POST {QueryEndpoint}
+    Note over Server: validated like any other request
+    Server-->>UI: rows + raw response
+```
+
 1. On load the UI fetches `{Route}/introspect`.
 2. `ModelSynthesizer` turns that contract into the same C# the design-time generator would emit — the
    enums, one query model per type, and a `ScryQuery` facade.

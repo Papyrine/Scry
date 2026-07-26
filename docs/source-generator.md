@@ -9,9 +9,7 @@ The generator reads the server model's **built DLL from disk** using `System.Ref
 The assembly is never referenced by the client project, never loaded into the compiler, and never
 executed. Only the allow-listed surface is extracted from its metadata tables.
 
-That is what lets a Blazor WebAssembly client be strongly typed against a server-side EF Core model
-without dragging EF Core, connection strings, or the non-allow-listed members of the model into the
-client's dependency graph or its shipped output.
+That is what lets a Blazor WebAssembly client be strongly typed against a server-side EF Core model without dragging EF Core, connection strings, or the non-allow-listed members of the model into the client's dependency graph or its shipped output.
 
 ## Wiring
 
@@ -79,6 +77,21 @@ contents change, and not otherwise.
 The extracted model is then compared structurally (via `EquatableArray<T>`), so a change to the model
 assembly that leaves the *queryable surface* untouched — an unrelated method, a private field — does
 not trigger regeneration downstream.
+
+Two gates therefore stand between a model build and a regenerated client — a content stamp and a
+structural comparison — and only a change that clears both re-emits code:
+
+```mermaid
+flowchart TD
+    A[Model project builds first<br/>ReferenceOutputAssembly=false] --> B[ComputeScryStamp<br/>hashes the dll, SHA-256]
+    B --> C[path + stamp<br/>= one Roslyn pipeline input]
+    C --> D{Stamp changed<br/>since last build?}
+    D -- No --> Z[Serve cached output<br/>generator does not re-run]
+    D -- Yes --> E[Re-read metadata,<br/>extract queryable surface]
+    E --> F{Queryable surface changed?<br/>EquatableArray compare}
+    F -- No --> Z
+    F -- Yes --> G[Regenerate client code]
+```
 
 ### Project references instead of the package
 

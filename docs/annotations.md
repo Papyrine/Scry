@@ -291,6 +291,18 @@ A member of an opted-in type is exposed when **all** of the following hold:
 
 Everything else is silently excluded — no error, it simply does not appear.
 
+```mermaid
+flowchart TD
+    M[Member of an opted-in type] --> Q1{Property with a public<br/>instance getter and<br/>no index parameters?}
+    Q1 -- No --> X[Silently excluded]
+    Q1 -- Yes --> Q2{Carries QueryIgnore?}
+    Q2 -- Yes --> X
+    Q2 -- No --> Q3{Member type?}
+    Q3 -- Scalar --> S[Exposed as scalar<br/>predicates, ordering, keys,<br/>aggregates, projection leaves]
+    Q3 -- Reference nav to<br/>an opted-in type --> N[Exposed as navigation<br/>traversable in a member path]
+    Q3 -- Collection nav, or a type<br/>that is not opted in --> X
+```
+
 ### Scalars
 
 `bool`, `char`, `sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `float`,

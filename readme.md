@@ -1,4 +1,4 @@
-# Scry
+# <img src="/src/icon.png" height="30px"> Scry
 
 Type-safe, serializable LINQ from a client to a server-side EF Core model.
 
@@ -22,30 +22,47 @@ server stays in full control of which types, properties, shapes, and rows can ev
 
 ## How it works
 
-At **build time** the source generator reads the model assembly by path and emits strongly-typed
-client query types from the allow-listed surface only. At **run time** the client's LINQ is captured
-and serialized to a restricted AST, and the server re-validates that AST against the allow-list before
-it ever touches EF Core. The client never references the model, and never executes the query.
+The build-time and runtime flows are deliberately independent. Nothing is referenced across the
+client/server boundary: the only things that cross it are the model dll *by path* (build time) and the
+serialized wire AST (run time).
+
+
+### Build time — generating the client
+
+The source generator reads the model assembly *by path* and emits strongly-typed client query types
+from the allow-listed surface only. The assembly is never referenced, loaded, or executed.
 
 ```mermaid
 flowchart TB
     subgraph model["Server model"]
         EF["EF Core model<br/>+ Scry.Annotations<br/>([Queryable], [QueryIgnore], …)"]
-        DLL["Model DLL"]
+        DLL["Model dll"]
         EF --> DLL
     end
 
     subgraph client["Client (no EF dependency)"]
-        direction TB
-        GEN["Source generator<br/>reads DLL by path via<br/>System.Reflection.Metadata"]
+        GEN["Source generator<br/>reads dll via<br/>System.Reflection.Metadata"]
         GENTYPES["Generated query types<br/>(Scry.Generated)"]
-        LINQ["UI writes LINQ"]
+        GEN --> GENTYPES
+    end
+
+    DLL -. "by path, never referenced" .-> GEN
+```
+
+
+### Run time — a query round-trip
+
+The client's LINQ is captured (never executed client-side) and serialized to a restricted AST. The
+server re-validates that AST against the allow-list — to completion, before anything is rebound — then
+rebinds to the real EF types, executes, and returns only the projected rows.
+
+```mermaid
+flowchart TB
+    subgraph client["Client"]
+        LINQ["UI writes linq<br/>against generated types"]
         CAPTURE["QueryProvider<br/>captures expression tree<br/>(never executed here)"]
         TRANS["QueryTranslator<br/>→ restricted query AST"]
-        GEN --> GENTYPES
-        GENTYPES --> LINQ
-        LINQ --> CAPTURE
-        CAPTURE --> TRANS
+        LINQ --> CAPTURE --> TRANS
     end
 
     subgraph wire["Scry.Wire"]
@@ -53,29 +70,23 @@ flowchart TB
     end
 
     subgraph server["Server"]
-        direction TB
         SCHEMA["Schema.Build<br/>allow-list from the real model"]
         VALID["QueryValidator<br/>authoritative gate<br/>(runs to completion first)"]
         BUILD["ExpressionBuilder<br/>rebind to real EF types"]
         EXEC["QueryExecutor + ProjectionPlan<br/>execute + shape rows"]
-        DB[("EF Core → database")]
-        SCHEMA -.-> VALID
-        VALID --> BUILD
-        BUILD --> EXEC
-        EXEC --> DB
+        DB[("EF Core → DB")]
+        RESP["QueryResponse"]
+        SCHEMA -. "allow-list" .-> VALID
+        VALID --> BUILD --> EXEC --> DB
+        DB -- "projected rows" --> RESP
     end
 
-    DLL -. "by path, never referenced" .-> GEN
-    EF -. reflected at startup .-> SCHEMA
     TRANS -- "serialize + POST" --> REQ
-    REQ -- deserialize --> VALID
-    DB -- projected rows --> RESP["QueryResponse"]
-    RESP -- rows --> LINQ
+    REQ -- "deserialize" --> VALID
+    RESP -- "rows" --> LINQ
 ```
 
-The build-time path (dotted, model → generator) and the runtime request path (solid) never share a
-reference: the only things that cross the boundary are the model DLL *by path* and the serialized wire
-AST. See [docs/security.md](docs/security.md) for the full threat model.
+See [docs/security.md](docs/security.md) for the full threat model.
 
 
 ## Packages
