@@ -11,7 +11,7 @@ public class IndexPageTests
     {
         var server = await SharedScryServer.InstanceAsync();
 
-        using var context = new BunitContext();
+        await using var context = new BunitContext();
         context.Services.AddSingleton(server.CreateScryClient());
         context.Services.AddSingleton<ScryQuery>();
 
@@ -26,7 +26,7 @@ public class IndexPageTests
     {
         var server = await SharedScryServer.InstanceAsync();
 
-        using var context = new BunitContext();
+        await using var context = new BunitContext();
         // Point the client at an endpoint that does not exist so the query fails and the page
         // takes its error branch.
         context.Services.AddSingleton(ScryClient.ForHttp(server.CreateClient(), "/api/missing"));
