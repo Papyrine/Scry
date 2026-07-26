@@ -1,4 +1,4 @@
 ﻿{
   Instance: {},
-  NodeCount: 20
+  NodeCount: 24
 }

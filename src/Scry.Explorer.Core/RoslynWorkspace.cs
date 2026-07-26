@@ -1,15 +1,5 @@
 namespace Scry.Explorer.Core;
 
-/// <summary>A completion offered by Roslyn: its label, Roslyn tag (kind), and the span it replaces.</summary>
-public sealed record ScryCompletion(string Label, string Kind, int ReplaceStart, int ReplaceEnd);
-
-/// <summary>A Roslyn diagnostic within the user's code: message, span (in editor coordinates), severity.</summary>
-public sealed record ScryDiagnostic(string Message, int Start, int End, bool IsError);
-
-/// <summary>Hover (QuickInfo) text for the symbol at a position, plus the span it covers (editor coords).</summary>
-public sealed record ScryHover(string Text, int Start, int End);
-
-
 /// <summary>
 /// An in-browser Roslyn workspace over the synthesized query models. The user's query expression is
 /// wrapped in a method body so the C# <see cref="CompletionService"/> can offer members against the
@@ -36,7 +26,7 @@ public sealed class RoslynWorkspace
                 return 
         """;
 
-    const string Footer =
+    const string footer =
         """
         ;
             }
@@ -73,17 +63,17 @@ public sealed class RoslynWorkspace
 
         var project = workspace.AddProject(projectInfo);
         workspace.AddDocument(project.Id, "Generated.cs", SourceText.From(generatedSource));
-        var editor = workspace.AddDocument(project.Id, "Editor.cs", SourceText.From(header + Footer));
+        var editor = workspace.AddDocument(project.Id, "Editor.cs", SourceText.From(header + footer));
 
         return new(workspace, editor.Id);
     }
 
     /// <summary>Returns the completions offered at <paramref name="caret"/> within <paramref name="code"/>.</summary>
-    public async Task<IReadOnlyList<ScryCompletion>> CompleteAsync(string code, int caret)
+    public async Task<List<ScryCompletion>> CompleteAsync(string code, int caret)
     {
         var solution = workspace.CurrentSolution.WithDocumentText(
             editorDocumentId,
-            SourceText.From(header + code + Footer));
+            SourceText.From(header + code + footer));
 
         var document = solution.GetDocument(editorDocumentId)!;
         var service = CompletionService.GetService(document);
@@ -96,7 +86,8 @@ public sealed class RoslynWorkspace
 
         // The range to replace is the identifier currently being typed (empty right after a '.').
         var start = caret;
-        while (start > 0 && (char.IsLetterOrDigit(code[start - 1]) || code[start - 1] == '_'))
+        while (start > 0 &&
+               (char.IsLetterOrDigit(code[start - 1]) || code[start - 1] == '_'))
         {
             start--;
         }
@@ -115,7 +106,7 @@ public sealed class RoslynWorkspace
 
         var solution = workspace.CurrentSolution.WithDocumentText(
             editorDocumentId,
-            SourceText.From(header + code + Footer));
+            SourceText.From(header + code + footer));
 
         var document = solution.GetDocument(editorDocumentId)!;
         var model = await document.GetSemanticModelAsync();
@@ -160,7 +151,7 @@ public sealed class RoslynWorkspace
     {
         var solution = workspace.CurrentSolution.WithDocumentText(
             editorDocumentId,
-            SourceText.From(header + code + Footer));
+            SourceText.From(header + code + footer));
 
         var document = solution.GetDocument(editorDocumentId)!;
         var root = await document.GetSyntaxRootAsync();
