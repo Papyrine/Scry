@@ -490,15 +490,35 @@ public class UiSnapshotTests
     {
         var dir = Directory.CreateTempSubdirectory("scry_walk_").FullName;
         var log = new List<string>();
-        var page = await browser.NewPageAsync(new() { ViewportSize = new() { Width = 1600, Height = 1000 } });
+        var page = await browser.NewPageAsync(
+            new()
+            {
+                ViewportSize = new()
+                {
+                    Width = 1600,
+                    Height = 1000
+                }
+            });
         var consoleErrors = new List<string>();
-        page.Console += (_, m) => { if (m.Type == "error") consoleErrors.Add(m.Text); };
+        page.Console +=
+            (_, m) =>
+            {
+                if (m.Type == "error")
+                {
+                    consoleErrors.Add(m.Text);
+                }
+            };
 
         await page.GotoAsync($"{baseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
         log.Add("✓ editor booted, schema loaded");
-        await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "1-loaded.png"), FullPage = true });
+        await page.ScreenshotAsync(
+            new()
+            {
+                Path = Path.Combine(dir, "1-loaded.png"),
+                FullPage = true
+            });
 
         // Inline IntelliSense dropdown.
         await page.EvaluateAsync(
@@ -512,7 +532,11 @@ public class UiSnapshotTests
             }
             """);
         await page.WaitForSelectorAsync(".suggest-widget .monaco-list-row", 20);
-        await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "2-intellisense.png") });
+        await page.ScreenshotAsync(
+            new()
+            {
+                Path = Path.Combine(dir, "2-intellisense.png")
+            });
         var suggest = await page.Locator(".suggest-widget .monaco-list-row").AllInnerTextsAsync();
         log.Add($"✓ IntelliSense dropdown: {string.Join(", ", suggest)}");
         await page.Keyboard.PressAsync("Escape");
@@ -522,7 +546,12 @@ public class UiSnapshotTests
             "Query.Employee.Where(_ => _.Active).OrderBy(_ => _.Name).Select(_ => new { _.Name, _.Status })");
         await page.Locator("[data-testid='run']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='result-table']", 60);
-        await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "3-run.png"), FullPage = true });
+        await page.ScreenshotAsync(
+            new()
+            {
+                Path = Path.Combine(dir, "3-run.png"),
+                FullPage = true
+            });
         var wire = await page.Locator("[data-testid='wire']").InnerTextAsync();
         var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
         log.Add($"✓ run: wireHasEmployee={wire.Contains("Employee")}, table=[{table.Replace("\n", " ").Trim()}]");
@@ -531,7 +560,12 @@ public class UiSnapshotTests
         await page.SetEditorValueAsync("Query.Employee.Where(_ => _.Active).CountAsync()");
         await page.Locator("[data-testid='run']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='result-scalar']", 60);
-        await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "3b-count.png"), FullPage = true });
+        await page.ScreenshotAsync(
+            new()
+            {
+                Path = Path.Combine(dir, "3b-count.png"),
+                FullPage = true
+            });
         var countWire = await page.Locator("[data-testid='wire']").InnerTextAsync();
         var countScalar = await page.Locator("[data-testid='result-scalar']").InnerTextAsync();
         log.Add($"✓ count terminal: wireHasCount={countWire.Contains("\"count\"")}, scalar={countScalar.Trim()}");
@@ -540,13 +574,24 @@ public class UiSnapshotTests
         await page.Locator("[data-testid='theme-toggle']").ClickAsync();
         await page.Locator("[data-testid='theme-toggle']").ClickAsync();
         await page.WaitForSelectorAsync(".monaco-editor.vs-dark", 10);
-        await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "5-dark.png"), FullPage = true });
+        await page.ScreenshotAsync(
+            new()
+            {
+                Path = Path.Combine(dir, "5-dark.png"),
+                FullPage = true
+            });
         var dataTheme = await page.EvaluateAsync<string>("() => document.documentElement.dataset.theme");
         log.Add($"✓ dark mode: dataTheme={dataTheme}");
 
         // Diagnostics.
         await page.SetEditorValueAsync("Query.Employee.Where(_ => _.Nope)");
-        await page.WaitForFunctionAsync("() => monaco.editor.getModelMarkers({}).length > 0", null, new() { Timeout = 20_000 });
+        await page.WaitForFunctionAsync(
+            "() => monaco.editor.getModelMarkers({}).length > 0",
+            null,
+            new()
+            {
+                Timeout = 20_000
+            });
         var markerMsg = await page.EvaluateAsync<string>(
             "() => monaco.editor.getModelMarkers({}).map(m => m.message).join(' | ')");
         log.Add($"✓ diagnostics: {markerMsg}");
@@ -575,9 +620,9 @@ public class UiSnapshotTests
             }
             """);
         await page.Mouse.MoveAsync(pt[0] - 80, pt[1]);
-        await page.Mouse.MoveAsync(pt[0], pt[1], new() { Steps = 10 });
+        await page.Mouse.MoveAsync(pt[0], pt[1], new() {Steps = 10});
         await Task.Delay(1800);
-        await page.ScreenshotAsync(new() { Path = Path.Combine(dir, "4-hover.png") });
+        await page.ScreenshotAsync(new() {Path = Path.Combine(dir, "4-hover.png")});
         var hoverCount = await page.Locator(".monaco-hover:not(.hidden)").CountAsync();
         // A fully laid-out editor has several .monaco-hover widgets (glyph-margin + content), so the
         // locator is not strict-safe — read the first one's text purely for the diagnostic log.
