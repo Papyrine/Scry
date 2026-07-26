@@ -107,8 +107,7 @@ sealed class Schema
     {
         if (options.ContextType is not { } contextType)
         {
-            throw new Exception(
-                "No model configured. Call options.UseModel<TContext>() in AddScry.");
+            throw new("No model configured. Call options.UseModel<TContext>() in AddScry.");
         }
 
         var schema = new Schema();
@@ -136,7 +135,7 @@ sealed class Schema
         {
             if (schema.sources.ContainsKey(name))
             {
-                throw new Exception($"Duplicate queryable source name '{name}'.");
+                throw new($"Duplicate queryable source name '{name}'.");
             }
 
             schema.sources[name] = new(name, type, kind, policy, BuildResolver(type, kind, options));
@@ -267,8 +266,7 @@ sealed class Schema
                 return (_, services) => factory(services);
             }
 
-            throw new Exception(
-                $"POCO source '{type.Name}' has no data registered. Call options.AddPocoSource<{type.Name}>(...).");
+            throw new($"POCO source '{type.Name}' has no data registered. Call options.AddPocoSource<{type.Name}>(...).");
         }
 
         var typedSet = setMethod.MakeGenericMethod(type);

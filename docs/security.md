@@ -142,8 +142,10 @@ concatenated into SQL.
 
 ### 5. Row policies
 
-An `IReturnablePolicy<T>` is applied to the source before any client operator, so client filters can
-only narrow an already-authorized set. See [Row policies](policies.md).
+An `IReturnablePolicy<T>` is applied to the source before any client operator, so client filters can<!-- include: policy-ordering. path: /docs/includes/policy-ordering.include.md -->
+only narrow an already-authorized set.<!-- endInclude -->
+
+See [Row policies](policies.md).
 
 ### 6. Resource limits
 
@@ -172,8 +174,10 @@ pipeline, how deeply nested an expression.
 
 Validation and wire failures return `400` with a specific message — the message names the rejected
 property or rule, which is not a disclosure beyond what the allow-list already implies. Everything
-else returns `500` with the fixed body `{"error":"Query execution failed."}`. Stack traces, SQL, and
-EF Core messages are never returned.
+else returns `500`.
+
+The `500` body is fixed — `{"error":"Query execution failed."}` — and stack traces, SQL, and EF Core<!-- include: error-500-body. path: /docs/includes/error-500-body.include.md -->
+messages are never returned to the client.<!-- endInclude -->
 
 ## End to end
 

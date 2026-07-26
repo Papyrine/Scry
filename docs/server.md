@@ -107,8 +107,8 @@ options.AddPocoSource<Holiday>(services =>
     services.GetRequiredService<IHolidayFeed>().Current());
 ```
 
-The sequence is wrapped with `AsQueryable()`, so the pipeline runs in memory over LINQ to Objects
-with the same validation, shaping, and limits as a database source.
+The registered sequence is wrapped with `AsQueryable()`, so the pipeline runs in memory over LINQ to<!-- include: poco-in-memory. path: /docs/includes/poco-in-memory.include.md -->
+Objects with the same validation, shaping, and limits as a database source.<!-- endInclude -->
 
 ## Row policies
 
@@ -116,9 +116,10 @@ with the same validation, shaping, and limits as a database source.
 options.AddPolicy<Employee, TenantPolicy>();
 ```
 
-Applies an `IReturnablePolicy<T>` to a source before any client operator, so client filters can only
-narrow an already-authorized set. Overrides `[ReturnableWith]` on the same type. See
-[Row policies](policies.md).
+An `IReturnablePolicy<T>` is applied to the source before any client operator, so client filters can<!-- include: policy-ordering. path: /docs/includes/policy-ordering.include.md -->
+only narrow an already-authorized set.<!-- endInclude -->
+
+It overrides `[ReturnableWith]` on the same type. See [Row policies](policies.md).
 
 ## Hosting without the HTTP endpoint
 
@@ -202,8 +203,10 @@ The endpoint maps failures deliberately:
 | Allow-list or limit violation (`ScryValidationException`) | `400` | `{"error":"..."}` |
 | Anything else | `500` | `{"error":"Query execution failed."}` |
 
-The `500` message is fixed. Internal details — stack traces, SQL, EF messages — are never returned to
-the client. Log them with your normal exception logging.
+The `500` body is fixed — `{"error":"Query execution failed."}` — and stack traces, SQL, and EF Core<!-- include: error-500-body. path: /docs/includes/error-500-body.include.md -->
+messages are never returned to the client.<!-- endInclude -->
+
+Log them with your normal exception logging.
 
 On the client, a non-success status becomes a `ScryRequestException` carrying `StatusCode` and the
 raw `Body`.

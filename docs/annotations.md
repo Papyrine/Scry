@@ -236,8 +236,8 @@ builder.Services
 <sup><a href='/samples/Sample.Server/Program.cs#L13-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-The registered sequence is turned into an `IQueryable` with `AsQueryable()`, so the pipeline runs
-in-memory over LINQ to Objects, applying the same validation and shaping as a database source.
+The registered sequence is wrapped with `AsQueryable()`, so the pipeline runs in memory over LINQ to<!-- include: poco-in-memory. path: /docs/includes/poco-in-memory.include.md -->
+Objects with the same validation, shaping, and limits as a database source.<!-- endInclude -->
 
 Registration is **mandatory**. `AddScry` throws at startup if a `[QueryablePoco]` type has no
 registered source:
