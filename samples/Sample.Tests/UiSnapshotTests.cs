@@ -622,12 +622,25 @@ public class UiSnapshotTests
         await page.Mouse.MoveAsync(pt[0] - 80, pt[1]);
         await page.Mouse.MoveAsync(pt[0], pt[1], new() {Steps = 10});
         await Task.Delay(1800);
-        await page.ScreenshotAsync(new() {Path = Path.Combine(dir, "4-hover.png")});
+        await page.ScreenshotAsync(
+            new()
+            {
+                Path = Path.Combine(dir, "4-hover.png")
+            });
         var hoverCount = await page.Locator(".monaco-hover:not(.hidden)").CountAsync();
         // A fully laid-out editor has several .monaco-hover widgets (glyph-margin + content), so the
         // locator is not strict-safe — read the first one's text purely for the diagnostic log.
         var hoverWidgets = page.Locator(".monaco-hover");
-        var hoverText = await hoverWidgets.CountAsync() > 0 ? await hoverWidgets.First.InnerTextAsync() : "(no widget)";
+        string hoverText;
+        if (await hoverWidgets.CountAsync() > 0)
+        {
+            hoverText = await hoverWidgets.First.InnerTextAsync();
+        }
+        else
+        {
+            hoverText = "(no widget)";
+        }
+
         log.Add($"{(hoverCount > 0 ? "✓" : "✗")} hover: visible={hoverCount}, text=[{hoverText.Replace('\n', ' ').Trim()}]");
 
         log.Add($"console errors: {(consoleErrors.Count == 0 ? "none" : string.Join(" || ", consoleErrors))}");
@@ -654,7 +667,13 @@ public class UiSnapshotTests
 
         // 'Nope' is not a member of the Employee model → a diagnostic marker should appear.
         await page.SetEditorValueAsync("Query.Employee.Where(_ => _.Nope)");
-        await page.WaitForFunctionAsync("() => monaco.editor.getModelMarkers({}).length > 0", null, new() { Timeout = 30_000 });
+        await page.WaitForFunctionAsync(
+            "() => monaco.editor.getModelMarkers({}).length > 0",
+            null,
+            new()
+            {
+                Timeout = 30_000
+            });
 
         var count = await page.EvaluateAsync<int>("() => monaco.editor.getModelMarkers({}).length");
         Assert.That(count, Is.GreaterThan(0));
