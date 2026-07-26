@@ -1,5 +1,3 @@
-
-
 // Launches the real Sample.Server (the same DLL `dotnet run` would execute) and drives it with a
 // headless Chromium browser, snapshotting the live WebAssembly UI as HTML + a screenshot.
 // Categorised "Browser" so CI can opt out (screenshots are environment sensitive, and the browser
