@@ -75,7 +75,7 @@ CLR type is likely to be renamed.
 [JsonDerivedType(typeof(SingleOp), "single")]
 public abstract record QueryOp;
 ```
-<sup><a href='/src/Scry.Wire/QueryOp.cs#L10-L24' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/QueryOp.cs#L8-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 | `$type` | Payload | Meaning |
@@ -108,7 +108,7 @@ At most one terminal, and nothing may follow it.
 [JsonDerivedType(typeof(AggregateExpr), "aggregate")]
 public abstract record Expr;
 ```
-<sup><a href='/src/Scry.Wire/Expr.cs#L9-L18' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Expressions/Expr.cs#L7-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ### `member`
@@ -281,7 +281,7 @@ that follows a `groupBy`.
 [JsonDerivedType(typeof(NestedValue), "nested")]
 public abstract record ProjectionValue;
 ```
-<sup><a href='/src/Scry.Wire/Projection.cs#L12-L18' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireProjectionValues' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Projection.cs#L10-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireProjectionValues' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 | `$type` | Payload | Produces |

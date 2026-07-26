@@ -135,7 +135,8 @@ protected override void OnModelCreating(ModelBuilder modelBuilder) =>
 <!-- snippet: serverRegistration -->
 <a id='snippet-serverRegistration'></a>
 ```cs
-builder.Services.AddScry<SampleContext>(
+builder.Services
+    .AddScry<SampleContext>(
     _ =>
     {
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
@@ -144,7 +145,7 @@ builder.Services.AddScry<SampleContext>(
         _.MaxPageSize = 200;
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L8-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L13-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Holiday` has no table, so its data is registered explicitly — see
@@ -155,7 +156,7 @@ builder.Services.AddScry<SampleContext>(
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L29-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L35-L37' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: mapExplorer -->
@@ -170,7 +171,7 @@ app.MapScryExplorer(
         _.EnableGuard = _ => true;
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L32-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L38-L47' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The sample always exposes the explorer so it can be browsed without setting an environment. A real
@@ -218,10 +219,6 @@ Because the sample uses project references rather than the NuGet package, the ge
 <!-- snippet: clientRegistration -->
 <a id='snippet-clientRegistration'></a>
 ```cs
-// Blazor WebAssembly backs HttpClient with the browser's fetch API — there is no socket pool or DNS
-// lifetime to manage — so a plain scoped client is the right registration here; IHttpClientFactory
-// would add nothing. Reach for AddHttpClient only when you need a handler pipeline (an auth
-// DelegatingHandler, Polly, or multiple named clients).
 builder.Services.AddScoped(
     _ => new HttpClient
     {
@@ -230,7 +227,7 @@ builder.Services.AddScoped(
 builder.Services.AddScryClient("/api/query");
 builder.Services.AddScoped<ScryQuery>();
 ```
-<sup><a href='/samples/Sample.Client/Program.cs#L5-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Program.cs#L13-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ## The queries
