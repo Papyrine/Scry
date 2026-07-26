@@ -6,8 +6,8 @@ namespace Scry;
 /// predicate, so client filters can only narrow the already-authorized set. Client-irrelevant.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct)]
-public sealed class ReturnableWithAttribute(Type policyType) :
+public sealed class ReturnableWithAttribute(Type policy) :
     Attribute
 {
-    public Type PolicyType { get; } = policyType;
+    public Type Policy { get; } = policy;
 }

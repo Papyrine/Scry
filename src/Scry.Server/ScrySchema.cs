@@ -199,7 +199,7 @@ sealed class ScrySchema
             return configured;
         }
 
-        return type.GetCustomAttribute<ReturnableWithAttribute>()?.PolicyType;
+        return type.GetCustomAttribute<ReturnableWithAttribute>()?.Policy;
     }
 
     static ScryTypeMeta BuildTypeMeta(Type type, HashSet<Type> queryableTypes)
