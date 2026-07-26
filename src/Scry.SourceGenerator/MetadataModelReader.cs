@@ -97,7 +97,8 @@ static class MetadataModelReader
 
         switch (type)
         {
-            case PrimitiveDecoded primitive when PrimitiveKeyword(primitive.Code) is { } keyword:
+            case PrimitiveDecoded primitive
+                when PrimitiveKeyword(primitive.Code) is { } keyword:
                 if (keyword == "string")
                 {
                     return new("", "string", NeedsNullDefault: true);
@@ -105,7 +106,8 @@ static class MetadataModelReader
 
                 return new("", nullable ? $"{keyword}?" : keyword, NeedsNullDefault: false);
 
-            case NamedDecoded named when ScalarKeyword(named.FullName) is { } scalar:
+            case NamedDecoded named
+                when ScalarKeyword(named.FullName) is { } scalar:
                 if (scalar == "string")
                 {
                     return new("", "string", NeedsNullDefault: true);
@@ -113,11 +115,13 @@ static class MetadataModelReader
 
                 return new("", nullable ? $"{scalar}?" : scalar, NeedsNullDefault: false);
 
-            case NamedDecoded { IsDefinition: true } definition when IsEnum(reader, (TypeDefinitionHandle)definition.Handle):
-                var enumName = CollectEnum(reader, (TypeDefinitionHandle)definition.Handle, enums);
+            case NamedDecoded {IsDefinition: true} definition
+                when IsEnum(reader, (TypeDefinitionHandle) definition.Handle):
+                var enumName = CollectEnum(reader, (TypeDefinitionHandle) definition.Handle, enums);
                 return new("", nullable ? $"{enumName}?" : enumName, NeedsNullDefault: false);
 
-            case NamedDecoded navigation when modelByFullName.TryGetValue(navigation.FullName, out var modelName):
+            case NamedDecoded navigation
+                when modelByFullName.TryGetValue(navigation.FullName, out var modelName):
                 // Reference navigation to another queryable type: nullable, no initializer.
                 return new("", $"{modelName}?", NeedsNullDefault: false);
 
@@ -297,8 +301,15 @@ static class MetadataModelReader
     static string FullName(MetadataReader reader, TypeDefinition type) =>
         Combine(reader.GetString(type.Namespace), reader.GetString(type.Name));
 
-    static string Combine(string ns, string name) =>
-        ns.Length == 0 ? name : $"{ns}.{name}";
+    static string Combine(string ns, string name)
+    {
+        if (ns.Length == 0)
+        {
+            return name;
+        }
+
+        return $"{ns}.{name}";
+    }
 
     static string? PrimitiveKeyword(PrimitiveTypeCode code) =>
         code switch

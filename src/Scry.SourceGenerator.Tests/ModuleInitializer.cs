@@ -1,7 +1,3 @@
-using VerifyTests.DiffPlex;
-
-namespace Scry.SourceGenerator.Tests;
-
 public static class ModuleInitializer
 {
     [ModuleInitializer]

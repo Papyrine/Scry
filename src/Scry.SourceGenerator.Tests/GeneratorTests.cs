@@ -1,9 +1,3 @@
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.Diagnostics;
-using Scry;
-using Scry.SourceGenerator;
-
 [TestFixture]
 public class GeneratorTests
 {
@@ -138,10 +132,11 @@ public class GeneratorTests
             generators: [generator.AsSourceGenerator()],
             additionalTexts: null,
             parseOptions: null,
-            optionsProvider: new TestOptionsProvider(new()
-            {
-                ["build_property.ScryModelDll"] = dllPath
-            }));
+            optionsProvider: new TestOptionsProvider(
+                new()
+                {
+                    ["build_property.ScryModelDll"] = dllPath
+                }));
 
         driver = driver.RunGenerators(consumer);
         return Verify(driver);
@@ -153,26 +148,9 @@ public class GeneratorTests
         var references = trusted
             .Split(Path.PathSeparator)
             .Where(_ => _.Length > 0)
-            .Select(_ => (MetadataReference)MetadataReference.CreateFromFile(_))
+            .Select(MetadataReference (_) => MetadataReference.CreateFromFile(_))
             .ToList();
         references.Add(MetadataReference.CreateFromFile(typeof(QueryableAttribute).Assembly.Location));
         return references;
-    }
-
-    sealed class TestOptionsProvider(Dictionary<string, string> values) :
-        AnalyzerConfigOptionsProvider
-    {
-        public override AnalyzerConfigOptions GlobalOptions { get; } = new TestOptions(values);
-
-        public override AnalyzerConfigOptions GetOptions(SyntaxTree tree) => GlobalOptions;
-
-        public override AnalyzerConfigOptions GetOptions(AdditionalText textFile) => GlobalOptions;
-    }
-
-    sealed class TestOptions(Dictionary<string, string> values) :
-        AnalyzerConfigOptions
-    {
-        public override bool TryGetValue(string key, out string value) =>
-            values.TryGetValue(key, out value!);
     }
 }

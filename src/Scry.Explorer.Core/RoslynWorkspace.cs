@@ -210,8 +210,7 @@ public sealed class RoslynWorkspace
                 Assembly.Load("Microsoft.CodeAnalysis.Features"),
                 Assembly.Load("Microsoft.CodeAnalysis.CSharp.Features")
             ])
-            .Distinct()
-            .ToImmutableArray();
+            .Distinct();
 
         return MefHostServices.Create(assemblies);
     }
