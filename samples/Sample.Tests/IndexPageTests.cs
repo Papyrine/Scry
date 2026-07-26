@@ -9,7 +9,7 @@ public class IndexPageTests
     [Test]
     public async Task RendersEmployeeAndRegionTables()
     {
-        await using var server = await ScryTestServer.StartAsync();
+        var server = await SharedScryServer.InstanceAsync();
 
         using var context = new BunitContext();
         context.Services.AddSingleton(server.CreateScryClient());
@@ -24,7 +24,7 @@ public class IndexPageTests
     [Test]
     public async Task RendersErrorWhenServerRejectsQuery()
     {
-        await using var server = await ScryTestServer.StartAsync();
+        var server = await SharedScryServer.InstanceAsync();
 
         using var context = new BunitContext();
         // Point the client at an endpoint that does not exist so the query fails and the page

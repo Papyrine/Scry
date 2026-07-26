@@ -233,7 +233,8 @@ sealed class ScrySchema
     static bool IsScalar(Type type)
     {
         var underlying = Nullable.GetUnderlyingType(type) ?? type;
-        if (underlying.IsEnum || underlying.IsPrimitive)
+        if (underlying.IsEnum ||
+            underlying.IsPrimitive)
         {
             return true;
         }
@@ -250,7 +251,8 @@ sealed class ScrySchema
 
     static readonly MethodInfo setMethod = typeof(DbContext)
         .GetMethods()
-        .Single(_ => _ is { Name: "Set", IsGenericMethod: true } && _.GetParameters().Length == 0);
+        .Single(_ => _ is { Name: "Set", IsGenericMethod: true } &&
+                     _.GetParameters().Length == 0);
 
     static Func<DbContext, IServiceProvider, IQueryable> BuildResolver(
         Type type,
@@ -259,16 +261,16 @@ sealed class ScrySchema
     {
         if (kind == SourceKind.Poco)
         {
-            if (!options.PocoSources.TryGetValue(type, out var factory))
+            if (options.PocoSources.TryGetValue(type, out var factory))
             {
-                throw new InvalidOperationException(
-                    $"POCO source '{type.Name}' has no data registered. Call options.AddPocoSource<{type.Name}>(...).");
+                return (_, services) => factory(services);
             }
 
-            return (_, services) => factory(services);
+            throw new InvalidOperationException(
+                $"POCO source '{type.Name}' has no data registered. Call options.AddPocoSource<{type.Name}>(...).");
         }
 
         var typedSet = setMethod.MakeGenericMethod(type);
-        return (db, _) => (IQueryable)typedSet.Invoke(db, null)!;
+        return (db, _) => (IQueryable) typedSet.Invoke(db, null)!;
     }
 }

@@ -8,7 +8,7 @@ public class WireFormatTests
     [Test]
     public async Task EmployeeQueryWireFormat()
     {
-        await using var server = await ScryTestServer.StartAsync();
+        var server = await SharedScryServer.InstanceAsync();
 
         var services = new ServiceCollection();
         var httpBuilder = services

@@ -295,7 +295,7 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
         var member = ResolvePath(path, rootType, requireScalar: false, "Navigation");
         if (member.Kind != MemberKind.Navigation)
         {
-            throw Reject($"'{string.Join(".", path)}' is not a navigation property.");
+            throw Reject($"'{string.Join('.', path)}' is not a navigation property.");
         }
 
         return member.Type;
