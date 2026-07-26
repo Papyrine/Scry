@@ -495,7 +495,7 @@ public class UiSnapshotTests
             {
                 ViewportSize = new()
                 {
-                    Width = 1600,
+                    Width = 1200,
                     Height = 1000
                 }
             });
