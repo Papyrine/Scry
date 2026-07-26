@@ -188,8 +188,7 @@ sealed class ScrySchema
     }
 
     static bool IsKeyless(Type type) =>
-        type.GetCustomAttributes()
-            .Any(_ => _.GetType().FullName == "Microsoft.EntityFrameworkCore.KeylessAttribute");
+        type.GetCustomAttribute<KeylessAttribute>() is not null;
 
     static Type? ResolvePolicy(Type type, ScryOptions options)
     {
