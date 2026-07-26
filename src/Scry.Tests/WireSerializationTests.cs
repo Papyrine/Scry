@@ -27,13 +27,13 @@ public class WireSerializationTests
                 new SelectOp(
                     new(
                     [
-                        new("Name", new ExprValue(new MemberNode(["Name"]))),
-                        new("ManagerName", new ExprValue(new MemberNode(["Manager", "Name"]))),
+                        new("Name", new NodeValue(new MemberNode(["Name"]))),
+                        new("ManagerName", new NodeValue(new MemberNode(["Manager", "Name"]))),
                         new(
                             "Manager",
                             new NestedValue(
                                 ["Manager"],
-                                new([new("Name", new ExprValue(new MemberNode(["Name"])))])))
+                                new([new("Name", new NodeValue(new MemberNode(["Name"])))])))
                     ]))
             ]);
 
@@ -55,9 +55,9 @@ public class WireSerializationTests
                 new SelectOp(
                     new(
                     [
-                        new("Region", new ExprValue(new MemberNode(["Region"]))),
-                        new("Total", new ExprValue(new AggregateNode(AggregateFn.Sum, new MemberNode(["Amount"])))),
-                        new("Count", new ExprValue(new AggregateNode(AggregateFn.Count, Selector: null)))
+                        new("Region", new NodeValue(new MemberNode(["Region"]))),
+                        new("Total", new NodeValue(new AggregateNode(AggregateFn.Sum, new MemberNode(["Amount"])))),
+                        new("Count", new NodeValue(new AggregateNode(AggregateFn.Count, Selector: null)))
                     ]))
             ]);
 

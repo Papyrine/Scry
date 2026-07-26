@@ -69,7 +69,7 @@ sealed class ExpressionBuilder(ScrySchema schema)
 
         foreach (var member in projection.Members)
         {
-            var expression = ((ExprValue)member.Value).Expression;
+            var expression = ((NodeValue)member.Value).Node;
             var leaf = expression switch
             {
                 AggregateNode aggregate => BuildAggregate(aggregate, parameter, element),
@@ -97,7 +97,7 @@ sealed class ExpressionBuilder(ScrySchema schema)
             var jsonPath = jsonPrefix.Append(member.Name).ToArray();
             switch (member.Value)
             {
-                case ExprValue { Expression: MemberNode memberNode }:
+                case NodeValue { Node: MemberNode memberNode }:
                     leaves.Add(BuildMemberAccess(root, memberNode.Path));
                     shape.Add(jsonPath);
                     break;

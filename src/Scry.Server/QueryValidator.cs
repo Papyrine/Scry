@@ -181,7 +181,7 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
         {
             switch (member.Value)
             {
-                case ExprValue { Expression: AggregateNode aggregate }:
+                case NodeValue { Node: AggregateNode aggregate }:
                     if (!grouped)
                     {
                         throw Reject("Aggregates are only allowed in a Select following GroupBy.");
@@ -194,7 +194,7 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
 
                     break;
 
-                case ExprValue { Expression: MemberNode memberNode }:
+                case NodeValue { Node: MemberNode memberNode }:
                     if (grouped)
                     {
                         if (groupKeys is null ||
@@ -210,7 +210,7 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
 
                     break;
 
-                case ExprValue:
+                case NodeValue:
                     throw Reject("Unsupported projection expression.");
 
                 case NestedValue nested:

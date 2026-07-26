@@ -52,7 +52,7 @@ name. The full vocabulary is:
 [JsonDerivedType(typeof(SingleOp), "single")]
 public abstract record QueryOp;
 ```
-<sup><a href='/src/Scry.Wire/QueryOp.cs#L8-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: wireExpressions -->

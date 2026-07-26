@@ -75,7 +75,7 @@ CLR type is likely to be renamed.
 [JsonDerivedType(typeof(SingleOp), "single")]
 public abstract record QueryOp;
 ```
-<sup><a href='/src/Scry.Wire/QueryOp.cs#L8-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 | `$type` | Payload | Meaning |
@@ -277,11 +277,11 @@ that follows a `groupBy`.
 ```cs
 /// <summary>The value of a projection member.</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
-[JsonDerivedType(typeof(ExprValue), "expr")]
+[JsonDerivedType(typeof(NodeValue), "expr")]
 [JsonDerivedType(typeof(NestedValue), "nested")]
 public abstract record ProjectionValue;
 ```
-<sup><a href='/src/Scry.Wire/Projection.cs#L10-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireProjectionValues' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Projections/ProjectionValue.cs#L3-L9' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireProjectionValues' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 | `$type` | Payload | Produces |
@@ -304,7 +304,7 @@ public sealed record QueryResponse(int Version, ResultKind Kind, JsonElement Pay
         new(WireFormat.Version, kind, payload);
 }
 ```
-<sup><a href='/src/Scry.Wire/QueryResponse.cs#L10-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireResponse' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/QueryResponse.cs#L8-L15' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireResponse' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ```json
@@ -429,7 +429,7 @@ translates to:
           {
             Name: Name,
             Value: {
-              Expression: {
+              Node: {
                 Path: [
                   Name
                 ]
@@ -439,7 +439,7 @@ translates to:
           {
             Name: Status,
             Value: {
-              Expression: {
+              Node: {
                 Path: [
                   Status
                 ]
@@ -449,7 +449,7 @@ translates to:
           {
             Name: ManagerName,
             Value: {
-              Expression: {
+              Node: {
                 Path: [
                   Manager,
                   Name

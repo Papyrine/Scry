@@ -57,7 +57,7 @@
           {
             Name: Name,
             Value: {
-              Expression: {
+              Node: {
                 Path: [
                   Name
                 ]
@@ -67,7 +67,7 @@
           {
             Name: Status,
             Value: {
-              Expression: {
+              Node: {
                 Path: [
                   Status
                 ]
@@ -77,7 +77,7 @@
           {
             Name: ManagerName,
             Value: {
-              Expression: {
+              Node: {
                 Path: [
                   Manager,
                   Name

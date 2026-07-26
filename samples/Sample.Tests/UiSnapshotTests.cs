@@ -628,12 +628,12 @@ public class UiSnapshotTests
         // locator is not strict-safe — read the first one's text purely for the diagnostic log.
         var hoverWidgets = page.Locator(".monaco-hover");
         var hoverText = await hoverWidgets.CountAsync() > 0 ? await hoverWidgets.First.InnerTextAsync() : "(no widget)";
-        log.Add($"{(hoverCount > 0 ? "✓" : "✗")} hover: visible={hoverCount}, text=[{hoverText.Replace("\n", " ").Trim()}]");
+        log.Add($"{(hoverCount > 0 ? "✓" : "✗")} hover: visible={hoverCount}, text=[{hoverText.Replace('\n', ' ').Trim()}]");
 
         log.Add($"console errors: {(consoleErrors.Count == 0 ? "none" : string.Join(" || ", consoleErrors))}");
         await File.WriteAllLinesAsync(Path.Combine(dir, "results.txt"), log);
         await TestContext.Out.WriteLineAsync($"Walkthrough screenshots + results: {dir}");
-        await TestContext.Out.WriteLineAsync(string.Join("\n", log));
+        await TestContext.Out.WriteLineAsync(string.Join('\n', log));
 
         // Assert the headlessly-verifiable features. Hover needs a real browser (Monaco renders the
         // editor text clipped headless, so the mouse can't land on a token to trigger it).

@@ -42,7 +42,7 @@ public class SecurityTests
     public void RejectsAggregateWithoutGroupBy() =>
         AssertRejected(QueryRequest.Create(
             "Order",
-            [new SelectOp(new([new("Total", new ExprValue(new AggregateNode(AggregateFn.Sum, new MemberNode(["Amount"]))))]))]));
+            [new SelectOp(new([new("Total", new NodeValue(new AggregateNode(AggregateFn.Sum, new MemberNode(["Amount"]))))]))]));
 
     [Test]
     public void RejectsThenByWithoutOrderBy() =>
@@ -62,7 +62,7 @@ public class SecurityTests
             "Order",
             [
                 new GroupByOp([new MemberNode(["Region"])]),
-                new SelectOp(new([new("Amount", new ExprValue(new MemberNode(["Amount"])))]))
+                new SelectOp(new([new("Amount", new NodeValue(new MemberNode(["Amount"])))]))
             ]));
 
     static void AssertRejected(QueryRequest request, Action<ScryOptions>? extra = null)

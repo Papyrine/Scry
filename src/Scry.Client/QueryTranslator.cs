@@ -126,18 +126,18 @@ sealed class QueryTranslator
                 } memberKey &&
                 memberKey.Expression == parameter)
             {
-                return new ExprValue(new MemberNode(groupKey ?? throw new NotSupportedException("No group key in scope.")));
+                return new NodeValue(new MemberNode(groupKey ?? throw new NotSupportedException("No group key in scope.")));
             }
 
             if (expression is MethodCallExpression aggregate)
             {
-                return new ExprValue(TranslateAggregate(aggregate));
+                return new NodeValue(TranslateAggregate(aggregate));
             }
 
             throw new NotSupportedException("A grouped projection may only use the group key or aggregates.");
         }
 
-        return new ExprValue(TranslateExpr(expression, parameter));
+        return new NodeValue(TranslateExpr(expression, parameter));
     }
 
     AggregateNode TranslateAggregate(MethodCallExpression call)
