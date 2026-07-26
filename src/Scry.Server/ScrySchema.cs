@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 /// <summary>
 /// The server's authoritative allow-list, built once from the model assembly's annotations. The
 /// generator and the server derive the same surface from the same attributes; this is the runtime
@@ -8,11 +10,11 @@ sealed class ScrySchema
     readonly Dictionary<string, ScrySource> sources = new(StringComparer.Ordinal);
     readonly Dictionary<Type, ScryTypeMeta> types = [];
 
-    public bool TryGetSource(string name, out ScrySource source) =>
-        sources.TryGetValue(name, out source!);
+    public bool TryGetSource(string name, [MaybeNullWhen(false)] out ScrySource source) =>
+        sources.TryGetValue(name, out source);
 
-    public bool TryGetType(Type type, out ScryTypeMeta meta) =>
-        types.TryGetValue(type, out meta!);
+    public bool TryGetType(Type type, [MaybeNullWhen(false)] out ScryTypeMeta meta) =>
+        types.TryGetValue(type, out meta);
 
     /// <summary>
     /// Projects the allow-list into the public introspection contract. Type displays mirror the
