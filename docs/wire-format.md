@@ -98,7 +98,7 @@ The legal operator orderings form a small state machine — every absent edge is
 
 ```mermaid
 stateDiagram-v2
-    direction LR
+    direction TD
     [*] --> Source
     Source --> Restricting: Where / OrderBy / ThenBy / Skip / Take
     Restricting --> Restricting: (any order, any number)
