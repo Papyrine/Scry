@@ -28,7 +28,10 @@ public class IndexPageTests
 
         await using var context = new BunitContext();
         // Point the client at an endpoint that does not exist so the query fails and the page
-        // takes its error branch.
+        // takes its error branch. The HttpClient CreateClient() returns is a fresh in-memory
+        // TestServer client — no socket or handler resources — and the server owns its own lifetime,
+        // so it is intentionally left undisposed here (ScryClient does not own it, and the container
+        // won't dispose an AddSingleton instance either).
         context.Services.AddSingleton(ScryClient.ForHttp(server.CreateClient(), "/api/missing"));
         context.Services.AddSingleton<ScryQuery>();
 
