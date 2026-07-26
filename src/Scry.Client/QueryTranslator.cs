@@ -1,5 +1,3 @@
-namespace Scry.Client;
-
 /// <summary>
 /// Translates a captured LINQ expression tree into the wire AST. Supports the closed operator set;
 /// anything outside it throws a clear <see cref="NotSupportedException"/> at translation time.

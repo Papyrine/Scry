@@ -1,5 +1,3 @@
-namespace Scry.Client;
-
 /// <summary>A deferred, capture-only queryable. Enumerating it synchronously is not supported.</summary>
 sealed class ScryQueryable<T> :
     IOrderedQueryable<T>

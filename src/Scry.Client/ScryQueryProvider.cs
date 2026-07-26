@@ -1,6 +1,4 @@
-﻿namespace Scry.Client;
-
-/// <summary>
+﻿/// <summary>
 /// An <see cref="IQueryProvider"/> that captures LINQ expressions instead of executing them. The
 /// captured tree is translated to the wire AST by the async terminal methods.
 /// </summary>
