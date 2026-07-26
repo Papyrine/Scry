@@ -1,15 +1,15 @@
 /// <summary>A deferred, capture-only queryable. Enumerating it synchronously is not supported.</summary>
-sealed class ScryQueryable<T> :
+sealed class CaptureQueryable<T> :
     IOrderedQueryable<T>
 {
-    readonly ScryQueryProvider provider;
+    readonly QueryProvider provider;
 
-    public ScryQueryable(ScryQueryProvider provider) :
+    public CaptureQueryable(QueryProvider provider) :
         this(provider, null)
     {
     }
 
-    public ScryQueryable(ScryQueryProvider provider, Expression? expression)
+    public CaptureQueryable(QueryProvider provider, Expression? expression)
     {
         this.provider = provider;
         Expression = expression ?? Expression.Constant(this);

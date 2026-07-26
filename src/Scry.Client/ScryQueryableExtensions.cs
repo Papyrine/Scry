@@ -63,7 +63,7 @@ public static class ScryQueryableExtensions
     /// </summary>
     public static QueryRequest ToScryRequest<T>(this IQueryable<T> source, QueryOp? terminal = null)
     {
-        if (source.Provider is not ScryQueryProvider provider)
+        if (source.Provider is not QueryProvider provider)
         {
             throw new Exception("This IQueryable is not a Scry source.");
         }
@@ -79,7 +79,7 @@ public static class ScryQueryableExtensions
 
     static Task<QueryResponse> Send<T>(IQueryable<T> source, QueryOp? terminal, Cancel cancel)
     {
-        if (source.Provider is not ScryQueryProvider provider)
+        if (source.Provider is not QueryProvider provider)
         {
             throw new Exception("This IQueryable is not a Scry source.");
         }

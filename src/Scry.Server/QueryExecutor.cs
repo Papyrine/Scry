@@ -2,7 +2,7 @@
 /// Orchestrates the full server pipeline for one request: validate against the allow-list, resolve
 /// the source, apply the row policy, rebind the AST to an EF query, execute, and shape the result.
 /// </summary>
-sealed class QueryExecutor(ScrySchema schema, ScryOptions options)
+sealed class QueryExecutor(Schema schema, ScryOptions options)
 {
     QueryValidator validator = new(schema, options);
     ExpressionBuilder builder = new(schema);

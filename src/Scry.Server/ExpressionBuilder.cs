@@ -3,7 +3,7 @@
 /// entity types. This is the only place CLR types are introduced — always from the schema, never
 /// from the wire.
 /// </summary>
-sealed class ExpressionBuilder(ScrySchema schema)
+sealed class ExpressionBuilder(Schema schema)
 {
     /// <summary>Builds a predicate lambda <c>TElement =&gt; bool</c>.</summary>
     public LambdaExpression BuildPredicate(Node predicate, Type type)

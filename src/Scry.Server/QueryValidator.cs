@@ -3,7 +3,7 @@
 /// allow-listed or exceeds a resource limit — independent of whatever code the client was generated
 /// against. Runs before any expression is rebound or executed.
 /// </summary>
-sealed class QueryValidator(ScrySchema schema, ScryOptions options)
+sealed class QueryValidator(Schema schema, ScryOptions options)
 {
     public ScrySource Validate(QueryRequest request)
     {
@@ -301,7 +301,7 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
         return member.Type;
     }
 
-    ScryMember ResolvePath(IReadOnlyList<string> path, Type rootType, bool requireScalar, string what)
+    Member ResolvePath(IReadOnlyList<string> path, Type rootType, bool requireScalar, string what)
     {
         if (path.Count == 0)
         {
@@ -314,7 +314,7 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
         }
 
         var currentType = rootType;
-        ScryMember? member = null;
+        Member? member = null;
 
         for (var i = 0; i < path.Count; i++)
         {

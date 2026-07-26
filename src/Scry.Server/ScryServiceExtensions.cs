@@ -10,7 +10,7 @@ public static class ScryServiceExtensions
         var options = new ScryOptions(typeof(TContext));
         configure(options);
 
-        var schema = ScrySchema.Build(options);
+        var schema = Schema.Build(options);
         services.AddSingleton(options);
         services.AddSingleton(new ScryProcessor(schema, options));
         return services;

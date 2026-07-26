@@ -8,10 +8,10 @@ namespace Scry;
 public sealed class ScryProcessor
 {
     QueryExecutor executor;
-    ScrySchema schema;
+    Schema schema;
     ScryOptions options;
 
-    internal ScryProcessor(ScrySchema schema, ScryOptions options)
+    internal ScryProcessor(Schema schema, ScryOptions options)
     {
         this.schema = schema;
         this.options = options;
@@ -27,7 +27,7 @@ public sealed class ScryProcessor
     {
         var options = new ScryOptions(typeof(TContext));
         configure(options);
-        return new(ScrySchema.Build(options), options);
+        return new(Schema.Build(options), options);
     }
 
     /// <summary>Validates and executes a request, returning the shaped result.</summary>

@@ -45,7 +45,7 @@ public class Order
 
 /// <summary>
 /// Carries its row policy via the [ReturnableWith] attribute rather than a programmatic AddPolicy,
-/// exercising the attribute-discovery branch of ScrySchema.ResolvePolicy.
+/// exercising the attribute-discovery branch of Schema.ResolvePolicy.
 /// </summary>
 [Queryable]
 [ReturnableWith(typeof(OpenTicketsOnlyPolicy))]

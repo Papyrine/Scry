@@ -5,15 +5,15 @@ using System.Diagnostics.CodeAnalysis;
 /// generator and the server derive the same surface from the same attributes; this is the runtime
 /// source of truth that every incoming query is validated against.
 /// </summary>
-sealed class ScrySchema
+sealed class Schema
 {
     readonly Dictionary<string, ScrySource> sources = new(StringComparer.Ordinal);
-    readonly Dictionary<Type, ScryTypeMeta> types = [];
+    readonly Dictionary<Type, TypeMeta> types = [];
 
     public bool TryGetSource(string name, [MaybeNullWhen(false)] out ScrySource source) =>
         sources.TryGetValue(name, out source);
 
-    public bool TryGetType(Type type, [MaybeNullWhen(false)] out ScryTypeMeta meta) =>
+    public bool TryGetType(Type type, [MaybeNullWhen(false)] out TypeMeta meta) =>
         types.TryGetValue(type, out meta);
 
     /// <summary>
@@ -47,7 +47,7 @@ sealed class ScrySchema
         return new(ScryIntrospection.CurrentVersion, options.MaxPageSize, sourceInfos, typeInfos, enumInfos);
     }
 
-    static ScryMemberInfo DescribeMember(ScryMember member, Dictionary<string, ScryEnumInfo> enums)
+    static ScryMemberInfo DescribeMember(Member member, Dictionary<string, ScryEnumInfo> enums)
     {
         if (member.Kind == MemberKind.Navigation)
         {
@@ -103,7 +103,7 @@ sealed class ScrySchema
             _ => type.Name
         };
 
-    public static ScrySchema Build(ScryOptions options)
+    public static Schema Build(ScryOptions options)
     {
         if (options.ContextType is not { } contextType)
         {
@@ -111,7 +111,7 @@ sealed class ScrySchema
                 "No model configured. Call options.UseModel<TContext>() in AddScry.");
         }
 
-        var schema = new ScrySchema();
+        var schema = new Schema();
         var discovered = new List<(Type Type, string Name, SourceKind Kind, Type? Policy)>();
 
         foreach (var type in contextType.Assembly.GetTypes())
@@ -202,9 +202,9 @@ sealed class ScrySchema
         return type.GetCustomAttribute<ReturnableWithAttribute>()?.Policy;
     }
 
-    static ScryTypeMeta BuildTypeMeta(Type type, HashSet<Type> queryableTypes)
+    static TypeMeta BuildTypeMeta(Type type, HashSet<Type> queryableTypes)
     {
-        var meta = new ScryTypeMeta(type);
+        var meta = new TypeMeta(type);
 
         foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {

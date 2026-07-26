@@ -69,8 +69,8 @@ hand-edit text inside a `snippet`/`endSnippet` region — change the referenced 
 The pipeline crosses four projects. Key files to read at each stage:
 
 **Client capture — `Scry.Client` (no EF dependency).**
-- `ScryClient.Source<T>(name)` returns an `IQueryable<T>` backed by `ScryQueryProvider` /
-  `ScryQueryable` — a capture-only provider that throws on synchronous enumeration.
+- `ScryClient.Source<T>(name)` returns an `IQueryable<T>` backed by `QueryProvider` /
+  `CaptureQueryable` — a capture-only provider that throws on synchronous enumeration.
 - `ScryQueryableExtensions` holds the async terminals (`ToListAsync`, `FirstAsync`, `CountAsync`, …)
   and `ToScryRequest`, which run `QueryTranslator` to turn the captured expression tree into the wire
   AST and POST it via `ScryClient`.
@@ -90,7 +90,7 @@ The pipeline crosses four projects. Key files to read at each stage:
   validated server-side.
 
 **Server validate/execute — `Scry.Server` (public types live in namespace `Scry`, not `Scry.Server`).**
-- `ScrySchema.Build(options)` builds the allow-list at startup from the **real** model assembly,
+- `Schema.Build(options)` builds the allow-list at startup from the **real** model assembly,
   independent of what the client was generated against.
 - `ScryProcessor.Execute` is the single choke point (validation → allow-list → policies → shaping);
   use it for auditing/other transports. `QueryValidator` is the authoritative gate and runs to
@@ -128,7 +128,7 @@ the queryable surface untouched. Referencing the projects directly (samples, int
 this wiring out explicitly instead of importing the props file.
 
 ⚠️ **Two parallel classifiers must stay in lockstep:** `MetadataModelReader.TryClassify` + its keyword
-maps (metadata side, drives generated code) and `ScrySchema.TryClassify` + `ScalarDisplay` (reflection
+maps (metadata side, drives generated code) and `Schema.TryClassify` + `ScalarDisplay` (reflection
 side, drives runtime introspection). Change type-display or classification logic in one and you must
 change the other, or generated client code and the server's introspection contract diverge.
 

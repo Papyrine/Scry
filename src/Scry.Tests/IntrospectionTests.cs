@@ -39,7 +39,7 @@ public class IntrospectionTests
     public void KeylessQueryableIsClassifiedAsView()
     {
         // [Queryable] on an EF [Keyless] type is the documented equivalent of [QueryableView], and
-        // must classify identically. The two branches live in ScrySchema.TryClassify.
+        // must classify identically. The two branches live in Schema.TryClassify.
         var source = Processor().Describe().Sources.Single(_ => _.Name == "RegionSummary");
         Assert.That(source.Kind, Is.EqualTo("View"));
     }

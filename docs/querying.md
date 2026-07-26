@@ -68,7 +68,7 @@ public static ScryClient ForHttp(HttpClient http, string endpoint) =>
 
 /// <summary>Returns an <see cref="IQueryable{T}"/> backed by the named allow-listed source.</summary>
 public IQueryable<T> Source<T>(string name) =>
-    new ScryQueryable<T>(new(this, name));
+    new CaptureQueryable<T>(new(this, name));
 ```
 <sup><a href='/src/Scry.Client/ScryClient.cs#L9-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->

@@ -325,7 +325,7 @@ projection leaf. `Projection member must reference a scalar value.` is the rejec
 Two independent components read the same attributes:
 
 - `MetadataModelReader` in the generator, over `System.Reflection.Metadata`, at build time.
-- `ScrySchema` in the server, over `System.Reflection`, at startup.
+- `Schema` in the server, over `System.Reflection`, at startup.
 
 They deliberately agree on classification and on the C# type spelling each member gets — the server's
 introspection output reproduces the generator's emission exactly, which is what lets the
