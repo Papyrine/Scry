@@ -194,18 +194,18 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
 
                     break;
 
-                case ExprValue { Expression: MemberNode memberExpr }:
+                case ExprValue { Expression: MemberNode memberNode }:
                     if (grouped)
                     {
                         if (groupKeys is null ||
-                            !groupKeys.Any(_ => PathEquals(_.Path, memberExpr.Path)))
+                            !groupKeys.Any(_ => PathEquals(_.Path, memberNode.Path)))
                         {
                             throw Reject("A grouped projection may only reference the group key or aggregates.");
                         }
                     }
                     else
                     {
-                        ResolvePath(memberExpr.Path, rootType, requireScalar: true, "Projection member");
+                        ResolvePath(memberNode.Path, rootType, requireScalar: true, "Projection member");
                     }
 
                     break;
@@ -232,16 +232,16 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
     void ValidatePredicate(Node expr, Type elementType) =>
         ValidateExpr(expr, elementType, depth: 0);
 
-    void ValidateScalar(Node expr, Type elementType, string what)
+    void ValidateScalar(Node node, Type elementType, string what)
     {
-        ValidateExpr(expr, elementType, depth: 0);
-        if (expr is MemberNode member)
+        ValidateExpr(node, elementType, depth: 0);
+        if (node is MemberNode member)
         {
             ResolvePath(member.Path, elementType, requireScalar: true, what);
         }
     }
 
-    void ValidateExpr(Node expr, Type elementType, int depth)
+    void ValidateExpr(Node node, Type elementType, int depth)
     {
         while (true)
         {
@@ -250,7 +250,7 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
                 throw Reject("Expression nesting is too deep.");
             }
 
-            switch (expr)
+            switch (node)
             {
                 case MemberNode member:
                     ResolvePath(member.Path, elementType, requireScalar: false, "Member");
@@ -261,12 +261,12 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
 
                 case BinaryNode binary:
                     ValidateExpr(binary.Left, elementType, depth + 1);
-                    expr = binary.Right;
+                    node = binary.Right;
                     depth += 1;
                     continue;
 
                 case UnaryNode unary:
-                    expr = unary.Operand;
+                    node = unary.Operand;
                     depth += 1;
                     continue;
 
@@ -283,7 +283,7 @@ sealed class QueryValidator(ScrySchema schema, ScryOptions options)
                     throw Reject("Aggregates are only allowed as a projection member in a grouped Select.");
 
                 default:
-                    throw Reject($"Unsupported expression '{expr.GetType().Name}'.");
+                    throw Reject($"Unsupported expression '{node.GetType().Name}'.");
             }
 
             break;

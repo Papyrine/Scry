@@ -6,17 +6,17 @@
 sealed class ExpressionBuilder(ScrySchema schema)
 {
     /// <summary>Builds a predicate lambda <c>TElement =&gt; bool</c>.</summary>
-    public LambdaExpression BuildPredicate(Node predicate, Type elementType)
+    public LambdaExpression BuildPredicate(Node predicate, Type type)
     {
-        var parameter = Expression.Parameter(elementType, "e");
+        var parameter = Expression.Parameter(type, "e");
         var body = Build(predicate, parameter, typeof(bool));
         return Expression.Lambda(body, parameter);
     }
 
     /// <summary>Builds a key selector lambda <c>TElement =&gt; TKey</c>.</summary>
-    public LambdaExpression BuildKeySelector(Node key, Type elementType)
+    public LambdaExpression BuildKeySelector(Node key, Type type)
     {
-        var parameter = Expression.Parameter(elementType, "e");
+        var parameter = Expression.Parameter(type, "e");
         var body = Build(key, parameter, null);
         return Expression.Lambda(body, parameter);
     }
@@ -25,9 +25,9 @@ sealed class ExpressionBuilder(ScrySchema schema)
     /// Builds a selector <c>TElement =&gt; object[]</c> projecting the requested scalar leaves, plus a
     /// shape describing how to fold the array back into (possibly nested) JSON.
     /// </summary>
-    public ProjectionPlan BuildProjection(Projection projection, Type elementType)
+    public ProjectionPlan BuildProjection(Projection projection, Type type)
     {
-        var parameter = Expression.Parameter(elementType, "e");
+        var parameter = Expression.Parameter(type, "e");
         var leaves = new List<Expression>();
         var shape = new List<IReadOnlyList<string>>();
         Flatten(projection, parameter, [], leaves, shape);
@@ -36,14 +36,14 @@ sealed class ExpressionBuilder(ScrySchema schema)
     }
 
     /// <summary>Builds a default projection of every allow-listed scalar member of the source.</summary>
-    public ProjectionPlan BuildDefaultProjection(Type elementType)
+    public ProjectionPlan BuildDefaultProjection(Type type)
     {
-        if (!schema.TryGetType(elementType, out var meta))
+        if (!schema.TryGetType(type, out var meta))
         {
-            throw new ScryValidationException($"Type '{elementType.Name}' is not queryable.");
+            throw new ScryValidationException($"Type '{type.Name}' is not queryable.");
         }
 
-        var parameter = Expression.Parameter(elementType, "e");
+        var parameter = Expression.Parameter(type, "e");
         var leaves = new List<Expression>();
         var shape = new List<IReadOnlyList<string>>();
         foreach (var member in meta.Members.Values.Where(_ => _.Kind == MemberKind.Scalar))
@@ -60,9 +60,9 @@ sealed class ExpressionBuilder(ScrySchema schema)
     /// Builds a grouped selector <c>IGrouping&lt;TKey,TElement&gt; =&gt; object[]</c> over a single key,
     /// supporting the group key and aggregate members.
     /// </summary>
-    public ProjectionPlan BuildGroupProjection(Projection projection, Type elementType, Type keyType)
+    public ProjectionPlan BuildGroupProjection(Projection projection, Type element, Type key)
     {
-        var groupingType = typeof(IGrouping<,>).MakeGenericType(keyType, elementType);
+        var groupingType = typeof(IGrouping<,>).MakeGenericType(key, element);
         var parameter = Expression.Parameter(groupingType, "g");
         var leaves = new List<Expression>();
         var shape = new List<IReadOnlyList<string>>();
@@ -72,7 +72,7 @@ sealed class ExpressionBuilder(ScrySchema schema)
             var expression = ((ExprValue)member.Value).Expression;
             var leaf = expression switch
             {
-                AggregateNode aggregate => BuildAggregate(aggregate, parameter, elementType),
+                AggregateNode aggregate => BuildAggregate(aggregate, parameter, element),
                 MemberNode => Expression.Property(parameter, "Key"),
                 _ => throw new ScryValidationException("Unsupported grouped projection member.")
             };
@@ -97,8 +97,8 @@ sealed class ExpressionBuilder(ScrySchema schema)
             var jsonPath = jsonPrefix.Append(member.Name).ToArray();
             switch (member.Value)
             {
-                case ExprValue { Expression: MemberNode memberExpr }:
-                    leaves.Add(BuildMemberAccess(root, memberExpr.Path));
+                case ExprValue { Expression: MemberNode memberNode }:
+                    leaves.Add(BuildMemberAccess(root, memberNode.Path));
                     shape.Add(jsonPath);
                     break;
 
@@ -108,20 +108,20 @@ sealed class ExpressionBuilder(ScrySchema schema)
                     break;
 
                 default:
-                    throw new ScryValidationException("Unsupported projection member.");
+                    throw new type("Unsupported projection member.");
             }
         }
     }
 
-    Expression Build(Node expr, ParameterExpression parameter, Type? expected) =>
-        expr switch
+    Expression Build(Node node, ParameterExpression parameter, Type? expected) =>
+        node switch
         {
             MemberNode member => BuildMemberAccess(parameter, member.Path),
             ConstNode constant => BuildConstant(constant, expected),
             BinaryNode binary => BuildBinary(binary, parameter),
             UnaryNode unary => BuildUnary(unary, parameter),
             CallNode call => BuildCall(call, parameter),
-            _ => throw new ScryValidationException($"Unsupported expression '{expr.GetType().Name}'.")
+            _ => throw new ScryValidationException($"Unsupported expression '{node.GetType().Name}'.")
         };
 
     Expression BuildMemberAccess(Expression root, IReadOnlyList<string> path)
@@ -241,36 +241,36 @@ sealed class ExpressionBuilder(ScrySchema schema)
         return Expression.Constant(parsed, underlying);
     }
 
-    Expression BuildAggregate(AggregateNode aggregate, ParameterExpression group, Type elementType)
+    Expression BuildAggregate(AggregateNode aggregate, ParameterExpression group, Type element)
     {
         if (aggregate.Function == AggregateFn.Count)
         {
-            return Expression.Call(enumerableCount.MakeGenericMethod(elementType), group);
+            return Expression.Call(enumerableCount.MakeGenericMethod(element), group);
         }
 
-        if (aggregate.Selector is not MemberNode memberExpr)
+        if (aggregate.Selector is not MemberNode member)
         {
             throw new ScryValidationException($"Aggregate '{aggregate.Function}' requires a member selector.");
         }
 
-        var selectorParameter = Expression.Parameter(elementType, "x");
-        var selectorBody = BuildMemberAccess(selectorParameter, memberExpr.Path);
+        var selectorParameter = Expression.Parameter(element, "x");
+        var selectorBody = BuildMemberAccess(selectorParameter, member.Path);
         var selector = Expression.Lambda(selectorBody, selectorParameter);
         var returnType = selectorBody.Type;
 
         return aggregate.Function switch
         {
-            AggregateFn.Sum => Expression.Call(SumOrAverage("Sum", elementType, returnType), group, selector),
-            AggregateFn.Average => Expression.Call(SumOrAverage("Average", elementType, returnType), group, selector),
-            AggregateFn.Min => Expression.Call(MinOrMax("Min", elementType, returnType), group, selector),
-            AggregateFn.Max => Expression.Call(MinOrMax("Max", elementType, returnType), group, selector),
+            AggregateFn.Sum => Expression.Call(SumOrAverage("Sum", element, returnType), group, selector),
+            AggregateFn.Average => Expression.Call(SumOrAverage("Average", element, returnType), group, selector),
+            AggregateFn.Min => Expression.Call(MinOrMax("Min", element, returnType), group, selector),
+            AggregateFn.Max => Expression.Call(MinOrMax("Max", element, returnType), group, selector),
             _ => throw new ScryValidationException($"Unsupported aggregate '{aggregate.Function}'.")
         };
     }
 
-    static MethodInfo SumOrAverage(string name, Type elementType, Type selectorReturnType) =>
+    static MethodInfo SumOrAverage(string name, Type element, Type selectorReturnType) =>
         aggregateMethods.GetOrAdd(
-            (name, elementType, selectorReturnType),
+            (name, element, selectorReturnType),
             // Sum/Average have one selector overload per numeric type (int, decimal, …), generic only
             // in the source element — pick it by the selector's return type, then close it.
             key => typeof(Enumerable).GetMethods()
@@ -281,9 +281,9 @@ sealed class ExpressionBuilder(ScrySchema schema)
                     _.GetParameters()[1].ParameterType.GetGenericArguments()[1] == key.result)
                 .MakeGenericMethod(key.element));
 
-    static MethodInfo MinOrMax(string name, Type elementType, Type selectorReturnType) =>
+    static MethodInfo MinOrMax(string name, Type element, Type selectorReturnType) =>
         aggregateMethods.GetOrAdd(
-            (name, elementType, selectorReturnType),
+            (name, element, selectorReturnType),
             // Min/Max use the fully generic Min<TSource,TResult>(source, selector) overload, closed
             // over both the element and the selector's return type.
             key => typeof(Enumerable).GetMethods()
