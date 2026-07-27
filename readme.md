@@ -197,6 +197,7 @@ It is off unless mapped, and Development-only by default. See [Query explorer](d
 - [Row policies](docs/policies.md)
 - [Security model](docs/security.md)
 - [Wire format](docs/wire-format.md)
+- [Schema versioning](docs/schema-versioning.md)
 - [Query explorer](docs/explorer.md)
 - [Sample](docs/sample.md)
 

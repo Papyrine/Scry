@@ -16,6 +16,7 @@ Type-safe, serializable LINQ from a client to a server-side EF Core model.
 | [Row policies](policies.md) | `IReturnablePolicy<T>` for tenant scoping, soft delete, and row-level security. |
 | [Security model](security.md) | The threat model, every enforcement layer, and what Scry does *not* protect. |
 | [Wire format](wire-format.md) | The JSON query AST: request, response, every node type, versioning. |
+| [Schema versioning](schema-versioning.md) | The wire version and schema stamp axes, and detecting a stale deployed client. |
 | [Query explorer](explorer.md) | The opt-in browser-Roslyn explorer UI and the introspection endpoint. |
 | [Sample](sample.md) | Running the bundled sample and what each part of it demonstrates. |
 
