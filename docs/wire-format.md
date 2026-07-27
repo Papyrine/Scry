@@ -1,12 +1,8 @@
 # Wire format
 
-`Scry.Wire` defines the serializable query AST shared by client and server. It is a **restricted,
-closed node vocabulary** — not general expression-tree serialization — which is what makes every
-query exhaustively validatable.
+`Scry.Wire` defines the serializable query AST shared by client and server. It is a **restricted, closed node vocabulary** — not general expression-tree serialization — which is what makes every query exhaustively validatable.
 
-You rarely construct these types by hand; the client translator emits them and the server consumes
-them. This page is the reference for anyone writing another client, debugging a request, or
-reviewing the surface.
+You rarely construct these types by hand; the client translator emits them and the server consumes them. This page is the reference for anyone writing another client, debugging a request, or reviewing the surface.
 
 ## Serialization
 
@@ -15,12 +11,9 @@ All (de)serialization goes through `ScryJson`, whose options are part of the con
 - Property names are **camelCase**.
 - Dictionary keys (result rows) are **camelCase**.
 - Enums are written as **names**, never numbers, with no naming policy applied.
-- Null-valued **properties** are omitted — so optional AST members such as `predicate` or a null
-  constant's `value` simply do not appear. Result rows are dictionaries, not properties, so an
-  explicit `null` column is still written.
+- Null-valued **properties** are omitted — so optional AST members such as `predicate` or a null constant's `value` simply do not appear. Result rows are dictionaries, not properties, so an explicit `null` column is still written.
 - Polymorphic types use a `$type` discriminator.
-- Deserialization is **fail-closed**: unknown discriminators and malformed JSON throw
-  `ScryWireException`, they are not skipped.
+- Deserialization is **fail-closed**: unknown discriminators and malformed JSON throw `ScryWireException`, they are not skipped.
 
 ## Request
 
@@ -51,8 +44,7 @@ public sealed record QueryRequest(int Version, string Root, IReadOnlyList<QueryO
 | `root` | The source name — the allow-listed type name, or the attribute's [`Name`](annotations.md#naming-a-source) when set. |
 | `pipeline` | Ordered operators, applied left to right. |
 
-Because `root` is part of the contract, prefer setting `Name` over relying on the type name if the
-CLR type is likely to be renamed.
+Because `root` is part of the contract, prefer setting `Name` over relying on the type name if the CLR type is likely to be renamed.
 
 `QueryRequest.Create(root, pipeline)` stamps the current version.
 
@@ -141,8 +133,7 @@ public abstract record Node;
 { "$type": "member", "path": ["Manager", "Name"] }
 ```
 
-A navigation path of allow-listed property names. Each segment is validated against the allow-list
-of the type reached so far; every non-final segment must be a reference navigation.
+A navigation path of allow-listed property names. Each segment is validated against the allow-list of the type reached so far; every non-final segment must be a reference navigation.
 
 ### `const`
 
@@ -150,8 +141,7 @@ of the type reached so far; every non-final segment must be a reference navigati
 { "$type": "const", "value": "FullTime", "tag": "Enum" }
 ```
 
-`value` is the invariant-culture string form, omitted entirely for a null constant. `tag` describes
-the shape the client had:
+`value` is the invariant-culture string form, omitted entirely for a null constant. `tag` describes the shape the client had:
 
 <!-- snippet: wireTypeTags -->
 <a id='snippet-wireTypeTags'></a>
@@ -177,10 +167,7 @@ public enum ClrTypeTag
 <sup><a href='/src/Scry.Wire/Enums.cs#L66-L84' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireTypeTags' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-The tag is a hint, not an instruction. The server parses the value into the **member's** type at the
-comparison site, so `tag` never dictates what CLR type is constructed. Types with no dedicated tag
-(`TimeOnly`, `TimeSpan`, `DateTimeOffset`, `char`) travel as `String` and are reconciled the same
-way. A `Bytes` value carries a `byte[]` as a base64 string.
+The tag is a hint, not an instruction. The server parses the value into the **member's** type at the comparison site, so `tag` never dictates what CLR type is constructed. Types with no dedicated tag (`TimeOnly`, `TimeSpan`, `DateTimeOffset`, `char`) travel as `String` and are reconciled the same way. A `Bytes` value carries a `byte[]` as a base64 string.
 
 ### `binary` and `unary`
 
@@ -223,8 +210,7 @@ public enum UnaryOp
 <sup><a href='/src/Scry.Wire/Enums.cs#L12-L36' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireBinaryOps' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-When one side is a constant, its type is inferred from the other side, and nullable/non-nullable
-operands are coerced to match.
+When one side is a constant, its type is inferred from the other side, and nullable/non-nullable operands are coerced to match.
 
 ### `call`
 
@@ -257,8 +243,7 @@ public enum KnownFunction
 <sup><a href='/src/Scry.Wire/Enums.cs#L38-L52' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-There is no free-form method name anywhere in the format. This enum is the complete set of behaviour
-a client can request.
+There is no free-form method name anywhere in the format. This enum is the complete set of behaviour a client can request.
 
 ### `aggregate`
 
@@ -282,8 +267,7 @@ public enum AggregateFn
 <sup><a href='/src/Scry.Wire/Enums.cs#L54-L64' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireAggregates' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-`selector` is omitted for `Count`. An aggregate is valid **only** as a projection member in a `select`
-that follows a `groupBy`.
+`selector` is omitted for `Count`. An aggregate is valid **only** as a projection member in a `select` that follows a `groupBy`.
 
 ## Projections
 
@@ -314,8 +298,7 @@ public abstract record ProjectionValue;
 | `expr` | `expression: Node` | A scalar leaf, or an aggregate in a grouped select. |
 | `nested` | `path: string[]`, `projection: Projection` | A nested JSON object built from a navigation. |
 
-A projection must have at least one member. Nested projections are not allowed in a grouped select,
-and nesting depth is capped by `MaxNavigationDepth`.
+A projection must have at least one member. Nested projections are not allowed in a grouped select, and nesting depth is capped by `MaxNavigationDepth`.
 
 ## Response
 
@@ -347,8 +330,7 @@ public sealed record QueryResponse(int Version, ResultKind Kind, JsonElement Pay
 | `Scalar` | A bare value (`int` for `count`, `bool` for `any`). |
 | `Page` | A `ScryPage` envelope: `{ items: [...], hasMore: bool, cursor: string? }` — `cursor` set for a seek-safe page, else null. See [Paging](paging.md). |
 
-The client checks that `kind` matches the terminal it sent and throws `ScryWireException` if it does
-not.
+The client checks that `kind` matches the terminal it sent and throws `ScryWireException` if it does not.
 
 ## Versioning
 
@@ -365,12 +347,9 @@ public static class WireFormat
 <sup><a href='/src/Scry.Wire/Enums.cs#L3-L10' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireVersion' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-`QueryRequest.Create` and `QueryResponse.Create` stamp the current version. The server rejects a
-request whose `version` is **greater** than its own — a newer client against an older server fails
-closed rather than being partially understood. Older requests continue to be accepted.
+`QueryRequest.Create` and `QueryResponse.Create` stamp the current version. The server rejects a request whose `version` is **greater** than its own — a newer client against an older server fails closed rather than being partially understood. Older requests continue to be accepted.
 
-The `ScryJson` options, the `$type` discriminator strings, and the enum member names are all part of
-the contract. Changing any of them is a wire break.
+The `ScryJson` options, the `$type` discriminator strings, and the enum member names are all part of the contract. Changing any of them is a wire break.
 
 ## Worked example
 
@@ -492,8 +471,7 @@ translates to:
 <sup><a href='/src/Scry.Tests/ClientRoundTripTests.ToScryRequestTranslatesWithoutExecuting.verified.txt#L1-L92' title='Snippet source file'>snippet source</a> | <a href='#snippet-ClientRoundTripTests.ToScryRequestTranslatesWithoutExecuting.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-Note that `wanted`, `prefix`, and `take` were closure-captured locals; they are evaluated on the
-client and emitted as constants.
+Note that `wanted`, `prefix`, and `take` were closure-captured locals; they are evaluated on the client and emitted as constants.
 
 Over HTTP, request and response look like this:
 

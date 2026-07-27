@@ -20,15 +20,11 @@ Type-safe, serializable LINQ from a client to a server-side EF Core model.
 
 ## How it works
 
-1. The EF Core model lives **server-side**. The client never references it — it is *pointed at by
-   path*.
-2. A **source generator** in the client reads the model assembly directly by path
-   (`System.Reflection.Metadata`), applies an **allow-list**, and generates strongly-typed client
-   query DTOs plus a queryable entry point.
+1. The EF Core model lives **server-side**. The client never references it — it is *pointed at by path*.
+2. A **source generator** in the client reads the model assembly directly by path (`System.Reflection.Metadata`), applies an **allow-list**, and generates strongly-typed client query DTOs plus a queryable entry point.
 3. The UI writes ordinary **LINQ** against the generated types.
 4. The LINQ is captured and **serialized to a restricted query AST**.
-5. The server **deserializes, re-validates against the allow-list at runtime, rebinds to the real EF
-   types, executes**, and returns the projected rows.
+5. The server **deserializes, re-validates against the allow-list at runtime, rebinds to the real EF types, executes**, and returns the projected rows.
 
 ```
 Sample.Model (EF Core + [Queryable])
@@ -59,30 +55,23 @@ Sample.Model (EF Core + [Queryable])
 | [Scry.Server](https://nuget.org/packages/Scry.Server/) | Server-side validation + execution against EF Core. |
 | [Scry.Server.Explorer](https://nuget.org/packages/Scry.Server.Explorer/) | Opt-in query explorer UI. |
 
-`Scry.SourceGenerator` is not published on its own — it is packed inside `Scry.Client` as an
-analyzer, so referencing `Scry.Client` is all a client project needs.
+`Scry.SourceGenerator` is not published on its own — it is packed inside `Scry.Client` as an analyzer, so referencing `Scry.Client` is all a client project needs.
 
 ## Requirements
 
 - .NET 10 (`net10.0`) for `Scry.Wire`, `Scry.Client`, `Scry.Server`, and `Scry.Server.Explorer`.
 - `Scry.Annotations` targets `netstandard2.0`, so any model project can reference it.
-- EF Core on the server. The client has no EF dependency, which keeps it small under trimmed Blazor
-  WebAssembly.
+- EF Core on the server. The client has no EF dependency, which keeps it small under trimmed Blazor WebAssembly.
 
 ## Editing these docs
 
-The markdown under `/docs` has its code blocks **generated in place**. Edit the `.md` files directly,
-then build `src/Scry.Tests`, which runs
-[MarkdownSnippets](https://github.com/SimonCropp/MarkdownSnippets) to overwrite the content inside each
-`snippet` region with the current source. Prose outside those regions is authored by hand; only the
-snippet blocks are managed.
+The markdown under `/docs` has its code blocks **generated in place**. Edit the `.md` files directly, then build `src/Scry.Tests`, which runs [MarkdownSnippets](https://github.com/SimonCropp/MarkdownSnippets) to overwrite the content inside each `snippet` region with the current source. Prose outside those regions is authored by hand; only the snippet blocks are managed.
 
 ```bash
 dotnet build src/Scry.Tests/Scry.Tests.csproj
 ```
 
-Every code block sourced from the repo is pulled in with a `snippet: key` directive, where the key is
-defined in a real source file:
+Every code block sourced from the repo is pulled in with a `snippet: key` directive, where the key is defined in a real source file:
 
 ```cs
 // begin-snippet: myKey

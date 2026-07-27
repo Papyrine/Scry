@@ -1,8 +1,6 @@
 # Writing queries
 
-Client queries are ordinary C# LINQ written against the generated query models. Nothing runs
-client-side: the expression tree is **captured**, translated to the [wire AST](wire-format.md), and
-sent to the server when a terminal operator is awaited.
+Client queries are ordinary C# LINQ written against the generated query models. Nothing runs client-side: the expression tree is **captured**, translated to the [wire AST](wire-format.md), and sent to the server when a terminal operator is awaited.
 
 <!-- snippet: clientQuery -->
 <a id='snippet-clientQuery'></a>
@@ -16,8 +14,7 @@ employees = await Query.Employee
 <sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L34-L40' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-The supported surface is deliberately closed. Anything outside it fails fast with a clear
-`NotSupportedException` at translation time — before a request is ever sent.
+The supported surface is deliberately closed. Anything outside it fails fast with a clear `NotSupportedException` at translation time — before a request is ever sent.
 
 ## Entry points
 
@@ -95,8 +92,7 @@ Operators are applied left to right, exactly as written.
 
 ## Terminals
 
-Terminals are `async` extension methods on `IQueryable<T>` from `Scry.Client`. Awaiting one is what
-sends the request.
+Terminals are `async` extension methods on `IQueryable<T>` from `Scry.Client`. Awaiting one is what sends the request.
 
 | Method | Returns | Result kind |
 | --- | --- | --- |
@@ -114,9 +110,7 @@ sends the request.
 | `ToPageAsync([pageSize])` | `Task<ScryPage<T>>` | page |
 | `ToPageAsync(pageSize, cursor)` | `Task<ScryPage<T>>` | page |
 
-`ToPageAsync` returns a bounded [page](paging.md): `Items`, `HasMore`, and a `Cursor`. Omitting
-`pageSize` uses the server's `DefaultPageSize`; any size is capped by `MaxPageSize`. Advance by
-**offset** (`Skip`, below) or by **keyset** — pass the previous page's `Cursor` back to seek past it:
+`ToPageAsync` returns a bounded [page](paging.md): `Items`, `HasMore`, and a `Cursor`. Omitting `pageSize` uses the server's `DefaultPageSize`; any size is capped by `MaxPageSize`. Advance by **offset** (`Skip`, below) or by **keyset** — pass the previous page's `Cursor` back to seek past it:
 
 <!-- snippet: clientPaging -->
 <a id='snippet-clientPaging'></a>
@@ -148,16 +142,11 @@ page = await Query.Employee
 <sup><a href='/samples/Sample.Client/Pages/KeysetPaging.razor.cs#L22-L30' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCursorPaging' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-Keyset paging needs an ordered, [seek-safe](paging.md#the-seek-safe-rule) query; otherwise `Cursor` is
-null and you page by offset. The [sample](sample.md) shows both an offset page and a cursor page.
+Keyset paging needs an ordered, [seek-safe](paging.md#the-seek-safe-rule) query; otherwise `Cursor` is null and you page by offset. The [sample](sample.md) shows both an offset page and a cursor page.
 
-The collection-shaping terminals (`ToArrayAsync`, `ToHashSetAsync`, `ToDictionaryAsync`,
-`ToLookupAsync`) all send the same **list** request as `ToListAsync` and reshape the returned rows in
-memory — there is no streaming wire, so their key/element selectors and comparers run client-side over
-the materialised result.
+The collection-shaping terminals (`ToArrayAsync`, `ToHashSetAsync`, `ToDictionaryAsync`, `ToLookupAsync`) all send the same **list** request as `ToListAsync` and reshape the returned rows in memory — there is no streaming wire, so their key/element selectors and comparers run client-side over the materialised result.
 
-Each takes an optional `CancellationToken`. There are no predicate overloads on the client — filter
-with `Where` first:
+Each takes an optional `CancellationToken`. There are no predicate overloads on the client — filter with `Where` first:
 
 ```cs
 var count = await Query.Employee
@@ -165,8 +154,7 @@ var count = await Query.Employee
     .CountAsync();
 ```
 
-`FirstAsync` and `SingleAsync` are declared as `Task<T?>` even though the server throws when the
-sequence is empty; the nullable return covers the `OrDefault` variants without a second signature.
+`FirstAsync` and `SingleAsync` are declared as `Task<T?>` even though the server throws when the sequence is empty; the nullable return covers the `OrDefault` variants without a second signature.
 
 There is one non-executing terminal, used by tooling such as the [explorer](explorer.md):
 
@@ -189,8 +177,7 @@ which produces the wire request without contacting the server.
 
 ## Expressions
 
-Everything below may appear inside a `Where` predicate, an ordering key, a group key, an aggregate
-selector, or a projection leaf, subject to the position rules further down.
+Everything below may appear inside a `Where` predicate, an ordering key, a group key, an aggregate selector, or a projection leaf, subject to the position rules further down.
 
 ### Member access
 
@@ -200,14 +187,9 @@ A path rooted at the lambda parameter, traversing reference navigations:
 .Where(_ => _.Manager!.Department!.Name == "Engineering")
 ```
 
-becomes the member path `["Manager", "Department", "Name"]`. Path length is capped by
-`MaxNavigationDepth` (default 4). Collection navigations are not exposed at all, so there is no way
-to express a traversal into one.
+becomes the member path `["Manager", "Department", "Name"]`. Path length is capped by `MaxNavigationDepth` (default 4). Collection navigations are not exposed at all, so there is no way to express a traversal into one.
 
-A `[QueryableComplex]` member (an EF complex type, e.g. one mapped to a JSON column) is traversed the
-same way — `.Where(_ => _.Address.City == "London")` becomes `["Address", "City"]`. The server
-rebinds it onto EF, which translates the access into the JSON column; nothing about the storage is
-visible on the wire.
+A `[QueryableComplex]` member (an EF complex type, e.g. one mapped to a JSON column) is traversed the same way — `.Where(_ => _.Address.City == "London")` becomes `["Address", "City"]`. The server rebinds it onto EF, which translates the access into the JSON column; nothing about the storage is visible on the wire.
 
 ### Operators
 
@@ -241,15 +223,13 @@ public enum UnaryOp
 <sup><a href='/src/Scry.Wire/Enums.cs#L12-L36' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireBinaryOps' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-C# `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, `+`, `-`, `*`, `/`, `!`, and unary `-` map onto
-these. Any other operator (`%`, `&`, `|`, `^`, `<<`, `>>`, `??`, `?:`) throws:
+C# `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, `+`, `-`, `*`, `/`, `!`, and unary `-` map onto these. Any other operator (`%`, `&`, `|`, `^`, `<<`, `>>`, `??`, `?:`) throws:
 
 ```
 Binary operator 'Modulo' is not supported by Scry.
 ```
 
-`Convert` / `ConvertChecked` nodes — which the C# compiler inserts freely around enums, nullables,
-and numeric widening — are transparently unwrapped rather than encoded.
+`Convert` / `ConvertChecked` nodes — which the C# compiler inserts freely around enums, nullables, and numeric widening — are transparently unwrapped rather than encoded.
 
 ### Functions
 
@@ -287,14 +267,11 @@ Mapped from:
 | `date.Month` | `DateMonth` |
 | `date.Day` | `DateDay` |
 
-The date parts apply to `DateTime` and `DateOnly`. There is no free-form method call node in the
-wire format, so this list is the complete set of behaviour a client can ask the database to perform.
+The date parts apply to `DateTime` and `DateOnly`. There is no free-form method call node in the wire format, so this list is the complete set of behaviour a client can ask the database to perform.
 
 ### Constants and captured values
 
-Literals become constants. So does **any sub-expression that does not reference the lambda
-parameter** — it is evaluated on the client and sent as a constant. That is what makes a query
-parameterizable at runtime:
+Literals become constants. So does **any sub-expression that does not reference the lambda parameter** — it is evaluated on the client and sent as a constant. That is what makes a query parameterizable at runtime:
 
 <!-- snippet: clientClosureCapture -->
 <a id='snippet-clientClosureCapture'></a>
@@ -309,13 +286,9 @@ fullTimers = await Query.Employee
 <sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L49-L56' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-`status` and `top` are locals; the translator compiles and invokes those sub-expressions, then emits
-their values. Calls to your own methods are fine on this path as long as they do not touch the query
-parameter — `.Where(_ => _.Name == BuildName())` sends the *result* of `BuildName()`.
+`status` and `top` are locals; the translator compiles and invokes those sub-expressions, then emits their values. Calls to your own methods are fine on this path as long as they do not touch the query parameter — `.Where(_ => _.Name == BuildName())` sends the *result* of `BuildName()`.
 
-A constant is carried as an invariant-culture string plus a type tag, and reconciled against the
-member type at the comparison site on the server. Enums travel as their **name**, not their numeric
-value.
+A constant is carried as an invariant-culture string plus a type tag, and reconciled against the member type at the comparison site on the server. Enums travel as their **name**, not their numeric value.
 
 ## Projections
 
@@ -337,23 +310,17 @@ Projecting a bare value does not work:
 A projection must construct an object (anonymous type, record, or object initializer).
 ```
 
-For a record or constructor call, member names come from the constructor parameter names, capitalized
-— `new EmployeeRow(name: ...)` produces the member `Name`.
+For a record or constructor call, member names come from the constructor parameter names, capitalized — `new EmployeeRow(name: ...)` produces the member `Name`.
 
-Every projection leaf must resolve to an allow-listed **scalar**. A navigation cannot be projected
-whole; project the scalar you want out of it (`_.Department!.Name`).
+Every projection leaf must resolve to an allow-listed **scalar**. A navigation cannot be projected whole; project the scalar you want out of it (`_.Department!.Name`).
 
 ### Without a `Select`
 
-If no projection is supplied, the server returns every allow-listed **scalar** member of the source.
-Navigations are excluded, and so is anything `[QueryIgnore]`d — which is why the default projection
-of `Employee` never contains `Salary`.
+If no projection is supplied, the server returns every allow-listed **scalar** member of the source. Navigations are excluded, and so is anything `[QueryIgnore]`d — which is why the default projection of `Employee` never contains `Salary`.
 
 ### Nested result objects
 
-Projecting a **constructed object** into a navigation nests the result under that member instead of
-flattening it. Write the nested shape as an ordinary object construction whose members read through
-the navigation:
+Projecting a **constructed object** into a navigation nests the result under that member instead of flattening it. Write the nested shape as an ordinary object construction whose members read through the navigation:
 
 <!-- snippet: clientNestedProjection -->
 <a id='snippet-clientNestedProjection'></a>
@@ -369,9 +336,7 @@ cards = await Query.Employee
 <sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L60-L68' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientNestedProjection' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-The client factors the shared navigation (`_.Department`) out of the nested members and emits a
-`NestedValue` in the wire AST; the server descends the navigation and shapes the leaves under it,
-producing nested JSON:
+The client factors the shared navigation (`_.Department`) out of the nested members and emits a `NestedValue` in the wire AST; the server descends the navigation and shapes the leaves under it, producing nested JSON:
 
 <!-- snippet: ExecutionTests.WhereOrderByNestedProjection.verified.txt -->
 <a id='snippet-ExecutionTests.WhereOrderByNestedProjection.verified.txt'></a>
@@ -402,17 +367,13 @@ producing nested JSON:
 
 Rules for a nested projection member:
 
-- Every member of the nested object must be a **member path** (`_.Department.Name`), not a function
-  call or a further nested object — one level of nesting, scalar leaves.
-- All its members must share a single navigation prefix; the client descends into that one navigation.
-  Mixing two navigations (`new(_.Department.Name, _.Manager.Name)`) in one nested object is rejected.
-- The flat form still works when you only need the value — `Department = _.Department!.Name` gives a
-  flat column instead of a nested object.
+- Every member of the nested object must be a **member path** (`_.Department.Name`), not a function call or a further nested object — one level of nesting, scalar leaves.
+- All its members must share a single navigation prefix; the client descends into that one navigation. Mixing two navigations (`new(_.Department.Name, _.Manager.Name)`) in one nested object is rejected.
+- The flat form still works when you only need the value — `Department = _.Department!.Name` gives a flat column instead of a nested object.
 
 ## Grouping and aggregates
 
-`GroupBy` must be followed by `Select`, and that projection may reference **only** the group key and
-aggregates:
+`GroupBy` must be followed by `Select`, and that projection may reference **only** the group key and aggregates:
 
 <!-- snippet: clientGroupBy -->
 <a id='snippet-clientGroupBy'></a>
@@ -454,17 +415,14 @@ Constraints:
 - Exactly one group key, and it must be a member access.
 - `Where`, `OrderBy`, and `ThenBy` are not allowed after `GroupBy`.
 - Nested projections are not allowed in a grouped `Select`.
-- Referencing a non-key member throws
-  `A grouped projection may only use the group key or aggregates.`
-- Aggregates outside a grouped `Select` are rejected server-side with
-  `Aggregates are only allowed in a Select following GroupBy.`
+- Referencing a non-key member throws `A grouped projection may only use the group key or aggregates.`
+- Aggregates outside a grouped `Select` are rejected server-side with `Aggregates are only allowed in a Select following GroupBy.`
 
 ## Ordering rules
 
 The pipeline is validated as a whole. In order:
 
-1. `Where`, `OrderBy`/`ThenBy`, `Skip`, `Take` — any number, in any order, before grouping or
-   projection.
+1. `Where`, `OrderBy`/`ThenBy`, `Skip`, `Take` — any number, in any order, before grouping or projection.
 2. At most one `GroupBy`, which must precede the `Select`.
 3. At most one `Select`.
 4. At most one terminal, and nothing after it.
@@ -504,8 +462,4 @@ See [Server](server.md#error-handling) for the response bodies.
 
 ## Future enhancements
 
-- **Streaming results (`ToAsyncEnumerable`).** The wire currently carries each query result as a
-  single response, so there is nothing to enumerate incrementally. `ToAsyncEnumerable` therefore
-  throws `NotSupportedException` for now; use `ToListAsync`. A streaming wire (chunked or paged
-  transport that yields rows as they arrive) is the intended way to make it real, at which point the
-  terminal would stream rather than buffer.
+- **Streaming results (`ToAsyncEnumerable`).** The wire currently carries each query result as a single response, so there is nothing to enumerate incrementally. `ToAsyncEnumerable` therefore throws `NotSupportedException` for now; use `ToListAsync`. A streaming wire (chunked or paged transport that yields rows as they arrive) is the intended way to make it real, at which point the terminal would stream rather than buffer.

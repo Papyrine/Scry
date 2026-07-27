@@ -2,35 +2,25 @@
 
 Type-safe, serializable LINQ from a client to a server-side EF Core model.
 
-When a UI evolves quickly, server-side querying usually forces a choice between hand-coding a
-bespoke endpoint and contract per use case, or adopting GraphQL/OData and shaping queries with a
-separate query language. Scry removes that trade-off while keeping everything in C# and
-strongly typed end to end:
+When a UI evolves quickly, server-side querying usually forces a choice between hand-coding a bespoke endpoint and contract per use case, or adopting GraphQL/OData and shaping queries with a separate query language. Scry removes that trade-off while keeping everything in C# and strongly typed end to end:
 
 1. The EF Core model lives **server-side**. The client never references it — it is *pointed at by path*.
-1. A **source generator** in the client reads the model assembly directly by path
-   (`System.Reflection.Metadata`), applies an **allow-list**, and generates strongly-typed client
-   query DTOs plus a queryable entry point.
+1. A **source generator** in the client reads the model assembly directly by path (`System.Reflection.Metadata`), applies an **allow-list**, and generates strongly-typed client query DTOs plus a queryable entry point.
 1. The UI writes ordinary **LINQ** against the generated types.
 1. The LINQ is captured and **serialized to a restricted query AST**.
-1. The server **deserializes, re-validates against the allow-list at runtime, rebinds to the real EF
-   types, executes**, and returns the projected rows.
+1. The server **deserializes, re-validates against the allow-list at runtime, rebinds to the real EF types, executes**, and returns the projected rows.
 
-Add or extend a query by writing LINQ in the client — no new endpoint, no new contract — while the
-server stays in full control of which types, properties, shapes, and rows can ever be returned.
+Add or extend a query by writing LINQ in the client — no new endpoint, no new contract — while the server stays in full control of which types, properties, shapes, and rows can ever be returned.
 
 
 ## How it works
 
-The build-time and runtime flows are deliberately independent. Nothing is referenced across the
-client/server boundary: the only things that cross it are the model dll *by path* (build time) and the
-serialized wire AST (run time).
+The build-time and runtime flows are deliberately independent. Nothing is referenced across the client/server boundary: the only things that cross it are the model dll *by path* (build time) and the serialized wire AST (run time).
 
 
 ### Build time — generating the client
 
-The source generator reads the model assembly *by path* and emits strongly-typed client query types
-from the allow-listed surface only. The assembly is never referenced, loaded, or executed.
+The source generator reads the model assembly *by path* and emits strongly-typed client query types from the allow-listed surface only. The assembly is never referenced, loaded, or executed.
 
 ```mermaid
 flowchart TB
@@ -52,9 +42,7 @@ flowchart TB
 
 ### Run time — a query round-trip
 
-The client's LINQ is captured (never executed client-side) and serialized to a restricted AST. The
-server re-validates that AST against the allow-list — to completion, before anything is rebound — then
-rebinds to the real EF types, executes, and returns only the projected rows.
+The client's LINQ is captured (never executed client-side) and serialized to a restricted AST. The server re-validates that AST against the allow-list — to completion, before anything is rebound — then rebinds to the real EF types, executes, and returns only the projected rows.
 
 ```mermaid
 flowchart TB
@@ -150,8 +138,7 @@ builder.Services
 <sup><a href='/samples/Sample.Server/Program.cs#L26-L36' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-`AddPocoSource` supplies the rows for a `[QueryablePoco]` type — see
-[POCO sources](docs/server.md#poco-sources).
+`AddPocoSource` supplies the rows for a `[QueryablePoco]` type — see [POCO sources](docs/server.md#poco-sources).
 
 <!-- snippet: mapScry -->
 <a id='snippet-mapScry'></a>
@@ -189,19 +176,15 @@ employees = await Query.Employee
 
 ## Query explorer
 
-An opt-in, GraphiQL-style explorer ships in `Scry.Server.Explorer`. It runs Roslyn in the browser, so
-you get real IntelliSense and diagnostics against the allow-listed schema, and can see exactly what
-goes on the wire:
+An opt-in, GraphiQL-style explorer ships in `Scry.Server.Explorer`. It runs Roslyn in the browser, so you get real IntelliSense and diagnostics against the allow-listed schema, and can see exactly what goes on the wire:
 
 ```csharp
 app.MapScryExplorer("/scry");
 ```
 
-<img src="docs/images/explorer-run.png" border="1"
-     alt="The Scry explorer: LINQ, the serialized wire request, the result table, and the raw response">
+<img src="docs/images/explorer-run.png" border="1" alt="The Scry explorer: LINQ, the serialized wire request, the result table, and the raw response">
 
-It is off unless mapped, and Development-only by default. See
-[Query explorer](docs/explorer.md).
+It is off unless mapped, and Development-only by default. See [Query explorer](docs/explorer.md).
 
 
 ## Documentation

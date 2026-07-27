@@ -1,8 +1,6 @@
 # Server
 
-`Scry.Server` validates an incoming query AST against the allow-list, rebinds it onto the real EF
-Core entity types, applies row policies, executes it against a `DbContext`, and returns the projected
-rows.
+`Scry.Server` validates an incoming query AST against the allow-list, rebinds it onto the real EF Core entity types, applies row policies, executes it against a `DbContext`, and returns the projected rows.
 
 ## Registration
 
@@ -22,13 +20,11 @@ builder.Services
 <sup><a href='/samples/Sample.Server/Program.cs#L26-L36' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-`AddPocoSource` registers the data for a `[QueryablePoco]` type — see
-[POCO sources](#poco-sources) below. `MaxPageSize` is one of the [limits](#options).
+`AddPocoSource` registers the data for a `[QueryablePoco]` type — see [POCO sources](#poco-sources) below. `MaxPageSize` is one of the [limits](#options).
 
 `AddScry<TContext>`:
 
-- Scans `typeof(TContext).Assembly` for types carrying `[Queryable]`, `[QueryableView]`, or
-  `[QueryablePoco]`.
+- Scans `typeof(TContext).Assembly` for types carrying `[Queryable]`, `[QueryableView]`, or `[QueryablePoco]`.
 - Builds the allow-list schema **once**, at registration time.
 - Registers the `ScryOptions` and a `ScryProcessor` as singletons.
 
@@ -49,8 +45,7 @@ app.MapScry("/api/query");
 <sup><a href='/samples/Sample.Server/Program.cs#L43-L45' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-One `POST` endpoint. The request body is a [`QueryRequest`](wire-format.md); the response body is a
-`QueryResponse`. `MapScry` returns an `IEndpointConventionBuilder`, so the usual conventions apply:
+One `POST` endpoint. The request body is a [`QueryRequest`](wire-format.md); the response body is a `QueryResponse`. `MapScry` returns an `IEndpointConventionBuilder`, so the usual conventions apply:
 
 ```cs
 app.MapScry("/api/query")
@@ -58,8 +53,7 @@ app.MapScry("/api/query")
     .RequireCors("client");
 ```
 
-Authentication and authorization are **not** Scry's job — put them on the endpoint. See
-[Security model](security.md).
+Authentication and authorization are **not** Scry's job — put them on the endpoint. See [Security model](security.md).
 
 ## Options
 
@@ -129,9 +123,7 @@ It overrides `[ReturnableWith]` on the same type. See [Row policies](policies.md
 
 ## Hosting without the HTTP endpoint
 
-`ScryProcessor` is the programmatic entry point that `MapScry` wraps. Use it directly for a different
-transport (SignalR, gRPC, a message queue) or in tests. `ScryProcessor.Create<TContext>` takes the
-same configuration delegate as `AddScry`:
+`ScryProcessor` is the programmatic entry point that `MapScry` wraps. Use it directly for a different transport (SignalR, gRPC, a message queue) or in tests. `ScryProcessor.Create<TContext>` takes the same configuration delegate as `AddScry`:
 
 <!-- snippet: processorCreate -->
 <a id='snippet-processorCreate'></a>
@@ -152,13 +144,11 @@ Execute a request against any `DbContext` instance:
 var response = processor.Execute(request, dbContext);
 ```
 
-There are two `Execute` overloads: one taking an `IServiceProvider` (used to resolve policies) and
-one without, which falls back to activating policies via their parameterless constructor.
+There are two `Execute` overloads: one taking an `IServiceProvider` (used to resolve policies) and one without, which falls back to activating policies via their parameterless constructor.
 
 `processor.Describe()` returns the [introspection](explorer.md#introspection) contract.
 
-Because `ScryClient` takes an arbitrary transport delegate, the same processor also makes an
-in-process client easy — the whole pipeline, LINQ to rows, with no web host:
+Because `ScryClient` takes an arbitrary transport delegate, the same processor also makes an in-process client easy — the whole pipeline, LINQ to rows, with no web host:
 
 <!-- snippet: inProcessClient -->
 <a id='snippet-inProcessClient'></a>
@@ -178,26 +168,20 @@ static ScryClient ClientFor(TestContext context)
 
 For each request the server, in order:
 
-1. **Validates** the whole AST against the schema and the limits. Any violation throws
-   `ScryValidationException` and nothing else runs.
-2. **Resolves** the source — `DbContext.Set<T>()` for entities and views, the registered factory for
-   POCOs.
+1. **Validates** the whole AST against the schema and the limits. Any violation throws `ScryValidationException` and nothing else runs.
+2. **Resolves** the source — `DbContext.Set<T>()` for entities and views, the registered factory for POCOs.
 3. **Applies the row policy**, if the source has one.
-4. **Rebinds** each operator onto real CLR expression trees over the entity type. CLR types come only
-   from the schema, never from the wire.
+4. **Rebinds** each operator onto real CLR expression trees over the entity type. CLR types come only from the schema, never from the wire.
 5. **Executes** through the underlying provider — EF Core translates to SQL for entities and views.
-6. **Shapes** the result: a `Select` to `object[]` of the requested leaves, folded back into
-   (possibly nested) JSON objects using the projection plan.
+6. **Shapes** the result: a `Select` to `object[]` of the requested leaves, folded back into (possibly nested) JSON objects using the projection plan.
 
-Because the projection is applied inside the query, only the requested columns are read from the
-database.
+Because the projection is applied inside the query, only the requested columns are read from the database.
 
 Terminal handling:
 
 - `Count` / `Any` execute as scalars.
 - A predicate on `First` / `Single` is applied **before** the projection.
-- `First` / `Single` return a single object, or `null` for the `OrDefault` variants over an empty
-  sequence.
+- `First` / `Single` return a single object, or `null` for the `OrDefault` variants over an empty sequence.
 
 ## Error handling
 
@@ -214,8 +198,7 @@ messages are never returned to the client.<!-- endInclude -->
 
 Log them with your normal exception logging.
 
-On the client, a non-success status becomes a `ScryRequestException` carrying `StatusCode` and the
-raw `Body`.
+On the client, a non-success status becomes a `ScryRequestException` carrying `StatusCode` and the raw `Body`.
 
 ## Result payloads
 

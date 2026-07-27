@@ -1,7 +1,6 @@
 # Scry.Annotations
 
-Allow-list attributes for [Scry](https://github.com/Papyrine/Scry). Apply them to a
-server-side EF Core model to control which types and properties are exposed to client-side queries.
+Allow-list attributes for [Scry](https://github.com/Papyrine/Scry). Apply them to a server-side EF Core model to control which types and properties are exposed to client-side queries.
 
 - `[Queryable]` — opt a table-backed entity into querying.
 - `[QueryableView]` — opt a keyless EF view into querying.
@@ -35,7 +34,6 @@ public class Employee
 <sup><a href='/samples/Sample.Model/Entities/Employee.cs#L3-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableEntity' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-Nothing is exposed without an opt-in attribute, and the server re-validates every incoming query
-against the same attributes at runtime.
+Nothing is exposed without an opt-in attribute, and the server re-validates every incoming query against the same attributes at runtime.
 
 Docs: [Annotations](https://github.com/Papyrine/Scry/blob/main/docs/annotations.md)

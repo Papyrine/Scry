@@ -1,11 +1,8 @@
 # Annotations
 
-`Scry.Annotations` (namespace `Scry`, targeting `netstandard2.0`) holds the attributes that define
-the allow-list. They are applied to the **server** model. Both the source generator and the server
-runtime read the same attributes and derive the same surface from them.
+`Scry.Annotations` (namespace `Scry`, targeting `netstandard2.0`) holds the attributes that define the allow-list. They are applied to the **server** model. Both the source generator and the server runtime read the same attributes and derive the same surface from them.
 
-The model is **default-deny**: a type that carries none of the opt-in attributes is invisible to
-clients, and a request naming it is rejected as an unknown source.
+The model is **default-deny**: a type that carries none of the opt-in attributes is invisible to clients, and a request naming it is rejected as an unknown source.
 
 | Attribute | Target | Effect |
 | --- | --- | --- |
@@ -44,19 +41,13 @@ public class Employee
 <sup><a href='/samples/Sample.Model/Entities/Employee.cs#L3-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableEntity' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-The source name exposed to clients defaults to the **type name** — `Employee`. That is what appears
-as the `root` of a wire request, as the property name on the generated `ScryQuery`, and in the
-introspection output.
+The source name exposed to clients defaults to the **type name** — `Employee`. That is what appears as the `root` of a wire request, as the property name on the generated `ScryQuery`, and in the introspection output.
 
-If the type also carries EF Core's `[Keyless]`, Scry classifies it as a view rather than an entity.
-The two are resolved identically (`DbContext.Set<T>()`); the distinction is reported through
-introspection so tooling can label it.
+If the type also carries EF Core's `[Keyless]`, Scry classifies it as a view rather than an entity. The two are resolved identically (`DbContext.Set<T>()`); the distinction is reported through introspection so tooling can label it.
 
 ## Naming a source
 
-The source name is part of the **wire contract**. Renaming the CLR type would otherwise change the
-`root` of every request and break already-deployed clients, so all three opt-in attributes take a
-`Name` that decouples the two:
+The source name is part of the **wire contract**. Renaming the CLR type would otherwise change the `root` of every request and break already-deployed clients, so all three opt-in attributes take a `Name` that decouples the two:
 
 <!-- snippet: namedSource -->
 <a id='snippet-namedSource'></a>
@@ -75,8 +66,7 @@ public class SalesRegion
 <sup><a href='/src/Scry.Tests/TestModel.cs#L86-L97' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSource' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-The generated entry point exposes the configured name, while the **model class name stays derived
-from the CLR type**:
+The generated entry point exposes the configured name, while the **model class name stays derived from the CLR type**:
 
 <!-- snippet: GeneratorTests.NamedSources#ScryQuery.g.verified.cs -->
 <a id='snippet-GeneratorTests.NamedSources#ScryQuery.g.verified.cs'></a>
@@ -109,9 +99,7 @@ public sealed class ScryQuery
 <sup><a href='/src/Scry.SourceGenerator.Tests/GeneratorTests.NamedSources%23ScryQuery.g.verified.cs#L1-L24' title='Snippet source file'>snippet source</a> | <a href='#snippet-GeneratorTests.NamedSources#ScryQuery.g.verified.cs' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-That split is deliberate. `Name` governs the public vocabulary; `{Type}QueryModel` stays tied to the
-type so the server's introspection output and the generator's emission keep matching exactly — which
-is what lets the [explorer](explorer.md) synthesize an identical model.
+That split is deliberate. `Name` governs the public vocabulary; `{Type}QueryModel` stays tied to the type so the server's introspection output and the generator's emission keep matching exactly — which is what lets the [explorer](explorer.md) synthesize an identical model.
 
 The server derives the same name, so its introspection stays in step with generated client code:
 
@@ -139,10 +127,7 @@ Details:
 
 - A blank or whitespace-only `Name` is treated as unset and falls back to the type name.
 - Names are compared with ordinal case sensitivity.
-- Two sources resolving to the same name is an error on both sides: the generator reports `SCRY002`
-  and emits nothing, and the server throws `Duplicate queryable source name '...'` at startup. Note
-  that this is reachable without `Name` too — two same-named types in different namespaces collide
-  the same way.
+- Two sources resolving to the same name is an error on both sides: the generator reports `SCRY002` and emits nothing, and the server throws `Duplicate queryable source name '...'` at startup. Note that this is reachable without `Name` too — two same-named types in different namespaces collide the same way.
 
 ## `[QueryableView]`
 
@@ -180,8 +165,7 @@ protected override void OnModelCreating(ModelBuilder modelBuilder) =>
 <sup><a href='/samples/Sample.Model/SampleContext.cs#L6-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-dbContext' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-`[QueryableView]` is equivalent to putting `[Queryable]` on a type that EF has marked `[Keyless]`;
-use it when the keyless configuration lives in `OnModelCreating` rather than on the type.
+`[QueryableView]` is equivalent to putting `[Queryable]` on a type that EF has marked `[Keyless]`; use it when the keyless configuration lives in `OnModelCreating` rather than on the type.
 
 ## `[QueryablePoco]`
 
@@ -241,8 +225,7 @@ builder.Services
 The registered sequence is wrapped with `AsQueryable()`, so the pipeline runs in memory over LINQ to<!-- include: poco-in-memory. path: /docs/includes/poco-in-memory.include.md -->
 Objects with the same validation, shaping, and limits as a database source.<!-- endInclude -->
 
-Registration is **mandatory**. `AddScry` throws at startup if a `[QueryablePoco]` type has no
-registered source:
+Registration is **mandatory**. `AddScry` throws at startup if a `[QueryablePoco]` type has no registered source:
 
 ```
 POCO source 'Holiday' has no data registered. Call options.AddPocoSource<Holiday>(...).
@@ -252,8 +235,7 @@ See [Server](server.md#poco-sources) for the per-request factory overload.
 
 ## `[QueryableComplex]`
 
-For an EF Core **complex type** — a value object with no key of its own, typically mapped into a JSON
-column:
+For an EF Core **complex type** — a value object with no key of its own, typically mapped into a JSON column:
 
 <!-- snippet: queryableComplex -->
 <a id='snippet-queryableComplex'></a>
@@ -283,19 +265,11 @@ modelBuilder.Entity<Employee>()
 <sup><a href='/src/Scry.Tests/TestModel.cs#L178-L182' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-A complex type is **not a root source**: it produces no property on the generated `ScryQuery` and no
-server resolver. It is reachable only by traversing into it from an opted-in entity/view/POCO — for
-example `Employee.Address.City`. Its members follow the same exposure rules as any other type
-(`[QueryIgnore]` still hides `Zip`), and the traversal is bounded by `MaxNavigationDepth` like any
-navigation. How EF stores the type — a JSON column or separate columns — is transparent to Scry; the
-server rebinds the member path onto EF, which translates it either way.
+A complex type is **not a root source**: it produces no property on the generated `ScryQuery` and no server resolver. It is reachable only by traversing into it from an opted-in entity/view/POCO — for example `Employee.Address.City`. Its members follow the same exposure rules as any other type (`[QueryIgnore]` still hides `Zip`), and the traversal is bounded by `MaxNavigationDepth` like any navigation. How EF stores the type — a JSON column or separate columns — is transparent to Scry; the server rebinds the member path onto EF, which translates it either way.
 
 Because it is a member type rather than a source, `[QueryableComplex]` takes no `Name`.
 
-The generator and the server both read this attribute, but neither can see EF's `OnModelCreating`, so
-they cannot *infer* which types are complex — the attribute is the signal. To catch a mistake early,
-`MapScry` cross-checks the annotations against the live EF model at startup and throws if a
-`[Queryable]` type is really a complex type, or a `[QueryableComplex]` type is really a mapped entity:
+The generator and the server both read this attribute, but neither can see EF's `OnModelCreating`, so they cannot *infer* which types are complex — the attribute is the signal. To catch a mistake early, `MapScry` cross-checks the annotations against the live EF model at startup and throws if a `[Queryable]` type is really a complex type, or a `[QueryableComplex]` type is really a mapped entity:
 
 ```
 'Address' is marked [Queryable]/[QueryableView] but is an EF complex type in SampleContext. Use [QueryableComplex].
@@ -310,13 +284,10 @@ public decimal Salary { get; set; }
 
 An ignored member is excluded twice over:
 
-- The source generator never emits it, so client code cannot name it and there is no IntelliSense
-  entry for it.
-- The server's schema never registers it, so a hand-crafted request naming it is rejected with
-  `Property 'Salary' is not allow-listed on 'Employee'.`
+- The source generator never emits it, so client code cannot name it and there is no IntelliSense entry for it.
+- The server's schema never registers it, so a hand-crafted request naming it is rejected with `Property 'Salary' is not allow-listed on 'Employee'.`
 
-It is also absent from the default projection — a query with no `Select` returns every allow-listed
-scalar, and `Salary` is not one.
+It is also absent from the default projection — a query with no `Select` returns every allow-listed scalar, and `Salary` is not one.
 
 ## `[ReturnableWith]`
 
@@ -325,12 +296,9 @@ scalar, and `Salary` is not one.
 public class Employee { ... }
 ```
 
-Names an `IReturnablePolicy<T>` implementation that the server applies to the source **before** any
-client operator. It is server-only: the generator ignores it and the client never sees it. See
-[Row policies](policies.md).
+Names an `IReturnablePolicy<T>` implementation that the server applies to the source **before** any client operator. It is server-only: the generator ignores it and the client never sees it. See [Row policies](policies.md).
 
-A policy registered in code via `ScryOptions.AddPolicy<TEntity, TPolicy>()` takes precedence over the
-attribute on the same type.
+A policy registered in code via `ScryOptions.AddPolicy<TEntity, TPolicy>()` takes precedence over the attribute on the same type.
 
 ## Which members are exposed
 
@@ -340,8 +308,7 @@ A member of an opted-in type is exposed when **all** of the following hold:
 - It has a **public instance getter**.
 - It takes no index parameters.
 - It does not carry `[QueryIgnore]`.
-- Its type is either a **scalar**, a **reference navigation to another opted-in type**, or a
-  **`[QueryableComplex]` type** (optionally `Nullable<>`).
+- Its type is either a **scalar**, a **reference navigation to another opted-in type**, or a **`[QueryableComplex]` type** (optionally `Nullable<>`).
 
 Everything else is silently excluded — no error, it simply does not appear.
 
@@ -359,34 +326,22 @@ flowchart TD
 
 ### Scalars
 
-`bool`, `char`, `sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `float`,
-`double`, `decimal`, `string`, `DateTime`, `DateOnly`, `TimeOnly`, `DateTimeOffset`, `TimeSpan`,
-`Guid`, `byte[]`, and any `enum` — plus the `Nullable<>` form of each value type.
+`bool`, `char`, `sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `float`, `double`, `decimal`, `string`, `DateTime`, `DateOnly`, `TimeOnly`, `DateTimeOffset`, `TimeSpan`, `Guid`, `byte[]`, and any `enum` — plus the `Nullable<>` form of each value type.
 
-An `enum` used by an exposed member is re-emitted into the generated client code (as
-`ScryEnums.g.cs`), so the client can compare against it without referencing the model.
+An `enum` used by an exposed member is re-emitted into the generated client code (as `ScryEnums.g.cs`), so the client can compare against it without referencing the model.
 
-Scalars can be used in predicates, ordering keys, group keys, aggregate selectors, and projection
-leaves.
+Scalars can be used in predicates, ordering keys, group keys, aggregate selectors, and projection leaves.
 
 ### Navigations
 
-A property whose type is another opted-in type is a **reference navigation**. It can be traversed in
-a member path (`e.Manager.Name`) and projected into, up to `MaxNavigationDepth` segments (default 4).
-A `[QueryableComplex]` member behaves the same way for traversal (`e.Address.City`); the only
-difference is at the type level — a complex type is never a root source.
+A property whose type is another opted-in type is a **reference navigation**. It can be traversed in a member path (`e.Manager.Name`) and projected into, up to `MaxNavigationDepth` segments (default 4). A `[QueryableComplex]` member behaves the same way for traversal (`e.Address.City`); the only difference is at the type level — a complex type is never a root source.
 
-A navigation cannot itself be a value — it cannot be compared, ordered by, grouped by, or used as a
-projection leaf. `Projection member must reference a scalar value.` is the rejection you get.
+A navigation cannot itself be a value — it cannot be compared, ordered by, grouped by, or used as a projection leaf. `Projection member must reference a scalar value.` is the rejection you get.
 
 ### Not exposed
 
-- **Collection navigations** (`List<Employee> Employees`). There is no wire node for traversing a
-  collection, so a client cannot fan out, `Any()` into a child set, or aggregate across one. If you
-  need a collection-derived value, expose it as a view or a computed scalar on the parent. This
-  includes collection-valued complex types (`OwnsMany` / JSON arrays).
-- **Complex types that are not themselves opted in.** Adding `[QueryableComplex]` to the target type
-  makes it traversable.
+- **Collection navigations** (`List<Employee> Employees`). There is no wire node for traversing a collection, so a client cannot fan out, `Any()` into a child set, or aggregate across one. If you need a collection-derived value, expose it as a view or a computed scalar on the parent. This includes collection-valued complex types (`OwnsMany` / JSON arrays).
+- **Complex types that are not themselves opted in.** Adding `[QueryableComplex]` to the target type makes it traversable.
 - **Write-only or non-public properties, indexers, and fields.**
 
 ## Keeping the two readers aligned
@@ -396,8 +351,4 @@ Two independent components read the same attributes:
 - `MetadataModelReader` in the generator, over `System.Reflection.Metadata`, at build time.
 - `Schema` in the server, over `System.Reflection`, at startup.
 
-They deliberately agree on classification and on the C# type spelling each member gets — the server's
-introspection output reproduces the generator's emission exactly, which is what lets the
-[query explorer](explorer.md) synthesize an identical model in the browser. The server's copy is the
-one that matters for security: it is rebuilt at runtime from the real assembly and validates every
-request regardless of what the client was generated against.
+They deliberately agree on classification and on the C# type spelling each member gets — the server's introspection output reproduces the generator's emission exactly, which is what lets the [query explorer](explorer.md) synthesize an identical model in the browser. The server's copy is the one that matters for security: it is rebuilt at runtime from the real assembly and validates every request regardless of what the client was generated against.

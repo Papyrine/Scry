@@ -49,8 +49,7 @@ public class Employee
 <sup><a href='/samples/Sample.Model/Entities/Employee.cs#L3-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableEntity' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-`Salary` is `[QueryIgnore]`d, so it is absent from the generated client model and rejected if named
-in a raw request.
+`Salary` is `[QueryIgnore]`d, so it is absent from the generated client model and rejected if named in a raw request.
 
 <!-- snippet: queryableOrder -->
 <a id='snippet-queryableOrder'></a>
@@ -149,8 +148,7 @@ builder.Services
 <sup><a href='/samples/Sample.Server/Program.cs#L26-L36' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-`Holiday` has no table, so its data is registered explicitly — see
-[POCO sources](server.md#poco-sources). `MaxPageSize` is lowered from the default 1000 to 200.
+`Holiday` has no table, so its data is registered explicitly — see [POCO sources](server.md#poco-sources). `MaxPageSize` is lowered from the default 1000 to 200.
 
 <!-- snippet: mapScry -->
 <a id='snippet-mapScry'></a>
@@ -175,9 +173,7 @@ app.MapScryExplorer(
 <sup><a href='/samples/Sample.Server/Program.cs#L46-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-The sample always exposes the explorer so it can be browsed without setting an environment. A real
-app should leave the default Development-only guard in place, or replace it with an authorization
-check — see [Query explorer](explorer.md).
+The sample always exposes the explorer so it can be browsed without setting an environment. A real app should leave the default Development-only guard in place, or replace it with an authorization check — see [Query explorer](explorer.md).
 
 ## The client
 
@@ -213,9 +209,7 @@ check — see [Query explorer](explorer.md).
 <sup><a href='/samples/Sample.Client/Sample.Client.csproj#L23-L40' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGeneratorWiring' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-Because the sample uses project references rather than the NuGet package, the generator wiring that
-`Scry.Client`'s `buildTransitive` props would normally supply is written out explicitly. See
-[Source generator](source-generator.md).
+Because the sample uses project references rather than the NuGet package, the generator wiring that `Scry.Client`'s `buildTransitive` props would normally supply is written out explicitly. See [Source generator](source-generator.md).
 
 <!-- snippet: clientRegistration -->
 <a id='snippet-clientRegistration'></a>
@@ -272,8 +266,7 @@ regions = await Query.Order
 <sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L42-L47' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-And a query parameterized by closure-captured locals — the values are evaluated client-side and sent
-as constants, which is how an app builds a filtered query at runtime:
+And a query parameterized by closure-captured locals — the values are evaluated client-side and sent as constants, which is how an app builds a filtered query at runtime:
 
 <!-- snippet: clientClosureCapture -->
 <a id='snippet-clientClosureCapture'></a>
@@ -312,9 +305,7 @@ Four projected columns requested, four returned. `Salary` is neither requested n
 
 ## Integration tests
 
-`/IntegrationTests` hosts the same model over a real ASP.NET Core test server against LocalDB, and
-exercises the full round trip through the typed client — including that a hand-crafted request naming
-an ignored property is rejected:
+`/IntegrationTests` hosts the same model over a real ASP.NET Core test server against LocalDB, and exercises the full round trip through the typed client — including that a hand-crafted request naming an ignored property is rejected:
 
 <!-- snippet: rawRequestRejected -->
 <a id='snippet-rawRequestRejected'></a>
