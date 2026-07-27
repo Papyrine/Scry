@@ -16,6 +16,7 @@ employees = await Query.Employee
 
 The supported surface is deliberately closed. Anything outside it fails fast with a clear `NotSupportedException` at translation time — before a request is ever sent.
 
+
 ## Entry points
 
 The generated `ScryQuery` exposes one property per allow-listed source:
@@ -80,6 +81,7 @@ public IQueryable<T> Source<T>(string name) =>
 <sup><a href='/src/Scry.Client/ScryClient.cs#L20-L28' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
+
 ## Operators
 
 | LINQ | Wire op | Notes |
@@ -99,6 +101,7 @@ LINQ operator 'Join' is not supported by Scry.
 ```
 
 Operators are applied left to right, exactly as written.
+
 
 ## Terminals
 
@@ -185,9 +188,11 @@ var request = client.Source<Employee>("Employee")
 
 which produces the wire request without contacting the server.
 
+
 ## Expressions
 
 Everything below may appear inside a `Where` predicate, an ordering key, a group key, an aggregate selector, or a projection leaf, subject to the position rules further down.
+
 
 ### Member access
 
@@ -200,6 +205,7 @@ A path rooted at the lambda parameter, traversing reference navigations:
 becomes the member path `["Manager", "Department", "Name"]`. Path length is capped by `MaxNavigationDepth` (default 4). Collection navigations are not exposed at all, so there is no way to express a traversal into one.
 
 A `[QueryableComplex]` member (an EF complex type, e.g. one mapped to a JSON column) is traversed the same way — `.Where(_ => _.Address.City == "London")` becomes `["Address", "City"]`. The server rebinds it onto EF, which translates the access into the JSON column; nothing about the storage is visible on the wire.
+
 
 ### Operators
 
@@ -241,6 +247,7 @@ Binary operator 'Modulo' is not supported by Scry.
 
 `Convert` / `ConvertChecked` nodes — which the C# compiler inserts freely around enums, nullables, and numeric widening — are transparently unwrapped rather than encoded.
 
+
 ### Functions
 
 <!-- snippet: wireFunctions -->
@@ -279,6 +286,7 @@ Mapped from:
 
 The date parts apply to `DateTime` and `DateOnly`. There is no free-form method call node in the wire format, so this list is the complete set of behaviour a client can ask the database to perform.
 
+
 ### Constants and captured values
 
 Literals become constants. So does **any sub-expression that does not reference the lambda parameter** — it is evaluated on the client and sent as a constant. That is what makes a query parameterizable at runtime:
@@ -299,6 +307,7 @@ fullTimers = await Query.Employee
 `status` and `top` are locals; the translator compiles and invokes those sub-expressions, then emits their values. Calls to your own methods are fine on this path as long as they do not touch the query parameter — `.Where(_ => _.Name == BuildName())` sends the *result* of `BuildName()`.
 
 A constant is carried as an invariant-culture string plus a type tag, and reconciled against the member type at the comparison site on the server. Enums travel as their **name**, not their numeric value.
+
 
 ## Projections
 
