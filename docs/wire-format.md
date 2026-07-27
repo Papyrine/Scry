@@ -402,6 +402,7 @@ A mismatch is **not** rejected on its own — an additive model change leaves ol
 
 A request with no stamp (a hand-built request, or another client implementation) is treated exactly as before.
 
+
 ## Worked example
 
 This LINQ:
