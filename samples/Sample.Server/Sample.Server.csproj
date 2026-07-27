@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="EfLocalDb" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" />
     <ProjectReference Include="..\..\src\Scry.Server\Scry.Server.csproj" />
     <ProjectReference Include="..\..\src\Scry.Server.Explorer\Scry.Server.Explorer.csproj" />

@@ -1,14 +1,27 @@
 class Program
 {
-    static void Main(string[] args)
+    // Back the sample with EfLocalDb: each launch runs against its own LocalDB database, cloned from a
+    // seeded template. EfLocalDb manages its own instance and self-heals orphaned files, so the sample
+    // can never wedge on a leftover .mdf the way a fixed-name EnsureCreated database can.
+    static SqlInstance<SampleContext> sqlInstance = new(
+        constructInstance: _ => new(_.Options),
+        buildTemplate: _ =>
+        {
+            SampleContext.Initialize(_);
+            return Task.CompletedTask;
+        });
+
+    static async Task Main(string[] args)
     {
+        var database = await sqlInstance.Build();
+
         var builder = WebApplication.CreateBuilder(args);
 
         // Serve the Blazor client's static web assets even when not running in the Development environment.
         builder.WebHost.UseStaticWebAssets();
 
         builder.Services
-            .AddDbContext<SampleContext>(_ => _.UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=ScrySample;Trusted_Connection=True;Encrypt=False"));
+            .AddDbContext<SampleContext>(_ => _.UseSqlServer(database.ConnectionString));
 
         // begin-snippet: serverRegistration
         builder.Services
@@ -23,11 +36,6 @@ class Program
         // end-snippet
 
         var app = builder.Build();
-
-        using (var scope = app.Services.CreateScope())
-        {
-            SampleContext.Initialize(scope.ServiceProvider.GetRequiredService<SampleContext>());
-        }
 
         app.UseBlazorFrameworkFiles();
         app.UseStaticFiles();
@@ -47,6 +55,6 @@ class Program
         // end-snippet
         app.MapFallbackToFile("index.html");
 
-        app.Run();
+        await app.RunAsync();
     }
 }
