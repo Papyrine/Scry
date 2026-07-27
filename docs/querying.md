@@ -437,6 +437,7 @@ Constraints:
 - Referencing a non-key member throws `A grouped projection may only use the group key or aggregates.`
 - Aggregates outside a grouped `Select` are rejected server-side with `Aggregates are only allowed in a Select following GroupBy.`
 
+
 ## Ordering rules
 
 The pipeline is validated as a whole. In order:
@@ -467,6 +468,7 @@ stateDiagram-v2
 Nothing filters, orders, skips, or takes after `GroupBy`; a `GroupBy` cannot reach a terminal without
 a `Select` in between; and there is no second `GroupBy` or `Select`. `ThenBy` without a preceding
 `OrderBy` is rejected, and nothing may follow a terminal.<!-- endInclude -->
+
 
 ## Errors
 
