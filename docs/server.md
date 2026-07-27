@@ -69,6 +69,12 @@ Authentication and authorization are **not** Scry's job — put them on the endp
 /// <summary>Maximum number of rows a single query may request via <c>Take</c>. Default 1000.</summary>
 public int MaxPageSize { get; set; } = 1000;
 
+/// <summary>
+/// Page size applied to a paged query (<c>ToPageAsync</c>) that does not request one. Bounds an
+/// otherwise-unbounded page; the effective size is always capped by <see cref="MaxPageSize"/>. Default 100.
+/// </summary>
+public int DefaultPageSize { get; set; } = 100;
+
 /// <summary>Maximum navigation-path length allowed in a member expression. Default 4.</summary>
 public int MaxNavigationDepth { get; set; } = 4;
 
@@ -78,7 +84,7 @@ public int MaxPipelineLength { get; set; } = 32;
 /// <summary>Maximum expression nesting depth in a predicate. Default 32.</summary>
 public int MaxExpressionDepth { get; set; } = 32;
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Every limit is enforced during validation, before any expression is rebound or executed.
@@ -137,7 +143,7 @@ static ScryProcessor Processor(Action<ScryOptions>? extra = null) =>
         extra?.Invoke(options);
     });
 ```
-<sup><a href='/src/Scry.Tests/ExecutionTests.cs#L190-L197' title='Snippet source file'>snippet source</a> | <a href='#snippet-processorCreate' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExecutionTests.cs#L239-L246' title='Snippet source file'>snippet source</a> | <a href='#snippet-processorCreate' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Execute a request against any `DbContext` instance:
@@ -165,7 +171,7 @@ static ScryClient ClientFor(TestContext context)
     return new((request, _) => Task.FromResult(processor.Execute(request, context)));
 }
 ```
-<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L254-L262' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessClient' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L284-L292' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessClient' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ## Execution pipeline

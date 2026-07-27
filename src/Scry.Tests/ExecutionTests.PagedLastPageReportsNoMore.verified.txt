@@ -1,0 +1,15 @@
+﻿{
+  "version": 1,
+  "kind": "Page",
+  "payload": {
+    "items": [
+      {
+        "name": "Bob"
+      },
+      {
+        "name": "Carol"
+      }
+    ],
+    "hasMore": false
+  }
+}

@@ -10,6 +10,7 @@ Type-safe, serializable LINQ from a client to a server-side EF Core model.
 | [Annotations](annotations.md) | `[Queryable]`, `[QueryableView]`, `[QueryablePoco]`, `[QueryIgnore]`, `[ReturnableWith]`, and what each exposes. |
 | [Source generator](source-generator.md) | How the model assembly is read by path, the MSBuild wiring, what is emitted, and troubleshooting. |
 | [Writing queries](querying.md) | The supported LINQ surface: operators, expressions, functions, projections, grouping, terminals. |
+| [Paging](paging.md) | The `ToPageAsync` page envelope and limits (offset paging); the keyset-cursor design (slices 2–3, pending). |
 | [Server](server.md) | `AddScry`, `MapScry`, `ScryOptions`, limits, POCO sources, hosting without HTTP, error handling. |
 | [Row policies](policies.md) | `IReturnablePolicy<T>` for tenant scoping, soft delete, and row-level security. |
 | [Security model](security.md) | The threat model, every enforcement layer, and what Scry does *not* protect. |
@@ -70,10 +71,11 @@ analyzer, so referencing `Scry.Client` is all a client project needs.
 
 ## Editing these docs
 
-The markdown under `/docs` is **generated**. Edit the `.source.md` files in `/docs/mdsource` and
-build `src/Scry.Tests`, which runs
-[MarkdownSnippets](https://github.com/SimonCropp/MarkdownSnippets) to merge the code snippets in and
-write the `.md` output.
+The markdown under `/docs` has its code blocks **generated in place**. Edit the `.md` files directly,
+then build `src/Scry.Tests`, which runs
+[MarkdownSnippets](https://github.com/SimonCropp/MarkdownSnippets) to overwrite the content inside each
+`snippet` region with the current source. Prose outside those regions is authored by hand; only the
+snippet blocks are managed.
 
 ```bash
 dotnet build src/Scry.Tests/Scry.Tests.csproj

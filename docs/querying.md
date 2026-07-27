@@ -111,6 +111,27 @@ sends the request.
 | `SingleOrDefaultAsync()` | `Task<T?>` | single |
 | `CountAsync()` | `Task<int>` | scalar |
 | `AnyAsync()` | `Task<bool>` | scalar |
+| `ToPageAsync([pageSize])` | `Task<ScryPage<T>>` | page |
+
+`ToPageAsync` returns a bounded [page](paging.md): `Items`, `HasMore`, and a `Cursor` (null for now).
+Omitting `pageSize` uses the server's `DefaultPageSize`; any size is capped by `MaxPageSize`. Advance
+to the next page with `Skip`:
+
+<!-- snippet: clientPaging -->
+<a id='snippet-clientPaging'></a>
+```cs
+// Offset paging: Skip to the start of the page, then take one page of rows. The response is
+// a ScryPage — the rows plus HasMore, which the UI uses to enable or disable the Next button.
+page = await Query.Employee
+    .OrderBy(_ => _.Name)
+    .Skip(pageIndex * pageSize)
+    .Select(_ => new EmployeeRow(_.Name, _.Status, _.Department!.Name))
+    .ToPageAsync(pageSize);
+```
+<sup><a href='/samples/Sample.Client/Pages/Paging.razor.cs#L22-L30' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientPaging' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+The [sample](sample.md) wires this into a Paging page with Previous/Next buttons driven by `HasMore`.
 
 The collection-shaping terminals (`ToArrayAsync`, `ToHashSetAsync`, `ToDictionaryAsync`,
 `ToLookupAsync`) all send the same **list** request as `ToListAsync` and reshape the returned rows in

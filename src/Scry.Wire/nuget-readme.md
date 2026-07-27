@@ -19,9 +19,10 @@ serialization — so every query is exhaustively validatable and free of arbitra
 [JsonDerivedType(typeof(AnyOp), "any")]
 [JsonDerivedType(typeof(FirstOp), "first")]
 [JsonDerivedType(typeof(SingleOp), "single")]
+[JsonDerivedType(typeof(PageOp), "page")]
 public abstract record QueryOp;
 ```
-<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: wireExpressions -->

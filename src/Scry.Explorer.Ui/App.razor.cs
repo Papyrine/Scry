@@ -99,6 +99,9 @@ public partial class App
                     case ResultKind.List:
                         BuildTable(parsed.Payload);
                         break;
+                    case ResultKind.Page:
+                        BuildTable(parsed.Payload.GetProperty("items"));
+                        break;
                     case ResultKind.Single:
                         BuildSingle(parsed.Payload);
                         break;

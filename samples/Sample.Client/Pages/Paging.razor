@@ -1,0 +1,42 @@
+@page "/paging"
+@inject ScryQuery Query
+
+<PageTitle>Scry Sample — Paging</PageTitle>
+
+<h1>Paging</h1>
+<p><a href="/">← Samples</a> · <a href="/scry">Explorer</a></p>
+<p>
+    Employees fetched one page at a time with <code>ToPageAsync</code>. The client sends an offset and a
+    page size; the server returns just that page of rows plus <code>HasMore</code>, which is what enables
+    the Next button.
+</p>
+
+@if (error is not null)
+{
+    <p class="error" role="alert">@error</p>
+}
+
+@if (page is null)
+{
+    <p class="loading">Loading…</p>
+}
+else
+{
+    <table>
+        <thead>
+            <tr><th>Name</th><th>Status</th><th>Department</th></tr>
+        </thead>
+        <tbody>
+        @foreach (var row in page.Items)
+        {
+            <tr><td>@row.Name</td><td>@row.Status</td><td>@row.Department</td></tr>
+        }
+        </tbody>
+    </table>
+
+    <div class="pager">
+        <button disabled="@(pageIndex == 0)" @onclick="PreviousPage">← Previous</button>
+        <span>Page @(pageIndex + 1)</span>
+        <button disabled="@(!page.HasMore)" @onclick="NextPage">Next →</button>
+    </div>
+}

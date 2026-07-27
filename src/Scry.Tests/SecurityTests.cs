@@ -55,6 +55,22 @@ public class SecurityTests
             options => options.MaxPageSize = 2);
 
     [Test]
+    public void RejectsPageSizeOverMaxPageSize() =>
+        AssertRejected(
+            QueryRequest.Create("Employee", [new PageOp(50)]),
+            options => options.MaxPageSize = 2);
+
+    [Test]
+    public void RejectsPagingGroupedQuery() =>
+        AssertRejected(QueryRequest.Create(
+            "Order",
+            [
+                new GroupByOp([new MemberNode(["Region"])]),
+                new SelectOp(new([new("Region", new NodeValue(new MemberNode(["Region"])))])),
+                new PageOp(10)
+            ]));
+
+    [Test]
     public void RejectsAggregateWithoutGroupBy() =>
         AssertRejected(QueryRequest.Create(
             "Order",

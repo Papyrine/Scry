@@ -3,7 +3,8 @@ namespace Scry.Wire;
 /// <summary>
 /// A serialized query result. <see cref="Payload"/> is a JSON array of projected rows for
 /// <see cref="ResultKind.List"/>, a single projected object for <see cref="ResultKind.Single"/>,
-/// or a scalar for <see cref="ResultKind.Scalar"/>.
+/// a scalar for <see cref="ResultKind.Scalar"/>, or a <see cref="ScryPage{T}"/> envelope
+/// (<c>items</c> + <c>hasMore</c> + <c>cursor</c>) for <see cref="ResultKind.Page"/>.
 /// </summary>
 // begin-snippet: wireResponse
 public sealed record QueryResponse(int Version, ResultKind Kind, JsonElement Payload)

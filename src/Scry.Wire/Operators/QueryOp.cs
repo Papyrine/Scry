@@ -18,5 +18,6 @@ namespace Scry.Wire;
 [JsonDerivedType(typeof(AnyOp), "any")]
 [JsonDerivedType(typeof(FirstOp), "first")]
 [JsonDerivedType(typeof(SingleOp), "single")]
+[JsonDerivedType(typeof(PageOp), "page")]
 public abstract record QueryOp;
 // end-snippet

@@ -60,9 +60,10 @@ name. The full vocabulary is:
 [JsonDerivedType(typeof(AnyOp), "any")]
 [JsonDerivedType(typeof(FirstOp), "first")]
 [JsonDerivedType(typeof(SingleOp), "single")]
+[JsonDerivedType(typeof(PageOp), "page")]
 public abstract record QueryOp;
 ```
-<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: wireExpressions -->
@@ -165,6 +166,12 @@ See [Row policies](policies.md).
 /// <summary>Maximum number of rows a single query may request via <c>Take</c>. Default 1000.</summary>
 public int MaxPageSize { get; set; } = 1000;
 
+/// <summary>
+/// Page size applied to a paged query (<c>ToPageAsync</c>) that does not request one. Bounds an
+/// otherwise-unbounded page; the effective size is always capped by <see cref="MaxPageSize"/>. Default 100.
+/// </summary>
+public int DefaultPageSize { get; set; } = 100;
+
 /// <summary>Maximum navigation-path length allowed in a member expression. Default 4.</summary>
 public int MaxNavigationDepth { get; set; } = 4;
 
@@ -174,7 +181,7 @@ public int MaxPipelineLength { get; set; } = 32;
 /// <summary>Maximum expression nesting depth in a predicate. Default 32.</summary>
 public int MaxExpressionDepth { get; set; } = 32;
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 These bound the work a single request can ask for: how many rows, how deep a join chain, how long a

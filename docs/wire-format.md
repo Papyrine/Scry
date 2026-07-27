@@ -73,9 +73,10 @@ CLR type is likely to be renamed.
 [JsonDerivedType(typeof(AnyOp), "any")]
 [JsonDerivedType(typeof(FirstOp), "first")]
 [JsonDerivedType(typeof(SingleOp), "single")]
+[JsonDerivedType(typeof(PageOp), "page")]
 public abstract record QueryOp;
 ```
-<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 | `$type` | Payload | Meaning |
@@ -91,6 +92,7 @@ public abstract record QueryOp;
 | `any` | `predicate: Node?` | Terminal, scalar. |
 | `first` | `orDefault: bool`, `predicate: Node?` | Terminal, single. |
 | `single` | `orDefault: bool`, `predicate: Node?` | Terminal, single. |
+| `page` | `size: int?` | Terminal, page. Bounded page of rows; `size` null uses `DefaultPageSize`, capped by `MaxPageSize`. See [Paging](paging.md). |
 
 At most one terminal, and nothing may follow it.
 
@@ -327,7 +329,7 @@ public sealed record QueryResponse(int Version, ResultKind Kind, JsonElement Pay
         new(WireFormat.Version, kind, payload);
 }
 ```
-<sup><a href='/src/Scry.Wire/QueryResponse.cs#L8-L15' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireResponse' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/QueryResponse.cs#L9-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireResponse' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ```json
@@ -343,6 +345,7 @@ public sealed record QueryResponse(int Version, ResultKind Kind, JsonElement Pay
 | `List` | An array of projected row objects. |
 | `Single` | One projected row object, or `null`. |
 | `Scalar` | A bare value (`int` for `count`, `bool` for `any`). |
+| `Page` | A `ScryPage` envelope: `{ items: [...], hasMore: bool, cursor: string? }`. See [Paging](paging.md). |
 
 The client checks that `kind` matches the terminal it sent and throws `ScryWireException` if it does
 not.

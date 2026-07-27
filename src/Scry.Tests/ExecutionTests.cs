@@ -132,6 +132,55 @@ public class ExecutionTests
     }
 
     [Test]
+    public Task PagedFirstPageReportsMore()
+    {
+        // Page size 2 over the four seeded employees (ordered by Name) returns the first two rows in a
+        // page envelope with hasMore true and no cursor.
+        var request = QueryRequest.Create(
+            "Employee",
+            [
+                new OrderByOp(new MemberNode(["Name"]), false),
+                new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))])),
+                new PageOp(2)
+            ]);
+
+        return VerifyResponse(request);
+    }
+
+    [Test]
+    public Task PagedLastPageReportsNoMore()
+    {
+        // Skip past the first page, then take a page of 2 — only Bob and Carol remain, so hasMore is false.
+        var request = QueryRequest.Create(
+            "Employee",
+            [
+                new OrderByOp(new MemberNode(["Name"]), false),
+                new SkipOp(2),
+                new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))])),
+                new PageOp(2)
+            ]);
+
+        return VerifyResponse(request);
+    }
+
+    [Test]
+    public Task PagedWithoutSizeUsesDefaultPageSize()
+    {
+        // A page that requests no size falls back to the server's DefaultPageSize (set to 2 here).
+        var request = QueryRequest.Create(
+            "Employee",
+            [
+                new OrderByOp(new MemberNode(["Name"]), false),
+                new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))])),
+                new PageOp(Size: null)
+            ]);
+
+        using var context = TestContext.CreateSeeded();
+        var response = Processor(_ => _.DefaultPageSize = 2).Execute(request, context);
+        return Verify(Pretty(ScryJson.Serialize(response)));
+    }
+
+    [Test]
     public Task PolicyScopesRowsBeforeClientFilter()
     {
         // No client filter on Active, but the policy restricts to active rows (Bob is inactive).

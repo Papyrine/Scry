@@ -80,6 +80,11 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             return Single(row, plan);
         }
 
+        if (terminal is PageOp page)
+        {
+            return Page(projected, plan, page);
+        }
+
         var rows = projected.ToList();
         var array = rows.Select(_ => Shape(_, plan)).ToArray();
         return QueryResponse.Create(ResultKind.List, JsonSerializer.SerializeToElement(array, ScryJson.Options));
@@ -204,6 +209,23 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             "SingleOrDefault" => projected.SingleOrDefault(),
             _ => throw new($"Unknown row method '{method}'.")
         };
+
+    QueryResponse Page(IQueryable<object[]> projected, ProjectionPlan plan, PageOp page)
+    {
+        var size = Math.Min(page.Size ?? options.DefaultPageSize, options.MaxPageSize);
+        // Fetch one extra row to detect a further page without issuing a second COUNT query.
+        var rows = projected.Take(size + 1).ToList();
+        var hasMore = rows.Count > size;
+        if (hasMore)
+        {
+            rows.RemoveRange(size, rows.Count - size);
+        }
+
+        var items = rows.Select(_ => Shape(_, plan)).ToArray();
+        // Cursor stays null until keyset paging (slice 2); offset paging advances with Skip + HasMore.
+        var envelope = new ScryPage<Dictionary<string, object?>>(items, hasMore, Cursor: null);
+        return QueryResponse.Create(ResultKind.Page, JsonSerializer.SerializeToElement(envelope, ScryJson.Options));
+    }
 
     static QueryResponse Scalar<T>(T value) =>
         QueryResponse.Create(ResultKind.Scalar, JsonSerializer.SerializeToElement(value, ScryJson.Options));

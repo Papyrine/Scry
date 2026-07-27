@@ -195,6 +195,36 @@ public class ClientRoundTripTests
     }
 
     [Test]
+    public async Task PagingWithSkipReportsHasMore()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // Ordered by Name the four seeded employees are Aaron, Alice, Bob, Carol. A page size of 2
+        // yields the first two with HasMore, then Skip(2) advances to the last two with HasMore false.
+        var first = await client.Source<Employee>("Employee")
+            .OrderBy(_ => _.Name)
+            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
+            .ToPageAsync(2);
+
+        var second = await client.Source<Employee>("Employee")
+            .OrderBy(_ => _.Name)
+            .Skip(2)
+            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
+            .ToPageAsync(2);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(first.Items.Select(_ => _.Name), Is.EqualTo(["Aaron", "Alice"]));
+            Assert.That(first.HasMore, Is.True);
+            // Cursor is null until keyset paging (slice 2); offset paging advances with Skip.
+            Assert.That(first.Cursor, Is.Null);
+            Assert.That(second.Items.Select(_ => _.Name), Is.EqualTo(["Bob", "Carol"]));
+            Assert.That(second.HasMore, Is.False);
+        });
+    }
+
+    [Test]
     public void ToAsyncEnumerableNotSupportedYet()
     {
         using var context = TestContext.CreateSeeded();

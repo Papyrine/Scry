@@ -97,6 +97,44 @@ public class WireSerializationTests
     }
 
     [Test]
+    public Task PageTerminalRoundTrips()
+    {
+        var request = QueryRequest.Create(
+            "Employees",
+            [
+                new OrderByOp(new MemberNode(["Name"]), Descending: false),
+                new PageOp(20)
+            ]);
+
+        return VerifyRoundTrip(request);
+    }
+
+    [Test]
+    public void PageEnvelopeResponseRoundTrips()
+    {
+        var page = new ScryPage<Dictionary<string, object?>>(
+            [new(StringComparer.Ordinal) { ["name"] = "Alice" }],
+            HasMore: true,
+            Cursor: null);
+        var json = ScryJson.Serialize(
+            QueryResponse.Create(ResultKind.Page, JsonSerializer.SerializeToElement(page, ScryJson.Options)));
+
+        // A null cursor is omitted from the wire, matching the fail-when-writing-null contract.
+        Assert.That(json, Does.Not.Contain("cursor"));
+
+        var response = ScryJson.DeserializeResponse(json);
+        Assert.That(response.Kind, Is.EqualTo(ResultKind.Page));
+
+        var roundTripped = response.Payload.Deserialize<ScryPage<Dictionary<string, object?>>>(ScryJson.Options)!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(roundTripped.HasMore, Is.True);
+            Assert.That(roundTripped.Cursor, Is.Null);
+            Assert.That(roundTripped.Items, Has.Count.EqualTo(1));
+        });
+    }
+
+    [Test]
     public void UnknownDiscriminatorFailsClosed()
     {
         var json = """{"version":1,"root":"Employees","pipeline":[{"$type":"evil","predicate":null}]}""";

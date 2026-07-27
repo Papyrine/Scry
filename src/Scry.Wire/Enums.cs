@@ -88,5 +88,6 @@ public enum ResultKind
 {
     List,
     Scalar,
-    Single
+    Single,
+    Page
 }

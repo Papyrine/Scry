@@ -105,6 +105,28 @@ public static class ScryQueryableExtensions
         return response.Payload.Deserialize<bool>(ScryJson.Options);
     }
 
+    /// <summary>
+    /// Executes the query and returns a bounded page using the server's default page size, plus
+    /// whether further rows exist. Advance to the next page with <c>Skip</c>.
+    /// </summary>
+    public static Task<ScryPage<T>> ToPageAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>
+        Page(source, new PageOp(Size: null), cancel);
+
+    /// <summary>
+    /// Executes the query and returns a page of at most <paramref name="pageSize"/> rows (capped by the
+    /// server's <c>MaxPageSize</c>), plus whether further rows exist. Advance with <c>Skip</c>.
+    /// </summary>
+    public static Task<ScryPage<T>> ToPageAsync<T>(this IQueryable<T> source, int pageSize, Cancel cancel = default) =>
+        Page(source, new PageOp(pageSize), cancel);
+
+    static async Task<ScryPage<T>> Page<T>(IQueryable<T> source, PageOp terminal, Cancel cancel)
+    {
+        var response = await Send(source, terminal, cancel);
+        EnsureKind(response, ResultKind.Page);
+        return response.Payload.Deserialize<ScryPage<T>>(ScryJson.Options) ??
+               throw new ScryWireException("Page result deserialized to null.");
+    }
+
     static async Task<T?> Single<T>(IQueryable<T> source, QueryOp terminal, Cancel cancel)
     {
         var response = await Send(source, terminal, cancel);

@@ -134,6 +134,24 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     terminalIndex = i;
                     break;
 
+                case PageOp page:
+                    if (sawGroupBy)
+                    {
+                        throw Reject("Paging is not supported over a grouped query.");
+                    }
+
+                    if (page.Size is { } pageSize)
+                    {
+                        EnsureNonNegative(pageSize, "Page size");
+                        if (pageSize > options.MaxPageSize)
+                        {
+                            throw Reject($"Page size {pageSize} exceeds the maximum page size of {options.MaxPageSize}.");
+                        }
+                    }
+
+                    terminalIndex = i;
+                    break;
+
                 default:
                     throw Reject($"Unsupported operator '{op.GetType().Name}'.");
             }

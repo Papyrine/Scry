@@ -10,6 +10,12 @@ public sealed class ScryOptions(Type contextType)
     /// <summary>Maximum number of rows a single query may request via <c>Take</c>. Default 1000.</summary>
     public int MaxPageSize { get; set; } = 1000;
 
+    /// <summary>
+    /// Page size applied to a paged query (<c>ToPageAsync</c>) that does not request one. Bounds an
+    /// otherwise-unbounded page; the effective size is always capped by <see cref="MaxPageSize"/>. Default 100.
+    /// </summary>
+    public int DefaultPageSize { get; set; } = 100;
+
     /// <summary>Maximum navigation-path length allowed in a member expression. Default 4.</summary>
     public int MaxNavigationDepth { get; set; } = 4;
 

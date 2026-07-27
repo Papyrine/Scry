@@ -81,7 +81,7 @@ Or in code, which takes precedence over the attribute on the same type:
 ```cs
 var response = Processor(_ => _.AddPolicy<Employee, ActiveOnlyPolicy>()).Execute(request, context);
 ```
-<sup><a href='/src/Scry.Tests/ExecutionTests.cs#L146-L148' title='Snippet source file'>snippet source</a> | <a href='#snippet-addPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExecutionTests.cs#L195-L197' title='Snippet source file'>snippet source</a> | <a href='#snippet-addPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Code registration is the better fit when the policy lives in the server project and the model project
