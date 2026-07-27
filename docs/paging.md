@@ -24,8 +24,10 @@ admin table. It is the wrong default for a real paging feature for two well-know
 - **It degrades.** `Skip(100_000)` makes the database walk and discard 100 000 rows on every page.
 
 Keyset paging seeks directly to the resume point (`WHERE key > lastKey ORDER BY key`), which is O(1)
-in the page offset and stable across writes. Relay made cursors idiomatic for exactly this reason;
-OData added `$skiptoken` on top of `$skip` for the same reason. Scry follows suit.
+in the page offset and stable across writes — Markus Winand's [use-the-index-luke.com/no-offset](https://use-the-index-luke.com/no-offset)
+is the canonical write-up. [Relay](https://relay.dev/graphql/connections.htm) made cursors idiomatic
+for exactly this reason; [OData](https://learn.microsoft.com/en-us/odata/webapi/skiptoken-for-server-side-paging)
+added `$skiptoken` on top of `$skip` for the same reason. Scry follows suit.
 
 ## The grammar — one new terminal
 
@@ -210,14 +212,18 @@ garbage. The signing key is server-only and never leaves the server.
 
 ### Is signing necessary? (belt-and-suspenders, by design)
 
-Opaque cursors are universal (Relay/GraphQL connections, OData `$skiptoken`, Stripe, GitHub, AWS
-`NextToken`, DynamoDB `LastEvaluatedKey`). **Signing** them is not: API designs split into two camps.
+Opaque cursors are universal ([Relay/GraphQL connections](https://relay.dev/graphql/connections.htm),
+[OData `$skiptoken`](https://learn.microsoft.com/en-us/odata/webapi/skiptoken-for-server-side-paging),
+[Stripe](https://docs.stripe.com/api/pagination), GitHub, AWS `NextToken`, DynamoDB `LastEvaluatedKey`).
+**Signing** them is not: API designs split into two camps.
 
-- **Unsigned, re-validated** — Stripe (`starting_after` is just an object ID) and most Relay
-  implementations (cursors are plain `base64(...)`). Tampering is harmless because the value is
-  re-scoped and re-authorized server-side on every request.
-- **Signed or encrypted** — much of AWS and JWT-style stateless tokens, so the server can reject
-  anything it did not mint and treat the payload as trusted.
+- **Unsigned, re-validated** — [Stripe](https://docs.stripe.com/api/pagination) (`starting_after` is
+  just an object ID) and most [Relay](https://relay.dev/graphql/connections.htm) implementations
+  (cursors are plain `base64(...)`). Tampering is harmless because the value is re-scoped and
+  re-authorized server-side on every request.
+- **Signed or encrypted** — much of [AWS](https://github.com/amazon-archives/realworld-serverless-application/wiki/List-API-Pagination)
+  and JWT-style stateless tokens, so the server can reject anything it did not mint and treat the
+  payload as trusted.
 
 Scry belongs to the **first** camp: a decoded cursor is re-validated and policy-filtered like any
 predicate (see above), so tampering is already safe. The HMAC is therefore **optional hardening**, not
@@ -230,7 +236,8 @@ Two caveats if you keep it:
   see the ordering-key values (`Name = "Alice"`, `Id = 1`). For Scry that is low-sensitivity: the
   client ordered by those columns and already saw those rows. But if a cursor could ever carry
   something a client should not read, use authenticated **encryption** (e.g. AES-GCM), not bare HMAC —
-  which is why AWS encrypts its pagination tokens.
+  which is why [AWS recommends encrypting](https://github.com/amazon-archives/realworld-serverless-application/wiki/List-API-Pagination)
+  its pagination tokens.
 - **A signed self-contained token is stateful about its key.** With the ephemeral default key a cursor
   dies on restart or across instances; set a stable `CursorSigningKey` for a scaled-out or
   restart-tolerant deployment (see [Limits](#limits)).
