@@ -55,6 +55,7 @@ public sealed class SampleContext(DbContextOptions<SampleContext> options) :
             Name = "Alice",
             Status = Status.FullTime,
             Active = true,
+            Created = new(2026, 1, 4),
             Department = engineering,
             Salary = 200_000
         };
@@ -65,6 +66,7 @@ public sealed class SampleContext(DbContextOptions<SampleContext> options) :
                 Name = "Aaron",
                 Status = Status.FullTime,
                 Active = true,
+                Created = new(2026, 1, 4),
                 Department = engineering,
                 Manager = alice,
                 Salary = 150_000
@@ -74,6 +76,7 @@ public sealed class SampleContext(DbContextOptions<SampleContext> options) :
                 Name = "Bob",
                 Status = Status.PartTime,
                 Active = false,
+                Created = new(2026, 2, 1),
                 Department = sales,
                 Manager = alice,
                 Salary = 90_000
@@ -83,6 +86,7 @@ public sealed class SampleContext(DbContextOptions<SampleContext> options) :
                 Name = "Carol",
                 Status = Status.Contractor,
                 Active = true,
+                Created = new(2026, 3, 1),
                 Department = sales,
                 Salary = 120_000
             });

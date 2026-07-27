@@ -8,6 +8,7 @@ public class Employee
     public string Name { get; set; } = "";
     public Status Status { get; set; }
     public bool Active { get; set; }
+    public DateOnly Created { get; set; }
 
     public int? ManagerId { get; set; }
     public Employee? Manager { get; set; }

@@ -19,6 +19,7 @@ public class Employee
     public string Name { get; set; } = "";
     public Status Status { get; set; }
     public bool Active { get; set; }
+    public DateOnly Created { get; set; }
 
     public int? ManagerId { get; set; }
     public Employee? Manager { get; set; }
@@ -31,7 +32,7 @@ public class Employee
     public decimal Salary { get; set; }
 }
 ```
-<sup><a href='/samples/Sample.Model/Entities/Employee.cs#L3-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableEntity' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Model/Entities/Employee.cs#L3-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableEntity' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Nothing is exposed without an opt-in attribute, and the server re-validates every incoming query

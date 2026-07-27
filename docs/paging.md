@@ -1,10 +1,5 @@
 # Paging
 
-> **Status: implemented.** Both offset paging (`ToPageAsync` + `ScryPage` + `HasMore` + `DefaultPageSize`)
-> and keyset **cursors** (opaque HMAC-signed token, server-appended total order, lexicographic seek) are
-> live. A cursor is emitted for a [seek-safe](#the-seek-safe-rule) query and null otherwise (offset
-> fallback). This page governs the design the way [security.md](security.md) governs the wire.
-
 Scry's paging model is **keyset-native**: the primary, blessed way to page a large result set is an
 opaque server-issued **cursor** that resumes a stable ordering. Offset paging (`Skip`/`Take`) remains
 available for small ad-hoc jumps, but cursors are what the docs push and what scales.
@@ -34,6 +29,8 @@ added `$skiptoken` on top of `$skip` for the same reason. Scry follows suit.
 Paging adds a single client terminal, `ToPageAsync`, and otherwise reuses the operators the client
 already writes: an `OrderBy` for the sort, a page size, and a cursor handed back from the previous page.
 
+<!-- snippet: pagingGrammar -->
+<a id='snippet-pagingGrammar'></a>
 ```cs
 // Page 1 — an ordered query with a page size.
 var page = await Query.Employee
@@ -54,6 +51,8 @@ if (page.HasMore)
         .ToPageAsync(20, page.Cursor);
 }
 ```
+<sup><a href='/samples/Sample.Client/Pages/PagingGrammar.cs#L9-L28' title='Snippet source file'>snippet source</a> | <a href='#snippet-pagingGrammar' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
 Roles of the pieces:
 
