@@ -13,7 +13,7 @@ employees = await Query.Employee
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L28-L34' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L25-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The supported surface is deliberately closed. Anything outside it fails fast with a clear
@@ -101,12 +101,21 @@ sends the request.
 | Method | Returns | Result kind |
 | --- | --- | --- |
 | `ToListAsync()` | `Task<List<T>>` | list |
+| `ToArrayAsync()` | `Task<T[]>` | list |
+| `ToHashSetAsync()` | `Task<HashSet<T>>` | list |
+| `ToDictionaryAsync(keySelector[, elementSelector][, comparer])` | `Task<Dictionary<TKey, …>>` | list |
+| `ToLookupAsync(keySelector[, elementSelector][, comparer])` | `Task<ILookup<TKey, …>>` | list |
 | `FirstAsync()` | `Task<T?>` | single |
 | `FirstOrDefaultAsync()` | `Task<T?>` | single |
 | `SingleAsync()` | `Task<T?>` | single |
 | `SingleOrDefaultAsync()` | `Task<T?>` | single |
 | `CountAsync()` | `Task<int>` | scalar |
 | `AnyAsync()` | `Task<bool>` | scalar |
+
+The collection-shaping terminals (`ToArrayAsync`, `ToHashSetAsync`, `ToDictionaryAsync`,
+`ToLookupAsync`) all send the same **list** request as `ToListAsync` and reshape the returned rows in
+memory — there is no streaming wire, so their key/element selectors and comparers run client-side over
+the materialised result.
 
 Each takes an optional `CancellationToken`. There are no predicate overloads on the client — filter
 with `Where` first:
@@ -253,7 +262,7 @@ fullTimers = await Query.Employee
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L43-L50' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L40-L47' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `status` and `top` are locals; the translator compiles and invokes those sub-expressions, then emits
@@ -344,7 +353,7 @@ regions = await Query.Order
     .Select(_ => new RegionSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L36-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L33-L38' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: wireAggregates -->
@@ -423,3 +432,11 @@ a `Select` in between; and there is no second `GroupBy` or `Select`. `ThenBy` wi
 | Server, during validation | `ScryValidationException` → `400` | The request violates the allow-list or a limit. |
 
 See [Server](server.md#error-handling) for the response bodies.
+
+## Future enhancements
+
+- **Streaming results (`ToAsyncEnumerable`).** The wire currently carries each query result as a
+  single response, so there is nothing to enumerate incrementally. `ToAsyncEnumerable` therefore
+  throws `NotSupportedException` for now; use `ToListAsync`. A streaming wire (chunked or paged
+  transport that yields rows as they arrive) is the intended way to make it real, at which point the
+  terminal would stream rather than buffer.

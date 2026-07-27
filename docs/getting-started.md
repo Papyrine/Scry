@@ -93,7 +93,7 @@ builder.Services
         _.MaxPageSize = 200;
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L13-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L26-L36' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddScry<TContext>` scans `typeof(TContext).Assembly` once at startup, builds the allow-list schema,
@@ -109,7 +109,7 @@ Then map the endpoint:
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L35-L37' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L43-L45' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 That is a single HTTP `POST` endpoint which accepts a serialized query and returns the projected
@@ -173,7 +173,7 @@ record EmployeeRow(string Name, Status Status, string? Manager, string Departmen
 
 record RegionSummary(string Region, decimal Total, int Count);
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L8-L12' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientProjectionTypes' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L5-L9' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientProjectionTypes' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 then write ordinary LINQ:
@@ -187,7 +187,7 @@ employees = await Query.Employee
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L28-L34' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L25-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 That query is captured — never executed client-side — serialized to the wire AST, POSTed, validated

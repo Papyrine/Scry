@@ -300,6 +300,8 @@ public class UiSnapshotTests
         var items = await page.Locator("[data-testid='completions'] li").AllInnerTextsAsync();
 
         Assert.That(items, Does.Contain("ToListAsync"));
+        Assert.That(items, Does.Contain("ToArrayAsync"));
+        Assert.That(items, Does.Contain("ToDictionaryAsync"));
         Assert.That(items, Does.Contain("FirstAsync"));
         Assert.That(items, Does.Contain("CountAsync"));
     }

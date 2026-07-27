@@ -79,14 +79,31 @@ public sealed class SnippetExecutor
         return (QueryRequest)runner.GetMethod("Run")!.Invoke(null, [query])!;
     }
 
-    // Recognised zero-argument terminal operators → their wire QueryOp ("" = enumerate to a list).
-    // Both the Scry async terminals (the real client API) and the plain-LINQ equivalents are accepted,
-    // so habitual `.ToList()`/`.Count()`/`.First()` work too.
-    static Dictionary<string, string> terminals = new(StringComparer.Ordinal)
+    // Collection-shaping terminals that all enumerate to a list on the wire. Their arguments (key
+    // selectors, element selectors, comparers) reshape the result client-side and do not affect the
+    // request, so these are stripped regardless of argument count. Both the Scry async terminals (the
+    // real client API) and the plain-LINQ equivalents are accepted, so habitual `.ToList()` works too.
+    static HashSet<string> collectionTerminals = new(StringComparer.Ordinal)
     {
-        ["ToListAsync"] = "",
-        ["ToList"] = "",
-        ["ToArray"] = "",
+        "ToListAsync",
+        "ToList",
+        "ToArrayAsync",
+        "ToArray",
+        "ToHashSetAsync",
+        "ToHashSet",
+        "ToDictionaryAsync",
+        "ToDictionary",
+        "ToLookupAsync",
+        "ToLookup"
+        // ToAsyncEnumerable is intentionally absent: streaming is not supported yet (the client
+        // terminal throws), so the explorer must not fold it into a valid list request either.
+    };
+
+    // Scalar/element terminals → their wire QueryOp. Only recognised with zero arguments: a predicate
+    // overload (e.g. `.First(_ => _.Active)`) affects the wire and must not be silently dropped, so it
+    // is left intact and translated as part of the pipeline instead.
+    static Dictionary<string, string> scalarTerminals = new(StringComparer.Ordinal)
+    {
         ["FirstAsync"] = "new global::Scry.Wire.FirstOp(false, null)",
         ["First"] = "new global::Scry.Wire.FirstOp(false, null)",
         ["FirstOrDefaultAsync"] = "new global::Scry.Wire.FirstOp(true, null)",
@@ -106,7 +123,7 @@ public sealed class SnippetExecutor
     /// expression and its wire terminal op ("" means enumerate to a list). A trailing ';' and a leading
     /// 'await' are tolerated. The terminal is stripped rather than executed — synchronous enumeration
     /// (e.g. plain <c>.ToList()</c>) would deadlock on the single-threaded WASM runtime. Anything that
-    /// is not a recognised zero-argument terminal is left intact (i.e. translated as a list).
+    /// is not a recognised terminal is left intact (i.e. translated as a list).
     /// </summary>
     static (string Expression, string Terminal) Rewrite(string code)
     {
@@ -117,10 +134,23 @@ public sealed class SnippetExecutor
             expression = awaited.Expression;
         }
 
-        if (expression is InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax member, ArgumentList.Arguments.Count: 0} &&
-            terminals.TryGetValue(member.Name.Identifier.ValueText, out var terminal))
+        if (expression is InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax member } invocation)
         {
-            return (member.Expression.ToString(), terminal);
+            var name = member.Name.Identifier.ValueText;
+
+            // Collection terminals enumerate to a list; their arguments (selectors/comparers) are
+            // client-side shaping and do not change the wire request, so strip whatever the arity.
+            if (collectionTerminals.Contains(name))
+            {
+                return (member.Expression.ToString(), "");
+            }
+
+            // Scalar terminals only when written without a predicate — otherwise the filter would be lost.
+            if (invocation.ArgumentList.Arguments.Count == 0 &&
+                scalarTerminals.TryGetValue(name, out var terminal))
+            {
+                return (member.Expression.ToString(), terminal);
+            }
         }
 
         return (expression.ToString(), "");

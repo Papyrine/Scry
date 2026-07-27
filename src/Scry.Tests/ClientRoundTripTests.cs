@@ -162,6 +162,44 @@ public class ClientRoundTripTests
     }
 
     [Test]
+    public async Task CollectionShapingTerminals()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var query = client.Source<Employee>("Employee")
+            .OrderBy(_ => _.Name)
+            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name));
+
+        // Every terminal sends the same list request and reshapes the four seeded rows client-side.
+        var array = await query.ToArrayAsync();
+        var hashSet = await query.ToHashSetAsync();
+        var byName = await query.ToDictionaryAsync(_ => _.Name);
+        var namesByStatus = await query.ToDictionaryAsync(_ => _.Name, _ => _.Status);
+        var byStatus = await query.ToLookupAsync(_ => _.Status);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(array.Select(_ => _.Name), Is.EqualTo(new[] { "Aaron", "Alice", "Bob", "Carol" }));
+            Assert.That(hashSet, Has.Count.EqualTo(4));
+            Assert.That(byName.Keys, Is.EquivalentTo(new[] { "Aaron", "Alice", "Bob", "Carol" }));
+            Assert.That(namesByStatus["Alice"], Is.EqualTo(Status.FullTime));
+            Assert.That(byStatus[Status.FullTime].Select(_ => _.Name), Is.EquivalentTo(new[] { "Aaron", "Alice" }));
+        });
+    }
+
+    [Test]
+    public void ToAsyncEnumerableNotSupportedYet()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // Streaming is a planned enhancement; the terminal throws rather than silently buffering.
+        Assert.Throws<NotSupportedException>(() =>
+            client.Source<Employee>("Employee").ToAsyncEnumerable());
+    }
+
+    [Test]
     public void UnsupportedProjectionThrows()
     {
         using var context = TestContext.CreateSeeded();

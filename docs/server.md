@@ -19,7 +19,7 @@ builder.Services
         _.MaxPageSize = 200;
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L13-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L26-L36' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddPocoSource` registers the data for a `[QueryablePoco]` type — see
@@ -46,7 +46,7 @@ Failures surface at startup, not at first request:
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L35-L37' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L43-L45' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 One `POST` endpoint. The request body is a [`QueryRequest`](wire-format.md); the response body is a
@@ -165,7 +165,7 @@ static ScryClient ClientFor(TestContext context)
     return new((request, _) => Task.FromResult(processor.Execute(request, context)));
 }
 ```
-<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L176-L184' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessClient' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L214-L222' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessClient' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ## Execution pipeline
