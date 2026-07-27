@@ -4,6 +4,7 @@
 
 You rarely construct these types by hand; the client translator emits them and the server consumes them. This page is the reference for anyone writing another client, debugging a request, or reviewing the surface.
 
+
 ## Serialization
 
 All (de)serialization goes through `ScryJson`, whose options are part of the contract:
@@ -14,6 +15,7 @@ All (de)serialization goes through `ScryJson`, whose options are part of the con
 - Null-valued **properties** are omitted — so optional AST members such as `predicate` or a null constant's `value` simply do not appear. Result rows are dictionaries, not properties, so an explicit `null` column is still written.
 - Polymorphic types use a `$type` discriminator.
 - Deserialization is **fail-closed**: unknown discriminators and malformed JSON throw `ScryWireException`, they are not skipped.
+
 
 ## Request
 
@@ -59,6 +61,7 @@ public sealed record QueryRequest(int Version, string Root, IReadOnlyList<QueryO
 Because `root` is part of the contract, prefer setting `Name` over relying on the type name if the CLR type is likely to be renamed.
 
 `QueryRequest.Create(root, pipeline)` fills in the current wire version, and takes an optional schema stamp.
+
 
 ## Operators
 
@@ -122,6 +125,7 @@ Nothing filters, orders, skips, or takes after `GroupBy`; a `GroupBy` cannot rea
 a `Select` in between; and there is no second `GroupBy` or `Select`. `ThenBy` without a preceding
 `OrderBy` is rejected, and nothing may follow a terminal.<!-- endInclude -->
 
+
 ## Expressions
 
 <!-- snippet: wireExpressions -->
@@ -139,6 +143,7 @@ public abstract record Node;
 <sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
+
 ### `member`
 
 ```json
@@ -146,6 +151,7 @@ public abstract record Node;
 ```
 
 A navigation path of allow-listed property names. Each segment is validated against the allow-list of the type reached so far; every non-final segment must be a reference navigation.
+
 
 ### `const`
 
@@ -180,6 +186,7 @@ public enum ClrTypeTag
 <!-- endSnippet -->
 
 The tag is a hint, not an instruction. The server parses the value into the **member's** type at the comparison site, so `tag` never dictates what CLR type is constructed. Types with no dedicated tag (`TimeOnly`, `TimeSpan`, `DateTimeOffset`, `char`) travel as `String` and are reconciled the same way. A `Bytes` value carries a `byte[]` as a base64 string.
+
 
 ### `binary` and `unary`
 
@@ -224,6 +231,7 @@ public enum UnaryOp
 
 When one side is a constant, its type is inferred from the other side, and nullable/non-nullable operands are coerced to match.
 
+
 ### `call`
 
 ```json
@@ -257,6 +265,7 @@ public enum KnownFunction
 
 There is no free-form method name anywhere in the format. This enum is the complete set of behaviour a client can request.
 
+
 ### `aggregate`
 
 ```json
@@ -280,6 +289,7 @@ public enum AggregateFn
 <!-- endSnippet -->
 
 `selector` is omitted for `Count`. An aggregate is valid **only** as a projection member in a `select` that follows a `groupBy`.
+
 
 ## Projections
 
@@ -311,6 +321,7 @@ public abstract record ProjectionValue;
 | `nested` | `path: string[]`, `projection: Projection` | A nested JSON object built from a navigation. |
 
 A projection must have at least one member. Nested projections are not allowed in a grouped select, and nesting depth is capped by `MaxNavigationDepth`.
+
 
 ## Response
 
@@ -344,6 +355,7 @@ public sealed record QueryResponse(int Version, ResultKind Kind, JsonElement Pay
 
 The client checks that `kind` matches the terminal it sent and throws `ScryWireException` if it does not.
 
+
 ## Versioning
 
 <!-- snippet: wireVersion -->
@@ -368,6 +380,7 @@ public static class WireFormat
 `QueryRequest.Create` and `QueryResponse.Create` stamp the current version. The server rejects a request whose `version` is **greater** than its own — a newer client against an older server fails closed rather than being partially understood. Older requests continue to be accepted.
 
 The `ScryJson` options, the `$type` discriminator strings, and the enum member names are all part of the contract. Changing any of them is a wire break.
+
 
 ## Schema stamp
 
