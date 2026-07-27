@@ -9,6 +9,7 @@ It is off unless mapped, and Development-only by default.
 
 One screen shows the whole pipeline: the LINQ you wrote, the wire request it translated to, the rows the server returned, and the raw response envelope.
 
+
 ## Mapping it
 
 ```cs
@@ -19,6 +20,7 @@ app.MapScryExplorer("/scry");
 Then browse to `/scry`.
 
 The explorer requires `AddScry` — it resolves the `ScryProcessor` to describe the schema.
+
 
 ## Options
 
@@ -75,6 +77,7 @@ app.MapScryExplorer(options =>
 ```
 
 When the guard returns false every explorer route returns **404**, not 403 — a disabled explorer is indistinguishable from one that was never mapped.
+
 
 ## Introspection
 
@@ -387,6 +390,7 @@ You can produce the same contract programmatically:
 var introspection = processor.Describe();
 ```
 
+
 ## How it works
 
 Everything except two HTTP calls happens **in the browser**: the schema is fetched once, the model is synthesized and compiled with Roslyn locally, and only an already-translated wire request crosses to the server — the same endpoint any client POSTs to.
@@ -424,11 +428,13 @@ A trailing terminal (`.ToListAsync()`, `.FirstAsync()`, `.CountAsync()`, or a pl
 
 Only validated requests reach the server. The explorer is a convenience over the same endpoint, not a bypass of it — it cannot query anything a normal client could not.
 
+
 ## Deployment notes
 
 The UI is published and embedded as manifest resources inside the `Scry.Server.Explorer` assembly, so the package is fully self-contained: no static web assets manifest, no extra files to deploy, and nothing to configure beyond the route.
 
 Because the explorer reveals the complete queryable schema, leaving it mapped in production means publishing that schema to anyone who passes the guard. The Development-only default is deliberate.
+
 
 ## Regenerating the screenshots
 
