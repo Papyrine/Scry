@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 /// <summary>
 /// The server's authoritative allow-list, built once from the model assembly's annotations. The
@@ -9,6 +10,12 @@ sealed class Schema
 {
     readonly Dictionary<string, ScrySource> sources = new(StringComparer.Ordinal);
     readonly Dictionary<Type, TypeMeta> types = [];
+
+    // Captured for the startup guardrail (ValidateAgainstModel): the CLR types the annotations claim
+    // are EF-mapped entities/views versus the ones claimed to be complex value types. The classifiers
+    // work from attributes alone; only the live EF model can confirm the claim is right.
+    readonly List<Type> entitySourceTypes = [];
+    readonly List<Type> complexTypes = [];
 
     public bool TryGetSource(string name, [MaybeNullWhen(false)] out ScrySource source) =>
         sources.TryGetValue(name, out source);
@@ -51,7 +58,9 @@ sealed class Schema
     {
         if (member.Kind == MemberKind.Navigation)
         {
-            return new(member.Name, $"{member.Type.Name}QueryModel?", NeedsNullDefault: false, IsNavigation: true);
+            // Unwrap Nullable<T> so an optional struct complex member displays as its model, not Nullable`1.
+            var target = Nullable.GetUnderlyingType(member.Type) ?? member.Type;
+            return new(member.Name, $"{target.Name}QueryModel?", NeedsNullDefault: false, IsNavigation: true);
         }
 
         var underlying = Nullable.GetUnderlyingType(member.Type);
@@ -123,10 +132,21 @@ sealed class Schema
             {
                 var policy = ResolvePolicy(type, options);
                 discovered.Add((type, name, kind, policy));
+                if (kind is SourceKind.Entity or SourceKind.View)
+                {
+                    schema.entitySourceTypes.Add(type);
+                }
+            }
+            else if (type.GetCustomAttribute<QueryableComplexAttribute>() is not null)
+            {
+                // A complex type is a traversable member type, not a root source: it gets member
+                // metadata (below) but no source entry and no resolver.
+                schema.complexTypes.Add(type);
             }
         }
 
-        var queryableTypes = discovered.Select(_ => _.Type).ToHashSet();
+        // Navigation targets are every opted-in type — the sources plus the complex value types.
+        var queryableTypes = discovered.Select(_ => _.Type).Concat(schema.complexTypes).ToHashSet();
 
         // Pass 1: build the allow-listed member metadata for every queryable type.
         foreach (var type in queryableTypes)
@@ -134,7 +154,7 @@ sealed class Schema
             schema.types[type] = BuildTypeMeta(type, queryableTypes);
         }
 
-        // Pass 2: register each source with its resolver.
+        // Pass 2: register each source with its resolver. Complex types are deliberately absent.
         foreach (var (type, name, kind, policy) in discovered)
         {
             if (schema.sources.ContainsKey(name))
@@ -146,6 +166,45 @@ sealed class Schema
         }
 
         return schema;
+    }
+
+    /// <summary>
+    /// Confirms the annotations match the live EF model, throwing a directed error otherwise. The
+    /// generator and the reflection classifier both work from attributes alone (the generator never
+    /// sees <c>OnModelCreating</c>), so a type marked <c>[Queryable]</c> that is really a complex type,
+    /// or a <c>[QueryableComplex]</c> that is really an entity, would otherwise fail obscurely at query
+    /// time. Invoked once at startup from <c>MapScry</c>, where a live model is available.
+    /// </summary>
+    public void ValidateAgainstModel(IModel model, Type contextType)
+    {
+        // The CLR types EF actually maps as complex types. A source-annotated type appearing here (or a
+        // complex-annotated type that is really a mapped entity) is the mix-up worth catching; a type
+        // simply absent from the model is left alone, since [Queryable] is deliberately allowed on types
+        // that carry no DbSet.
+        var complexClrTypes = model.GetEntityTypes()
+            .SelectMany(_ => _.GetComplexProperties())
+            .Select(_ => _.ComplexType.ClrType)
+            .ToHashSet();
+
+        foreach (var type in entitySourceTypes)
+        {
+            if (complexClrTypes.Contains(type))
+            {
+                throw new(
+                    $"'{type.Name}' is marked [Queryable]/[QueryableView] but is an EF complex type in " +
+                    $"{contextType.Name}. Use [QueryableComplex].");
+            }
+        }
+
+        foreach (var type in complexTypes)
+        {
+            if (model.FindEntityType(type) is not null)
+            {
+                throw new(
+                    $"'{type.Name}' is marked [QueryableComplex] but is a mapped entity in " +
+                    $"{contextType.Name}. Use [Queryable] (or [QueryableView] for a keyless view).");
+            }
+        }
     }
 
     static bool TryClassify(Type type, out SourceKind kind, out string name)
@@ -221,10 +280,14 @@ sealed class Schema
             if (IsScalar(property.PropertyType))
             {
                 meta.Members[property.Name] = new(property.Name, property, MemberKind.Scalar);
+                continue;
             }
-            else if (queryableTypes.Contains(property.PropertyType))
+
+            // A reference navigation or a complex value type: traversable when the target is opted in.
+            // Unwrap Nullable<T> so an optional struct complex member (Address?) resolves to Address.
+            var target = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+            if (queryableTypes.Contains(target))
             {
-                // A reference navigation to another allow-listed type is traversable.
                 meta.Members[property.Name] = new(property.Name, property, MemberKind.Navigation);
             }
 

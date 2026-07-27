@@ -33,9 +33,29 @@ public class Employee
 
     public byte[] Avatar { get; set; } = [];
 
+    // A complex type mapped to a JSON column (see TestContext.OnModelCreating). Traversable via
+    // [QueryableComplex]; exercises Scry rebinding member access that EF translates into the JSON column.
+    public Address Address { get; set; } = new();
+
     [QueryIgnore]
     public decimal Salary { get; set; }
 }
+
+/// <summary>
+/// A complex value type mapped to JSON. Opted in with [QueryableComplex]: reachable only by
+/// traversing from <see cref="Employee"/> (e.g. Address.City), never as a root source. Zip is hidden.
+/// </summary>
+// begin-snippet: queryableComplex
+[QueryableComplex]
+public class Address
+{
+    public string City { get; set; } = "";
+    public string Country { get; set; } = "";
+
+    [QueryIgnore]
+    public string Zip { get; set; } = "";
+}
+// end-snippet
 
 [Queryable]
 public class Order
@@ -153,6 +173,14 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
         configurationBuilder.Properties<decimal>().HavePrecision(18, 2);
 
+    // Map the Address complex type into a JSON column, the scenario complex-type support targets.
+    protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+        // begin-snippet: complexToJson
+        modelBuilder.Entity<Employee>()
+            .ComplexProperty(_ => _.Address)
+            .ToJson();
+    // end-snippet
+
     static SqlInstance<TestContext> sqlInstance = null!;
     static SqlDatabase<TestContext> database = null!;
 
@@ -181,12 +209,12 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
         var sales = new Department { Name = "Sales" };
         context.Departments.AddRange(engineering, sales);
 
-        var alice = new Employee { Name = "Alice", Status = Status.FullTime, Active = true, Department = engineering, Salary = 200_000, Avatar = [0x01, 0x02, 0x03] };
+        var alice = new Employee { Name = "Alice", Status = Status.FullTime, Active = true, Department = engineering, Salary = 200_000, Avatar = [0x01, 0x02, 0x03], Address = new() { City = "London", Country = "UK", Zip = "EC1" } };
         context.Employees.Add(alice);
         context.Employees.AddRange(
-            new() { Name = "Aaron", Status = Status.FullTime, Active = true, Department = engineering, Manager = alice, Salary = 150_000, Avatar = [0x0A, 0x0B] },
-            new() { Name = "Bob", Status = Status.PartTime, Active = false, Department = sales, Manager = alice, Salary = 90_000, Avatar = [0xFF] },
-            new() { Name = "Carol", Status = Status.Contractor, Active = true, Department = sales, Salary = 120_000, Avatar = [] });
+            new() { Name = "Aaron", Status = Status.FullTime, Active = true, Department = engineering, Manager = alice, Salary = 150_000, Avatar = [0x0A, 0x0B], Address = new() { City = "London", Country = "UK", Zip = "W1" } },
+            new() { Name = "Bob", Status = Status.PartTime, Active = false, Department = sales, Manager = alice, Salary = 90_000, Avatar = [0xFF], Address = new() { City = "Berlin", Country = "DE", Zip = "10115" } },
+            new() { Name = "Carol", Status = Status.Contractor, Active = true, Department = sales, Salary = 120_000, Avatar = [], Address = new() { City = "Paris", Country = "FR", Zip = "75001" } });
 
         context.Orders.AddRange(
             new() { Region = "North", Amount = 100m, Quantity = 3, Sku = 1000 },

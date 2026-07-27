@@ -22,13 +22,23 @@ Not assumed:
 
 ### 1. Default-deny allow-list
 
-A type is invisible unless it carries `[Queryable]`, `[QueryableView]`, or `[QueryablePoco]`. A
-property is invisible if it carries `[QueryIgnore]`, has no public instance getter, or is not a
-scalar or a navigation to another opted-in type. Collection navigations are never exposed.
+A type is invisible unless it carries `[Queryable]`, `[QueryableView]`, `[QueryablePoco]`, or
+`[QueryableComplex]`. A property is invisible if it carries `[QueryIgnore]`, has no public instance
+getter, or is not a scalar or a navigation to another opted-in type. Collection navigations are never
+exposed.
 
 Adding an entity to the `DbContext` does not expose it. Adding a property to an exposed entity does
 expose it — that is the one direction where the default is open, and it is why the surface should be
 reviewed alongside model changes.
+
+**Complex types and JSON columns** follow the same default-deny rule. A complex/value type — including
+one mapped into a JSON column — is invisible until it carries `[QueryableComplex]`, and even then only
+its allow-listed scalar leaves are reachable (`[QueryIgnore]` still hides members). Exposing a complex
+type does not transitively expose anything: a nested type it references is reachable only if it too is
+opted in, so a JSON column cannot smuggle in an entity or an unlisted field. Traversal into a complex
+member counts against `MaxNavigationDepth` exactly like a navigation, bounding how deeply a client can
+descend into nested JSON. How EF stores the type (JSON or columns) never changes what is reachable —
+the allow-list is built from the CLR/annotation surface, not the storage mapping.
 
 ### 2. A closed AST
 

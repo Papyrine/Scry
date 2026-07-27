@@ -50,6 +50,36 @@ public class IntrospectionTests
             Processor().Describe().Sources.Select(_ => _.Name),
             Does.Contain("Employee"));
 
+    [Test]
+    public void ComplexTypeAppearsInTypesButNotSources()
+    {
+        var introspection = Processor().Describe();
+
+        // The complex type is a traversable member type, so it is a Type (for the generated model) but
+        // never a Source (no entry point).
+        Assert.That(introspection.Types.Select(_ => _.Model), Does.Contain("AddressQueryModel"));
+        Assert.That(introspection.Sources.Select(_ => _.Name), Does.Not.Contain("Address"));
+
+        // Employee references it as a navigation-shaped member; [QueryIgnore] Zip stays hidden.
+        var address = introspection.Types.Single(_ => _.Model == "EmployeeQueryModel")
+            .Members.Single(_ => _.Name == "Address");
+        Assert.That(address.IsNavigation, Is.True);
+        Assert.That(address.TypeDisplay, Is.EqualTo("AddressQueryModel?"));
+
+        var addressModel = introspection.Types.Single(_ => _.Model == "AddressQueryModel");
+        Assert.That(addressModel.Members.Select(_ => _.Name), Is.EquivalentTo(new[] { "City", "Country" }));
+    }
+
+    [Test]
+    public void GuardrailAcceptsCorrectlyAnnotatedModel()
+    {
+        using var context = TestContext.CreateSeeded();
+
+        // Against the live EF model, Address is a complex type (not an entity) and the sources are real
+        // entities/views — so the startup guardrail passes.
+        Assert.DoesNotThrow(() => Processor().ValidateAgainstModel(context));
+    }
+
     static ScryProcessor Processor() =>
         ScryProcessor.Create<TestContext>(
             _ => _.AddPocoSource<Holiday>(_ => Holiday.Seed()));

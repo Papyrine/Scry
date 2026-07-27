@@ -253,7 +253,11 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             switch (node)
             {
                 case MemberNode member:
-                    ResolvePath(member.Path, elementType, requireScalar: false, "Member");
+                    // A member used as a value in an expression must resolve to a scalar. Intermediate
+                    // navigations/complex types in the path are traversed by ResolvePath; only the leaf
+                    // must be scalar. This rejects e.g. a bare navigation or complex member compared to
+                    // a constant at validation, rather than letting it fault during execution.
+                    ResolvePath(member.Path, elementType, requireScalar: true, "Member");
                     break;
 
                 case ConstNode:
@@ -336,7 +340,8 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     throw Reject($"Cannot traverse through non-navigation '{path[i]}'.");
                 }
 
-                currentType = member.Type;
+                // Unwrap Nullable<T> so an optional struct complex member resolves to its underlying type.
+                currentType = Nullable.GetUnderlyingType(member.Type) ?? member.Type;
             }
         }
 

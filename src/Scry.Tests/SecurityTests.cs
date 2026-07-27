@@ -32,6 +32,22 @@ public class SecurityTests
             "Employee",
             [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Name", "Length"]), new ConstNode("3", ClrTypeTag.Int32)))]));
 
+    // A [QueryIgnore] member of a complex type is hidden just like on an entity — traversing to it is
+    // rejected, so a JSON column cannot smuggle in an unlisted field.
+    [Test]
+    public void RejectsIgnoredComplexMember() =>
+        AssertRejected(QueryRequest.Create(
+            "Employee",
+            [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Address", "Zip"]), new ConstNode("x", ClrTypeTag.String)))]));
+
+    // A complex member is not a scalar; using it where a value is required is rejected (you must name
+    // a scalar leaf such as Address.City).
+    [Test]
+    public void RejectsComplexMemberAsScalar() =>
+        AssertRejected(QueryRequest.Create(
+            "Employee",
+            [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Address"]), new ConstNode("x", ClrTypeTag.String)))]));
+
     [Test]
     public void RejectsTakeOverMaxPageSize() =>
         AssertRejected(

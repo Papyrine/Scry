@@ -143,7 +143,7 @@ var request = client.Source<Employee>("Employee")
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
     .ToScryRequest();
 ```
-<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L28-L37' title='Snippet source file'>snippet source</a> | <a href='#snippet-translateWithoutExecuting' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L30-L39' title='Snippet source file'>snippet source</a> | <a href='#snippet-translateWithoutExecuting' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 which produces the wire request without contacting the server.
@@ -164,6 +164,11 @@ A path rooted at the lambda parameter, traversing reference navigations:
 becomes the member path `["Manager", "Department", "Name"]`. Path length is capped by
 `MaxNavigationDepth` (default 4). Collection navigations are not exposed at all, so there is no way
 to express a traversal into one.
+
+A `[QueryableComplex]` member (an EF complex type, e.g. one mapped to a JSON column) is traversed the
+same way — `.Where(_ => _.Address.City == "London")` becomes `["Address", "City"]`. The server
+rebinds it onto EF, which translates the access into the JSON column; nothing about the storage is
+visible on the wire.
 
 ### Operators
 

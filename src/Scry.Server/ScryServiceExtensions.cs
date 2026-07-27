@@ -17,8 +17,20 @@ public static class ScryServiceExtensions
     }
 
     /// <summary>Maps the query-execution endpoint (HTTP POST) at <paramref name="pattern"/>.</summary>
-    public static IEndpointConventionBuilder MapScry(this IEndpointRouteBuilder endpoints, string pattern) =>
-        endpoints.MapPost(pattern, Handle);
+    public static IEndpointConventionBuilder MapScry(this IEndpointRouteBuilder endpoints, string pattern)
+    {
+        // Validate the annotations against the live EF model once, at startup, where a model exists.
+        // A misapplied [Queryable]/[QueryableComplex] fails loudly here rather than obscurely per-query.
+        using (var scope = endpoints.ServiceProvider.CreateScope())
+        {
+            var options = scope.ServiceProvider.GetRequiredService<ScryOptions>();
+            var processor = scope.ServiceProvider.GetRequiredService<ScryProcessor>();
+            var db = (DbContext)scope.ServiceProvider.GetRequiredService(options.ContextType);
+            processor.ValidateAgainstModel(db);
+        }
+
+        return endpoints.MapPost(pattern, Handle);
+    }
 
     static async Task Handle(HttpContext context)
     {

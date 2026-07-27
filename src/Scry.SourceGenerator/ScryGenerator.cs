@@ -70,12 +70,22 @@ public class ScryGenerator :
         }
 
         // Emitting duplicates would otherwise surface as a CS0102 on generated code the user cannot
-        // see. The server rejects the same clash at startup.
-        var seen = new HashSet<string>(StringComparer.Ordinal);
+        // see. The server rejects the same clash at startup. Two axes clash independently: the
+        // generated model class name (all types, incl. complex) and the entry-point property name
+        // (sources only — complex types emit no entry point).
+        var seenModels = new HashSet<string>(StringComparer.Ordinal);
+        var seenSources = new HashSet<string>(StringComparer.Ordinal);
         var duplicated = false;
         foreach (var source in extract.Sources)
         {
-            if (!seen.Add(source.SourceName))
+            if (!seenModels.Add(source.ModelName))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(duplicateSource, Location.None, source.SourceName));
+                duplicated = true;
+            }
+
+            if (source.Kind != SourceKind.Complex &&
+                !seenSources.Add(source.SourceName))
             {
                 context.ReportDiagnostic(Diagnostic.Create(duplicateSource, Location.None, source.SourceName));
                 duplicated = true;
@@ -102,10 +112,13 @@ public class ScryGenerator :
 
     static string EmitModel(SourceInfo source)
     {
+        var descriptor = source.Kind == SourceKind.Complex
+            ? "complex type"
+            : $"{source.Kind.ToString().ToLowerInvariant()} source";
         var builder = Header();
         builder.AppendLine(
             $$"""
-            /// <summary>Client query model for the '{{source.SourceName}}' {{source.Kind.ToString().ToLowerInvariant()}} source.</summary>
+            /// <summary>Client query model for the '{{source.SourceName}}' {{descriptor}}.</summary>
             public sealed class {{source.ModelName}}
             {
             """);
@@ -155,6 +168,12 @@ public class ScryGenerator :
             """);
         foreach (var source in sources)
         {
+            // Complex types are traversable member types, not roots — they get no entry point.
+            if (source.Kind == SourceKind.Complex)
+            {
+                continue;
+            }
+
             builder.AppendLine();
             builder.AppendLine(
                 $"""

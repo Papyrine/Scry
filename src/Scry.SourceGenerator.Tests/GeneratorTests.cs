@@ -86,6 +86,38 @@ public class GeneratorTests
     }
 
     [Test]
+    public Task ComplexType()
+    {
+        const string model = """
+            using Scry;
+
+            namespace Sample.Model;
+
+            [Queryable]
+            public class Employee
+            {
+                public int Id { get; set; }
+                public string Name { get; set; } = "";
+                // A required and an optional complex member: both resolve to the complex query model.
+                public Address Address { get; set; } = new();
+                public Address? SecondaryAddress { get; set; }
+            }
+
+            // A complex value type: gets its own query model and is a navigation target, but no entry
+            // point on ScryQuery. [QueryIgnore] still hides a member.
+            [QueryableComplex]
+            public class Address
+            {
+                public string City { get; set; } = "";
+                public string Country { get; set; } = "";
+                [QueryIgnore] public string Secret { get; set; } = "";
+            }
+            """;
+
+        return VerifyGenerated(model);
+    }
+
+    [Test]
     public Task DuplicateSourceNameIsReported()
     {
         const string model = """

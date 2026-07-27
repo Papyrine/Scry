@@ -165,7 +165,7 @@ static ScryClient ClientFor(TestContext context)
     return new((request, _) => Task.FromResult(processor.Execute(request, context)));
 }
 ```
-<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L214-L222' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessClient' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L233-L241' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessClient' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ## Execution pipeline

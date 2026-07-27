@@ -16,7 +16,14 @@ public class RoslynLayerTests
                 new("Name", "string", NeedsNullDefault: true, IsNavigation: false),
                 new("Active", "bool", NeedsNullDefault: false, IsNavigation: false),
                 new("Status", "Status", NeedsNullDefault: false, IsNavigation: false),
-                new("Manager", "EmployeeQueryModel?", NeedsNullDefault: false, IsNavigation: true)
+                new("Manager", "EmployeeQueryModel?", NeedsNullDefault: false, IsNavigation: true),
+                // A complex type is exposed exactly like a navigation member on the client model.
+                new("Address", "AddressQueryModel?", NeedsNullDefault: false, IsNavigation: true)
+            ]),
+            new("AddressQueryModel",
+            [
+                new("City", "string", NeedsNullDefault: true, IsNavigation: false),
+                new("Country", "string", NeedsNullDefault: true, IsNavigation: false)
             ])
         ],
         Enums: [new("Status", ["FullTime", "PartTime", "Contractor"])]);
@@ -82,6 +89,28 @@ public class RoslynLayerTests
     {
         var request = executor.Translate(
             "Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name, _.Status })");
+
+        Assert.That(request.Root, Is.EqualTo("Employee"));
+        Assert.That(request.Pipeline.Any(_ => _ is WhereOp), Is.True, "where op");
+        Assert.That(request.Pipeline.Any(_ => _ is SelectOp), Is.True, "select op");
+    }
+
+    [Test]
+    public async Task CompletesComplexTypeMembersAfterTraversal()
+    {
+        // Traversing into a complex member offers its scalar leaves, just like a navigation.
+        const string code = "Query.Employee.Where(_ => _.Address.";
+        var labels = (await workspace.CompleteAsync(code, code.Length)).Select(_ => _.Label).ToList();
+
+        Assert.That(labels, Does.Contain("City"));
+        Assert.That(labels, Does.Contain("Country"));
+    }
+
+    [Test]
+    public void TranslatesComplexTypeTraversalToWire()
+    {
+        var request = executor.Translate(
+            "Query.Employee.Where(_ => _.Address.City == \"London\").Select(_ => new { _.Name, _.Address.Country })");
 
         Assert.That(request.Root, Is.EqualTo("Employee"));
         Assert.That(request.Pipeline.Any(_ => _ is WhereOp), Is.True, "where op");

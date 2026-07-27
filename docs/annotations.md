@@ -12,6 +12,7 @@ clients, and a request naming it is rejected as an unknown source.
 | `[Queryable]` | class, struct | Opts a table-backed EF Core entity into client querying. |
 | `[QueryableView]` | class, struct | Opts a keyless EF Core entity (a database view) into client querying. |
 | `[QueryablePoco]` | class, struct | Opts a non-persisted POCO into client querying; the server supplies the data. |
+| `[QueryableComplex]` | class, struct | Opts an EF complex type (e.g. a JSON-mapped value object) in as a traversable member type, not a root source. |
 | `[QueryIgnore]` | property, field | Excludes a member from an opted-in type. |
 | `[ReturnableWith(typeof(TPolicy))]` | class, struct | Attaches a server-side row policy. |
 
@@ -70,7 +71,7 @@ public class SalesRegion
     public string Name { get; set; } = "";
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L66-L77' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSource' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L86-L97' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSource' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The generated entry point exposes the configured name, while the **model class name stays derived
@@ -248,6 +249,57 @@ POCO source 'Holiday' has no data registered. Call options.AddPocoSource<Holiday
 
 See [Server](server.md#poco-sources) for the per-request factory overload.
 
+## `[QueryableComplex]`
+
+For an EF Core **complex type** — a value object with no key of its own, typically mapped into a JSON
+column:
+
+<!-- snippet: queryableComplex -->
+<a id='snippet-queryableComplex'></a>
+```cs
+[QueryableComplex]
+public class Address
+{
+    public string City { get; set; } = "";
+    public string Country { get; set; } = "";
+
+    [QueryIgnore]
+    public string Zip { get; set; } = "";
+}
+```
+<sup><a href='/src/Scry.Tests/TestModel.cs#L48-L58' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableComplex' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+paired with the usual EF mapping on the owning entity:
+
+<!-- snippet: complexToJson -->
+<a id='snippet-complexToJson'></a>
+```cs
+modelBuilder.Entity<Employee>()
+    .ComplexProperty(_ => _.Address)
+    .ToJson();
+```
+<sup><a href='/src/Scry.Tests/TestModel.cs#L178-L182' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+A complex type is **not a root source**: it produces no property on the generated `ScryQuery` and no
+server resolver. It is reachable only by traversing into it from an opted-in entity/view/POCO — for
+example `Employee.Address.City`. Its members follow the same exposure rules as any other type
+(`[QueryIgnore]` still hides `Zip`), and the traversal is bounded by `MaxNavigationDepth` like any
+navigation. How EF stores the type — a JSON column or separate columns — is transparent to Scry; the
+server rebinds the member path onto EF, which translates it either way.
+
+Because it is a member type rather than a source, `[QueryableComplex]` takes no `Name`.
+
+The generator and the server both read this attribute, but neither can see EF's `OnModelCreating`, so
+they cannot *infer* which types are complex — the attribute is the signal. To catch a mistake early,
+`MapScry` cross-checks the annotations against the live EF model at startup and throws if a
+`[Queryable]` type is really a complex type, or a `[QueryableComplex]` type is really a mapped entity:
+
+```
+'Address' is marked [Queryable]/[QueryableView] but is an EF complex type in SampleContext. Use [QueryableComplex].
+```
+
 ## `[QueryIgnore]`
 
 ```cs
@@ -287,7 +339,8 @@ A member of an opted-in type is exposed when **all** of the following hold:
 - It has a **public instance getter**.
 - It takes no index parameters.
 - It does not carry `[QueryIgnore]`.
-- Its type is either a **scalar** or a **reference navigation to another opted-in type**.
+- Its type is either a **scalar**, a **reference navigation to another opted-in type**, or a
+  **`[QueryableComplex]` type** (optionally `Nullable<>`).
 
 Everything else is silently excluded — no error, it simply does not appear.
 
@@ -299,7 +352,7 @@ flowchart TD
     Q2 -- Yes --> X
     Q2 -- No --> Q3{Member type?}
     Q3 -- Scalar --> S[Exposed as scalar<br/>predicates, ordering, keys,<br/>aggregates, projection leaves]
-    Q3 -- Reference nav to<br/>an opted-in type --> N[Exposed as navigation<br/>traversable in a member path]
+    Q3 -- Reference nav to an opted-in type,<br/>or a QueryableComplex type --> N[Exposed as navigation<br/>traversable in a member path]
     Q3 -- Collection nav, or a type<br/>that is not opted in --> X
 ```
 
@@ -319,6 +372,8 @@ leaves.
 
 A property whose type is another opted-in type is a **reference navigation**. It can be traversed in
 a member path (`e.Manager.Name`) and projected into, up to `MaxNavigationDepth` segments (default 4).
+A `[QueryableComplex]` member behaves the same way for traversal (`e.Address.City`); the only
+difference is at the type level — a complex type is never a root source.
 
 A navigation cannot itself be a value — it cannot be compared, ordered by, grouped by, or used as a
 projection leaf. `Projection member must reference a scalar value.` is the rejection you get.
@@ -327,9 +382,10 @@ projection leaf. `Projection member must reference a scalar value.` is the rejec
 
 - **Collection navigations** (`List<Employee> Employees`). There is no wire node for traversing a
   collection, so a client cannot fan out, `Any()` into a child set, or aggregate across one. If you
-  need a collection-derived value, expose it as a view or a computed scalar on the parent.
-- **Complex types that are not themselves opted in.** Adding `[Queryable]` to the target type makes
-  it traversable.
+  need a collection-derived value, expose it as a view or a computed scalar on the parent. This
+  includes collection-valued complex types (`OwnsMany` / JSON arrays).
+- **Complex types that are not themselves opted in.** Adding `[QueryableComplex]` to the target type
+  makes it traversable.
 - **Write-only or non-public properties, indexers, and fields.**
 
 ## Keeping the two readers aligned

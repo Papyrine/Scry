@@ -7,6 +7,7 @@ static class MetadataModelReader
     const string queryableAttribute = "Scry.QueryableAttribute";
     const string queryableViewAttribute = "Scry.QueryableViewAttribute";
     const string queryablePocoAttribute = "Scry.QueryablePocoAttribute";
+    const string queryableComplexAttribute = "Scry.QueryableComplexAttribute";
     const string queryIgnoreAttribute = "Scry.QueryIgnoreAttribute";
     const string keylessAttribute = "Microsoft.EntityFrameworkCore.KeylessAttribute";
 
@@ -188,6 +189,10 @@ static class MetadataModelReader
                 case queryablePocoAttribute:
                     found = SourceKind.Poco;
                     configuredName = NameArgument(attribute, decoder) ?? configuredName;
+                    break;
+                case queryableComplexAttribute:
+                    // A complex type has no Name (it is not a source); its model name is the type name.
+                    found = SourceKind.Complex;
                     break;
                 case keylessAttribute:
                     keyless = true;

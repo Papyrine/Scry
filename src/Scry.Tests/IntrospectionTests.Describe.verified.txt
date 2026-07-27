@@ -45,6 +45,23 @@
   ],
   Types: [
     {
+      Model: AddressQueryModel,
+      Members: [
+        {
+          Name: City,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false
+        },
+        {
+          Name: Country,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false
+        }
+      ]
+    },
+    {
       Model: DepartmentQueryModel,
       Members: [
         {
@@ -86,6 +103,12 @@
           TypeDisplay: bool,
           NeedsNullDefault: false,
           IsNavigation: false
+        },
+        {
+          Name: Address,
+          TypeDisplay: AddressQueryModel?,
+          NeedsNullDefault: false,
+          IsNavigation: true
         },
         {
           Name: Avatar,

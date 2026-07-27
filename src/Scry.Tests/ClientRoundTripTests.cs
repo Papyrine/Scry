@@ -10,6 +10,8 @@ public class ClientRoundTripTests
 
     record OrderRow(string Region, uint Quantity, ulong Sku);
 
+    record EmployeeLocation(string Name, string City, string Country);
+
     // ReSharper restore NotAccessedPositionalProperty.Local
 
     [Test]
@@ -197,6 +199,23 @@ public class ClientRoundTripTests
         // Streaming is a planned enhancement; the terminal throws rather than silently buffering.
         Assert.Throws<NotSupportedException>(() =>
             client.Source<Employee>("Employee").ToAsyncEnumerable());
+    }
+
+    [Test]
+    public async Task ComplexTypeTraversal()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // Filter through and project scalar leaves of the JSON-mapped Address complex type. The server
+        // rebinds Address.City/Country onto EF, which translates them into the JSON column.
+        var rows = await client.Source<Employee>("Employee")
+            .Where(_ => _.Address.Country == "UK")
+            .OrderBy(_ => _.Name)
+            .Select(_ => new EmployeeLocation(_.Name, _.Address.City, _.Address.Country))
+            .ToListAsync();
+
+        await Verify(rows);
     }
 
     [Test]

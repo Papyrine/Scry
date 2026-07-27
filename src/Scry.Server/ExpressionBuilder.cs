@@ -129,11 +129,20 @@ sealed class ExpressionBuilder(Schema schema)
         var expression = root;
         foreach (var segment in path)
         {
-            if (!schema.TryGetType(expression.Type, out var meta) ||
+            // Traversing into an optional struct complex member (Nullable<T>): resolve against the
+            // underlying type and unwrap via .Value before accessing the child property.
+            var underlying = Nullable.GetUnderlyingType(expression.Type);
+            var ownerType = underlying ?? expression.Type;
+            if (!schema.TryGetType(ownerType, out var meta) ||
                 !meta.Members.TryGetValue(segment, out var member))
             {
                 throw new ScryValidationException(
-                    $"Property '{segment}' is not allow-listed on '{expression.Type.Name}'.");
+                    $"Property '{segment}' is not allow-listed on '{ownerType.Name}'.");
+            }
+
+            if (underlying is not null)
+            {
+                expression = Expression.Property(expression, "Value");
             }
 
             expression = Expression.Property(expression, member.Property);

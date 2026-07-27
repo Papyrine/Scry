@@ -1,0 +1,12 @@
+﻿[
+  {
+    Name: Aaron,
+    City: London,
+    Country: UK
+  },
+  {
+    Name: Alice,
+    City: London,
+    Country: UK
+  }
+]

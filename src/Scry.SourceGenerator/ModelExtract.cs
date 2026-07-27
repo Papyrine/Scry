@@ -28,5 +28,9 @@ enum SourceKind
 {
     Entity,
     View,
-    Poco
+    Poco,
+
+    // A complex value type: a QueryModel is generated and it is a valid navigation target, but it is
+    // not a root source, so no entry point is emitted on the ScryQuery facade.
+    Complex
 }
