@@ -70,7 +70,7 @@ public class SalesRegion
     public string Name { get; set; } = "";
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L59-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSource' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L66-L77' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSource' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The generated entry point exposes the configured name, while the **model class name stays derived
@@ -307,7 +307,7 @@ flowchart TD
 
 `bool`, `char`, `sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `float`,
 `double`, `decimal`, `string`, `DateTime`, `DateOnly`, `TimeOnly`, `DateTimeOffset`, `TimeSpan`,
-`Guid`, and any `enum` — plus the `Nullable<>` form of each value type.
+`Guid`, `byte[]`, and any `enum` — plus the `Nullable<>` form of each value type.
 
 An `enum` used by an exposed member is re-emitted into the generated client code (as
 `ScryEnums.g.cs`), so the client can compare against it without referencing the model.

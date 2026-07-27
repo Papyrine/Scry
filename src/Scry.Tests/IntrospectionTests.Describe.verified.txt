@@ -88,6 +88,12 @@
           IsNavigation: false
         },
         {
+          Name: Avatar,
+          TypeDisplay: byte[],
+          NeedsNullDefault: true,
+          IsNavigation: false
+        },
+        {
           Name: Department,
           TypeDisplay: DepartmentQueryModel?,
           NeedsNullDefault: false,
@@ -164,9 +170,21 @@
           IsNavigation: false
         },
         {
+          Name: Quantity,
+          TypeDisplay: uint,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        },
+        {
           Name: Region,
           TypeDisplay: string,
           NeedsNullDefault: true,
+          IsNavigation: false
+        },
+        {
+          Name: Sku,
+          TypeDisplay: ulong,
+          NeedsNullDefault: false,
           IsNavigation: false
         }
       ]

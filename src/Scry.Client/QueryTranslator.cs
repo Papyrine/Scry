@@ -353,6 +353,7 @@ sealed class QueryTranslator
             DateTime date => new(date.ToString("o", culture), ClrTypeTag.DateTime),
             Date date => new(date.ToString("yyyy-MM-dd", culture), ClrTypeTag.DateOnly),
             Guid guid => new(guid.ToString(), ClrTypeTag.Guid),
+            byte[] bytes => new(Convert.ToBase64String(bytes), ClrTypeTag.Bytes),
             _ => new(Convert.ToString(value, culture) ?? "", ClrTypeTag.String)
         };
     }

@@ -146,9 +146,10 @@ public sealed class EmployeeQueryModel
     public bool Active { get; init; }
     public int? ManagerId { get; init; }
     public EmployeeQueryModel? Manager { get; init; }
+    public byte[] Avatar { get; init; } = null!;
 }
 ```
-<sup><a href='/src/Scry.SourceGenerator.Tests/GeneratorTests.EntitiesViewPocoAndEnum%23EmployeeQueryModel.g.verified.cs#L1-L15' title='Snippet source file'>snippet source</a> | <a href='#snippet-GeneratorTests.EntitiesViewPocoAndEnum#EmployeeQueryModel.g.verified.cs' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.SourceGenerator.Tests/GeneratorTests.EntitiesViewPocoAndEnum%23EmployeeQueryModel.g.verified.cs#L1-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-GeneratorTests.EntitiesViewPocoAndEnum#EmployeeQueryModel.g.verified.cs' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Note what is *absent*: `Salary` is `[QueryIgnore]`, and `Department`/`DepartmentId` appear only if
@@ -237,6 +238,7 @@ builder.Services.AddScoped<ScryQuery>();
 | --- | --- |
 | `bool`, `char`, `sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `float`, `double` | the C# keyword |
 | `string` | `string` (with ` = null!;`) |
+| `byte[]` | `byte[]` (with ` = null!;`) |
 | `decimal` | `decimal` |
 | `DateTime`, `DateOnly`, `TimeOnly`, `DateTimeOffset`, `TimeSpan`, `Guid` | `global::System.X` |
 | an `enum` | the enum name, re-emitted into `ScryEnums.g.cs` |

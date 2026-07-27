@@ -10,7 +10,11 @@ sealed record NamedDecoded(string FullName, EntityHandle Handle, bool IsDefiniti
 sealed record NullableDecoded(DecodedType Inner) :
     DecodedType;
 
-/// <summary>Anything Scry does not expose (arrays, collections, generics other than Nullable).</summary>
+/// <summary>A <c>byte[]</c> property — the only array shape Scry exposes, as a binary scalar.</summary>
+sealed record BytesDecoded :
+    DecodedType;
+
+/// <summary>Anything Scry does not expose (arrays other than byte[], collections, generics other than Nullable).</summary>
 sealed record OtherDecoded :
     DecodedType;
 
@@ -25,6 +29,7 @@ sealed class SignatureDecoder :
     ICustomAttributeTypeProvider<DecodedType>
 {
     static readonly OtherDecoded other = new();
+    static readonly BytesDecoded bytes = new();
 
     public DecodedType GetPrimitiveType(PrimitiveTypeCode typeCode) => new PrimitiveDecoded(typeCode);
 
@@ -54,7 +59,10 @@ sealed class SignatureDecoder :
         return other;
     }
 
-    public DecodedType GetSZArrayType(DecodedType elementType) => other;
+    public DecodedType GetSZArrayType(DecodedType elementType) =>
+        elementType is PrimitiveDecoded { Code: PrimitiveTypeCode.Byte }
+            ? bytes
+            : other;
 
     public DecodedType GetArrayType(DecodedType elementType, ArrayShape shape) => other;
 

@@ -78,6 +78,7 @@ public enum ClrTypeTag
     DateTime,
     DateOnly,
     Guid,
+    Bytes,
     Enum
 }
 // end-snippet

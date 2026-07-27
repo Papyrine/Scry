@@ -168,16 +168,17 @@ public enum ClrTypeTag
     DateTime,
     DateOnly,
     Guid,
+    Bytes,
     Enum
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L66-L83' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireTypeTags' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Enums.cs#L66-L84' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireTypeTags' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The tag is a hint, not an instruction. The server parses the value into the **member's** type at the
 comparison site, so `tag` never dictates what CLR type is constructed. Types with no dedicated tag
 (`TimeOnly`, `TimeSpan`, `DateTimeOffset`, `char`) travel as `String` and are reconciled the same
-way.
+way. A `Bytes` value carries a `byte[]` as a base64 string.
 
 ### `binary` and `unary`
 
@@ -384,7 +385,7 @@ var request = client.Source<Employee>("Employee")
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
     .ToScryRequest();
 ```
-<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L26-L35' title='Snippet source file'>snippet source</a> | <a href='#snippet-translateWithoutExecuting' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L28-L37' title='Snippet source file'>snippet source</a> | <a href='#snippet-translateWithoutExecuting' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 translates to:

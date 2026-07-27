@@ -79,6 +79,30 @@ public class ExecutionTests
     }
 
     [Test]
+    public Task ByteArrayEqualityFilterAndProjection()
+    {
+        // Filters by a byte[] literal (base64 on the wire, EF binary comparison in SQL) and projects
+        // the binary column back out — it serializes as base64 in the shaped result.
+        var request = QueryRequest.Create(
+            "Employee",
+            [
+                new WhereOp(
+                    new BinaryNode(
+                        BinaryOp.Equal,
+                        new MemberNode(["Avatar"]),
+                        new ConstNode(Convert.ToBase64String([0x01, 0x02, 0x03]), ClrTypeTag.Bytes))),
+                new SelectOp(
+                    new(
+                    [
+                        new("Name", new NodeValue(new MemberNode(["Name"]))),
+                        new("Avatar", new NodeValue(new MemberNode(["Avatar"])))
+                    ]))
+            ]);
+
+        return VerifyResponse(request);
+    }
+
+    [Test]
     public Task CountTerminal()
     {
         var request = QueryRequest.Create(

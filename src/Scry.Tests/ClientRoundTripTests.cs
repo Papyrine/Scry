@@ -8,6 +8,8 @@ public class ClientRoundTripTests
 
     record OrderSummary(string Region, decimal Total, int Count);
 
+    record OrderRow(string Region, uint Quantity, ulong Sku);
+
     // ReSharper restore NotAccessedPositionalProperty.Local
 
     [Test]
@@ -77,6 +79,55 @@ public class ClientRoundTripTests
 
         var rows = await client.Source<Employee>("Employee")
             .Where(_ => _.Status == wanted)
+            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
+            .ToListAsync();
+
+        await Verify(rows);
+    }
+
+    [Test]
+    public async Task UnsignedMemberFilters()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+        // uint/ulong literals have no dedicated ClrTypeTag; they ride the String tag and the server
+        // reconciles them to the member's real type via Convert.ChangeType. This pins the round-trip
+        // through EF/LocalDB, including a Sku above long.MaxValue that a numeric Int64 tag would break.
+        var quantity = 7u;
+        var sku = ulong.MaxValue;
+
+        var rows = await client.Source<Order>("Order")
+            .Where(_ => _.Quantity == quantity && _.Sku == sku)
+            .Select(_ => new OrderRow(_.Region, _.Quantity, _.Sku))
+            .ToListAsync();
+
+        await Verify(rows);
+    }
+
+    [Test]
+    public async Task UnsignedMemberOrdering()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var rows = await client.Source<Order>("Order")
+            .OrderByDescending(_ => _.Sku)
+            .Select(_ => new OrderRow(_.Region, _.Quantity, _.Sku))
+            .ToListAsync();
+
+        await Verify(rows);
+    }
+
+    [Test]
+    public async Task ByteArrayEqualityFilter()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+        // A closure-captured byte[] exercises ConstantOf's base64 encoding of ClrTypeTag.Bytes.
+        var avatar = new byte[] { 0x01, 0x02, 0x03 };
+
+        var rows = await client.Source<Employee>("Employee")
+            .Where(_ => _.Avatar == avatar)
             .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
             .ToListAsync();
 

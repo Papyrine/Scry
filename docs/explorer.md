@@ -179,6 +179,12 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false
         },
         {
+          Name: Avatar,
+          TypeDisplay: byte[],
+          NeedsNullDefault: true,
+          IsNavigation: false
+        },
+        {
           Name: Department,
           TypeDisplay: DepartmentQueryModel?,
           NeedsNullDefault: false,
@@ -255,9 +261,21 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false
         },
         {
+          Name: Quantity,
+          TypeDisplay: uint,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        },
+        {
           Name: Region,
           TypeDisplay: string,
           NeedsNullDefault: true,
+          IsNavigation: false
+        },
+        {
+          Name: Sku,
+          TypeDisplay: ulong,
+          NeedsNullDefault: false,
           IsNavigation: false
         }
       ]
@@ -333,7 +351,7 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
   QueryEndpoint: /api/query
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L243' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L261' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names,

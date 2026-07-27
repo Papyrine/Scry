@@ -31,6 +31,8 @@ public class Employee
     public int DepartmentId { get; set; }
     public Department? Department { get; set; }
 
+    public byte[] Avatar { get; set; } = [];
+
     [QueryIgnore]
     public decimal Salary { get; set; }
 }
@@ -41,6 +43,11 @@ public class Order
     public int Id { get; set; }
     public string Region { get; set; } = "";
     public decimal Amount { get; set; }
+
+    // Unsigned members: EF maps uint -> bigint and ulong -> decimal(20,0) on SQL Server. Neither has a
+    // dedicated ClrTypeTag; their literals ride the String tag and are reconciled server-side.
+    public uint Quantity { get; set; }
+    public ulong Sku { get; set; }
 }
 
 /// <summary>
@@ -174,17 +181,19 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
         var sales = new Department { Name = "Sales" };
         context.Departments.AddRange(engineering, sales);
 
-        var alice = new Employee { Name = "Alice", Status = Status.FullTime, Active = true, Department = engineering, Salary = 200_000 };
+        var alice = new Employee { Name = "Alice", Status = Status.FullTime, Active = true, Department = engineering, Salary = 200_000, Avatar = [0x01, 0x02, 0x03] };
         context.Employees.Add(alice);
         context.Employees.AddRange(
-            new() { Name = "Aaron", Status = Status.FullTime, Active = true, Department = engineering, Manager = alice, Salary = 150_000 },
-            new() { Name = "Bob", Status = Status.PartTime, Active = false, Department = sales, Manager = alice, Salary = 90_000 },
-            new() { Name = "Carol", Status = Status.Contractor, Active = true, Department = sales, Salary = 120_000 });
+            new() { Name = "Aaron", Status = Status.FullTime, Active = true, Department = engineering, Manager = alice, Salary = 150_000, Avatar = [0x0A, 0x0B] },
+            new() { Name = "Bob", Status = Status.PartTime, Active = false, Department = sales, Manager = alice, Salary = 90_000, Avatar = [0xFF] },
+            new() { Name = "Carol", Status = Status.Contractor, Active = true, Department = sales, Salary = 120_000, Avatar = [] });
 
         context.Orders.AddRange(
-            new() { Region = "North", Amount = 100m },
-            new() { Region = "North", Amount = 250m },
-            new() { Region = "South", Amount = 75m });
+            new() { Region = "North", Amount = 100m, Quantity = 3, Sku = 1000 },
+            // Sku is deliberately above long.MaxValue to prove the value survives the String-tag path
+            // (a numeric Int64 tag would overflow).
+            new() { Region = "North", Amount = 250m, Quantity = 7, Sku = ulong.MaxValue },
+            new() { Region = "South", Amount = 75m, Quantity = 1, Sku = 3000 });
 
         context.Tickets.AddRange(
             new() { Name = "Login bug", IsOpen = true },

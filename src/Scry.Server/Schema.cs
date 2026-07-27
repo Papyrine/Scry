@@ -66,10 +66,11 @@ sealed class Schema
         }
 
         var display = ScalarDisplay(actual);
-        if (display == "string")
+        if (display is "string" or "byte[]")
         {
-            // A non-nullable string needs ' = null!;' to satisfy nullable analysis, matching the generator.
-            return new(member.Name, "string", NeedsNullDefault: true, IsNavigation: false);
+            // A non-nullable reference-type scalar needs ' = null!;' to satisfy nullable analysis,
+            // matching the generator.
+            return new(member.Name, display, NeedsNullDefault: true, IsNavigation: false);
         }
 
         return new(member.Name, nullable ? $"{display}?" : display, NeedsNullDefault: false, IsNavigation: false);
@@ -100,6 +101,9 @@ sealed class Schema
             "System.DateTimeOffset" => "global::System.DateTimeOffset",
             "System.TimeSpan" => "global::System.TimeSpan",
             "System.Guid" => "global::System.Guid",
+            // byte[] has no ScalarKeyword counterpart; the metadata side reaches it via SignatureDecoder's
+            // GetSZArrayType -> BytesDecoded, since arrays are not NamedDecoded.
+            "System.Byte[]" => "byte[]",
             _ => type.Name
         };
 
@@ -246,7 +250,8 @@ sealed class Schema
                underlying == typeof(Time) ||
                underlying == typeof(DateTimeOffset) ||
                underlying == typeof(TimeSpan) ||
-               underlying == typeof(Guid);
+               underlying == typeof(Guid) ||
+               underlying == typeof(byte[]);
     }
 
     static readonly MethodInfo setMethod = typeof(DbContext)

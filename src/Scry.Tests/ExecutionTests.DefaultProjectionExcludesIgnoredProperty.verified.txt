@@ -8,7 +8,8 @@
       "status": "FullTime",
       "active": true,
       "managerId": 1,
-      "departmentId": 1
+      "departmentId": 1,
+      "avatar": "Cgs="
     },
     {
       "id": 1,
@@ -16,7 +17,8 @@
       "status": "FullTime",
       "active": true,
       "managerId": null,
-      "departmentId": 1
+      "departmentId": 1,
+      "avatar": "AQID"
     },
     {
       "id": 4,
@@ -24,7 +26,8 @@
       "status": "PartTime",
       "active": false,
       "managerId": 1,
-      "departmentId": 2
+      "departmentId": 2,
+      "avatar": "/w=="
     },
     {
       "id": 2,
@@ -32,7 +35,8 @@
       "status": "Contractor",
       "active": true,
       "managerId": null,
-      "departmentId": 2
+      "departmentId": 2,
+      "avatar": ""
     }
   ]
 }

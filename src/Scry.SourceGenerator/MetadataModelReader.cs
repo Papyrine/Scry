@@ -115,6 +115,11 @@ static class MetadataModelReader
 
                 return new("", nullable ? $"{scalar}?" : scalar, NeedsNullDefault: false);
 
+            // The only array shape Scry exposes. Like string it is a reference type, so a
+            // non-nullable byte[] needs ' = null!;'. Mirrors Schema.ScalarDisplay's "System.Byte[]".
+            case BytesDecoded:
+                return new("", "byte[]", NeedsNullDefault: true);
+
             case NamedDecoded {IsDefinition: true} definition
                 when IsEnum(reader, (TypeDefinitionHandle) definition.Handle):
                 var enumName = CollectEnum(reader, (TypeDefinitionHandle) definition.Handle, enums);

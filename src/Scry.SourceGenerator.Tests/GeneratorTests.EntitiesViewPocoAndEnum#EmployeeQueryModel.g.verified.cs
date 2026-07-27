@@ -12,4 +12,5 @@ public sealed class EmployeeQueryModel
     public bool Active { get; init; }
     public int? ManagerId { get; init; }
     public EmployeeQueryModel? Manager { get; init; }
+    public byte[] Avatar { get; init; } = null!;
 }

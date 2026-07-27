@@ -357,6 +357,7 @@ sealed class ExpressionBuilder(Schema schema)
             ClrTypeTag.DateTime => typeof(DateTime),
             ClrTypeTag.DateOnly => typeof(Date),
             ClrTypeTag.Guid => typeof(Guid),
+            ClrTypeTag.Bytes => typeof(byte[]),
             _ => typeof(string)
         };
 
@@ -421,6 +422,11 @@ sealed class ExpressionBuilder(Schema schema)
         if (underlying == typeof(Guid))
         {
             return Guid.Parse(value);
+        }
+
+        if (underlying == typeof(byte[]))
+        {
+            return Convert.FromBase64String(value);
         }
 
         return Convert.ChangeType(value, underlying, culture);

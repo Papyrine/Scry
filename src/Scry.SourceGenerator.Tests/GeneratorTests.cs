@@ -20,6 +20,7 @@ public class GeneratorTests
                 public bool Active { get; set; }
                 public int? ManagerId { get; set; }
                 public Employee? Manager { get; set; }
+                public byte[] Avatar { get; set; } = [];
                 [QueryIgnore] public decimal Salary { get; set; }
             }
 

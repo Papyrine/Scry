@@ -81,6 +81,22 @@ public class WireSerializationTests
     }
 
     [Test]
+    public Task ByteArrayConstantRoundTrips()
+    {
+        var request = QueryRequest.Create(
+            "Employees",
+            [
+                new WhereOp(
+                    new BinaryNode(
+                        BinaryOp.Equal,
+                        new MemberNode(["Avatar"]),
+                        new ConstNode(Convert.ToBase64String([0x01, 0x02, 0x03]), ClrTypeTag.Bytes)))
+            ]);
+
+        return VerifyRoundTrip(request);
+    }
+
+    [Test]
     public void UnknownDiscriminatorFailsClosed()
     {
         var json = """{"version":1,"root":"Employees","pipeline":[{"$type":"evil","predicate":null}]}""";

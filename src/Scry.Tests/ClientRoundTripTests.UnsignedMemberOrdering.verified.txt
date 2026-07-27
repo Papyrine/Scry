@@ -1,0 +1,17 @@
+﻿[
+  {
+    Region: North,
+    Quantity: 7,
+    Sku: 18446744073709551615
+  },
+  {
+    Region: South,
+    Quantity: 1,
+    Sku: 3000
+  },
+  {
+    Region: North,
+    Quantity: 3,
+    Sku: 1000
+  }
+]
