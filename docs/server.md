@@ -2,6 +2,7 @@
 
 `Scry.Server` validates an incoming query AST against the allow-list, rebinds it onto the real EF Core entity types, applies row policies, executes it against a `DbContext`, and returns the projected rows.
 
+
 ## Registration
 
 <!-- snippet: serverRegistration -->
@@ -35,6 +36,7 @@ Failures surface at startup, not at first request:
 - A `[QueryablePoco]` type with no registered data.
 - Two sources resolving to the same name.
 
+
 ## Mapping the endpoint
 
 <!-- snippet: mapScry -->
@@ -54,6 +56,7 @@ app.MapScry("/api/query")
 ```
 
 Authentication and authorization are **not** Scry's job — put them on the endpoint. See [Security model](security.md).
+
 
 ## Options
 
@@ -90,6 +93,7 @@ Every limit is enforced during validation, before any expression is rebound or e
 | `MaxPipelineLength` | 32 | Pipelines with more operators than the limit. |
 | `MaxExpressionDepth` | 32 | Predicate/expression trees nested deeper than the limit. |
 
+
 ## POCO sources
 
 A `[QueryablePoco]` type is not in the EF model, so the server supplies its data.
@@ -110,6 +114,7 @@ options.AddPocoSource<Holiday>(services =>
 The registered sequence is wrapped with `AsQueryable()`, so the pipeline runs in memory over LINQ to<!-- include: poco-in-memory. path: /docs/includes/poco-in-memory.include.md -->
 Objects with the same validation, shaping, and limits as a database source.<!-- endInclude -->
 
+
 ## Row policies
 
 ```cs
@@ -120,6 +125,7 @@ An `IReturnablePolicy<T>` is applied to the source before any client operator, s
 only narrow an already-authorized set.<!-- endInclude -->
 
 It overrides `[ReturnableWith]` on the same type. See [Row policies](policies.md).
+
 
 ## Hosting without the HTTP endpoint
 
@@ -164,6 +170,7 @@ static ScryClient ClientFor(TestContext context)
 <sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L361-L369' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessClient' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
+
 ## Execution pipeline
 
 For each request the server, in order:
@@ -183,6 +190,7 @@ Terminal handling:
 - A predicate on `First` / `Single` is applied **before** the projection.
 - `First` / `Single` return a single object, or `null` for the `OrDefault` variants over an empty sequence.
 
+
 ## Error handling
 
 The endpoint maps failures deliberately:
@@ -199,6 +207,7 @@ messages are never returned to the client.<!-- endInclude -->
 Log them with your normal exception logging.
 
 On the client, a non-success status becomes a `ScryRequestException` carrying `StatusCode` and the raw `Body`.
+
 
 ## Result payloads
 
