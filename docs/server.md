@@ -154,7 +154,7 @@ There are two `Execute` overloads: one taking an `IServiceProvider` (used to res
 
 `processor.Describe()` returns the [introspection](explorer.md#introspection) contract.
 
-Because `ScryClient` takes an arbitrary transport delegate, the same processor also makes an in-process client easy — the whole pipeline, LINQ to rows, with no web host:
+Because `ScryClient` takes an arbitrary transport delegate, the same processor also supports an in-process client — the whole pipeline, LINQ to rows, with no web host:
 
 <!-- snippet: inProcessClient -->
 <a id='snippet-inProcessClient'></a>
@@ -204,7 +204,7 @@ The endpoint maps failures deliberately:
 The `500` body is fixed — `{"error":"Query execution failed."}` — and stack traces, SQL, and EF Core<!-- include: error-500-body. path: /docs/includes/error-500-body.include.md -->
 messages are never returned to the client.<!-- endInclude -->
 
-Log them with your normal exception logging.
+Log them with the application's normal exception logging.
 
 On the client, a non-success status becomes a `ScryRequestException` carrying `StatusCode` and the raw `Body`.
 

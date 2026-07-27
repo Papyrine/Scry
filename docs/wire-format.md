@@ -2,7 +2,7 @@
 
 `Scry.Wire` defines the serializable query AST shared by client and server. It is a **restricted, closed node vocabulary** — not general expression-tree serialization — which is what makes every query exhaustively validatable.
 
-You rarely construct these types by hand; the client translator emits them and the server consumes them. This page is the reference for anyone writing another client, debugging a request, or reviewing the surface.
+These types are rarely constructed by hand; the client translator emits them and the server consumes them. This page is the reference for anyone writing another client, debugging a request, or reviewing the surface.
 
 
 ## Serialization
@@ -12,7 +12,7 @@ All (de)serialization goes through `ScryJson`, whose options are part of the con
 - Property names are **camelCase**.
 - Dictionary keys (result rows) are **camelCase**.
 - Enums are written as **names**, never numbers, with no naming policy applied.
-- Null-valued **properties** are omitted — so optional AST members such as `predicate` or a null constant's `value` simply do not appear. Result rows are dictionaries, not properties, so an explicit `null` column is still written.
+- Null-valued **properties** are omitted — so optional AST members such as `predicate` or a null constant's `value` do not appear. Result rows are dictionaries, not properties, so an explicit `null` column is still written.
 - Polymorphic types use a `$type` discriminator.
 - Deserialization is **fail-closed**: unknown discriminators and malformed JSON throw `ScryWireException`, they are not skipped.
 

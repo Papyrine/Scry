@@ -63,7 +63,7 @@ Reference the model project with ReferenceOutputAssembly=&quot;false&quot; so it
 
 ### Why the stamp
 
-Roslyn's incremental pipeline can only see inputs that are declared to it. The DLL is read out of band, so from Roslyn's point of view the input is just a *path string* — which does not change when the file's contents do. A build that changes the model but not its location would leave the generator's cached output in place.
+Roslyn's incremental pipeline can only see inputs that are declared to it. The DLL is read out of band, so from Roslyn's point of view the input is only a *path string* — which does not change when the file's contents do. A build that changes the model but not its location would leave the generator's cached output in place.
 
 `ComputeScryStamp` hashes the DLL and surfaces the hash as a second compiler-visible property. The generator combines path and stamp into one pipeline input, so the model is re-read exactly when its contents change, and not otherwise.
 

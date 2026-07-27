@@ -328,7 +328,7 @@ A member of an opted-in type is exposed when **all** of the following hold:
 - It does not carry `[QueryIgnore]`.
 - Its type is either a **scalar**, a **reference navigation to another opted-in type**, or a **`[QueryableComplex]` type** (optionally `Nullable<>`).
 
-Everything else is silently excluded — no error, it simply does not appear.
+Everything else is silently excluded — no error, it does not appear.
 
 ```mermaid
 flowchart TD
@@ -356,12 +356,12 @@ Scalars can be used in predicates, ordering keys, group keys, aggregate selector
 
 A property whose type is another opted-in type is a **reference navigation**. It can be traversed in a member path (`e.Manager.Name`) and projected into, up to `MaxNavigationDepth` segments (default 4). A `[QueryableComplex]` member behaves the same way for traversal (`e.Address.City`); the only difference is at the type level — a complex type is never a root source.
 
-A navigation cannot itself be a value — it cannot be compared, ordered by, grouped by, or used as a projection leaf. `Projection member must reference a scalar value.` is the rejection you get.
+A navigation cannot itself be a value — it cannot be compared, ordered by, grouped by, or used as a projection leaf. `Projection member must reference a scalar value.` is the rejection returned.
 
 
 ### Not exposed
 
-- **Collection navigations** (`List<Employee> Employees`). There is no wire node for traversing a collection, so a client cannot fan out, `Any()` into a child set, or aggregate across one. If you need a collection-derived value, expose it as a view or a computed scalar on the parent. This includes collection-valued complex types (`OwnsMany` / JSON arrays).
+- **Collection navigations** (`List<Employee> Employees`). There is no wire node for traversing a collection, so a client cannot fan out, `Any()` into a child set, or aggregate across one. For a collection-derived value, expose it as a view or a computed scalar on the parent. This includes collection-valued complex types (`OwnsMany` / JSON arrays).
 - **Complex types that are not themselves opted in.** Adding `[QueryableComplex]` to the target type makes it traversable.
 - **Write-only or non-public properties, indexers, and fields.**
 

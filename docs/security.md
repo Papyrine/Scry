@@ -106,7 +106,7 @@ The server rebuilds the allow-list at startup from the real model assembly, inde
 
 Validation runs to completion **before** any expression is rebound or executed. A rejected query never reaches EF Core.
 
-The optional [schema stamp](wire-format.md#schema-stamp) on a request is **not** a security input. It is attacker-controlled like the rest of the wire, is never consulted while deciding whether a query is allowed, and cannot widen the allow-list or unlock a source. It is read only *after* a query has already been rejected, to add "your client looks stale" to the error message. Forging or omitting it changes nothing about what a client may query.
+The optional [schema stamp](wire-format.md#schema-stamp) on a request is **not** a security input. It is attacker-controlled like the rest of the wire, is never consulted while deciding whether a query is allowed, and cannot widen the allow-list or unlock a source. It is read only *after* a query has already been rejected, to add a "the client looks stale" note to the error message. Forging or omitting it changes nothing about what a client may query.
 
 <!-- snippet: rejectIgnoredProperty -->
 <a id='snippet-rejectIgnoredProperty'></a>
@@ -229,7 +229,7 @@ app.MapScry("/api/query")
 
 **Column-level authorization per user.** `[QueryIgnore]` is static: a column is exposed or it is not. There is no per-caller column masking. Expose a view containing only the permitted columns instead.
 
-**Auditing.** Nothing is logged by default. `ScryProcessor.Execute` is the single choke point if you want to record what was asked for.
+**Auditing.** Nothing is logged by default. `ScryProcessor.Execute` is the single choke point for recording what was asked for.
 
 **CORS, CSRF, TLS.** Ordinary ASP.NET Core concerns, unchanged by Scry.
 

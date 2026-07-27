@@ -7,7 +7,7 @@ It is off unless mapped, and Development-only by default.
 <img src="images/explorer-run.png" border="1" alt="The explorer after running a query: the LINQ, the serialized wire request, the result table, and the raw response">
 
 
-One screen shows the whole pipeline: the LINQ you wrote, the wire request it translated to, the rows the server returned, and the raw response envelope.
+One screen shows the whole pipeline: the LINQ as written, the wire request it translated to, the rows the server returned, and the raw response envelope.
 
 
 ## Mapping it
@@ -62,10 +62,10 @@ app.MapScryExplorer(
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `Route` | `/scry` | Sub-path the UI is served under. |
-| `QueryEndpoint` | `/api/query` | The `MapScry` endpoint the explorer POSTs to. Must match what you mapped. |
+| `QueryEndpoint` | `/api/query` | The `MapScry` endpoint the explorer POSTs to. Must match the mapped route. |
 | `EnableGuard` | `DevelopmentOnly` | Decides, per request, whether the explorer is reachable. |
 
-To expose it outside Development, replace the guard with your own check:
+To expose it outside Development, replace the guard with a custom check:
 
 ```cs
 app.MapScryExplorer(options =>
@@ -384,7 +384,7 @@ Because `TypeDisplay` matches the generator's emission exactly, the explorer can
 
 Note what is offered and what is not: `Active`, `Department`, `Manager`, `Name`, `Status` — but no `Salary`, because it is `[QueryIgnore]`d and therefore never reaches the introspection contract.
 
-You can produce the same contract programmatically:
+The same contract can be produced programmatically:
 
 ```cs
 var introspection = processor.Describe();

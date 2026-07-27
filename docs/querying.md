@@ -65,7 +65,7 @@ Each returns an `IQueryable<T>` whose provider only captures. Enumerating it syn
 Use ToListAsync to execute a Scry query.
 ```
 
-You can also reach a source by name, which is what the generated code does under the hood:
+A source can also be reached by name, which is what the generated code does under the hood:
 
 <!-- snippet: scryClientApi -->
 <a id='snippet-scryClientApi'></a>
@@ -155,7 +155,7 @@ page = await Query.Employee
 <sup><a href='/samples/Sample.Client/Pages/KeysetPaging.razor.cs#L22-L30' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCursorPaging' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-Keyset paging needs an ordered, [seek-safe](paging.md#the-seek-safe-rule) query; otherwise `Cursor` is null and you page by offset. The [sample](sample.md) shows both an offset page and a cursor page.
+Keyset paging needs an ordered, [seek-safe](paging.md#the-seek-safe-rule) query; otherwise `Cursor` is null and paging falls back to offset. The [sample](sample.md) shows both an offset page and a cursor page.
 
 The collection-shaping terminals (`ToArrayAsync`, `ToHashSetAsync`, `ToDictionaryAsync`, `ToLookupAsync`) all send the same **list** request as `ToListAsync` and reshape the returned rows in memory — there is no streaming wire, so their key/element selectors and comparers run client-side over the materialised result.
 
@@ -304,7 +304,7 @@ fullTimers = await Query.Employee
 <sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L49-L56' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-`status` and `top` are locals; the translator compiles and invokes those sub-expressions, then emits their values. Calls to your own methods are fine on this path as long as they do not touch the query parameter — `.Where(_ => _.Name == BuildName())` sends the *result* of `BuildName()`.
+`status` and `top` are locals; the translator compiles and invokes those sub-expressions, then emits their values. Calls to custom methods are fine on this path as long as they do not touch the query parameter — `.Where(_ => _.Name == BuildName())` sends the *result* of `BuildName()`.
 
 A constant is carried as an invariant-culture string plus a type tag, and reconciled against the member type at the comparison site on the server. Enums travel as their **name**, not their numeric value.
 
@@ -331,7 +331,7 @@ A projection must construct an object (anonymous type, record, or object initial
 
 For a record or constructor call, member names come from the constructor parameter names, capitalized — `new EmployeeRow(name: ...)` produces the member `Name`.
 
-Every projection leaf must resolve to an allow-listed **scalar**. A navigation cannot be projected whole; project the scalar you want out of it (`_.Department!.Name`).
+Every projection leaf must resolve to an allow-listed **scalar**. A navigation cannot be projected whole; project a scalar out of it (`_.Department!.Name`).
 
 
 ### Without a `Select`
@@ -390,7 +390,7 @@ Rules for a nested projection member:
 
 - Every member of the nested object must be a **member path** (`_.Department.Name`), not a function call or a further nested object — one level of nesting, scalar leaves.
 - All its members must share a single navigation prefix; the client descends into that one navigation. Mixing two navigations (`new(_.Department.Name, _.Manager.Name)`) in one nested object is rejected.
-- The flat form still works when you only need the value — `Department = _.Department!.Name` gives a flat column instead of a nested object.
+- The flat form still works when only the value is needed — `Department = _.Department!.Name` gives a flat column instead of a nested object.
 
 
 ## Grouping and aggregates

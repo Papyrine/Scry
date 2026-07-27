@@ -1,6 +1,6 @@
 # Schema versioning
 
-Every client/server API has to decide how much of its past it will keep working. That decision is a spectrum, and where you sit on it trades one set of costs for another. This page places Scry on that spectrum, then documents the mechanics.
+Every client/server API has to decide how much of its past it will keep working. That decision is a spectrum, and a system's position on it trades one set of costs for another. This page places Scry on that spectrum, then documents the mechanics.
 
 
 ## The versioning spectrum
@@ -11,7 +11,7 @@ Five representative positions, from most willing to break to least:
 
 - **No versioning** — one surface, no compatibility promises. A drifted client keeps working right up until the server ships a change it can't tolerate, and then gets a hard error with no warning. Cheapest to build, most disruptive when it does break.
 - **Drift detection** — still one surface, but every response tells the client the server's current schema, so a stale client can *notice* it has drifted and update itself (reload, re-fetch, prompt) instead of failing a query. This is where Scry sits, via the [schema stamp](#the-two-version-axes).
-- **Additive-only evolution** — you promise never to remove or change existing surface, only add. Old clients keep working on the subset they know. Nothing breaks, but the surface can only grow.
+- **Additive-only evolution** — a standing promise never to remove or change existing surface, only add. Old clients keep working on the subset they know. Nothing breaks, but the surface can only grow.
 - **Parallel versions** — `v1`, `v2`, … served side by side, each a maintained contract, with clients migrating on their own schedule inside a deprecation window.
 - **Never break** — perpetual back-compat. Every version is supported indefinitely; nothing a client has ever relied on is allowed to change.
 
@@ -21,8 +21,8 @@ Five representative positions, from most willing to break to least:
 The positions differ along a handful of axes worth naming explicitly:
 
 - **Deployment risk** — the chance that shipping a server change breaks a client that is already live (or cached in a browser tab).
-- **Server change freedom** — how freely you can change, rename, or remove server surface without ceremony. High freedom means a fast cadence; low freedom means every change is gated by compatibility.
-- **Technical debt** — the compatibility shims, dead columns, deprecated fields, and parallel code paths you carry forward to keep old clients working.
+- **Server change freedom** — how freely server surface can be changed, renamed, or removed without ceremony. High freedom means a fast cadence; low freedom means every change is gated by compatibility.
+- **Technical debt** — the compatibility shims, dead columns, deprecated fields, and parallel code paths carried forward to keep old clients working.
 - **UI ↔ business-model lag** — how far a running UI is allowed to drift from the *current* model and business rules. Strong back-compat is double-edged: it lets an old client keep running, which also means users can keep seeing a stale shape of the business long after it changed.
 - **Developer effort** — the ongoing engineering cost of the strategy, separate from debt: discipline, tests across versions, migration tooling.
 - **Failure mode** — what a mismatch *feels like*: a hard error a user hits, a self-healing prompt, or nothing at all.
@@ -67,9 +67,9 @@ Every response carries the server's [schema stamp](wire-format.md#schema-stamp),
 | --- | --- |
 | `ServerSchemaStamp` | The stamp from the most recent response, or null before the first. |
 | `SchemaStale` | True once that stamp differs from the client's own. Poll it wherever convenient. |
-| `SchemaStaleDetected` | Raised the first time drift is seen. This is the one to handle if you want to prompt. |
+| `SchemaStaleDetected` | Raised the first time drift is seen. This is the one to handle to drive a prompt. |
 
-The event hands you a `SchemaDrift` carrying both stamps (`ClientStamp`, `ServerStamp`), and is raised at most once per `ScryClient` — a chatty app does not re-prompt on every query.
+The event carries a `SchemaDrift` with both stamps (`ClientStamp`, `ServerStamp`), and is raised at most once per `ScryClient` — a chatty app does not re-prompt on every query.
 
 Drift is **not** an error. The query that revealed it has already succeeded, and an additive model change — a new source, a new member — leaves an older client working indefinitely. Treat the signal as "a newer client exists", not "this client is broken".
 

@@ -185,10 +185,10 @@ employees = await Query.Employee
 
 That query is captured — never executed client-side — serialized to the wire AST, POSTed, validated against the allow-list on the server, rebound to the real `Employee` type, run through EF Core, and returned as exactly the four projected columns.
 
-Adding a new query is just more LINQ. No new endpoint, no new contract, no server change.
+Adding a new query is more LINQ. No new endpoint, no new contract, no server change.
 
 
-## What you get for free
+## What comes for free
 
 - `Salary` is `[QueryIgnore]`, so it is absent from `EmployeeQueryModel` — there is no way to write LINQ that references it. A hand-crafted request naming `Salary` is rejected with `400` by the server's independent validation pass.
 - The `Status` enum is re-emitted client-side, so no model reference is needed to compare against `Status.FullTime`.

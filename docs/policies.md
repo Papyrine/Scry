@@ -141,7 +141,7 @@ When executing through `ScryProcessor.Execute(request, db)` — the overload wit
 
 ## Applies to every source kind
 
-Policies work on entities, views, and POCO sources alike; each is just an `IQueryable<T>` by the time the policy sees it. For a POCO source the filter runs in memory, for the others it is translated to SQL.
+Policies work on entities, views, and POCO sources alike; each is an `IQueryable<T>` by the time the policy sees it. For a POCO source the filter runs in memory, for the others it is translated to SQL.
 
 
 ## What a policy is not

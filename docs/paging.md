@@ -82,12 +82,12 @@ A correct keyset seek needs a **total order over non-null, comparable keys**. Th
 2. the client supplied **≥ 1 `OrderBy`** and it is the **trailing** restricting op — no `Where`, `Skip`, or `Take` after it (a `Skip`/`Take` anywhere means offset intent), and
 3. every client ordering key is a **single-segment scalar member** that EF reports **non-nullable**.
 
-When a query is not seek-safe the response falls back to offset paging: `Cursor` is null and the caller advances with `Skip`. Passing a cursor to a non-seek-safe query is rejected with a `400`. This deliberately sidesteps NULL-ordering and nav-path seek correctness (where a simple `>`/`<` seek would skip or duplicate rows) while covering the common case — filter, then sort by stable columns.
+When a query is not seek-safe the response falls back to offset paging: `Cursor` is null and the caller advances with `Skip`. Passing a cursor to a non-seek-safe query is rejected with a `400`. This deliberately sidesteps NULL-ordering and nav-path seek correctness (where a naive `>`/`<` seek would skip or duplicate rows) while covering the common case — filter, then sort by stable columns.
 
 
 ## Total count is separate
 
-Neither the page nor the cursor carries a total row count. A count is a second, potentially expensive query, so — as with OData's opt-in `$count` and Relay's separate `totalCount` — it stays out of the page. Scry already exposes it as its own terminal; ask for it explicitly when you need it:
+Neither the page nor the cursor carries a total row count. A count is a second, potentially expensive query, so — as with OData's opt-in `$count` and Relay's separate `totalCount` — it stays out of the page. Scry already exposes it as its own terminal; ask for it explicitly when needed:
 
 ```cs
 var total = await Query.Employee.Where(_ => _.Active).CountAsync();
@@ -174,12 +174,12 @@ The cursor is nonetheless **HMAC-signed** (`CursorSigningKey`, or a per-process 
 
 Opaque cursors are universal ([Relay/GraphQL connections](https://relay.dev/graphql/connections.htm), [OData `$skiptoken`](https://learn.microsoft.com/en-us/odata/webapi/skiptoken-for-server-side-paging), [Stripe](https://docs.stripe.com/api/pagination), GitHub, AWS `NextToken`, DynamoDB `LastEvaluatedKey`). **Signing** them is not: API designs split into two camps.
 
-- **Unsigned, re-validated** — [Stripe](https://docs.stripe.com/api/pagination) (`starting_after` is just an object ID) and most [Relay](https://relay.dev/graphql/connections.htm) implementations (cursors are plain `base64(...)`). Tampering is harmless because the value is re-scoped and re-authorized server-side on every request.
+- **Unsigned, re-validated** — [Stripe](https://docs.stripe.com/api/pagination) (`starting_after` is an object ID) and most [Relay](https://relay.dev/graphql/connections.htm) implementations (cursors are plain `base64(...)`). Tampering is harmless because the value is re-scoped and re-authorized server-side on every request.
 - **Signed or encrypted** — much of [AWS](https://github.com/amazon-archives/realworld-serverless-application/wiki/List-API-Pagination) and JWT-style stateless tokens, so the server can reject anything it did not mint and treat the payload as trusted.
 
 Scry belongs to the **first** camp: a decoded cursor is re-validated and policy-filtered like any predicate (see above), so tampering is already safe. The HMAC is therefore **optional hardening**, not load-bearing — it only buys fail-fast rejection and the opaque contract. Dropping it and shipping a plain `base64` payload would be a defensible, Relay-style choice.
 
-Two caveats if you keep it:
+Two caveats if it is kept:
 
 - **HMAC signs, it does not hide.** The payload is readable — anyone can base64-decode the cursor and see the ordering-key values (`Name = "Alice"`, `Id = 1`). For Scry that is low-sensitivity: the client ordered by those columns and already saw those rows. But if a cursor could ever carry something a client should not read, use authenticated **encryption** (e.g. AES-GCM), not bare HMAC — which is why [AWS recommends encrypting](https://github.com/amazon-archives/realworld-serverless-application/wiki/List-API-Pagination) its pagination tokens.
 - **A signed self-contained token is stateful about its key.** With the ephemeral default key a cursor dies on restart or across instances; set a stable `CursorSigningKey` for a scaled-out or restart-tolerant deployment (see [Limits](#limits)).
