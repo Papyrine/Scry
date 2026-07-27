@@ -13,6 +13,7 @@ The model is **default-deny**: a type that carries none of the opt-in attributes
 | `[QueryIgnore]` | property, field | Excludes a member from an opted-in type. |
 | `[ReturnableWith(typeof(TPolicy))]` | class, struct | Attaches a server-side row policy. |
 
+
 ## `[Queryable]`
 
 <!-- snippet: queryableEntity -->
@@ -44,6 +45,7 @@ public class Employee
 The source name exposed to clients defaults to the **type name** — `Employee`. That is what appears as the `root` of a wire request, as the property name on the generated `ScryQuery`, and in the introspection output.
 
 If the type also carries EF Core's `[Keyless]`, Scry classifies it as a view rather than an entity. The two are resolved identically (`DbContext.Set<T>()`); the distinction is reported through introspection so tooling can label it.
+
 
 ## Naming a source
 
@@ -139,6 +141,7 @@ Details:
 - Names are compared with ordinal case sensitivity.
 - Two sources resolving to the same name is an error on both sides: the generator reports `SCRY002` and emits nothing, and the server throws `Duplicate queryable source name '...'` at startup. Note that this is reachable without `Name` too — two same-named types in different namespaces collide the same way.
 
+
 ## `[QueryableView]`
 
 For a keyless entity mapped to a database view:
@@ -176,6 +179,7 @@ protected override void OnModelCreating(ModelBuilder modelBuilder) =>
 <!-- endSnippet -->
 
 `[QueryableView]` is equivalent to putting `[Queryable]` on a type that EF has marked `[Keyless]`; use it when the keyless configuration lives in `OnModelCreating` rather than on the type.
+
 
 ## `[QueryablePoco]`
 
@@ -243,6 +247,7 @@ POCO source 'Holiday' has no data registered. Call options.AddPocoSource<Holiday
 
 See [Server](server.md#poco-sources) for the per-request factory overload.
 
+
 ## `[QueryableComplex]`
 
 For an EF Core **complex type** — a value object with no key of its own, typically mapped into a JSON column:
@@ -285,6 +290,7 @@ The generator and the server both read this attribute, but neither can see EF's 
 'Address' is marked [Queryable]/[QueryableView] but is an EF complex type in SampleContext. Use [QueryableComplex].
 ```
 
+
 ## `[QueryIgnore]`
 
 ```cs
@@ -299,6 +305,7 @@ An ignored member is excluded twice over:
 
 It is also absent from the default projection — a query with no `Select` returns every allow-listed scalar, and `Salary` is not one.
 
+
 ## `[ReturnableWith]`
 
 ```cs
@@ -309,6 +316,7 @@ public class Employee { ... }
 Names an `IReturnablePolicy<T>` implementation that the server applies to the source **before** any client operator. It is server-only: the generator ignores it and the client never sees it. See [Row policies](policies.md).
 
 A policy registered in code via `ScryOptions.AddPolicy<TEntity, TPolicy>()` takes precedence over the attribute on the same type.
+
 
 ## Which members are exposed
 
@@ -334,6 +342,7 @@ flowchart TD
     Q3 -- Collection nav, or a type<br/>that is not opted in --> X
 ```
 
+
 ### Scalars
 
 `bool`, `char`, `sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `float`, `double`, `decimal`, `string`, `DateTime`, `DateOnly`, `TimeOnly`, `DateTimeOffset`, `TimeSpan`, `Guid`, `byte[]`, and any `enum` — plus the `Nullable<>` form of each value type.
@@ -342,17 +351,20 @@ An `enum` used by an exposed member is re-emitted into the generated client code
 
 Scalars can be used in predicates, ordering keys, group keys, aggregate selectors, and projection leaves.
 
+
 ### Navigations
 
 A property whose type is another opted-in type is a **reference navigation**. It can be traversed in a member path (`e.Manager.Name`) and projected into, up to `MaxNavigationDepth` segments (default 4). A `[QueryableComplex]` member behaves the same way for traversal (`e.Address.City`); the only difference is at the type level — a complex type is never a root source.
 
 A navigation cannot itself be a value — it cannot be compared, ordered by, grouped by, or used as a projection leaf. `Projection member must reference a scalar value.` is the rejection you get.
 
+
 ### Not exposed
 
 - **Collection navigations** (`List<Employee> Employees`). There is no wire node for traversing a collection, so a client cannot fan out, `Any()` into a child set, or aggregate across one. If you need a collection-derived value, expose it as a view or a computed scalar on the parent. This includes collection-valued complex types (`OwnsMany` / JSON arrays).
 - **Complex types that are not themselves opted in.** Adding `[QueryableComplex]` to the target type makes it traversable.
 - **Write-only or non-public properties, indexers, and fields.**
+
 
 ## Keeping the two readers aligned
 
