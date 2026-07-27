@@ -2,6 +2,7 @@
 
 Type-safe, serializable LINQ from a client to a server-side EF Core model.
 
+
 ## Guides
 
 | Page | Contents |
@@ -17,6 +18,7 @@ Type-safe, serializable LINQ from a client to a server-side EF Core model.
 | [Wire format](wire-format.md) | The JSON query AST: request, response, every node type, versioning. |
 | [Query explorer](explorer.md) | The opt-in browser-Roslyn explorer UI and the introspection endpoint. |
 | [Sample](sample.md) | Running the bundled sample and what each part of it demonstrates. |
+
 
 ## How it works
 
@@ -45,6 +47,7 @@ Sample.Model (EF Core + [Queryable])
                                                            → EF Core → project → JSON
 ```
 
+
 ## Packages
 
 | Package | Purpose |
@@ -62,6 +65,7 @@ Sample.Model (EF Core + [Queryable])
 - .NET 10 (`net10.0`) for `Scry.Wire`, `Scry.Client`, `Scry.Server`, and `Scry.Server.Explorer`.
 - `Scry.Annotations` targets `netstandard2.0`, so any model project can reference it.
 - EF Core on the server. The client has no EF dependency, which keeps it small under trimmed Blazor WebAssembly.
+
 
 ## Editing these docs
 
