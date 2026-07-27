@@ -333,9 +333,11 @@ For a record or constructor call, member names come from the constructor paramet
 
 Every projection leaf must resolve to an allow-listed **scalar**. A navigation cannot be projected whole; project the scalar you want out of it (`_.Department!.Name`).
 
+
 ### Without a `Select`
 
 If no projection is supplied, the server returns every allow-listed **scalar** member of the source. Navigations are excluded, and so is anything `[QueryIgnore]`d — which is why the default projection of `Employee` never contains `Salary`.
+
 
 ### Nested result objects
 
@@ -389,6 +391,7 @@ Rules for a nested projection member:
 - Every member of the nested object must be a **member path** (`_.Department.Name`), not a function call or a further nested object — one level of nesting, scalar leaves.
 - All its members must share a single navigation prefix; the client descends into that one navigation. Mixing two navigations (`new(_.Department.Name, _.Manager.Name)`) in one nested object is rejected.
 - The flat form still works when you only need the value — `Department = _.Department!.Name` gives a flat column instead of a nested object.
+
 
 ## Grouping and aggregates
 
