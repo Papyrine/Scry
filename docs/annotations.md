@@ -79,9 +79,19 @@ namespace Scry.Generated;
 /// <summary>Entry point for writing LINQ queries against the allow-listed sources.</summary>
 public sealed class ScryQuery
 {
+    /// <summary>
+    /// A hash of the queryable surface this client was generated against. Attached to each
+    /// request so the server can identify a client generated against a different model.
+    /// </summary>
+    public const string SchemaStamp = "f0fc8cc5a6fa0a51b23480d0cb05daf7afe41cb78a460358abe7f74dee4042f1";
+
     readonly global::Scry.Client.ScryClient client;
 
-    public ScryQuery(global::Scry.Client.ScryClient client) => this.client = client;
+    public ScryQuery(global::Scry.Client.ScryClient client)
+    {
+        this.client = client;
+        client.SchemaStamp = SchemaStamp;
+    }
 
     public global::System.Linq.IQueryable<EmployeeQueryModel> Staff =>
         client.Source<EmployeeQueryModel>("Staff");
@@ -96,7 +106,7 @@ public sealed class ScryQuery
         client.Source<OrderQueryModel>("Order");
 }
 ```
-<sup><a href='/src/Scry.SourceGenerator.Tests/GeneratorTests.NamedSources%23ScryQuery.g.verified.cs#L1-L24' title='Snippet source file'>snippet source</a> | <a href='#snippet-GeneratorTests.NamedSources#ScryQuery.g.verified.cs' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.SourceGenerator.Tests/GeneratorTests.NamedSources%23ScryQuery.g.verified.cs#L1-L34' title='Snippet source file'>snippet source</a> | <a href='#snippet-GeneratorTests.NamedSources#ScryQuery.g.verified.cs' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 That split is deliberate. `Name` governs the public vocabulary; `{Type}QueryModel` stays tied to the type so the server's introspection output and the generator's emission keep matching exactly — which is what lets the [explorer](explorer.md) synthesize an identical model.

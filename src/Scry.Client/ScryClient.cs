@@ -4,22 +4,58 @@ namespace Scry.Client;
 /// The client entry point. Exposes allow-listed sources as <see cref="IQueryable{T}"/> and sends
 /// translated queries to the server via a pluggable transport.
 /// </summary>
-public sealed class ScryClient(Func<QueryRequest, Cancel, Task<QueryResponse>> transport)
+public sealed class ScryClient
 {
+    readonly Func<QueryRequest, Cancel, Task<QueryResponse>> transport;
+
+    /// <summary>Creates a client over a custom transport.</summary>
+    public ScryClient(Func<QueryRequest, Cancel, Task<QueryResponse>> transport) =>
+        this.transport = transport;
+
+    // The HTTP transport is an instance method so each response can record the server's advertised
+    // schema stamp; a static one could not reach the client it belongs to.
+    ScryClient(HttpClient http, string endpoint) =>
+        transport = (request, cancel) => PostAsync(http, endpoint, request, cancel);
+
     // begin-snippet: scryClientApi
     /// <summary>Creates a client that POSTs queries to an HTTP endpoint.</summary>
     public static ScryClient ForHttp(HttpClient http, string endpoint) =>
-        new((request, token) => PostAsync(http, endpoint, request, token));
+        new(http, endpoint);
 
     /// <summary>Returns an <see cref="IQueryable{T}"/> backed by the named allow-listed source.</summary>
     public IQueryable<T> Source<T>(string name) =>
         new CaptureQueryable<T>(new(this, name));
     // end-snippet
 
+    /// <summary>
+    /// The schema stamp of the generated model this client queries with. Assigned by the generated
+    /// <c>ScryQuery</c> entry point and attached to each request, so the server can identify a client
+    /// generated against a different model. Null (e.g. for hand-built sources) sends no stamp.
+    /// </summary>
+    public string? SchemaStamp { get; set; }
+
+    /// <summary>
+    /// The schema stamp the server advertised on the most recent HTTP response, or null before the
+    /// first response (or over a non-HTTP transport). Compare with <see cref="SchemaStamp"/> to detect
+    /// a drifted model while queries are still succeeding — a long-lived client (a cached WASM app)
+    /// can use a difference to prompt a reload before a breaking change reaches it.
+    /// </summary>
+    public string? ServerSchemaStamp { get; private set; }
+
+    /// <summary>
+    /// True once the server has advertised a schema stamp that differs from this client's, meaning the
+    /// client was generated against a different model surface. Queries may still succeed — an additive
+    /// model change breaks nothing — so treat this as a signal to regenerate or reload, not an error.
+    /// </summary>
+    public bool SchemaStale =>
+        SchemaStamp is { } client &&
+        ServerSchemaStamp is { } server &&
+        client != server;
+
     internal Task<QueryResponse> SendAsync(QueryRequest request, Cancel cancel) =>
         transport(request, cancel);
 
-    static async Task<QueryResponse> PostAsync(
+    async Task<QueryResponse> PostAsync(
         HttpClient http,
         string endpoint,
         QueryRequest request,
@@ -28,6 +64,12 @@ public sealed class ScryClient(Func<QueryRequest, Cancel, Task<QueryResponse>> t
         var json = ScryJson.Serialize(request);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
         using var message = await http.PostAsync(endpoint, content, cancel);
+
+        // Recorded from failures too: a rejection caused by schema drift is exactly when this matters.
+        if (message.Headers.TryGetValues(WireFormat.SchemaStampHeader, out var values))
+        {
+            ServerSchemaStamp = values.FirstOrDefault();
+        }
 
         var body = await message.Content.ReadAsStringAsync(cancel);
         if (message.IsSuccessStatusCode)

@@ -6,6 +6,12 @@ public static class WireFormat
 {
     /// <summary>The current wire format version.</summary>
     public const int Version = 1;
+
+    /// <summary>
+    /// The response header carrying the server's schema stamp, so a client can detect a drifted model
+    /// on any response rather than only on a rejection. Part of the wire contract.
+    /// </summary>
+    public const string SchemaStampHeader = "Scry-Schema-Stamp";
 }
 // end-snippet
 

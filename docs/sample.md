@@ -292,13 +292,16 @@ fullTimers = await Query.Employee
   {
     RequestUri: http://localhost/api/query,
     RequestMethod: POST,
-    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"expr","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"expr","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"expr","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"expr","node":{"$type":"member","path":["Department","Name"]}}}]}}]},
+    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"expr","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"expr","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"expr","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"expr","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"a3b2edd1bc384796cc3e90ae40f16fdda5cb6136bf7badeb9da35653a7d74fcd"},
     ResponseStatus: OK 200,
+    ResponseHeaders: {
+      Scry-Schema-Stamp: a3b2edd1bc384796cc3e90ae40f16fdda5cb6136bf7badeb9da35653a7d74fcd
+    },
     ResponseContent: {"version":1,"kind":"List","payload":[{"name":"Aaron","status":"FullTime","manager":"Alice","department":"Engineering"},{"name":"Alice","status":"FullTime","manager":null,"department":"Engineering"},{"name":"Carol","status":"Contractor","manager":null,"department":"Sales"}]}
   }
 ]
 ```
-<sup><a href='/samples/Sample.Tests/WireFormatTests.EmployeeQueryWireFormat.verified.txt#L1-L9' title='Snippet source file'>snippet source</a> | <a href='#snippet-WireFormatTests.EmployeeQueryWireFormat.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Tests/WireFormatTests.EmployeeQueryWireFormat.verified.txt#L1-L12' title='Snippet source file'>snippet source</a> | <a href='#snippet-WireFormatTests.EmployeeQueryWireFormat.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Four projected columns requested, four returned. `Salary` is neither requested nor returnable.

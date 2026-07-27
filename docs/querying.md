@@ -31,9 +31,19 @@ namespace Scry.Generated;
 /// <summary>Entry point for writing LINQ queries against the allow-listed sources.</summary>
 public sealed class ScryQuery
 {
+    /// <summary>
+    /// A hash of the queryable surface this client was generated against. Attached to each
+    /// request so the server can identify a client generated against a different model.
+    /// </summary>
+    public const string SchemaStamp = "da2a2c457e825eda6625b3344f24ee3c69c4954b731d9681f6c40beaf15b4101";
+
     readonly global::Scry.Client.ScryClient client;
 
-    public ScryQuery(global::Scry.Client.ScryClient client) => this.client = client;
+    public ScryQuery(global::Scry.Client.ScryClient client)
+    {
+        this.client = client;
+        client.SchemaStamp = SchemaStamp;
+    }
 
     public global::System.Linq.IQueryable<EmployeeQueryModel> Employee =>
         client.Source<EmployeeQueryModel>("Employee");
@@ -45,7 +55,7 @@ public sealed class ScryQuery
         client.Source<HolidayQueryModel>("Holiday");
 }
 ```
-<sup><a href='/src/Scry.SourceGenerator.Tests/GeneratorTests.EntitiesViewPocoAndEnum%23ScryQuery.g.verified.cs#L1-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-GeneratorTests.EntitiesViewPocoAndEnum#ScryQuery.g.verified.cs' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.SourceGenerator.Tests/GeneratorTests.EntitiesViewPocoAndEnum%23ScryQuery.g.verified.cs#L1-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-GeneratorTests.EntitiesViewPocoAndEnum#ScryQuery.g.verified.cs' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Each returns an `IQueryable<T>` whose provider only captures. Enumerating it synchronously throws:
@@ -61,13 +71,13 @@ You can also reach a source by name, which is what the generated code does under
 ```cs
 /// <summary>Creates a client that POSTs queries to an HTTP endpoint.</summary>
 public static ScryClient ForHttp(HttpClient http, string endpoint) =>
-    new((request, token) => PostAsync(http, endpoint, request, token));
+    new(http, endpoint);
 
 /// <summary>Returns an <see cref="IQueryable{T}"/> backed by the named allow-listed source.</summary>
 public IQueryable<T> Source<T>(string name) =>
     new CaptureQueryable<T>(new(this, name));
 ```
-<sup><a href='/src/Scry.Client/ScryClient.cs#L9-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Client/ScryClient.cs#L20-L28' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ## Operators
@@ -220,7 +230,7 @@ public enum UnaryOp
     Negate
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L12-L36' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireBinaryOps' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Enums.cs#L18-L42' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireBinaryOps' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 C# `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, `+`, `-`, `*`, `/`, `!`, and unary `-` map onto these. Any other operator (`%`, `&`, `|`, `^`, `<<`, `>>`, `??`, `?:`) throws:
@@ -250,7 +260,7 @@ public enum KnownFunction
     DateDay
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L38-L52' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Enums.cs#L44-L58' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Mapped from:
@@ -399,7 +409,7 @@ public enum AggregateFn
     Max
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L54-L64' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireAggregates' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Enums.cs#L60-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireAggregates' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 | C# | Aggregate |

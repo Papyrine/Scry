@@ -107,7 +107,7 @@ public class ScryGenerator :
             context.AddSource("ScryEnums.g.cs", EmitEnums(extract.Enums));
         }
 
-        context.AddSource("ScryQuery.g.cs", EmitQuery(extract.Sources));
+        context.AddSource("ScryQuery.g.cs", EmitQuery(extract));
     }
 
     static string EmitModel(SourceInfo source)
@@ -154,19 +154,29 @@ public class ScryGenerator :
         return builder.ToString();
     }
 
-    static string EmitQuery(EquatableArray<SourceInfo> sources)
+    static string EmitQuery(ModelExtract extract)
     {
         var builder = Header();
         builder.AppendLine(
-            """
+            $$"""
             /// <summary>Entry point for writing LINQ queries against the allow-listed sources.</summary>
             public sealed class ScryQuery
             {
+                /// <summary>
+                /// A hash of the queryable surface this client was generated against. Attached to each
+                /// request so the server can identify a client generated against a different model.
+                /// </summary>
+                public const string SchemaStamp = "{{ComputeStamp(extract)}}";
+
                 readonly global::Scry.Client.ScryClient client;
 
-                public ScryQuery(global::Scry.Client.ScryClient client) => this.client = client;
+                public ScryQuery(global::Scry.Client.ScryClient client)
+                {
+                    this.client = client;
+                    client.SchemaStamp = SchemaStamp;
+                }
             """);
-        foreach (var source in sources)
+        foreach (var source in extract.Sources)
         {
             // Complex types are traversable member types, not roots — they get no entry point.
             if (source.Kind == SourceKind.Complex)
@@ -184,6 +194,23 @@ public class ScryGenerator :
 
         builder.AppendLine("}");
         return builder.ToString();
+    }
+
+    // Mirrors Schema.ComputeStamp on the server: same canonical inputs into the shared SchemaStamp,
+    // so a client generated from the same surface carries the same stamp the server computes.
+    static string ComputeStamp(ModelExtract extract)
+    {
+        var sources = extract.Sources
+            .Where(_ => _.Kind != SourceKind.Complex)
+            .Select(_ => (_.SourceName, _.Kind.ToString(), _.ModelName))
+            .ToList();
+        var types = extract.Sources
+            .Select(_ => (_.ModelName, _.Properties.Select(property => (property.Name, property.TypeDisplay)).ToList()))
+            .ToList();
+        var enums = extract.Enums
+            .Select(_ => (_.Name, _.Members.ToList()))
+            .ToList();
+        return SchemaStamp.Compute(sources, types, enums);
     }
 
     static StringBuilder Header()

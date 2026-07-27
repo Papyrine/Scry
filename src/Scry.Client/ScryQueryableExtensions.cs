@@ -166,7 +166,7 @@ public static class ScryQueryableExtensions
             pipeline.Add(terminal);
         }
 
-        return QueryRequest.Create(provider.Root, pipeline);
+        return QueryRequest.Create(provider.Root, pipeline, provider.Client.SchemaStamp);
     }
 
     static Task<QueryResponse> Send<T>(IQueryable<T> source, QueryOp? terminal, Cancel cancel)

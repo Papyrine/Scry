@@ -62,11 +62,19 @@ public static class ModelSynthesizer
         if (executable)
         {
             // Mirrors the generator: each source is backed by the real client so the captured query
-            // can be translated via ToScryRequest.
+            // can be translated via ToScryRequest, and carries the same schema stamp — here taken
+            // from the introspection the explorer just fetched.
             builder.AppendLine(
-                """
+                $$"""
+                    public const string SchemaStamp = "{{introspection.SchemaStamp}}";
+
                     readonly global::Scry.Client.ScryClient client;
-                    public ScryQuery(global::Scry.Client.ScryClient client) => this.client = client;
+
+                    public ScryQuery(global::Scry.Client.ScryClient client)
+                    {
+                        this.client = client;
+                        client.SchemaStamp = SchemaStamp;
+                    }
                 """);
             foreach (var source in introspection.Sources)
             {

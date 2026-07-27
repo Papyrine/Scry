@@ -30,6 +30,32 @@ sealed class Schema
     /// </summary>
     public ScryIntrospection Describe(ScryOptions options)
     {
+        var (sourceInfos, typeInfos, enumInfos) = DescribeSurface();
+        return new(ScryIntrospection.CurrentVersion, options.MaxPageSize, sourceInfos, typeInfos, enumInfos)
+        {
+            SchemaStamp = Stamp
+        };
+    }
+
+    /// <summary>
+    /// A hash of the allow-listed surface, compared against <see cref="QueryRequest.Stamp"/> to
+    /// distinguish a stale client from an invalid query. The generator computes the same value over
+    /// the same canonical form (the shared SchemaStamp source), so client and server stamps agree
+    /// exactly when their queryable surfaces do. Computed once, at build.
+    /// </summary>
+    public string Stamp { get; private set; } = "";
+
+    string ComputeStamp()
+    {
+        var (sourceInfos, typeInfos, enumInfos) = DescribeSurface();
+        return SchemaStamp.Compute(
+            sourceInfos.Select(_ => (_.Name, _.Kind, _.Model)).ToList(),
+            typeInfos.Select(_ => (_.Model, _.Members.Select(member => (member.Name, member.TypeDisplay)).ToList())).ToList(),
+            enumInfos.Select(_ => (_.Name, _.Values.ToList())).ToList());
+    }
+
+    (List<ScrySourceInfo> Sources, List<ScryTypeInfo> Types, List<ScryEnumInfo> Enums) DescribeSurface()
+    {
         var enums = new Dictionary<string, ScryEnumInfo>(StringComparer.Ordinal);
 
         var typeInfos = types.Values
@@ -51,7 +77,7 @@ sealed class Schema
             .OrderBy(_ => _.Name, StringComparer.Ordinal)
             .ToList();
 
-        return new(ScryIntrospection.CurrentVersion, options.MaxPageSize, sourceInfos, typeInfos, enumInfos);
+        return (sourceInfos, typeInfos, enumInfos);
     }
 
     static ScryMemberInfo DescribeMember(Member member, Dictionary<string, ScryEnumInfo> enums)
@@ -165,6 +191,7 @@ sealed class Schema
             schema.sources[name] = new(name, type, kind, policy, BuildResolver(type, kind, options));
         }
 
+        schema.Stamp = schema.ComputeStamp();
         return schema;
     }
 

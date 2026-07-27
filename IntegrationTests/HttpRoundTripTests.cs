@@ -143,6 +143,55 @@ public class HttpRoundTripTests
     }
     // end-snippet
 
+    // The lockstep guarantee behind stale-client detection: the stamp the generator bakes into the
+    // client (computed from Sample.Model's metadata on disk) must equal the stamp the server computes
+    // from the same assembly via reflection. If the two surface readers ever diverge, this fails.
+    [Test]
+    public void GeneratedSchemaStampMatchesServer()
+    {
+        var processor = app.Services.GetRequiredService<ScryProcessor>();
+
+        Assert.That(ScryQuery.SchemaStamp, Is.EqualTo(processor.Describe().SchemaStamp));
+    }
+
+    [Test]
+    public async Task ResponseAdvertisesSchemaStamp()
+    {
+        using var content = new StringContent(
+            """{"version":1,"root":"Employee","pipeline":[{"$type":"count"}]}""",
+            Encoding.UTF8,
+            "application/json");
+        using var response = await http.PostAsync("/api/query", content);
+
+        Assert.That(
+            response.Headers.GetValues("Scry-Schema-Stamp").Single(),
+            Is.EqualTo(ScryQuery.SchemaStamp));
+    }
+
+    // A client generated against the live model must never report itself stale — this is the
+    // in-agreement half of the SchemaStale signal.
+    [Test]
+    public async Task MatchingClientIsNotReportedStale()
+    {
+        await query.Employee.CountAsync();
+
+        Assert.That(client.ServerSchemaStamp, Is.EqualTo(ScryQuery.SchemaStamp));
+        Assert.That(client.SchemaStale, Is.False);
+    }
+
+    // The drifted case: a client carrying a stamp from an older model learns it is stale from a
+    // response header, even though the query itself succeeded.
+    [Test]
+    public async Task DriftedClientIsReportedStale()
+    {
+        var stale = ScryClient.ForHttp(http, "/api/query");
+        stale.SchemaStamp = "stamp-from-an-older-model";
+
+        await stale.Source<EmployeeQueryModel>("Employee").CountAsync();
+
+        Assert.That(stale.SchemaStale, Is.True);
+    }
+
     [Test]
     public void DisallowedPropertyThrowsThroughClient() =>
         // The generated client model has no Salary member (the server marks it [QueryIgnore]), so

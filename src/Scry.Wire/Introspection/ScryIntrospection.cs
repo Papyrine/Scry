@@ -17,4 +17,10 @@ public sealed record ScryIntrospection(
 
     /// <summary>The query endpoint the explorer POSTs translated requests to (set by the explorer host).</summary>
     public string QueryEndpoint { get; init; } = "/api/query";
+
+    /// <summary>
+    /// A hash of the queryable surface. Equals the generated client's <c>ScryQuery.SchemaStamp</c>
+    /// exactly when client and server were built from the same model surface.
+    /// </summary>
+    public string SchemaStamp { get; init; } = "";
 }

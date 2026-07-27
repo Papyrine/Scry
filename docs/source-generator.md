@@ -181,9 +181,19 @@ namespace Scry.Generated;
 /// <summary>Entry point for writing LINQ queries against the allow-listed sources.</summary>
 public sealed class ScryQuery
 {
+    /// <summary>
+    /// A hash of the queryable surface this client was generated against. Attached to each
+    /// request so the server can identify a client generated against a different model.
+    /// </summary>
+    public const string SchemaStamp = "da2a2c457e825eda6625b3344f24ee3c69c4954b731d9681f6c40beaf15b4101";
+
     readonly global::Scry.Client.ScryClient client;
 
-    public ScryQuery(global::Scry.Client.ScryClient client) => this.client = client;
+    public ScryQuery(global::Scry.Client.ScryClient client)
+    {
+        this.client = client;
+        client.SchemaStamp = SchemaStamp;
+    }
 
     public global::System.Linq.IQueryable<EmployeeQueryModel> Employee =>
         client.Source<EmployeeQueryModel>("Employee");
@@ -195,7 +205,7 @@ public sealed class ScryQuery
         client.Source<HolidayQueryModel>("Holiday");
 }
 ```
-<sup><a href='/src/Scry.SourceGenerator.Tests/GeneratorTests.EntitiesViewPocoAndEnum%23ScryQuery.g.verified.cs#L1-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-GeneratorTests.EntitiesViewPocoAndEnum#ScryQuery.g.verified.cs' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.SourceGenerator.Tests/GeneratorTests.EntitiesViewPocoAndEnum%23ScryQuery.g.verified.cs#L1-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-GeneratorTests.EntitiesViewPocoAndEnum#ScryQuery.g.verified.cs' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Register it alongside the client:

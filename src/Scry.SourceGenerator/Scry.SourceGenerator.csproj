@@ -16,6 +16,11 @@
     <NoWarn>$(NoWarn);RS1041;RS1035</NoWarn>
   </PropertyGroup>
   <ItemGroup>
+    <!-- The stamp must be byte-identical between generated clients and the server; both compile the
+         same shared source. -->
+    <Compile Include="..\Shared\SchemaStamp.cs" Link="SchemaStamp.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />

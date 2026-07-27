@@ -81,7 +81,7 @@ public enum KnownFunction
     DateDay
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L38-L52' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Enums.cs#L44-L58' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Unknown discriminators fail deserialization rather than being ignored, so a request that names anything outside these sets is rejected at the JSON layer.
@@ -100,6 +100,8 @@ The server rebuilds the allow-list at startup from the real model assembly, inde
 - Any resource limit overrun.
 
 Validation runs to completion **before** any expression is rebound or executed. A rejected query never reaches EF Core.
+
+The optional [schema stamp](wire-format.md#schema-stamp) on a request is **not** a security input. It is attacker-controlled like the rest of the wire, is never consulted while deciding whether a query is allowed, and cannot widen the allow-list or unlock a source. It is read only *after* a query has already been rejected, to add "your client looks stale" to the error message. Forging or omitting it changes nothing about what a client may query.
 
 <!-- snippet: rejectIgnoredProperty -->
 <a id='snippet-rejectIgnoredProperty'></a>

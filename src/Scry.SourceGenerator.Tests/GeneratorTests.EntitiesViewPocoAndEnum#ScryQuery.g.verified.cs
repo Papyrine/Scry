@@ -6,9 +6,19 @@ namespace Scry.Generated;
 /// <summary>Entry point for writing LINQ queries against the allow-listed sources.</summary>
 public sealed class ScryQuery
 {
+    /// <summary>
+    /// A hash of the queryable surface this client was generated against. Attached to each
+    /// request so the server can identify a client generated against a different model.
+    /// </summary>
+    public const string SchemaStamp = "da2a2c457e825eda6625b3344f24ee3c69c4954b731d9681f6c40beaf15b4101";
+
     readonly global::Scry.Client.ScryClient client;
 
-    public ScryQuery(global::Scry.Client.ScryClient client) => this.client = client;
+    public ScryQuery(global::Scry.Client.ScryClient client)
+    {
+        this.client = client;
+        client.SchemaStamp = SchemaStamp;
+    }
 
     public global::System.Linq.IQueryable<EmployeeQueryModel> Employee =>
         client.Source<EmployeeQueryModel>("Employee");

@@ -4,6 +4,11 @@
     <PackageReadmeFile>nuget-readme.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
+    <!-- The stamp must be byte-identical between generated clients and the server; both compile the
+         same shared source. -->
+    <Compile Include="..\Shared\SchemaStamp.cs" Link="SchemaStamp.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Polyfill" PrivateAssets="all" />

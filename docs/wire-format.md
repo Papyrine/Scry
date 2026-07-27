@@ -23,11 +23,22 @@ All (de)serialization goes through `ScryJson`, whose options are part of the con
 public sealed record QueryRequest(int Version, string Root, IReadOnlyList<QueryOp> Pipeline)
 {
     /// <summary>Creates a request stamped with the current <see cref="WireFormat.Version"/>.</summary>
-    public static QueryRequest Create(string root, IReadOnlyList<QueryOp> pipeline) =>
-        new(WireFormat.Version, root, pipeline);
+    public static QueryRequest Create(string root, IReadOnlyList<QueryOp> pipeline, string? stamp = null) =>
+        new(WireFormat.Version, root, pipeline)
+        {
+            Stamp = stamp
+        };
+
+    /// <summary>
+    /// The schema stamp of the generated client model the query was written against, when known.
+    /// Lets the server distinguish a stale client (generated against a different model) from an
+    /// invalid query. Omitted on the wire when null; servers ignore an unrecognized stamp property,
+    /// so carrying it is compatible in both directions.
+    /// </summary>
+    public string? Stamp { get; init; }
 }
 ```
-<sup><a href='/src/Scry.Wire/QueryRequest.cs#L7-L14' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireRequest' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/QueryRequest.cs#L7-L25' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireRequest' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ```json
@@ -43,10 +54,11 @@ public sealed record QueryRequest(int Version, string Root, IReadOnlyList<QueryO
 | `version` | Wire format version. The server rejects anything newer than it understands. |
 | `root` | The source name — the allow-listed type name, or the attribute's [`Name`](annotations.md#naming-a-source) when set. |
 | `pipeline` | Ordered operators, applied left to right. |
+| `stamp` | Optional. The [schema stamp](#schema-stamp) of the model the client was generated against. Omitted when unknown. |
 
 Because `root` is part of the contract, prefer setting `Name` over relying on the type name if the CLR type is likely to be renamed.
 
-`QueryRequest.Create(root, pipeline)` stamps the current version.
+`QueryRequest.Create(root, pipeline)` fills in the current wire version, and takes an optional schema stamp.
 
 ## Operators
 
@@ -164,7 +176,7 @@ public enum ClrTypeTag
     Enum
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L66-L84' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireTypeTags' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Enums.cs#L72-L90' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireTypeTags' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The tag is a hint, not an instruction. The server parses the value into the **member's** type at the comparison site, so `tag` never dictates what CLR type is constructed. Types with no dedicated tag (`TimeOnly`, `TimeSpan`, `DateTimeOffset`, `char`) travel as `String` and are reconciled the same way. A `Bytes` value carries a `byte[]` as a base64 string.
@@ -207,7 +219,7 @@ public enum UnaryOp
     Negate
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L12-L36' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireBinaryOps' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Enums.cs#L18-L42' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireBinaryOps' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 When one side is a constant, its type is inferred from the other side, and nullable/non-nullable operands are coerced to match.
@@ -240,7 +252,7 @@ public enum KnownFunction
     DateDay
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L38-L52' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Enums.cs#L44-L58' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 There is no free-form method name anywhere in the format. This enum is the complete set of behaviour a client can request.
@@ -264,7 +276,7 @@ public enum AggregateFn
     Max
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L54-L64' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireAggregates' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Enums.cs#L60-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireAggregates' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `selector` is omitted for `Count`. An aggregate is valid **only** as a projection member in a `select` that follows a `groupBy`.
@@ -342,14 +354,40 @@ public static class WireFormat
 {
     /// <summary>The current wire format version.</summary>
     public const int Version = 1;
+
+    /// <summary>
+    /// The response header carrying the server's schema stamp, so a client can detect a drifted model
+    /// on any response rather than only on a rejection. Part of the wire contract.
+    /// </summary>
+    public const string SchemaStampHeader = "Scry-Schema-Stamp";
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L3-L10' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireVersion' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Enums.cs#L3-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireVersion' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `QueryRequest.Create` and `QueryResponse.Create` stamp the current version. The server rejects a request whose `version` is **greater** than its own — a newer client against an older server fails closed rather than being partially understood. Older requests continue to be accepted.
 
 The `ScryJson` options, the `$type` discriminator strings, and the enum member names are all part of the contract. Changing any of them is a wire break.
+
+## Schema stamp
+
+`version` covers the *format*. The **schema stamp** covers the *model* — the allow-listed surface a client was generated against.
+
+The stamp is a SHA-256 hash over a canonical description of the queryable surface: sources with their kinds, query-model types with their members and type displays, and re-emitted enums with their values, each list sorted ordinal. The generator computes it from the model DLL's metadata and bakes it into the generated `ScryQuery` as `SchemaStamp`; the server computes it from the real model by reflection. Both sides compile the same source, so equal surfaces produce equal stamps.
+
+The stamp travels in three places:
+
+| Direction | Carrier |
+| --- | --- |
+| Client → server | `stamp` on the request. The generated `ScryQuery` assigns it to the `ScryClient`, which attaches it to every request. |
+| Server → client | The `Scry-Schema-Stamp` response header, set on **every** response including rejections. `ScryClient` records it as `ServerSchemaStamp`, and `SchemaStale` is true once it differs from the client's own. |
+| Server → tooling | `schemaStamp` on [introspection](explorer.md). |
+
+The response header is what makes drift detectable *early*: a long-lived client — a cached WASM app — sees the mismatch while its queries are still succeeding, so it can prompt a reload before a breaking change reaches it, rather than discovering the problem as a failed query.
+
+A mismatch is **not** rejected on its own — an additive model change leaves older clients working, and the stamp on a request is client-supplied so it is never a security input. On the server it is used only to explain a rejection: when validation fails *and* the request's stamp differs from the server's, the 400 adds that the client was generated against a different model surface and should be regenerated, instead of leaving a bare "not allow-listed" that reads identically to a hostile request.
+
+A request with no stamp (a hand-built request, or another client implementation) is treated exactly as before.
 
 ## Worked example
 
@@ -482,11 +520,14 @@ Over HTTP, request and response look like this:
   {
     RequestUri: http://localhost/api/query,
     RequestMethod: POST,
-    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"expr","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"expr","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"expr","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"expr","node":{"$type":"member","path":["Department","Name"]}}}]}}]},
+    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"expr","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"expr","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"expr","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"expr","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"a3b2edd1bc384796cc3e90ae40f16fdda5cb6136bf7badeb9da35653a7d74fcd"},
     ResponseStatus: OK 200,
+    ResponseHeaders: {
+      Scry-Schema-Stamp: a3b2edd1bc384796cc3e90ae40f16fdda5cb6136bf7badeb9da35653a7d74fcd
+    },
     ResponseContent: {"version":1,"kind":"List","payload":[{"name":"Aaron","status":"FullTime","manager":"Alice","department":"Engineering"},{"name":"Alice","status":"FullTime","manager":null,"department":"Engineering"},{"name":"Carol","status":"Contractor","manager":null,"department":"Sales"}]}
   }
 ]
 ```
-<sup><a href='/samples/Sample.Tests/WireFormatTests.EmployeeQueryWireFormat.verified.txt#L1-L9' title='Snippet source file'>snippet source</a> | <a href='#snippet-WireFormatTests.EmployeeQueryWireFormat.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Tests/WireFormatTests.EmployeeQueryWireFormat.verified.txt#L1-L12' title='Snippet source file'>snippet source</a> | <a href='#snippet-WireFormatTests.EmployeeQueryWireFormat.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->

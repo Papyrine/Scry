@@ -22,6 +22,12 @@ public sealed class ScryProcessor
     public ScryIntrospection Describe() => schema.Describe(options);
 
     /// <summary>
+    /// A hash of this server's allow-listed surface. Advertised on every response so a client can
+    /// compare it against the stamp it was generated with and detect a drifted model.
+    /// </summary>
+    public string SchemaStamp => schema.Stamp;
+
+    /// <summary>
     /// Confirms the model's annotations match its live EF mapping (e.g. a <c>[Queryable]</c> type is
     /// really an entity, a <c>[QueryableComplex]</c> type is really a complex type), throwing a
     /// directed error otherwise. Called once at startup by <c>MapScry</c>; safe to call from other
@@ -40,8 +46,24 @@ public sealed class ScryProcessor
     }
 
     /// <summary>Validates and executes a request, returning the shaped result.</summary>
-    public QueryResponse Execute(QueryRequest request, DbContext data, IServiceProvider services) =>
-        executor.Execute(request, data, services);
+    public QueryResponse Execute(QueryRequest request, DbContext data, IServiceProvider services)
+    {
+        try
+        {
+            return executor.Execute(request, data, services);
+        }
+        // A rejected query from a client that was generated against a different model surface is far
+        // more likely stale than hostile; say so, instead of leaving an unexplained rejection. A
+        // matching stamp (or none) reports the plain validation message.
+        catch (ScryValidationException exception) when (
+            request.Stamp is { } requestStamp &&
+            requestStamp != schema.Stamp)
+        {
+            throw new ScryValidationException(
+                $"{exception.Message} The request's schema stamp does not match this server's model, so " +
+                "the client was generated against a different model surface — regenerate the client.");
+        }
+    }
 
     /// <summary>Executes a request without a service provider (no DI-resolved policies).</summary>
     public QueryResponse Execute(QueryRequest request, DbContext data) =>

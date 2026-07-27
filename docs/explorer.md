@@ -365,10 +365,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       ]
     }
   ],
-  QueryEndpoint: /api/query
+  QueryEndpoint: /api/query,
+  SchemaStamp: f8f716b35836d8d00e72571b7593e20580a68b1a252ecbfe9dfff2b48209ff5f
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L284' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L285' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names, member names with the exact C# type spelling the source generator would emit, and the re-emitted enums. It carries **no** policies, resolvers, connection details, or CLR internals.

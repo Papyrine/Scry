@@ -38,6 +38,11 @@ public static class ScryServiceExtensions
         var options = services.GetRequiredService<ScryOptions>();
         var processor = services.GetRequiredService<ScryProcessor>();
 
+        // Advertised on every response, including rejections, so a client can notice a drifted model
+        // while its queries are still succeeding rather than only once one breaks. Set before any
+        // write, since headers are fixed once the response has started.
+        context.Response.Headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
+
         string body;
         using (var reader = new StreamReader(context.Request.Body))
         {
