@@ -10,6 +10,7 @@ A Scry solution has three projects:
 
 The client does **not** reference the model. It points at the model's built DLL with an MSBuild property, and the source generator reads that file as metadata. Nothing from the model assembly is loaded, referenced, or executed on the client, and nothing but the allow-listed surface reaches generated code.
 
+
 ## 1. The model
 
 <!-- snippet: queryableEntity -->
@@ -72,6 +73,7 @@ The model project references `Scry.Annotations` alongside EF Core:
 <sup><a href='/samples/Sample.Model/Sample.Model.csproj#L8-L14' title='Snippet source file'>snippet source</a> | <a href='#snippet-modelProjectReferences' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
+
 ## 2. The server
 
 Register the `DbContext` as usual, then register Scry against it:
@@ -107,6 +109,7 @@ app.MapScry("/api/query");
 <!-- endSnippet -->
 
 That is a single HTTP `POST` endpoint which accepts a serialized query and returns the projected rows. See [Server](server.md) for all options, and [Row policies](policies.md) for row-level filtering.
+
 
 ## 3. The client
 
@@ -151,6 +154,7 @@ builder.Services.AddScoped<ScryQuery>();
 
 `AddScryClient` registers a `ScryClient` that POSTs to the given endpoint using the registered `HttpClient`. `ScryQuery` is generated into the `Scry.Generated` namespace.
 
+
 ## 4. Write a query
 
 Declare whatever shape the UI wants:
@@ -182,6 +186,7 @@ employees = await Query.Employee
 That query is captured — never executed client-side — serialized to the wire AST, POSTed, validated against the allow-list on the server, rebound to the real `Employee` type, run through EF Core, and returned as exactly the four projected columns.
 
 Adding a new query is just more LINQ. No new endpoint, no new contract, no server change.
+
 
 ## What you get for free
 
