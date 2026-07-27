@@ -35,6 +35,114 @@ sealed class ExpressionBuilder(Schema schema)
         return new(selector, shape);
     }
 
+    /// <summary>
+    /// Builds a page selector <c>TElement =&gt; object[]</c> whose leading slots are the requested (or
+    /// default) projection leaves and whose trailing <c>KeyCount</c> slots are the ordering-key values.
+    /// One materialization then yields both the shaped rows and the last row's key values (for the next
+    /// cursor). <c>Shape</c> describes only the leading projection slots.
+    /// </summary>
+    public (LambdaExpression Selector, IReadOnlyList<IReadOnlyList<string>> Shape, int KeyCount) BuildPageProjection(
+        Projection? projection,
+        IReadOnlyList<(Node Key, bool Descending)> keys,
+        Type type)
+    {
+        var parameter = Expression.Parameter(type, "e");
+        var leaves = new List<Expression>();
+        var shape = new List<IReadOnlyList<string>>();
+
+        if (projection is null)
+        {
+            if (!schema.TryGetType(type, out var meta))
+            {
+                throw new ScryValidationException($"Type '{type.Name}' is not queryable.");
+            }
+
+            foreach (var member in meta.Members.Values.Where(_ => _.Kind == MemberKind.Scalar))
+            {
+                leaves.Add(Expression.Property(parameter, member.Property));
+                shape.Add([member.Name]);
+            }
+        }
+        else
+        {
+            Flatten(projection, parameter, [], leaves, shape);
+        }
+
+        // Trailing slots: the ordering-key values, used only to build the next page's cursor.
+        foreach (var (key, _) in keys)
+        {
+            leaves.Add(Build(key, parameter, null));
+        }
+
+        var selector = Expression.Lambda(ToObjectArray(leaves), parameter);
+        return (selector, shape, keys.Count);
+    }
+
+    /// <summary>
+    /// Builds the keyset seek predicate <c>TElement =&gt; bool</c> that resumes past a cursor:
+    /// <c>OR_i ( AND_{j&lt;i} (k_j == c_j)  AND  (k_i &gt; c_i for ascending, k_i &lt; c_i for descending) )</c>.
+    /// The keys are the (already validated) ordering members plus the appended primary key; the values
+    /// are the decoded cursor constants, rebound against each key's real type.
+    /// </summary>
+    public LambdaExpression BuildSeekPredicate(
+        IReadOnlyList<(Node Key, bool Descending)> keys,
+        IReadOnlyList<ConstNode> values,
+        Type type)
+    {
+        var parameter = Expression.Parameter(type, "e");
+
+        Expression? disjunction = null;
+        for (var i = 0; i < keys.Count; i++)
+        {
+            Expression? conjunction = null;
+            for (var j = 0; j < i; j++)
+            {
+                var equal = CompareKey(keys[j].Key, values[j], parameter, strictGreater: null, descending: false);
+                conjunction = conjunction is null ? equal : Expression.AndAlso(conjunction, equal);
+            }
+
+            var strict = CompareKey(keys[i].Key, values[i], parameter, strictGreater: true, keys[i].Descending);
+            var term = conjunction is null ? strict : Expression.AndAlso(conjunction, strict);
+            disjunction = disjunction is null ? term : Expression.OrElse(disjunction, term);
+        }
+
+        return Expression.Lambda(disjunction!, parameter);
+    }
+
+    // Builds one comparison of an ordering key against a cursor value. strictGreater null => equality;
+    // otherwise a strict inequality flipped by descending. Strings compare via string.Compare so EF
+    // translates them to a SQL relational comparison under the column collation (matching the ORDER BY).
+    Expression CompareKey(Node keyNode, ConstNode value, ParameterExpression parameter, bool? strictGreater, bool descending)
+    {
+        var left = Build(keyNode, parameter, null);
+        var right = BuildConstant(value, left.Type);
+        Coerce(ref left, ref right);
+
+        if (strictGreater is null)
+        {
+            return Expression.Equal(left, right);
+        }
+
+        var greater = strictGreater.Value ^ descending;
+
+        if (left.Type == typeof(string))
+        {
+            var comparison = Expression.Call(stringCompare, left, right);
+            var zero = Expression.Constant(0);
+            return greater ? Expression.GreaterThan(comparison, zero) : Expression.LessThan(comparison, zero);
+        }
+
+        // Enums do not carry relational operators through Expression; compare their underlying value.
+        if (left.Type.IsEnum)
+        {
+            var underlying = Enum.GetUnderlyingType(left.Type);
+            left = Expression.Convert(left, underlying);
+            right = Expression.Convert(right, underlying);
+        }
+
+        return greater ? Expression.GreaterThan(left, right) : Expression.LessThan(left, right);
+    }
+
     /// <summary>Builds a default projection of every allow-listed scalar member of the source.</summary>
     public ProjectionPlan BuildDefaultProjection(Type type)
     {
@@ -356,6 +464,10 @@ sealed class ExpressionBuilder(Schema schema)
     static readonly MethodInfo stringToLower = StringMethod("ToLower");
     static readonly MethodInfo stringToUpper = StringMethod("ToUpper");
     static readonly MethodInfo stringIsNullOrEmpty = StringMethod("IsNullOrEmpty", typeof(string));
+
+    // string.Compare(string, string) — the seek predicate uses it so a string ordering key rebinds to
+    // a SQL relational comparison (EF has no translation for the > / < operators on string directly).
+    static readonly MethodInfo stringCompare = StringMethod("Compare", typeof(string), typeof(string));
 
     // The generic Count<TSource>(source) definition is type-independent; only MakeGenericMethod varies.
     static readonly MethodInfo enumerableCount = typeof(Enumerable).GetMethods()

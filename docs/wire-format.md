@@ -92,7 +92,7 @@ public abstract record QueryOp;
 | `any` | `predicate: Node?` | Terminal, scalar. |
 | `first` | `orDefault: bool`, `predicate: Node?` | Terminal, single. |
 | `single` | `orDefault: bool`, `predicate: Node?` | Terminal, single. |
-| `page` | `size: int?` | Terminal, page. Bounded page of rows; `size` null uses `DefaultPageSize`, capped by `MaxPageSize`. See [Paging](paging.md). |
+| `page` | `size: int?`, `cursor: string?` | Terminal, page. Bounded page of rows; `size` null uses `DefaultPageSize`, capped by `MaxPageSize`. `cursor` resumes a previous page (keyset). See [Paging](paging.md). |
 
 At most one terminal, and nothing may follow it.
 
@@ -345,7 +345,7 @@ public sealed record QueryResponse(int Version, ResultKind Kind, JsonElement Pay
 | `List` | An array of projected row objects. |
 | `Single` | One projected row object, or `null`. |
 | `Scalar` | A bare value (`int` for `count`, `bool` for `any`). |
-| `Page` | A `ScryPage` envelope: `{ items: [...], hasMore: bool, cursor: string? }`. See [Paging](paging.md). |
+| `Page` | A `ScryPage` envelope: `{ items: [...], hasMore: bool, cursor: string? }` — `cursor` set for a seek-safe page, else null. See [Paging](paging.md). |
 
 The client checks that `kind` matches the terminal it sent and throws `ScryWireException` if it does
 not.

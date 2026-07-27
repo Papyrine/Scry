@@ -217,10 +217,87 @@ public class ClientRoundTripTests
         {
             Assert.That(first.Items.Select(_ => _.Name), Is.EqualTo(["Aaron", "Alice"]));
             Assert.That(first.HasMore, Is.True);
-            // Cursor is null until keyset paging (slice 2); offset paging advances with Skip.
-            Assert.That(first.Cursor, Is.Null);
             Assert.That(second.Items.Select(_ => _.Name), Is.EqualTo(["Bob", "Carol"]));
             Assert.That(second.HasMore, Is.False);
+            // The Skip page is offset paging, so it carries no cursor; the unskipped page is seek-safe.
+            Assert.That(second.Cursor, Is.Null);
+        });
+    }
+
+    [Test]
+    public async Task KeysetPagingWithCursor()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // Ordered by Name: Aaron, Alice, Bob, Carol. Page 2 resumes past page 1 via the returned cursor
+        // (a keyset seek), not an offset.
+        IQueryable<EmployeeRow> Ordered() => client.Source<Employee>("Employee")
+            .OrderBy(_ => _.Name)
+            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name));
+
+        var first = await Ordered().ToPageAsync(2);
+        var second = await Ordered().ToPageAsync(2, first.Cursor);
+
+        string[] firstPage = ["Aaron", "Alice"];
+        string[] secondPage = ["Bob", "Carol"];
+        Assert.Multiple(() =>
+        {
+            Assert.That(first.Items.Select(_ => _.Name), Is.EqualTo(firstPage));
+            Assert.That(first.HasMore, Is.True);
+            Assert.That(first.Cursor, Is.Not.Null);
+            Assert.That(second.Items.Select(_ => _.Name), Is.EqualTo(secondPage));
+            Assert.That(second.HasMore, Is.False);
+            // Last page — nothing left to resume.
+            Assert.That(second.Cursor, Is.Null);
+        });
+    }
+
+    [Test]
+    public async Task KeysetPagingMultiKeyVisitsEveryRowOnce()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // A composite order (Status, then Name) exercises the multi-key lexicographic seek plus the
+        // appended primary-key tiebreaker. Paging all the way through must visit every row exactly once.
+        IQueryable<EmployeeRow> Ordered() => client.Source<Employee>("Employee")
+            .OrderBy(_ => _.Status)
+            .ThenBy(_ => _.Name)
+            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name));
+
+        var names = new List<string>();
+        var page = await Ordered().ToPageAsync(2);
+        names.AddRange(page.Items.Select(_ => _.Name));
+        while (page.HasMore)
+        {
+            page = await Ordered().ToPageAsync(2, page.Cursor);
+            names.AddRange(page.Items.Select(_ => _.Name));
+        }
+
+        // Status order is FullTime, PartTime, Contractor; the two full-timers (by Name) come first.
+        string[] all = ["Aaron", "Alice", "Bob", "Carol"];
+        Assert.That(names, Is.EqualTo(all));
+    }
+
+    [Test]
+    public async Task KeysetNullableKeyFallsBackToOffset()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // ManagerId is nullable, so the ordering is not a safe total order for a cursor: the page is
+        // served by offset with no cursor emitted.
+        var page = await client.Source<Employee>("Employee")
+            .OrderBy(_ => _.ManagerId)
+            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
+            .ToPageAsync(2);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(page.Items, Has.Count.EqualTo(2));
+            Assert.That(page.HasMore, Is.True);
+            Assert.That(page.Cursor, Is.Null);
         });
     }
 

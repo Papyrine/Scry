@@ -110,6 +110,19 @@ public class WireSerializationTests
     }
 
     [Test]
+    public Task PageWithCursorRoundTrips()
+    {
+        var request = QueryRequest.Create(
+            "Employees",
+            [
+                new OrderByOp(new MemberNode(["Name"]), Descending: false),
+                new PageOp(20, "eyJrIjpbXX0.c2ln")
+            ]);
+
+        return VerifyRoundTrip(request);
+    }
+
+    [Test]
     public void PageEnvelopeResponseRoundTrips()
     {
         var page = new ScryPage<Dictionary<string, object?>>(

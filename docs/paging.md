@@ -1,10 +1,9 @@
 # Paging
 
-> **Status: Slice 1 implemented; cursors (slices 2–3) pending.** Offset paging — the `ToPageAsync`
-> terminal, the `ScryPage` envelope, `HasMore`, and `DefaultPageSize` — is live. The keyset **cursor**
-> (opaque token, server-appended total order, seek predicate) is the target design described below but
-> is not built yet, so `Cursor` is always null and you advance pages with `Skip`. This page governs
-> the full design the way [security.md](security.md) governs the wire.
+> **Status: implemented.** Both offset paging (`ToPageAsync` + `ScryPage` + `HasMore` + `DefaultPageSize`)
+> and keyset **cursors** (opaque HMAC-signed token, server-appended total order, lexicographic seek) are
+> live. A cursor is emitted for a [seek-safe](#the-seek-safe-rule) query and null otherwise (offset
+> fallback). This page governs the design the way [security.md](security.md) governs the wire.
 
 Scry's paging model is **keyset-native**: the primary, blessed way to page a large result set is an
 opaque server-issued **cursor** that resumes a stable ordering. Offset paging (`Skip`/`Take`) remains
@@ -31,8 +30,7 @@ OData added `$skiptoken` on top of `$skip` for the same reason. Scry follows sui
 ## The grammar — one new terminal
 
 Paging adds a single client terminal, `ToPageAsync`, and otherwise reuses the operators the client
-already writes: an `OrderBy` for the sort, a page size, and (once cursors land) a token handed back
-from the previous page.
+already writes: an `OrderBy` for the sort, a page size, and a cursor handed back from the previous page.
 
 ```cs
 // Page 1 — an ordered query with a page size.
@@ -44,30 +42,25 @@ var page = await Query.Employee
 
 foreach (var row in page.Items) { /* ... */ }
 
-// Page 2 — TARGET (slices 2–3): the same query, resumed with the previous page's cursor.
-var next = await Query.Employee
-    .Where(_ => _.Active)
-    .OrderBy(_ => _.Created)
-    .ThenBy(_ => _.Id)
-    .ToPageAsync(20, page.Cursor);
-
-// Page 2 — TODAY (slice 1): advance with Skip, stopping on HasMore.
-var next = await Query.Employee
-    .Where(_ => _.Active)
-    .OrderBy(_ => _.Created)
-    .ThenBy(_ => _.Id)
-    .Skip(20)
-    .ToPageAsync(20);
+// Page 2 — the same query, resumed with the previous page's cursor (a keyset seek).
+if (page.HasMore)
+{
+    var next = await Query.Employee
+        .Where(_ => _.Active)
+        .OrderBy(_ => _.Created)
+        .ThenBy(_ => _.Id)
+        .ToPageAsync(20, page.Cursor);
+}
 ```
 
 Roles of the pieces:
 
 | Piece | Role |
 | --- | --- |
-| `ToPageAsync(n)` | The paging terminal. `n` is the **page size** (a parameter, not a trailing `Take`, so it is unambiguous next to any `Skip`). Capped by `MaxPageSize`, defaulted by `DefaultPageSize` when omitted (`ToPageAsync()`). Returns `ScryPage<T>` of `Items` + `HasMore` + `Cursor`. |
+| `ToPageAsync(n[, cursor])` | The paging terminal. `n` is the **page size** (a parameter, not a trailing `Take`, so it is unambiguous next to any `Skip`). Capped by `MaxPageSize`, defaulted by `DefaultPageSize` when omitted. `cursor` resumes a previous page. Returns `ScryPage<T>` of `Items` + `HasMore` + `Cursor`. |
 | `OrderBy` / `ThenBy` | The **sort**. Required for a cursor — with no order there is no stable resume point. |
-| `Skip(n)` | Advances offset-style in slice 1. Superseded by the cursor once keyset paging lands. |
-| `Cursor` | *(Slices 2–3)* opaque resume token from the previous page; null today. |
+| `Skip(n)` | Offset paging, an alternative to the cursor for small ad-hoc jumps. A `Skip` present makes the page offset-mode (no cursor emitted). |
+| `Cursor` | Opaque resume token from the previous page; null on the last page and for a non-[seek-safe](#the-seek-safe-rule) query. |
 
 ## What the server guarantees
 
@@ -75,16 +68,16 @@ The client's ordering is not enough on its own — `OrderBy(_ => _.Created)` is 
 with the same `Created` have no defined relative order and a cursor could straddle them. The server
 closes this:
 
-1. **Total order.** *(Slices 2–3)* the server appends the source's **primary key** (which it knows
-   from EF metadata) as a final tiebreaker to the client's ordering, unless the ordering already ends
-   in a unique key. This is invisible to the projection — the key is used for ordering and the cursor
-   only, never surfaced in the result unless the client projected it.
-2. **`HasMore` without a count.** *(Slice 1 — implemented.)* The server fetches `n + 1` rows, returns
-   `n`, and sets `HasMore` from whether the extra row existed. No `COUNT(*)` is issued.
-3. **The cursor.** *(Slices 2–3)* the server encodes the ordering-key tuple of the last returned row
-   into an opaque token (see [Cursor format](#cursor-format)).
-4. **Resume.** *(Slices 2–3)* on the next call the server decodes the cursor and adds a
-   **lexicographic seek predicate** over the ordering keys, then re-runs the identical pipeline.
+1. **Total order.** The server appends the source's **primary key** (which it knows from EF metadata)
+   as a final ascending tiebreaker to the client's ordering, unless the ordering already ends in it.
+   This is invisible to the projection — the key is used for ordering and the cursor only, never
+   surfaced in the result unless the client projected it.
+2. **`HasMore` without a count.** The server fetches `n + 1` rows, returns `n`, and sets `HasMore`
+   from whether the extra row existed. No `COUNT(*)` is issued.
+3. **The cursor.** The server encodes the ordering-key tuple (including the appended primary key) of
+   the last returned row into an opaque, signed token (see [Cursor format](#cursor-format)).
+4. **Resume.** On the next call the server decodes the cursor and adds a **lexicographic seek
+   predicate** over the ordering keys, then re-runs the identical pipeline.
 
 For an ascending `a`, descending `b`, tiebreak `pk`, the seek predicate is:
 
@@ -96,6 +89,21 @@ WHERE  a > a0
 
 This is ordinary SQL that EF Core translates; it introduces no new execution concept, only additional
 `WhereOp`-equivalent comparisons built server-side.
+
+## The seek-safe rule
+
+A correct keyset seek needs a **total order over non-null, comparable keys**. The server emits (and
+accepts) a cursor only when the query is **seek-safe**:
+
+1. the source is an **entity with a primary key** (a view or POCO has none),
+2. the client supplied **≥ 1 `OrderBy`** and it is the **trailing** restricting op — no `Where`,
+   `Skip`, or `Take` after it (a `Skip`/`Take` anywhere means offset intent), and
+3. every client ordering key is a **single-segment scalar member** that EF reports **non-nullable**.
+
+When a query is not seek-safe the response falls back to offset paging: `Cursor` is null and the
+caller advances with `Skip`. Passing a cursor to a non-seek-safe query is rejected with a `400`. This
+deliberately sidesteps NULL-ordering and nav-path seek correctness (where a simple `>`/`<` seek would
+skip or duplicate rows) while covering the common case — filter, then sort by stable columns.
 
 ## Total count is separate
 
@@ -109,14 +117,13 @@ var total = await Query.Employee.Where(_ => _.Active).CountAsync();
 
 ## Limits
 
-Paging is governed by two `ScryOptions` settings. `MaxPageSize` already exists as the ceiling on an
-explicit `Take`; `DefaultPageSize` is added so an unbounded paged query is bounded rather than
-returning the whole table.
+Paging is governed by these `ScryOptions` settings:
 
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `MaxPageSize` | 1000 | Hard ceiling on the page size. A `Take`, or a `ToPageAsync` size, above it is rejected at validation. |
 | `DefaultPageSize` | 100 | Page size applied to a `ToPageAsync()` that omits a size. |
+| `CursorSigningKey` | *(ephemeral)* | HMAC key for cursor signatures. When unset, a random per-process key is used — cursors then do not survive a restart or work across instances. Set a stable key for a scaled-out or restart-tolerant deployment. |
 
 `DefaultPageSize` closes the paging hole where an unbounded page would otherwise bypass `MaxPageSize`:
 a paged result is always a bounded page, and `HasMore` tells the caller whether more exists.
@@ -137,8 +144,8 @@ terminals are untouched. It adds a terminal operator and a result kind against
 ### Request — a `page` terminal
 
 Paging adds one terminal operator, `page`, carrying the requested page `size` (omitted for the server
-default). *(Slices 2–3)* it also gains an opaque `cursor` — the resume token from the previous page's
-response; a client must treat it as a bytestring and never parse or synthesize one.
+default) and an optional opaque `cursor` — the resume token from a previous page's response, which a
+client must treat as a bytestring and never parse or synthesize.
 
 ```json
 {
@@ -146,7 +153,7 @@ response; a client must treat it as a bytestring and never parse or synthesize o
   "root": "Employee",
   "pipeline": [
     { "$type": "orderBy", "key": { "$type": "member", "path": ["Created"] }, "descending": false },
-    { "$type": "page", "size": 20 }
+    { "$type": "page", "size": 20, "cursor": "eyJrZXlzIjpb...w9.Ab3f..." }
   ]
 }
 ```
@@ -171,20 +178,22 @@ than a bare row array. `List` (from `ToListAsync`) is unchanged.
 | --- | --- |
 | `items` | The projected rows for this page. |
 | `hasMore` | Whether a further page exists. |
-| `cursor` | *(Slices 2–3)* opaque resume token for the next page; omitted when null (as it always is today). |
+| `cursor` | Opaque resume token for the next page; omitted on the last page and for a non-seek-safe query. |
 
 ### Cursor format
 
-*(Slices 2–3.)* The cursor is internal to the server and its shape is **not** part of the wire
-contract — clients must not depend on it. The reference encoding is a version-tagged, base64url-encoded
-JSON tuple of the ordering-key values of the last row:
+The cursor's shape is internal to the server and **not** part of the wire contract — clients must not
+depend on it. The encoding (`CursorCodec`) is `base64url(json) "." base64url(hmac)`, where the JSON is
+the tagged ordering-key values of the last row:
 
 ```
-v1.<base64url(json)>   where json = { "k": [ <orderKey0>, <orderKey1>, ..., <pk> ] }
+{ "keys": [ { "value": "Alice", "tag": "String" }, { "value": "42", "tag": "Int32" } ] }
 ```
 
-Values are carried in the same invariant-culture string + `ClrTypeTag` form the wire uses for
-constants, so decoding a cursor produces exactly the `ConstNode`s the seek predicate needs.
+Values use the same invariant-culture string + `ClrTypeTag` form the wire uses for constants, so
+decoding a cursor produces exactly the `ConstNode`s the seek predicate rebinds against each key's real
+type. The HMAC (`HMACSHA256` over the JSON, keyed by `CursorSigningKey`) is checked in constant time on
+decode; a bad signature or malformed token is a `400`.
 
 ## Security
 
@@ -194,10 +203,37 @@ A cursor introduces **no new attack surface**. When decoded it becomes `Where`-s
 arbitrary point *within an already-authorized, already-policy-filtered set* — it cannot widen the set,
 reach an unlisted member, or bypass a row policy.
 
-The reference cursor is nonetheless **HMAC-signed** with a server key. This is not a confidentiality
-or authorization control — it enforces the "opaque, do not parse" contract and rejects malformed
-tokens early with a clear `400` rather than letting them fall through to a seek over garbage. The
-signing key is server-only and never leaves the server.
+The cursor is nonetheless **HMAC-signed** (`CursorSigningKey`, or a per-process ephemeral key). This is
+not a confidentiality or authorization control — it enforces the "opaque, do not parse" contract and
+rejects malformed tokens early with a clear `400` rather than letting them fall through to a seek over
+garbage. The signing key is server-only and never leaves the server.
+
+### Is signing necessary? (belt-and-suspenders, by design)
+
+Opaque cursors are universal (Relay/GraphQL connections, OData `$skiptoken`, Stripe, GitHub, AWS
+`NextToken`, DynamoDB `LastEvaluatedKey`). **Signing** them is not: API designs split into two camps.
+
+- **Unsigned, re-validated** — Stripe (`starting_after` is just an object ID) and most Relay
+  implementations (cursors are plain `base64(...)`). Tampering is harmless because the value is
+  re-scoped and re-authorized server-side on every request.
+- **Signed or encrypted** — much of AWS and JWT-style stateless tokens, so the server can reject
+  anything it did not mint and treat the payload as trusted.
+
+Scry belongs to the **first** camp: a decoded cursor is re-validated and policy-filtered like any
+predicate (see above), so tampering is already safe. The HMAC is therefore **optional hardening**, not
+load-bearing — it only buys fail-fast rejection and the opaque contract. Dropping it and shipping a
+plain `base64` payload would be a defensible, Relay-style choice.
+
+Two caveats if you keep it:
+
+- **HMAC signs, it does not hide.** The payload is readable — anyone can base64-decode the cursor and
+  see the ordering-key values (`Name = "Alice"`, `Id = 1`). For Scry that is low-sensitivity: the
+  client ordered by those columns and already saw those rows. But if a cursor could ever carry
+  something a client should not read, use authenticated **encryption** (e.g. AES-GCM), not bare HMAC —
+  which is why AWS encrypts its pagination tokens.
+- **A signed self-contained token is stateful about its key.** With the ephemeral default key a cursor
+  dies on restart or across instances; set a stable `CursorSigningKey` for a scaled-out or
+  restart-tolerant deployment (see [Limits](#limits)).
 
 ## Scope
 
@@ -206,27 +242,26 @@ The `page` terminal targets a **non-grouped** query. Out of scope:
 - **Grouped / aggregated results.** A `page` over a `GroupBy` → `Select` pipeline is **rejected** at
   validation (`Paging is not supported over a grouped query`); grouped results use `Skip`/`Take`.
 - **`Single` / `First` terminals.** These already bound their result and take no page.
-- **Unordered queries.** Slice 1 allows `ToPageAsync` without an `OrderBy` (plain offset with no
-  cursor). An `OrderBy` becomes *required* when cursors land, since a cursor needs a stable order.
+- **Nullable / nav-path / unordered keys.** Not seek-safe — served by offset with no cursor (see
+  [the seek-safe rule](#the-seek-safe-rule)). True keyset over nullable columns (NULL-ordering aware)
+  is the remaining hard corner, left as a future enhancement.
 
 ## Delivery plan
 
-The design is delivered in slices so the fiddly seek-predicate generation does not block the useful
-first increment:
+Delivered in slices so the fiddly seek-predicate generation did not block the useful first increment.
+All three are now implemented:
 
-1. **Envelope + `DefaultPageSize` — ✅ done.** The `page` terminal, `ScryPage` envelope, `HasMore` via
-   the `n + 1` fetch, and `DefaultPageSize`, advancing with `Skip`. Complete, safe offset paging;
-   makes `MaxPageSize` coherent. Cursor is null.
-2. **Single-key cursor.** Append the primary key, issue and decode a two-term seek (`ORDER BY key` +
-   tiebreak). Covers the common "order by one column" case. Adds `cursor` to the `page` op and terminal.
-3. **Multi-key cursor.** Full lexicographic seek over an arbitrary `OrderBy`/`ThenBy` chain, including
-   mixed directions and nullable keys.
+1. **Envelope + `DefaultPageSize` — ✅.** The `page` terminal, `ScryPage` envelope, `HasMore` via the
+   `n + 1` fetch, and `DefaultPageSize`; offset paging advances with `Skip`.
+2. **Single-key cursor — ✅.** Primary-key tiebreak, encode/decode, two-term seek.
+3. **Multi-key cursor — ✅.** Full lexicographic seek over an arbitrary `OrderBy`/`ThenBy` chain with
+   mixed directions (`CursorCodec`, `ExpressionBuilder.BuildSeekPredicate`). Nullable-key keyset
+   remains out of scope per the seek-safe rule.
 
 ## Open questions
 
-- **Unordered paged query when cursors land.** Slice 1 permits `ToPageAsync` with no `OrderBy` (offset
-  only). Once cursors exist, do we reject the unordered case outright, or keep allowing it as
-  cursor-less offset paging? Rejecting is more honest; allowing is more forgiving.
 - **Cursor invalidation.** A cursor encodes an ordering; if the caller changes the `OrderBy` between
-  pages the seek is meaningless. Options: bind the cursor to a hash of the pipeline and reject a
-  mismatch, or document it as caller error.
+  pages the seek is meaningless. Today a cursor whose length does not match the query's ordering is
+  rejected (`400`), which catches gross mismatches; binding the cursor to a full hash of the pipeline
+  would catch subtler ones (same key count, different columns) at the cost of forcing an identical
+  query between pages.

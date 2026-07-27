@@ -26,6 +26,14 @@ public sealed class ScryOptions(Type contextType)
     public int MaxExpressionDepth { get; set; } = 32;
     // end-snippet
 
+    /// <summary>
+    /// HMAC key used to sign keyset paging cursors. When null a random per-process key is used, so
+    /// cursors do not survive a restart or work across multiple instances — set a stable key for a
+    /// scaled-out or restart-tolerant deployment. Signing enforces the opaque-cursor contract; it is
+    /// not an authorization control (a decoded cursor is always re-validated and policy-filtered).
+    /// </summary>
+    public byte[]? CursorSigningKey { get; set; }
+
     internal Type ContextType { get; private set; } = contextType;
 
     internal Dictionary<Type, Func<IServiceProvider, IQueryable>> PocoSources { get; } = [];

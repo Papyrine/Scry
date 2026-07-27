@@ -10,6 +10,7 @@
         "name": "Alice"
       }
     ],
-    "hasMore": true
+    "hasMore": true,
+    "cursor": "{scrubbed cursor}"
   }
 }

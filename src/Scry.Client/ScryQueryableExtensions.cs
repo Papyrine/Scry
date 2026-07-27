@@ -119,6 +119,14 @@ public static class ScryQueryableExtensions
     public static Task<ScryPage<T>> ToPageAsync<T>(this IQueryable<T> source, int pageSize, Cancel cancel = default) =>
         Page(source, new PageOp(pageSize), cancel);
 
+    /// <summary>
+    /// Executes the query and returns a page of at most <paramref name="pageSize"/> rows, resuming from
+    /// <paramref name="cursor"/> (keyset paging). Pass the <see cref="ScryPage{T}.Cursor"/> from the
+    /// previous page; a null cursor starts from the beginning. The query must be ordered.
+    /// </summary>
+    public static Task<ScryPage<T>> ToPageAsync<T>(this IQueryable<T> source, int pageSize, string? cursor, Cancel cancel = default) =>
+        Page(source, new PageOp(pageSize, cursor), cancel);
+
     static async Task<ScryPage<T>> Page<T>(IQueryable<T> source, PageOp terminal, Cancel cancel)
     {
         var response = await Send(source, terminal, cancel);

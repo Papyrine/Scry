@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using Microsoft.EntityFrameworkCore.Metadata;
+
 /// <summary>
 /// Orchestrates the full server pipeline for one request: validate against the allow-list, resolve
 /// the source, apply the row policy, rebind the AST to an EF query, execute, and shape the result.
@@ -18,24 +21,40 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         GroupByOp? groupBy = null;
         SelectOp? select = null;
         QueryOp? terminal = null;
+        // Captured alongside inline application so the page terminal can rebuild the ordering into a
+        // total order (append the primary key) and a keyset seek predicate.
+        List<(Node Key, bool Descending)> orderings = [];
+        // A cursor can only append its primary-key tiebreak when the ordering is the trailing restricting
+        // op (so the query is still IOrderedQueryable) and no offset (Skip/Take) is in play.
+        var tailIsOrdered = false;
+        var sawSkipOrTake = false;
 
         foreach (var op in request.Pipeline)
         {
             switch (op)
             {
                 case WhereOp where:
+                    tailIsOrdered = false;
                     query = Apply(query, "Where", builder.BuildPredicate(where.Predicate, elementType));
                     break;
                 case OrderByOp orderBy:
+                    orderings.Add((orderBy.Key, orderBy.Descending));
+                    tailIsOrdered = true;
                     query = ApplyOrder(query, builder.BuildKeySelector(orderBy.Key, elementType), orderBy.Descending, then: false);
                     break;
                 case ThenByOp thenBy:
+                    orderings.Add((thenBy.Key, thenBy.Descending));
+                    tailIsOrdered = true;
                     query = ApplyOrder(query, builder.BuildKeySelector(thenBy.Key, elementType), thenBy.Descending, then: true);
                     break;
                 case SkipOp skip:
+                    sawSkipOrTake = true;
+                    tailIsOrdered = false;
                     query = ApplyPaging(query, "Skip", skip.Count);
                     break;
                 case TakeOp take:
+                    sawSkipOrTake = true;
+                    tailIsOrdered = false;
                     query = ApplyPaging(query, "Take", take.Count);
                     break;
                 case GroupByOp group:
@@ -66,6 +85,11 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             return Scalar(Execute<bool>(query, "Any"));
         }
 
+        if (terminal is PageOp page)
+        {
+            return Page(query, elementType, select, orderings, tailIsOrdered && !sawSkipOrTake, page, source, db);
+        }
+
         var (projected, plan) = BuildProjected(query, elementType, groupBy, select, terminal);
 
         if (terminal is FirstOp first)
@@ -78,11 +102,6 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         {
             var row = ExecuteRow(projected, single.OrDefault ? "SingleOrDefault" : "Single");
             return Single(row, plan);
-        }
-
-        if (terminal is PageOp page)
-        {
-            return Page(projected, plan, page);
         }
 
         var rows = projected.ToList();
@@ -210,9 +229,51 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             _ => throw new($"Unknown row method '{method}'.")
         };
 
-    QueryResponse Page(IQueryable<object[]> projected, ProjectionPlan plan, PageOp page)
+    QueryResponse Page(
+        IQueryable query,
+        Type elementType,
+        SelectOp? select,
+        IReadOnlyList<(Node Key, bool Descending)> orderings,
+        bool seekEligible,
+        PageOp page,
+        ScrySource source,
+        DbContext db)
     {
         var size = Math.Min(page.Size ?? options.DefaultPageSize, options.MaxPageSize);
+
+        var (seekSafe, keys) = PlanSeek(orderings, seekEligible, source, elementType, db);
+        if (!seekSafe && page.Cursor is not null)
+        {
+            throw new ScryValidationException(
+                "Cursor paging requires an ordered query over an entity with non-nullable ordering keys.");
+        }
+
+        if (seekSafe)
+        {
+            // Append the primary key as a trailing ascending tiebreaker so the order — and the cursor
+            // that resumes it — is total.
+            foreach (var (key, _) in keys.Skip(orderings.Count))
+            {
+                query = ApplyOrder(query, builder.BuildKeySelector(key, elementType), descending: false, then: true);
+            }
+
+            if (page.Cursor is not null)
+            {
+                var values = CursorCodec.Decode(page.Cursor, SigningKey());
+                if (values.Count != keys.Count)
+                {
+                    throw new ScryValidationException("Paging cursor does not match the query ordering.");
+                }
+
+                query = Apply(query, "Where", builder.BuildSeekPredicate(keys, values, elementType));
+            }
+        }
+
+        var effectiveKeys = seekSafe ? keys : Array.Empty<(Node Key, bool Descending)>();
+        var (selector, shape, keyCount) = builder.BuildPageProjection(select?.Projection, effectiveKeys, elementType);
+        var projected = ApplySelect(query, selector);
+        var plan = new ProjectionPlan(selector, shape);
+
         // Fetch one extra row to detect a further page without issuing a second COUNT query.
         var rows = projected.Take(size + 1).ToList();
         var hasMore = rows.Count > size;
@@ -222,10 +283,90 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         }
 
         var items = rows.Select(_ => Shape(_, plan)).ToArray();
-        // Cursor stays null until keyset paging (slice 2); offset paging advances with Skip + HasMore.
-        var envelope = new ScryPage<Dictionary<string, object?>>(items, hasMore, Cursor: null);
+
+        // The next cursor is the ordering-key tuple of the last returned row — omitted on the last page
+        // (nothing more to resume) and when the query is not seek-safe (offset paging only).
+        string? cursor = null;
+        if (seekSafe &&
+            hasMore &&
+            rows.Count > 0)
+        {
+            var last = rows[^1];
+            var keyValues = new (string?, ClrTypeTag)[keyCount];
+            for (var i = 0; i < keyCount; i++)
+            {
+                keyValues[i] = CursorCodec.TagValue(last[shape.Count + i]);
+            }
+
+            cursor = CursorCodec.Encode(keyValues, SigningKey());
+        }
+
+        var envelope = new ScryPage<Dictionary<string, object?>>(items, hasMore, cursor);
         return QueryResponse.Create(ResultKind.Page, JsonSerializer.SerializeToElement(envelope, ScryJson.Options));
     }
+
+    // Decides whether a page can be resumed by a keyset cursor and, if so, the total ordering to seek
+    // over: the client's ordering keys plus the primary key appended as a tiebreaker. A cursor is only
+    // safe over an entity ordered by single-segment, non-nullable scalar members (so the seek is a true
+    // total order); anything else — a view/POCO, no ordering, a nav-path or nullable key — falls back to
+    // offset paging with no cursor.
+    (bool SeekSafe, IReadOnlyList<(Node Key, bool Descending)> Keys) PlanSeek(
+        IReadOnlyList<(Node Key, bool Descending)> orderings,
+        bool seekEligible,
+        ScrySource source,
+        Type elementType,
+        DbContext db)
+    {
+        if (!seekEligible ||
+            source.Kind != SourceKind.Entity ||
+            orderings.Count == 0)
+        {
+            return (false, orderings);
+        }
+
+        foreach (var (key, _) in orderings)
+        {
+            if (key is not MemberNode { Path: [var single] } ||
+                !IsNonNullableScalar(db, elementType, single))
+            {
+                return (false, orderings);
+            }
+        }
+
+        var primaryKey = db.Model.FindEntityType(elementType)?.FindPrimaryKey();
+        if (primaryKey is null ||
+            !schema.TryGetType(elementType, out var meta))
+        {
+            return (false, orderings);
+        }
+
+        var pkKeys = new List<(Node, bool)>();
+        foreach (var property in primaryKey.Properties)
+        {
+            // The key must be an exposable scalar to build a member node for the tiebreaker/cursor.
+            if (!meta.Members.TryGetValue(property.Name, out var member) ||
+                member.Kind != MemberKind.Scalar)
+            {
+                return (false, orderings);
+            }
+
+            if (!orderings.Any(_ => _.Key is MemberNode { Path: [var name] } && name == property.Name))
+            {
+                pkKeys.Add((new MemberNode([property.Name]), false));
+            }
+        }
+
+        return (true, [.. orderings, .. pkKeys]);
+    }
+
+    static bool IsNonNullableScalar(DbContext db, Type elementType, string member) =>
+        db.Model.FindEntityType(elementType)?.FindProperty(member) is { IsNullable: false };
+
+    byte[] SigningKey() =>
+        options.CursorSigningKey ?? ephemeralSigningKey;
+
+    // Used when no CursorSigningKey is configured: cursors are valid only within this process's lifetime.
+    static readonly byte[] ephemeralSigningKey = RandomNumberGenerator.GetBytes(32);
 
     static QueryResponse Scalar<T>(T value) =>
         QueryResponse.Create(ResultKind.Scalar, JsonSerializer.SerializeToElement(value, ScryJson.Options));

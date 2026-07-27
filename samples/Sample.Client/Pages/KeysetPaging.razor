@@ -1,0 +1,41 @@
+@page "/keyset"
+@inject ScryQuery Query
+
+<PageTitle>Scry Sample — Keyset paging</PageTitle>
+
+<h1>Keyset paging</h1>
+<p><a href="/">← Samples</a> · <a href="/paging">Offset paging</a> · <a href="/scry">Explorer</a></p>
+<p>
+    Employees fetched with <code>ToPageAsync(pageSize, cursor)</code>. Each page returns an opaque
+    <code>Cursor</code>; Next hands it back so the server seeks straight past the last row rather than
+    counting an offset. Forward-only — that is the nature of a cursor.
+</p>
+
+@if (error is not null)
+{
+    <p class="error" role="alert">@error</p>
+}
+
+@if (page is null)
+{
+    <p class="loading">Loading…</p>
+}
+else
+{
+    <table>
+        <thead>
+            <tr><th>Name</th><th>Status</th><th>Department</th></tr>
+        </thead>
+        <tbody>
+        @foreach (var row in page.Items)
+        {
+            <tr><td>@row.Name</td><td>@row.Status</td><td>@row.Department</td></tr>
+        }
+        </tbody>
+    </table>
+
+    <div class="pager">
+        <button disabled="@(!page.HasMore)" @onclick="Next">Next →</button>
+        <button @onclick="StartOver">Start over</button>
+    </div>
+}

@@ -112,10 +112,11 @@ sends the request.
 | `CountAsync()` | `Task<int>` | scalar |
 | `AnyAsync()` | `Task<bool>` | scalar |
 | `ToPageAsync([pageSize])` | `Task<ScryPage<T>>` | page |
+| `ToPageAsync(pageSize, cursor)` | `Task<ScryPage<T>>` | page |
 
-`ToPageAsync` returns a bounded [page](paging.md): `Items`, `HasMore`, and a `Cursor` (null for now).
-Omitting `pageSize` uses the server's `DefaultPageSize`; any size is capped by `MaxPageSize`. Advance
-to the next page with `Skip`:
+`ToPageAsync` returns a bounded [page](paging.md): `Items`, `HasMore`, and a `Cursor`. Omitting
+`pageSize` uses the server's `DefaultPageSize`; any size is capped by `MaxPageSize`. Advance by
+**offset** (`Skip`, below) or by **keyset** — pass the previous page's `Cursor` back to seek past it:
 
 <!-- snippet: clientPaging -->
 <a id='snippet-clientPaging'></a>
@@ -131,7 +132,24 @@ page = await Query.Employee
 <sup><a href='/samples/Sample.Client/Pages/Paging.razor.cs#L22-L30' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientPaging' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-The [sample](sample.md) wires this into a Paging page with Previous/Next buttons driven by `HasMore`.
+or, resuming by cursor:
+
+<!-- snippet: clientCursorPaging -->
+<a id='snippet-clientCursorPaging'></a>
+```cs
+// Keyset paging: pass the previous page's opaque Cursor to resume exactly past its last row.
+// The query must be ordered; the server seeks (WHERE Name > … ORDER BY Name, Id) instead of
+// counting an offset, so it stays fast and stable as rows are added or removed.
+page = await Query.Employee
+    .OrderBy(_ => _.Name)
+    .Select(_ => new EmployeeRow(_.Name, _.Status, _.Department!.Name))
+    .ToPageAsync(pageSize, from);
+```
+<sup><a href='/samples/Sample.Client/Pages/KeysetPaging.razor.cs#L22-L30' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCursorPaging' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Keyset paging needs an ordered, [seek-safe](paging.md#the-seek-safe-rule) query; otherwise `Cursor` is
+null and you page by offset. The [sample](sample.md) shows both an offset page and a cursor page.
 
 The collection-shaping terminals (`ToArrayAsync`, `ToHashSetAsync`, `ToDictionaryAsync`,
 `ToLookupAsync`) all send the same **list** request as `ToListAsync` and reshape the returned rows in

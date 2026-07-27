@@ -61,6 +61,18 @@ public class SecurityTests
             options => options.MaxPageSize = 2);
 
     [Test]
+    public void RejectsInvalidPagingCursor() =>
+        // Ordered query is seek-safe, so the server tries to decode the (garbage) cursor and rejects it.
+        AssertRejected(QueryRequest.Create(
+            "Employee",
+            [new OrderByOp(new MemberNode(["Name"]), false), new PageOp(2, "not-a-valid-cursor")]));
+
+    [Test]
+    public void RejectsCursorOnUnorderedQuery() =>
+        // A cursor needs an ordering to resume; an unordered page with a cursor is rejected.
+        AssertRejected(QueryRequest.Create("Employee", [new PageOp(2, "anything")]));
+
+    [Test]
     public void RejectsPagingGroupedQuery() =>
         AssertRejected(QueryRequest.Create(
             "Order",
