@@ -67,7 +67,7 @@ public class IntrospectionTests
         Assert.That(address.TypeDisplay, Is.EqualTo("AddressQueryModel?"));
 
         var addressModel = introspection.Types.Single(_ => _.Model == "AddressQueryModel");
-        Assert.That(addressModel.Members.Select(_ => _.Name), Is.EquivalentTo(new[] { "City", "Country" }));
+        Assert.That(addressModel.Members.Select(_ => _.Name), Is.EquivalentTo(["City", "Country"]));
     }
 
     [Test]

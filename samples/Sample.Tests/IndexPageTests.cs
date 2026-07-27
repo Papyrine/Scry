@@ -17,7 +17,7 @@ public class IndexPageTests
 
         var page = context.Render<IndexPage>();
         await page.WaitForStateAsync(
-            () => page.FindAll("table").Count == 3,
+            () => page.FindAll("table").Count == 4,
             TimeSpan.FromSeconds(10));
 
         await Verify(page);

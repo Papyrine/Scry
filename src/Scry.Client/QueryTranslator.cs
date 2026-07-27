@@ -137,7 +137,100 @@ sealed class QueryTranslator
             throw new NotSupportedException("A grouped projection may only use the group key or aggregates.");
         }
 
+        // A member whose value is itself a constructed object is a nested projection into a navigation
+        // (e.g. Department = new DepartmentInfo(_.Department.Name)), producing a nested result object.
+        if (expression is NewExpression or MemberInitExpression)
+        {
+            return TranslateNested(expression, parameter);
+        }
+
         return new NodeValue(TranslateExpr(expression, parameter));
+    }
+
+    NestedValue TranslateNested(Expression expression, ParameterExpression parameter)
+    {
+        var members = new List<(string Name, IReadOnlyList<string> Path)>();
+        foreach (var (name, value) in NestedMembers(expression))
+        {
+            // Nested members must be plain member paths through the navigation; a deeper nested
+            // object, a function call, or a constant is not a supported nested-projection leaf.
+            if (TranslateExpr(value, parameter) is not MemberNode member)
+            {
+                throw new NotSupportedException(
+                    "A nested projection member must be a member path into the navigation (e.g. _.Department.Name).");
+            }
+
+            members.Add((name, member.Path));
+        }
+
+        if (members.Count == 0)
+        {
+            throw new NotSupportedException("A nested projection must have at least one member.");
+        }
+
+        var prefix = CommonNavigationPrefix([.. members.Select(_ => _.Path)]);
+        if (prefix.Count == 0)
+        {
+            throw new NotSupportedException(
+                "A nested projection must read from a single navigation property (every member sharing, e.g., _.Department).");
+        }
+
+        var projected = members
+            .Select(_ => new ProjectionMember(_.Name, new NodeValue(new MemberNode([.. _.Path.Skip(prefix.Count)]))))
+            .ToList();
+
+        return new(prefix, new(projected));
+    }
+
+    static IEnumerable<(string Name, Expression Value)> NestedMembers(Expression expression)
+    {
+        switch (expression)
+        {
+            case NewExpression construction:
+                var names = ProjectionNames(construction);
+                for (var i = 0; i < construction.Arguments.Count; i++)
+                {
+                    yield return (names[i], construction.Arguments[i]);
+                }
+
+                break;
+
+            case MemberInitExpression init:
+                foreach (var binding in init.Bindings)
+                {
+                    if (binding is not MemberAssignment assignment)
+                    {
+                        throw new NotSupportedException("Only simple member assignments are supported in a projection.");
+                    }
+
+                    yield return (assignment.Member.Name, assignment.Expression);
+                }
+
+                break;
+
+            default:
+                throw new NotSupportedException("A nested projection must construct an object.");
+        }
+    }
+
+    // The navigation a nested projection descends into: the shared leading segments of every member
+    // path, stopping before any member's final (scalar) segment so each keeps a non-empty relative
+    // path. Empty means the members do not share a single navigation, which is unsupported.
+    static IReadOnlyList<string> CommonNavigationPrefix(IReadOnlyList<IReadOnlyList<string>> paths)
+    {
+        var prefix = new List<string>();
+        while (paths.All(_ => _.Count > prefix.Count + 1))
+        {
+            var segment = paths[0][prefix.Count];
+            if (paths.Any(_ => _[prefix.Count] != segment))
+            {
+                break;
+            }
+
+            prefix.Add(segment);
+        }
+
+        return prefix;
     }
 
     AggregateNode TranslateAggregate(MethodCallExpression call)

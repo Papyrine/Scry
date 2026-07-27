@@ -13,7 +13,7 @@ employees = await Query.Employee
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L25-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L34-L40' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The supported surface is deliberately closed. Anything outside it fails fast with a clear
@@ -143,7 +143,7 @@ var request = client.Source<Employee>("Employee")
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
     .ToScryRequest();
 ```
-<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L30-L39' title='Snippet source file'>snippet source</a> | <a href='#snippet-translateWithoutExecuting' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L34-L43' title='Snippet source file'>snippet source</a> | <a href='#snippet-translateWithoutExecuting' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 which produces the wire request without contacting the server.
@@ -267,7 +267,7 @@ fullTimers = await Query.Employee
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L40-L47' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L49-L56' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `status` and `top` are locals; the translator compiles and invokes those sub-expressions, then emits
@@ -312,7 +312,27 @@ of `Employee` never contains `Salary`.
 
 ### Nested result objects
 
-The wire format can nest a projection under a navigation, producing nested JSON:
+Projecting a **constructed object** into a navigation nests the result under that member instead of
+flattening it. Write the nested shape as an ordinary object construction whose members read through
+the navigation:
+
+<!-- snippet: clientNestedProjection -->
+<a id='snippet-clientNestedProjection'></a>
+```cs
+// Projecting into the Department navigation builds a nested result object rather than
+// flattening it — the response is { Name, Department: { Name } }.
+cards = await Query.Employee
+    .Where(_ => _.Active)
+    .OrderBy(_ => _.Name)
+    .Select(_ => new EmployeeCard(_.Name, new DepartmentCard(_.Department!.Name)))
+    .ToListAsync();
+```
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L60-L68' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientNestedProjection' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+The client factors the shared navigation (`_.Department`) out of the nested members and emits a
+`NestedValue` in the wire AST; the server descends the navigation and shapes the leaves under it,
+producing nested JSON:
 
 <!-- snippet: ExecutionTests.WhereOrderByNestedProjection.verified.txt -->
 <a id='snippet-ExecutionTests.WhereOrderByNestedProjection.verified.txt'></a>
@@ -341,9 +361,14 @@ The wire format can nest a projection under a navigation, producing nested JSON:
 <sup><a href='/src/Scry.Tests/ExecutionTests.WhereOrderByNestedProjection.verified.txt#L1-L20' title='Snippet source file'>snippet source</a> | <a href='#snippet-ExecutionTests.WhereOrderByNestedProjection.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-The client translator always emits flat member paths, so this shape is reachable by constructing the
-AST directly rather than from LINQ. From LINQ, name the leaf instead —
-`Department = _.Department!.Name`.
+Rules for a nested projection member:
+
+- Every member of the nested object must be a **member path** (`_.Department.Name`), not a function
+  call or a further nested object — one level of nesting, scalar leaves.
+- All its members must share a single navigation prefix; the client descends into that one navigation.
+  Mixing two navigations (`new(_.Department.Name, _.Manager.Name)`) in one nested object is rejected.
+- The flat form still works when you only need the value — `Department = _.Department!.Name` gives a
+  flat column instead of a nested object.
 
 ## Grouping and aggregates
 
@@ -358,7 +383,7 @@ regions = await Query.Order
     .Select(_ => new RegionSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L33-L38' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L42-L47' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: wireAggregates -->

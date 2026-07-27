@@ -1,0 +1,20 @@
+﻿[
+  {
+    Name: Aaron,
+    Department: {
+      Name: Engineering
+    }
+  },
+  {
+    Name: Alice,
+    Department: {
+      Name: Engineering
+    }
+  },
+  {
+    Name: Carol,
+    Department: {
+      Name: Sales
+    }
+  }
+]

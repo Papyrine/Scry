@@ -81,9 +81,9 @@ public class UiSnapshotTests
         var page = await browser.NewPageAsync();
         await page.GotoAsync(baseUrl);
 
-        // Wait until the WebAssembly app has run its queries and rendered both result tables.
+        // Wait until the WebAssembly app has run its queries and rendered the result tables.
         await page.WaitForSelectorAsync("table tbody tr");
-        await Assertions.Expect(page.Locator("table")).ToHaveCountAsync(3);
+        await Assertions.Expect(page.Locator("table")).ToHaveCountAsync(4);
 
         // Snapshot the real WebAssembly-rendered DOM (not a screenshot): pixel screenshots differ
         // across machines/OS font rendering and can't run in CI, but the rendered markup is stable.

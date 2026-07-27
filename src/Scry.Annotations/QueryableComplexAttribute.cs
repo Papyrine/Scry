@@ -10,6 +10,4 @@ namespace Scry;
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct)]
 public sealed class QueryableComplexAttribute :
-    Attribute
-{
-}
+    Attribute;

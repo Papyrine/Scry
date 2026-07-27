@@ -8,6 +8,14 @@ public partial class Index
     record RegionSummary(string Region, decimal Total, int Count);
     // end-snippet
 
+    // begin-snippet: clientNestedProjectionTypes
+    // A nested result shape: the Department navigation projects into its own object rather than being
+    // flattened into a column.
+    record EmployeeCard(string Name, DepartmentCard Department);
+
+    record DepartmentCard(string Name);
+    // end-snippet
+
     // Captured as locals so the LINQ below closes over them — the query is parameterized at runtime
     // rather than hard-coded, exactly how an app would build a filtered query.
     readonly Status status = Status.FullTime;
@@ -16,6 +24,7 @@ public partial class Index
     List<EmployeeRow>? employees;
     List<RegionSummary>? regions;
     List<EmployeeRow>? fullTimers;
+    List<EmployeeCard>? cards;
     string? error;
 
     protected override async Task OnInitializedAsync()
@@ -43,6 +52,18 @@ public partial class Index
                 .OrderBy(_ => _.Name)
                 .Take(top)
                 .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
+                .ToListAsync();
+            // end-snippet
+
+            // ReSharper disable once ArrangeObjectCreationWhenTypeNotEvident
+
+            // begin-snippet: clientNestedProjection
+            // Projecting into the Department navigation builds a nested result object rather than
+            // flattening it — the response is { Name, Department: { Name } }.
+            cards = await Query.Employee
+                .Where(_ => _.Active)
+                .OrderBy(_ => _.Name)
+                .Select(_ => new EmployeeCard(_.Name, new DepartmentCard(_.Department!.Name)))
                 .ToListAsync();
             // end-snippet
         }

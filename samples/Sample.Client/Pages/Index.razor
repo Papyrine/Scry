@@ -79,3 +79,23 @@ else
         </tbody>
     </table>
 }
+
+<h2>Employee cards (nested projection)</h2>
+@if (cards is null)
+{
+    <p>Loading…</p>
+}
+else
+{
+    <table>
+        <thead>
+            <tr><th>Name</th><th>Department</th></tr>
+        </thead>
+        <tbody>
+        @foreach (var card in cards)
+        {
+            <tr><td>@card.Name</td><td>@card.Department.Name</td></tr>
+        }
+        </tbody>
+    </table>
+}

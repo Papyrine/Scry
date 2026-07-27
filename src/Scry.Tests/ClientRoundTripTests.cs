@@ -12,6 +12,10 @@ public class ClientRoundTripTests
 
     record EmployeeLocation(string Name, string City, string Country);
 
+    record EmployeeCard(string Name, DepartmentCard Department);
+
+    record DepartmentCard(string Name);
+
     // ReSharper restore NotAccessedPositionalProperty.Local
 
     [Test]
@@ -182,11 +186,11 @@ public class ClientRoundTripTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(array.Select(_ => _.Name), Is.EqualTo(new[] { "Aaron", "Alice", "Bob", "Carol" }));
+            Assert.That(array.Select(_ => _.Name), Is.EqualTo(["Aaron", "Alice", "Bob", "Carol"]));
             Assert.That(hashSet, Has.Count.EqualTo(4));
-            Assert.That(byName.Keys, Is.EquivalentTo(new[] { "Aaron", "Alice", "Bob", "Carol" }));
+            Assert.That(byName.Keys, Is.EquivalentTo(["Aaron", "Alice", "Bob", "Carol"]));
             Assert.That(namesByStatus["Alice"], Is.EqualTo(Status.FullTime));
-            Assert.That(byStatus[Status.FullTime].Select(_ => _.Name), Is.EquivalentTo(new[] { "Aaron", "Alice" }));
+            Assert.That(byStatus[Status.FullTime].Select(_ => _.Name), Is.EquivalentTo(["Aaron", "Alice"]));
         });
     }
 
@@ -213,6 +217,23 @@ public class ClientRoundTripTests
             .Where(_ => _.Address.Country == "UK")
             .OrderBy(_ => _.Name)
             .Select(_ => new EmployeeLocation(_.Name, _.Address.City, _.Address.Country))
+            .ToListAsync();
+
+        await Verify(rows);
+    }
+
+    [Test]
+    public async Task NestedProjectionIntoNavigation()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // Projecting into the Department navigation produces a nested result object rather than a
+        // flattened column — the client emits a NestedValue and the row shape is { Name, Department: { Name } }.
+        var rows = await client.Source<Employee>("Employee")
+            .Where(_ => _.Active)
+            .OrderBy(_ => _.Name)
+            .Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name)))
             .ToListAsync();
 
         await Verify(rows);

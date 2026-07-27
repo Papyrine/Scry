@@ -190,9 +190,7 @@ sealed class Schema
         {
             if (complexClrTypes.Contains(type))
             {
-                throw new(
-                    $"'{type.Name}' is marked [Queryable]/[QueryableView] but is an EF complex type in " +
-                    $"{contextType.Name}. Use [QueryableComplex].");
+                throw new($"'{type.Name}' is marked [Queryable]/[QueryableView] but is an EF complex type in {contextType.Name}. Use [QueryableComplex].");
             }
         }
 
@@ -200,9 +198,7 @@ sealed class Schema
         {
             if (model.FindEntityType(type) is not null)
             {
-                throw new(
-                    $"'{type.Name}' is marked [QueryableComplex] but is a mapped entity in " +
-                    $"{contextType.Name}. Use [Queryable] (or [QueryableView] for a keyless view).");
+                throw new($"'{type.Name}' is marked [QueryableComplex] but is a mapped entity in {contextType.Name}. Use [Queryable] (or [QueryableView] for a keyless view).");
             }
         }
     }
