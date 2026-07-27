@@ -1,5 +1,54 @@
 # Schema versioning
 
+Every client/server API has to decide how much of its past it will keep working. That decision is a spectrum, and where you sit on it trades one set of costs for another. This page places Scry on that spectrum, then documents the mechanics.
+
+
+## The versioning spectrum
+
+At one end is **no versioning**: the server exposes exactly one surface, with no attempt to keep older clients working — so a client breaks the moment a server change is *incompatible* with what it uses. At the other is **never break**: every surface the server has ever shipped keeps working forever. Neither end is free — one pushes the cost onto *deployments*, the other onto *maintenance* — and most real systems sit somewhere between.
+
+Five representative positions, from most willing to break to least:
+
+- **No versioning** — one surface, no compatibility promises. A drifted client keeps working right up until the server ships a change it can't tolerate, and then gets a hard error with no warning. Cheapest to build, most disruptive when it does break.
+- **Drift detection** — still one surface, but every response tells the client the server's current schema, so a stale client can *notice* it has drifted and update itself (reload, re-fetch, prompt) instead of failing a query. This is where Scry sits, via the [schema stamp](#the-two-version-axes).
+- **Additive-only evolution** — you promise never to remove or change existing surface, only add. Old clients keep working on the subset they know. Nothing breaks, but the surface can only grow.
+- **Parallel versions** — `v1`, `v2`, … served side by side, each a maintained contract, with clients migrating on their own schedule inside a deprecation window.
+- **Never break** — perpetual back-compat. Every version is supported indefinitely; nothing a client has ever relied on is allowed to change.
+
+
+### The impacts
+
+The positions differ along a handful of axes worth naming explicitly:
+
+- **Deployment risk** — the chance that shipping a server change breaks a client that is already live (or cached in a browser tab).
+- **Server change freedom** — how freely you can change, rename, or remove server surface without ceremony. High freedom means a fast cadence; low freedom means every change is gated by compatibility.
+- **Technical debt** — the compatibility shims, dead columns, deprecated fields, and parallel code paths you carry forward to keep old clients working.
+- **UI ↔ business-model lag** — how far a running UI is allowed to drift from the *current* model and business rules. Strong back-compat is double-edged: it lets an old client keep running, which also means users can keep seeing a stale shape of the business long after it changed.
+- **Developer effort** — the ongoing engineering cost of the strategy, separate from debt: discipline, tests across versions, migration tooling.
+- **Failure mode** — what a mismatch *feels like*: a hard error a user hits, a self-healing prompt, or nothing at all.
+
+
+### Comparison
+
+| | No versioning | Drift detection *(Scry)* | Additive-only | Parallel versions | Never break |
+| --- | --- | --- | --- | --- | --- |
+| **Deployment risk** | High — any incompatible change breaks live clients | Medium — breaking change still breaks in-flight queries, but the client self-heals; additive is safe | Low — old clients keep working | Low — old versions keep serving | Lowest — nothing ever breaks |
+| **Server change freedom** | Highest — change anything, anytime | High — same freedom, with a safety net | Medium — add freely, never remove or change | Medium — new version anytime, but each is a commitment | Lowest — every change gated by compat forever |
+| **Technical debt** | Lowest — one surface, no shims | Low — one surface | Growing — deprecated surface accumulates and can't be cleaned | High — multiple live code paths and migration machinery | Highest — everything supported forever |
+| **UI ↔ business-model lag** | Uncontrolled — a lagging UI runs silently until a breaking change forces it out | Minimal — stale clients are detected and prompted promptly | Can be large — old clients linger indefinitely | Bounded by the deprecation window | Unbounded — ancient clients live forever; the model ossifies |
+| **Developer effort** | Low ongoing, high per-deploy coordination | Low — the mechanism is built in | Medium — discipline to stay additive | High — build, test, and support N versions | Highest |
+| **Failure mode** | Hard error the user hits first | Early signal before the break; graceful self-update | Silent — nothing breaks | Silent within the window, then a planned cutover | Silent |
+
+No column is "correct" — the table is a map of what each position optimizes for. A tightly coupled internal app with lockstep deploys is well served by **no versioning**; a public API with thousands of uncontrolled consumers is pushed toward **parallel versions** or **never break** and pays for it in debt and lag.
+
+
+### Where Scry sits
+
+Scry's client is **generated and type-safe** against a specific model surface, so the query schema is deliberately *not* versioned in parallel — there is one surface at a time, and keeping several live would defeat the point. Instead Scry takes the **drift-detection** position: the wire *format* is versioned and fails closed (below), while the *model* surface is unversioned but stamped, so a deployed client detects drift early and updates itself rather than discovering the problem as a failed query. That keeps deployment cadence high and technical debt low, and accepts that a breaking model change requires clients to regenerate — which the stamp makes a graceful reload rather than a broken page.
+
+
+## The two version axes
+
 A Scry deployment has two independent version axes, both documented in [Wire format](wire-format.md):
 
 - The **[wire version](wire-format.md#versioning)** covers the *format* — the shape of the request and response. The server rejects a request whose version is newer than its own.
