@@ -183,7 +183,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// resolution the name-based <see cref="Expression.Call(Type, string, Type[], Expression[])"/> does
     /// on every invocation.
     /// </summary>
-    static Expression CallQueryable(string method, Type[] typeArgs, params Expression[] arguments)
+    static MethodCallExpression CallQueryable(string method, Type[] typeArgs, params Expression[] arguments)
     {
         if (queryableMethods.TryGetValue(method, out var open))
         {

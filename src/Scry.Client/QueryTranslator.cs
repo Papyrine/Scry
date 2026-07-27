@@ -216,7 +216,7 @@ sealed class QueryTranslator
     // The navigation a nested projection descends into: the shared leading segments of every member
     // path, stopping before any member's final (scalar) segment so each keeps a non-empty relative
     // path. Empty means the members do not share a single navigation, which is unsupported.
-    static IReadOnlyList<string> CommonNavigationPrefix(IReadOnlyList<IReadOnlyList<string>> paths)
+    static List<string> CommonNavigationPrefix(IReadOnlyList<IReadOnlyList<string>> paths)
     {
         var prefix = new List<string>();
         while (paths.All(_ => _.Count > prefix.Count + 1))
@@ -389,7 +389,7 @@ sealed class QueryTranslator
             _ => throw new NotSupportedException("Expected a lambda expression.")
         };
 
-    static IReadOnlyList<string> ProjectionNames(NewExpression construction)
+    static string[] ProjectionNames(NewExpression construction)
     {
         if (construction.Members is { } members)
         {

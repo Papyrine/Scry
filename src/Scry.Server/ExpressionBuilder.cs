@@ -70,14 +70,24 @@ sealed class ExpressionBuilder(Schema schema)
         foreach (var member in projection.Members)
         {
             var expression = ((NodeValue)member.Value).Node;
-            var leaf = expression switch
+            switch (expression)
             {
-                AggregateNode aggregate => BuildAggregate(aggregate, parameter, element),
-                MemberNode => Expression.Property(parameter, "Key"),
-                _ => throw new ScryValidationException("Unsupported grouped projection member.")
-            };
+                case AggregateNode aggregate:
+                {
+                    var leaf = BuildAggregate(aggregate, parameter, element);
+                    leaves.Add(Box(leaf));
+                    break;
+                }
+                case MemberNode:
+                {
+                    var leaf = Expression.Property(parameter, "Key");
+                    leaves.Add(Box(leaf));
+                    break;
+                }
+                default:
+                    throw new ScryValidationException("Unsupported grouped projection member.");
+            }
 
-            leaves.Add(Box(leaf));
             shape.Add([member.Name]);
         }
 
@@ -151,7 +161,7 @@ sealed class ExpressionBuilder(Schema schema)
         return expression;
     }
 
-    Expression BuildBinary(BinaryNode binary, ParameterExpression parameter)
+    BinaryExpression BuildBinary(BinaryNode binary, ParameterExpression parameter)
     {
         if (binary.Op is BinaryOp.AndAlso or BinaryOp.OrElse)
         {
@@ -197,7 +207,7 @@ sealed class ExpressionBuilder(Schema schema)
         };
     }
 
-    Expression BuildUnary(UnaryNode unary, ParameterExpression parameter)
+    UnaryExpression BuildUnary(UnaryNode unary, ParameterExpression parameter)
     {
         var operand = Build(unary.Operand, parameter, unary.Op == UnaryOp.Not ? typeof(bool) : null);
         return unary.Op switch
@@ -250,7 +260,7 @@ sealed class ExpressionBuilder(Schema schema)
         return Expression.Constant(parsed, underlying);
     }
 
-    Expression BuildAggregate(AggregateNode aggregate, ParameterExpression group, Type element)
+    MethodCallExpression BuildAggregate(AggregateNode aggregate, ParameterExpression group, Type element)
     {
         if (aggregate.Function == AggregateFn.Count)
         {
@@ -303,11 +313,18 @@ sealed class ExpressionBuilder(Schema schema)
                     _.GetParameters().Length == 2)
                 .MakeGenericMethod(key.element, key.result));
 
-    static Expression ToObjectArray(List<Expression> leaves) =>
+    static NewArrayExpression ToObjectArray(List<Expression> leaves) =>
         Expression.NewArrayInit(typeof(object), leaves.Select(Box));
 
-    static Expression Box(Expression expression) =>
-        expression.Type == typeof(object) ? expression : Expression.Convert(expression, typeof(object));
+    static Expression Box(Expression expression)
+    {
+        if (expression.Type == typeof(object))
+        {
+            return expression;
+        }
+
+        return Expression.Convert(expression, typeof(object));
+    }
 
     static void Coerce(ref Expression left, ref Expression right)
     {
