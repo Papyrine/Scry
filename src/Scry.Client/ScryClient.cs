@@ -52,8 +52,38 @@ public sealed class ScryClient
         ServerSchemaStamp is { } server &&
         client != server;
 
+    /// <summary>
+    /// Raised the first time a response reveals that the server's queryable surface differs from the
+    /// one this client was generated against — typically because the server was redeployed while a
+    /// cached client (a WASM app left open in a tab) kept running. Handle it to prompt a reload.
+    /// </summary>
+    /// <remarks>
+    /// Raised at most once per client, on the thread that awaited the query, and after the response
+    /// has been recorded — so <see cref="SchemaStale"/> is already true when the handler runs. Drift
+    /// is not an error: the query that revealed it has still succeeded (or failed on its own merits),
+    /// and an additive model change leaves an older client working indefinitely.
+    /// </remarks>
+    public event Action<SchemaDrift>? SchemaStaleDetected;
+
+    bool staleRaised;
+
     internal Task<QueryResponse> SendAsync(QueryRequest request, Cancel cancel) =>
         transport(request, cancel);
+
+    // Raised once, not per response: a chatty app would otherwise re-prompt on every query for as
+    // long as the drift lasts.
+    void RecordServerStamp(string? server)
+    {
+        ServerSchemaStamp = server;
+        if (staleRaised ||
+            !SchemaStale)
+        {
+            return;
+        }
+
+        staleRaised = true;
+        SchemaStaleDetected?.Invoke(new(SchemaStamp!, ServerSchemaStamp!));
+    }
 
     async Task<QueryResponse> PostAsync(
         HttpClient http,
@@ -68,7 +98,7 @@ public sealed class ScryClient
         // Recorded from failures too: a rejection caused by schema drift is exactly when this matters.
         if (message.Headers.TryGetValues(WireFormat.SchemaStampHeader, out var values))
         {
-            ServerSchemaStamp = values.FirstOrDefault();
+            RecordServerStamp(values.FirstOrDefault());
         }
 
         var body = await message.Content.ReadAsStringAsync(cancel);

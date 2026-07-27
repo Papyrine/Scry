@@ -1,0 +1,13 @@
+@implements IDisposable
+@inject ScryClient Client
+@inject NavigationManager Navigation
+
+<!-- begin-snippet: staleBannerMarkup -->
+@if (drift is not null)
+{
+    <div class="stale" role="alert">
+        <span>A newer version of this app is available.</span>
+        <button @onclick="Reload">Reload</button>
+    </div>
+}
+<!-- end-snippet -->

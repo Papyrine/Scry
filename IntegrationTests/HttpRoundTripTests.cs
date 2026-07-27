@@ -193,6 +193,59 @@ public class HttpRoundTripTests
     }
 
     [Test]
+    public async Task DriftedClientRaisesSchemaStaleDetected()
+    {
+        var stale = ScryClient.ForHttp(http, "/api/query");
+        stale.SchemaStamp = "stamp-from-an-older-model";
+
+        SchemaDrift? drift = null;
+        stale.SchemaStaleDetected += _ => drift = _;
+
+        // The query itself succeeds — drift is reported alongside a working result, not as a failure.
+        var count = await stale.Source<EmployeeQueryModel>("Employee").CountAsync();
+
+        Assert.That(count, Is.EqualTo(4));
+        Assert.That(drift, Is.Not.Null);
+        Assert.That(drift!.ClientStamp, Is.EqualTo("stamp-from-an-older-model"));
+        Assert.That(drift.ServerStamp, Is.EqualTo(ScryQuery.SchemaStamp));
+    }
+
+    // Raised once per client, however many queries follow: an app that polls would otherwise re-prompt
+    // for a reload on every request until the user acts.
+    [Test]
+    public async Task SchemaStaleDetectedIsRaisedOnce()
+    {
+        var stale = ScryClient.ForHttp(http, "/api/query");
+        stale.SchemaStamp = "stamp-from-an-older-model";
+
+        var raised = 0;
+        stale.SchemaStaleDetected += _ => raised++;
+
+        await stale.Source<EmployeeQueryModel>("Employee").CountAsync();
+        await stale.Source<EmployeeQueryModel>("Employee").CountAsync();
+        await stale.Source<EmployeeQueryModel>("Employee").CountAsync();
+
+        Assert.That(raised, Is.EqualTo(1));
+    }
+
+    // A client generated against the live model must stay silent — the half that keeps the signal from
+    // being noise. Uses its own client so the subscription cannot leak into the shared fixture.
+    [Test]
+    public async Task MatchingClientNeverRaisesSchemaStaleDetected()
+    {
+        var current = ScryClient.ForHttp(http, "/api/query");
+        var matching = new ScryQuery(current);
+
+        var raised = false;
+        current.SchemaStaleDetected += _ => raised = true;
+
+        await matching.Employee.CountAsync();
+
+        Assert.That(raised, Is.False);
+        Assert.That(current.SchemaStale, Is.False);
+    }
+
+    [Test]
     public void DisallowedPropertyThrowsThroughClient() =>
         // The generated client model has no Salary member (the server marks it [QueryIgnore]), so
         // attempts to reach hidden data must come as raw requests, which the server rejects (see the

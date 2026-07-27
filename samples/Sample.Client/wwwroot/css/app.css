@@ -34,6 +34,16 @@ thead {
     font-weight: 600;
 }
 
+.stale {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding: 0.6rem 1rem;
+    border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+    background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
 .pager {
     display: flex;
     align-items: center;
