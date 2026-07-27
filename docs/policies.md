@@ -13,6 +13,7 @@ public interface IReturnablePolicy<T>
 <sup><a href='/src/Scry.Server/IReturnablePolicy.cs#L9-L14' title='Snippet source file'>snippet source</a> | <a href='#snippet-returnablePolicyInterface' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
+
 ## Writing a policy
 
 <!-- snippet: returnablePolicy -->
@@ -62,6 +63,7 @@ public sealed class TenantPolicy :
 
 The returned `IQueryable<T>` is composed into the query, so the filter is translated to SQL along with everything else — it is not a post-filter over materialized rows.
 
+
 ## Registering a policy
 
 By attribute, on the model:
@@ -83,6 +85,7 @@ var response = Processor(_ => _.AddPolicy<Employee, ActiveOnlyPolicy>()).Execute
 <!-- endSnippet -->
 
 Code registration is the better fit when the policy lives in the server project and the model project should not reference it.
+
 
 ## Ordering guarantee
 
@@ -118,6 +121,7 @@ This test demonstrates it: the request carries no filter on `Active`, yet the in
 <sup><a href='/src/Scry.Tests/ExecutionTests.PolicyScopesRowsBeforeClientFilter.verified.txt#L1-L15' title='Snippet source file'>snippet source</a> | <a href='#snippet-ExecutionTests.PolicyScopesRowsBeforeClientFilter.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
+
 ## Instantiation
 
 The policy type is resolved from the request's `IServiceProvider` first, so it can take constructor dependencies:
@@ -134,9 +138,11 @@ Could not create policy 'TenantPolicy'.
 
 When executing through `ScryProcessor.Execute(request, db)` — the overload without a service provider — only the `Activator` path is available.
 
+
 ## Applies to every source kind
 
 Policies work on entities, views, and POCO sources alike; each is just an `IQueryable<T>` by the time the policy sees it. For a POCO source the filter runs in memory, for the others it is translated to SQL.
+
 
 ## What a policy is not
 
