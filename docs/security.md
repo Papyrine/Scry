@@ -2,6 +2,7 @@
 
 Scry lets a client compose queries. The design assumption is that **the client is hostile**: the generated code, the LINQ, and the serialized request are all attacker-controlled. Every guarantee is enforced on the server, at runtime, against the real model assembly.
 
+
 ## Threat model
 
 Assumed:
@@ -14,7 +15,9 @@ Not assumed:
 
 - That the client-side type system constrains anything. It is a developer-experience feature, not a control.
 
+
 ## Layers
+
 
 ### 1. Default-deny allow-list
 
@@ -23,6 +26,7 @@ A type is invisible unless it carries `[Queryable]`, `[QueryableView]`, `[Querya
 Adding an entity to the `DbContext` does not expose it. Adding a property to an exposed entity does expose it — that is the one direction where the default is open, and it is why the surface should be reviewed alongside model changes.
 
 **Complex types and JSON columns** follow the same default-deny rule. A complex/value type — including one mapped into a JSON column — is invisible until it carries `[QueryableComplex]`, and even then only its allow-listed scalar leaves are reachable (`[QueryIgnore]` still hides members). Exposing a complex type does not transitively expose anything: a nested type it references is reachable only if it too is opted in, so a JSON column cannot smuggle in an entity or an unlisted field. Traversal into a complex member counts against `MaxNavigationDepth` exactly like a navigation, bounding how deeply a client can descend into nested JSON. How EF stores the type (JSON or columns) never changes what is reachable — the allow-list is built from the CLR/annotation surface, not the storage mapping.
+
 
 ### 2. A closed AST
 
@@ -86,6 +90,7 @@ public enum KnownFunction
 
 Unknown discriminators fail deserialization rather than being ignored, so a request that names anything outside these sets is rejected at the JSON layer.
 
+
 ### 3. Server-side revalidation
 
 The server rebuilds the allow-list at startup from the real model assembly, independently of whatever the client was generated against. `QueryValidator` then walks every incoming AST and rejects:
@@ -120,11 +125,13 @@ public void RejectsIgnoredProperty() =>
 <sup><a href='/src/Scry.Tests/SecurityTests.cs#L6-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-rejectIgnoredProperty' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
+
 ### 4. Typed rebinding
 
 CLR types are introduced only from the schema, never from the wire. Member access is built by looking the name up in the allow-list and using the `PropertyInfo` found there, so there is no path from a wire string to a reflected member that was not already allow-listed.
 
 Constants are the one attacker-supplied value that reaches the query. They travel as a string plus a type tag and are parsed into the **member's** type at the comparison site — not into whatever type the tag claims. They become `Expression.Constant` nodes, which EF Core parameterizes; they are never concatenated into SQL.
+
 
 ### 5. Row policies
 
@@ -132,6 +139,7 @@ An `IReturnablePolicy<T>` is applied to the source before any client operator, s
 only narrow an already-authorized set.<!-- endInclude -->
 
 See [Row policies](policies.md).
+
 
 ### 6. Resource limits
 
@@ -161,12 +169,14 @@ public int MaxExpressionDepth { get; set; } = 32;
 
 These bound the work a single request can ask for: how many rows, how deep a join chain, how long a pipeline, how deeply nested an expression.
 
+
 ### 7. Contained errors
 
 Validation and wire failures return `400` with a specific message — the message names the rejected property or rule, which is not a disclosure beyond what the allow-list already implies. Everything else returns `500`.
 
 The `500` body is fixed — `{"error":"Query execution failed."}` — and stack traces, SQL, and EF Core<!-- include: error-500-body. path: /docs/includes/error-500-body.include.md -->
 messages are never returned to the client.<!-- endInclude -->
+
 
 ## End to end
 
@@ -205,6 +215,7 @@ public async Task DisallowedPropertyRejectedWith400()
 <sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L117-L144' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
+
 ## What Scry does not do
 
 **Authentication and authorization.** Scry has no notion of a user. Put it on the endpoint:
@@ -221,6 +232,7 @@ app.MapScry("/api/query")
 **Auditing.** Nothing is logged by default. `ScryProcessor.Execute` is the single choke point if you want to record what was asked for.
 
 **CORS, CSRF, TLS.** Ordinary ASP.NET Core concerns, unchanged by Scry.
+
 
 ## Review checklist
 
