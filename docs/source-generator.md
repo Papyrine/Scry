@@ -2,11 +2,13 @@
 
 The generator lives in `Scry.SourceGenerator`. It is not a standalone package — it is packed inside `Scry.Client` as an analyzer, so a client project that references `Scry.Client` already has it.
 
+
 ## The path-not-reference design
 
 The generator reads the server model's **built DLL from disk** using `System.Reflection.Metadata`. The assembly is never referenced by the client project, never loaded into the compiler, and never executed. Only the allow-listed surface is extracted from its metadata tables.
 
 That is what lets a Blazor WebAssembly client be strongly typed against a server-side EF Core model without dragging EF Core, connection strings, or the non-allow-listed members of the model into the client's dependency graph or its shipped output.
+
 
 ## Wiring
 
@@ -58,6 +60,7 @@ Reference the model project with ReferenceOutputAssembly=&quot;false&quot; so it
 <sup><a href='/src/Scry.Client/buildTransitive/Scry.Client.props#L11-L32' title='Snippet source file'>snippet source</a> | <a href='#snippet-buildTransitiveProps' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
+
 ### Why the stamp
 
 Roslyn's incremental pipeline can only see inputs that are declared to it. The DLL is read out of band, so from Roslyn's point of view the input is just a *path string* — which does not change when the file's contents do. A build that changes the model but not its location would leave the generator's cached output in place.
@@ -79,6 +82,7 @@ flowchart TD
     F -- No --> Z
     F -- Yes --> G[Regenerate client code]
 ```
+
 
 ### Project references instead of the package
 
@@ -107,9 +111,11 @@ When referencing the projects directly (as the sample and integration tests do),
 <sup><a href='/samples/Sample.Client/Sample.Client.csproj#L23-L40' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGeneratorWiring' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
+
 ## What is emitted
 
 Everything lands in the `Scry.Generated` namespace.
+
 
 ### One query model per source
 
@@ -142,6 +148,7 @@ Note what is *absent*: `Salary` is `[QueryIgnore]`, and `Department`/`Department
 
 Properties are `init`-only. A reference navigation is emitted as a nullable reference to the *other query model*, so `e.Manager!.Name` type-checks and traverses. A non-nullable `string` gets ` = null!;` to satisfy nullable analysis.
 
+
 ### Re-emitted enums
 
 `ScryEnums.g.cs` contains every enum reachable from an exposed member, with its members in declaration order:
@@ -165,6 +172,7 @@ public enum Status
 <!-- endSnippet -->
 
 This is why the client can write `e.Status == Status.FullTime` without referencing the model.
+
 
 ### The entry point
 
@@ -224,6 +232,7 @@ builder.Services.AddScoped<ScryQuery>();
 <sup><a href='/samples/Sample.Client/Program.cs#L13-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
+
 ## Type mapping
 
 | Model member type | Generated |
@@ -237,6 +246,7 @@ builder.Services.AddScoped<ScryQuery>();
 | another opted-in type | `{Type}QueryModel?` |
 | a nullable value type | the above with `?` |
 | anything else | omitted |
+
 
 ## Diagnostics
 
@@ -265,6 +275,7 @@ Reference the model project with ReferenceOutputAssembly="false" so it builds fi
 **Generated code is stale after changing the model.** This is what the stamp exists to prevent, so first confirm the model project actually rebuilt. In Rider or Visual Studio the analyzer host caches generator assemblies; a restart clears it. The generator's `AssemblyVersion` tracks the package version specifically so an upgraded package gets a distinct identity rather than serving a cached, frozen generator.
 
 **Build order flakiness in CI.** Confirm the `ReferenceOutputAssembly="false"` project reference is present. Without it, nothing orders the model build ahead of the client compile.
+
 
 ## Reading generated code
 
