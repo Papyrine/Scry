@@ -1,6 +1,3 @@
-using Scry.Client;
-using Scry.Generated;
-
 namespace Sample.Client.Pages;
 
 public partial class Index
