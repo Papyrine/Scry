@@ -9,6 +9,7 @@
 | `Sample.Client` | Blazor WebAssembly UI that writes LINQ against the generated models. |
 | `Sample.Tests` | Snapshot tests over the rendered UI, the wire traffic, and the explorer endpoint. |
 
+
 ## Running it
 
 The sample uses SQL Server LocalDB and creates/seeds the database on startup.
@@ -18,6 +19,7 @@ dotnet run --project samples/Sample.Server
 ```
 
 Then browse to the URL it prints. The query explorer is at `/scry`.
+
 
 ## The model
 
@@ -175,6 +177,7 @@ app.MapScryExplorer(
 
 The sample always exposes the explorer so it can be browsed without setting an environment. A real app should leave the default Development-only guard in place, or replace it with an authorization check — see [Query explorer](explorer.md).
 
+
 ## The client
 
 <!-- snippet: clientModelPath -->
@@ -224,6 +227,7 @@ builder.Services.AddScoped<ScryQuery>();
 ```
 <sup><a href='/samples/Sample.Client/Program.cs#L13-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
+
 
 ## The queries
 
@@ -281,6 +285,7 @@ fullTimers = await Query.Employee
 <sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L49-L56' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
+
 ## What the traffic looks like
 
 `Sample.Tests` snapshots the actual HTTP exchange for the first query:
@@ -305,6 +310,7 @@ fullTimers = await Query.Employee
 <!-- endSnippet -->
 
 Four projected columns requested, four returned. `Salary` is neither requested nor returnable.
+
 
 ## Integration tests
 
