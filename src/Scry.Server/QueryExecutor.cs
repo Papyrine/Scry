@@ -80,12 +80,12 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             return Single(row, plan);
         }
 
-        var rows = ((IQueryable<object[]>)projected).ToList();
+        var rows = projected.ToList();
         var array = rows.Select(_ => Shape(_, plan)).ToArray();
         return QueryResponse.Create(ResultKind.List, JsonSerializer.SerializeToElement(array, ScryJson.Options));
     }
 
-    (IQueryable Query, ProjectionPlan Plan) BuildProjected(
+    (IQueryable<object[]> Query, ProjectionPlan Plan) BuildProjected(
         IQueryable query,
         Type elementType,
         GroupByOp? groupBy,
@@ -165,8 +165,8 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         query.Provider.CreateQuery(
             CallQueryable("GroupBy", [elementType, keyType], query.Expression, Expression.Quote(keySelector)));
 
-    static IQueryable ApplySelect(IQueryable query, LambdaExpression selector) =>
-        query.Provider.CreateQuery(
+    static IQueryable<object[]> ApplySelect(IQueryable query, LambdaExpression selector) =>
+        (IQueryable<object[]>)query.Provider.CreateQuery(
             CallQueryable("Select", [query.ElementType, typeof(object[])], query.Expression, Expression.Quote(selector)));
 
     static T Execute<T>(IQueryable query, string method) =>
@@ -195,18 +195,15 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         return call;
     }
 
-    static object[]? ExecuteRow(IQueryable projected, string method)
-    {
-        var typed = (IQueryable<object[]>)projected;
-        return method switch
+    static object[]? ExecuteRow(IQueryable<object[]> projected, string method) =>
+        method switch
         {
-            "First" => typed.First(),
-            "FirstOrDefault" => typed.FirstOrDefault(),
-            "Single" => typed.Single(),
-            "SingleOrDefault" => typed.SingleOrDefault(),
+            "First" => projected.First(),
+            "FirstOrDefault" => projected.FirstOrDefault(),
+            "Single" => projected.Single(),
+            "SingleOrDefault" => projected.SingleOrDefault(),
             _ => throw new($"Unknown row method '{method}'.")
         };
-    }
 
     static QueryResponse Scalar<T>(T value) =>
         QueryResponse.Create(ResultKind.Scalar, JsonSerializer.SerializeToElement(value, ScryJson.Options));
