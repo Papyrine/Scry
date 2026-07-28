@@ -38,6 +38,6 @@ public abstract record Node;
 <sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-Referenced by `Scry.Client` and `Scry.Server`; you rarely use it directly.
+Referenced by `Scry.Client` and `Scry.Server`; it is rarely used directly.
 
 Docs: [Wire format](https://github.com/Papyrine/Scry/blob/main/docs/wire-format.md)

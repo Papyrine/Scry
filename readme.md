@@ -176,7 +176,7 @@ employees = await Query.Employee
 
 ## Query explorer
 
-An opt-in, GraphiQL-style explorer ships in `Scry.Server.Explorer`. It runs Roslyn in the browser, so you get real IntelliSense and diagnostics against the allow-listed schema, and can see exactly what goes on the wire:
+An opt-in, GraphiQL-style explorer ships in `Scry.Server.Explorer`. It runs Roslyn in the browser, giving real IntelliSense and diagnostics against the allow-listed schema, and shows exactly what goes on the wire:
 
 ```csharp
 app.MapScryExplorer("/scry");
