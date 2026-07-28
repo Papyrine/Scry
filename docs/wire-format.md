@@ -333,9 +333,16 @@ public sealed record QueryResponse(int Version, ResultKind Kind, JsonElement Pay
     /// <summary>Creates a response stamped with the current <see cref="WireFormat.Version"/>.</summary>
     public static QueryResponse Create(ResultKind kind, JsonElement payload) =>
         new(WireFormat.Version, kind, payload);
+
+    /// <summary>
+    /// Renamed enum values ([PreviousNames] on the server model), sent only when the request's schema
+    /// stamp differs from the server's. Lets a client generated before a rename resolve a value name
+    /// it does not know to one it does. Null otherwise, and omitted from the JSON.
+    /// </summary>
+    public IReadOnlyList<EnumAlias>? EnumAliases { get; init; }
 }
 ```
-<sup><a href='/src/Scry.Wire/QueryResponse.cs#L9-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireResponse' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/QueryResponse.cs#L9-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireResponse' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ```json
@@ -354,6 +361,19 @@ public sealed record QueryResponse(int Version, ResultKind Kind, JsonElement Pay
 | `Page` | A `ScryPage` envelope: `{ items: [...], hasMore: bool, cursor: string? }` — `cursor` set for a seek-safe page, else null. See [Paging](paging.md). |
 
 The client checks that `kind` matches the terminal it sent and throws `ScryWireException` if it does not.
+
+`enumAliases` is optional and **additive**: it appears only when the request's schema stamp differs from the server's and the model declares enum value renames via `[PreviousNames]` ([Annotations](annotations.md#renaming)). Each entry maps the name the payload serializes a value under to the previous names it was exposed as:
+
+```json
+{
+  "version": 1,
+  "kind": "List",
+  "payload": [ { "name": "Carol", "status": "Contractor" } ],
+  "enumAliases": [ { "enumName": "Status", "valueName": "Contractor", "previousNames": [ "Freelancer" ] } ]
+}
+```
+
+The payload itself always carries the **current** name — the aliases are a translation table for a reader generated before the rename, never a second serialization. A reader that does not understand the field ignores it.
 
 
 ## Versioning

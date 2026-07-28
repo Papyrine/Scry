@@ -83,10 +83,10 @@ public class PreviousNamesTests
         Assert.That(json, Does.Not.Contain("Alice"));
     }
 
-    // An enum rename has no fix in the response direction: unlike a projection key, a value cannot be
-    // written under two names, so it comes back as the current one and a client generated before the
-    // rename cannot deserialize the row. Documented in docs/annotations.md and pinned here, so adding
-    // response-side mapping later cannot silently contradict it.
+    // The payload always carries the current name — never the previous one, and never both, since a
+    // value has a single string slot. The response direction is instead handled out of band: a drifted
+    // client receives QueryResponse.EnumAliases and its reader translates (see EnumAliasTests). Pinned
+    // so response-side dual-naming cannot creep into the payload itself.
     [Test]
     public void RenamedEnumValueIsReturnedUnderItsCurrentName()
     {

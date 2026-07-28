@@ -46,6 +46,24 @@ sealed class Schema
     }
 
     /// <summary>
+    /// The enum renames declared by [PreviousNames], in wire form: current value name to the previous
+    /// names still honoured. Attached to responses for a drifted client, whose reader resolves a value
+    /// name it does not know to one it does — the response-side counterpart of
+    /// <see cref="ResolveEnumValue"/>. Empty when no exposed enum value carries a previous name.
+    /// </summary>
+    public IReadOnlyList<EnumAlias> EnumAliases { get; private set; } = [];
+
+    IReadOnlyList<EnumAlias> BuildEnumAliases() =>
+    [
+        ..enumPreviousNames
+            .SelectMany(entry => entry.Value
+                .GroupBy(_ => _.Value)
+                .Select(group => new EnumAlias(entry.Key.Name, group.Key, [..group.Select(_ => _.Key).Order(StringComparer.Ordinal)])))
+            .OrderBy(_ => _.EnumName, StringComparer.Ordinal)
+            .ThenBy(_ => _.ValueName, StringComparer.Ordinal)
+    ];
+
+    /// <summary>
     /// Projects the allow-list into the public introspection contract. Type displays mirror the
     /// source generator's emission exactly, so a client can synthesize byte-compatible query models.
     /// Ordered for deterministic output.
@@ -248,6 +266,7 @@ sealed class Schema
             }
         }
 
+        schema.EnumAliases = schema.BuildEnumAliases();
         schema.Stamp = schema.ComputeStamp();
         return schema;
     }

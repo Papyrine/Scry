@@ -48,16 +48,26 @@ public sealed class ScryProcessor
     /// <summary>Validates and executes a request, returning the shaped result.</summary>
     public QueryResponse Execute(QueryRequest request, DbContext data, IServiceProvider services)
     {
+        var drifted = request.Stamp is { } requestStamp && requestStamp != schema.Stamp;
         try
         {
-            return executor.Execute(request, data, services);
+            var response = executor.Execute(request, data, services);
+
+            // A drifted client may have been generated before an enum value rename, in which case the
+            // payload carries names it does not know. The aliases let its reader resolve them; a
+            // matching (or absent) stamp proves the client already has the current names, so nothing
+            // rides along in the common case.
+            if (drifted && schema.EnumAliases.Count > 0)
+            {
+                response = response with { EnumAliases = schema.EnumAliases };
+            }
+
+            return response;
         }
         // A rejected query from a client that was generated against a different model surface is far
         // more likely stale than hostile; say so, instead of leaving an unexplained rejection. A
         // matching stamp (or none) reports the plain validation message.
-        catch (ScryValidationException exception) when (
-            request.Stamp is { } requestStamp &&
-            requestStamp != schema.Stamp)
+        catch (ScryValidationException exception) when (drifted)
         {
             throw new ScryValidationException(
                 $"{exception.Message} The request's schema stamp does not match this server's model, so " +

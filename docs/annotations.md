@@ -203,9 +203,13 @@ The client therefore names its own columns on every request, and the server echo
 
 The server's own default projection remains for a request that names no members — a hand-built one, or any non-generated caller. Those have no fixed model to disappoint, so they get the current names.
 
-**Enum values are the exception.** A renamed value in a *result* is serialized under its current name, and unlike a key a value cannot be written under two names. A client generated before the rename will fail to deserialize it. So `[PreviousNames]` on an enum value covers the request direction — filtering by the old name — but not receiving rows that contain it. A renamed enum value appearing in query results is a hard break for deployed clients; the stamp still flags it, so they are prompted to reload.
+**Enum values travel differently.** A renamed value in a *result* is serialized under its current name — unlike a key, a value cannot be written under two names. Instead the translation rides out of band: when the request's stamp differs from the server's, the response carries [`enumAliases`](wire-format.md#response) (current name → previous names, straight from `[PreviousNames]`), and the client's enum reader resolves a name it does not know to a previous name it does. The payload stays canonical, and nothing is sent when the stamps agree.
+
+If a name still cannot be resolved — the value was renamed without a `[PreviousNames]` entry, or removed — the client throws `ScryStaleClientException` rather than a bare `JsonException`, so the failure names its cause: regenerate the client, or reload the deployed app.
 
 Entries are meant to be **pruned** once deployed clients have refreshed. Keeping them indefinitely accumulates exactly the compatibility debt the one-surface-at-a-time design avoids.
+
+Once pruned, treat a retired name as **retired for good** — do not reuse it for something else. Every other mistake here fails loudly: an unknown name is a rejected query or a `ScryStaleClientException`. Reuse is the one that fails *quietly*. A client old enough to still send the retired name gets whatever now answers to it, and a retired enum value name resolves an ancient client's row to the wrong member with no error anywhere. The startup checks cannot catch this, because by then nothing records that the name ever meant something else.
 
 Details:
 

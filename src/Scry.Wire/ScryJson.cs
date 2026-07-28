@@ -20,9 +20,33 @@ public static class ScryJson
             PropertyNameCaseInsensitive = true,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
-        // No naming policy on enums: names are part of the wire contract and must stay stable.
-        options.Converters.Add(new JsonStringEnumConverter());
+        // No naming policy on enums: names are part of the wire contract and must stay stable. The
+        // tolerant wrapper is byte-identical to JsonStringEnumConverter except when a payload read
+        // hits a value name this side does not know — see DeserializePayload.
+        options.Converters.Add(new TolerantEnumConverterFactory());
         return options;
+    }
+
+    /// <summary>
+    /// Deserializes a response's payload. Prefer this over deserializing <see cref="QueryResponse.Payload"/>
+    /// directly: it makes the response's <see cref="QueryResponse.EnumAliases"/> available to the enum
+    /// reader, so a client generated before an enum value rename can resolve the current name to the
+    /// previous one it was generated with. An unresolvable name throws
+    /// <see cref="ScryStaleClientException"/> rather than a bare <see cref="JsonException"/>.
+    /// </summary>
+    public static T? DeserializePayload<T>(QueryResponse response)
+    {
+        // Non-null marks "inside a payload" even when the response carried no aliases, so an unknown
+        // enum name still reports a stale client instead of an unexplained parse failure.
+        EnumAliasScope.Current = response.EnumAliases ?? [];
+        try
+        {
+            return response.Payload.Deserialize<T>(Options);
+        }
+        finally
+        {
+            EnumAliasScope.Current = null;
+        }
     }
 
     public static string Serialize(QueryRequest request) =>

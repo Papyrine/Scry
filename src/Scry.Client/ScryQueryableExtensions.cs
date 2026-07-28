@@ -8,7 +8,7 @@ public static class ScryQueryableExtensions
     {
         var response = await Send(source, terminal: null, cancel);
         EnsureKind(response, ResultKind.List);
-        return response.Payload.Deserialize<List<T>>(ScryJson.Options) ?? [];
+        return ScryJson.DeserializePayload<List<T>>(response) ?? [];
     }
 
     // The collection-shaping terminals below all send the same "enumerate to a list" request as
@@ -131,7 +131,7 @@ public static class ScryQueryableExtensions
     {
         var response = await Send(source, terminal, cancel);
         EnsureKind(response, ResultKind.Page);
-        return response.Payload.Deserialize<ScryPage<T>>(ScryJson.Options) ??
+        return ScryJson.DeserializePayload<ScryPage<T>>(response) ??
                throw new ScryWireException("Page result deserialized to null.");
     }
 
@@ -139,13 +139,12 @@ public static class ScryQueryableExtensions
     {
         var response = await Send(source, terminal, cancel);
         EnsureKind(response, ResultKind.Single);
-        var payload = response.Payload;
-        if (payload.ValueKind == JsonValueKind.Null)
+        if (response.Payload.ValueKind == JsonValueKind.Null)
         {
             return default;
         }
 
-        return payload.Deserialize<T>(ScryJson.Options);
+        return ScryJson.DeserializePayload<T>(response);
     }
 
     /// <summary>

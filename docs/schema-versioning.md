@@ -48,7 +48,7 @@ Scry's client is **generated and type-safe** against a specific model surface, s
 
 Renames are the one breaking change with a built-in soft landing. `[PreviousNames]` ([Annotations](annotations.md#renaming)) keeps the server accepting the name a source, member, or enum value was previously exposed under, so a deployed client keeps querying while it picks up a regenerated one. Previous names stay out of the stamp, so the rename still registers as drift — they buy a migration window, not silence — and they are meant to be pruned once clients have refreshed, which is what keeps this short of the *additive-only* column above.
 
-The exception is a renamed **enum value that appears in results**. A previous name lets an old client filter by it, but the value comes back serialized under its current name and a value cannot carry two names the way a response key can, so that client cannot deserialize the row. That rename stays a hard break: the stamp flags it, and the client has to reload.
+Renamed **enum values in results** take one extra step: the payload serializes the current name (a value cannot carry two names the way a response key can), so a drifted client's response also carries an [alias table](wire-format.md#response) mapping current names to previous ones, which the client's reader uses to resolve a name it does not know back to the one it was generated with. A name that still cannot be resolved — renamed without a `[PreviousNames]` entry, or removed — surfaces as a directed `ScryStaleClientException` rather than an unexplained parse failure.
 
 
 ## The two version axes
