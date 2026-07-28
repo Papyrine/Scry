@@ -114,7 +114,7 @@ public sealed class ScryClient
         // A failure the server attributed to this client's schema stamp surfaces as the same exception
         // the payload reader throws for an unknown enum value, so one catch covers every stale-client
         // failure and can prompt a reload. SchemaStaleDetected has already been raised above.
-        if (TryParseError(body) is { StaleClient: true } error)
+        if (TryParseError(body) is { StaleClient: true, Error.Length: > 0 } error)
         {
             throw new ScryStaleClientException(error.Error);
         }
