@@ -201,12 +201,14 @@ The endpoint maps failures deliberately:
 | Allow-list or limit violation (`ScryValidationException`) | `400` | `{"error":"..."}` |
 | Anything else | `500` | `{"error":"Query execution failed."}` |
 
-The `500` body is fixed — `{"error":"Query execution failed."}` — and stack traces, SQL, and EF Core<!-- include: error-500-body. path: /docs/includes/error-500-body.include.md -->
-messages are never returned to the client.<!-- endInclude -->
+When the request's [schema stamp](schema-versioning.md#the-two-version-axes) differs from the server's, the `400` and `500` bodies additionally carry `"staleClient": true` — the failure is attributed to a client generated against an older model surface rather than to the query itself. A malformed request (`ScryWireException`) is never attributed: it carries no usable stamp. The marker is omitted entirely when the stamps agree or the request sent none.
+
+The `500` message is fixed — `Query execution failed.` — and stack traces, SQL, and EF Core<!-- include: error-500-body. path: /docs/includes/error-500-body.include.md -->
+messages are never returned to the client. The only variable part is the `staleClient` marker.<!-- endInclude -->
 
 Log them with the application's normal exception logging.
 
-On the client, a non-success status becomes a `ScryRequestException` carrying `StatusCode` and the raw `Body`.
+On the client, a non-success status becomes a `ScryRequestException` carrying `StatusCode` and the raw `Body` — unless the body carries `staleClient`, in which case it becomes a `ScryStaleClientException`, the same type the payload reader throws for an unknown enum value. One catch therefore covers every failure whose remedy is regenerating the client (or reloading the deployed app); see [Schema versioning](schema-versioning.md#detecting-a-stale-client).
 
 
 ## Result payloads

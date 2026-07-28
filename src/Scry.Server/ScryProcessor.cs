@@ -71,7 +71,10 @@ public sealed class ScryProcessor
         {
             throw new ScryValidationException(
                 $"{exception.Message} The request's schema stamp does not match this server's model, so " +
-                "the client was generated against a different model surface — regenerate the client.");
+                "the client was generated against a different model surface — regenerate the client.")
+            {
+                StaleClient = true
+            };
         }
     }
 

@@ -22,6 +22,9 @@ public class StaleClientTests
 
         Assert.That(exception.Message, Does.Contain("not allow-listed"));
         Assert.That(exception.Message, Does.Contain("regenerate the client"));
+        // The structured counterpart of the prose: the HTTP endpoint forwards it as
+        // ScryError.StaleClient so client code can prompt a reload without parsing messages.
+        Assert.That(exception.StaleClient, Is.True);
     }
 
     [Test]
@@ -36,6 +39,7 @@ public class StaleClientTests
 
         Assert.That(exception.Message, Does.Contain("not allow-listed"));
         Assert.That(exception.Message, Does.Not.Contain("regenerate the client"));
+        Assert.That(exception.StaleClient, Is.False);
     }
 
     [Test]
@@ -48,6 +52,7 @@ public class StaleClientTests
             () => processor.Execute(InvalidRequest(stamp: null), context))!;
 
         Assert.That(exception.Message, Does.Not.Contain("regenerate the client"));
+        Assert.That(exception.StaleClient, Is.False);
     }
 
     // Schema drift alone must not reject anything: a valid query from an outdated client (e.g. after

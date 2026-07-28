@@ -49,37 +49,52 @@ public static class ScryServiceExtensions
             body = await reader.ReadToEndAsync(context.RequestAborted);
         }
 
+        QueryRequest request;
         try
         {
-            var request = ScryJson.DeserializeRequest(body);
+            request = ScryJson.DeserializeRequest(body);
+        }
+        catch (ScryWireException exception)
+        {
+            // A malformed request carries no usable stamp, so it is never attributed to staleness.
+            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, staleClient: false);
+            return;
+        }
+
+        // A stamp that disagrees marks the client as generated against a different model surface.
+        // Validation failures carry their own attribution (ScryValidationException.StaleClient); for
+        // an execution failure this is the only attribution available — a drifted client faulting the
+        // server (e.g. a constant parsed against a member whose type has since changed) is far more
+        // likely stale than the server broken, and marking it lets the client prompt a reload instead
+        // of presenting an unexplained server error.
+        var drifted = request.Stamp is { } stamp && stamp != processor.SchemaStamp;
+
+        try
+        {
             var db = (DbContext)services.GetRequiredService(options.ContextType);
             var response = processor.Execute(request, db, services);
 
             context.Response.ContentType = "application/json";
             await context.Response.WriteAsync(ScryJson.Serialize(response), context.RequestAborted);
         }
-        catch (ScryWireException exception)
-        {
-            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message);
-        }
         catch (ScryValidationException exception)
         {
-            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message);
+            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, exception.StaleClient);
         }
         catch (Exception)
         {
             // Never leak internals (stack traces, SQL) to the client.
-            await WriteError(context, StatusCodes.Status500InternalServerError, "Query execution failed.");
+            await WriteError(context, StatusCodes.Status500InternalServerError, "Query execution failed.", drifted);
         }
     }
 
-    static Task WriteError(HttpContext context, int status, string message)
+    static Task WriteError(HttpContext context, int status, string message, bool staleClient)
     {
         context.Response.StatusCode = status;
         context.Response.ContentType = "application/json";
-        return context.Response.WriteAsJsonAsync(new ScryError(message), context.RequestAborted);
+        return context.Response.WriteAsJsonAsync(
+            new ScryError(message) { StaleClient = staleClient },
+            ScryJson.Options,
+            context.RequestAborted);
     }
-
-    // ReSharper disable once NotAccessedPositionalProperty.Local
-    sealed record ScryError(string Error);
 }

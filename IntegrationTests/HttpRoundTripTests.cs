@@ -245,6 +245,76 @@ public class HttpRoundTripTests
         Assert.That(current.SchemaStale, Is.False);
     }
 
+    // A drifted client whose query the server rejects gets a ScryStaleClientException — the same type
+    // the payload reader throws for an unknown enum value — so one catch covers every stale-client
+    // failure and can prompt a reload.
+    [Test]
+    public void DriftedClientRejectionThrowsStaleClientException()
+    {
+        var stale = ScryClient.ForHttp(http, "/api/query");
+        stale.SchemaStamp = "stamp-from-an-older-model";
+
+        var exception = Assert.ThrowsAsync<ScryStaleClientException>(() =>
+            stale.Source<EmployeeQueryModel>("Renamed").ToListAsync())!;
+
+        Assert.That(exception.Message, Does.Contain("regenerate the client"));
+    }
+
+    // The wire shape behind it: the error body carries a structured staleClient marker, not just
+    // prose, so non-.NET consumers can react without parsing the message.
+    [Test]
+    public async Task DriftedRejectionBodyCarriesStaleClientMarker()
+    {
+        using var content = new StringContent(
+            """{"version":1,"root":"Renamed","pipeline":[{"$type":"count"}],"stamp":"stamp-from-an-older-model"}""",
+            Encoding.UTF8,
+            "application/json");
+        using var response = await http.PostAsync("/api/query", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(body, Does.Contain("\"staleClient\":true"));
+    }
+
+    // The same rejection without a stamp makes no staleness claim — the marker is omitted entirely
+    // rather than sent as false.
+    [Test]
+    public async Task UnstampedRejectionBodyOmitsStaleClientMarker()
+    {
+        using var content = new StringContent(
+            """{"version":1,"root":"Renamed","pipeline":[{"$type":"count"}]}""",
+            Encoding.UTF8,
+            "application/json");
+        using var response = await http.PostAsync("/api/query", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(body, Does.Not.Contain("staleClient"));
+    }
+
+    // An execution failure (500) from a drifted client is also attributed: validation cannot catch
+    // e.g. a constant parsed against a member whose type has since changed, so the failure surfaces
+    // at execution — far more likely a stale client than a broken server. The body stays the fixed
+    // generic message; only the marker is added.
+    [Test]
+    public async Task DriftedExecutionFailureIsAttributedToStaleClient()
+    {
+        // Amount is decimal; "abc" passes validation (constants are target-typed at rebind, not
+        // type-checked by the validator) and then faults ParseValue -> the generic 500 path.
+        using var content = new StringContent(
+            """
+            {"version":1,"root":"Order","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Amount"]},"right":{"$type":"const","value":"abc","tag":"String"}}},{"$type":"count"}],"stamp":"stamp-from-an-older-model"}
+            """,
+            Encoding.UTF8,
+            "application/json");
+        using var response = await http.PostAsync("/api/query", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
+        Assert.That(body, Does.Contain("Query execution failed."));
+        Assert.That(body, Does.Contain("\"staleClient\":true"));
+    }
+
     [Test]
     public void DisallowedPropertyThrowsThroughClient() =>
         // The generated client model has no Salary member (the server marks it [QueryIgnore]), so

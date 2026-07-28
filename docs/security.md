@@ -174,8 +174,8 @@ These bound the work a single request can ask for: how many rows, how deep a joi
 
 Validation and wire failures return `400` with a specific message — the message names the rejected property or rule, which is not a disclosure beyond what the allow-list already implies. Everything else returns `500`.
 
-The `500` body is fixed — `{"error":"Query execution failed."}` — and stack traces, SQL, and EF Core<!-- include: error-500-body. path: /docs/includes/error-500-body.include.md -->
-messages are never returned to the client.<!-- endInclude -->
+The `500` message is fixed — `Query execution failed.` — and stack traces, SQL, and EF Core<!-- include: error-500-body. path: /docs/includes/error-500-body.include.md -->
+messages are never returned to the client. The only variable part is the `staleClient` marker.<!-- endInclude -->
 
 
 ## End to end

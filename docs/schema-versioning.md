@@ -118,3 +118,13 @@ The prompt itself is ordinary markup — the banner renders only once drift has 
 <!-- endSnippet -->
 
 Prefer prompting over reloading automatically. A forced reload discards whatever the user was in the middle of, and their current client still works — there is no reason to interrupt them mid-task for a change that has not broken anything yet.
+
+
+## When the break arrives
+
+Eventually a drifted client's query does fail — a member it still references was removed, or a value it holds no longer parses. Those failures identify themselves:
+
+- The server marks every rejection (and execution failure) from a mismatched stamp with `"staleClient": true` on the [error body](server.md#error-handling), keeping the plain 400/500 shape for a client that is plain wrong.
+- `ScryClient` surfaces such failures as **`ScryStaleClientException`** — the same exception thrown client-side when a result carries an enum value name the generated model does not have. One catch covers every failure whose remedy is a newer client.
+
+The two channels are complementary, and both fire on a failed query — the stamp header rides on rejections too, so `SchemaStaleDetected` has already been raised by the time the exception surfaces. An app with the banner above therefore needs no extra handling: the failed query throws, and the reload prompt is already on screen explaining why. Handle the exception where a better experience is possible — retrying the interrupted operation after the reload, say — not because the signal would otherwise be lost.
