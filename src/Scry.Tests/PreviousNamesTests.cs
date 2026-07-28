@@ -83,6 +83,32 @@ public class PreviousNamesTests
         Assert.That(json, Does.Not.Contain("Alice"));
     }
 
+    // An enum rename has no fix in the response direction: unlike a projection key, a value cannot be
+    // written under two names, so it comes back as the current one and a client generated before the
+    // rename cannot deserialize the row. Documented in docs/annotations.md and pinned here, so adding
+    // response-side mapping later cannot silently contradict it.
+    [Test]
+    public void RenamedEnumValueIsReturnedUnderItsCurrentName()
+    {
+        var request = QueryRequest.Create(
+            "Employee",
+            [
+                new WhereOp(
+                    new BinaryNode(
+                        BinaryOp.Equal,
+                        new MemberNode(["Status"]),
+                        new ConstNode("Freelancer", ClrTypeTag.Enum))),
+                new SelectOp(new([new("Status", new NodeValue(new MemberNode(["Status"])))]))
+            ]);
+
+        using var context = TestContext.CreateSeeded();
+        var json = ScryJson.Serialize(Processor().Execute(request, context));
+
+        // Filtered by the previous name, returned under the current one.
+        Assert.That(json, Does.Contain("Contractor"));
+        Assert.That(json, Does.Not.Contain("Freelancer"));
+    }
+
     // An enum value the server has never heard of is a rejected query, not a server fault — the
     // shape a stale client hits when a value was renamed without a [PreviousNames] entry.
     [Test]
