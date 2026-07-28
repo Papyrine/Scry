@@ -345,7 +345,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 throw Reject($"Type '{currentType.Name}' is not queryable.");
             }
 
-            if (!meta.Members.TryGetValue(path[i], out member))
+            if (!meta.TryGetMember(path[i], out member))
             {
                 throw Reject($"Property '{path[i]}' is not allow-listed on '{currentType.Name}'.");
             }

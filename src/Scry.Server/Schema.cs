@@ -11,6 +11,11 @@ sealed class Schema
     readonly Dictionary<string, ScrySource> sources = new(StringComparer.Ordinal);
     readonly Dictionary<Type, TypeMeta> types = [];
 
+    // Previous wire names still answered to, kept apart from the current surface above so they never
+    // leak into introspection or the stamp. Enum values are keyed by enum type, then previous name.
+    readonly Dictionary<string, ScrySource> sourcePreviousNames = new(StringComparer.Ordinal);
+    readonly Dictionary<Type, Dictionary<string, string>> enumPreviousNames = [];
+
     // Captured for the startup guardrail (ValidateAgainstModel): the CLR types the annotations claim
     // are EF-mapped entities/views versus the ones claimed to be complex value types. The classifiers
     // work from attributes alone; only the live EF model can confirm the claim is right.
@@ -18,10 +23,27 @@ sealed class Schema
     readonly List<Type> complexTypes = [];
 
     public bool TryGetSource(string name, [MaybeNullWhen(false)] out ScrySource source) =>
-        sources.TryGetValue(name, out source);
+        sources.TryGetValue(name, out source) ||
+        sourcePreviousNames.TryGetValue(name, out source);
 
     public bool TryGetType(Type type, [MaybeNullWhen(false)] out TypeMeta meta) =>
         types.TryGetValue(type, out meta);
+
+    /// <summary>
+    /// Maps an enum value name off the wire to its current name, translating one a client was
+    /// generated against before the value was renamed. Unknown names are returned unchanged, so the
+    /// caller reports them against the real enum.
+    /// </summary>
+    public string ResolveEnumValue(Type enumType, string name)
+    {
+        if (enumPreviousNames.TryGetValue(enumType, out var previous) &&
+            previous.TryGetValue(name, out var current))
+        {
+            return current;
+        }
+
+        return name;
+    }
 
     /// <summary>
     /// Projects the allow-list into the public introspection contract. Type displays mirror the
@@ -168,6 +190,17 @@ sealed class Schema
                 // A complex type is a traversable member type, not a root source: it gets member
                 // metadata (below) but no source entry and no resolver.
                 schema.complexTypes.Add(type);
+
+                // Only its members are ever named on the wire, so a previous name on the type itself
+                // has nothing to apply to.
+                if (PreviousNamesOf(type).Count > 0)
+                {
+                    throw new($"[PreviousNames] on '{type.Name}' has no effect: a [QueryableComplex] type is not a source and has no wire name. Put it on the renamed member instead.");
+                }
+            }
+            else if (PreviousNamesOf(type).Count > 0)
+            {
+                throw new($"[PreviousNames] on '{type.Name}', which has no wire name: it is not an opted-in source. Put it on a [Queryable]/[QueryableView]/[QueryablePoco] type, an exposed member, or an enum value.");
             }
         }
 
@@ -191,8 +224,96 @@ sealed class Schema
             schema.sources[name] = new(name, type, kind, policy, BuildResolver(type, kind, options));
         }
 
+        // Pass 3: register the previous names sources still answer to. Deferred until every current
+        // name is known, so a previous name can never shadow a live source whatever the discovery order.
+        foreach (var (type, name, _, _) in discovered)
+        {
+            schema.RegisterSourcePreviousNames(type, schema.sources[name]);
+        }
+
+        // Enum value names travel on the wire as constants, so a renamed value needs the same
+        // migration window as a source or a member. Only enums reachable from an allow-listed scalar
+        // member are on the wire at all.
+        foreach (var enumType in schema.types.Values
+                     .SelectMany(_ => _.Members.Values)
+                     .Where(_ => _.Kind == MemberKind.Scalar)
+                     .Select(_ => Nullable.GetUnderlyingType(_.Type) ?? _.Type)
+                     .Where(_ => _.IsEnum)
+                     .Distinct())
+        {
+            var previous = BuildEnumPreviousNames(enumType);
+            if (previous.Count > 0)
+            {
+                schema.enumPreviousNames[enumType] = previous;
+            }
+        }
+
         schema.Stamp = schema.ComputeStamp();
         return schema;
+    }
+
+    static IReadOnlyList<string> PreviousNamesOf(MemberInfo member) =>
+        member.GetCustomAttribute<PreviousNamesAttribute>()?.Names ?? [];
+
+    void RegisterSourcePreviousNames(Type type, ScrySource source)
+    {
+        foreach (var previous in PreviousNamesOf(type))
+        {
+            EnsureNotBlank(previous, $"'{type.Name}'");
+
+            if (previous == source.Name)
+            {
+                throw new($"[PreviousNames] on '{type.Name}' lists '{previous}', which is already its current source name. Remove it.");
+            }
+
+            if (sources.TryGetValue(previous, out var live))
+            {
+                throw new($"[PreviousNames] on '{type.Name}' lists '{previous}', which is the current source name of '{live.ClrType.Name}'.");
+            }
+
+            if (sourcePreviousNames.TryGetValue(previous, out var claimed))
+            {
+                throw new($"[PreviousNames] on '{type.Name}' lists '{previous}', which is already a previous name of source '{claimed.Name}'.");
+            }
+
+            sourcePreviousNames[previous] = source;
+        }
+    }
+
+    static Dictionary<string, string> BuildEnumPreviousNames(Type enumType)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        var current = Enum.GetNames(enumType).ToHashSet(StringComparer.Ordinal);
+
+        foreach (var field in enumType.GetFields(BindingFlags.Public | BindingFlags.Static))
+        {
+            foreach (var previous in PreviousNamesOf(field))
+            {
+                EnsureNotBlank(previous, $"'{enumType.Name}.{field.Name}'");
+
+                if (current.Contains(previous))
+                {
+                    throw new($"[PreviousNames] on '{enumType.Name}.{field.Name}' lists '{previous}', which is a current value of that enum.");
+                }
+
+                if (map.TryGetValue(previous, out var claimed))
+                {
+                    throw new($"[PreviousNames] on '{enumType.Name}.{field.Name}' lists '{previous}', which is already a previous name of '{enumType.Name}.{claimed}'.");
+                }
+
+                map[previous] = field.Name;
+            }
+        }
+
+        return map;
+    }
+
+    static void EnsureNotBlank(string previous, string what)
+    {
+        if (string.IsNullOrWhiteSpace(previous))
+        {
+            throw new($"[PreviousNames] on {what} contains a blank name.");
+        }
     }
 
     /// <summary>
@@ -297,6 +418,7 @@ sealed class Schema
                 property.GetIndexParameters().Length > 0 ||
                 property.GetCustomAttribute<QueryIgnoreAttribute>() is not null)
             {
+                EnsureNoPreviousNames(type, property);
                 continue;
             }
 
@@ -312,12 +434,55 @@ sealed class Schema
             if (queryableTypes.Contains(target))
             {
                 meta.Members[property.Name] = new(property.Name, property, MemberKind.Navigation);
+                continue;
             }
 
             // Anything else (collections, non-queryable complex types) is intentionally excluded.
+            EnsureNoPreviousNames(type, property);
+        }
+
+        // Registered once the whole current surface is known, so a previous name cannot shadow a live
+        // member that happens to be declared later in the type.
+        foreach (var member in meta.Members.Values)
+        {
+            RegisterMemberPreviousNames(meta, member);
         }
 
         return meta;
+    }
+
+    static void RegisterMemberPreviousNames(TypeMeta meta, Member member)
+    {
+        var owner = meta.ClrType.Name;
+        foreach (var previous in PreviousNamesOf(member.Property))
+        {
+            EnsureNotBlank(previous, $"'{owner}.{member.Name}'");
+
+            if (previous == member.Name)
+            {
+                throw new($"[PreviousNames] on '{owner}.{member.Name}' lists '{previous}', which is already its current name. Remove it.");
+            }
+
+            if (meta.Members.ContainsKey(previous))
+            {
+                throw new($"[PreviousNames] on '{owner}.{member.Name}' lists '{previous}', which is a current member of '{owner}'.");
+            }
+
+            if (meta.PreviousNames.TryGetValue(previous, out var claimed))
+            {
+                throw new($"[PreviousNames] on '{owner}.{member.Name}' lists '{previous}', which is already a previous name of '{owner}.{claimed.Name}'.");
+            }
+
+            meta.PreviousNames[previous] = member;
+        }
+    }
+
+    static void EnsureNoPreviousNames(Type type, PropertyInfo property)
+    {
+        if (PreviousNamesOf(property).Count > 0)
+        {
+            throw new($"[PreviousNames] on '{type.Name}.{property.Name}', which is not exposed to clients. Remove it, or remove whatever excludes the member.");
+        }
     }
 
     static bool IsScalar(Type type)

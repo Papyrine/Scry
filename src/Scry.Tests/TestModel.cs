@@ -2,12 +2,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Scry.Tests;
 
+// begin-snippet: previousNamesEnumValue
 public enum Status
 {
     FullTime,
     PartTime,
+
+    // Renamed from 'Freelancer'; enum value names ride the wire as constants, so clients generated
+    // before the rename keep resolving.
+    [PreviousNames("Freelancer")]
     Contractor
 }
+// end-snippet
 
 [Queryable]
 public class Department
@@ -21,7 +27,12 @@ public class Department
 public class Employee
 {
     public int Id { get; set; }
+
+    // begin-snippet: previousNamesMember
+    // Renamed from 'FullName'; the previous name still resolves for clients generated before it.
+    [PreviousNames("FullName")]
     public string Name { get; set; } = "";
+    // end-snippet
     public Status Status { get; set; }
     public bool Active { get; set; }
 
@@ -71,10 +82,12 @@ public class Order
 }
 
 /// <summary>
-/// Carries its row policy via the [ReturnableWith] attribute rather than a programmatic AddPolicy,
-/// exercising the attribute-discovery branch of Schema.ResolvePolicy.
+/// Was exposed as 'Issue' before the CLR type was renamed. Carries its row policy via the
+/// [ReturnableWith] attribute rather than a programmatic AddPolicy, exercising the
+/// attribute-discovery branch of Schema.ResolvePolicy.
 /// </summary>
 [Queryable]
+[PreviousNames("Issue")]
 [ReturnableWith(typeof(OpenTicketsOnlyPolicy))]
 public class Ticket
 {
@@ -86,9 +99,11 @@ public class Ticket
 // begin-snippet: namedSource
 /// <summary>
 /// Exposed to clients as 'Region', so the CLR type can be renamed without changing the wire
-/// contract. Has no DbSet — nothing queries it; it exists to pin the naming behaviour.
+/// contract. Adopting Name was itself a wire rename — it had been exposed as 'SalesRegion' — so the
+/// old name is carried as a previous name. Has no DbSet; it exists to pin the naming behaviour.
 /// </summary>
 [Queryable(Name = "Region")]
+[PreviousNames("SalesRegion")]
 public class SalesRegion
 {
     public int Id { get; set; }

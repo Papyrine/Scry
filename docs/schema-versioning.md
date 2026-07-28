@@ -46,6 +46,8 @@ No column is "correct" — the table is a map of what each position optimizes fo
 
 Scry's client is **generated and type-safe** against a specific model surface, so the query schema is deliberately *not* versioned in parallel — there is one surface at a time, and keeping several live would defeat the point. Instead Scry takes the **drift-detection** position: the wire *format* is versioned and fails closed (below), while the *model* surface is unversioned but stamped, so a deployed client detects drift early and updates itself rather than discovering the problem as a failed query. That keeps deployment cadence high and technical debt low, and accepts that a breaking model change requires clients to regenerate — which the stamp makes a graceful reload rather than a broken page.
 
+Renames are the one breaking change with a built-in soft landing. `[PreviousNames]` ([Annotations](annotations.md#renaming)) keeps the server accepting the name a source, member, or enum value was previously exposed under, so a deployed client keeps querying while it picks up a regenerated one. Previous names stay out of the stamp, so the rename still registers as drift — they buy a migration window, not silence — and they are meant to be pruned once clients have refreshed, which is what keeps this short of the *additive-only* column above.
+
 
 ## The two version axes
 

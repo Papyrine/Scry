@@ -11,6 +11,7 @@ The model is **default-deny**: a type that carries none of the opt-in attributes
 | `[QueryablePoco]` | class, struct | Opts a non-persisted POCO into client querying; the server supplies the data. |
 | `[QueryableComplex]` | class, struct | Opts an EF complex type (e.g. a JSON-mapped value object) in as a traversable member type, not a root source. |
 | `[QueryIgnore]` | property, field | Excludes a member from an opted-in type. |
+| `[PreviousNames("...")]` | class, struct, property, field | Keeps accepting the names a source, member, or enum value used to be exposed under. |
 | `[ReturnableWith(typeof(TPolicy))]` | class, struct | Attaches a server-side row policy. |
 
 
@@ -51,21 +52,25 @@ If the type also carries EF Core's `[Keyless]`, Scry classifies it as a view rat
 
 The source name is part of the **wire contract**. Renaming the CLR type would otherwise change the `root` of every request and break already-deployed clients, so all three opt-in attributes take a `Name` that decouples the two:
 
+`Name` pins the wire name against CLR renames. It does not help when the **wire name itself** has to change — see [Renaming](#renaming) for that.
+
 <!-- snippet: namedSource -->
 <a id='snippet-namedSource'></a>
 ```cs
 /// <summary>
 /// Exposed to clients as 'Region', so the CLR type can be renamed without changing the wire
-/// contract. Has no DbSet — nothing queries it; it exists to pin the naming behaviour.
+/// contract. Adopting Name was itself a wire rename — it had been exposed as 'SalesRegion' — so the
+/// old name is carried as a previous name. Has no DbSet; it exists to pin the naming behaviour.
 /// </summary>
 [Queryable(Name = "Region")]
+[PreviousNames("SalesRegion")]
 public class SalesRegion
 {
     public int Id { get; set; }
     public string Name { get; set; } = "";
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L86-L97' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSource' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L99-L112' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSource' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The generated entry point exposes the configured name, while the **model class name stays derived from the CLR type**:
@@ -140,6 +145,63 @@ Details:
 - A blank or whitespace-only `Name` is treated as unset and falls back to the type name.
 - Names are compared with ordinal case sensitivity.
 - Two sources resolving to the same name is an error on both sides: the generator reports `SCRY002` and emits nothing, and the server throws `Duplicate queryable source name '...'` at startup. Note that this is reachable without `Name` too — two same-named types in different namespaces collide the same way.
+
+
+## Renaming
+
+Three things are named on the wire, and renaming any of them breaks a client that has not been regenerated:
+
+| Wire name | Appears as | Renamed by |
+| --- | --- | --- |
+| Source | `root` of a request | renaming the CLR type, or changing/adopting/dropping `Name` |
+| Member | segments of a member path, and projection keys | renaming the property |
+| Enum value | an enum constant's value | renaming the enum member |
+
+`[PreviousNames]` gives each of them a migration window: the server keeps resolving the old name, so already-deployed clients keep working while they pick up a regenerated one.
+
+On a source it sits alongside `Name` — the [example above](#naming-a-source) had been exposed as `SalesRegion` before it adopted `Name = "Region"`, so it carries the old name.
+
+On a member:
+
+<!-- snippet: previousNamesMember -->
+<a id='snippet-previousNamesMember'></a>
+```cs
+// Renamed from 'FullName'; the previous name still resolves for clients generated before it.
+[PreviousNames("FullName")]
+public string Name { get; set; } = "";
+```
+<sup><a href='/src/Scry.Tests/TestModel.cs#L31-L35' title='Snippet source file'>snippet source</a> | <a href='#snippet-previousNamesMember' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+On an enum value:
+
+<!-- snippet: previousNamesEnumValue -->
+<a id='snippet-previousNamesEnumValue'></a>
+```cs
+public enum Status
+{
+    FullTime,
+    PartTime,
+
+    // Renamed from 'Freelancer'; enum value names ride the wire as constants, so clients generated
+    // before the rename keep resolving.
+    [PreviousNames("Freelancer")]
+    Contractor
+}
+```
+<sup><a href='/src/Scry.Tests/TestModel.cs#L5-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-previousNamesEnumValue' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+It is deliberately **server-side only**. Generated clients never emit a previous name, and previous names are excluded from introspection and from the [schema stamp](wire-format.md#schema-stamp) — so a rename still changes the stamp and still registers as drift. That is the point: the stale client is detected and prompted to reload ([Schema versioning](schema-versioning.md#detecting-a-stale-client)) while its in-flight queries keep succeeding, instead of failing first and being diagnosed second.
+
+Entries are meant to be **pruned** once deployed clients have refreshed. Keeping them indefinitely accumulates exactly the compatibility debt the one-surface-at-a-time design avoids.
+
+Details:
+
+- Previous names are the previous *wire* names, not previous CLR names. A CLR type renamed behind a fixed `Name` never changed its wire name and needs no entry.
+- Compared with ordinal case sensitivity, like every other name on the wire.
+- The server throws at startup for a previous name that is blank, that collides with a live source/member/enum value, that duplicates another previous name in the same scope, or that is applied to something with no wire name of its own — a `[QueryableComplex]` type, a `[QueryIgnore]`d property, or a type with no opt-in attribute.
+- A renamed enum value with no matching entry is rejected as an invalid query (`'X' is not a value of enum 'Y'`), not reported as a server fault.
 
 
 ## `[QueryableView]`
@@ -265,7 +327,7 @@ public class Address
     public string Zip { get; set; } = "";
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L48-L58' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableComplex' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L59-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableComplex' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 paired with the usual EF mapping on the owning entity:
@@ -277,7 +339,7 @@ modelBuilder.Entity<Employee>()
     .ComplexProperty(_ => _.Address)
     .ToJson();
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L178-L182' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L193-L197' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A complex type is **not a root source**: it produces no property on the generated `ScryQuery` and no server resolver. It is reachable only by traversing into it from an opted-in entity/view/POCO — for example `Employee.Address.City`. Its members follow the same exposure rules as any other type (`[QueryIgnore]` still hides `Zip`), and the traversal is bounded by `MaxNavigationDepth` like any navigation. How EF stores the type — a JSON column or separate columns — is transparent to Scry; the server rebinds the member path onto EF, which translates it either way.

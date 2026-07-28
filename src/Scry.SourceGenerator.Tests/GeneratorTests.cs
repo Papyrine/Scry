@@ -141,7 +141,61 @@ public class GeneratorTests
         return VerifyGenerated(model);
     }
 
-    static Task VerifyGenerated(string modelSource)
+    // The generator must ignore [PreviousNames] outright. A previous name is a server-side
+    // compatibility affordance; emitting one — or letting it reach the schema stamp — would put a name
+    // into the client that the current surface does not have, and would stop a rename registering as
+    // drift. Identical output for the annotated and unannotated model is the check.
+    [Test]
+    public void PreviousNamesDoNotAffectGeneratedOutput()
+    {
+        const string bare = """
+            using Scry;
+
+            namespace Sample.Model;
+
+            public enum Status { FullTime, Contractor }
+
+            [Queryable]
+            public class Employee
+            {
+                public int Id { get; set; }
+                public string Name { get; set; } = "";
+                public Status Status { get; set; }
+            }
+            """;
+
+        const string annotated = """
+            using Scry;
+
+            namespace Sample.Model;
+
+            public enum Status { FullTime, [PreviousNames("Freelancer")] Contractor }
+
+            [Queryable]
+            [PreviousNames("Staff")]
+            public class Employee
+            {
+                public int Id { get; set; }
+                [PreviousNames("FullName")] public string Name { get; set; } = "";
+                public Status Status { get; set; }
+            }
+            """;
+
+        Assert.That(GeneratedSources(annotated), Is.EqualTo(GeneratedSources(bare)));
+    }
+
+    static List<string> GeneratedSources(string modelSource) =>
+        RunGenerator(modelSource)
+            .GetRunResult()
+            .Results
+            .SelectMany(_ => _.GeneratedSources)
+            .Select(_ => _.SourceText.ToString())
+            .ToList();
+
+    static Task VerifyGenerated(string modelSource) =>
+        Verify(RunGenerator(modelSource));
+
+    static GeneratorDriver RunGenerator(string modelSource)
     {
         var references = ReferenceAssemblies();
         var modelCompilation = CSharpCompilation.Create(
@@ -171,8 +225,7 @@ public class GeneratorTests
                     ["build_property.ScryModelDll"] = dllPath
                 }));
 
-        driver = driver.RunGenerators(consumer);
-        return Verify(driver);
+        return driver.RunGenerators(consumer);
     }
 
     static List<MetadataReference> ReferenceAssemblies()

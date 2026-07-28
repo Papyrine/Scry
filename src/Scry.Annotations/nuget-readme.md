@@ -6,6 +6,7 @@ Allow-list attributes for [Scry](https://github.com/Papyrine/Scry). Apply them t
 - `[QueryableView]` — opt a keyless EF view into querying.
 - `[QueryablePoco]` — opt a non-persisted POCO into querying.
 - `[QueryIgnore]` — exclude a property from an opted-in type.
+- `[PreviousNames("...")]` — keep accepting the names a source, member, or enum value was previously exposed under.
 - `[ReturnableWith(typeof(Policy))]` — attach a server-side row/instance policy.
 
 <!-- snippet: queryableEntity -->

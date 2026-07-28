@@ -252,7 +252,7 @@ sealed class ExpressionBuilder(Schema schema)
             var underlying = Nullable.GetUnderlyingType(expression.Type);
             var ownerType = underlying ?? expression.Type;
             if (!schema.TryGetType(ownerType, out var meta) ||
-                !meta.Members.TryGetValue(segment, out var member))
+                !meta.TryGetMember(segment, out var member))
             {
                 throw new ScryValidationException(
                     $"Property '{segment}' is not allow-listed on '{ownerType.Name}'.");
@@ -346,7 +346,7 @@ sealed class ExpressionBuilder(Schema schema)
         };
     }
 
-    static Expression BuildConstant(ConstNode constant, Type? expected)
+    Expression BuildConstant(ConstNode constant, Type? expected)
     {
         var target = expected ?? TagToType(constant.Tag);
         var underlying = Nullable.GetUnderlyingType(target) ?? target;
@@ -499,11 +499,22 @@ sealed class ExpressionBuilder(Schema schema)
             _ => typeof(string)
         };
 
-    static object ParseValue(string value, Type underlying)
+    object ParseValue(string value, Type underlying)
     {
         if (underlying.IsEnum)
         {
-            return Enum.Parse(underlying, value);
+            var resolved = schema.ResolveEnumValue(underlying, value);
+            try
+            {
+                return Enum.Parse(underlying, resolved);
+            }
+            catch (ArgumentException)
+            {
+                // A value the client knows and the server does not — a stale client after the value was
+                // renamed (without a [PreviousNames] entry) or removed. Report it as a rejected query
+                // rather than letting it surface as a server fault.
+                throw new ScryValidationException($"'{value}' is not a value of enum '{underlying.Name}'.");
+            }
         }
 
         var culture = CultureInfo.InvariantCulture;
