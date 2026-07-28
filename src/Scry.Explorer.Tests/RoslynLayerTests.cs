@@ -164,6 +164,8 @@ public class RoslynLayerTests
         Assert.That(source, Does.Contain("public sealed class EmployeeQueryModel"));
         Assert.That(source, Does.Contain("public string Name { get; init; } = null!;"));
         Assert.That(source, Does.Contain("IQueryable<EmployeeQueryModel> Employee"));
-        Assert.That(source, Does.Contain("client.Source<EmployeeQueryModel>(\"Employee\")"));
+        // The scalar member list mirrors the generator's entry point, so a snippet without a Select
+        // produces the same wire request a generated client would.
+        Assert.That(source, Does.Contain("client.Source<EmployeeQueryModel>(\"Employee\", [\"Name\", \"Active\", \"Status\"])"));
     }
 }

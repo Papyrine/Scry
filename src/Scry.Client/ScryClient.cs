@@ -22,9 +22,13 @@ public sealed class ScryClient
     public static ScryClient ForHttp(HttpClient http, string endpoint) =>
         new(http, endpoint);
 
-    /// <summary>Returns an <see cref="IQueryable{T}"/> backed by the named allow-listed source.</summary>
-    public IQueryable<T> Source<T>(string name) =>
-        new CaptureQueryable<T>(new(this, name));
+    /// <summary>
+    /// Returns an <see cref="IQueryable{T}"/> backed by the named allow-listed source.
+    /// <paramref name="defaultProjection"/> is the source's scalar member names, passed by the
+    /// generated entry point so a query without a <c>Select</c> still projects explicitly.
+    /// </summary>
+    public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjection = null) =>
+        new CaptureQueryable<T>(new(this, name, defaultProjection));
     // end-snippet
 
     /// <summary>

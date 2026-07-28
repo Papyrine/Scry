@@ -129,7 +129,7 @@ static class MetadataModelReader
             case NamedDecoded navigation
                 when modelByFullName.TryGetValue(navigation.FullName, out var modelName):
                 // Reference navigation to another queryable type: nullable, no initializer.
-                return new("", $"{modelName}?", NeedsNullDefault: false);
+                return new("", $"{modelName}?", NeedsNullDefault: false, IsNavigation: true);
 
             default:
                 return null;

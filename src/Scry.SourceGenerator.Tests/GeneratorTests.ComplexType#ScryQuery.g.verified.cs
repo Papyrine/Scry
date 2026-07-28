@@ -21,5 +21,5 @@ public sealed class ScryQuery
     }
 
     public global::System.Linq.IQueryable<EmployeeQueryModel> Employee =>
-        client.Source<EmployeeQueryModel>("Employee");
+        client.Source<EmployeeQueryModel>("Employee", ["Id", "Name"]);
 }

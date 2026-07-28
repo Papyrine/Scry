@@ -161,12 +161,37 @@ public static class ScryQueryableExtensions
         }
 
         var pipeline = new List<QueryOp>(QueryTranslator.Translate(source.Expression));
+        AddDefaultProjection(pipeline, provider, terminal);
         if (terminal is not null)
         {
             pipeline.Add(terminal);
         }
 
         return QueryRequest.Create(provider.Root, pipeline, provider.Client.SchemaStamp);
+    }
+
+    /// <summary>
+    /// Appends a projection over the source's scalar members when the query wrote no <c>Select</c>.
+    /// Without it the server picks the response keys from its own model, which a client generated
+    /// before a member rename cannot read; naming them here makes the response keys the client's own.
+    /// </summary>
+    static void AddDefaultProjection(List<QueryOp> pipeline, QueryProvider provider, QueryOp? terminal)
+    {
+        // A grouped query's Select is the aggregate projection and is mandatory; Count/Any return a
+        // scalar and project nothing. Neither wants a member projection bolted on. A terminal carrying
+        // its own predicate is rejected server-side once a Select is present, so it falls back to the
+        // server's default projection rather than being made invalid.
+        if (provider.DefaultProjection is not { Count: > 0 } members ||
+            terminal is CountOp or AnyOp ||
+            terminal is FirstOp { Predicate: not null } or SingleOp { Predicate: not null } ||
+            pipeline.Any(_ => _ is SelectOp or GroupByOp))
+        {
+            return;
+        }
+
+        pipeline.Add(
+            new SelectOp(
+                new([..members.Select(_ => new ProjectionMember(_, new NodeValue(new MemberNode([_]))))])));
     }
 
     static Task<QueryResponse> Send<T>(IQueryable<T> source, QueryOp? terminal, Cancel cancel)

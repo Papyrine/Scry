@@ -21,14 +21,14 @@ public sealed class ScryQuery
     }
 
     public global::System.Linq.IQueryable<EmployeeQueryModel> Staff =>
-        client.Source<EmployeeQueryModel>("Staff");
+        client.Source<EmployeeQueryModel>("Staff", ["Id", "Name"]);
 
     public global::System.Linq.IQueryable<EmployeeSummaryQueryModel> Headcount =>
-        client.Source<EmployeeSummaryQueryModel>("Headcount");
+        client.Source<EmployeeSummaryQueryModel>("Headcount", ["Total"]);
 
     public global::System.Linq.IQueryable<HolidayQueryModel> PublicHoliday =>
-        client.Source<HolidayQueryModel>("PublicHoliday");
+        client.Source<HolidayQueryModel>("PublicHoliday", ["Name"]);
 
     public global::System.Linq.IQueryable<OrderQueryModel> Order =>
-        client.Source<OrderQueryModel>("Order");
+        client.Source<OrderQueryModel>("Order", ["Amount"]);
 }

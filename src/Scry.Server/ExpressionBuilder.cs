@@ -143,7 +143,11 @@ sealed class ExpressionBuilder(Schema schema)
         return greater ? Expression.GreaterThan(left, right) : Expression.LessThan(left, right);
     }
 
-    /// <summary>Builds a default projection of every allow-listed scalar member of the source.</summary>
+    /// <summary>
+    /// Builds a default projection of every allow-listed scalar member of the source. Only reached for
+    /// a request that named no members: a generated client always sends an explicit projection, so its
+    /// response keys are its own names rather than the server's.
+    /// </summary>
     public ProjectionPlan BuildDefaultProjection(Type type)
     {
         if (!schema.TryGetType(type, out var meta))

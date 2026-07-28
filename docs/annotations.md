@@ -101,16 +101,16 @@ public sealed class ScryQuery
     }
 
     public global::System.Linq.IQueryable<EmployeeQueryModel> Staff =>
-        client.Source<EmployeeQueryModel>("Staff");
+        client.Source<EmployeeQueryModel>("Staff", ["Id", "Name"]);
 
     public global::System.Linq.IQueryable<EmployeeSummaryQueryModel> Headcount =>
-        client.Source<EmployeeSummaryQueryModel>("Headcount");
+        client.Source<EmployeeSummaryQueryModel>("Headcount", ["Total"]);
 
     public global::System.Linq.IQueryable<HolidayQueryModel> PublicHoliday =>
-        client.Source<HolidayQueryModel>("PublicHoliday");
+        client.Source<HolidayQueryModel>("PublicHoliday", ["Name"]);
 
     public global::System.Linq.IQueryable<OrderQueryModel> Order =>
-        client.Source<OrderQueryModel>("Order");
+        client.Source<OrderQueryModel>("Order", ["Amount"]);
 }
 ```
 <sup><a href='/src/Scry.SourceGenerator.Tests/GeneratorTests.NamedSources%23ScryQuery.g.verified.cs#L1-L34' title='Snippet source file'>snippet source</a> | <a href='#snippet-GeneratorTests.NamedSources#ScryQuery.g.verified.cs' title='Start of snippet'>anchor</a></sup>
@@ -193,6 +193,17 @@ public enum Status
 <!-- endSnippet -->
 
 It is deliberately **server-side only**. Generated clients never emit a previous name, and previous names are excluded from introspection and from the [schema stamp](wire-format.md#schema-stamp) — so a rename still changes the stamp and still registers as drift. That is the point: the stale client is detected and prompted to reload ([Schema versioning](schema-versioning.md#detecting-a-stale-client)) while its in-flight queries keep succeeding, instead of failing first and being diagnosed second.
+
+
+### The response side
+
+Accepting an old name is only half of it — the response has to come back in keys the old client can read. Response keys always come from the **request's** projection, and a generated client always sends one: the entry point passes its scalar member names to `Source` (visible in the [generated entry point above](#naming-a-source)), so a query that writes no `Select` still projects them explicitly.
+
+The client therefore names its own columns on every request, and the server echoes those names back verbatim — it never substitutes its own. A member rename round-trips without the server having to work out which vintage of client it is talking to.
+
+The server's own default projection remains for a request that names no members — a hand-built one, or any non-generated caller. Those have no fixed model to disappoint, so they get the current names.
+
+**Enum values are the exception.** A renamed value in a *result* is serialized under its current name, and unlike a key a value cannot be written under two names. A client generated before the rename will fail to deserialize it. So `[PreviousNames]` on an enum value covers the request direction — filtering by the old name — but not receiving rows that contain it. A renamed enum value appearing in query results is a hard break for deployed clients; the stamp still flags it, so they are prompted to reload.
 
 Entries are meant to be **pruned** once deployed clients have refreshed. Keeping them indefinitely accumulates exactly the compatibility debt the one-surface-at-a-time design avoids.
 

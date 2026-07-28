@@ -78,7 +78,16 @@ public static class ModelSynthesizer
                 """);
             foreach (var source in introspection.Sources)
             {
-                builder.AppendLine($"    public global::System.Linq.IQueryable<{source.Model}> {source.Name} => client.Source<{source.Model}>(\"{source.Name}\");");
+                // Mirrors the generator's entry point, scalar member list included, so a snippet without
+                // a Select produces the same wire request a generated client would.
+                var members = string.Join(
+                    ", ",
+                    introspection.Types
+                        .Single(_ => _.Model == source.Model)
+                        .Members
+                        .Where(_ => !_.IsNavigation)
+                        .Select(_ => $"\"{_.Name}\""));
+                builder.AppendLine($"    public global::System.Linq.IQueryable<{source.Model}> {source.Name} => client.Source<{source.Model}>(\"{source.Name}\", [{members}]);");
             }
         }
         else

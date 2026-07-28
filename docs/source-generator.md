@@ -204,17 +204,19 @@ public sealed class ScryQuery
     }
 
     public global::System.Linq.IQueryable<EmployeeQueryModel> Employee =>
-        client.Source<EmployeeQueryModel>("Employee");
+        client.Source<EmployeeQueryModel>("Employee", ["Id", "Name", "Status", "Active", "ManagerId", "Avatar"]);
 
     public global::System.Linq.IQueryable<EmployeeSummaryQueryModel> EmployeeSummary =>
-        client.Source<EmployeeSummaryQueryModel>("EmployeeSummary");
+        client.Source<EmployeeSummaryQueryModel>("EmployeeSummary", ["Department", "Headcount"]);
 
     public global::System.Linq.IQueryable<HolidayQueryModel> Holiday =>
-        client.Source<HolidayQueryModel>("Holiday");
+        client.Source<HolidayQueryModel>("Holiday", ["Name", "Date"]);
 }
 ```
 <sup><a href='/src/Scry.SourceGenerator.Tests/GeneratorTests.EntitiesViewPocoAndEnum%23ScryQuery.g.verified.cs#L1-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-GeneratorTests.EntitiesViewPocoAndEnum#ScryQuery.g.verified.cs' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
+
+Each source passes its **scalar member names** to `Source`. That is what a query with no `Select` projects, so the client names its own response keys rather than leaving the server to pick them — which is what lets a server-side member rename round-trip to an already-deployed client ([Renaming](annotations.md#renaming)). Navigations are excluded, matching the server's own default projection.
 
 Register it alongside the client:
 

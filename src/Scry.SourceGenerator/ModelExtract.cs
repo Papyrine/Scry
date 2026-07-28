@@ -19,7 +19,11 @@ record struct SourceInfo(
     EquatableArray<PropertyInfo> Properties);
 
 /// <summary>An allow-listed property and the C# type the client DTO should expose.</summary>
-record struct PropertyInfo(string Name, string TypeDisplay, bool NeedsNullDefault);
+/// <param name="IsNavigation">
+/// True for a reference navigation to another query model. Excluded from the default projection the
+/// entry point emits, which lists scalars only — matching the server's own default projection.
+/// </param>
+record struct PropertyInfo(string Name, string TypeDisplay, bool NeedsNullDefault, bool IsNavigation = false);
 
 /// <summary>An enum referenced by a model, re-emitted so the client needs no server reference.</summary>
 record struct EnumInfo(string Name, EquatableArray<string> Members);

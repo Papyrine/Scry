@@ -1,0 +1,47 @@
+﻿{
+  Version: 1,
+  Root: Employee,
+  Pipeline: [
+    {
+      Predicate: {
+        Path: [
+          Active
+        ]
+      }
+    },
+    {
+      Key: {
+        Path: [
+          Name
+        ]
+      },
+      Descending: false
+    },
+    {
+      Projection: {
+        Members: [
+          {
+            Name: Name,
+            Value: {
+              Node: {
+                Path: [
+                  Name
+                ]
+              }
+            }
+          },
+          {
+            Name: Status,
+            Value: {
+              Node: {
+                Path: [
+                  Status
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

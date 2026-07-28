@@ -47,13 +47,13 @@ public sealed class ScryQuery
     }
 
     public global::System.Linq.IQueryable<EmployeeQueryModel> Employee =>
-        client.Source<EmployeeQueryModel>("Employee");
+        client.Source<EmployeeQueryModel>("Employee", ["Id", "Name", "Status", "Active", "ManagerId", "Avatar"]);
 
     public global::System.Linq.IQueryable<EmployeeSummaryQueryModel> EmployeeSummary =>
-        client.Source<EmployeeSummaryQueryModel>("EmployeeSummary");
+        client.Source<EmployeeSummaryQueryModel>("EmployeeSummary", ["Department", "Headcount"]);
 
     public global::System.Linq.IQueryable<HolidayQueryModel> Holiday =>
-        client.Source<HolidayQueryModel>("Holiday");
+        client.Source<HolidayQueryModel>("Holiday", ["Name", "Date"]);
 }
 ```
 <sup><a href='/src/Scry.SourceGenerator.Tests/GeneratorTests.EntitiesViewPocoAndEnum%23ScryQuery.g.verified.cs#L1-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-GeneratorTests.EntitiesViewPocoAndEnum#ScryQuery.g.verified.cs' title='Start of snippet'>anchor</a></sup>
@@ -74,11 +74,15 @@ A source can also be reached by name, which is what the generated code does unde
 public static ScryClient ForHttp(HttpClient http, string endpoint) =>
     new(http, endpoint);
 
-/// <summary>Returns an <see cref="IQueryable{T}"/> backed by the named allow-listed source.</summary>
-public IQueryable<T> Source<T>(string name) =>
-    new CaptureQueryable<T>(new(this, name));
+/// <summary>
+/// Returns an <see cref="IQueryable{T}"/> backed by the named allow-listed source.
+/// <paramref name="defaultProjection"/> is the source's scalar member names, passed by the
+/// generated entry point so a query without a <c>Select</c> still projects explicitly.
+/// </summary>
+public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjection = null) =>
+    new CaptureQueryable<T>(new(this, name, defaultProjection));
 ```
-<sup><a href='/src/Scry.Client/ScryClient.cs#L20-L28' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Client/ScryClient.cs#L20-L32' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -336,7 +340,9 @@ Every projection leaf must resolve to an allow-listed **scalar**. A navigation c
 
 ### Without a `Select`
 
-If no projection is supplied, the server returns every allow-listed **scalar** member of the source. Navigations are excluded, and so is anything `[QueryIgnore]`d — which is why the default projection of `Employee` never contains `Salary`.
+A query with no `Select` returns every allow-listed **scalar** member of the source. Navigations are excluded, and so is anything `[QueryIgnore]`d — which is why the default projection of `Employee` never contains `Salary`.
+
+The projection is still explicit on the wire. The generated entry point knows those scalar members, so the client fills them in rather than leaving the server to choose, and the response comes back keyed by the names the client was generated with — which is what makes a member rename survivable ([Renaming](annotations.md#renaming)). A request that genuinely names no members, such as a hand-built one, falls back to the server picking them.
 
 
 ### Nested result objects

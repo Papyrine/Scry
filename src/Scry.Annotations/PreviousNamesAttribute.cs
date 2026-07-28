@@ -11,6 +11,12 @@ namespace Scry;
 /// dropping) <c>Name</c> does.
 /// </para>
 /// <para>
+/// On an enum value this covers the request direction only. A renamed value appearing in a
+/// <em>result</em> is serialized under its current name — one value cannot be written under two names
+/// — so a client generated before the rename can filter by the old name but cannot deserialize a row
+/// carrying it.
+/// </para>
+/// <para>
 /// Entries are meant to be pruned once deployed clients have refreshed — keeping them indefinitely
 /// accumulates exactly the compatibility debt the stamp is designed to avoid.
 /// </para>

@@ -184,11 +184,18 @@ public class ScryGenerator :
                 continue;
             }
 
+            // The scalar members ride along so a query that writes no Select still projects them by
+            // name. That keeps the response keyed by the names this client was generated with, rather
+            // than whatever the server's current model calls them.
+            var members = string.Join(
+                ", ",
+                source.Properties.Where(_ => !_.IsNavigation).Select(_ => $"\"{_.Name}\""));
+
             builder.AppendLine();
             builder.AppendLine(
                 $"""
                 public global::System.Linq.IQueryable<{source.ModelName}> {source.SourceName} =>
-                    client.Source<{source.ModelName}>("{source.SourceName}");
+                    client.Source<{source.ModelName}>("{source.SourceName}", [{members}]);
             """);
         }
 
