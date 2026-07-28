@@ -12,5 +12,6 @@ global using NUnit.Framework;
 global using Scry;
 global using Scry.Client;
 global using Scry.Generated;
+global using Scry.Wire;
 global using VerifyTests.DiffPlex;
 global using static VerifyNUnit.Verifier;

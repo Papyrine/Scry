@@ -128,3 +128,37 @@ Eventually a drifted client's query does fail — a member it still references w
 - `ScryClient` surfaces such failures as **`ScryStaleClientException`** — the same exception thrown client-side when a result carries an enum value name the generated model does not have. One catch covers every failure whose remedy is a newer client.
 
 The two channels are complementary, and both fire on a failed query — the stamp header rides on rejections too, so `SchemaStaleDetected` has already been raised by the time the exception surfaces. An app with the banner above therefore needs no extra handling: the failed query throws, and the reload prompt is already on screen explaining why. Handle the exception where a better experience is possible — retrying the interrupted operation after the reload, say — not because the signal would otherwise be lost.
+
+The [sample](sample.md)'s Index page distinguishes the stale failure from an application error where its queries run:
+
+<!-- snippet: handleStaleClient -->
+<a id='snippet-handleStaleClient'></a>
+```cs
+// The query failed because this deployed app was generated against a model surface the server
+// no longer has. SchemaStaleDetected has already fired on the same response, so the reload
+// banner is showing; render a directed placeholder for the data that could not load, rather
+// than presenting the failure as an application error.
+catch (ScryStaleClientException)
+{
+    stale = true;
+}
+```
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L71-L80' title='Snippet source file'>snippet source</a> | <a href='#snippet-handleStaleClient' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+The stale branch renders a directed placeholder in place of the data — the fix is a reload, and the banner offering one is already visible above:
+
+<!-- snippet: staleDataMarkup -->
+<a id='snippet-staleDataMarkup'></a>
+```razor
+@if (stale)
+{
+    <p class="stale" role="alert">
+        This page needs a newer version of the app. Use the reload prompt above to update.
+    </p>
+}
+```
+<sup><a href='/samples/Sample.Client/Pages/Index.razor#L18-L25' title='Snippet source file'>snippet source</a> | <a href='#snippet-staleDataMarkup' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+The generic `catch` stays: a failure without the stale marker is an ordinary error and should keep looking like one. Order matters — `ScryStaleClientException` first, since the general handler would otherwise swallow it.

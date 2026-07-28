@@ -26,6 +26,7 @@ public partial class Index
     List<EmployeeRow>? fullTimers;
     List<EmployeeCard>? cards;
     string? error;
+    bool stale;
 
     protected override async Task OnInitializedAsync()
     {
@@ -67,6 +68,16 @@ public partial class Index
                 .ToListAsync();
             // end-snippet
         }
+        // begin-snippet: handleStaleClient
+        // The query failed because this deployed app was generated against a model surface the server
+        // no longer has. SchemaStaleDetected has already fired on the same response, so the reload
+        // banner is showing; render a directed placeholder for the data that could not load, rather
+        // than presenting the failure as an application error.
+        catch (ScryStaleClientException)
+        {
+            stale = true;
+        }
+        // end-snippet
         catch (Exception exception)
         {
             error = exception.Message;

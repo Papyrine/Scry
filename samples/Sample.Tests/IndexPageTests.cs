@@ -23,6 +23,30 @@ public class IndexPageTests
         await Verify(page);
     }
 
+    // The page's stale branch: a query failing with ScryStaleClientException (the server attributed
+    // the failure to this client's schema stamp, or a result carried an enum value the generated
+    // model does not have) renders the directed reload prompt instead of the generic error. The
+    // custom transport stands in for the HTTP path, whose classification is covered by the
+    // integration tests.
+    [Test]
+    public async Task RendersStalePromptWhenQueryFailsStale()
+    {
+        await using var context = new BunitContext();
+        context.Services.AddSingleton(new ScryClient((_, _) =>
+            Task.FromException<QueryResponse>(new ScryStaleClientException(
+                "Property 'Renamed' is not allow-listed on 'Employee'. The request's schema stamp does " +
+                "not match this server's model, so the client was generated against a different model " +
+                "surface — regenerate the client."))));
+        context.Services.AddSingleton<ScryQuery>();
+
+        var page = context.Render<IndexPage>();
+        await page.WaitForStateAsync(
+            () => page.FindAll("p.stale").Count == 1,
+            TimeSpan.FromSeconds(10));
+
+        await Verify(page);
+    }
+
     [Test]
     public async Task RendersErrorWhenServerRejectsQuery()
     {

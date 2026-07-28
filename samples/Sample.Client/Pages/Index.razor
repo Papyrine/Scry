@@ -15,6 +15,16 @@
     <p class="error" role="alert">@error</p>
 }
 
+<!-- begin-snippet: staleDataMarkup -->
+@if (stale)
+{
+    <p class="stale" role="alert">
+        This page needs a newer version of the app. Use the reload prompt above to update.
+    </p>
+}
+<!-- end-snippet -->
+
+
 <h2>Active employees</h2>
 @if (employees is null)
 {

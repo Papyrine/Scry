@@ -11,7 +11,7 @@ employees = await Query.Employee
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L34-L40' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L35-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The supported surface is deliberately closed. Anything outside it fails fast with a clear `NotSupportedException` at translation time — before a request is ever sent.
@@ -305,7 +305,7 @@ fullTimers = await Query.Employee
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L49-L56' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L50-L57' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `status` and `top` are locals; the translator compiles and invokes those sub-expressions, then emits their values. Calls to custom methods are fine on this path as long as they do not touch the query parameter — `.Where(_ => _.Name == BuildName())` sends the *result* of `BuildName()`.
@@ -360,7 +360,7 @@ cards = await Query.Employee
     .Select(_ => new EmployeeCard(_.Name, new DepartmentCard(_.Department!.Name)))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L60-L68' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientNestedProjection' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L61-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientNestedProjection' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The client factors the shared navigation (`_.Department`) out of the nested members and emits a `NestedValue` in the wire AST; the server descends the navigation and shapes the leaves under it, producing nested JSON:
@@ -411,7 +411,7 @@ regions = await Query.Order
     .Select(_ => new RegionSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L42-L47' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L43-L48' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: wireAggregates -->

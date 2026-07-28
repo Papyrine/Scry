@@ -36,7 +36,7 @@ employees = await Query.Employee
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L34-L40' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L35-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Docs: [Getting started](https://github.com/Papyrine/Scry/blob/main/docs/getting-started.md) · [Writing queries](https://github.com/Papyrine/Scry/blob/main/docs/querying.md) · [Source generator](https://github.com/Papyrine/Scry/blob/main/docs/source-generator.md)
