@@ -104,6 +104,8 @@ Any other LINQ operator — `Join`, `Distinct`, `SelectMany`, `Union`, `Last`, `
 LINQ operator 'Join' is not supported by Scry.
 ```
 
+[LINQ coverage](linq-coverage.md) tracks the full supported/unsupported matrix against what EF Core can translate.
+
 Operators are applied left to right, exactly as written.
 
 
