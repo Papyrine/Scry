@@ -10,7 +10,6 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
-    <PackageReference Include="SponsorCheck" PrivateAssets="all" />
     <ProjectReference Include="..\Scry.Server\Scry.Server.csproj" />
     <None Include="nuget-readme.md" Pack="true" PackagePath="\" />
   </ItemGroup>

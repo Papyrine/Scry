@@ -13,7 +13,6 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Polyfill" PrivateAssets="all" />
     <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
-    <PackageReference Include="SponsorCheck" PrivateAssets="all" />
     <ProjectReference Include="..\Scry.Wire\Scry.Wire.csproj" />
     <ProjectReference Include="..\Scry.Annotations\Scry.Annotations.csproj" />
     <None Include="nuget-readme.md" Pack="true" PackagePath="\" />

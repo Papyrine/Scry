@@ -7,7 +7,6 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Polyfill" PrivateAssets="all" />
     <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
-    <PackageReference Include="SponsorCheck" PrivateAssets="all" />
     <ProjectReference Include="..\Scry.Wire\Scry.Wire.csproj" />
     <ProjectReference Include="..\Scry.SourceGenerator\Scry.SourceGenerator.csproj"
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
