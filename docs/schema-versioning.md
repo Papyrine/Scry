@@ -172,3 +172,20 @@ The stale branch renders a directed placeholder in place of the data — the fix
 <!-- endSnippet -->
 
 The generic `catch` stays: a failure without the stale marker is an ordinary error and should keep looking like one. Order matters — `ScryStaleClientException` first, since the general handler would otherwise swallow it.
+
+
+## What is not handled
+
+The table above is the set of changes a deployed client survives or is told about. This is its mirror — the changes that are **not** bridged, and why each is excluded by design rather than by omission. None is a bug to be fixed later; each is a place where the alternative was worse.
+
+| Change | What a deployed client sees | Why it is not bridged |
+| --- | --- | --- |
+| **Adding an enum value** that reaches results | `ScryStaleClientException` on the row carrying it | The [alias table](annotations.md#the-response-side) maps a renamed value to a name the client already has. A genuinely new value has no old name to map from, so there is nothing to translate. Additive on the server, breaking for old clients — the one asymmetry in the additive story. |
+| **Changing a scalar's representation** — `int` to `string`, say | *Nothing.* `Age > 30` keeps working, as a string comparison | The only scenario with no signal at all. Catching it would mean type-checking `ConstNode.Tag` against the member, but the tags are deliberately loose — `uint` and `ulong` ride the `String` tag — so a strict check would reject legitimate traffic. Ordering semantics change silently; treat a representation change as requiring a coordinated deploy. |
+| **Tightening a limit** — `MaxPageSize`, `MaxNavigationDepth`, … | The plain `400` the limit produces, with no drift signal | Limits are [server options](server.md#options), not schema, so they are correctly absent from the stamp. A reload would not help: the client's own code asks for the page size, so the remedy is an app change. Flagging it as drift would tell the user to do something that cannot fix it. |
+| **Reusing a retired name** for something else | Whatever now answers to that name — silently | Every other mistake here fails loudly. This one cannot: once an entry is pruned, nothing records that the name ever meant something else, so no startup check can catch it. See [pruning](annotations.md#renaming). |
+| **Removing a source, member, or enum value** | `ScryStaleClientException` | Not bridgeable *by definition* — the data is gone. It is in the handled table because it is detected and attributed, not because the client keeps working. |
+
+The first three share a shape worth naming: they are changes where the *meaning* moved rather than the *name*. Scry's compatibility machinery is a name-mapping layer — it can say "this used to be called that", and nothing more. A change that keeps a name but alters what it means is outside what any such layer can express, which is why the answer there is a coordinated deploy rather than a wider mechanism.
+
+For anything on this list, the [stamp](#the-two-version-axes) still changes, so `SchemaStaleDetected` still fires and the reload prompt still appears — the difference is that queries break before the user acts on it, rather than continuing to work while they decide.
