@@ -297,7 +297,7 @@ public enum AggregateFn
 {
   "projection": {
     "members": [
-      { "name": "Name", "value": { "$type": "expr", "expression": { "$type": "member", "path": ["Name"] } } }
+      { "name": "Name", "value": { "$type": "node", "node": { "$type": "member", "path": ["Name"] } } }
     ]
   }
 }
@@ -308,7 +308,7 @@ public enum AggregateFn
 ```cs
 /// <summary>The value of a projection member.</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
-[JsonDerivedType(typeof(NodeValue), "expr")]
+[JsonDerivedType(typeof(NodeValue), "node")]
 [JsonDerivedType(typeof(NestedValue), "nested")]
 public abstract record ProjectionValue;
 ```
@@ -317,7 +317,7 @@ public abstract record ProjectionValue;
 
 | `$type` | Payload | Produces |
 | --- | --- | --- |
-| `expr` | `expression: Node` | A scalar leaf, or an aggregate in a grouped select. |
+| `node` | `node: Node` | A scalar leaf, or an aggregate in a grouped select. |
 | `nested` | `path: string[]`, `projection: Projection` | A nested JSON object built from a navigation. |
 
 A projection must have at least one member. Nested projections are not allowed in a grouped select, and nesting depth is capped by `MaxNavigationDepth`.
