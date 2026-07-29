@@ -75,9 +75,7 @@ public sealed class ScryProcessor
         // matching stamp (or none) reports the plain validation message.
         catch (ScryValidationException exception) when (drifted)
         {
-            throw new ScryValidationException(
-                $"{exception.Message} The request's schema stamp does not match this server's model, so " +
-                "the client was generated against a different model surface — regenerate the client.")
+            throw new ScryValidationException($"{exception.Message} The request's schema stamp does not match this server's model, so the client was generated against a different model surface — regenerate the client.")
             {
                 StaleClient = true
             };

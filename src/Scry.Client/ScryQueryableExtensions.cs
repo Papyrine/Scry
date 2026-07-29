@@ -385,7 +385,8 @@ public static class ScryQueryableExtensions
         if (provider.DefaultProjection is not { Count: > 0 } members ||
             terminal is CountOp or LongCountOp or AnyOp or AllOp or AggregateOp ||
             terminal is FirstOp { Predicate: not null } or SingleOp { Predicate: not null } or LastOp { Predicate: not null } ||
-            pipeline.Any(_ => _ is SelectOp or GroupByOp))
+            // A join carries its own projection, since a member has to name which side it reads.
+            pipeline.Any(_ => _ is SelectOp or GroupByOp or JoinOp))
         {
             return;
         }

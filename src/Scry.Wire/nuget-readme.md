@@ -15,6 +15,7 @@ The serializable query AST shared by the [Scry](https://github.com/Papyrine/Scry
 [JsonDerivedType(typeof(GroupByOp), "groupBy")]
 [JsonDerivedType(typeof(DistinctOp), "distinct")]
 [JsonDerivedType(typeof(ReverseOp), "reverse")]
+[JsonDerivedType(typeof(JoinOp), "join")]
 [JsonDerivedType(typeof(CountOp), "count")]
 [JsonDerivedType(typeof(LongCountOp), "longCount")]
 [JsonDerivedType(typeof(AnyOp), "any")]
@@ -26,7 +27,7 @@ The serializable query AST shared by the [Scry](https://github.com/Papyrine/Scry
 [JsonDerivedType(typeof(PageOp), "page")]
 public abstract record QueryOp;
 ```
-<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L29' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L30' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: wireExpressions -->

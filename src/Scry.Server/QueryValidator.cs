@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// The authoritative server-side gate. Walks an incoming query AST and rejects anything that is not
 /// allow-listed or exceeds a resource limit — independent of whatever code the client was generated
 /// against. Runs before any expression is rebound or executed.
@@ -44,6 +44,14 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             if (terminalIndex >= 0)
             {
                 throw Reject("No operator may follow a terminal operator.");
+            }
+
+            // A join fixes the row shape — its projection names both sides, and every later operator is
+            // single-rooted, so none of them could say which side it meant.
+            if (sawJoin &&
+                op is not (CountOp or LongCountOp or AnyOp or FirstOp or SingleOp))
+            {
+                throw Reject("Only Count, LongCount, Any, First, or Single may follow a Join.");
             }
 
             switch (op)
@@ -167,19 +175,19 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     break;
 
                 case CountOp count:
-                    ValidateTerminalPredicate(count.Predicate, rootType, sawSelect);
+                    ValidateTerminalPredicate(count.Predicate, rootType, sawSelect, sawJoin);
                     EnsureFoldableDistinct(sawDistinct, sawGroupBy, projection, "Count");
                     terminalIndex = i;
                     break;
 
                 case LongCountOp longCount:
-                    ValidateTerminalPredicate(longCount.Predicate, rootType, sawSelect);
+                    ValidateTerminalPredicate(longCount.Predicate, rootType, sawSelect, sawJoin);
                     EnsureFoldableDistinct(sawDistinct, sawGroupBy, projection, "LongCount");
                     terminalIndex = i;
                     break;
 
                 case AnyOp any:
-                    ValidateTerminalPredicate(any.Predicate, rootType, sawSelect);
+                    ValidateTerminalPredicate(any.Predicate, rootType, sawSelect, sawJoin);
                     EnsureFoldableDistinct(sawDistinct, sawGroupBy, projection, "Any");
                     terminalIndex = i;
                     break;
@@ -197,12 +205,12 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     break;
 
                 case FirstOp first:
-                    ValidateTerminalPredicate(first.Predicate, rootType, sawSelect);
+                    ValidateTerminalPredicate(first.Predicate, rootType, sawSelect, sawJoin);
                     terminalIndex = i;
                     break;
 
                 case SingleOp single:
-                    ValidateTerminalPredicate(single.Predicate, rootType, sawSelect);
+                    ValidateTerminalPredicate(single.Predicate, rootType, sawSelect, sawJoin);
                     terminalIndex = i;
                     break;
 
@@ -270,11 +278,16 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         }
     }
 
-    void ValidateTerminalPredicate(Node? predicate, Type rootType, bool sawSelect)
+    void ValidateTerminalPredicate(Node? predicate, Type rootType, bool sawSelect, bool sawJoin = false)
     {
         if (predicate is null)
         {
             return;
+        }
+
+        if (sawJoin)
+        {
+            throw Reject("A terminal predicate is not allowed after a Join — filter each side before joining.");
         }
 
         if (sawSelect)
@@ -567,6 +580,46 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
     }
 
     /// <summary>
+    /// Validates a join. The inner source is looked up by name in the same allow-list a request's own
+    /// root goes through, and each projected member is validated against the side it names — the two
+    /// sides never share an allow-list.
+    /// </summary>
+    void ValidateJoin(JoinOp join, Type outerType)
+    {
+        if (!schema.TryGetSource(join.Root, out var inner))
+        {
+            throw Reject($"Unknown source '{join.Root}'.");
+        }
+
+        var innerType = inner.ClrType;
+
+        ValidateScalar(join.OuterKey, outerType, "Join key");
+        ValidateScalar(join.InnerKey, innerType, "Join key");
+
+        if (join.InnerPredicate is { } predicate)
+        {
+            ValidatePredicate(predicate, innerType);
+        }
+
+        if (join.Result.Count == 0)
+        {
+            throw Reject("A join must project at least one member.");
+        }
+
+        foreach (var member in join.Result)
+        {
+            var side = member.Side switch
+            {
+                JoinSide.Outer => outerType,
+                JoinSide.Inner => innerType,
+                _ => throw Reject($"Unsupported join side '{member.Side}'.")
+            };
+
+            ResolvePath(member.Path, side, requireScalar: true, "Join projection member");
+        }
+    }
+
+    /// <summary>
     /// Validates a question asked about a collection navigation. The path must end at an exposed
     /// collection, and the inner predicate and selector are validated against the collection's element
     /// type — a different allow-list from the row the subquery hangs off, and the reason they cannot
@@ -699,12 +752,12 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
     Type ResolveNavigation(IReadOnlyList<string> path, Type rootType)
     {
         var member = ResolvePath(path, rootType, requireScalar: false, "Navigation");
-        if (member.Kind != MemberKind.Navigation)
+        if (member.Kind == MemberKind.Navigation)
         {
-            throw Reject($"'{string.Join('.', path)}' is not a navigation property.");
+            return member.Type;
         }
 
-        return member.Type;
+        throw Reject($"'{string.Join('.', path)}' is not a navigation property.");
     }
 
     Member ResolvePath(IReadOnlyList<string> path, Type rootType, bool requireScalar, string what)
@@ -821,8 +874,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
         if (projection is not { Members: [{ Value: NodeValue { Node: MemberNode } }] })
         {
-            throw Reject(
-                $"{op} over a Distinct query requires the Select to project exactly one member.");
+            throw Reject($"{op} over a Distinct query requires the Select to project exactly one member.");
         }
     }
 

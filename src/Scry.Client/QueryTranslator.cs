@@ -78,10 +78,101 @@ sealed class QueryTranslator
             case "Reverse":
                 return new ReverseOp();
 
+            case "Join":
+                return TranslateJoin(call, JoinKind.Inner);
+            case "LeftJoin":
+                return TranslateJoin(call, JoinKind.Left);
+
             default:
                 throw new NotSupportedException($"LINQ operator '{call.Method.Name}' is not supported by Scry.");
         }
     }
+
+    /// <summary>
+    /// Translates <c>outer.Join(inner, o =&gt; …, i =&gt; …, (o, i) =&gt; new {…})</c>. The inner argument is
+    /// another captured Scry source, so its own root and any filters it carries are read straight off
+    /// it rather than being re-derived here.
+    /// </summary>
+    JoinOp TranslateJoin(MethodCallExpression call, JoinKind kind)
+    {
+        if (call.Arguments.Count != 5)
+        {
+            throw new NotSupportedException("A join must supply an inner source, both key selectors, and a result selector.");
+        }
+
+        var (root, innerPredicate) = InnerSource(call.Arguments[1]);
+        var outerKey = Lambda(call.Arguments[2]);
+        var innerKey = Lambda(call.Arguments[3]);
+        var result = Lambda(call.Arguments[4]);
+
+        if (result.Parameters.Count != 2)
+        {
+            throw new NotSupportedException("A join's result selector must take the outer and inner rows.");
+        }
+
+        return new(
+            root,
+            kind,
+            TranslateExpr(outerKey.Body, outerKey.Parameters[0]),
+            TranslateExpr(innerKey.Body, innerKey.Parameters[0]),
+            innerPredicate,
+            JoinMembers(result));
+    }
+
+    // The joined source is a captured queryable of its own. Only Where survives the crossing: every
+    // other operator would describe rows the join has already consumed.
+    static (string Root, Node? Predicate) InnerSource(Expression expression)
+    {
+        var value = Evaluate(expression);
+        if (value is not IQueryable {Provider: QueryProvider provider} queryable)
+        {
+            throw new NotSupportedException("The inner side of a join must be a Scry source.");
+        }
+
+        Node? predicate = null;
+        foreach (var op in Translate(queryable.Expression))
+        {
+            if (op is not WhereOp where)
+            {
+                throw new NotSupportedException(
+                    $"'{op.GetType().Name.Replace("Op", "")}' is not supported on the inner side of a join — only Where is.");
+            }
+
+            predicate = predicate is null
+                ? where.Predicate
+                : new BinaryNode(BinaryOp.AndAlso, predicate, where.Predicate);
+        }
+
+        return (provider.Root, predicate);
+    }
+
+    static List<JoinMember> JoinMembers(LambdaExpression result)
+    {
+        var members = new List<JoinMember>();
+        foreach (var (name, value) in NestedMembers(result.Body))
+        {
+            // Each leaf must say which side it reads, so it has to be a plain path rooted at one of
+            // the two parameters — the joined pair has no single root to resolve it against.
+            var side = Rooted(value, result.Parameters[0])
+                ? JoinSide.Outer
+                : Rooted(value, result.Parameters[1])
+                    ? JoinSide.Inner
+                    : throw new NotSupportedException(
+                        $"Join projection member '{name}' must be a member path on the outer or inner row.");
+
+            members.Add(new(name, side, MemberPath((MemberExpression)value)));
+        }
+
+        if (members.Count == 0)
+        {
+            throw new NotSupportedException("A join must project at least one member.");
+        }
+
+        return members;
+    }
+
+    static bool Rooted(Expression expression, ParameterExpression root) =>
+        expression is MemberExpression member && IsRooted(member, root);
 
     Node TranslateKey(MethodCallExpression call)
     {

@@ -169,6 +169,73 @@ sealed class ExpressionBuilder(Schema schema)
     }
 
     /// <summary>
+    /// Builds a join's result selector <c>(TOuter, TInner) =&gt; object[]</c>, plus the shape describing
+    /// its slots. The join projects straight to the shaped row, so the joined pair never becomes an
+    /// element type of its own — which is what keeps every later operator single-rooted.
+    /// </summary>
+    /// <remarks>
+    /// Under a left join the inner row can be absent, so a non-nullable value read from that side is
+    /// widened to its nullable form; without that the shaper would fault materializing a SQL NULL.
+    /// </remarks>
+    public (LambdaExpression Selector, IReadOnlyList<IReadOnlyList<string>> Shape) BuildJoinProjection(
+        IReadOnlyList<JoinMember> members,
+        Type outerType,
+        Type innerType,
+        JoinKind kind)
+    {
+        var outer = Expression.Parameter(outerType, "o");
+        var inner = Expression.Parameter(innerType, "i");
+        var leaves = new List<Expression>();
+        var shape = new List<IReadOnlyList<string>>();
+
+        foreach (var member in members)
+        {
+            var root = member.Side == JoinSide.Outer ? (Expression)outer : inner;
+            var leaf = BuildMemberAccess(root, member.Path);
+
+            if (kind == JoinKind.Left &&
+                member.Side == JoinSide.Inner &&
+                leaf.Type.IsValueType &&
+                Nullable.GetUnderlyingType(leaf.Type) is null)
+            {
+                leaf = Expression.Convert(leaf, typeof(Nullable<>).MakeGenericType(leaf.Type));
+            }
+
+            leaves.Add(leaf);
+            shape.Add([member.Name]);
+        }
+
+        return (Expression.Lambda(ToObjectArray(leaves), outer, inner), shape);
+    }
+
+    /// <summary>
+    /// Builds a join key selector. Both sides must produce the same key type for the provider to join
+    /// on, so a nullable difference between them is reconciled here rather than faulting.
+    /// </summary>
+    public (LambdaExpression Outer, LambdaExpression Inner) BuildJoinKeys(
+        Node outerKey,
+        Type outerType,
+        Node innerKey,
+        Type innerType)
+    {
+        var outerParameter = Expression.Parameter(outerType, "o");
+        var innerParameter = Expression.Parameter(innerType, "i");
+        var outerBody = Build(outerKey, outerParameter, null);
+        var innerBody = Build(innerKey, innerParameter, null);
+
+        Coerce(ref outerBody, ref innerBody);
+        if (outerBody.Type != innerBody.Type)
+        {
+            throw new ScryValidationException(
+                $"Join keys must have the same type, but were '{outerBody.Type.Name}' and '{innerBody.Type.Name}'.");
+        }
+
+        return (
+            Expression.Lambda(outerBody, outerParameter),
+            Expression.Lambda(innerBody, innerParameter));
+    }
+
+    /// <summary>
     /// Builds a selector for a projection of exactly one member, typed as that member rather than
     /// boxed into the <c>object[]</c> a shaped row uses. The validator guarantees the shape; this is
     /// what lets a deduplicated sequence be folded to a scalar.
@@ -300,7 +367,12 @@ sealed class ExpressionBuilder(Schema schema)
             return null;
         }
 
-        return underlying is null ? promoted : typeof(Nullable<>).MakeGenericType(promoted);
+        if (underlying is null)
+        {
+            return promoted;
+        }
+
+        return typeof(Nullable<>).MakeGenericType(promoted);
     }
 
     /// <summary>
@@ -435,8 +507,7 @@ sealed class ExpressionBuilder(Schema schema)
             if (!schema.TryGetType(ownerType, out var meta) ||
                 !meta.TryGetMember(segment, out var member))
             {
-                throw new ScryValidationException(
-                    $"Property '{segment}' is not allow-listed on '{ownerType.Name}'.");
+                throw new ScryValidationException($"Property '{segment}' is not allow-listed on '{ownerType.Name}'.");
             }
 
             if (underlying is not null)
@@ -529,8 +600,7 @@ sealed class ExpressionBuilder(Schema schema)
         // with a number. Rejected rather than surfacing as a fault.
         catch (InvalidOperationException exception)
         {
-            throw new ScryValidationException(
-                $"'{binary.Op}' is not defined for '{left.Type.Name}' and '{right.Type.Name}': {exception.Message}");
+            throw new ScryValidationException($"'{binary.Op}' is not defined for '{left.Type.Name}' and '{right.Type.Name}': {exception.Message}");
         }
     }
 

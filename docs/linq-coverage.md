@@ -22,6 +22,7 @@ For usage detail on the supported surface (position rules, limits, examples), se
 | `Distinct()` | Deduplicates the projected rows; only the `Select` and a terminal may follow. |
 | `Reverse()` | Inverts the ordering; requires a preceding `OrderBy`, as EF does. |
 | `Where(predicate)` after `GroupBy` | SQL `HAVING` — reads the group key and aggregates. |
+| `Join(…)` / `LeftJoin(…)` | Each side policy-filtered independently first; carries its own projection. |
 
 ### Collection subqueries
 
@@ -111,10 +112,12 @@ Structurally bigger than the current pipeline — multiple sources per request, 
 - [ ] `Contains` over a **server-side** sequence (a subquery `IN`) rather than a client-supplied set. Closest to the shipped [collection subqueries](querying.md#collection-subqueries), but tests a value against a *different* source rather than a collection hanging off the row, so it needs the cross-source decision below.
 - [ ] `SelectMany` — needs collections *projectable*, which the shipped design deliberately excludes; revisit only with a bounded nested-result shape.
 
-**Cross-source queries.** `Join` / `GroupJoin` / `LeftJoin` / `RightJoin` / `FullJoin`, and the set operations `Union` / `Concat` / `Intersect` / `Except`. Both need a request that carries more than one root, which the wire has no shape for — every request is one `root` plus one pipeline today. The blocking decision is not the wire but the [row policies](policies.md): the central guarantee is that a policy is applied to a source *before* any client operator, so every joined or unioned source must be policy-filtered independently before being combined, and a join must not become a way to observe rows through a source whose policy would hide them. Until that composition is specified, a join is the single most dangerous operator to add.
+**Cross-source queries.** `Join` and `LeftJoin` are [supported](querying.md#joins). The policy composition they were gated on is settled: each side is resolved and policy-filtered independently before the two meet, so a join can only narrow. The set operations remain open, and share the harder half of the problem — they combine two sources into one *sequence*, so unlike a join they cannot resolve the ambiguity by projecting both sides at the point they meet.
 
-- [ ] `Join` / `GroupJoin` / `LeftJoin` / `RightJoin` / `FullJoin`.
-- [ ] Set operations: `Union`, `Concat`, `Intersect`, `Except`.
+- [x] `Join` / `LeftJoin`.
+- [ ] `RightJoin` / `FullJoin` — the same shape as `LeftJoin`, but the outer row can be absent, so the *outer* projection needs the nullable widening the inner side already gets.
+- [ ] `GroupJoin` — returns a collection per outer row, which the [collections design](annotations.md#collections) deliberately keeps unprojectable.
+- [ ] Set operations: `Union`, `Concat`, `Intersect`, `Except` — both sides must project to the same shape before combining, which needs a projection the pipeline can carry per side.
 - [ ] `DefaultIfEmpty` — only meaningful alongside joins.
 
 **Other.**

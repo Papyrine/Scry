@@ -19,6 +19,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         SelectOp? select = null;
         QueryOp? terminal = null;
         Node? groupFilter = null;
+        JoinOp? join = null;
         // Captured alongside inline application so the page terminal can rebuild the ordering into a
         // total order (append the primary key) and a keyset seek predicate.
         List<(Node Key, bool Descending)> orderings = [];
@@ -75,6 +76,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 case DistinctOp:
                     distinct = true;
                     break;
+                case JoinOp joined:
+                    join = joined;
+                    break;
                 case GroupByOp group:
                     groupBy = group;
                     break;
@@ -97,6 +101,27 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         if (terminal is PageOp page)
         {
             return Page(query, elementType, select, orderings, tailIsOrdered && !sawSkipOrTake, page, source, db);
+        }
+
+        // A join projects straight to the shaped row, so it replaces the projection step entirely and
+        // the folding terminals below fold the joined rows.
+        if (join is not null)
+        {
+            var (joined, joinPlan) = BuildJoined(query, elementType, join, db, services);
+
+            return terminal switch
+            {
+                CountOp => Scalar(Execute<int>(joined, "Count")),
+                LongCountOp => Scalar(Execute<long>(joined, "LongCount")),
+                AnyOp => Scalar(Execute<bool>(joined, "Any")),
+                FirstOp firstRow => Single(ExecuteRow(joined, firstRow.OrDefault ? "FirstOrDefault" : "First"), joinPlan),
+                SingleOp singleRow => Single(ExecuteRow(joined, singleRow.OrDefault ? "SingleOrDefault" : "Single"), joinPlan),
+                _ => QueryResponse.Create(
+                    ResultKind.List,
+                    JsonSerializer.SerializeToElement(
+                        joined.ToList().Select(_ => Shape(_, joinPlan)).ToArray(),
+                        ScryJson.Options))
+            };
         }
 
         // Folding a deduplicated sequence reads one value per row, so it is projected as that value's
@@ -163,6 +188,47 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         var rows = projected.ToList();
         var array = rows.Select(_ => Shape(_, plan)).ToArray();
         return QueryResponse.Create(ResultKind.List, JsonSerializer.SerializeToElement(array, ScryJson.Options));
+    }
+
+    /// <summary>
+    /// Resolves the joined source and combines it with the outer query. The inner source goes through
+    /// the same resolution and <b>row policy</b> the outer did, before the two meet — so a join can
+    /// only narrow, and no row hidden from a direct query of the inner source is observable through one.
+    /// </summary>
+    (IQueryable<object[]> Query, ProjectionPlan Plan) BuildJoined(
+        IQueryable outer,
+        Type outerType,
+        JoinOp join,
+        DbContext db,
+        IServiceProvider services)
+    {
+        if (!schema.TryGetSource(join.Root, out var innerSource))
+        {
+            throw new ScryValidationException($"Unknown source '{join.Root}'.");
+        }
+
+        var innerType = innerSource.ClrType;
+        var inner = ApplyPolicy(innerSource.Resolve(db, services), innerSource, db, services);
+
+        if (join.InnerPredicate is { } predicate)
+        {
+            inner = Apply(inner, "Where", builder.BuildPredicate(predicate, innerType));
+        }
+
+        var (outerKey, innerKey) = builder.BuildJoinKeys(join.OuterKey, outerType, join.InnerKey, innerType);
+        var (selector, shape) = builder.BuildJoinProjection(join.Result, outerType, innerType, join.Kind);
+
+        var joined = (IQueryable<object[]>)outer.Provider.CreateQuery(
+            CallQueryable(
+                join.Kind == JoinKind.Left ? "LeftJoin" : "Join",
+                [outerType, innerType, outerKey.ReturnType, typeof(object[])],
+                outer.Expression,
+                inner.Expression,
+                Expression.Quote(outerKey),
+                Expression.Quote(innerKey),
+                Expression.Quote(selector)));
+
+        return (joined, new(selector, shape));
     }
 
     static Node? TerminalPredicate(QueryOp? terminal) =>

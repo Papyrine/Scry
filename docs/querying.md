@@ -99,6 +99,7 @@ public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjec
 | `Select(projection)` | `select` | At most one, and it must construct an object. |
 | `Distinct()` | `distinct` | Deduplicates the **projected** rows. Only the `Select` and a terminal may follow it. |
 | `Reverse()` | `reverse` | Inverts the ordering. Requires a preceding `OrderBy`. |
+| `Join(inner, …)` / `LeftJoin(inner, …)` | `join` | Joins a second source — see [below](#joins). Carries its own projection; only a terminal may follow. |
 
 Any other LINQ operator — `Join`, `SelectMany`, `Union`, … — throws:
 
@@ -357,6 +358,34 @@ The date functions apply to `DateTime`, `DateOnly`, `DateTimeOffset`, and `TimeO
 There is no free-form method call node in the wire format, so this list is the complete set of behaviour a client can ask the database to perform. **Provider support is still the outer bound**: a function only reaches SQL if the EF provider translates it, which is why `DayOfWeek` — which SQL Server's provider does not translate — has no entry.
 
 Functions are **expression-level**: they read a row inside a `Where` predicate, an ordering or group key, a terminal predicate, an aggregate selector, or a [projection member](#computed-projection-members).
+
+
+### Joins
+
+A second source can be joined in, naming it exactly as a query names its own root:
+
+```cs
+await Query.Employee
+    .Where(_ => _.Active)
+    .Join(
+        Query.Department.Where(_ => _.Name != "Archive"),
+        employee => employee.DepartmentId,
+        department => department.Id,
+        (employee, department) => new Row(employee.Name, department.Name))
+    .ToListAsync();
+```
+
+`LeftJoin` keeps every outer row, with nulls where the inner side has no match. A value read from the inner side of a left join comes back nullable, so an unmatched row yields null rather than a fault.
+
+**Each side is resolved and [policy-filtered](policies.md) independently, before the two meet.** A join is therefore only ever narrowing: no row that a direct query of the inner source would hide is observable through one. That is what makes the operator safe to expose at all.
+
+Three rules follow from the joined row having two roots:
+
+- The join **carries its own projection**, rather than being followed by a `Select`. A projected member has to say which side it reads, and an ordinary member path has no room to.
+- Only `Count`, `LongCount`, `Any`, `First`, and `Single` may follow a join. Every other operator is single-rooted and could not name a side.
+- Only `Where` crosses into the inner side. Ordering, paging, and grouping there would describe rows the join has already consumed, so filter each side first and join last.
+
+Each side is validated against its own allow-list: a `[QueryIgnore]`d member stays hidden on both, and naming an outer member on the inner side is rejected. The two key selectors must produce the same type.
 
 
 ### Collection subqueries

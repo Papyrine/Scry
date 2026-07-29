@@ -49,6 +49,7 @@ The wire format has no node for an arbitrary method call, no node for raw SQL, a
 [JsonDerivedType(typeof(GroupByOp), "groupBy")]
 [JsonDerivedType(typeof(DistinctOp), "distinct")]
 [JsonDerivedType(typeof(ReverseOp), "reverse")]
+[JsonDerivedType(typeof(JoinOp), "join")]
 [JsonDerivedType(typeof(CountOp), "count")]
 [JsonDerivedType(typeof(LongCountOp), "longCount")]
 [JsonDerivedType(typeof(AnyOp), "any")]
@@ -60,7 +61,7 @@ The wire format has no node for an arbitrary method call, no node for raw SQL, a
 [JsonDerivedType(typeof(PageOp), "page")]
 public abstract record QueryOp;
 ```
-<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L29' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L30' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: wireExpressions -->
@@ -178,6 +179,8 @@ Constants are the one attacker-supplied value that reaches the query. They trave
 
 An `IReturnablePolicy<T>` is applied to the source before any client operator, so client filters can<!-- include: policy-ordering. path: /docs/includes/policy-ordering.include.md -->
 only narrow an already-authorized set.<!-- endInclude -->
+
+A [join](querying.md#joins) resolves its second source through the same path: that source's policy is applied **before** the two sides meet, so a join can only narrow and never becomes a way to observe rows through a source whose policy hides them. The same reasoning is why a [collection navigation](annotations.md#collections) of a policied type is refused outright — there, the aggregate has no source for a policy to filter.
 
 See [Row policies](policies.md).
 
