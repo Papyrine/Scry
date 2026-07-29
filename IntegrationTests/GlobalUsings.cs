@@ -1,5 +1,6 @@
 ﻿global using System.Net;
 global using System.Text;
+global using System.Text.Json;
 global using Microsoft.AspNetCore.Builder;
 global using Microsoft.AspNetCore.TestHost;
 global using Microsoft.Extensions.DependencyInjection;

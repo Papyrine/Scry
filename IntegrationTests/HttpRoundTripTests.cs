@@ -315,6 +315,42 @@ public class HttpRoundTripTests
         Assert.That(body, Does.Contain("\"staleClient\":true"));
     }
 
+    // A model frozen at a surface where ManagerId was still non-nullable. Alice has no manager, so the
+    // server sends null and this cannot be read — the shape of drift the alias machinery cannot bridge
+    // (nothing was renamed; a member changed).
+    record PreNullableEmployee(string Name, int ManagerId);
+
+    [Test]
+    public void UnreadablePayloadFromDriftedClientThrowsStaleClientException()
+    {
+        var stale = ScryClient.ForHttp(http, "/api/query");
+        stale.SchemaStamp = "stamp-from-an-older-model";
+
+        var exception = Assert.ThrowsAsync<ScryStaleClientException>(() =>
+            stale.Source<PreNullableEmployee>("Employee", ["Name", "ManagerId"]).ToListAsync())!;
+
+        Assert.That(exception.Message, Does.Contain("regenerate the client"));
+        // The parse failure is preserved rather than replaced, so the cause stays diagnosable.
+        Assert.That(exception.InnerException, Is.InstanceOf<JsonException>());
+    }
+
+    // The same unreadable payload from a client whose stamp agrees with the server is a real bug, not
+    // drift — it must stay a raw parse failure rather than being dressed up as a reload prompt.
+    [Test]
+    public async Task UnreadablePayloadFromCurrentClientThrowsRawParseFailure()
+    {
+        var current = ScryClient.ForHttp(http, "/api/query");
+        // Constructing ScryQuery stamps the client with the generated surface, which matches the server.
+        _ = new ScryQuery(current);
+
+        // Prime ServerSchemaStamp so SchemaStale is decided, not merely unknown.
+        await current.Source<EmployeeQueryModel>("Employee").CountAsync();
+        Assert.That(current.SchemaStale, Is.False);
+
+        Assert.ThrowsAsync<JsonException>(() =>
+            current.Source<PreNullableEmployee>("Employee", ["Name", "ManagerId"]).ToListAsync());
+    }
+
     [Test]
     public void DisallowedPropertyThrowsThroughClient() =>
         // The generated client model has no Salary member (the server marks it [QueryIgnore]), so

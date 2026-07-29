@@ -122,12 +122,20 @@ Prefer prompting over reloading automatically. A forced reload discards whatever
 
 ## When the break arrives
 
-Eventually a drifted client's query does fail — a member it still references was removed, or a value it holds no longer parses. Those failures identify themselves:
+Eventually a drifted client's query does fail — a member it still references was removed, or a result no longer fits the shape it was generated for. Those failures identify themselves, and all of them arrive as one exception, **`ScryStaleClientException`**:
 
-- The server marks every rejection (and execution failure) from a mismatched stamp with `"staleClient": true` on the [error body](server.md#error-handling), keeping the plain 400/500 shape for a client that is plain wrong.
-- `ScryClient` surfaces such failures as **`ScryStaleClientException`** — the same exception thrown client-side when a result carries an enum value name the generated model does not have. One catch covers every failure whose remedy is a newer client.
+| Failure | Attributed by |
+| --- | --- |
+| The server rejects the query (`400`) | `"staleClient": true` on the [error body](server.md#error-handling) |
+| The query faults during execution (`500`) | the same marker — validation cannot catch every model change, e.g. a constant parsed against a member whose type has since changed |
+| A result carries an enum value name the generated model lacks | the client's reader, after the [alias table](annotations.md#the-response-side) fails to resolve it |
+| A result cannot be read at all — a widened numeric that now overflows, a member that became nullable | the client, when the stamp already shows it drifted |
 
-The two channels are complementary, and both fire on a failed query — the stamp header rides on rejections too, so `SchemaStaleDetected` has already been raised by the time the exception surfaces. An app with the banner above therefore needs no extra handling: the failed query throws, and the reload prompt is already on screen explaining why. Handle the exception where a better experience is possible — retrying the interrupted operation after the reload, say — not because the signal would otherwise be lost.
+The server keeps the plain 400/500 shape for a client that is plain wrong, and the client keeps the raw parse failure when the stamps agree — a current client failing to read a current payload is a bug, not drift, and must stay loud. Leniency applies only where the stamp *proves* the client is behind.
+
+One catch therefore covers every failure whose remedy is a newer client. The original exception is preserved as `InnerException` where there was one.
+
+This channel and the soft signal above are complementary, and both fire on the same failed query — the stamp header rides on rejections too, and is recorded before the payload is read. So `SchemaStaleDetected` has always been raised by the time the exception surfaces (which is also what lets the client classify an unreadable payload in the first place). An app with the banner above therefore needs no extra handling: the failed query throws, and the reload prompt is already on screen explaining why. Handle the exception where a better experience is possible — retrying the interrupted operation after the reload, say — not because the signal would otherwise be lost.
 
 The [sample](sample.md)'s Index page distinguishes the stale failure from an application error where its queries run:
 

@@ -8,7 +8,7 @@ public static class ScryQueryableExtensions
     {
         var response = await Send(source, terminal: null, cancel);
         EnsureKind(response, ResultKind.List);
-        return ScryJson.DeserializePayload<List<T>>(response) ?? [];
+        return Materialize<List<T>>(source, response) ?? [];
     }
 
     // The collection-shaping terminals below all send the same "enumerate to a list" request as
@@ -131,7 +131,7 @@ public static class ScryQueryableExtensions
     {
         var response = await Send(source, terminal, cancel);
         EnsureKind(response, ResultKind.Page);
-        return ScryJson.DeserializePayload<ScryPage<T>>(response) ??
+        return Materialize<ScryPage<T>>(source, response) ??
                throw new ScryWireException("Page result deserialized to null.");
     }
 
@@ -144,7 +144,36 @@ public static class ScryQueryableExtensions
             return default;
         }
 
-        return ScryJson.DeserializePayload<T>(response);
+        return Materialize<T>(source, response);
+    }
+
+    /// <summary>
+    /// Reads a result payload into the client's generated model, classifying a failure the schema
+    /// stamp already attributes to drift.
+    /// </summary>
+    /// <remarks>
+    /// The alias machinery bridges renames, but not every model change: a widened numeric whose value
+    /// now overflows the old property, a member that became nullable, a scalar whose representation
+    /// changed. Those surface here as a parse failure. When the stamp already shows the client behind
+    /// the server — recorded from the response header before this payload is touched — the cause is
+    /// drift rather than a wire fault, so it joins every other stale-client failure under one
+    /// exception. When the stamps agree, the original propagates untouched: a current client failing
+    /// to read a current payload is a real bug and must stay loud.
+    /// </remarks>
+    static T? Materialize<T>(IQueryable source, QueryResponse response)
+    {
+        try
+        {
+            return ScryJson.DeserializePayload<T>(response);
+        }
+        catch (JsonException exception)
+            when (source.Provider is QueryProvider {Client.SchemaStale: true})
+        {
+            throw new ScryStaleClientException(
+                $"The query result could not be read into this client's generated model: {exception.Message} " +
+                "The server's queryable surface has changed — regenerate the client, or reload the deployed app.",
+                exception);
+        }
     }
 
     /// <summary>
