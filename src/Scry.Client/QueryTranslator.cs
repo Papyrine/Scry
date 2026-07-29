@@ -14,6 +14,13 @@ sealed class QueryTranslator
         return ops;
     }
 
+    /// <summary>
+    /// Translates a standalone lambda body — a predicate or an aggregate selector supplied to a
+    /// terminal rather than captured in the query expression.
+    /// </summary>
+    public static Node TranslateLambda(LambdaExpression lambda) =>
+        new QueryTranslator().TranslateExpr(lambda.Body, lambda.Parameters[0]);
+
     void Visit(Expression expression, List<QueryOp> ops)
     {
         if (expression is ConstantExpression)
@@ -61,6 +68,12 @@ sealed class QueryTranslator
 
             case "Select":
                 return new SelectOp(TranslateProjection(Lambda(call.Arguments[1])));
+
+            case "Distinct" when call.Arguments.Count == 1:
+                return new DistinctOp();
+
+            case "Distinct":
+                throw new NotSupportedException("Distinct with an equality comparer is not supported by Scry.");
 
             default:
                 throw new NotSupportedException($"LINQ operator '{call.Method.Name}' is not supported by Scry.");
@@ -273,7 +286,13 @@ sealed class QueryTranslator
                 case BinaryExpression binary:
                     return new BinaryNode(MapBinary(binary.NodeType), TranslateExpr(binary.Left, root), TranslateExpr(binary.Right, root));
 
-                case MemberExpression member when IsDatePart(member, out var function):
+                case ConditionalExpression conditional:
+                    return new ConditionalNode(
+                        TranslateExpr(conditional.Test, root),
+                        TranslateExpr(conditional.IfTrue, root),
+                        TranslateExpr(conditional.IfFalse, root));
+
+                case MemberExpression member when IsKnownProperty(member, out var function):
                     return new CallNode(function, TranslateExpr(member.Expression!, root), []);
 
                 case MemberExpression member when IsRooted(member, root):
@@ -289,6 +308,13 @@ sealed class QueryTranslator
                     return TranslateMethod(call, root);
 
                 default:
+                    // Anything else that does not read the row is closure state — a constructed value
+                    // such as new DateTime(…), an indexer, a cast — so it is evaluated into a constant.
+                    if (!ReferencesParameter(expression, root))
+                    {
+                        return ConstantOf(Evaluate(expression));
+                    }
+
                     throw Unsupported(expression);
             }
         }
@@ -296,18 +322,51 @@ sealed class QueryTranslator
 
     Node TranslateMethod(MethodCallExpression call, ParameterExpression root)
     {
-        if (call.Method.DeclaringType == typeof(string))
+        var declaring = call.Method.DeclaringType;
+
+        if (declaring == typeof(string))
         {
-            return call.Method.Name switch
+            return TranslateStringMethod(call, root);
+        }
+
+        if (IsTemporal(declaring))
+        {
+            var added = call.Method.Name switch
             {
-                "Contains" => new CallNode(KnownFunction.StringContains, TranslateExpr(call.Object!, root), [TranslateExpr(call.Arguments[0], root)]),
-                "StartsWith" => new CallNode(KnownFunction.StringStartsWith, TranslateExpr(call.Object!, root), [TranslateExpr(call.Arguments[0], root)]),
-                "EndsWith" => new CallNode(KnownFunction.StringEndsWith, TranslateExpr(call.Object!, root), [TranslateExpr(call.Arguments[0], root)]),
-                "ToLower" => new CallNode(KnownFunction.StringToLower, TranslateExpr(call.Object!, root), []),
-                "ToUpper" => new CallNode(KnownFunction.StringToUpper, TranslateExpr(call.Object!, root), []),
-                "IsNullOrEmpty" => new CallNode(KnownFunction.StringIsNullOrEmpty, TranslateExpr(call.Arguments[0], root), []),
+                "AddYears" => KnownFunction.DateAddYears,
+                "AddMonths" => KnownFunction.DateAddMonths,
+                "AddDays" => KnownFunction.DateAddDays,
+                "AddHours" => KnownFunction.DateAddHours,
+                "AddMinutes" => KnownFunction.DateAddMinutes,
+                "AddSeconds" => KnownFunction.DateAddSeconds,
                 _ => throw Unsupported(call)
             };
+            return new CallNode(added, TranslateExpr(call.Object!, root), [TranslateExpr(call.Arguments[0], root)]);
+        }
+
+        if (declaring == typeof(Math))
+        {
+            var math = call.Method.Name switch
+            {
+                "Abs" => KnownFunction.MathAbs,
+                "Ceiling" => KnownFunction.MathCeiling,
+                "Floor" => KnownFunction.MathFloor,
+                "Round" => KnownFunction.MathRound,
+                _ => throw Unsupported(call)
+            };
+
+            // Math.Round(value, digits) carries the digit count as its one argument.
+            var arguments = call.Arguments.Count > 1
+                ? new[] { TranslateExpr(call.Arguments[1], root) }
+                : [];
+            return new CallNode(math, TranslateExpr(call.Arguments[0], root), arguments);
+        }
+
+        // ids.Contains(_.Id) — membership of a client-side set, which becomes a SQL IN. The set must be
+        // closure state (evaluated here into constants) and the tested value must come from the row.
+        if (IsSetContains(call, root, out var set, out var value))
+        {
+            return new CallNode(KnownFunction.In, TranslateExpr(value, root), [..SetConstants(set)]);
         }
 
         // A call that does not touch the parameter is a closure value — evaluate it.
@@ -319,24 +378,170 @@ sealed class QueryTranslator
         throw Unsupported(call);
     }
 
-    static bool IsDatePart(MemberExpression member, out KnownFunction function)
+    Node TranslateStringMethod(MethodCallExpression call, ParameterExpression root)
+    {
+        Node Target() => TranslateExpr(call.Object!, root);
+
+        Node Argument(int index) => TranslateExpr(call.Arguments[index], root);
+
+        switch (call.Method.Name)
+        {
+            case "Contains" when call.Arguments.Count == 1:
+                return new CallNode(KnownFunction.StringContains, Target(), [Argument(0)]);
+            case "StartsWith" when call.Arguments.Count == 1:
+                return new CallNode(KnownFunction.StringStartsWith, Target(), [Argument(0)]);
+            case "EndsWith" when call.Arguments.Count == 1:
+                return new CallNode(KnownFunction.StringEndsWith, Target(), [Argument(0)]);
+            case "ToLower" when call.Arguments.Count == 0:
+                return new CallNode(KnownFunction.StringToLower, Target(), []);
+            case "ToUpper" when call.Arguments.Count == 0:
+                return new CallNode(KnownFunction.StringToUpper, Target(), []);
+            case "IsNullOrEmpty":
+                return new CallNode(KnownFunction.StringIsNullOrEmpty, Argument(0), []);
+            case "IsNullOrWhiteSpace":
+                return new CallNode(KnownFunction.StringIsNullOrWhiteSpace, Argument(0), []);
+
+            // The char-set overloads (Trim(params char[])) have no SQL equivalent — only the
+            // whitespace-trimming forms translate.
+            case "Trim" when call.Arguments.Count == 0:
+                return new CallNode(KnownFunction.StringTrim, Target(), []);
+            case "TrimStart" when call.Arguments.Count == 0:
+                return new CallNode(KnownFunction.StringTrimStart, Target(), []);
+            case "TrimEnd" when call.Arguments.Count == 0:
+                return new CallNode(KnownFunction.StringTrimEnd, Target(), []);
+
+            case "Substring" when call.Arguments.Count is 1 or 2:
+                return new CallNode(KnownFunction.StringSubstring, Target(), [..call.Arguments.Select(_ => TranslateExpr(_, root))]);
+            case "IndexOf" when call.Arguments.Count == 1:
+                return new CallNode(KnownFunction.StringIndexOf, Target(), [Argument(0)]);
+            case "Replace" when call.Arguments.Count == 2:
+                return new CallNode(KnownFunction.StringReplace, Target(), [Argument(0), Argument(1)]);
+
+            default:
+                throw Unsupported(call);
+        }
+    }
+
+    // The receiver holds the candidate set and must be closure state; the tested value must read from
+    // the row. Both the instance form (List.Contains) and the static form (Enumerable.Contains) map here.
+    static bool IsSetContains(
+        MethodCallExpression call,
+        ParameterExpression root,
+        [NotNullWhen(true)] out Expression? set,
+        [NotNullWhen(true)] out Expression? value)
+    {
+        set = null;
+        value = null;
+
+        if (call.Method.Name != "Contains")
+        {
+            return false;
+        }
+
+        if (call is {Object: { } instance, Arguments.Count: 1})
+        {
+            (set, value) = (instance, call.Arguments[0]);
+        }
+        else if (call is {Object: null, Arguments.Count: 2})
+        {
+            (set, value) = (call.Arguments[0], call.Arguments[1]);
+        }
+        else
+        {
+            return false;
+        }
+
+        set = UnwrapSet(set);
+
+        return !ReferencesParameter(set, root) &&
+               ReferencesParameter(value, root);
+    }
+
+    /// <summary>
+    /// Reads through to the collection a set expression really denotes. An array receiver binds to
+    /// <c>MemoryExtensions.Contains</c>, so what arrives is a <c>ReadOnlySpan</c> produced by a
+    /// conversion or an <c>AsSpan</c> call — a ref struct, which cannot be returned from the compiled
+    /// lambda the values are read with. The array behind it can.
+    /// </summary>
+    static Expression UnwrapSet(Expression expression)
+    {
+        while (true)
+        {
+            switch (expression)
+            {
+                case UnaryExpression {NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked} convert:
+                    expression = convert.Operand;
+                    continue;
+                case MethodCallExpression {Object: null, Arguments.Count: 1} call when call.Type.IsByRefLike:
+                    expression = call.Arguments[0];
+                    continue;
+                case MethodCallExpression {Object: { } instance, Arguments.Count: 0} call when call.Type.IsByRefLike:
+                    expression = instance;
+                    continue;
+                default:
+                    return expression;
+            }
+        }
+    }
+
+    static IEnumerable<Node> SetConstants(Expression set)
+    {
+        if (Evaluate(set) is not IEnumerable values)
+        {
+            throw new NotSupportedException("The Contains set must be a collection of values.");
+        }
+
+        return values.Cast<object?>().Select(ConstantOf);
+    }
+
+    static bool IsTemporal(Type? type) =>
+        type == typeof(DateTime) ||
+        type == typeof(Date) ||
+        type == typeof(DateTimeOffset) ||
+        type == typeof(Time);
+
+    // A property that reads as a function rather than a member path: a date part, or string length.
+    static bool IsKnownProperty(MemberExpression member, out KnownFunction function)
     {
         var declaring = member.Member.DeclaringType;
-        if (member.Expression is not null &&
-            (declaring == typeof(DateTime) ||
-             declaring == typeof(Date)))
+        if (member.Expression is not null)
         {
-            switch (member.Member.Name)
+            if (IsTemporal(declaring))
             {
-                case "Year":
-                    function = KnownFunction.DateYear;
-                    return true;
-                case "Month":
-                    function = KnownFunction.DateMonth;
-                    return true;
-                case "Day":
-                    function = KnownFunction.DateDay;
-                    return true;
+                switch (member.Member.Name)
+                {
+                    case "Year":
+                        function = KnownFunction.DateYear;
+                        return true;
+                    case "Month":
+                        function = KnownFunction.DateMonth;
+                        return true;
+                    case "Day":
+                        function = KnownFunction.DateDay;
+                        return true;
+                    case "Hour":
+                        function = KnownFunction.DateHour;
+                        return true;
+                    case "Minute":
+                        function = KnownFunction.DateMinute;
+                        return true;
+                    case "Second":
+                        function = KnownFunction.DateSecond;
+                        return true;
+                    case "DayOfYear":
+                        function = KnownFunction.DateDayOfYear;
+                        return true;
+                    case "Date":
+                        function = KnownFunction.DateDate;
+                        return true;
+                }
+            }
+
+            if (declaring == typeof(string) &&
+                member.Member.Name == "Length")
+            {
+                function = KnownFunction.StringLength;
+                return true;
             }
         }
 
@@ -424,6 +629,8 @@ sealed class QueryTranslator
             ExpressionType.Subtract => BinaryOp.Subtract,
             ExpressionType.Multiply => BinaryOp.Multiply,
             ExpressionType.Divide => BinaryOp.Divide,
+            ExpressionType.Modulo => BinaryOp.Modulo,
+            ExpressionType.Coalesce => BinaryOp.Coalesce,
             _ => throw new NotSupportedException($"Binary operator '{type}' is not supported.")
         };
 

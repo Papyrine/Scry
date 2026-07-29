@@ -76,14 +76,19 @@ Because `root` is part of the contract, prefer setting `Name` over relying on th
 [JsonDerivedType(typeof(TakeOp), "take")]
 [JsonDerivedType(typeof(SelectOp), "select")]
 [JsonDerivedType(typeof(GroupByOp), "groupBy")]
+[JsonDerivedType(typeof(DistinctOp), "distinct")]
 [JsonDerivedType(typeof(CountOp), "count")]
+[JsonDerivedType(typeof(LongCountOp), "longCount")]
 [JsonDerivedType(typeof(AnyOp), "any")]
+[JsonDerivedType(typeof(AllOp), "all")]
 [JsonDerivedType(typeof(FirstOp), "first")]
 [JsonDerivedType(typeof(SingleOp), "single")]
+[JsonDerivedType(typeof(LastOp), "last")]
+[JsonDerivedType(typeof(AggregateOp), "aggregate")]
 [JsonDerivedType(typeof(PageOp), "page")]
 public abstract record QueryOp;
 ```
-<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L28' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 | `$type` | Payload | Meaning |
@@ -116,14 +121,23 @@ stateDiagram-v2
     Source --> Projected: Select
     Restricting --> Projected: Select
     Grouped --> Projected: Select (mandatory)
+    Source --> Deduplicated: Distinct
+    Restricting --> Deduplicated: Distinct
+    Projected --> Deduplicated: Distinct
+    Deduplicated --> Projected: Select
     Source --> [*]: terminal
     Restricting --> [*]: terminal
     Projected --> [*]: terminal
+    Deduplicated --> [*]: terminal
 ```
 
 Nothing filters, orders, skips, or takes after `GroupBy`; a `GroupBy` cannot reach a terminal without
 a `Select` in between; and there is no second `GroupBy` or `Select`. `ThenBy` without a preceding
-`OrderBy` is rejected, and nothing may follow a terminal.<!-- endInclude -->
+`OrderBy` is rejected, and nothing may follow a terminal.
+
+`Distinct` deduplicates the projected rows, so the only thing that may follow it is the `Select` it
+deduplicates and a terminal. Filtering or ordering after it would be describing the rows that fed it,
+and paging after it would be slicing an order that a deduplication cannot preserve.<!-- endInclude -->
 
 
 ## Expressions
@@ -137,10 +151,11 @@ a `Select` in between; and there is no second `GroupBy` or `Select`. `ThenBy` wi
 [JsonDerivedType(typeof(BinaryNode), "binary")]
 [JsonDerivedType(typeof(UnaryNode), "unary")]
 [JsonDerivedType(typeof(CallNode), "call")]
+[JsonDerivedType(typeof(ConditionalNode), "conditional")]
 [JsonDerivedType(typeof(AggregateNode), "aggregate")]
 public abstract record Node;
 ```
-<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -216,7 +231,9 @@ public enum BinaryOp
     Add,
     Subtract,
     Multiply,
-    Divide
+    Divide,
+    Modulo,
+    Coalesce
 }
 
 /// <summary>Unary operators allowed in an expression.</summary>
@@ -226,7 +243,7 @@ public enum UnaryOp
     Negate
 }
 ```
-<sup><a href='/src/Scry.Wire/BinaryOp.cs#L3-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireBinaryOps' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/BinaryOp.cs#L3-L29' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireBinaryOps' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 When one side is a constant, its type is inferred from the other side, and nullable/non-nullable operands are coerced to match.
@@ -255,12 +272,41 @@ public enum KnownFunction
     StringToLower,
     StringToUpper,
     StringIsNullOrEmpty,
+    StringIsNullOrWhiteSpace,
+    StringLength,
+    StringTrim,
+    StringTrimStart,
+    StringTrimEnd,
+    StringSubstring,
+    StringIndexOf,
+    StringReplace,
     DateYear,
     DateMonth,
-    DateDay
+    DateDay,
+    DateHour,
+    DateMinute,
+    DateSecond,
+    DateDayOfYear,
+    DateDate,
+    DateAddYears,
+    DateAddMonths,
+    DateAddDays,
+    DateAddHours,
+    DateAddMinutes,
+    DateAddSeconds,
+    MathAbs,
+    MathCeiling,
+    MathFloor,
+    MathRound,
+
+    /// <summary>
+    /// Membership of a client-supplied set (SQL <c>IN</c>). The target is the value being tested and
+    /// every argument is a <see cref="ConstNode"/>; the server caps the number of values.
+    /// </summary>
+    In
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 There is no free-form method name anywhere in the format. This enum is the complete set of behaviour a client can request.
@@ -275,7 +321,11 @@ There is no free-form method name anywhere in the format. This enum is the compl
 <!-- snippet: wireAggregates -->
 <a id='snippet-wireAggregates'></a>
 ```cs
-/// <summary>Aggregate functions allowed in a projection over a grouped query.</summary>
+/// <summary>
+/// Aggregate functions, used either in a projection over a grouped query or as a terminal folding
+/// the whole sequence to one scalar. <see cref="Count"/> is grouped-projection only — counting a
+/// sequence has its own terminal.
+/// </summary>
 public enum AggregateFn
 {
     Count,
@@ -285,7 +335,7 @@ public enum AggregateFn
     Max
 }
 ```
-<sup><a href='/src/Scry.Wire/AggregateFn.cs#L3-L13' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireAggregates' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/AggregateFn.cs#L3-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireAggregates' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `selector` is omitted for `Count`. An aggregate is valid **only** as a projection member in a `select` that follows a `groupBy`.
@@ -413,6 +463,8 @@ public static class WireFormat
 `QueryRequest.Create` and `QueryResponse.Create` stamp the current version. The server rejects a request whose `version` is **greater** than its own — a newer client against an older server fails closed rather than being partially understood. Older requests continue to be accepted.
 
 The `ScryJson` options, the `$type` discriminator strings, and the enum member names are all part of the contract. Changing any of them is a wire break.
+
+**Adding** to the vocabulary — a new operator, node type, or function — does not bump the version. A request that uses only the older vocabulary stays byte-identical, so it keeps working against an older server; bumping the version would break those requests for no reason. A request that does use a new operator reaches an older server as an unknown `$type`, which fails deserialization closed rather than being partially understood — the same guarantee the version check gives, arrived at from the other direction. Removing or renaming any of them remains a break, and would bump the version.
 
 
 ## Schema stamp

@@ -25,6 +25,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         // op (so the query is still IOrderedQueryable) and no offset (Skip/Take) is in play.
         var tailIsOrdered = false;
         var sawSkipOrTake = false;
+        // Distinct deduplicates the projected rows, so it is applied after the projection is built
+        // rather than inline with the operators over the entity query.
+        var distinct = false;
 
         foreach (var op in request.Pipeline)
         {
@@ -54,6 +57,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                     tailIsOrdered = false;
                     query = ApplyPaging(query, "Take", take.Count);
                     break;
+                case DistinctOp:
+                    distinct = true;
+                    break;
                 case GroupByOp group:
                     groupBy = group;
                     break;
@@ -66,20 +72,11 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             }
         }
 
-        if (terminal is CountOp)
+        // Every terminal predicate narrows the rows before anything else the terminal does, so they are
+        // all applied here rather than each terminal repeating it.
+        if (TerminalPredicate(terminal) is { } predicate)
         {
-            var count = Execute<int>(query, "Count");
-            return Scalar(count);
-        }
-
-        if (terminal is AnyOp any)
-        {
-            if (any.Predicate is { } anyPredicate)
-            {
-                query = Apply(query, "Where", builder.BuildPredicate(anyPredicate, elementType));
-            }
-
-            return Scalar(Execute<bool>(query, "Any"));
+            query = Apply(query, "Where", builder.BuildPredicate(predicate, elementType));
         }
 
         if (terminal is PageOp page)
@@ -87,7 +84,48 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             return Page(query, elementType, select, orderings, tailIsOrdered && !sawSkipOrTake, page, source, db);
         }
 
-        var (projected, plan) = BuildProjected(query, elementType, groupBy, select, terminal);
+        // Folding a deduplicated sequence reads one value per row, so it is projected as that value's
+        // own type and deduplicated there. The shaped object[] a row projection produces has no
+        // equality of its own for a provider to deduplicate on — only enumeration can shape it back
+        // afterwards — which is why the validator confines this to a single projected member.
+        if (distinct &&
+            terminal is CountOp or LongCountOp or AnyOp)
+        {
+            var values = ApplySelectTyped(query, builder.BuildSingleValueSelector(select!.Projection, elementType));
+            var deduped = values.Provider.CreateQuery(
+                CallQueryable("Distinct", [values.ElementType], values.Expression));
+
+            return terminal switch
+            {
+                CountOp => Scalar(Execute<int>(deduped, "Count")),
+                LongCountOp => Scalar(Execute<long>(deduped, "LongCount")),
+                _ => Scalar(Execute<bool>(deduped, "Any"))
+            };
+        }
+
+        // Every other folding terminal reads the rows themselves and projects nothing. None of them can
+        // co-occur with a Distinct: the validator allows only the three folded above.
+        switch (terminal)
+        {
+            case CountOp:
+                return Scalar(Execute<int>(query, "Count"));
+            case LongCountOp:
+                return Scalar(Execute<long>(query, "LongCount"));
+            case AnyOp:
+                return Scalar(Execute<bool>(query, "Any"));
+            case AllOp all:
+                return Scalar(
+                    Execute<bool>(query, "All", Expression.Quote(builder.BuildPredicate(all.Predicate, elementType))));
+            case AggregateOp aggregate:
+                return Aggregate(query, aggregate, elementType);
+        }
+
+        var (projected, plan) = BuildProjected(query, elementType, groupBy, select);
+
+        if (distinct)
+        {
+            projected = ApplyDistinct(projected, source.Kind);
+        }
 
         if (terminal is FirstOp first)
         {
@@ -101,17 +139,53 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             return Single(row, plan);
         }
 
+        if (terminal is LastOp last)
+        {
+            var row = ExecuteRow(projected, last.OrDefault ? "LastOrDefault" : "Last");
+            return Single(row, plan);
+        }
+
         var rows = projected.ToList();
         var array = rows.Select(_ => Shape(_, plan)).ToArray();
         return QueryResponse.Create(ResultKind.List, JsonSerializer.SerializeToElement(array, ScryJson.Options));
+    }
+
+    static Node? TerminalPredicate(QueryOp? terminal) =>
+        terminal switch
+        {
+            CountOp count => count.Predicate,
+            LongCountOp longCount => longCount.Predicate,
+            AnyOp any => any.Predicate,
+            FirstOp first => first.Predicate,
+            SingleOp single => single.Predicate,
+            LastOp last => last.Predicate,
+            _ => null
+        };
+
+    /// <summary>
+    /// Folds the whole sequence to one scalar. The selected values are projected first so the provider
+    /// picks its aggregate overload from the value type, which <see cref="ExpressionBuilder"/> has
+    /// already widened to one that exists.
+    /// </summary>
+    QueryResponse Aggregate(IQueryable query, AggregateOp aggregate, Type elementType)
+    {
+        var selector = builder.BuildAggregateSelector(aggregate.Selector, elementType, aggregate.Function);
+        var values = ApplySelectTyped(query, selector);
+        var name = aggregate.Function.ToString();
+
+        // Min/Max are generic in the value type; Sum/Average have one overload per numeric type.
+        var call = aggregate.Function is AggregateFn.Min or AggregateFn.Max
+            ? Expression.Call(typeof(Queryable), name, [values.ElementType], values.Expression)
+            : Expression.Call(typeof(Queryable), name, null, values.Expression);
+
+        return Scalar(values.Provider.Execute(call));
     }
 
     (IQueryable<object[]> Query, ProjectionPlan Plan) BuildProjected(
         IQueryable query,
         Type elementType,
         GroupByOp? groupBy,
-        SelectOp? select,
-        QueryOp? terminal)
+        SelectOp? select)
     {
         if (groupBy is not null)
         {
@@ -120,16 +194,6 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             var grouped = ApplyGroupBy(query, keySelector, elementType, keyType);
             var groupPlan = builder.BuildGroupProjection(select!.Projection, elementType, keyType);
             return (ApplySelect(grouped, groupPlan.Selector), groupPlan);
-        }
-
-        // Terminal predicate on First/Single is applied pre-projection.
-        if (terminal is FirstOp { Predicate: { } firstPredicate })
-        {
-            query = Apply(query, "Where", builder.BuildPredicate(firstPredicate, elementType));
-        }
-        else if (terminal is SingleOp { Predicate: { } singlePredicate })
-        {
-            query = Apply(query, "Where", builder.BuildPredicate(singlePredicate, elementType));
         }
 
         var plan = select is null
@@ -190,9 +254,53 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         (IQueryable<object[]>)query.Provider.CreateQuery(
             CallQueryable("Select", [query.ElementType, typeof(object[])], query.Expression, Expression.Quote(selector)));
 
-    static T Execute<T>(IQueryable query, string method) =>
+    static IQueryable ApplySelectTyped(IQueryable query, LambdaExpression selector) =>
+        query.Provider.CreateQuery(
+            CallQueryable("Select", [query.ElementType, selector.ReturnType], query.Expression, Expression.Quote(selector)));
+
+    /// <summary>
+    /// Deduplicates the projected rows. A relational provider turns this into <c>SELECT DISTINCT</c>
+    /// over the projected columns. An in-memory POCO source runs the same operator under LINQ to
+    /// Objects, where <c>object[]</c> compares by reference and nothing would ever match, so those
+    /// compare the row values instead.
+    /// </summary>
+    static IQueryable<object[]> ApplyDistinct(IQueryable<object[]> query, SourceKind kind)
+    {
+        if (kind == SourceKind.Poco)
+        {
+            return query.Distinct(RowComparer.Instance);
+        }
+
+        return (IQueryable<object[]>)query.Provider.CreateQuery(
+            CallQueryable("Distinct", [typeof(object[])], query.Expression));
+    }
+
+    sealed class RowComparer :
+        IEqualityComparer<object[]>
+    {
+        public static readonly RowComparer Instance = new();
+
+        public bool Equals(object[]? x, object[]? y) =>
+            x is not null &&
+            y is not null &&
+            x.Length == y.Length &&
+            x.Zip(y).All(_ => Equals(_.First, _.Second));
+
+        public int GetHashCode(object[] row)
+        {
+            var hash = new HashCode();
+            foreach (var value in row)
+            {
+                hash.Add(value);
+            }
+
+            return hash.ToHashCode();
+        }
+    }
+
+    static T Execute<T>(IQueryable query, string method, params Expression[] arguments) =>
         (T)query.Provider.Execute(
-            CallQueryable(method, [query.ElementType], query.Expression))!;
+            CallQueryable(method, [query.ElementType], [query.Expression, ..arguments]))!;
 
     static readonly ConcurrentDictionary<string, MethodInfo> queryableMethods = new();
 
@@ -223,6 +331,8 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             "FirstOrDefault" => projected.FirstOrDefault(),
             "Single" => projected.Single(),
             "SingleOrDefault" => projected.SingleOrDefault(),
+            "Last" => projected.Last(),
+            "LastOrDefault" => projected.LastOrDefault(),
             _ => throw new($"Unknown row method '{method}'.")
         };
 

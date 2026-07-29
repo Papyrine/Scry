@@ -19,21 +19,26 @@ For usage detail on the supported surface (position rules, limits, examples), se
 | `Skip(n)` / `Take(n)` | `Take` capped by `MaxPageSize`. |
 | `Select(projection)` | At most one; must construct an object. |
 | `GroupBy(key)` | Single key, must be followed by a `Select`. |
+| `Distinct()` | Deduplicates the projected rows; only the `Select` and a terminal may follow. |
 
 ### Terminals
 
 | LINQ | Notes |
 | --- | --- |
 | `ToListAsync` / `ToArrayAsync` / `ToHashSetAsync` / `ToDictionaryAsync` / `ToLookupAsync` | List results. |
-| `FirstAsync` / `FirstOrDefaultAsync` | The wire also carries an optional inline predicate. |
-| `SingleAsync` / `SingleOrDefaultAsync` | The wire also carries an optional inline predicate. |
-| `CountAsync` | No predicate overload yet — use `Where`. |
-| `AnyAsync` | The wire also carries an optional inline predicate. |
+| `FirstAsync` / `FirstOrDefaultAsync` | Optional predicate. |
+| `SingleAsync` / `SingleOrDefaultAsync` | Optional predicate. |
+| `LastAsync` / `LastOrDefaultAsync` | Optional predicate. Requires an ordered query, as EF does. |
+| `ElementAtAsync` / `ElementAtOrDefaultAsync` | `Skip` + `First`; no wire operator of its own. |
+| `CountAsync` / `LongCountAsync` | Optional predicate. |
+| `AnyAsync` | Optional predicate. |
+| `AllAsync(predicate)` | |
+| `SumAsync` / `AverageAsync` / `MinAsync` / `MaxAsync` | Over the whole sequence, no `GroupBy` needed. |
 | `ToPageAsync` | Scry-specific bounded [page envelope](paging.md). |
 
 ### Aggregates
 
-`Count`, `Sum`, `Average`, `Min`, `Max` are supported in exactly one position: as a projection value in the `Select` that follows a `GroupBy`, aggregating over the rows of each group. See [grouping](querying.md#grouping-and-aggregates).
+`Count`, `Sum`, `Average`, `Min`, `Max` are supported in two positions. As a projection value in the `Select` that follows a `GroupBy`, aggregating over the rows of each group — see [grouping](querying.md#grouping-and-aggregates):
 
 <!-- snippet: clientGroupBy -->
 <a id='snippet-clientGroupBy'></a>
@@ -46,22 +51,32 @@ regions = await Query.Order
 <sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L43-L48' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-Every other position an aggregate can appear in EF Core has no wire representation:
+…and as a **terminal folding the whole sequence** to one scalar, which needs no `GroupBy`:
 
-- As a **terminal over the whole query** — `SumAsync(_ => _.Salary)`, `MaxAsync(_ => _.Hired)` on an ungrouped query. (`CountAsync` and `AnyAsync` are the exception: they exist as dedicated terminals.)
+```cs
+var total = await Query.Order
+    .Where(_ => _.Region == "North")
+    .SumAsync(_ => _.Amount);
+```
+
+The remaining positions an aggregate can appear in EF Core have no wire representation:
+
 - Over a **collection navigation in a projection** — `.Select(_ => new { _.Name, Orders = _.Orders.Count() })`. Collection navigations are not exposed at all.
 - In a **predicate** — `.Where(g => g.Count() > 5)` after a `GroupBy` (SQL `HAVING`), or any aggregate-based subquery inside a `Where`.
 
-All three are tracked in [Not yet supported](#not-yet-supported).
+Both are tracked in [Not yet supported](#not-yet-supported).
 
 ### Expression operators
 
-`==` `!=` `<` `<=` `>` `>=` `&&` `||` `!` `+` `-` `*` `/` and unary `-`.
+`==` `!=` `<` `<=` `>` `>=` `&&` `||` `!` `+` `-` `*` `/` `%` `??` `?:` and unary `-`.
 
 ### Functions
 
-String: `Contains`, `StartsWith`, `EndsWith`, `ToLower`, `ToUpper`, `string.IsNullOrEmpty`.
-Date (`DateTime` / `DateOnly`): `Year`, `Month`, `Day`.
+See [the full table](querying.md#functions). In summary — string: `Contains`, `StartsWith`, `EndsWith`, `ToLower`, `ToUpper`, `Length`, `Trim`/`TrimStart`/`TrimEnd`, `Substring`, `IndexOf`, `Replace`, `IsNullOrEmpty`, `IsNullOrWhiteSpace`. Date: `Year`, `Month`, `Day`, `Hour`, `Minute`, `Second`, `DayOfYear`, `Date`, and the `Add*` methods. Math: `Abs`, `Ceiling`, `Floor`, `Round`. Plus `Contains` over a client-supplied set, which becomes a SQL `IN`.
+
+Functions are expression-level: they read a row in a predicate, an ordering or group key, a terminal predicate, or an aggregate selector. **A projection member is still a member path** — `Select(_ => new { Upper = _.Name.ToUpper() })` is rejected.
+
+Reaching the wire is necessary but not sufficient: a function still has to be one the **EF provider** translates. Scry validates and rebinds it, then EF decides. Where a provider has no translation the query fails at execution rather than at validation — so a function with no SQL Server translation is left out of the closed set rather than shipped as a trap.
 
 
 ## Not yet supported
@@ -72,18 +87,12 @@ Everything below is translatable by EF Core but has no wire representation in Sc
 
 Fit the closed-vocabulary pattern — each is a new enum member or a small op record plus validator, builder, and generator work. Roughly ordered by expected demand.
 
-- [ ] `Contains` over a client-side collection (`ids.Contains(_.Id)`, SQL `IN`) — the biggest practical gap for filtering.
-- [ ] Top-level `Sum` / `Average` / `Min` / `Max` terminals (with selector), without requiring `GroupBy`.
-- [ ] Predicate overload on `CountAsync`; `LongCountAsync`.
-- [ ] `Distinct`.
-- [ ] `All(predicate)`.
-- [ ] `??` (coalesce) and `?:` (conditional) in expressions.
-- [ ] `%` (modulo).
-- [ ] More string functions: `Length`, `Trim` / `TrimStart` / `TrimEnd`, `Substring`, `IndexOf`, `Replace`, `string.IsNullOrWhiteSpace`.
-- [ ] More date parts and members: `Hour`, `Minute`, `Second`, `DayOfWeek`, `DayOfYear`, `Date`, and the `Add*` methods.
-- [ ] Math functions: `Abs`, `Ceiling`, `Floor`, `Round`.
-- [ ] `ElementAtAsync` / `ElementAtOrDefaultAsync` (sugar over `Skip`/`Take`).
-- [ ] `LastAsync` / `LastOrDefaultAsync` — EF requires an ordering; the validator would too.
+- [ ] **Expressions as projection members** — `Select(_ => new { Upper = _.Name.ToUpper(), Net = _.Amount - _.Discount })`. Functions and arithmetic already validate and rebind; a projection leaf is the one position still restricted to a plain member path. The most likely thing to be reached for next, now that the function set is wide.
+- [ ] Ordering a deduplicated query — `Distinct().OrderBy(…)`, and paging over it. Both need ordering keys expressed against the *projection* rather than the row, which is also what would let `Skip`/`Take` follow a `Distinct`.
+- [ ] Counting a `Distinct` over more than one projected member. `COUNT(DISTINCT x)` is single-column in SQL; a multi-column form needs a projection type with real equality, which the shaped `object[]` row deliberately is not.
+- [ ] `string.Concat` / interpolation, `char` members, `StartsWith` with a `StringComparison`.
+- [ ] `DayOfWeek` — deliberately omitted, not overlooked: SQL Server's provider has no translation for it, so it would compile client-side and then fail at execution. Worth adding behind provider capability detection, or when a supporting provider is targeted.
+- [ ] `Math.Pow` / `Sqrt` / `Truncate`, and the remaining sub-second date parts (`Millisecond`).
 
 ### Needs design
 
@@ -98,6 +107,7 @@ Structurally bigger than the current pipeline — multiple sources per request, 
 - [ ] `OfType` / `Cast` — inheritance hierarchies are not modelled in the generated surface.
 - [ ] `DefaultIfEmpty`.
 - [ ] `Reverse` — EF translates it only over an explicit ordering.
+- [ ] `Contains` over a **server-side** sequence (a subquery `IN`) rather than a client-supplied set.
 - [ ] Streaming results (`ToAsyncEnumerable`) — needs a streaming wire; see [Writing queries](querying.md#future-enhancements).
 
 ### Not gaps

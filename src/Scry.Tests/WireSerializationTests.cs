@@ -194,6 +194,69 @@ public class WireSerializationTests
         Assert.That(response.Version, Is.EqualTo(WireFormat.Version));
     }
 
+    [Test]
+    public Task ExpandedExpressionsRoundTrip()
+    {
+        var request = QueryRequest.Create(
+            "Employees",
+            [
+                new WhereOp(
+                    new BinaryNode(
+                        BinaryOp.AndAlso,
+                        new CallNode(
+                            KnownFunction.In,
+                            new MemberNode(["Status"]),
+                            [new ConstNode("FullTime", ClrTypeTag.Enum), new ConstNode("PartTime", ClrTypeTag.Enum)]),
+                        new BinaryNode(
+                            BinaryOp.Equal,
+                            new BinaryNode(
+                                BinaryOp.Modulo,
+                                new CallNode(KnownFunction.StringLength, new MemberNode(["Name"]), []),
+                                new ConstNode("2", ClrTypeTag.Int32)),
+                            new ConstNode("0", ClrTypeTag.Int32)))),
+                new WhereOp(
+                    new ConditionalNode(
+                        new MemberNode(["Active"]),
+                        new BinaryNode(
+                            BinaryOp.Equal,
+                            new BinaryNode(BinaryOp.Coalesce, new MemberNode(["ManagerId"]), new ConstNode("0", ClrTypeTag.Int32)),
+                            new ConstNode("0", ClrTypeTag.Int32)),
+                        new ConstNode("false", ClrTypeTag.Boolean))),
+                new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))])),
+                new DistinctOp()
+            ]);
+
+        return VerifyRoundTrip(request);
+    }
+
+    [Test]
+    public Task ExpandedTerminalsRoundTrip()
+    {
+        // Each terminal is serialized on its own — a pipeline may only carry one — so this walks the
+        // whole set through the discriminator map in a single assertion.
+        QueryOp[] terminals =
+        [
+            new CountOp(new MemberNode(["Active"])),
+            new LongCountOp(),
+            new AllOp(new MemberNode(["Active"])),
+            new LastOp(OrDefault: true, Predicate: null),
+            new AggregateOp(AggregateFn.Sum, new MemberNode(["Id"])),
+            new AggregateOp(AggregateFn.Average, new MemberNode(["Id"]))
+        ];
+
+        var json = terminals
+            .Select(_ => ScryJson.Serialize(QueryRequest.Create("Employees", [_])))
+            .ToList();
+
+        foreach (var (serialized, index) in json.Select((_, i) => (_, i)))
+        {
+            var roundTripped = ScryJson.DeserializeRequest(serialized);
+            Assert.That(ScryJson.Serialize(roundTripped), Is.EqualTo(serialized), $"terminal {index}");
+        }
+
+        return Verify(string.Join("\n", json));
+    }
+
     static Task VerifyRoundTrip(QueryRequest request)
     {
         var json = ScryJson.Serialize(request);

@@ -107,6 +107,140 @@ public class SecurityTests
                 new SelectOp(new([new("Amount", new NodeValue(new MemberNode(["Amount"])))]))
             ]));
 
+    // A function is validated for arity before anything is rebound, so a call the builder would read
+    // more arguments from than were sent is a rejected query rather than a faulted one.
+    [Test]
+    public void RejectsFunctionWithMissingArgument() =>
+        AssertRejected(QueryRequest.Create(
+            "Employee",
+            [new WhereOp(new CallNode(KnownFunction.StringContains, new MemberNode(["Name"]), []))]));
+
+    [Test]
+    public void RejectsFunctionWithExtraArguments() =>
+        AssertRejected(QueryRequest.Create(
+            "Employee",
+            [
+                new WhereOp(new CallNode(
+                    KnownFunction.StringStartsWith,
+                    new MemberNode(["Name"]),
+                    [new ConstNode("a", ClrTypeTag.String), new ConstNode("b", ClrTypeTag.String)]))
+            ]));
+
+    // A date part applied to a member that has none cannot be rebound; it is reported as a rejection
+    // rather than surfacing as a server fault.
+    [Test]
+    public void RejectsDatePartOnNonTemporalMember() =>
+        AssertRejected(QueryRequest.Create(
+            "Employee",
+            [
+                new WhereOp(new BinaryNode(
+                    BinaryOp.Equal,
+                    new CallNode(KnownFunction.DateYear, new MemberNode(["Name"]), []),
+                    new ConstNode("2026", ClrTypeTag.Int32)))
+            ]));
+
+    [Test]
+    public void RejectsInSetOverTheConfiguredLimit() =>
+        AssertRejected(
+            QueryRequest.Create(
+                "Employee",
+                [
+                    new WhereOp(new CallNode(
+                        KnownFunction.In,
+                        new MemberNode(["Name"]),
+                        [..Enumerable.Range(0, 5).Select(_ => new ConstNode(_.ToString(), ClrTypeTag.String))]))
+                ]),
+            options => options.MaxInValues = 3);
+
+    // Every candidate value must be a literal: a member node here would be comparing the row against
+    // itself through a path that was never validated as a set.
+    [Test]
+    public void RejectsInSetContainingANonConstant() =>
+        AssertRejected(QueryRequest.Create(
+            "Employee",
+            [
+                new WhereOp(new CallNode(
+                    KnownFunction.In,
+                    new MemberNode(["Name"]),
+                    [new MemberNode(["Address", "City"])]))
+            ]));
+
+    [Test]
+    public void RejectsOrderByAfterDistinct() =>
+        AssertRejected(QueryRequest.Create(
+            "Employee",
+            [
+                new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))])),
+                new DistinctOp(),
+                new OrderByOp(new MemberNode(["Name"]), Descending: false)
+            ]));
+
+    [Test]
+    public void RejectsPagingAfterDistinct() =>
+        AssertRejected(QueryRequest.Create(
+            "Employee",
+            [
+                new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))])),
+                new DistinctOp(),
+                new TakeOp(5)
+            ]));
+
+    [Test]
+    public void RejectsCountingADistinctQueryOverSeveralMembers() =>
+        AssertRejected(QueryRequest.Create(
+            "Employee",
+            [
+                new SelectOp(new(
+                [
+                    new("Name", new NodeValue(new MemberNode(["Name"]))),
+                    new("Status", new NodeValue(new MemberNode(["Status"])))
+                ])),
+                new DistinctOp(),
+                new CountOp()
+            ]));
+
+    [Test]
+    public void RejectsLastWithoutOrdering() =>
+        AssertRejected(QueryRequest.Create("Employee", [new LastOp(OrDefault: false, Predicate: null)]));
+
+    [Test]
+    public void RejectsAggregateTerminalOverAnIgnoredMember() =>
+        AssertRejected(QueryRequest.Create(
+            "Employee",
+            [new AggregateOp(AggregateFn.Sum, new MemberNode(["Salary"]))]));
+
+    [Test]
+    public void RejectsAggregateTerminalAfterSelect() =>
+        AssertRejected(QueryRequest.Create(
+            "Order",
+            [
+                new SelectOp(new([new("Amount", new NodeValue(new MemberNode(["Amount"])))])),
+                new AggregateOp(AggregateFn.Sum, new MemberNode(["Amount"]))
+            ]));
+
+    // Count has its own terminal; carrying it as an aggregate would be a second spelling of the same
+    // operation with a different result type.
+    [Test]
+    public void RejectsCountAsAnAggregateTerminal() =>
+        AssertRejected(QueryRequest.Create(
+            "Order",
+            [new AggregateOp(AggregateFn.Count, new MemberNode(["Amount"]))]));
+
+    [Test]
+    public void RejectsSummingANonNumericMember() =>
+        AssertRejected(QueryRequest.Create(
+            "Employee",
+            [new AggregateOp(AggregateFn.Sum, new MemberNode(["Name"]))]));
+
+    [Test]
+    public void RejectsTerminalPredicateAfterSelect() =>
+        AssertRejected(QueryRequest.Create(
+            "Employee",
+            [
+                new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))])),
+                new CountOp(new MemberNode(["Active"]))
+            ]));
+
     static void AssertRejected(QueryRequest request, Action<ScryOptions>? extra = null)
     {
         using var context = TestContext.CreateSeeded();

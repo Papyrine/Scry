@@ -43,14 +43,19 @@ The wire format has no node for an arbitrary method call, no node for raw SQL, a
 [JsonDerivedType(typeof(TakeOp), "take")]
 [JsonDerivedType(typeof(SelectOp), "select")]
 [JsonDerivedType(typeof(GroupByOp), "groupBy")]
+[JsonDerivedType(typeof(DistinctOp), "distinct")]
 [JsonDerivedType(typeof(CountOp), "count")]
+[JsonDerivedType(typeof(LongCountOp), "longCount")]
 [JsonDerivedType(typeof(AnyOp), "any")]
+[JsonDerivedType(typeof(AllOp), "all")]
 [JsonDerivedType(typeof(FirstOp), "first")]
 [JsonDerivedType(typeof(SingleOp), "single")]
+[JsonDerivedType(typeof(LastOp), "last")]
+[JsonDerivedType(typeof(AggregateOp), "aggregate")]
 [JsonDerivedType(typeof(PageOp), "page")]
 public abstract record QueryOp;
 ```
-<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L28' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: wireExpressions -->
@@ -62,10 +67,11 @@ public abstract record QueryOp;
 [JsonDerivedType(typeof(BinaryNode), "binary")]
 [JsonDerivedType(typeof(UnaryNode), "unary")]
 [JsonDerivedType(typeof(CallNode), "call")]
+[JsonDerivedType(typeof(ConditionalNode), "conditional")]
 [JsonDerivedType(typeof(AggregateNode), "aggregate")]
 public abstract record Node;
 ```
-<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: wireFunctions -->
@@ -80,12 +86,41 @@ public enum KnownFunction
     StringToLower,
     StringToUpper,
     StringIsNullOrEmpty,
+    StringIsNullOrWhiteSpace,
+    StringLength,
+    StringTrim,
+    StringTrimStart,
+    StringTrimEnd,
+    StringSubstring,
+    StringIndexOf,
+    StringReplace,
     DateYear,
     DateMonth,
-    DateDay
+    DateDay,
+    DateHour,
+    DateMinute,
+    DateSecond,
+    DateDayOfYear,
+    DateDate,
+    DateAddYears,
+    DateAddMonths,
+    DateAddDays,
+    DateAddHours,
+    DateAddMinutes,
+    DateAddSeconds,
+    MathAbs,
+    MathCeiling,
+    MathFloor,
+    MathRound,
+
+    /// <summary>
+    /// Membership of a client-supplied set (SQL <c>IN</c>). The target is the value being tested and
+    /// every argument is a <see cref="ConstNode"/>; the server caps the number of values.
+    /// </summary>
+    In
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Unknown discriminators fail deserialization rather than being ignored, so a request that names anything outside these sets is rejected at the JSON layer.
@@ -163,8 +198,14 @@ public int MaxPipelineLength { get; set; } = 32;
 
 /// <summary>Maximum expression nesting depth in a predicate. Default 32.</summary>
 public int MaxExpressionDepth { get; set; } = 32;
+
+/// <summary>
+/// Maximum number of values a client may supply to a set-membership test (<c>Contains</c>, which
+/// becomes a SQL <c>IN</c>). Default 1000.
+/// </summary>
+public int MaxInValues { get; set; } = 1000;
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L33' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 These bound the work a single request can ask for: how many rows, how deep a join chain, how long a pipeline, how deeply nested an expression.

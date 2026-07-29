@@ -169,6 +169,24 @@ sealed class ExpressionBuilder(Schema schema)
     }
 
     /// <summary>
+    /// Builds a selector for a projection of exactly one member, typed as that member rather than
+    /// boxed into the <c>object[]</c> a shaped row uses. The validator guarantees the shape; this is
+    /// what lets a deduplicated sequence be folded to a scalar.
+    /// </summary>
+    public LambdaExpression BuildSingleValueSelector(Projection projection, Type type)
+    {
+        var parameter = Expression.Parameter(type, "e");
+        var leaves = new List<Expression>();
+        Flatten(projection, parameter, [], leaves, []);
+        if (leaves.Count != 1)
+        {
+            throw new ScryValidationException("Expected a projection of exactly one member.");
+        }
+
+        return Expression.Lambda(leaves[0], parameter);
+    }
+
+    /// <summary>
     /// Builds a grouped selector <c>IGrouping&lt;TKey,TElement&gt; =&gt; object[]</c> over a single key,
     /// supporting the group key and aggregate members.
     /// </summary>
@@ -235,6 +253,65 @@ sealed class ExpressionBuilder(Schema schema)
         }
     }
 
+    /// <summary>
+    /// Builds the selector for a whole-sequence aggregate, typed so the aggregate is one the provider
+    /// can actually run: <c>Min</c>/<c>Max</c> select a nullable so an empty sequence yields null
+    /// instead of faulting, and <c>Sum</c>/<c>Average</c> widen the member to the nearest numeric type
+    /// with a <see cref="Queryable"/> overload (the wire says which member to fold, never which CLR
+    /// type to fold it as).
+    /// </summary>
+    public LambdaExpression BuildAggregateSelector(Node selector, Type type, AggregateFn function)
+    {
+        var parameter = Expression.Parameter(type, "e");
+        var body = Build(selector, parameter, null);
+
+        if (function is AggregateFn.Min or AggregateFn.Max)
+        {
+            if (body.Type.IsValueType &&
+                Nullable.GetUnderlyingType(body.Type) is null)
+            {
+                body = Expression.Convert(body, typeof(Nullable<>).MakeGenericType(body.Type));
+            }
+        }
+        else
+        {
+            var promoted = PromoteNumeric(body.Type) ??
+                           throw new ScryValidationException(
+                               $"'{function}' is not supported over '{body.Type.Name}'.");
+            if (promoted != body.Type)
+            {
+                body = Expression.Convert(body, promoted);
+            }
+        }
+
+        return Expression.Lambda(body, parameter);
+    }
+
+    // The numeric types Queryable.Sum/Average have overloads for. Narrower members widen to the
+    // smallest of them that holds every value; anything not numeric has no aggregate at all.
+    static Type? PromoteNumeric(Type type)
+    {
+        var underlying = Nullable.GetUnderlyingType(type);
+        var value = underlying ?? type;
+
+        var promoted = Type.GetTypeCode(value) switch
+        {
+            TypeCode.Byte or TypeCode.SByte or TypeCode.Int16 or TypeCode.UInt16 or TypeCode.Int32 => typeof(int),
+            TypeCode.UInt32 or TypeCode.Int64 => typeof(long),
+            TypeCode.UInt64 or TypeCode.Decimal => typeof(decimal),
+            TypeCode.Single => typeof(float),
+            TypeCode.Double => typeof(double),
+            _ => null
+        };
+
+        if (promoted is null)
+        {
+            return null;
+        }
+
+        return underlying is null ? promoted : typeof(Nullable<>).MakeGenericType(promoted);
+    }
+
     Expression Build(Node node, ParameterExpression parameter, Type? expected) =>
         node switch
         {
@@ -243,8 +320,25 @@ sealed class ExpressionBuilder(Schema schema)
             BinaryNode binary => BuildBinary(binary, parameter),
             UnaryNode unary => BuildUnary(unary, parameter),
             CallNode call => BuildCall(call, parameter),
+            ConditionalNode conditional => BuildConditional(conditional, parameter),
             _ => throw new ScryValidationException($"Unsupported expression '{node.GetType().Name}'.")
         };
+
+    Expression BuildConditional(ConditionalNode conditional, ParameterExpression parameter)
+    {
+        var test = Build(conditional.Test, parameter, typeof(bool));
+        var ifTrue = Build(conditional.IfTrue, parameter, null);
+        var ifFalse = Build(conditional.IfFalse, parameter, ifTrue.Type);
+        Coerce(ref ifTrue, ref ifFalse);
+
+        if (ifTrue.Type != ifFalse.Type)
+        {
+            throw new ScryValidationException(
+                $"The branches of a conditional must have the same type, but were '{ifTrue.Type.Name}' and '{ifFalse.Type.Name}'.");
+        }
+
+        return Expression.Condition(test, ifTrue, ifFalse);
+    }
 
     Expression BuildMemberAccess(Expression root, IReadOnlyList<string> path)
     {
@@ -273,8 +367,25 @@ sealed class ExpressionBuilder(Schema schema)
         return expression;
     }
 
-    BinaryExpression BuildBinary(BinaryNode binary, ParameterExpression parameter)
+    Expression BuildBinary(BinaryNode binary, ParameterExpression parameter)
     {
+        if (binary.Op == BinaryOp.Coalesce)
+        {
+            var fallbackOf = Build(binary.Left, parameter, null);
+            if (fallbackOf.Type.IsValueType &&
+                Nullable.GetUnderlyingType(fallbackOf.Type) is null)
+            {
+                throw new ScryValidationException(
+                    $"Coalesce requires a nullable left operand, but '{fallbackOf.Type.Name}' cannot be null.");
+            }
+
+            var fallback = Build(
+                binary.Right,
+                parameter,
+                Nullable.GetUnderlyingType(fallbackOf.Type) ?? fallbackOf.Type);
+            return Expression.Coalesce(fallbackOf, fallback);
+        }
+
         if (binary.Op is BinaryOp.AndAlso or BinaryOp.OrElse)
         {
             var leftBool = Build(binary.Left, parameter, typeof(bool));
@@ -315,6 +426,7 @@ sealed class ExpressionBuilder(Schema schema)
             BinaryOp.Subtract => Expression.Subtract(left, right),
             BinaryOp.Multiply => Expression.Multiply(left, right),
             BinaryOp.Divide => Expression.Divide(left, right),
+            BinaryOp.Modulo => Expression.Modulo(left, right),
             _ => throw new ScryValidationException($"Unsupported binary operator '{binary.Op}'.")
         };
     }
@@ -330,25 +442,169 @@ sealed class ExpressionBuilder(Schema schema)
         };
     }
 
+    /// <summary>
+    /// Rebinds a function call. The wire names a function, never a method: which CLR member that
+    /// resolves to is decided here from the target's real type. A function the target type does not
+    /// support (a date part on a number, say) is a rejected query rather than a fault, which is what
+    /// the type mismatches surfacing as <see cref="ArgumentException"/> below are translated into.
+    /// </summary>
     Expression BuildCall(CallNode call, ParameterExpression parameter)
     {
         var target = Build(call.Target, parameter, null);
-        var arguments = call.Arguments.Select(_ => Build(_, parameter, typeof(string))).ToArray();
 
-        return call.Function switch
+        try
         {
-            KnownFunction.StringContains => Expression.Call(target, stringContains, arguments[0]),
-            KnownFunction.StringStartsWith => Expression.Call(target, stringStartsWith, arguments[0]),
-            KnownFunction.StringEndsWith => Expression.Call(target, stringEndsWith, arguments[0]),
-            KnownFunction.StringToLower => Expression.Call(target, stringToLower),
-            KnownFunction.StringToUpper => Expression.Call(target, stringToUpper),
-            KnownFunction.StringIsNullOrEmpty => Expression.Call(stringIsNullOrEmpty, target),
-            KnownFunction.DateYear => Expression.Property(target, "Year"),
-            KnownFunction.DateMonth => Expression.Property(target, "Month"),
-            KnownFunction.DateDay => Expression.Property(target, "Day"),
-            _ => throw new ScryValidationException($"Unsupported function '{call.Function}'.")
-        };
+            return call.Function switch
+            {
+                KnownFunction.StringContains => Expression.Call(target, stringContains, StringArgument(call, 0, parameter)),
+                KnownFunction.StringStartsWith => Expression.Call(target, stringStartsWith, StringArgument(call, 0, parameter)),
+                KnownFunction.StringEndsWith => Expression.Call(target, stringEndsWith, StringArgument(call, 0, parameter)),
+                KnownFunction.StringToLower => Expression.Call(target, stringToLower),
+                KnownFunction.StringToUpper => Expression.Call(target, stringToUpper),
+                KnownFunction.StringIsNullOrEmpty => Expression.Call(stringIsNullOrEmpty, target),
+                KnownFunction.StringIsNullOrWhiteSpace => Expression.Call(stringIsNullOrWhiteSpace, target),
+                KnownFunction.StringLength => Expression.Property(target, "Length"),
+                KnownFunction.StringTrim => Expression.Call(target, stringTrim),
+                KnownFunction.StringTrimStart => Expression.Call(target, stringTrimStart),
+                KnownFunction.StringTrimEnd => Expression.Call(target, stringTrimEnd),
+                KnownFunction.StringSubstring => BuildSubstring(call, target, parameter),
+                KnownFunction.StringIndexOf => Expression.Call(target, stringIndexOf, StringArgument(call, 0, parameter)),
+                KnownFunction.StringReplace => Expression.Call(target, stringReplace, StringArgument(call, 0, parameter), StringArgument(call, 1, parameter)),
+
+                KnownFunction.DateYear => TemporalProperty(target, "Year"),
+                KnownFunction.DateMonth => TemporalProperty(target, "Month"),
+                KnownFunction.DateDay => TemporalProperty(target, "Day"),
+                KnownFunction.DateHour => TemporalProperty(target, "Hour"),
+                KnownFunction.DateMinute => TemporalProperty(target, "Minute"),
+                KnownFunction.DateSecond => TemporalProperty(target, "Second"),
+                KnownFunction.DateDayOfYear => TemporalProperty(target, "DayOfYear"),
+                KnownFunction.DateDate => TemporalProperty(target, "Date"),
+                KnownFunction.DateAddYears => TemporalAdd(call, target, "AddYears", parameter),
+                KnownFunction.DateAddMonths => TemporalAdd(call, target, "AddMonths", parameter),
+                KnownFunction.DateAddDays => TemporalAdd(call, target, "AddDays", parameter),
+                KnownFunction.DateAddHours => TemporalAdd(call, target, "AddHours", parameter),
+                KnownFunction.DateAddMinutes => TemporalAdd(call, target, "AddMinutes", parameter),
+                KnownFunction.DateAddSeconds => TemporalAdd(call, target, "AddSeconds", parameter),
+
+                KnownFunction.MathAbs => MathCall("Abs", target),
+                KnownFunction.MathCeiling => MathCall("Ceiling", target),
+                KnownFunction.MathFloor => MathCall("Floor", target),
+                KnownFunction.MathRound => BuildRound(call, target, parameter),
+
+                KnownFunction.In => BuildIn(call, target),
+
+                _ => throw new ScryValidationException($"Unsupported function '{call.Function}'.")
+            };
+        }
+        catch (ArgumentException exception)
+        {
+            throw new ScryValidationException(
+                $"Function '{call.Function}' cannot be applied to '{target.Type.Name}': {exception.Message}");
+        }
     }
+
+    Expression StringArgument(CallNode call, int index, ParameterExpression parameter) =>
+        Build(call.Arguments[index], parameter, typeof(string));
+
+    // A date part reads off the value, so an optional member is unwrapped first. Under EF that unwrap
+    // is part of the translated SQL expression and a null row simply yields null.
+    static Expression TemporalProperty(Expression target, string name)
+    {
+        var value = Nullable.GetUnderlyingType(target.Type) is null
+            ? target
+            : Expression.Property(target, "Value");
+
+        var property = value.Type.GetProperty(name) ??
+                       throw new ScryValidationException($"'{value.Type.Name}' has no '{name}'.");
+        return Expression.Property(value, property);
+    }
+
+    // AddDays and friends take an int on DateOnly and a double on DateTime, so the argument is built
+    // against whatever the resolved overload actually declares.
+    Expression TemporalAdd(CallNode call, Expression target, string name, ParameterExpression parameter)
+    {
+        var value = Nullable.GetUnderlyingType(target.Type) is null
+            ? target
+            : Expression.Property(target, "Value");
+
+        var method = value.Type.GetMethods()
+                         .FirstOrDefault(_ => _.Name == name && _.GetParameters().Length == 1) ??
+                     throw new ScryValidationException($"'{value.Type.Name}' has no '{name}'.");
+
+        var argument = Build(call.Arguments[0], parameter, method.GetParameters()[0].ParameterType);
+        return Expression.Call(value, method, ConvertTo(argument, method.GetParameters()[0].ParameterType));
+    }
+
+    static Expression MathCall(string name, Expression target)
+    {
+        var value = Nullable.GetUnderlyingType(target.Type) is null
+            ? target
+            : Expression.Property(target, "Value");
+
+        var method = typeof(Math).GetMethod(name, [value.Type]) ??
+                     throw new ScryValidationException($"Math.{name} is not defined for '{value.Type.Name}'.");
+        return Expression.Call(method, value);
+    }
+
+    Expression BuildRound(CallNode call, Expression target, ParameterExpression parameter)
+    {
+        if (call.Arguments.Count == 0)
+        {
+            return MathCall("Round", target);
+        }
+
+        var value = Nullable.GetUnderlyingType(target.Type) is null
+            ? target
+            : Expression.Property(target, "Value");
+        var digits = ConvertTo(Build(call.Arguments[0], parameter, typeof(int)), typeof(int));
+
+        var method = typeof(Math).GetMethod("Round", [value.Type, typeof(int)]) ??
+                     throw new ScryValidationException($"Math.Round is not defined for '{value.Type.Name}'.");
+        return Expression.Call(method, value, digits);
+    }
+
+    Expression BuildSubstring(CallNode call, Expression target, ParameterExpression parameter)
+    {
+        var start = ConvertTo(Build(call.Arguments[0], parameter, typeof(int)), typeof(int));
+        if (call.Arguments.Count == 1)
+        {
+            return Expression.Call(target, stringSubstring, start);
+        }
+
+        var length = ConvertTo(Build(call.Arguments[1], parameter, typeof(int)), typeof(int));
+        return Expression.Call(target, stringSubstringWithLength, start, length);
+    }
+
+    /// <summary>
+    /// Rebinds set membership onto <c>Enumerable.Contains</c> over a typed array of the client's
+    /// values, which EF translates to a SQL <c>IN</c>. The array's element type comes from the member
+    /// being tested, so every value is parsed into the server's own type — the wire's type tags never
+    /// decide it.
+    /// </summary>
+    Expression BuildIn(CallNode call, Expression target)
+    {
+        var elementType = target.Type;
+        var values = Array.CreateInstance(elementType, call.Arguments.Count);
+        var underlying = Nullable.GetUnderlyingType(elementType) ?? elementType;
+
+        for (var i = 0; i < call.Arguments.Count; i++)
+        {
+            var constant = (ConstNode)call.Arguments[i];
+            if (constant.Value is not null &&
+                constant.Tag != ClrTypeTag.Null)
+            {
+                values.SetValue(ParseValue(constant.Value, underlying), i);
+            }
+        }
+
+        return Expression.Call(
+            enumerableContains.MakeGenericMethod(elementType),
+            Expression.Constant(values, typeof(IEnumerable<>).MakeGenericType(elementType)),
+            target);
+    }
+
+    static Expression ConvertTo(Expression expression, Type target) =>
+        expression.Type == target ? expression : Expression.Convert(expression, target);
 
     Expression BuildConstant(ConstNode constant, Type? expected)
     {
@@ -468,6 +724,20 @@ sealed class ExpressionBuilder(Schema schema)
     static readonly MethodInfo stringToLower = StringMethod("ToLower");
     static readonly MethodInfo stringToUpper = StringMethod("ToUpper");
     static readonly MethodInfo stringIsNullOrEmpty = StringMethod("IsNullOrEmpty", typeof(string));
+    static readonly MethodInfo stringIsNullOrWhiteSpace = StringMethod("IsNullOrWhiteSpace", typeof(string));
+    static readonly MethodInfo stringTrim = StringMethod("Trim");
+    static readonly MethodInfo stringTrimStart = StringMethod("TrimStart");
+    static readonly MethodInfo stringTrimEnd = StringMethod("TrimEnd");
+    static readonly MethodInfo stringSubstring = StringMethod("Substring", typeof(int));
+    static readonly MethodInfo stringSubstringWithLength = StringMethod("Substring", typeof(int), typeof(int));
+    static readonly MethodInfo stringIndexOf = StringMethod("IndexOf", typeof(string));
+    static readonly MethodInfo stringReplace = StringMethod("Replace", typeof(string), typeof(string));
+
+    // The generic Contains<TSource>(source, value) definition, closed per member type by BuildIn.
+    static readonly MethodInfo enumerableContains = typeof(Enumerable).GetMethods()
+        .Single(_ =>
+            _ is { Name: "Contains", IsGenericMethodDefinition: true } &&
+            _.GetParameters().Length == 2);
 
     // string.Compare(string, string) — the seek predicate uses it so a string ordering key rebinds to
     // a SQL relational comparison (EF has no translation for the > / < operators on string directly).

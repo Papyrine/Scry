@@ -187,8 +187,20 @@
           IsNavigation: false
         },
         {
+          Name: Discount,
+          TypeDisplay: decimal?,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        },
+        {
           Name: Id,
           TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        },
+        {
+          Name: Placed,
+          TypeDisplay: global::System.DateTime,
           NeedsNullDefault: false,
           IsNavigation: false
         },
@@ -281,5 +293,5 @@
     }
   ],
   QueryEndpoint: /api/query,
-  SchemaStamp: -PcWs1g22NAOclcb
+  SchemaStamp: cUJ2bSEAp0O2bG_0
 }

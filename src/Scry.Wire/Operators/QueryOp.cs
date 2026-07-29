@@ -14,10 +14,15 @@ namespace Scry.Wire;
 [JsonDerivedType(typeof(TakeOp), "take")]
 [JsonDerivedType(typeof(SelectOp), "select")]
 [JsonDerivedType(typeof(GroupByOp), "groupBy")]
+[JsonDerivedType(typeof(DistinctOp), "distinct")]
 [JsonDerivedType(typeof(CountOp), "count")]
+[JsonDerivedType(typeof(LongCountOp), "longCount")]
 [JsonDerivedType(typeof(AnyOp), "any")]
+[JsonDerivedType(typeof(AllOp), "all")]
 [JsonDerivedType(typeof(FirstOp), "first")]
 [JsonDerivedType(typeof(SingleOp), "single")]
+[JsonDerivedType(typeof(LastOp), "last")]
+[JsonDerivedType(typeof(AggregateOp), "aggregate")]
 [JsonDerivedType(typeof(PageOp), "page")]
 public abstract record QueryOp;
 // end-snippet

@@ -77,6 +77,11 @@ public class Order
     // dedicated ClrTypeTag; their literals ride the String tag and are reconciled server-side.
     public uint Quantity { get; set; }
     public ulong Sku { get; set; }
+
+    // A real DateTime column, so the date functions are exercised as translated SQL rather than in
+    // memory. Discount is optional, which is what the coalesce and nullable-aggregate paths need.
+    public DateTime Placed { get; set; }
+    public decimal? Discount { get; set; }
 }
 
 /// <summary>
@@ -230,11 +235,11 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
             new() { Name = "Carol", Status = Status.Contractor, Active = true, Department = sales, Salary = 120_000, Avatar = [], Address = new() { City = "Paris", Country = "FR", Zip = "75001" } });
 
         context.Orders.AddRange(
-            new() { Region = "North", Amount = 100m, Quantity = 3, Sku = 1000 },
+            new() { Region = "North", Amount = 100m, Quantity = 3, Sku = 1000, Placed = new(2026, 3, 4, 9, 30, 15), Discount = 10m },
             // Sku is deliberately above long.MaxValue to prove the value survives the String-tag path
             // (a numeric Int64 tag would overflow).
-            new() { Region = "North", Amount = 250m, Quantity = 7, Sku = ulong.MaxValue },
-            new() { Region = "South", Amount = 75m, Quantity = 1, Sku = 3000 });
+            new() { Region = "North", Amount = 250m, Quantity = 7, Sku = ulong.MaxValue, Placed = new(2026, 7, 20, 14, 5, 0), Discount = null },
+            new() { Region = "South", Amount = 75m, Quantity = 1, Sku = 3000, Placed = new(2025, 12, 31, 23, 59, 59), Discount = 5m });
 
         context.Tickets.AddRange(
             new() { Name = "Login bug", IsOpen = true },

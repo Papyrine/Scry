@@ -15,7 +15,9 @@ public enum BinaryOp
     Add,
     Subtract,
     Multiply,
-    Divide
+    Divide,
+    Modulo,
+    Coalesce
 }
 
 /// <summary>Unary operators allowed in an expression.</summary>

@@ -11,6 +11,7 @@ namespace Scry.Wire;
 [JsonDerivedType(typeof(BinaryNode), "binary")]
 [JsonDerivedType(typeof(UnaryNode), "unary")]
 [JsonDerivedType(typeof(CallNode), "call")]
+[JsonDerivedType(typeof(ConditionalNode), "conditional")]
 [JsonDerivedType(typeof(AggregateNode), "aggregate")]
 public abstract record Node;
 // end-snippet

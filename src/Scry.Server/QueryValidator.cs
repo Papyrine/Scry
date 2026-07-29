@@ -31,8 +31,10 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         var sawOrdering = false;
         var sawGroupBy = false;
         var sawSelect = false;
+        var sawDistinct = false;
         var terminalIndex = -1;
         IReadOnlyList<MemberNode>? groupKeys = null;
+        Projection? projection = null;
 
         for (var i = 0; i < pipeline.Count; i++)
         {
@@ -48,12 +50,14 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 case WhereOp where:
                     EnsureNotGrouped(sawGroupBy, "Where");
                     EnsureNotProjected(sawSelect, "Where");
+                    EnsureNotDistinct(sawDistinct, "Where");
                     ValidatePredicate(where.Predicate, rootType);
                     break;
 
                 case OrderByOp orderBy:
                     EnsureNotGrouped(sawGroupBy, "OrderBy");
                     EnsureNotProjected(sawSelect, "OrderBy");
+                    EnsureNotDistinct(sawDistinct, "OrderBy");
                     ValidateScalar(orderBy.Key, rootType, "OrderBy key");
                     sawOrdering = true;
                     break;
@@ -64,14 +68,17 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                         throw Reject("ThenBy must follow OrderBy.");
                     }
 
+                    EnsureNotDistinct(sawDistinct, "ThenBy");
                     ValidateScalar(thenBy.Key, rootType, "ThenBy key");
                     break;
 
                 case SkipOp skip:
+                    EnsureNotDistinct(sawDistinct, "Skip");
                     EnsureNonNegative(skip.Count, "Skip");
                     break;
 
                 case TakeOp take:
+                    EnsureNotDistinct(sawDistinct, "Take");
                     EnsureNonNegative(take.Count, "Take");
                     if (take.Count > options.MaxPageSize)
                     {
@@ -90,6 +97,8 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     {
                         throw Reject("GroupBy must precede Select.");
                     }
+
+                    EnsureNotDistinct(sawDistinct, "GroupBy");
 
                     if (groupBy.Keys.Count != 1)
                     {
@@ -112,15 +121,46 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     }
 
                     ValidateProjection(select.Projection, rootType, sawGroupBy, groupKeys, depth: 0);
+                    projection = select.Projection;
                     sawSelect = true;
                     break;
 
-                case CountOp:
+                case DistinctOp:
+                    if (sawDistinct)
+                    {
+                        throw Reject("Only one Distinct is allowed.");
+                    }
+
+                    sawDistinct = true;
+                    break;
+
+                case CountOp count:
+                    ValidateTerminalPredicate(count.Predicate, rootType, sawSelect);
+                    EnsureFoldableDistinct(sawDistinct, sawGroupBy, projection, "Count");
+                    terminalIndex = i;
+                    break;
+
+                case LongCountOp longCount:
+                    ValidateTerminalPredicate(longCount.Predicate, rootType, sawSelect);
+                    EnsureFoldableDistinct(sawDistinct, sawGroupBy, projection, "LongCount");
                     terminalIndex = i;
                     break;
 
                 case AnyOp any:
                     ValidateTerminalPredicate(any.Predicate, rootType, sawSelect);
+                    EnsureFoldableDistinct(sawDistinct, sawGroupBy, projection, "Any");
+                    terminalIndex = i;
+                    break;
+
+                case AllOp all:
+                    if (sawDistinct)
+                    {
+                        throw Reject("All is not supported over a Distinct query.");
+                    }
+
+                    // Unlike the other terminal predicates this one is required, but it reads the same
+                    // row members, so it is subject to the same "not after a projection" rule.
+                    ValidateTerminalPredicate(all.Predicate, rootType, sawSelect);
                     terminalIndex = i;
                     break;
 
@@ -134,10 +174,45 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     terminalIndex = i;
                     break;
 
+                case LastOp last:
+                    if (!sawOrdering)
+                    {
+                        throw Reject("Last requires an ordered query — add an OrderBy.");
+                    }
+
+                    ValidateTerminalPredicate(last.Predicate, rootType, sawSelect);
+                    terminalIndex = i;
+                    break;
+
+                case AggregateOp aggregate:
+                    if (aggregate.Function == AggregateFn.Count)
+                    {
+                        throw Reject("Use the Count terminal to count rows.");
+                    }
+
+                    if (sawGroupBy || sawSelect)
+                    {
+                        throw Reject("An aggregate terminal must precede GroupBy and Select.");
+                    }
+
+                    if (sawDistinct)
+                    {
+                        throw Reject("An aggregate terminal is not supported over a Distinct query.");
+                    }
+
+                    ValidateScalar(aggregate.Selector, rootType, "Aggregate selector");
+                    terminalIndex = i;
+                    break;
+
                 case PageOp page:
                     if (sawGroupBy)
                     {
                         throw Reject("Paging is not supported over a grouped query.");
+                    }
+
+                    if (sawDistinct)
+                    {
+                        throw Reject("Paging is not supported over a Distinct query.");
                     }
 
                     if (page.Size is { } pageSize)
@@ -292,13 +367,15 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     depth += 1;
                     continue;
 
-                case CallNode call:
-                    ValidateExpr(call.Target, elementType, depth + 1);
-                    foreach (var argument in call.Arguments)
-                    {
-                        ValidateExpr(argument, elementType, depth + 1);
-                    }
+                case ConditionalNode conditional:
+                    ValidateExpr(conditional.Test, elementType, depth + 1);
+                    ValidateExpr(conditional.IfTrue, elementType, depth + 1);
+                    node = conditional.IfFalse;
+                    depth += 1;
+                    continue;
 
+                case CallNode call:
+                    ValidateCall(call, elementType, depth);
                     break;
 
                 case AggregateNode:
@@ -311,6 +388,86 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             break;
         }
     }
+
+    /// <summary>
+    /// Validates a function call: that the function exists, that it was given the number of arguments
+    /// the builder will read, and — for set membership — that the candidate values really are constants
+    /// and stay within the configured cap. Arity is checked here rather than left to the builder so a
+    /// malformed call is a rejected query, not a faulted one.
+    /// </summary>
+    void ValidateCall(CallNode call, Type elementType, int depth)
+    {
+        var (min, max) = Arity(call.Function);
+        var count = call.Arguments.Count;
+        if (count < min ||
+            count > max)
+        {
+            throw Reject($"Function '{call.Function}' does not take {count} argument(s).");
+        }
+
+        if (call.Function == KnownFunction.In)
+        {
+            if (count > options.MaxInValues)
+            {
+                throw Reject($"A Contains set of {count} values exceeds the maximum of {options.MaxInValues}.");
+            }
+
+            if (call.Arguments.Any(_ => _ is not ConstNode))
+            {
+                throw Reject("Every value in a Contains set must be a constant.");
+            }
+        }
+
+        ValidateExpr(call.Target, elementType, depth + 1);
+        foreach (var argument in call.Arguments)
+        {
+            ValidateExpr(argument, elementType, depth + 1);
+        }
+    }
+
+    static (int Min, int Max) Arity(KnownFunction function) =>
+        function switch
+        {
+            KnownFunction.StringToLower or
+                KnownFunction.StringToUpper or
+                KnownFunction.StringIsNullOrEmpty or
+                KnownFunction.StringIsNullOrWhiteSpace or
+                KnownFunction.StringLength or
+                KnownFunction.StringTrim or
+                KnownFunction.StringTrimStart or
+                KnownFunction.StringTrimEnd or
+                KnownFunction.DateYear or
+                KnownFunction.DateMonth or
+                KnownFunction.DateDay or
+                KnownFunction.DateHour or
+                KnownFunction.DateMinute or
+                KnownFunction.DateSecond or
+                KnownFunction.DateDayOfYear or
+                KnownFunction.DateDate or
+                KnownFunction.MathAbs or
+                KnownFunction.MathCeiling or
+                KnownFunction.MathFloor => (0, 0),
+
+            KnownFunction.StringContains or
+                KnownFunction.StringStartsWith or
+                KnownFunction.StringEndsWith or
+                KnownFunction.StringIndexOf or
+                KnownFunction.DateAddYears or
+                KnownFunction.DateAddMonths or
+                KnownFunction.DateAddDays or
+                KnownFunction.DateAddHours or
+                KnownFunction.DateAddMinutes or
+                KnownFunction.DateAddSeconds => (1, 1),
+
+            KnownFunction.StringReplace => (2, 2),
+            KnownFunction.StringSubstring => (1, 2),
+            KnownFunction.MathRound => (0, 1),
+
+            // Bounded by MaxInValues rather than by arity.
+            KnownFunction.In => (0, int.MaxValue),
+
+            _ => throw Reject($"Unsupported function '{function}'.")
+        };
 
     Type ResolveNavigation(IReadOnlyList<string> path, Type rootType)
     {
@@ -402,6 +559,43 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         if (sawSelect)
         {
             throw Reject($"{op} is not allowed after Select.");
+        }
+    }
+
+    // Distinct is applied to the projected rows, so only the projection it deduplicates and a terminal
+    // may follow it. Anything that reads row members again would be describing the pre-Distinct rows and
+    // silently mean something else. Paging is excluded for a different reason: an ordering cannot
+    // survive a Distinct, so Skip/Take over one would be slicing an undefined order.
+    static void EnsureNotDistinct(bool sawDistinct, string op)
+    {
+        if (sawDistinct)
+        {
+            throw Reject($"{op} is not allowed after Distinct.");
+        }
+    }
+
+    /// <summary>
+    /// A terminal that folds deduplicated rows to a scalar has to fold a single projected value:
+    /// <c>COUNT(DISTINCT x)</c> is one column by definition, and a provider given a whole row to
+    /// deduplicate and count has no equivalent to fall back on. Enumerating a Distinct query is
+    /// unrestricted; only the folding terminals are.
+    /// </summary>
+    static void EnsureFoldableDistinct(bool sawDistinct, bool sawGroupBy, Projection? projection, string op)
+    {
+        if (!sawDistinct)
+        {
+            return;
+        }
+
+        if (sawGroupBy)
+        {
+            throw Reject($"{op} over a Distinct query is not supported after GroupBy.");
+        }
+
+        if (projection is not { Members: [{ Value: NodeValue { Node: MemberNode } }] })
+        {
+            throw Reject(
+                $"{op} over a Distinct query requires the Select to project exactly one member.");
         }
     }
 

@@ -80,8 +80,14 @@ public int MaxPipelineLength { get; set; } = 32;
 
 /// <summary>Maximum expression nesting depth in a predicate. Default 32.</summary>
 public int MaxExpressionDepth { get; set; } = 32;
+
+/// <summary>
+/// Maximum number of values a client may supply to a set-membership test (<c>Contains</c>, which
+/// becomes a SQL <c>IN</c>). Default 1000.
+/// </summary>
+public int MaxInValues { get; set; } = 1000;
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L33' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Every limit is enforced during validation, before any expression is rebound or executed.
@@ -92,6 +98,7 @@ Every limit is enforced during validation, before any expression is rebound or e
 | `MaxNavigationDepth` | 4 | Member paths longer than the limit, and projection nesting deeper than it. |
 | `MaxPipelineLength` | 32 | Pipelines with more operators than the limit. |
 | `MaxExpressionDepth` | 32 | Predicate/expression trees nested deeper than the limit. |
+| `MaxInValues` | 1000 | `Contains` over a client-supplied set larger than the limit. Bounds the SQL `IN` list a single request can build. |
 
 
 ## POCO sources

@@ -275,8 +275,20 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false
         },
         {
+          Name: Discount,
+          TypeDisplay: decimal?,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        },
+        {
           Name: Id,
           TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false
+        },
+        {
+          Name: Placed,
+          TypeDisplay: global::System.DateTime,
           NeedsNullDefault: false,
           IsNavigation: false
         },
@@ -369,10 +381,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
     }
   ],
   QueryEndpoint: /api/query,
-  SchemaStamp: -PcWs1g22NAOclcb
+  SchemaStamp: cUJ2bSEAp0O2bG_0
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L285' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L297' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names, member names with the exact C# type spelling the source generator would emit, and the re-emitted enums. It carries **no** policies, resolvers, connection details, or CLR internals.

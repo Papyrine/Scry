@@ -10,8 +10,37 @@ public enum KnownFunction
     StringToLower,
     StringToUpper,
     StringIsNullOrEmpty,
+    StringIsNullOrWhiteSpace,
+    StringLength,
+    StringTrim,
+    StringTrimStart,
+    StringTrimEnd,
+    StringSubstring,
+    StringIndexOf,
+    StringReplace,
     DateYear,
     DateMonth,
-    DateDay
+    DateDay,
+    DateHour,
+    DateMinute,
+    DateSecond,
+    DateDayOfYear,
+    DateDate,
+    DateAddYears,
+    DateAddMonths,
+    DateAddDays,
+    DateAddHours,
+    DateAddMinutes,
+    DateAddSeconds,
+    MathAbs,
+    MathCeiling,
+    MathFloor,
+    MathRound,
+
+    /// <summary>
+    /// Membership of a client-supplied set (SQL <c>IN</c>). The target is the value being tested and
+    /// every argument is a <see cref="ConstNode"/>; the server caps the number of values.
+    /// </summary>
+    In
 }
 // end-snippet

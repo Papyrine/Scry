@@ -97,8 +97,9 @@ public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjec
 | `Take(n)` | `take` | `n` must be non-negative and `<= MaxPageSize`. |
 | `GroupBy(key)` | `groupBy` | Exactly one key, at most one `GroupBy`, and it must be followed by a `Select`. |
 | `Select(projection)` | `select` | At most one, and it must construct an object. |
+| `Distinct()` | `distinct` | Deduplicates the **projected** rows. Only the `Select` and a terminal may follow it. |
 
-Any other LINQ operator — `Join`, `Distinct`, `SelectMany`, `Union`, `Last`, `Reverse`, … — throws:
+Any other LINQ operator — `Join`, `SelectMany`, `Union`, `Reverse`, … — throws:
 
 ```
 LINQ operator 'Join' is not supported by Scry.
@@ -120,14 +121,29 @@ Terminals are `async` extension methods on `IQueryable<T>` from `Scry.Client`. A
 | `ToHashSetAsync()` | `Task<HashSet<T>>` | list |
 | `ToDictionaryAsync(keySelector[, elementSelector][, comparer])` | `Task<Dictionary<TKey, …>>` | list |
 | `ToLookupAsync(keySelector[, elementSelector][, comparer])` | `Task<ILookup<TKey, …>>` | list |
-| `FirstAsync()` | `Task<T?>` | single |
-| `FirstOrDefaultAsync()` | `Task<T?>` | single |
-| `SingleAsync()` | `Task<T?>` | single |
-| `SingleOrDefaultAsync()` | `Task<T?>` | single |
-| `CountAsync()` | `Task<int>` | scalar |
-| `AnyAsync()` | `Task<bool>` | scalar |
+| `FirstAsync([predicate])` | `Task<T?>` | single |
+| `FirstOrDefaultAsync([predicate])` | `Task<T?>` | single |
+| `SingleAsync([predicate])` | `Task<T?>` | single |
+| `SingleOrDefaultAsync([predicate])` | `Task<T?>` | single |
+| `LastAsync([predicate])` | `Task<T?>` | single |
+| `LastOrDefaultAsync([predicate])` | `Task<T?>` | single |
+| `ElementAtAsync(index)` | `Task<T?>` | single |
+| `ElementAtOrDefaultAsync(index)` | `Task<T?>` | single |
+| `CountAsync([predicate])` | `Task<int>` | scalar |
+| `LongCountAsync([predicate])` | `Task<long>` | scalar |
+| `AnyAsync([predicate])` | `Task<bool>` | scalar |
+| `AllAsync(predicate)` | `Task<bool>` | scalar |
+| `SumAsync(selector)` | `Task<TValue>` | scalar |
+| `AverageAsync(selector)` | `Task<double>` / `Task<decimal>` | scalar |
+| `MinAsync(selector)` / `MaxAsync(selector)` | `Task<TValue?>` | scalar |
 | `ToPageAsync([pageSize])` | `Task<ScryPage<T>>` | page |
 | `ToPageAsync(pageSize, cursor)` | `Task<ScryPage<T>>` | page |
+
+A terminal predicate narrows the rows before the terminal does anything else — `CountAsync(_ => _.Active)` is `Where(_ => _.Active).CountAsync()`. It cannot be combined with a `Select`, since it reads the row rather than the projection.
+
+`LastAsync` requires an ordered query: "last" is resolved by reversing the ordering, so an unordered query has no defined last row and is rejected. `ElementAtAsync` is `Skip` plus `First`, so an index past the end yields no row rather than an error.
+
+The aggregate terminals fold the whole sequence. `SumAsync` and `AverageAsync` carry one overload per numeric type, mirroring `System.Linq` — the value the server computes has a type of its own, so an average over integers returns a `double`. `MinAsync`/`MaxAsync` return the selected type, and give the default when there are no rows (select a nullable — `MinAsync(_ => (decimal?)_.Amount)` — to tell "no rows" apart from a real zero).
 
 `ToPageAsync` returns a bounded [page](paging.md): `Items`, `HasMore`, and a `Cursor`. Omitting `pageSize` uses the server's `DefaultPageSize`; any size is capped by `MaxPageSize`. Advance by **offset** (`Skip`, below) or by **keyset** — pass the previous page's `Cursor` back to seek past it:
 
@@ -232,7 +248,9 @@ public enum BinaryOp
     Add,
     Subtract,
     Multiply,
-    Divide
+    Divide,
+    Modulo,
+    Coalesce
 }
 
 /// <summary>Unary operators allowed in an expression.</summary>
@@ -242,14 +260,16 @@ public enum UnaryOp
     Negate
 }
 ```
-<sup><a href='/src/Scry.Wire/BinaryOp.cs#L3-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireBinaryOps' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/BinaryOp.cs#L3-L29' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireBinaryOps' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-C# `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, `+`, `-`, `*`, `/`, `!`, and unary `-` map onto these. Any other operator (`%`, `&`, `|`, `^`, `<<`, `>>`, `??`, `?:`) throws:
+C# `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, `+`, `-`, `*`, `/`, `%`, `??`, `!`, and unary `-` map onto these, and `?:` becomes a `conditional` node. Any other operator (`&`, `|`, `^`, `<<`, `>>`) throws:
 
 ```
-Binary operator 'Modulo' is not supported by Scry.
+Binary operator 'ExclusiveOr' is not supported by Scry.
 ```
+
+`??` requires a nullable left operand, and the two branches of a `?:` must have the same type; both are checked server-side when the expression is rebound.
 
 `Convert` / `ConvertChecked` nodes — which the C# compiler inserts freely around enums, nullables, and numeric widening — are transparently unwrapped rather than encoded.
 
@@ -268,12 +288,41 @@ public enum KnownFunction
     StringToLower,
     StringToUpper,
     StringIsNullOrEmpty,
+    StringIsNullOrWhiteSpace,
+    StringLength,
+    StringTrim,
+    StringTrimStart,
+    StringTrimEnd,
+    StringSubstring,
+    StringIndexOf,
+    StringReplace,
     DateYear,
     DateMonth,
-    DateDay
+    DateDay,
+    DateHour,
+    DateMinute,
+    DateSecond,
+    DateDayOfYear,
+    DateDate,
+    DateAddYears,
+    DateAddMonths,
+    DateAddDays,
+    DateAddHours,
+    DateAddMinutes,
+    DateAddSeconds,
+    MathAbs,
+    MathCeiling,
+    MathFloor,
+    MathRound,
+
+    /// <summary>
+    /// Membership of a client-supplied set (SQL <c>IN</c>). The target is the value being tested and
+    /// every argument is a <see cref="ConstNode"/>; the server caps the number of values.
+    /// </summary>
+    In
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Mapped from:
@@ -283,14 +332,45 @@ Mapped from:
 | `text.Contains(value)` | `StringContains` |
 | `text.StartsWith(value)` | `StringStartsWith` |
 | `text.EndsWith(value)` | `StringEndsWith` |
-| `text.ToLower()` | `StringToLower` |
-| `text.ToUpper()` | `StringToUpper` |
+| `text.ToLower()` / `text.ToUpper()` | `StringToLower` / `StringToUpper` |
 | `string.IsNullOrEmpty(text)` | `StringIsNullOrEmpty` |
-| `date.Year` | `DateYear` |
-| `date.Month` | `DateMonth` |
-| `date.Day` | `DateDay` |
+| `string.IsNullOrWhiteSpace(text)` | `StringIsNullOrWhiteSpace` |
+| `text.Length` | `StringLength` |
+| `text.Trim()` / `text.TrimStart()` / `text.TrimEnd()` | `StringTrim` / `StringTrimStart` / `StringTrimEnd` |
+| `text.Substring(start[, length])` | `StringSubstring` |
+| `text.IndexOf(value)` | `StringIndexOf` |
+| `text.Replace(from, to)` | `StringReplace` |
+| `date.Year` / `.Month` / `.Day` | `DateYear` / `DateMonth` / `DateDay` |
+| `date.Hour` / `.Minute` / `.Second` | `DateHour` / `DateMinute` / `DateSecond` |
+| `date.DayOfYear` | `DateDayOfYear` |
+| `date.Date` | `DateDate` |
+| `date.AddYears(n)` / `.AddMonths(n)` / `.AddDays(n)` | `DateAddYears` / `DateAddMonths` / `DateAddDays` |
+| `date.AddHours(n)` / `.AddMinutes(n)` / `.AddSeconds(n)` | `DateAddHours` / `DateAddMinutes` / `DateAddSeconds` |
+| `Math.Abs(value)` | `MathAbs` |
+| `Math.Ceiling(value)` / `Math.Floor(value)` | `MathCeiling` / `MathFloor` |
+| `Math.Round(value[, digits])` | `MathRound` |
+| `set.Contains(_.Member)` | `In` |
 
-The date parts apply to `DateTime` and `DateOnly`. There is no free-form method call node in the wire format, so this list is the complete set of behaviour a client can ask the database to perform.
+The date functions apply to `DateTime`, `DateOnly`, `DateTimeOffset`, and `TimeOnly`, and an optional member is unwrapped before the part is read. Only the parts a type actually has are available: asking for the `Hour` of a `DateOnly` is rejected. The trim functions map only the whitespace-trimming overloads — the `params char[]` forms have no SQL equivalent.
+
+There is no free-form method call node in the wire format, so this list is the complete set of behaviour a client can ask the database to perform. **Provider support is still the outer bound**: a function only reaches SQL if the EF provider translates it, which is why `DayOfWeek` — which SQL Server's provider does not translate — has no entry.
+
+Functions are **expression-level**: they read a row inside a `Where` predicate, an ordering or group key, a terminal predicate, or an aggregate selector. A projection member is still a member path, so `Select(_ => new { Upper = _.Name.ToUpper() })` is rejected.
+
+
+### Set membership
+
+`Contains` over a client-side collection becomes a SQL `IN`:
+
+```cs
+var wanted = new[] { "Engineering", "Sales" };
+
+await Query.Employee
+    .Where(_ => wanted.Contains(_.Department!.Name))
+    .ToListAsync();
+```
+
+The collection must be closure state — it is evaluated on the client and its values ride the wire as constants — and the tested value must come from the row. The number of values is capped by [`MaxInValues`](server.md#limits) (default 1000). An empty collection matches nothing.
 
 
 ### Constants and captured values
@@ -420,7 +500,11 @@ regions = await Query.Order
 <!-- snippet: wireAggregates -->
 <a id='snippet-wireAggregates'></a>
 ```cs
-/// <summary>Aggregate functions allowed in a projection over a grouped query.</summary>
+/// <summary>
+/// Aggregate functions, used either in a projection over a grouped query or as a terminal folding
+/// the whole sequence to one scalar. <see cref="Count"/> is grouped-projection only — counting a
+/// sequence has its own terminal.
+/// </summary>
 public enum AggregateFn
 {
     Count,
@@ -430,7 +514,7 @@ public enum AggregateFn
     Max
 }
 ```
-<sup><a href='/src/Scry.Wire/AggregateFn.cs#L3-L13' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireAggregates' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/AggregateFn.cs#L3-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireAggregates' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 | C# | Aggregate |
@@ -447,17 +531,20 @@ Constraints:
 - `Where`, `OrderBy`, and `ThenBy` are not allowed after `GroupBy`.
 - Nested projections are not allowed in a grouped `Select`.
 - Referencing a non-key member throws `A grouped projection may only use the group key or aggregates.`
-- Aggregates outside a grouped `Select` are rejected server-side with `Aggregates are only allowed in a Select following GroupBy.`
+- An aggregate written *inside a projection* is only valid in a grouped `Select`; elsewhere it is rejected with `Aggregates are only allowed in a Select following GroupBy.`
+
+To aggregate a whole sequence rather than each group, use the [aggregate terminals](#terminals) — `SumAsync`, `AverageAsync`, `MinAsync`, `MaxAsync` — which need no `GroupBy` and must precede any `Select`.
 
 
 ## Ordering rules
 
 The pipeline is validated as a whole. In order:
 
-1. `Where`, `OrderBy`/`ThenBy`, `Skip`, `Take` — any number, in any order, before grouping or projection.
+1. `Where`, `OrderBy`/`ThenBy`, `Skip`, `Take` — any number, in any order, before grouping, projection, or deduplication.
 2. At most one `GroupBy`, which must precede the `Select`.
 3. At most one `Select`.
-4. At most one terminal, and nothing after it.
+4. At most one `Distinct`, after which only the `Select` and a terminal may follow.
+5. At most one terminal, and nothing after it.
 
 The legal operator orderings form a small state machine — every absent edge is an illegal ordering:<!-- include: pipeline-order. path: /docs/includes/pipeline-order.include.md -->
 
@@ -472,14 +559,23 @@ stateDiagram-v2
     Source --> Projected: Select
     Restricting --> Projected: Select
     Grouped --> Projected: Select (mandatory)
+    Source --> Deduplicated: Distinct
+    Restricting --> Deduplicated: Distinct
+    Projected --> Deduplicated: Distinct
+    Deduplicated --> Projected: Select
     Source --> [*]: terminal
     Restricting --> [*]: terminal
     Projected --> [*]: terminal
+    Deduplicated --> [*]: terminal
 ```
 
 Nothing filters, orders, skips, or takes after `GroupBy`; a `GroupBy` cannot reach a terminal without
 a `Select` in between; and there is no second `GroupBy` or `Select`. `ThenBy` without a preceding
-`OrderBy` is rejected, and nothing may follow a terminal.<!-- endInclude -->
+`OrderBy` is rejected, and nothing may follow a terminal.
+
+`Distinct` deduplicates the projected rows, so the only thing that may follow it is the `Select` it
+deduplicates and a terminal. Filtering or ordering after it would be describing the rows that fed it,
+and paging after it would be slicing an order that a deduplication cannot preserve.<!-- endInclude -->
 
 
 ## Errors

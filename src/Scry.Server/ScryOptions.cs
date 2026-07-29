@@ -24,6 +24,12 @@ public sealed class ScryOptions(Type contextType)
 
     /// <summary>Maximum expression nesting depth in a predicate. Default 32.</summary>
     public int MaxExpressionDepth { get; set; } = 32;
+
+    /// <summary>
+    /// Maximum number of values a client may supply to a set-membership test (<c>Contains</c>, which
+    /// becomes a SQL <c>IN</c>). Default 1000.
+    /// </summary>
+    public int MaxInValues { get; set; } = 1000;
     // end-snippet
 
     /// <summary>

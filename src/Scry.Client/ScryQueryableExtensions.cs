@@ -77,33 +77,184 @@ public static class ScryQueryableExtensions
     public static Task<T?> FirstOrDefaultAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>
         Single(source, new FirstOp(OrDefault: true, Predicate: null), cancel);
 
+    /// <summary>Executes the query and returns the first row matching <paramref name="predicate"/>, or default if none does.</summary>
+    public static Task<T?> FirstOrDefaultAsync<T>(this IQueryable<T> source, Expression<Func<T, bool>> predicate, Cancel cancel = default) =>
+        Single(source, new FirstOp(OrDefault: true, Predicate(predicate)), cancel);
+
     /// <summary>Executes the query and returns the first row.</summary>
     public static Task<T?> FirstAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>
         Single(source, new FirstOp(OrDefault: false, Predicate: null), cancel);
+
+    /// <summary>Executes the query and returns the first row matching <paramref name="predicate"/>.</summary>
+    public static Task<T?> FirstAsync<T>(this IQueryable<T> source, Expression<Func<T, bool>> predicate, Cancel cancel = default) =>
+        Single(source, new FirstOp(OrDefault: false, Predicate(predicate)), cancel);
 
     /// <summary>Executes the query and returns the single row, or default if empty.</summary>
     public static Task<T?> SingleOrDefaultAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>
         Single(source, new SingleOp(OrDefault: true, Predicate: null), cancel);
 
+    /// <summary>Executes the query and returns the single row matching <paramref name="predicate"/>, or default if none does.</summary>
+    public static Task<T?> SingleOrDefaultAsync<T>(this IQueryable<T> source, Expression<Func<T, bool>> predicate, Cancel cancel = default) =>
+        Single(source, new SingleOp(OrDefault: true, Predicate(predicate)), cancel);
+
     /// <summary>Executes the query and returns the single row.</summary>
     public static Task<T?> SingleAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>
         Single(source, new SingleOp(OrDefault: false, Predicate: null), cancel);
 
+    /// <summary>Executes the query and returns the single row matching <paramref name="predicate"/>.</summary>
+    public static Task<T?> SingleAsync<T>(this IQueryable<T> source, Expression<Func<T, bool>> predicate, Cancel cancel = default) =>
+        Single(source, new SingleOp(OrDefault: false, Predicate(predicate)), cancel);
+
+    /// <summary>
+    /// Executes the query and returns the last row. The query must be ordered — the server resolves
+    /// "last" by reversing the ordering, so an unordered query is rejected.
+    /// </summary>
+    public static Task<T?> LastAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>
+        Single(source, new LastOp(OrDefault: false, Predicate: null), cancel);
+
+    /// <summary>Executes the query and returns the last row matching <paramref name="predicate"/>. The query must be ordered.</summary>
+    public static Task<T?> LastAsync<T>(this IQueryable<T> source, Expression<Func<T, bool>> predicate, Cancel cancel = default) =>
+        Single(source, new LastOp(OrDefault: false, Predicate(predicate)), cancel);
+
+    /// <summary>Executes the query and returns the last row, or default if empty. The query must be ordered.</summary>
+    public static Task<T?> LastOrDefaultAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>
+        Single(source, new LastOp(OrDefault: true, Predicate: null), cancel);
+
+    /// <summary>Executes the query and returns the last row matching <paramref name="predicate"/>, or default if none does. The query must be ordered.</summary>
+    public static Task<T?> LastOrDefaultAsync<T>(this IQueryable<T> source, Expression<Func<T, bool>> predicate, Cancel cancel = default) =>
+        Single(source, new LastOp(OrDefault: true, Predicate(predicate)), cancel);
+
+    // ElementAt is Skip + First rather than its own wire operator: the pipeline already expresses it
+    // exactly, and skipping past the end yields no row — the same empty case First already handles.
+
+    /// <summary>Executes the query and returns the row at <paramref name="index"/>.</summary>
+    public static Task<T?> ElementAtAsync<T>(this IQueryable<T> source, int index, Cancel cancel = default) =>
+        Single(source.Skip(index), new FirstOp(OrDefault: false, Predicate: null), cancel);
+
+    /// <summary>Executes the query and returns the row at <paramref name="index"/>, or default if there is none.</summary>
+    public static Task<T?> ElementAtOrDefaultAsync<T>(this IQueryable<T> source, int index, Cancel cancel = default) =>
+        Single(source.Skip(index), new FirstOp(OrDefault: true, Predicate: null), cancel);
+
     /// <summary>Executes the query and returns the row count.</summary>
-    public static async Task<int> CountAsync<T>(this IQueryable<T> source, Cancel cancel = default)
-    {
-        var response = await Send(source, new CountOp(), cancel);
-        EnsureKind(response, ResultKind.Scalar);
-        return response.Payload.Deserialize<int>(ScryJson.Options);
-    }
+    public static Task<int> CountAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>
+        Scalar<T, int>(source, new CountOp(), cancel);
+
+    /// <summary>Executes the query and returns the number of rows matching <paramref name="predicate"/>.</summary>
+    public static Task<int> CountAsync<T>(this IQueryable<T> source, Expression<Func<T, bool>> predicate, Cancel cancel = default) =>
+        Scalar<T, int>(source, new CountOp(Predicate(predicate)), cancel);
+
+    /// <summary>Executes the query and returns the row count as a 64-bit integer.</summary>
+    public static Task<long> LongCountAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>
+        Scalar<T, long>(source, new LongCountOp(), cancel);
+
+    /// <summary>Executes the query and returns the number of rows matching <paramref name="predicate"/> as a 64-bit integer.</summary>
+    public static Task<long> LongCountAsync<T>(this IQueryable<T> source, Expression<Func<T, bool>> predicate, Cancel cancel = default) =>
+        Scalar<T, long>(source, new LongCountOp(Predicate(predicate)), cancel);
 
     /// <summary>Executes the query and returns whether any rows match.</summary>
-    public static async Task<bool> AnyAsync<T>(this IQueryable<T> source, Cancel cancel = default)
-    {
-        var response = await Send(source, new AnyOp(Predicate: null), cancel);
-        EnsureKind(response, ResultKind.Scalar);
-        return response.Payload.Deserialize<bool>(ScryJson.Options);
-    }
+    public static Task<bool> AnyAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>
+        Scalar<T, bool>(source, new AnyOp(Predicate: null), cancel);
+
+    /// <summary>Executes the query and returns whether any row matches <paramref name="predicate"/>.</summary>
+    public static Task<bool> AnyAsync<T>(this IQueryable<T> source, Expression<Func<T, bool>> predicate, Cancel cancel = default) =>
+        Scalar<T, bool>(source, new AnyOp(Predicate(predicate)), cancel);
+
+    /// <summary>Executes the query and returns whether every row matches <paramref name="predicate"/>. True when no rows match the query.</summary>
+    public static Task<bool> AllAsync<T>(this IQueryable<T> source, Expression<Func<T, bool>> predicate, Cancel cancel = default) =>
+        Scalar<T, bool>(source, new AllOp(Predicate(predicate)), cancel);
+
+    // Sum and Average carry one overload per numeric type, mirroring System.Linq: the value the server
+    // computes has a type of its own (Average over integers is a double), so the selector's type has to
+    // pick the returned type rather than being echoed back. Min/Max stay generic — their result is
+    // always the selected type — and return null for an empty sequence rather than faulting.
+
+    /// <summary>Executes the query and returns the sum of the selected values.</summary>
+    public static Task<int> SumAsync<T>(this IQueryable<T> source, Expression<Func<T, int>> selector, Cancel cancel = default) =>
+        Aggregate<T, int>(source, AggregateFn.Sum, selector, cancel);
+
+    /// <summary>Executes the query and returns the sum of the selected values.</summary>
+    public static Task<int?> SumAsync<T>(this IQueryable<T> source, Expression<Func<T, int?>> selector, Cancel cancel = default) =>
+        Aggregate<T, int?>(source, AggregateFn.Sum, selector, cancel);
+
+    /// <summary>Executes the query and returns the sum of the selected values.</summary>
+    public static Task<long> SumAsync<T>(this IQueryable<T> source, Expression<Func<T, long>> selector, Cancel cancel = default) =>
+        Aggregate<T, long>(source, AggregateFn.Sum, selector, cancel);
+
+    /// <summary>Executes the query and returns the sum of the selected values.</summary>
+    public static Task<long?> SumAsync<T>(this IQueryable<T> source, Expression<Func<T, long?>> selector, Cancel cancel = default) =>
+        Aggregate<T, long?>(source, AggregateFn.Sum, selector, cancel);
+
+    /// <summary>Executes the query and returns the sum of the selected values.</summary>
+    public static Task<float> SumAsync<T>(this IQueryable<T> source, Expression<Func<T, float>> selector, Cancel cancel = default) =>
+        Aggregate<T, float>(source, AggregateFn.Sum, selector, cancel);
+
+    /// <summary>Executes the query and returns the sum of the selected values.</summary>
+    public static Task<float?> SumAsync<T>(this IQueryable<T> source, Expression<Func<T, float?>> selector, Cancel cancel = default) =>
+        Aggregate<T, float?>(source, AggregateFn.Sum, selector, cancel);
+
+    /// <summary>Executes the query and returns the sum of the selected values.</summary>
+    public static Task<double> SumAsync<T>(this IQueryable<T> source, Expression<Func<T, double>> selector, Cancel cancel = default) =>
+        Aggregate<T, double>(source, AggregateFn.Sum, selector, cancel);
+
+    /// <summary>Executes the query and returns the sum of the selected values.</summary>
+    public static Task<double?> SumAsync<T>(this IQueryable<T> source, Expression<Func<T, double?>> selector, Cancel cancel = default) =>
+        Aggregate<T, double?>(source, AggregateFn.Sum, selector, cancel);
+
+    /// <summary>Executes the query and returns the sum of the selected values.</summary>
+    public static Task<decimal> SumAsync<T>(this IQueryable<T> source, Expression<Func<T, decimal>> selector, Cancel cancel = default) =>
+        Aggregate<T, decimal>(source, AggregateFn.Sum, selector, cancel);
+
+    /// <summary>Executes the query and returns the sum of the selected values.</summary>
+    public static Task<decimal?> SumAsync<T>(this IQueryable<T> source, Expression<Func<T, decimal?>> selector, Cancel cancel = default) =>
+        Aggregate<T, decimal?>(source, AggregateFn.Sum, selector, cancel);
+
+    /// <summary>Executes the query and returns the average of the selected values.</summary>
+    public static Task<double> AverageAsync<T>(this IQueryable<T> source, Expression<Func<T, int>> selector, Cancel cancel = default) =>
+        Aggregate<T, double>(source, AggregateFn.Average, selector, cancel);
+
+    /// <summary>Executes the query and returns the average of the selected values.</summary>
+    public static Task<double?> AverageAsync<T>(this IQueryable<T> source, Expression<Func<T, int?>> selector, Cancel cancel = default) =>
+        Aggregate<T, double?>(source, AggregateFn.Average, selector, cancel);
+
+    /// <summary>Executes the query and returns the average of the selected values.</summary>
+    public static Task<double> AverageAsync<T>(this IQueryable<T> source, Expression<Func<T, long>> selector, Cancel cancel = default) =>
+        Aggregate<T, double>(source, AggregateFn.Average, selector, cancel);
+
+    /// <summary>Executes the query and returns the average of the selected values.</summary>
+    public static Task<double?> AverageAsync<T>(this IQueryable<T> source, Expression<Func<T, long?>> selector, Cancel cancel = default) =>
+        Aggregate<T, double?>(source, AggregateFn.Average, selector, cancel);
+
+    /// <summary>Executes the query and returns the average of the selected values.</summary>
+    public static Task<float> AverageAsync<T>(this IQueryable<T> source, Expression<Func<T, float>> selector, Cancel cancel = default) =>
+        Aggregate<T, float>(source, AggregateFn.Average, selector, cancel);
+
+    /// <summary>Executes the query and returns the average of the selected values.</summary>
+    public static Task<float?> AverageAsync<T>(this IQueryable<T> source, Expression<Func<T, float?>> selector, Cancel cancel = default) =>
+        Aggregate<T, float?>(source, AggregateFn.Average, selector, cancel);
+
+    /// <summary>Executes the query and returns the average of the selected values.</summary>
+    public static Task<double> AverageAsync<T>(this IQueryable<T> source, Expression<Func<T, double>> selector, Cancel cancel = default) =>
+        Aggregate<T, double>(source, AggregateFn.Average, selector, cancel);
+
+    /// <summary>Executes the query and returns the average of the selected values.</summary>
+    public static Task<double?> AverageAsync<T>(this IQueryable<T> source, Expression<Func<T, double?>> selector, Cancel cancel = default) =>
+        Aggregate<T, double?>(source, AggregateFn.Average, selector, cancel);
+
+    /// <summary>Executes the query and returns the average of the selected values.</summary>
+    public static Task<decimal> AverageAsync<T>(this IQueryable<T> source, Expression<Func<T, decimal>> selector, Cancel cancel = default) =>
+        Aggregate<T, decimal>(source, AggregateFn.Average, selector, cancel);
+
+    /// <summary>Executes the query and returns the average of the selected values.</summary>
+    public static Task<decimal?> AverageAsync<T>(this IQueryable<T> source, Expression<Func<T, decimal?>> selector, Cancel cancel = default) =>
+        Aggregate<T, decimal?>(source, AggregateFn.Average, selector, cancel);
+
+    /// <summary>Executes the query and returns the smallest selected value, or default if there are no rows.</summary>
+    public static Task<TValue?> MinAsync<T, TValue>(this IQueryable<T> source, Expression<Func<T, TValue>> selector, Cancel cancel = default) =>
+        Aggregate<T, TValue?>(source, AggregateFn.Min, selector, cancel);
+
+    /// <summary>Executes the query and returns the largest selected value, or default if there are no rows.</summary>
+    public static Task<TValue?> MaxAsync<T, TValue>(this IQueryable<T> source, Expression<Func<T, TValue>> selector, Cancel cancel = default) =>
+        Aggregate<T, TValue?>(source, AggregateFn.Max, selector, cancel);
 
     /// <summary>
     /// Executes the query and returns a bounded page using the server's default page size, plus
@@ -133,6 +284,28 @@ public static class ScryQueryableExtensions
         EnsureKind(response, ResultKind.Page);
         return Materialize<ScryPage<T>>(source, response) ??
                throw new ScryWireException("Page result deserialized to null.");
+    }
+
+    static Node Predicate<T>(Expression<Func<T, bool>> predicate) =>
+        QueryTranslator.TranslateLambda(predicate);
+
+    static Task<TValue?> Aggregate<T, TValue>(IQueryable<T> source, AggregateFn function, LambdaExpression selector, Cancel cancel) =>
+        Scalar<T, TValue>(source, new AggregateOp(function, QueryTranslator.TranslateLambda(selector)), cancel);
+
+    /// <summary>
+    /// Sends a terminal that produces a single scalar. A null payload — an aggregate over no rows —
+    /// yields the default rather than a deserialization failure.
+    /// </summary>
+    static async Task<TValue?> Scalar<T, TValue>(IQueryable<T> source, QueryOp terminal, Cancel cancel)
+    {
+        var response = await Send(source, terminal, cancel);
+        EnsureKind(response, ResultKind.Scalar);
+        if (response.Payload.ValueKind == JsonValueKind.Null)
+        {
+            return default;
+        }
+
+        return response.Payload.Deserialize<TValue>(ScryJson.Options);
     }
 
     static async Task<T?> Single<T>(IQueryable<T> source, QueryOp terminal, Cancel cancel)
@@ -205,13 +378,13 @@ public static class ScryQueryableExtensions
     /// </summary>
     static void AddDefaultProjection(List<QueryOp> pipeline, QueryProvider provider, QueryOp? terminal)
     {
-        // A grouped query's Select is the aggregate projection and is mandatory; Count/Any return a
-        // scalar and project nothing. Neither wants a member projection bolted on. A terminal carrying
-        // its own predicate is rejected server-side once a Select is present, so it falls back to the
-        // server's default projection rather than being made invalid.
+        // A grouped query's Select is the aggregate projection and is mandatory; the scalar terminals
+        // return a single value and project nothing. Neither wants a member projection bolted on. A
+        // terminal carrying its own predicate is rejected server-side once a Select is present, so it
+        // falls back to the server's default projection rather than being made invalid.
         if (provider.DefaultProjection is not { Count: > 0 } members ||
-            terminal is CountOp or AnyOp ||
-            terminal is FirstOp { Predicate: not null } or SingleOp { Predicate: not null } ||
+            terminal is CountOp or LongCountOp or AnyOp or AllOp or AggregateOp ||
+            terminal is FirstOp { Predicate: not null } or SingleOp { Predicate: not null } or LastOp { Predicate: not null } ||
             pipeline.Any(_ => _ is SelectOp or GroupByOp))
         {
             return;
