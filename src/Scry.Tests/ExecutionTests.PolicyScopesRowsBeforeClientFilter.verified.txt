@@ -11,5 +11,6 @@
     {
       "name": "Carol"
     }
-  ]
+  ],
+  "stamp": "{scrubbed stamp}"
 }

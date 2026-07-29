@@ -240,7 +240,7 @@ public enum UnaryOp
     Negate
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L18-L42' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireBinaryOps' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Enums.cs#L20-L44' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireBinaryOps' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 C# `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, `+`, `-`, `*`, `/`, `!`, and unary `-` map onto these. Any other operator (`%`, `&`, `|`, `^`, `<<`, `>>`, `??`, `?:`) throws:
@@ -271,7 +271,7 @@ public enum KnownFunction
     DateDay
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L44-L58' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Enums.cs#L46-L60' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Mapped from:
@@ -386,10 +386,11 @@ The client factors the shared navigation (`_.Department`) out of the nested memb
         "name": "Engineering"
       }
     }
-  ]
+  ],
+  "stamp": "{scrubbed stamp}"
 }
 ```
-<sup><a href='/src/Scry.Tests/ExecutionTests.WhereOrderByNestedProjection.verified.txt#L1-L20' title='Snippet source file'>snippet source</a> | <a href='#snippet-ExecutionTests.WhereOrderByNestedProjection.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExecutionTests.WhereOrderByNestedProjection.verified.txt#L1-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-ExecutionTests.WhereOrderByNestedProjection.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Rules for a nested projection member:
@@ -427,7 +428,7 @@ public enum AggregateFn
     Max
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L60-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireAggregates' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Enums.cs#L62-L72' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireAggregates' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 | C# | Aggregate |

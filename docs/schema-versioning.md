@@ -73,6 +73,8 @@ Every response carries the server's [schema stamp](wire-format.md#schema-stamp),
 | `SchemaStale` | True once that stamp differs from the client's own. Poll it wherever convenient. |
 | `SchemaStaleDetected` | Raised the first time drift is seen. This is the one to handle to drive a prompt. |
 
+The stamp arrives in the [response body](wire-format.md#response), so this works over **any** transport — SignalR, gRPC, or an in-process `ScryProcessor` — not only HTTP. The HTTP transport reads it from the `Scry-Schema-Stamp` header as well, which additionally covers error responses, where there is no body to read it from.
+
 The event carries a `SchemaDrift` with both stamps (`ClientStamp`, `ServerStamp`), and is raised at most once per `ScryClient` — a chatty app does not re-prompt on every query.
 
 Drift is **not** an error. The query that revealed it has already succeeded, and an additive model change — a new source, a new member — leaves an older client working indefinitely. Treat the signal as "a newer client exists", not "this client is broken".

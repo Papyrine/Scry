@@ -39,8 +39,9 @@ public sealed class ScryClient
     public string? SchemaStamp { get; set; }
 
     /// <summary>
-    /// The schema stamp the server advertised on the most recent HTTP response, or null before the
-    /// first response (or over a non-HTTP transport). Compare with <see cref="SchemaStamp"/> to detect
+    /// The schema stamp the server advertised on the most recent response, or null before the first
+    /// one. Carried in the response body over any transport, and additionally as a header over HTTP
+    /// (which also covers error responses). Compare with <see cref="SchemaStamp"/> to detect
     /// a drifted model while queries are still succeeding — a long-lived client (a cached WASM app)
     /// can use a difference to prompt a reload before a breaking change reaches it.
     /// </summary>
@@ -71,8 +72,22 @@ public sealed class ScryClient
 
     bool staleRaised;
 
-    internal Task<QueryResponse> SendAsync(QueryRequest request, Cancel cancel) =>
-        transport(request, cancel);
+    internal async Task<QueryResponse> SendAsync(QueryRequest request, Cancel cancel)
+    {
+        var response = await transport(request, cancel);
+
+        // Every successful response carries the server's stamp, so drift detection works over any
+        // transport rather than only HTTP. The HTTP transport has already recorded the same value from
+        // the response header — which it keeps, since a header also rides on error responses, where
+        // there is no body to read it from. A response without a stamp records nothing rather than
+        // clearing what the header found.
+        if (response.Stamp is { } stamp)
+        {
+            RecordServerStamp(stamp);
+        }
+
+        return response;
+    }
 
     // Raised once, not per response: a chatty app would otherwise re-prompt on every query for as
     // long as the drift lasts.

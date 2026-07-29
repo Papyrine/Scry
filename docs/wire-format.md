@@ -182,7 +182,7 @@ public enum ClrTypeTag
     Enum
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L72-L90' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireTypeTags' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Enums.cs#L74-L92' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireTypeTags' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The tag is a hint, not an instruction. The server parses the value into the **member's** type at the comparison site, so `tag` never dictates what CLR type is constructed. Types with no dedicated tag (`TimeOnly`, `TimeSpan`, `DateTimeOffset`, `char`) travel as `String` and are reconciled the same way. A `Bytes` value carries a `byte[]` as a base64 string.
@@ -226,7 +226,7 @@ public enum UnaryOp
     Negate
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L18-L42' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireBinaryOps' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Enums.cs#L20-L44' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireBinaryOps' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 When one side is a constant, its type is inferred from the other side, and nullable/non-nullable operands are coerced to match.
@@ -260,7 +260,7 @@ public enum KnownFunction
     DateDay
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L44-L58' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Enums.cs#L46-L60' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 There is no free-form method name anywhere in the format. This enum is the complete set of behaviour a client can request.
@@ -285,7 +285,7 @@ public enum AggregateFn
     Max
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L60-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireAggregates' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Enums.cs#L62-L72' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireAggregates' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `selector` is omitted for `Count`. An aggregate is valid **only** as a projection member in a `select` that follows a `groupBy`.
@@ -335,6 +335,14 @@ public sealed record QueryResponse(int Version, ResultKind Kind, JsonElement Pay
         new(WireFormat.Version, kind, payload);
 
     /// <summary>
+    /// The server's schema stamp, carried on every successful response so a client can compare it
+    /// against its own and detect a drifted model. The HTTP transport also advertises it as a header
+    /// (<see cref="WireFormat.SchemaStampHeader"/>), which additionally covers error responses; this is
+    /// the channel every other transport uses.
+    /// </summary>
+    public string? Stamp { get; init; }
+
+    /// <summary>
     /// Renamed enum values ([PreviousNames] on the server model), sent only when the request's schema
     /// stamp differs from the server's. Lets a client generated before a rename resolve a value name
     /// it does not know to one it does. Null otherwise, and omitted from the JSON.
@@ -342,14 +350,15 @@ public sealed record QueryResponse(int Version, ResultKind Kind, JsonElement Pay
     public IReadOnlyList<EnumAlias>? EnumAliases { get; init; }
 }
 ```
-<sup><a href='/src/Scry.Wire/QueryResponse.cs#L9-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireResponse' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/QueryResponse.cs#L9-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireResponse' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ```json
 {
   "version": 1,
   "kind": "List",
-  "payload": [ { "name": "Alice", "status": "FullTime" } ]
+  "payload": [ { "name": "Alice", "status": "FullTime" } ],
+  "stamp": "f8f716b35836d8d00e72571b7593e20580a68b1a252ecbfe9dfff2b48209ff5f"
 }
 ```
 
@@ -361,6 +370,8 @@ public sealed record QueryResponse(int Version, ResultKind Kind, JsonElement Pay
 | `Page` | A `ScryPage` envelope: `{ items: [...], hasMore: bool, cursor: string? }` — `cursor` set for a seek-safe page, else null. See [Paging](paging.md). |
 
 The client checks that `kind` matches the terminal it sent and throws `ScryWireException` if it does not.
+
+`stamp` is the server's [schema stamp](#schema-stamp), carried on **every** successful response — this is what a client compares against its own to notice a drifted model. Over HTTP the same value also rides as the `Scry-Schema-Stamp` header, which additionally covers *error* responses, where there is no body to read it from. Every other transport (SignalR, gRPC, in-process) uses the body, so [drift detection](schema-versioning.md#detecting-a-stale-client) is not HTTP-specific.
 
 `enumAliases` is optional and **additive**: it appears only when the request's schema stamp differs from the server's and the model declares enum value renames via `[PreviousNames]` ([Annotations](annotations.md#renaming)). Each entry maps the name the payload serializes a value under to the previous names it was exposed as:
 
@@ -388,13 +399,15 @@ public static class WireFormat
     public const int Version = 1;
 
     /// <summary>
-    /// The response header carrying the server's schema stamp, so a client can detect a drifted model
-    /// on any response rather than only on a rejection. Part of the wire contract.
+    /// The HTTP response header carrying the server's schema stamp. A successful response also carries
+    /// it in the body (<see cref="QueryResponse.Stamp"/>, the channel every non-HTTP transport uses);
+    /// the header additionally covers error responses, where there is no body to read it from. Part of
+    /// the wire contract.
     /// </summary>
     public const string SchemaStampHeader = "Scry-Schema-Stamp";
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L3-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireVersion' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Enums.cs#L3-L18' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireVersion' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `QueryRequest.Create` and `QueryResponse.Create` stamp the current version. The server rejects a request whose `version` is **greater** than its own — a newer client against an older server fails closed rather than being partially understood. Older requests continue to be accepted.

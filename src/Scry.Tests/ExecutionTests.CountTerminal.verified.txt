@@ -1,5 +1,6 @@
 ﻿{
   "version": 1,
   "kind": "Scalar",
-  "payload": 3
+  "payload": 3,
+  "stamp": "{scrubbed stamp}"
 }

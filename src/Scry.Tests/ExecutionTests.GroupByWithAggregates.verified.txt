@@ -12,5 +12,6 @@
       "total": 75.00,
       "count": 1
     }
-  ]
+  ],
+  "stamp": "{scrubbed stamp}"
 }

@@ -8,8 +8,10 @@ public static class WireFormat
     public const int Version = 1;
 
     /// <summary>
-    /// The response header carrying the server's schema stamp, so a client can detect a drifted model
-    /// on any response rather than only on a rejection. Part of the wire contract.
+    /// The HTTP response header carrying the server's schema stamp. A successful response also carries
+    /// it in the body (<see cref="QueryResponse.Stamp"/>, the channel every non-HTTP transport uses);
+    /// the header additionally covers error responses, where there is no body to read it from. Part of
+    /// the wire contract.
     /// </summary>
     public const string SchemaStampHeader = "Scry-Schema-Stamp";
 }

@@ -232,10 +232,11 @@ Responses are JSON with camelCased keys and enums as names:
       "total": 75.00,
       "count": 1
     }
-  ]
+  ],
+  "stamp": "{scrubbed stamp}"
 }
 ```
-<sup><a href='/src/Scry.Tests/ExecutionTests.GroupByWithAggregates.verified.txt#L1-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-ExecutionTests.GroupByWithAggregates.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExecutionTests.GroupByWithAggregates.verified.txt#L1-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-ExecutionTests.GroupByWithAggregates.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `kind` is `List`, `Single`, or `Scalar`, matching the terminal that was used.

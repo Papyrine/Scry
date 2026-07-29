@@ -12,5 +12,6 @@
     ],
     "hasMore": true,
     "cursor": "{scrubbed cursor}"
-  }
+  },
+  "stamp": "{scrubbed stamp}"
 }

@@ -16,5 +16,6 @@
         "name": "Engineering"
       }
     }
-  ]
+  ],
+  "stamp": "{scrubbed stamp}"
 }

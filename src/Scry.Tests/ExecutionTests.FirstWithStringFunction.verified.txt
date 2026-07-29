@@ -9,5 +9,6 @@
     "managerId": 1,
     "departmentId": 2,
     "avatar": "/w=="
-  }
+  },
+  "stamp": "{scrubbed stamp}"
 }

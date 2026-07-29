@@ -38,5 +38,6 @@
       "departmentId": 2,
       "avatar": ""
     }
-  ]
+  ],
+  "stamp": "{scrubbed stamp}"
 }

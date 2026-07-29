@@ -51,7 +51,13 @@ public sealed class ScryProcessor
         var drifted = request.Stamp is { } requestStamp && requestStamp != schema.Stamp;
         try
         {
-            var response = executor.Execute(request, data, services);
+            var response = executor.Execute(request, data, services) with
+            {
+                // Carried on every response, not only a drifted one: this is the signal a client uses
+                // to notice drift in the first place, and it is the only such channel for a transport
+                // that is not HTTP (which also advertises it as a response header).
+                Stamp = schema.Stamp
+            };
 
             // A drifted client may have been generated before an enum value rename, in which case the
             // payload carries names it does not know. The aliases let its reader resolve them; a

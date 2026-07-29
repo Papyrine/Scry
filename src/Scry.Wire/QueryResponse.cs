@@ -14,6 +14,14 @@ public sealed record QueryResponse(int Version, ResultKind Kind, JsonElement Pay
         new(WireFormat.Version, kind, payload);
 
     /// <summary>
+    /// The server's schema stamp, carried on every successful response so a client can compare it
+    /// against its own and detect a drifted model. The HTTP transport also advertises it as a header
+    /// (<see cref="WireFormat.SchemaStampHeader"/>), which additionally covers error responses; this is
+    /// the channel every other transport uses.
+    /// </summary>
+    public string? Stamp { get; init; }
+
+    /// <summary>
     /// Renamed enum values ([PreviousNames] on the server model), sent only when the request's schema
     /// stamp differs from the server's. Lets a client generated before a rename resolve a value name
     /// it does not know to one it does. Null otherwise, and omitted from the JSON.

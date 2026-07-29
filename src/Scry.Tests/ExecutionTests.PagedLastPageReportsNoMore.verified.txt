@@ -11,5 +11,6 @@
       }
     ],
     "hasMore": false
-  }
+  },
+  "stamp": "{scrubbed stamp}"
 }

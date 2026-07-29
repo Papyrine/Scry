@@ -6,5 +6,6 @@
       "name": "Alice",
       "avatar": "AQID"
     }
-  ]
+  ],
+  "stamp": "{scrubbed stamp}"
 }
