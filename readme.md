@@ -13,6 +13,15 @@ When a UI evolves quickly, server-side querying usually forces a choice between 
 Add or extend a query by writing LINQ in the client — no new endpoint, no new contract — while the server stays in full control of which types, properties, shapes, and rows can ever be returned.
 
 
+## Intended use
+
+Scry is designed for a **WebAssembly front end** — typically Blazor WASM — talking to its own back end. The client has no EF dependency, so it stays small under a trimmed WASM publish, while remaining strongly typed against the server's EF Core model.
+
+It also assumes the front end and the back end are built by the **same team** and deployed together. A generated client is bound to the model surface it was generated against, and the two are expected to move in lockstep. Scry is deliberately *not* a general-purpose web API: it is not intended as a stable public contract for multiple external consumers, third-party apps, or clients on release cycles the team does not control. See [docs/schema-versioning.md](docs/schema-versioning.md) for how drift between the two is detected.
+
+"Same team" is about coupling, not trust. The client is still treated as hostile — the generated code, the LINQ, and the wire request are all attacker-controlled — and every guarantee is re-enforced server-side at runtime. See [docs/security.md](docs/security.md).
+
+
 ## How it works
 
 The build-time and runtime flows are deliberately independent. Nothing is referenced across the client/server boundary: the only things that cross it are the model dll *by path* (build time) and the serialized wire AST (run time).
