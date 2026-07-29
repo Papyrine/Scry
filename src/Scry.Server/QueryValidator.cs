@@ -391,70 +391,78 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
     /// </summary>
     void ValidateHaving(Node node, Type elementType, IReadOnlyList<MemberNode>? groupKeys, int depth)
     {
-        if (depth > options.MaxExpressionDepth)
+        while (true)
         {
-            throw Reject("Expression nesting is too deep.");
-        }
+            if (depth > options.MaxExpressionDepth)
+            {
+                throw Reject("Expression nesting is too deep.");
+            }
 
-        switch (node)
-        {
-            case MemberNode member:
-                if (groupKeys is null ||
-                    !groupKeys.Any(_ => PathEquals(_.Path, member.Path)))
-                {
-                    throw Reject("A predicate after GroupBy may only reference the group key or aggregates.");
-                }
+            switch (node)
+            {
+                case MemberNode member:
+                    if (groupKeys is null ||
+                        !groupKeys.Any(_ => PathEquals(_.Path, member.Path)))
+                    {
+                        throw Reject("A predicate after GroupBy may only reference the group key or aggregates.");
+                    }
 
-                break;
+                    break;
 
-            case AggregateNode aggregate:
-                if (aggregate.Selector is { } selector)
-                {
-                    ValidateScalar(selector, elementType, "Aggregate selector");
-                }
-                else if (aggregate.Function != AggregateFn.Count)
-                {
-                    throw Reject($"Aggregate '{aggregate.Function}' requires a selector.");
-                }
+                case AggregateNode aggregate:
+                    if (aggregate.Selector is { } selector)
+                    {
+                        ValidateScalar(selector, elementType, "Aggregate selector");
+                    }
+                    else if (aggregate.Function != AggregateFn.Count)
+                    {
+                        throw Reject($"Aggregate '{aggregate.Function}' requires a selector.");
+                    }
 
-                break;
+                    break;
 
-            case ConstNode:
-                break;
+                case ConstNode:
+                    break;
 
-            case BinaryNode binary:
-                ValidateHaving(binary.Left, elementType, groupKeys, depth + 1);
-                ValidateHaving(binary.Right, elementType, groupKeys, depth + 1);
-                break;
+                case BinaryNode binary:
+                    ValidateHaving(binary.Left, elementType, groupKeys, depth + 1);
+                    node = binary.Right;
+                    depth += 1;
+                    continue;
 
-            case UnaryNode unary:
-                ValidateHaving(unary.Operand, elementType, groupKeys, depth + 1);
-                break;
+                case UnaryNode unary:
+                    node = unary.Operand;
+                    depth += 1;
+                    continue;
 
-            case ConditionalNode conditional:
-                ValidateHaving(conditional.Test, elementType, groupKeys, depth + 1);
-                ValidateHaving(conditional.IfTrue, elementType, groupKeys, depth + 1);
-                ValidateHaving(conditional.IfFalse, elementType, groupKeys, depth + 1);
-                break;
+                case ConditionalNode conditional:
+                    ValidateHaving(conditional.Test, elementType, groupKeys, depth + 1);
+                    ValidateHaving(conditional.IfTrue, elementType, groupKeys, depth + 1);
+                    node = conditional.IfFalse;
+                    depth += 1;
+                    continue;
 
-            case CallNode call:
-                var (min, max) = Arity(call.Function);
-                if (call.Arguments.Count < min ||
-                    call.Arguments.Count > max)
-                {
-                    throw Reject($"Function '{call.Function}' does not take {call.Arguments.Count} argument(s).");
-                }
+                case CallNode call:
+                    var (min, max) = Arity(call.Function);
+                    if (call.Arguments.Count < min ||
+                        call.Arguments.Count > max)
+                    {
+                        throw Reject($"Function '{call.Function}' does not take {call.Arguments.Count} argument(s).");
+                    }
 
-                ValidateHaving(call.Target, elementType, groupKeys, depth + 1);
-                foreach (var argument in call.Arguments)
-                {
-                    ValidateHaving(argument, elementType, groupKeys, depth + 1);
-                }
+                    ValidateHaving(call.Target, elementType, groupKeys, depth + 1);
+                    foreach (var argument in call.Arguments)
+                    {
+                        ValidateHaving(argument, elementType, groupKeys, depth + 1);
+                    }
 
-                break;
+                    break;
 
-            default:
-                throw Reject($"Unsupported expression '{node.GetType().Name}'.");
+                default:
+                    throw Reject($"Unsupported expression '{node.GetType().Name}'.");
+            }
+
+            break;
         }
     }
 
@@ -678,30 +686,35 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
     // the depth limit alone does not bound it meaningfully. One level is the whole allowance.
     static void EnsureNoNestedSubquery(Node node)
     {
-        switch (node)
+        while (true)
         {
-            case SubqueryNode:
-                throw Reject("A subquery may not appear inside another subquery.");
-            case BinaryNode binary:
-                EnsureNoNestedSubquery(binary.Left);
-                EnsureNoNestedSubquery(binary.Right);
-                break;
-            case UnaryNode unary:
-                EnsureNoNestedSubquery(unary.Operand);
-                break;
-            case ConditionalNode conditional:
-                EnsureNoNestedSubquery(conditional.Test);
-                EnsureNoNestedSubquery(conditional.IfTrue);
-                EnsureNoNestedSubquery(conditional.IfFalse);
-                break;
-            case CallNode call:
-                EnsureNoNestedSubquery(call.Target);
-                foreach (var argument in call.Arguments)
-                {
-                    EnsureNoNestedSubquery(argument);
-                }
+            switch (node)
+            {
+                case SubqueryNode:
+                    throw Reject("A subquery may not appear inside another subquery.");
+                case BinaryNode binary:
+                    EnsureNoNestedSubquery(binary.Left);
+                    node = binary.Right;
+                    continue;
+                case UnaryNode unary:
+                    node = unary.Operand;
+                    continue;
+                case ConditionalNode conditional:
+                    EnsureNoNestedSubquery(conditional.Test);
+                    EnsureNoNestedSubquery(conditional.IfTrue);
+                    node = conditional.IfFalse;
+                    continue;
+                case CallNode call:
+                    EnsureNoNestedSubquery(call.Target);
+                    foreach (var argument in call.Arguments)
+                    {
+                        EnsureNoNestedSubquery(argument);
+                    }
 
-                break;
+                    break;
+            }
+
+            break;
         }
     }
 

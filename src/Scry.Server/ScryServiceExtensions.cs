@@ -90,10 +90,14 @@ public static class ScryServiceExtensions
 
     static Task WriteError(HttpContext context, int status, string message, bool staleClient)
     {
-        context.Response.StatusCode = status;
-        context.Response.ContentType = "application/json";
-        return context.Response.WriteAsJsonAsync(
-            new ScryError(message) { StaleClient = staleClient },
+        var response = context.Response;
+        response.StatusCode = status;
+        response.ContentType = "application/json";
+        return response.WriteAsJsonAsync(
+            new ScryError(message)
+            {
+                StaleClient = staleClient
+            },
             ScryJson.Options,
             context.RequestAborted);
     }

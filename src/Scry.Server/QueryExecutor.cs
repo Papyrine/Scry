@@ -38,9 +38,14 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 // A Where after GroupBy filters the groups, not the rows, so it cannot be applied to the
                 // entity query — it waits for the grouping to be built. Several of them conjoin.
                 case WhereOp having when groupBy is not null:
-                    groupFilter = groupFilter is null
-                        ? having.Predicate
-                        : new BinaryNode(BinaryOp.AndAlso, groupFilter, having.Predicate);
+                    if (groupFilter is null)
+                    {
+                        groupFilter = having.Predicate;
+                    }
+                    else
+                    {
+                        groupFilter = new BinaryNode(BinaryOp.AndAlso, groupFilter, having.Predicate);
+                    }
                     break;
                 case WhereOp where:
                     tailIsOrdered = false;
@@ -255,9 +260,15 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         var name = aggregate.Function.ToString();
 
         // Min/Max are generic in the value type; Sum/Average have one overload per numeric type.
-        var call = aggregate.Function is AggregateFn.Min or AggregateFn.Max
-            ? Expression.Call(typeof(Queryable), name, [values.ElementType], values.Expression)
-            : Expression.Call(typeof(Queryable), name, null, values.Expression);
+        MethodCallExpression call;
+        if (aggregate.Function is AggregateFn.Min or AggregateFn.Max)
+        {
+            call = Expression.Call(typeof(Queryable), name, [values.ElementType], values.Expression);
+        }
+        else
+        {
+            call = Expression.Call(typeof(Queryable), name, null, values.Expression);
+        }
 
         return Scalar(values.Provider.Execute(call));
     }
@@ -544,7 +555,8 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 return (false, orderings);
             }
 
-            if (!orderings.Any(_ => _.Key is MemberNode { Path: [var name] } && name == property.Name))
+            if (!orderings.Any(_ => _.Key is MemberNode { Path: [var name] } &&
+                                    name == property.Name))
             {
                 pkKeys.Add((new MemberNode([property.Name]), false));
             }
