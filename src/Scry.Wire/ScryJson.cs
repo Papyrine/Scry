@@ -1,5 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
-
 namespace Scry.Wire;
 
 /// <summary>
@@ -69,13 +67,12 @@ public static class ScryJson
         // Mirror the server's request-version gate (QueryValidator): reject a response stamped with a
         // newer wire format than this client understands rather than misreading a payload shaped by a
         // format it was not built against.
-        if (response.Version > WireFormat.Version)
+        if (response.Version <= WireFormat.Version)
         {
-            throw new ScryWireException(
-                $"Unsupported response wire version {response.Version}; this client supports up to {WireFormat.Version}. The server is newer than the client.");
+            return response;
         }
 
-        return response;
+        throw new ScryWireException($"Unsupported response wire version {response.Version}; this client supports up to {WireFormat.Version}. The server is newer than the client.");
     }
 
     static T Deserialize<T>([StringSyntax(StringSyntaxAttribute.Json)] string json, string what)
