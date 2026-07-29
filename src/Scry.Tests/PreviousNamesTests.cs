@@ -12,7 +12,7 @@ public class PreviousNamesTests
         var request = QueryRequest.Create("Issue", [new OrderByOp(new MemberNode(["Name"]), false)]);
 
         using var context = TestContext.CreateSeeded();
-        var json = ScryJson.Serialize(Processor().Execute(request, context));
+        var json = ScryJson.Serialize(SharedProcessor.Instance.Execute(request, context));
 
         Assert.That(json, Does.Contain("Login bug"));
         // The source resolves to the same ScrySource, so its row policy still applies.
@@ -34,7 +34,7 @@ public class PreviousNamesTests
             ]);
 
         using var context = TestContext.CreateSeeded();
-        var json = ScryJson.Serialize(Processor().Execute(request, context));
+        var json = ScryJson.Serialize(SharedProcessor.Instance.Execute(request, context));
 
         Assert.That(json, Does.Contain("Alice"));
         Assert.That(json, Does.Not.Contain("Carol"));
@@ -53,7 +53,7 @@ public class PreviousNamesTests
             ]);
 
         using var context = TestContext.CreateSeeded();
-        var json = ScryJson.Serialize(Processor().Execute(request, context));
+        var json = ScryJson.Serialize(SharedProcessor.Instance.Execute(request, context));
 
         Assert.That(json, Does.Contain("\"fullName\""));
         Assert.That(json, Does.Contain("Alice"));
@@ -74,7 +74,7 @@ public class PreviousNamesTests
             ]);
 
         using var context = TestContext.CreateSeeded();
-        var json = ScryJson.Serialize(Processor().Execute(request, context));
+        var json = ScryJson.Serialize(SharedProcessor.Instance.Execute(request, context));
 
         // Carol is the only Contractor.
         Assert.That(json, Does.Contain("Carol"));
@@ -100,7 +100,7 @@ public class PreviousNamesTests
             ]);
 
         using var context = TestContext.CreateSeeded();
-        var json = ScryJson.Serialize(Processor().Execute(request, context));
+        var json = ScryJson.Serialize(SharedProcessor.Instance.Execute(request, context));
 
         // Filtered by the previous name, returned under the current one.
         Assert.That(json, Does.Contain("Contractor"));
@@ -125,7 +125,7 @@ public class PreviousNamesTests
         using var context = TestContext.CreateSeeded();
 
         var exception = Assert.Throws<ScryValidationException>(
-            () => Processor().Execute(request, context))!;
+            () => SharedProcessor.Instance.Execute(request, context))!;
 
         Assert.That(exception.Message, Does.Contain("'Departed' is not a value of enum 'Status'"));
     }
@@ -136,7 +136,7 @@ public class PreviousNamesTests
     [Test]
     public void PreviousNamesAreExcludedFromIntrospection()
     {
-        var introspection = Processor().Describe();
+        var introspection = SharedProcessor.Instance.Describe();
 
         Assert.That(introspection.Sources.Select(_ => _.Name), Does.Not.Contain("Issue"));
         Assert.That(introspection.Sources.Select(_ => _.Name), Does.Not.Contain("SalesRegion"));
@@ -166,11 +166,9 @@ public class PreviousNamesTests
         using var context = TestContext.CreateSeeded();
 
         var exception = Assert.Throws<ScryValidationException>(
-            () => Processor().Execute(request, context))!;
+            () => SharedProcessor.Instance.Execute(request, context))!;
 
         Assert.That(exception.Message, Does.Contain("'Surname' is not allow-listed"));
     }
 
-    static ScryProcessor Processor() =>
-        ScryProcessor.Create<TestContext>(options => options.AddPocoSource<Holiday>(_ => Holiday.Seed()));
 }

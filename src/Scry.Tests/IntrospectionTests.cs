@@ -2,19 +2,14 @@
 public class IntrospectionTests
 {
     [Test]
-    public Task Describe()
-    {
-        var processor = ScryProcessor.Create<TestContext>(
-            _ => _.AddPocoSource<Holiday>(_ => Holiday.Seed()));
-
-        return Verify(processor.Describe());
-    }
+    public Task Describe() =>
+        Verify(SharedProcessor.Instance.Describe());
 
     // begin-snippet: namedSourceTest
     [Test]
     public void NameOverridesSourceNameButNotModelName()
     {
-        var sources = Processor().Describe().Sources;
+        var sources = SharedProcessor.Instance.Describe().Sources;
 
         // The CLR type is SalesRegion; [Queryable(Name = "Region")] renames only the source, so the
         // generated model stays SalesRegionQueryModel and the server's introspection agrees with
@@ -29,7 +24,7 @@ public class IntrospectionTests
     [Test]
     public void QueryableViewIsClassifiedAsView()
     {
-        var source = Processor().Describe().Sources.Single(_ => _.Name == "DepartmentHeadcount");
+        var source = SharedProcessor.Instance.Describe().Sources.Single(_ => _.Name == "DepartmentHeadcount");
         Assert.That(source.Kind, Is.EqualTo("View"));
     }
 
@@ -38,20 +33,20 @@ public class IntrospectionTests
     {
         // [Queryable] on an EF [Keyless] type is the documented equivalent of [QueryableView], and
         // must classify identically. The two branches live in Schema.TryClassify.
-        var source = Processor().Describe().Sources.Single(_ => _.Name == "RegionSummary");
+        var source = SharedProcessor.Instance.Describe().Sources.Single(_ => _.Name == "RegionSummary");
         Assert.That(source.Kind, Is.EqualTo("View"));
     }
 
     [Test]
     public void UnnamedSourcesFallBackToTheTypeName() =>
         Assert.That(
-            Processor().Describe().Sources.Select(_ => _.Name),
+            SharedProcessor.Instance.Describe().Sources.Select(_ => _.Name),
             Does.Contain("Employee"));
 
     [Test]
     public void ComplexTypeAppearsInTypesButNotSources()
     {
-        var introspection = Processor().Describe();
+        var introspection = SharedProcessor.Instance.Describe();
 
         // The complex type is a traversable member type, so it is a Type (for the generated model) but
         // never a Source (no entry point).
@@ -75,10 +70,7 @@ public class IntrospectionTests
 
         // Against the live EF model, Address is a complex type (not an entity) and the sources are real
         // entities/views — so the startup guardrail passes.
-        Assert.DoesNotThrow(() => Processor().ValidateAgainstModel(context));
+        Assert.DoesNotThrow(() => SharedProcessor.Instance.ValidateAgainstModel(context));
     }
 
-    static ScryProcessor Processor() =>
-        ScryProcessor.Create<TestContext>(
-            _ => _.AddPocoSource<Holiday>(_ => Holiday.Seed()));
 }

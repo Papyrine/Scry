@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Scry.Client;
 
 /// <summary>
@@ -139,7 +141,7 @@ public sealed class ScryClient
 
     // A non-success body is usually the endpoint's ScryError, but may be anything once proxies or
     // other middleware are involved — an unparseable body falls back to the raw-bodied exception.
-    static ScryError? TryParseError(string body)
+    static ScryError? TryParseError([StringSyntax(StringSyntaxAttribute.Json)] string body)
     {
         try
         {

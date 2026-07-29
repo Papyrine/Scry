@@ -110,11 +110,14 @@ public class SecurityTests
     static void AssertRejected(QueryRequest request, Action<ScryOptions>? extra = null)
     {
         using var context = TestContext.CreateSeeded();
-        var processor = ScryProcessor.Create<TestContext>(options =>
-        {
-            options.AddPocoSource<Holiday>(_ => Holiday.Seed());
-            extra?.Invoke(options);
-        });
+        // Only a custom limit warrants a fresh processor; the default configuration is shared.
+        var processor = extra is null
+            ? SharedProcessor.Instance
+            : ScryProcessor.Create<TestContext>(options =>
+            {
+                options.AddPocoSource<Holiday>(_ => Holiday.Seed());
+                extra(options);
+            });
 
         Assert.Throws<ScryValidationException>(() => processor.Execute(request, context));
     }

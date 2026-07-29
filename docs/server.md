@@ -134,14 +134,10 @@ It overrides `[ReturnableWith]` on the same type. See [Row policies](policies.md
 <!-- snippet: processorCreate -->
 <a id='snippet-processorCreate'></a>
 ```cs
-static ScryProcessor Processor(Action<ScryOptions>? extra = null) =>
-    ScryProcessor.Create<TestContext>(options =>
-    {
-        options.AddPocoSource<Holiday>(_ => Holiday.Seed());
-        extra?.Invoke(options);
-    });
+public static ScryProcessor Instance { get; } = ScryProcessor.Create<TestContext>(
+    options => options.AddPocoSource<Holiday>(_ => Holiday.Seed()));
 ```
-<sup><a href='/src/Scry.Tests/ExecutionTests.cs#L237-L244' title='Snippet source file'>snippet source</a> | <a href='#snippet-processorCreate' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/SharedProcessor.cs#L9-L12' title='Snippet source file'>snippet source</a> | <a href='#snippet-processorCreate' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Execute a request against any `DbContext` instance:
@@ -159,15 +155,10 @@ Because `ScryClient` takes an arbitrary transport delegate, the same processor a
 <!-- snippet: inProcessClient -->
 <a id='snippet-inProcessClient'></a>
 ```cs
-static ScryClient ClientFor(TestContext context)
-{
-    var processor = ScryProcessor.Create<TestContext>(
-        _ => _.AddPocoSource<Holiday>(_ => Holiday.Seed()));
-
-    return new((request, _) => Task.FromResult(processor.Execute(request, context)));
-}
+static ScryClient ClientFor(TestContext context) =>
+    new((request, _) => Task.FromResult(SharedProcessor.Instance.Execute(request, context)));
 ```
-<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L359-L367' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessClient' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L359-L362' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessClient' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 

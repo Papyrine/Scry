@@ -27,7 +27,7 @@ public class DefaultProjectionTests
     public void ResponseIsKeyedByTheClientsMemberNames()
     {
         using var context = TestContext.CreateSeeded();
-        var processor = Processor();
+        var processor = SharedProcessor.Instance;
 
         var request = Client().Source<Employee>("Employee", ["FullName"])
             .OrderBy(_ => _.Name)
@@ -112,6 +112,4 @@ public class DefaultProjectionTests
     static ScryClient Client() =>
         new((_, _) => throw new("These tests inspect the translated request; they do not send it."));
 
-    static ScryProcessor Processor() =>
-        ScryProcessor.Create<TestContext>(options => options.AddPocoSource<Holiday>(_ => Holiday.Seed()));
 }

@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Scry.Wire;
 
 /// <summary>
@@ -58,10 +60,10 @@ public static class ScryJson
     public static string Serialize(ScryIntrospection introspection) =>
         JsonSerializer.Serialize(introspection, Options);
 
-    public static QueryRequest DeserializeRequest(string json) =>
+    public static QueryRequest DeserializeRequest([StringSyntax(StringSyntaxAttribute.Json)] string json) =>
         Deserialize<QueryRequest>(json, "request");
 
-    public static QueryResponse DeserializeResponse(string json)
+    public static QueryResponse DeserializeResponse([StringSyntax(StringSyntaxAttribute.Json)] string json)
     {
         var response = Deserialize<QueryResponse>(json, "response");
         // Mirror the server's request-version gate (QueryValidator): reject a response stamped with a
@@ -76,7 +78,7 @@ public static class ScryJson
         return response;
     }
 
-    static T Deserialize<T>(string json, string what)
+    static T Deserialize<T>([StringSyntax(StringSyntaxAttribute.Json)] string json, string what)
     {
         try
         {

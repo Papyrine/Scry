@@ -148,7 +148,19 @@ public class WireSerializationTests
     [Test]
     public void UnknownDiscriminatorFailsClosed()
     {
-        var json = """{"version":1,"root":"Employees","pipeline":[{"$type":"evil","predicate":null}]}""";
+        var json =
+            """
+            {
+              "version": 1,
+              "root": "Employees",
+              "pipeline": [
+                {
+                  "$type": "evil",
+                  "predicate": null
+                }
+              ]
+            }
+            """;
 
         Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest(json));
     }
@@ -160,7 +172,14 @@ public class WireSerializationTests
     [Test]
     public void NewerResponseVersionFailsClosed()
     {
-        var json = $$"""{"version":{{WireFormat.Version + 1}},"kind":"Scalar","payload":1}""";
+        var json =
+            $$"""
+            {
+              "version": {{WireFormat.Version + 1}},
+              "kind": "Scalar",
+              "payload": 1
+            }
+            """;
 
         var exception = Assert.Throws<ScryWireException>(() => ScryJson.DeserializeResponse(json));
         Assert.That(exception!.Message, Does.Contain($"wire version {WireFormat.Version + 1}"));

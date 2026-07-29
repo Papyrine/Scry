@@ -1,6 +1,3 @@
-using System.Text.RegularExpressions;
-using VerifyTests.DiffPlex;
-
 public static partial class ModuleInitializer
 {
     [ModuleInitializer]

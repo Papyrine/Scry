@@ -16,15 +16,12 @@ public class GuardrailTests
     [Test]
     public void RejectsComplexTypeMappedAsEntity()
     {
-        var processor = ScryProcessor.Create<TestContext>(
-            _ => _.AddPocoSource<Holiday>(_ => Holiday.Seed()));
-
         var options = new DbContextOptionsBuilder<AddressAsEntityContext>()
             .UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=ScryGuardrail")
             .Options;
         using var context = new AddressAsEntityContext(options);
 
-        var exception = Assert.Throws<Exception>(() => processor.ValidateAgainstModel(context));
+        var exception = Assert.Throws<Exception>(() => SharedProcessor.Instance.ValidateAgainstModel(context));
         Assert.That(exception!.Message, Does.Contain("[QueryableComplex] but is a mapped entity"));
     }
 }

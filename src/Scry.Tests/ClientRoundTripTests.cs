@@ -357,12 +357,7 @@ public class ClientRoundTripTests
     }
 
     // begin-snippet: inProcessClient
-    static ScryClient ClientFor(TestContext context)
-    {
-        var processor = ScryProcessor.Create<TestContext>(
-            _ => _.AddPocoSource<Holiday>(_ => Holiday.Seed()));
-
-        return new((request, _) => Task.FromResult(processor.Execute(request, context)));
-    }
+    static ScryClient ClientFor(TestContext context) =>
+        new((request, _) => Task.FromResult(SharedProcessor.Instance.Execute(request, context)));
     // end-snippet
 }

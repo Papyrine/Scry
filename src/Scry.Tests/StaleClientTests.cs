@@ -13,7 +13,7 @@ public class StaleClientTests
     public void MismatchedStampReportsStaleClient()
     {
         using var context = TestContext.CreateSeeded();
-        var processor = Processor();
+        var processor = SharedProcessor.Instance;
 
         var exception = Assert.Throws<ScryValidationException>(
             () => processor.Execute(InvalidRequest("stamp-from-an-older-model"), context))!;
@@ -29,7 +29,7 @@ public class StaleClientTests
     public void MatchingStampReportsPlainRejection()
     {
         using var context = TestContext.CreateSeeded();
-        var processor = Processor();
+        var processor = SharedProcessor.Instance;
         var current = processor.Describe().SchemaStamp;
 
         var exception = Assert.Throws<ScryValidationException>(
@@ -44,7 +44,7 @@ public class StaleClientTests
     public void MissingStampReportsPlainRejection()
     {
         using var context = TestContext.CreateSeeded();
-        var processor = Processor();
+        var processor = SharedProcessor.Instance;
 
         var exception = Assert.Throws<ScryValidationException>(
             () => processor.Execute(InvalidRequest(stamp: null), context))!;
@@ -59,7 +59,7 @@ public class StaleClientTests
     public void MismatchedStampWithValidQueryExecutes()
     {
         using var context = TestContext.CreateSeeded();
-        var processor = Processor();
+        var processor = SharedProcessor.Instance;
 
         var request = QueryRequest.Create("Employee", [new CountOp()], "stamp-from-an-older-model");
         var response = processor.Execute(request, context);
@@ -67,6 +67,4 @@ public class StaleClientTests
         Assert.That(response.Kind, Is.EqualTo(ResultKind.Scalar));
     }
 
-    static ScryProcessor Processor() =>
-        ScryProcessor.Create<TestContext>(options => options.AddPocoSource<Holiday>(_ => Holiday.Seed()));
 }

@@ -158,7 +158,13 @@ public class HttpRoundTripTests
     public async Task ResponseAdvertisesSchemaStamp()
     {
         using var content = new StringContent(
-            """{"version":1,"root":"Employee","pipeline":[{"$type":"count"}]}""",
+            """
+            {
+              "version": 1,
+              "root": "Employee",
+              "pipeline": [ { "$type": "count" } ]
+            }
+            """,
             Encoding.UTF8,
             "application/json");
         using var response = await http.PostAsync("/api/query", content);
@@ -266,7 +272,14 @@ public class HttpRoundTripTests
     public async Task DriftedRejectionBodyCarriesStaleClientMarker()
     {
         using var content = new StringContent(
-            """{"version":1,"root":"Renamed","pipeline":[{"$type":"count"}],"stamp":"stamp-from-an-older-model"}""",
+            """
+            {
+              "version": 1,
+              "root": "Renamed",
+              "pipeline": [ { "$type": "count" } ],
+              "stamp": "stamp-from-an-older-model"
+            }
+            """,
             Encoding.UTF8,
             "application/json");
         using var response = await http.PostAsync("/api/query", content);
@@ -282,7 +295,13 @@ public class HttpRoundTripTests
     public async Task UnstampedRejectionBodyOmitsStaleClientMarker()
     {
         using var content = new StringContent(
-            """{"version":1,"root":"Renamed","pipeline":[{"$type":"count"}]}""",
+            """
+            {
+              "version": 1,
+              "root": "Renamed",
+              "pipeline": [ { "$type": "count" } ]
+            }
+            """,
             Encoding.UTF8,
             "application/json");
         using var response = await http.PostAsync("/api/query", content);
@@ -303,7 +322,23 @@ public class HttpRoundTripTests
         // type-checked by the validator) and then faults ParseValue -> the generic 500 path.
         using var content = new StringContent(
             """
-            {"version":1,"root":"Order","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Amount"]},"right":{"$type":"const","value":"abc","tag":"String"}}},{"$type":"count"}],"stamp":"stamp-from-an-older-model"}
+            {
+              "version": 1,
+              "root": "Order",
+              "pipeline": [
+                {
+                  "$type": "where",
+                  "predicate": {
+                    "$type": "binary",
+                    "op": "Equal",
+                    "left": { "$type": "member", "path": ["Amount"] },
+                    "right": { "$type": "const", "value": "abc", "tag": "String" }
+                  }
+                },
+                { "$type": "count" }
+              ],
+              "stamp": "stamp-from-an-older-model"
+            }
             """,
             Encoding.UTF8,
             "application/json");

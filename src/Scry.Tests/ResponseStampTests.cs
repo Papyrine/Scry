@@ -16,7 +16,7 @@ public class ResponseStampTests
     public void EveryResponseCarriesTheServerStamp()
     {
         using var context = TestContext.CreateSeeded();
-        var processor = Processor();
+        var processor = SharedProcessor.Instance;
 
         var response = processor.Execute(QueryRequest.Create("Employee", [new CountOp()]), context);
 
@@ -34,7 +34,14 @@ public class ResponseStampTests
         // Additive: a response without the field still deserializes, and none is written when null.
         Assert.That(ScryJson.Serialize(QueryResponse.Create(ResultKind.Scalar, payload)), Does.Not.Contain("stamp"));
         Assert.That(
-            ScryJson.DeserializeResponse("""{"version":1,"kind":"Scalar","payload":1}""").Stamp,
+            ScryJson.DeserializeResponse(
+                """
+                {
+                  "version": 1,
+                  "kind": "Scalar",
+                  "payload": 1
+                }
+                """).Stamp,
             Is.Null);
     }
 
@@ -60,7 +67,7 @@ public class ResponseStampTests
     public async Task MatchingClientIsNotReportedStaleOverANonHttpTransport()
     {
         await using var context = TestContext.CreateSeeded();
-        var processor = Processor();
+        var processor = SharedProcessor.Instance;
         var client = new ScryClient((request, _) => Task.FromResult(processor.Execute(request, context)))
         {
             SchemaStamp = processor.Describe().SchemaStamp
@@ -93,13 +100,11 @@ public class ResponseStampTests
 
     static ScryClient StaleClient(TestContext context)
     {
-        var processor = Processor();
+        var processor = SharedProcessor.Instance;
         return new((request, _) => Task.FromResult(processor.Execute(request, context)))
         {
             SchemaStamp = "stamp-from-an-older-model"
         };
     }
 
-    static ScryProcessor Processor() =>
-        ScryProcessor.Create<TestContext>(options => options.AddPocoSource<Holiday>(_ => Holiday.Seed()));
 }

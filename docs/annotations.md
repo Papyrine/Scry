@@ -126,7 +126,7 @@ The server derives the same name, so its introspection stays in step with genera
 [Test]
 public void NameOverridesSourceNameButNotModelName()
 {
-    var sources = Processor().Describe().Sources;
+    var sources = SharedProcessor.Instance.Describe().Sources;
 
     // The CLR type is SalesRegion; [Queryable(Name = "Region")] renames only the source, so the
     // generated model stays SalesRegionQueryModel and the server's introspection agrees with
@@ -137,7 +137,7 @@ public void NameOverridesSourceNameButNotModelName()
     Assert.That(sources.Select(_ => _.Name), Does.Not.Contain("SalesRegion"));
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.cs#L13-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSourceTest' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.cs#L8-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSourceTest' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Details:

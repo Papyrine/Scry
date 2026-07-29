@@ -29,7 +29,7 @@ public class EnumAliasTests
         using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create("Employee", [new CountOp()], "stamp-from-an-older-model");
-        var response = Processor().Execute(request, context);
+        var response = SharedProcessor.Instance.Execute(request, context);
 
         var alias = response.EnumAliases!.Single();
         Assert.Multiple(() =>
@@ -46,7 +46,7 @@ public class EnumAliasTests
     public void ResponseOmitsAliasesWhenStampMatchesOrIsAbsent()
     {
         using var context = TestContext.CreateSeeded();
-        var processor = Processor();
+        var processor = SharedProcessor.Instance;
 
         var matched = processor.Execute(
             QueryRequest.Create("Employee", [new CountOp()], processor.Describe().SchemaStamp),
@@ -88,7 +88,7 @@ public class EnumAliasTests
     public void UnresolvableEnumValueReportsStaleClient()
     {
         using var context = TestContext.CreateSeeded();
-        var processor = Processor();
+        var processor = SharedProcessor.Instance;
         var client = new ScryClient((request, _) => Task.FromResult(processor.Execute(request, context)));
 
         var exception = Assert.ThrowsAsync<ScryStaleClientException>(() =>
@@ -121,19 +121,24 @@ public class EnumAliasTests
         // Absent aliases add nothing to the wire, and a response written before the field existed
         // still deserializes — the field is additive, not a wire break.
         Assert.That(ScryJson.Serialize(QueryResponse.Create(ResultKind.Scalar, payload)), Does.Not.Contain("enumAliases"));
-        var legacy = ScryJson.DeserializeResponse("""{"version":1,"kind":"Scalar","payload":1}""");
+        var legacy = ScryJson.DeserializeResponse(
+            """
+            {
+              "version": 1,
+              "kind": "Scalar",
+              "payload": 1
+            }
+            """);
         Assert.That(legacy.EnumAliases, Is.Null);
     }
 
     static ScryClient StaleClient(TestContext context)
     {
-        var processor = Processor();
+        var processor = SharedProcessor.Instance;
         return new((request, _) => Task.FromResult(processor.Execute(request, context)))
         {
             SchemaStamp = "stamp-from-an-older-model"
         };
     }
 
-    static ScryProcessor Processor() =>
-        ScryProcessor.Create<TestContext>(options => options.AddPocoSource<Holiday>(_ => Holiday.Seed()));
 }

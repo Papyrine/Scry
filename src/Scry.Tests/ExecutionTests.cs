@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 [TestFixture]
 public class ExecutionTests
 {
@@ -33,7 +35,7 @@ public class ExecutionTests
         var request = QueryRequest.Create("Employee", [new OrderByOp(new MemberNode(["Name"]), false)]);
 
         using var context = TestContext.CreateSeeded();
-        var response = Processor().Execute(request, context);
+        var response = SharedProcessor.Instance.Execute(request, context);
         var json = ScryJson.Serialize(response);
 
         Assert.That(json, Does.Not.Contain("Salary").IgnoreCase);
@@ -204,7 +206,7 @@ public class ExecutionTests
         var request = QueryRequest.Create("Ticket", [new OrderByOp(new MemberNode(["Name"]), false)]);
 
         using var context = TestContext.CreateSeeded();
-        var json = ScryJson.Serialize(Processor().Execute(request, context));
+        var json = ScryJson.Serialize(SharedProcessor.Instance.Execute(request, context));
 
         Assert.That(json, Does.Contain("Login bug"));
         Assert.That(json, Does.Contain("Signup crash"));
@@ -230,21 +232,25 @@ public class ExecutionTests
     static Task VerifyResponse(QueryRequest request)
     {
         using var context = TestContext.CreateSeeded();
-        var response = Processor().Execute(request, context);
+        var response = SharedProcessor.Instance.Execute(request, context);
         return Verify(Pretty(ScryJson.Serialize(response)));
     }
 
-    // begin-snippet: processorCreate
-    static ScryProcessor Processor(Action<ScryOptions>? extra = null) =>
+    // Only for tests that add options on top of the default configuration; everything else uses
+    // SharedProcessor.Instance.
+    static ScryProcessor Processor(Action<ScryOptions> extra) =>
         ScryProcessor.Create<TestContext>(options =>
         {
             options.AddPocoSource<Holiday>(_ => Holiday.Seed());
-            extra?.Invoke(options);
+            extra(options);
         });
-    // end-snippet
 
-    static readonly JsonSerializerOptions indented = new() { WriteIndented = true };
+    static readonly JsonSerializerOptions indented =
+        new()
+        {
+            WriteIndented = true
+        };
 
-    static string Pretty(string json) =>
+    static string Pretty([StringSyntax(StringSyntaxAttribute.Json)] string json) =>
         JsonSerializer.Serialize(JsonSerializer.Deserialize<JsonElement>(json), indented);
 }
