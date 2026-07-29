@@ -32,7 +32,7 @@ public class ExpandedOperatorTests
             .Select(_ => new OrderShape(_.Region, _.Amount))
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Amount), Is.EqualTo(new[] { 100m, 250m }));
+        Assert.That(rows.Select(_ => _.Amount), Is.EqualTo([100m, 250m]));
     }
 
     [Test]
@@ -180,7 +180,7 @@ public class ExpandedOperatorTests
             .Distinct()
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Region).Order(), Is.EqualTo(new[] { "North", "South" }));
+        Assert.That(rows.Select(_ => _.Region).Order(), Is.EqualTo(["North", "South"]));
     }
 
     [Test]
@@ -432,8 +432,8 @@ public class ExpandedOperatorTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(rows.Select(_ => _.Region), Is.EqualTo(new[] { "S", "N", "N" }));
-            Assert.That(rows.Select(_ => _.Amount), Is.EqualTo(new[] { 70m, 90m, 250m }));
+            Assert.That(rows.Select(_ => _.Region), Is.EqualTo(["S", "N", "N"]));
+            Assert.That(rows.Select(_ => _.Amount), Is.EqualTo([70m, 90m, 250m]));
         });
     }
 
