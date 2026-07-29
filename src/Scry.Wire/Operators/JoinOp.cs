@@ -1,0 +1,24 @@
+namespace Scry.Wire;
+
+/// <summary>
+/// Joins a second source to the pipeline. <see cref="Root"/> names that source exactly as a request's
+/// own root does, so it is resolved — and <b>policy-filtered</b> — independently before the two sides
+/// meet. A join can therefore only ever narrow: no row hidden from a direct query of the inner source
+/// is observable through one.
+/// </summary>
+/// <remarks>
+/// The join carries its own projection rather than being followed by a <c>Select</c>, because a
+/// projected member has to say which side it reads and an ordinary member path has no room to. That
+/// also keeps the joined shape from escaping into later operators, which are all single-rooted.
+/// </remarks>
+public sealed record JoinOp(
+    string Root,
+    JoinKind Kind,
+    Node OuterKey,
+    Node InnerKey,
+    Node? InnerPredicate,
+    IReadOnlyList<JoinMember> Result) :
+    QueryOp;
+
+/// <summary>One projected member of a join, naming the side it reads from.</summary>
+public sealed record JoinMember(string Name, JoinSide Side, IReadOnlyList<string> Path);

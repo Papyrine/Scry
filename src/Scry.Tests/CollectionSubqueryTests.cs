@@ -62,7 +62,7 @@ public class CollectionSubqueryTests
             .Select(_ => new OrderRow(_.Region, _.Lines.Count()))
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Lines), Is.EqualTo(new[] { 2, 1, 0 }));
+        Assert.That(rows.Select(_ => _.Lines), Is.EqualTo([2, 1, 0]));
     }
 
     [Test]
@@ -87,7 +87,7 @@ public class CollectionSubqueryTests
             .Select(_ => new OrderRow(_.Region, _.Lines.Count(l => l.Quantity > 1)))
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Lines), Is.EqualTo(new[] { 1, 1, 0 }));
+        Assert.That(rows.Select(_ => _.Lines), Is.EqualTo([1, 1, 0]));
     }
 
     [Test]
@@ -101,7 +101,7 @@ public class CollectionSubqueryTests
             .Select(_ => new OrderRow(_.Region, _.Lines.Where(l => l.Quantity > 1).Count()))
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Lines), Is.EqualTo(new[] { 1, 1, 0 }));
+        Assert.That(rows.Select(_ => _.Lines), Is.EqualTo([1, 1, 0]));
     }
 
     [Test]
@@ -115,7 +115,7 @@ public class CollectionSubqueryTests
             .Select(_ => new TotalRow(_.Region, _.Lines.Sum(l => l.Price)))
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Total), Is.EqualTo(new[] { 75m, 50m, 0m }));
+        Assert.That(rows.Select(_ => _.Total), Is.EqualTo([75m, 50m, 0m]));
     }
 
     [Test]

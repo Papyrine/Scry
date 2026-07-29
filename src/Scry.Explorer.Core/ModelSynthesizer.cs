@@ -85,7 +85,7 @@ public static class ModelSynthesizer
                     introspection.Types
                         .Single(_ => _.Model == source.Model)
                         .Members
-                        .Where(_ => !_.IsNavigation && !_.IsCollection)
+                        .Where(_ => _ is {IsNavigation: false, IsCollection: false})
                         .Select(_ => $"\"{_.Name}\""));
                 builder.AppendLine($"    public global::System.Linq.IQueryable<{source.Model}> {source.Name} => client.Source<{source.Model}>(\"{source.Name}\", [{members}]);");
             }

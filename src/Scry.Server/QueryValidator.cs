@@ -32,6 +32,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         var sawGroupBy = false;
         var sawSelect = false;
         var sawDistinct = false;
+        var sawJoin = false;
         var terminalIndex = -1;
         IReadOnlyList<MemberNode>? groupKeys = null;
         Projection? projection = null;
@@ -150,6 +151,19 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
                     EnsureNotGrouped(sawGroupBy, "Reverse");
                     EnsureNotDistinct(sawDistinct, "Reverse");
+                    break;
+
+                case JoinOp join:
+                    if (sawJoin)
+                    {
+                        throw Reject("Only one Join is allowed.");
+                    }
+
+                    EnsureNotGrouped(sawGroupBy, "Join");
+                    EnsureNotProjected(sawSelect, "Join");
+                    EnsureNotDistinct(sawDistinct, "Join");
+                    ValidateJoin(join, rootType);
+                    sawJoin = true;
                     break;
 
                 case CountOp count:
