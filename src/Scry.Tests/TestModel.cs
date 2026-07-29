@@ -1,7 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace Scry.Tests;
-
 // begin-snippet: previousNamesEnumValue
 public enum Status
 {

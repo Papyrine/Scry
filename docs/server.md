@@ -141,7 +141,7 @@ static ScryProcessor Processor(Action<ScryOptions>? extra = null) =>
         extra?.Invoke(options);
     });
 ```
-<sup><a href='/src/Scry.Tests/ExecutionTests.cs#L239-L246' title='Snippet source file'>snippet source</a> | <a href='#snippet-processorCreate' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExecutionTests.cs#L237-L244' title='Snippet source file'>snippet source</a> | <a href='#snippet-processorCreate' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Execute a request against any `DbContext` instance:
@@ -167,7 +167,7 @@ static ScryClient ClientFor(TestContext context)
     return new((request, _) => Task.FromResult(processor.Execute(request, context)));
 }
 ```
-<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L361-L369' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessClient' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L359-L367' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessClient' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 

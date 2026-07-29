@@ -1,5 +1,3 @@
-namespace Scry.Tests;
-
 /// <summary>
 /// A generated entry point hands its scalar member names to <c>Source</c>, so a query that writes no
 /// <c>Select</c> still projects them explicitly. That keeps the response keyed by the names the client

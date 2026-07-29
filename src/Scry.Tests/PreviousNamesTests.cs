@@ -1,5 +1,3 @@
-namespace Scry.Tests;
-
 /// <summary>
 /// Covers [PreviousNames]: the names a client generated before a rename keeps sending, which the
 /// server still resolves. The test model renames a source (Ticket, was 'Issue'), a member

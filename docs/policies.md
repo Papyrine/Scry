@@ -27,7 +27,7 @@ public sealed class ActiveOnlyPolicy :
         source.Where(_ => _.Active);
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L151-L159' title='Snippet source file'>snippet source</a> | <a href='#snippet-returnablePolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L149-L157' title='Snippet source file'>snippet source</a> | <a href='#snippet-returnablePolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The `context` carries the request-scoped service provider and the active `DbContext`:
@@ -81,7 +81,7 @@ Or in code, which takes precedence over the attribute on the same type:
 ```cs
 var response = Processor(_ => _.AddPolicy<Employee, ActiveOnlyPolicy>()).Execute(request, context);
 ```
-<sup><a href='/src/Scry.Tests/ExecutionTests.cs#L195-L197' title='Snippet source file'>snippet source</a> | <a href='#snippet-addPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExecutionTests.cs#L193-L195' title='Snippet source file'>snippet source</a> | <a href='#snippet-addPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Code registration is the better fit when the policy lives in the server project and the model project should not reference it.

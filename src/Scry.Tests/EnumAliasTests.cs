@@ -1,5 +1,3 @@
-namespace Scry.Tests;
-
 /// <summary>
 /// The response side of an enum value rename. The payload always carries the current name; for a
 /// drifted client the response also carries <see cref="QueryResponse.EnumAliases"/>, and the client's

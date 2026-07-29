@@ -1,8 +1,6 @@
 using System.Text.RegularExpressions;
 using VerifyTests.DiffPlex;
 
-namespace Scry.Tests;
-
 public static partial class ModuleInitializer
 {
     [ModuleInitializer]

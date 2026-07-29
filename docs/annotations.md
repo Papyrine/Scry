@@ -70,7 +70,7 @@ public class SalesRegion
     public string Name { get; set; } = "";
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L99-L112' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSource' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L97-L110' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSource' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The generated entry point exposes the configured name, while the **model class name stays derived from the CLR type**:
@@ -137,7 +137,7 @@ public void NameOverridesSourceNameButNotModelName()
     Assert.That(sources.Select(_ => _.Name), Does.Not.Contain("SalesRegion"));
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.cs#L15-L29' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSourceTest' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.cs#L13-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSourceTest' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Details:
@@ -170,7 +170,7 @@ On a member:
 [PreviousNames("FullName")]
 public string Name { get; set; } = "";
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L31-L35' title='Snippet source file'>snippet source</a> | <a href='#snippet-previousNamesMember' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L29-L33' title='Snippet source file'>snippet source</a> | <a href='#snippet-previousNamesMember' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 On an enum value:
@@ -189,7 +189,7 @@ public enum Status
     Contractor
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L5-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-previousNamesEnumValue' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L3-L14' title='Snippet source file'>snippet source</a> | <a href='#snippet-previousNamesEnumValue' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 It is deliberately **server-side only**. Generated clients never emit a previous name, and previous names are excluded from introspection and from the [schema stamp](wire-format.md#schema-stamp) — so a rename still changes the stamp and still registers as drift. That is the point: the stale client is detected and prompted to reload ([Schema versioning](schema-versioning.md#detecting-a-stale-client)) while its in-flight queries keep succeeding, instead of failing first and being diagnosed second.
@@ -342,7 +342,7 @@ public class Address
     public string Zip { get; set; } = "";
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L59-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableComplex' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L57-L67' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableComplex' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 paired with the usual EF mapping on the owning entity:
@@ -354,7 +354,7 @@ modelBuilder.Entity<Employee>()
     .ComplexProperty(_ => _.Address)
     .ToJson();
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L193-L197' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L191-L195' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A complex type is **not a root source**: it produces no property on the generated `ScryQuery` and no server resolver. It is reachable only by traversing into it from an opted-in entity/view/POCO — for example `Employee.Address.City`. Its members follow the same exposure rules as any other type (`[QueryIgnore]` still hides `Zip`), and the traversal is bounded by `MaxNavigationDepth` like any navigation. How EF stores the type — a JSON column or separate columns — is transparent to Scry; the server rebinds the member path onto EF, which translates it either way.

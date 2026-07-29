@@ -1,5 +1,3 @@
-namespace Scry.Tests;
-
 /// <summary>
 /// The server's schema stamp rides on every successful response, so drift detection works over any
 /// transport. These use an in-process transport — no HTTP, no headers — which is exactly the case the

@@ -1,7 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace Scry.Tests;
-
 [TestFixture]
 public class GuardrailTests
 {

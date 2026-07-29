@@ -187,7 +187,7 @@ var request = client.Source<Employee>("Employee")
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
     .ToScryRequest();
 ```
-<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L34-L43' title='Snippet source file'>snippet source</a> | <a href='#snippet-translateWithoutExecuting' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L32-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-translateWithoutExecuting' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 which produces the wire request without contacting the server.

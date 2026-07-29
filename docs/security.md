@@ -122,7 +122,7 @@ public void RejectsIgnoredProperty() =>
                 new ConstNode("100", ClrTypeTag.Decimal)))
         ]));
 ```
-<sup><a href='/src/Scry.Tests/SecurityTests.cs#L6-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-rejectIgnoredProperty' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/SecurityTests.cs#L4-L15' title='Snippet source file'>snippet source</a> | <a href='#snippet-rejectIgnoredProperty' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
