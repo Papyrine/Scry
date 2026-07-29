@@ -490,12 +490,21 @@ A leaf can be any expression, not only a member path — the same vocabulary a p
 
 The same allow-list applies inside a computed leaf as anywhere else: a `[QueryIgnore]`d member is no more reachable through an expression than through a plain path, and the expression-depth limit still holds.
 
-Two restrictions:
+This holds inside a [nested object](#nested-result-objects) too — the navigation it descends into is inferred from the paths an expression reads, wherever they sit inside it:
 
-- A leaf must **read at least one member of the row**. `Select(_ => new { Kind = "employee" })` is rejected — the client already has that value, and EF refuses a constant in a client projection.
-- A member of a **nested** object must still be a plain member path. Which navigation the nested object descends into is inferred from those paths, so `new(_.Department!.Name.ToUpper())` is rejected on the client. Compute it as a flat member instead.
+```cs
+.Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name.ToUpper())))
+```
 
-A grouped `Select` is unchanged: it may reference only the group key and aggregates.
+One restriction: a leaf must **read at least one member of the row**. `Select(_ => new { Kind = "employee" })` is rejected — the client already has that value, and EF refuses a constant in a client projection.
+
+A **grouped** `Select` composes the same way, over what a group has: its key and aggregates.
+
+```cs
+.Select(_ => new RegionSummary(_.Key.ToUpper(), _.Sum(_ => _.Amount) / _.Count()))
+```
+
+That does not widen what a group can read. Every column but the key has been folded away, so naming one — even buried inside an expression — is still rejected.
 
 
 ### Without a `Select`
@@ -555,7 +564,7 @@ The client factors the shared navigation (`_.Department`) out of the nested memb
 
 Rules for a nested projection member:
 
-- Every member of the nested object must be a **member path** (`_.Department.Name`), not a function call or a further nested object — one level of nesting, scalar leaves.
+- Every member of the nested object must resolve to a **scalar** — a member path (`_.Department.Name`) or an [expression over one](#computed-projection-members) (`_.Department.Name.ToUpper()`), but not a further nested object. One level of nesting.
 - All its members must share a single navigation prefix; the client descends into that one navigation. Mixing two navigations (`new(_.Department.Name, _.Manager.Name)`) in one nested object is rejected.
 - The flat form still works when only the value is needed — `Department = _.Department!.Name` gives a flat column instead of a nested object.
 
@@ -606,9 +615,10 @@ public enum AggregateFn
 Constraints:
 
 - Exactly one group key, and it must be a member access.
-- `Where`, `OrderBy`, and `ThenBy` are not allowed after `GroupBy`.
+- `OrderBy` and `ThenBy` are not allowed after `GroupBy`; a `Where` after it is a [group filter](#filtering-groups).
+- The key and aggregates may be [composed into expressions](#computed-projection-members) — `_.Sum(…) / _.Count()`.
 - Nested projections are not allowed in a grouped `Select`.
-- Referencing a non-key member throws `A grouped projection may only use the group key or aggregates.`
+- Referencing a non-key member throws `A predicate after GroupBy may only reference the group key or aggregates.`, whether it is named directly or buried in an expression.
 - An aggregate written *inside a projection* is only valid in a grouped `Select`; elsewhere it is rejected with `Aggregates are only allowed in a Select following GroupBy.`
 
 To aggregate a whole sequence rather than each group, use the [aggregate terminals](#terminals) — `SumAsync`, `AverageAsync`, `MinAsync`, `MaxAsync` — which need no `GroupBy` and must precede any `Select`.

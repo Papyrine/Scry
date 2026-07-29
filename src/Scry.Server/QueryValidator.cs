@@ -352,9 +352,12 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 // allow-list, function set and depth limit. A projection is one more place a row can be
                 // read from, not a place where more can be read.
                 case NodeValue value:
+                    // Over a group the same vocabulary applies as in a HAVING predicate: the key and
+                    // aggregates, composed with the ordinary operators and functions.
                     if (grouped)
                     {
-                        throw Reject("A grouped projection may only reference the group key or aggregates.");
+                        ValidateHaving(value.Node, rootType, groupKeys, depth: 0);
+                        break;
                     }
 
                     // A leaf that reads nothing is a value the client already has, and a provider has

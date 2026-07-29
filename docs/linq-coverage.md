@@ -85,7 +85,9 @@ Functions are expression-level: they read a row in a predicate, an ordering or g
 
 ### Computed projection members
 
-A projection leaf can be any of the above rather than only a member path — `Select(_ => new { Shouted = _.Name.ToUpper(), Net = _.Amount - _.Discount })`. See [projections](querying.md#computed-projection-members). A leaf must read at least one row member (a constant-only leaf is rejected, as EF refuses one in a client projection), a member of a *nested* object must stay a plain path, and a grouped `Select` is still limited to the group key and aggregates.
+A projection leaf can be any of the above rather than only a member path — `Select(_ => new { Shouted = _.Name.ToUpper(), Net = _.Amount - _.Discount })`. See [projections](querying.md#computed-projection-members). The same holds inside a nested object, whose navigation is inferred from the paths an expression reads, and in a grouped `Select`, where the key and aggregates compose — `_.Sum(…) / _.Count()`.
+
+A leaf must read at least one row member: a constant-only leaf is rejected, as EF refuses one in a client projection. A grouped leaf may still only read the key and aggregates, whether named directly or buried in an expression.
 
 Reaching the wire is necessary but not sufficient: a function still has to be one the **EF provider** translates. Scry validates and rebinds it, then EF decides. Where a provider has no translation the query fails at execution rather than at validation — so a function with no SQL Server translation is left out of the closed set rather than shipped as a trap.
 
@@ -98,7 +100,6 @@ Everything below is translatable by EF Core but has no wire representation in Sc
 
 Fit the closed-vocabulary pattern — each is a new enum member or a small op record plus validator, builder, and generator work. Roughly ordered by expected demand.
 
-- [ ] Expressions in a **nested** projection member and in a **grouped** `Select` — the two positions a computed leaf still cannot appear. The first needs the navigation a nested object descends into to be carried explicitly rather than inferred from its member paths; the second needs aggregates to compose (`_.Sum(…) / _.Count()`), which the grouped builder handles only as whole members today.
 - [ ] Ordering a deduplicated query — `Distinct().OrderBy(…)`, and paging over it. Both need ordering keys expressed against the *projection* rather than the row, which is also what would let `Skip`/`Take` follow a `Distinct`.
 - [ ] Counting a `Distinct` over more than one projected member. `COUNT(DISTINCT x)` is single-column in SQL; a multi-column form needs a projection type with real equality, which the shaped `object[]` row deliberately is not.
 - [ ] `string.Concat` / interpolation, `char` members, `StartsWith` with a `StringComparison`.

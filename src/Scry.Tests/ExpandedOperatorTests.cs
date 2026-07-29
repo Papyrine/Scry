@@ -17,6 +17,10 @@ public class ExpandedOperatorTests
 
     record DepartmentCard(string Name);
 
+    record EmployeeTwoCard(string Name, DepartmentTwoCard Department);
+
+    record DepartmentTwoCard(string Name, int Length);
+
     // ReSharper restore NotAccessedPositionalProperty.Local
 
     [Test]
@@ -472,30 +476,94 @@ public class ExpandedOperatorTests
     }
 
     [Test]
-    public void ExpressionInANestedProjectionMemberIsRejected()
+    public async Task ExpressionInANestedProjectionMember()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        // Inferring which navigation a nested object descends into reads the member paths, so a
-        // nested member has to stay one. Rejected on the client, before a request is sent.
-        Assert.ThrowsAsync<NotSupportedException>(
-            () => client.Source<Employee>("Employee")
-                .Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name.ToUpper())))
-                .ToListAsync());
+        // The navigation the nested object descends into is inferred from the path inside the
+        // expression, not from a bare path.
+        var rows = await client.Source<Employee>("Employee")
+            .Where(_ => _.Name == "Alice")
+            .Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name.ToUpper())))
+            .ToListAsync();
+
+        Assert.That(rows.Single().Department.Name, Is.EqualTo("ENGINEERING"));
     }
 
     [Test]
-    public void ExpressionInAGroupedProjectionIsRejected()
+    public async Task NestedProjectionMixingAPathAndAnExpression()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        Assert.ThrowsAsync<NotSupportedException>(
-            () => client.Source<Order>("Order")
-                .GroupBy(_ => _.Region)
-                .Select(_ => new NameRow(_.Key.ToUpper()))
-                .ToListAsync());
+        var rows = await client.Source<Employee>("Employee")
+            .Where(_ => _.Name == "Alice")
+            .Select(_ => new EmployeeTwoCard(_.Name, new(_.Department!.Name, _.Department!.Name.Length)))
+            .ToListAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rows.Single().Department.Name, Is.EqualTo("Engineering"));
+            Assert.That(rows.Single().Department.Length, Is.EqualTo(11));
+        });
+    }
+
+    [Test]
+    public async Task ExpressionInAGroupedProjection()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var rows = await client.Source<Order>("Order")
+            .GroupBy(_ => _.Region)
+            .Select(_ => new NameRow(_.Key.ToUpper()))
+            .ToListAsync();
+
+        Assert.That(rows.Select(_ => _.Name).Order(), Is.EqualTo(new[] { "NORTH", "SOUTH" }));
+    }
+
+    [Test]
+    public async Task ComposedAggregatesInAGroupedProjection()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // North holds two orders totalling 350; the mean is computed from two aggregates rather than
+        // asked for directly.
+        var rows = await client.Source<Order>("Order")
+            .GroupBy(_ => _.Region)
+            .Select(_ => new OrderShape(_.Key, _.Sum(_ => _.Amount) / _.Count()))
+            .ToListAsync();
+
+        Assert.That(rows.Single(_ => _.Region == "North").Amount, Is.EqualTo(175m));
+    }
+
+    [Test]
+    public void ANonKeyMemberInAGroupedProjectionIsStillRejected()
+    {
+        using var context = TestContext.CreateSeeded();
+
+        // Composition does not widen what a group can read: every column but the key has been folded
+        // away, so burying one inside an expression must not smuggle it back.
+        var request = QueryRequest.Create(
+            "Order",
+            [
+                new GroupByOp([new MemberNode(["Region"])]),
+                new SelectOp(new(
+                [
+                    new("Region", new NodeValue(new MemberNode(["Region"]))),
+                    new("Smuggled", new NodeValue(new BinaryNode(
+                        BinaryOp.Add,
+                        new MemberNode(["Amount"]),
+                        new ConstNode("1", ClrTypeTag.Decimal))))
+                ]))
+            ]);
+
+        var exception = Assert.Throws<ScryValidationException>(
+            () => SharedProcessor.Instance.Execute(request, context));
+
+        Assert.That(exception!.Message, Does.Contain("group key or aggregates"));
     }
 
     [Test]

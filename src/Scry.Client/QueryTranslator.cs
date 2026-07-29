@@ -225,23 +225,12 @@ sealed class QueryTranslator
 
     ProjectionValue ProjectionValue(Expression expression, ParameterExpression parameter, bool grouped)
     {
+        // Over a group the row being read is the grouping itself, which TranslateExpr already knows how
+        // to read: its Key is the group key and a call taking it is an aggregate. That leaves the two
+        // free to compose — _.Sum(x => x.Amount) / _.Count(), or _.Key.ToUpper().
         if (grouped)
         {
-            if (expression is MemberExpression
-                {
-                    Member.Name: "Key"
-                } memberKey &&
-                memberKey.Expression == parameter)
-            {
-                return new NodeValue(new MemberNode(groupKey ?? throw new NotSupportedException("No group key in scope.")));
-            }
-
-            if (expression is MethodCallExpression aggregate)
-            {
-                return new NodeValue(TranslateAggregate(aggregate));
-            }
-
-            throw new NotSupportedException("A grouped projection may only use the group key or aggregates.");
+            return new NodeValue(TranslateExpr(expression, parameter));
         }
 
         // A member whose value is itself a constructed object is a nested projection into a navigation
@@ -259,18 +248,10 @@ sealed class QueryTranslator
 
     NestedValue TranslateNested(Expression expression, ParameterExpression parameter)
     {
-        var members = new List<(string Name, IReadOnlyList<string> Path)>();
+        var members = new List<(string Name, Node Value)>();
         foreach (var (name, value) in NestedMembers(expression))
         {
-            // Nested members must be plain member paths through the navigation; a deeper nested
-            // object, a function call, or a constant is not a supported nested-projection leaf.
-            if (TranslateExpr(value, parameter) is not MemberNode member)
-            {
-                throw new NotSupportedException(
-                    "A nested projection member must be a member path into the navigation (e.g. _.Department.Name).");
-            }
-
-            members.Add((name, member.Path));
+            members.Add((name, TranslateExpr(value, parameter)));
         }
 
         if (members.Count == 0)
@@ -278,7 +259,16 @@ sealed class QueryTranslator
             throw new NotSupportedException("A nested projection must have at least one member.");
         }
 
-        var prefix = CommonNavigationPrefix([.. members.Select(_ => _.Path)]);
+        // The navigation a nested object descends into is inferred from the member paths it reads —
+        // which may sit anywhere inside an expression, not only at its root, so they are collected from
+        // the whole tree and then stripped back off it.
+        var paths = new List<IReadOnlyList<string>>();
+        foreach (var (_, value) in members)
+        {
+            CollectPaths(value, paths);
+        }
+
+        var prefix = CommonNavigationPrefix(paths);
         if (prefix.Count == 0)
         {
             throw new NotSupportedException(
@@ -286,11 +276,71 @@ sealed class QueryTranslator
         }
 
         var projected = members
-            .Select(_ => new ProjectionMember(_.Name, new NodeValue(new MemberNode([.. _.Path.Skip(prefix.Count)]))))
+            .Select(_ => new ProjectionMember(_.Name, new NodeValue(StripPrefix(_.Value, prefix.Count))))
             .ToList();
 
         return new(prefix, new(projected));
     }
+
+    /// <summary>
+    /// Gathers every member path an expression reads from the row. A subquery's own predicate and
+    /// selector are skipped: they are rooted at the collection's element, not at the row, so they say
+    /// nothing about which navigation the enclosing projection descends into.
+    /// </summary>
+    static void CollectPaths(Node node, List<IReadOnlyList<string>> paths)
+    {
+        switch (node)
+        {
+            case MemberNode member:
+                paths.Add(member.Path);
+                break;
+            case SubqueryNode subquery:
+                paths.Add(subquery.Path);
+                break;
+            case BinaryNode binary:
+                CollectPaths(binary.Left, paths);
+                CollectPaths(binary.Right, paths);
+                break;
+            case UnaryNode unary:
+                CollectPaths(unary.Operand, paths);
+                break;
+            case ConditionalNode conditional:
+                CollectPaths(conditional.Test, paths);
+                CollectPaths(conditional.IfTrue, paths);
+                CollectPaths(conditional.IfFalse, paths);
+                break;
+            case CallNode call:
+                CollectPaths(call.Target, paths);
+                foreach (var argument in call.Arguments)
+                {
+                    CollectPaths(argument, paths);
+                }
+
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Rebases an expression onto the navigation the nested projection descends into, by dropping the
+    /// shared leading segments from every path it reads.
+    /// </summary>
+    static Node StripPrefix(Node node, int prefix) =>
+        node switch
+        {
+            MemberNode member => new MemberNode([..member.Path.Skip(prefix)]),
+            SubqueryNode subquery => subquery with { Path = [..subquery.Path.Skip(prefix)] },
+            BinaryNode binary => new BinaryNode(binary.Op, StripPrefix(binary.Left, prefix), StripPrefix(binary.Right, prefix)),
+            UnaryNode unary => new UnaryNode(unary.Op, StripPrefix(unary.Operand, prefix)),
+            ConditionalNode conditional => new ConditionalNode(
+                StripPrefix(conditional.Test, prefix),
+                StripPrefix(conditional.IfTrue, prefix),
+                StripPrefix(conditional.IfFalse, prefix)),
+            CallNode call => new CallNode(
+                call.Function,
+                StripPrefix(call.Target, prefix),
+                [..call.Arguments.Select(_ => StripPrefix(_, prefix))]),
+            _ => node
+        };
 
     static IEnumerable<(string Name, Expression Value)> NestedMembers(Expression expression)
     {

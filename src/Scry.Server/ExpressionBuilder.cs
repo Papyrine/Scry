@@ -567,6 +567,7 @@ sealed class ExpressionBuilder(Schema schema)
         }
 
         Coerce(ref left, ref right);
+        PromoteNumeric(ref left, ref right);
 
         // C# compiles string concatenation to an Add carrying string.Concat as its method. The wire
         // records the operator, never the method, so the concatenation is reconstructed here from the
@@ -775,6 +776,70 @@ sealed class ExpressionBuilder(Schema schema)
             Expression.Constant(values, typeof(IEnumerable<>).MakeGenericType(elementType)),
             target);
     }
+
+    /// <summary>
+    /// Widens two numeric operands to a common type. C# inserts this conversion itself — <c>decimal /
+    /// int</c> compiles because the <c>int</c> is promoted — but the wire records the operator and
+    /// never the conversion, so it has to be reconstructed from the operand types. Operands that are
+    /// not both numeric are left alone: enums, strings and dates have their own comparison rules.
+    /// </summary>
+    static void PromoteNumeric(ref Expression left, ref Expression right)
+    {
+        if (left.Type == right.Type)
+        {
+            return;
+        }
+
+        var leftValue = Nullable.GetUnderlyingType(left.Type) ?? left.Type;
+        var rightValue = Nullable.GetUnderlyingType(right.Type) ?? right.Type;
+        if (leftValue == rightValue ||
+            NumericTarget(leftValue, rightValue) is not { } target)
+        {
+            return;
+        }
+
+        // An operand that can be null keeps the result nullable, exactly as it would in C#.
+        if (Nullable.GetUnderlyingType(left.Type) is not null ||
+            Nullable.GetUnderlyingType(right.Type) is not null)
+        {
+            target = typeof(Nullable<>).MakeGenericType(target);
+        }
+
+        left = ConvertTo(left, target);
+        right = ConvertTo(right, target);
+    }
+
+    // Widest wins, in the order C# itself prefers.
+    static Type? NumericTarget(Type left, Type right)
+    {
+        if (!IsNumeric(left) ||
+            !IsNumeric(right))
+        {
+            return null;
+        }
+
+        foreach (var candidate in numericWidths)
+        {
+            if (left == candidate ||
+                right == candidate)
+            {
+                return candidate;
+            }
+        }
+
+        return typeof(int);
+    }
+
+    static readonly Type[] numericWidths =
+    [
+        typeof(decimal), typeof(double), typeof(float), typeof(ulong), typeof(long), typeof(uint), typeof(int)
+    ];
+
+    static bool IsNumeric(Type type) =>
+        !type.IsEnum &&
+        Type.GetTypeCode(type) is TypeCode.Byte or TypeCode.SByte or TypeCode.Int16 or TypeCode.UInt16 or
+            TypeCode.Int32 or TypeCode.UInt32 or TypeCode.Int64 or TypeCode.UInt64 or
+            TypeCode.Single or TypeCode.Double or TypeCode.Decimal;
 
     static Expression ConvertTo(Expression expression, Type target) =>
         expression.Type == target ? expression : Expression.Convert(expression, target);
