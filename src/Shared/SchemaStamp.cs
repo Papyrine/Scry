@@ -1,12 +1,8 @@
 // Linked into both Scry.Server (net10.0) and Scry.SourceGenerator, so the two sides compute the stamp
 // from one implementation. The generator also multi-targets netstandard2.0 — the target Roslyn loads
-// as an analyzer — so this file must compile there too.
-//
-// That is what the SHA256 #if is for, and it is not optional in either direction: SHA256.HashData is
-// .NET 5+, so netstandard2.0 cannot use it, while CA1850 demands it over ComputeHash on the net10
-// targets and TreatWarningsAsErrors turns that into a build error.
-//
-// BCL references are fully qualified because the two projects have different global usings.
+// as an analyzer — so this file must compile there too. SHA256.HashData is .NET 5+; Polyfill (a
+// source-only package, so nothing extra to bundle into the analyzer) supplies it on netstandard2.0,
+// which is what lets one path serve every target while satisfying CA1850 on the net10 ones.
 
 /// <summary>
 /// Computes the schema stamp: a truncated SHA-256 over a canonical description of the queryable
