@@ -303,8 +303,25 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
                     break;
 
-                case NodeValue:
-                    throw Reject("Unsupported projection expression.");
+                // Any other expression: validated exactly as a predicate's would be, against the same
+                // allow-list, function set and depth limit. A projection is one more place a row can be
+                // read from, not a place where more can be read.
+                case NodeValue value:
+                    if (grouped)
+                    {
+                        throw Reject("A grouped projection may only reference the group key or aggregates.");
+                    }
+
+                    // A leaf that reads nothing is a value the client already has, and a provider has
+                    // no column to compute it from — EF rejects a constant in a client projection
+                    // outright. Caught here so it reads as the rejection it is.
+                    if (!ReadsRow(value.Node))
+                    {
+                        throw Reject("A projection member must read at least one member of the row.");
+                    }
+
+                    ValidateExpr(value.Node, rootType, depth: 0);
+                    break;
 
                 case NestedValue nested:
                     if (grouped)
@@ -321,6 +338,20 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             }
         }
     }
+
+    static bool ReadsRow(Node node) =>
+        node switch
+        {
+            MemberNode => true,
+            ConstNode => false,
+            BinaryNode binary => ReadsRow(binary.Left) || ReadsRow(binary.Right),
+            UnaryNode unary => ReadsRow(unary.Operand),
+            ConditionalNode conditional => ReadsRow(conditional.Test) ||
+                                           ReadsRow(conditional.IfTrue) ||
+                                           ReadsRow(conditional.IfFalse),
+            CallNode call => ReadsRow(call.Target) || call.Arguments.Any(ReadsRow),
+            _ => true
+        };
 
     void ValidatePredicate(Node expr, Type elementType) =>
         ValidateExpr(expr, elementType, depth: 0);

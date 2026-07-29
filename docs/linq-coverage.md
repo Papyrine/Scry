@@ -74,7 +74,11 @@ Both are tracked in [Not yet supported](#not-yet-supported).
 
 See [the full table](querying.md#functions). In summary — string: `Contains`, `StartsWith`, `EndsWith`, `ToLower`, `ToUpper`, `Length`, `Trim`/`TrimStart`/`TrimEnd`, `Substring`, `IndexOf`, `Replace`, `IsNullOrEmpty`, `IsNullOrWhiteSpace`. Date: `Year`, `Month`, `Day`, `Hour`, `Minute`, `Second`, `DayOfYear`, `Date`, and the `Add*` methods. Math: `Abs`, `Ceiling`, `Floor`, `Round`. Plus `Contains` over a client-supplied set, which becomes a SQL `IN`.
 
-Functions are expression-level: they read a row in a predicate, an ordering or group key, a terminal predicate, or an aggregate selector. **A projection member is still a member path** — `Select(_ => new { Upper = _.Name.ToUpper() })` is rejected.
+Functions are expression-level: they read a row in a predicate, an ordering or group key, a terminal predicate, an aggregate selector, or a projection member.
+
+### Computed projection members
+
+A projection leaf can be any of the above rather than only a member path — `Select(_ => new { Shouted = _.Name.ToUpper(), Net = _.Amount - _.Discount })`. See [projections](querying.md#computed-projection-members). A leaf must read at least one row member (a constant-only leaf is rejected, as EF refuses one in a client projection), a member of a *nested* object must stay a plain path, and a grouped `Select` is still limited to the group key and aggregates.
 
 Reaching the wire is necessary but not sufficient: a function still has to be one the **EF provider** translates. Scry validates and rebinds it, then EF decides. Where a provider has no translation the query fails at execution rather than at validation — so a function with no SQL Server translation is left out of the closed set rather than shipped as a trap.
 
@@ -87,7 +91,7 @@ Everything below is translatable by EF Core but has no wire representation in Sc
 
 Fit the closed-vocabulary pattern — each is a new enum member or a small op record plus validator, builder, and generator work. Roughly ordered by expected demand.
 
-- [ ] **Expressions as projection members** — `Select(_ => new { Upper = _.Name.ToUpper(), Net = _.Amount - _.Discount })`. Functions and arithmetic already validate and rebind; a projection leaf is the one position still restricted to a plain member path. The most likely thing to be reached for next, now that the function set is wide.
+- [ ] Expressions in a **nested** projection member and in a **grouped** `Select` — the two positions a computed leaf still cannot appear. The first needs the navigation a nested object descends into to be carried explicitly rather than inferred from its member paths; the second needs aggregates to compose (`_.Sum(…) / _.Count()`), which the grouped builder handles only as whole members today.
 - [ ] Ordering a deduplicated query — `Distinct().OrderBy(…)`, and paging over it. Both need ordering keys expressed against the *projection* rather than the row, which is also what would let `Skip`/`Take` follow a `Distinct`.
 - [ ] Counting a `Distinct` over more than one projected member. `COUNT(DISTINCT x)` is single-column in SQL; a multi-column form needs a projection type with real equality, which the shaped `object[]` row deliberately is not.
 - [ ] `string.Concat` / interpolation, `char` members, `StartsWith` with a `StringComparison`.

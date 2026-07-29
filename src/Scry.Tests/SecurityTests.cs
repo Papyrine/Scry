@@ -241,6 +241,47 @@ public class SecurityTests
                 new CountOp(new MemberNode(["Active"]))
             ]));
 
+    // A projection expression is one more place a row can be read from, not a place where more can be
+    // read: the allow-list applies inside it exactly as it does inside a predicate.
+    [Test]
+    public void RejectsIgnoredPropertyInsideAProjectionExpression() =>
+        AssertRejected(QueryRequest.Create(
+            "Employee",
+            [
+                new SelectOp(new(
+                [
+                    new("Doubled", new NodeValue(new BinaryNode(
+                        BinaryOp.Multiply,
+                        new MemberNode(["Salary"]),
+                        new ConstNode("2", ClrTypeTag.Decimal))))
+                ]))
+            ]));
+
+    [Test]
+    public void RejectsNavigationAsAProjectionExpressionOperand() =>
+        AssertRejected(QueryRequest.Create(
+            "Employee",
+            [
+                new SelectOp(new(
+                [
+                    new("Upper", new NodeValue(new CallNode(
+                        KnownFunction.StringToUpper,
+                        new MemberNode(["Department"]),
+                        [])))
+                ]))
+            ]));
+
+    [Test]
+    public void RejectsProjectionMemberThatReadsNothing() =>
+        AssertRejected(QueryRequest.Create(
+            "Employee",
+            [
+                new SelectOp(new(
+                [
+                    new("Fixed", new NodeValue(new ConstNode("x", ClrTypeTag.String)))
+                ]))
+            ]));
+
     static void AssertRejected(QueryRequest request, Action<ScryOptions>? extra = null)
     {
         using var context = TestContext.CreateSeeded();

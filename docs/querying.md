@@ -263,7 +263,7 @@ public enum UnaryOp
 <sup><a href='/src/Scry.Wire/BinaryOp.cs#L3-L29' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireBinaryOps' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-C# `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, `+`, `-`, `*`, `/`, `%`, `??`, `!`, and unary `-` map onto these, and `?:` becomes a `conditional` node. Any other operator (`&`, `|`, `^`, `<<`, `>>`) throws:
+C# `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, `+`, `-`, `*`, `/`, `%`, `??`, `!`, and unary `-` map onto these, and `?:` becomes a `conditional` node. `+` over two strings is concatenation — the wire records the operator, never the method, so the server reconstructs it from the operand types. Any other operator (`&`, `|`, `^`, `<<`, `>>`) throws:
 
 ```
 Binary operator 'ExclusiveOr' is not supported by Scry.
@@ -355,7 +355,7 @@ The date functions apply to `DateTime`, `DateOnly`, `DateTimeOffset`, and `TimeO
 
 There is no free-form method call node in the wire format, so this list is the complete set of behaviour a client can ask the database to perform. **Provider support is still the outer bound**: a function only reaches SQL if the EF provider translates it, which is why `DayOfWeek` — which SQL Server's provider does not translate — has no entry.
 
-Functions are **expression-level**: they read a row inside a `Where` predicate, an ordering or group key, a terminal predicate, or an aggregate selector. A projection member is still a member path, so `Select(_ => new { Upper = _.Name.ToUpper() })` is rejected.
+Functions are **expression-level**: they read a row inside a `Where` predicate, an ordering or group key, a terminal predicate, an aggregate selector, or a [projection member](#computed-projection-members).
 
 
 ### Set membership
@@ -418,6 +418,30 @@ A projection must construct an object (anonymous type, record, or object initial
 For a record or constructor call, member names come from the constructor parameter names, capitalized — `new EmployeeRow(name: ...)` produces the member `Name`.
 
 Every projection leaf must resolve to an allow-listed **scalar**. A navigation cannot be projected whole; project a scalar out of it (`_.Department!.Name`).
+
+
+### Computed projection members
+
+A leaf can be any expression, not only a member path — the same vocabulary a predicate is built from, computed by the database and returned as a column:
+
+```cs
+.Select(_ => new
+{
+    Shouted = _.Name.ToUpper(),
+    Net = _.Amount - (_.Discount ?? 0m),
+    Band = _.Amount > 100m ? "large" : "small",
+    Label = _.Region + " / " + _.Name
+})
+```
+
+The same allow-list applies inside a computed leaf as anywhere else: a `[QueryIgnore]`d member is no more reachable through an expression than through a plain path, and the expression-depth limit still holds.
+
+Two restrictions:
+
+- A leaf must **read at least one member of the row**. `Select(_ => new { Kind = "employee" })` is rejected — the client already has that value, and EF refuses a constant in a client projection.
+- A member of a **nested** object must still be a plain member path. Which navigation the nested object descends into is inferred from those paths, so `new(_.Department!.Name.ToUpper())` is rejected on the client. Compute it as a flat member instead.
+
+A grouped `Select` is unchanged: it may reference only the group key and aggregates.
 
 
 ### Without a `Select`

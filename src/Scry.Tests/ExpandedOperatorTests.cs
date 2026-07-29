@@ -13,6 +13,10 @@ public class ExpandedOperatorTests
 
     record OrderShape(string Region, decimal Amount);
 
+    record EmployeeCard(string Name, DepartmentCard Department);
+
+    record DepartmentCard(string Name);
+
     // ReSharper restore NotAccessedPositionalProperty.Local
 
     [Test]
@@ -400,17 +404,97 @@ public class ExpandedOperatorTests
     }
 
     [Test]
-    public void FunctionInAProjectionIsStillRejected()
+    public async Task FunctionInAProjection()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var rows = await client.Source<Employee>("Employee")
+            .Where(_ => _.Name == "Alice")
+            .Select(_ => new NameRow(_.Name.ToUpper()))
+            .ToListAsync();
+
+        Assert.That(rows.Single().Name, Is.EqualTo("ALICE"));
+    }
+
+    [Test]
+    public async Task ArithmeticAndConditionalInAProjection()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var rows = await client.Source<Order>("Order")
+            .OrderBy(_ => _.Amount)
+            .Select(_ => new OrderShape(
+                _.Region == "North" ? "N" : "S",
+                _.Amount - (_.Discount ?? 0m)))
+            .ToListAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rows.Select(_ => _.Region), Is.EqualTo(new[] { "S", "N", "N" }));
+            Assert.That(rows.Select(_ => _.Amount), Is.EqualTo(new[] { 70m, 90m, 250m }));
+        });
+    }
+
+    [Test]
+    public void ConstantOnlyProjectionMemberIsRejected()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        // Functions are expression-level: they read a row in a predicate, an ordering key or an
-        // aggregate selector, but a projection member is still a member path. Pinned so the boundary
-        // is a deliberate one rather than an accident of the new function set.
-        Assert.ThrowsAsync<ScryValidationException>(
+        // A leaf that reads nothing from the row is a value the client already has, and EF rejects a
+        // constant in a client projection outright — so it is reported as a rejection, not a fault.
+        var exception = Assert.ThrowsAsync<ScryValidationException>(
             () => client.Source<Employee>("Employee")
-                .Select(_ => new NameRow(_.Name.ToUpper()))
+                .Select(_ => new NameRow("fixed"))
+                .ToListAsync());
+
+        Assert.That(exception!.Message, Does.Contain("must read at least one member"));
+    }
+
+    [Test]
+    public async Task ConstantCombinedWithARowMemberInAProjection()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // A constant is fine as part of a computed leaf: it becomes part of the SQL expression rather
+        // than a value materialized on its own.
+        var suffix = "!";
+
+        var rows = await client.Source<Employee>("Employee")
+            .Where(_ => _.Name == "Alice")
+            .Select(_ => new NameRow(_.Name.Replace("A", "4") + suffix))
+            .ToListAsync();
+
+        Assert.That(rows.Single().Name, Is.EqualTo("4lice!"));
+    }
+
+    [Test]
+    public void ExpressionInANestedProjectionMemberIsRejected()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // Inferring which navigation a nested object descends into reads the member paths, so a
+        // nested member has to stay one. Rejected on the client, before a request is sent.
+        Assert.ThrowsAsync<NotSupportedException>(
+            () => client.Source<Employee>("Employee")
+                .Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name.ToUpper())))
+                .ToListAsync());
+    }
+
+    [Test]
+    public void ExpressionInAGroupedProjectionIsRejected()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        Assert.ThrowsAsync<NotSupportedException>(
+            () => client.Source<Order>("Order")
+                .GroupBy(_ => _.Region)
+                .Select(_ => new NameRow(_.Key.ToUpper()))
                 .ToListAsync());
     }
 

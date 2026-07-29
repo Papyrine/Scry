@@ -152,7 +152,10 @@ sealed class QueryTranslator
 
         // A member whose value is itself a constructed object is a nested projection into a navigation
         // (e.g. Department = new DepartmentInfo(_.Department.Name)), producing a nested result object.
-        if (expression is NewExpression or MemberInitExpression)
+        // One that reads nothing from the row is not a projection at all — it is a constructed constant
+        // such as new DateTime(2026, 1, 1), and falls through to be evaluated as one.
+        if (expression is NewExpression or MemberInitExpression &&
+            ReferencesParameter(expression, parameter))
         {
             return TranslateNested(expression, parameter);
         }
@@ -248,23 +251,30 @@ sealed class QueryTranslator
 
     AggregateNode TranslateAggregate(MethodCallExpression call)
     {
-        if (call.Method.Name == "Count")
+        if (call is {Method.Name: "Count", Arguments.Count: 1})
         {
             return new(AggregateFn.Count, Selector: null);
         }
 
-        var selector = Lambda(call.Arguments[1]);
-        var member = TranslateExpr(selector.Body, selector.Parameters[0]);
         var function = call.Method.Name switch
         {
             "Sum" => AggregateFn.Sum,
             "Average" => AggregateFn.Average,
             "Min" => AggregateFn.Min,
             "Max" => AggregateFn.Max,
-            _ => throw new NotSupportedException($"Aggregate '{call.Method.Name}' is not supported.")
+            // Reached for any other call written in a grouped projection, where only the group key and
+            // an aggregate are expressible — so the arity below is safe to assume.
+            _ => throw new NotSupportedException(
+                $"'{call.Method.Name}' is not an aggregate. A grouped projection may only use the group key and Count/Sum/Average/Min/Max.")
         };
 
-        return new(function, member);
+        if (call.Arguments.Count != 2)
+        {
+            throw new NotSupportedException($"Aggregate '{call.Method.Name}' requires a selector.");
+        }
+
+        var selector = Lambda(call.Arguments[1]);
+        return new(function, TranslateExpr(selector.Body, selector.Parameters[0]));
     }
 
     Node TranslateExpr(Expression expression, ParameterExpression root)

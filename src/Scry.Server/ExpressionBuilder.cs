@@ -237,8 +237,11 @@ sealed class ExpressionBuilder(Schema schema)
             var jsonPath = jsonPrefix.Append(member.Name).ToArray();
             switch (member.Value)
             {
-                case NodeValue { Node: MemberNode memberNode }:
-                    leaves.Add(BuildMemberAccess(root, memberNode.Path));
+                // A leaf is any validated scalar expression, not only a member path — the same
+                // vocabulary a predicate is built from, rooted at whatever part of the row this
+                // projection level describes.
+                case NodeValue value:
+                    leaves.Add(Build(value.Node, root, null));
                     shape.Add(jsonPath);
                     break;
 
@@ -312,23 +315,23 @@ sealed class ExpressionBuilder(Schema schema)
         return underlying is null ? promoted : typeof(Nullable<>).MakeGenericType(promoted);
     }
 
-    Expression Build(Node node, ParameterExpression parameter, Type? expected) =>
+    Expression Build(Node node, Expression row, Type? expected) =>
         node switch
         {
-            MemberNode member => BuildMemberAccess(parameter, member.Path),
+            MemberNode member => BuildMemberAccess(row, member.Path),
             ConstNode constant => BuildConstant(constant, expected),
-            BinaryNode binary => BuildBinary(binary, parameter),
-            UnaryNode unary => BuildUnary(unary, parameter),
-            CallNode call => BuildCall(call, parameter),
-            ConditionalNode conditional => BuildConditional(conditional, parameter),
+            BinaryNode binary => BuildBinary(binary, row),
+            UnaryNode unary => BuildUnary(unary, row),
+            CallNode call => BuildCall(call, row),
+            ConditionalNode conditional => BuildConditional(conditional, row),
             _ => throw new ScryValidationException($"Unsupported expression '{node.GetType().Name}'.")
         };
 
-    Expression BuildConditional(ConditionalNode conditional, ParameterExpression parameter)
+    Expression BuildConditional(ConditionalNode conditional, Expression row)
     {
-        var test = Build(conditional.Test, parameter, typeof(bool));
-        var ifTrue = Build(conditional.IfTrue, parameter, null);
-        var ifFalse = Build(conditional.IfFalse, parameter, ifTrue.Type);
+        var test = Build(conditional.Test, row, typeof(bool));
+        var ifTrue = Build(conditional.IfTrue, row, null);
+        var ifFalse = Build(conditional.IfFalse, row, ifTrue.Type);
         Coerce(ref ifTrue, ref ifFalse);
 
         if (ifTrue.Type != ifFalse.Type)
@@ -367,11 +370,11 @@ sealed class ExpressionBuilder(Schema schema)
         return expression;
     }
 
-    Expression BuildBinary(BinaryNode binary, ParameterExpression parameter)
+    Expression BuildBinary(BinaryNode binary, Expression row)
     {
         if (binary.Op == BinaryOp.Coalesce)
         {
-            var fallbackOf = Build(binary.Left, parameter, null);
+            var fallbackOf = Build(binary.Left, row, null);
             if (fallbackOf.Type.IsValueType &&
                 Nullable.GetUnderlyingType(fallbackOf.Type) is null)
             {
@@ -381,15 +384,15 @@ sealed class ExpressionBuilder(Schema schema)
 
             var fallback = Build(
                 binary.Right,
-                parameter,
+                row,
                 Nullable.GetUnderlyingType(fallbackOf.Type) ?? fallbackOf.Type);
             return Expression.Coalesce(fallbackOf, fallback);
         }
 
         if (binary.Op is BinaryOp.AndAlso or BinaryOp.OrElse)
         {
-            var leftBool = Build(binary.Left, parameter, typeof(bool));
-            var rightBool = Build(binary.Right, parameter, typeof(bool));
+            var leftBool = Build(binary.Left, row, typeof(bool));
+            var rightBool = Build(binary.Right, row, typeof(bool));
             if (binary.Op == BinaryOp.AndAlso)
             {
                 return Expression.AndAlso(leftBool, rightBool);
@@ -403,37 +406,57 @@ sealed class ExpressionBuilder(Schema schema)
         Expression right;
         if (binary is {Left: ConstNode, Right: not ConstNode})
         {
-            right = Build(binary.Right, parameter, null);
-            left = Build(binary.Left, parameter, right.Type);
+            right = Build(binary.Right, row, null);
+            left = Build(binary.Left, row, right.Type);
         }
         else
         {
-            left = Build(binary.Left, parameter, null);
-            right = Build(binary.Right, parameter, left.Type);
+            left = Build(binary.Left, row, null);
+            right = Build(binary.Right, row, left.Type);
         }
 
         Coerce(ref left, ref right);
 
-        return binary.Op switch
+        // C# compiles string concatenation to an Add carrying string.Concat as its method. The wire
+        // records the operator, never the method, so the concatenation is reconstructed here from the
+        // operand types — an Add of two strings can mean nothing else.
+        if (binary.Op == BinaryOp.Add &&
+            left.Type == typeof(string) &&
+            right.Type == typeof(string))
         {
-            BinaryOp.Equal => Expression.Equal(left, right),
-            BinaryOp.NotEqual => Expression.NotEqual(left, right),
-            BinaryOp.LessThan => Expression.LessThan(left, right),
-            BinaryOp.LessThanOrEqual => Expression.LessThanOrEqual(left, right),
-            BinaryOp.GreaterThan => Expression.GreaterThan(left, right),
-            BinaryOp.GreaterThanOrEqual => Expression.GreaterThanOrEqual(left, right),
-            BinaryOp.Add => Expression.Add(left, right),
-            BinaryOp.Subtract => Expression.Subtract(left, right),
-            BinaryOp.Multiply => Expression.Multiply(left, right),
-            BinaryOp.Divide => Expression.Divide(left, right),
-            BinaryOp.Modulo => Expression.Modulo(left, right),
-            _ => throw new ScryValidationException($"Unsupported binary operator '{binary.Op}'.")
-        };
+            return Expression.Call(stringConcat, left, right);
+        }
+
+        try
+        {
+            return binary.Op switch
+            {
+                BinaryOp.Equal => Expression.Equal(left, right),
+                BinaryOp.NotEqual => Expression.NotEqual(left, right),
+                BinaryOp.LessThan => Expression.LessThan(left, right),
+                BinaryOp.LessThanOrEqual => Expression.LessThanOrEqual(left, right),
+                BinaryOp.GreaterThan => Expression.GreaterThan(left, right),
+                BinaryOp.GreaterThanOrEqual => Expression.GreaterThanOrEqual(left, right),
+                BinaryOp.Add => Expression.Add(left, right),
+                BinaryOp.Subtract => Expression.Subtract(left, right),
+                BinaryOp.Multiply => Expression.Multiply(left, right),
+                BinaryOp.Divide => Expression.Divide(left, right),
+                BinaryOp.Modulo => Expression.Modulo(left, right),
+                _ => throw new ScryValidationException($"Unsupported binary operator '{binary.Op}'.")
+            };
+        }
+        // An operator the two operand types have no definition for — a request pairing, say, a date
+        // with a number. Rejected rather than surfacing as a fault.
+        catch (InvalidOperationException exception)
+        {
+            throw new ScryValidationException(
+                $"'{binary.Op}' is not defined for '{left.Type.Name}' and '{right.Type.Name}': {exception.Message}");
+        }
     }
 
-    UnaryExpression BuildUnary(UnaryNode unary, ParameterExpression parameter)
+    UnaryExpression BuildUnary(UnaryNode unary, Expression row)
     {
-        var operand = Build(unary.Operand, parameter, unary.Op == UnaryOp.Not ? typeof(bool) : null);
+        var operand = Build(unary.Operand, row, unary.Op == UnaryOp.Not ? typeof(bool) : null);
         return unary.Op switch
         {
             UnaryOp.Not => Expression.Not(operand),
@@ -448,17 +471,17 @@ sealed class ExpressionBuilder(Schema schema)
     /// support (a date part on a number, say) is a rejected query rather than a fault, which is what
     /// the type mismatches surfacing as <see cref="ArgumentException"/> below are translated into.
     /// </summary>
-    Expression BuildCall(CallNode call, ParameterExpression parameter)
+    Expression BuildCall(CallNode call, Expression row)
     {
-        var target = Build(call.Target, parameter, null);
+        var target = Build(call.Target, row, null);
 
         try
         {
             return call.Function switch
             {
-                KnownFunction.StringContains => Expression.Call(target, stringContains, StringArgument(call, 0, parameter)),
-                KnownFunction.StringStartsWith => Expression.Call(target, stringStartsWith, StringArgument(call, 0, parameter)),
-                KnownFunction.StringEndsWith => Expression.Call(target, stringEndsWith, StringArgument(call, 0, parameter)),
+                KnownFunction.StringContains => Expression.Call(target, stringContains, StringArgument(call, 0, row)),
+                KnownFunction.StringStartsWith => Expression.Call(target, stringStartsWith, StringArgument(call, 0, row)),
+                KnownFunction.StringEndsWith => Expression.Call(target, stringEndsWith, StringArgument(call, 0, row)),
                 KnownFunction.StringToLower => Expression.Call(target, stringToLower),
                 KnownFunction.StringToUpper => Expression.Call(target, stringToUpper),
                 KnownFunction.StringIsNullOrEmpty => Expression.Call(stringIsNullOrEmpty, target),
@@ -467,9 +490,9 @@ sealed class ExpressionBuilder(Schema schema)
                 KnownFunction.StringTrim => Expression.Call(target, stringTrim),
                 KnownFunction.StringTrimStart => Expression.Call(target, stringTrimStart),
                 KnownFunction.StringTrimEnd => Expression.Call(target, stringTrimEnd),
-                KnownFunction.StringSubstring => BuildSubstring(call, target, parameter),
-                KnownFunction.StringIndexOf => Expression.Call(target, stringIndexOf, StringArgument(call, 0, parameter)),
-                KnownFunction.StringReplace => Expression.Call(target, stringReplace, StringArgument(call, 0, parameter), StringArgument(call, 1, parameter)),
+                KnownFunction.StringSubstring => BuildSubstring(call, target, row),
+                KnownFunction.StringIndexOf => Expression.Call(target, stringIndexOf, StringArgument(call, 0, row)),
+                KnownFunction.StringReplace => Expression.Call(target, stringReplace, StringArgument(call, 0, row), StringArgument(call, 1, row)),
 
                 KnownFunction.DateYear => TemporalProperty(target, "Year"),
                 KnownFunction.DateMonth => TemporalProperty(target, "Month"),
@@ -479,17 +502,17 @@ sealed class ExpressionBuilder(Schema schema)
                 KnownFunction.DateSecond => TemporalProperty(target, "Second"),
                 KnownFunction.DateDayOfYear => TemporalProperty(target, "DayOfYear"),
                 KnownFunction.DateDate => TemporalProperty(target, "Date"),
-                KnownFunction.DateAddYears => TemporalAdd(call, target, "AddYears", parameter),
-                KnownFunction.DateAddMonths => TemporalAdd(call, target, "AddMonths", parameter),
-                KnownFunction.DateAddDays => TemporalAdd(call, target, "AddDays", parameter),
-                KnownFunction.DateAddHours => TemporalAdd(call, target, "AddHours", parameter),
-                KnownFunction.DateAddMinutes => TemporalAdd(call, target, "AddMinutes", parameter),
-                KnownFunction.DateAddSeconds => TemporalAdd(call, target, "AddSeconds", parameter),
+                KnownFunction.DateAddYears => TemporalAdd(call, target, "AddYears", row),
+                KnownFunction.DateAddMonths => TemporalAdd(call, target, "AddMonths", row),
+                KnownFunction.DateAddDays => TemporalAdd(call, target, "AddDays", row),
+                KnownFunction.DateAddHours => TemporalAdd(call, target, "AddHours", row),
+                KnownFunction.DateAddMinutes => TemporalAdd(call, target, "AddMinutes", row),
+                KnownFunction.DateAddSeconds => TemporalAdd(call, target, "AddSeconds", row),
 
                 KnownFunction.MathAbs => MathCall("Abs", target),
                 KnownFunction.MathCeiling => MathCall("Ceiling", target),
                 KnownFunction.MathFloor => MathCall("Floor", target),
-                KnownFunction.MathRound => BuildRound(call, target, parameter),
+                KnownFunction.MathRound => BuildRound(call, target, row),
 
                 KnownFunction.In => BuildIn(call, target),
 
@@ -503,8 +526,8 @@ sealed class ExpressionBuilder(Schema schema)
         }
     }
 
-    Expression StringArgument(CallNode call, int index, ParameterExpression parameter) =>
-        Build(call.Arguments[index], parameter, typeof(string));
+    Expression StringArgument(CallNode call, int index, Expression row) =>
+        Build(call.Arguments[index], row, typeof(string));
 
     // A date part reads off the value, so an optional member is unwrapped first. Under EF that unwrap
     // is part of the translated SQL expression and a null row simply yields null.
@@ -521,7 +544,7 @@ sealed class ExpressionBuilder(Schema schema)
 
     // AddDays and friends take an int on DateOnly and a double on DateTime, so the argument is built
     // against whatever the resolved overload actually declares.
-    Expression TemporalAdd(CallNode call, Expression target, string name, ParameterExpression parameter)
+    Expression TemporalAdd(CallNode call, Expression target, string name, Expression row)
     {
         var value = Nullable.GetUnderlyingType(target.Type) is null
             ? target
@@ -531,7 +554,7 @@ sealed class ExpressionBuilder(Schema schema)
                          .FirstOrDefault(_ => _.Name == name && _.GetParameters().Length == 1) ??
                      throw new ScryValidationException($"'{value.Type.Name}' has no '{name}'.");
 
-        var argument = Build(call.Arguments[0], parameter, method.GetParameters()[0].ParameterType);
+        var argument = Build(call.Arguments[0], row, method.GetParameters()[0].ParameterType);
         return Expression.Call(value, method, ConvertTo(argument, method.GetParameters()[0].ParameterType));
     }
 
@@ -546,7 +569,7 @@ sealed class ExpressionBuilder(Schema schema)
         return Expression.Call(method, value);
     }
 
-    Expression BuildRound(CallNode call, Expression target, ParameterExpression parameter)
+    Expression BuildRound(CallNode call, Expression target, Expression row)
     {
         if (call.Arguments.Count == 0)
         {
@@ -556,22 +579,22 @@ sealed class ExpressionBuilder(Schema schema)
         var value = Nullable.GetUnderlyingType(target.Type) is null
             ? target
             : Expression.Property(target, "Value");
-        var digits = ConvertTo(Build(call.Arguments[0], parameter, typeof(int)), typeof(int));
+        var digits = ConvertTo(Build(call.Arguments[0], row, typeof(int)), typeof(int));
 
         var method = typeof(Math).GetMethod("Round", [value.Type, typeof(int)]) ??
                      throw new ScryValidationException($"Math.Round is not defined for '{value.Type.Name}'.");
         return Expression.Call(method, value, digits);
     }
 
-    Expression BuildSubstring(CallNode call, Expression target, ParameterExpression parameter)
+    Expression BuildSubstring(CallNode call, Expression target, Expression row)
     {
-        var start = ConvertTo(Build(call.Arguments[0], parameter, typeof(int)), typeof(int));
+        var start = ConvertTo(Build(call.Arguments[0], row, typeof(int)), typeof(int));
         if (call.Arguments.Count == 1)
         {
             return Expression.Call(target, stringSubstring, start);
         }
 
-        var length = ConvertTo(Build(call.Arguments[1], parameter, typeof(int)), typeof(int));
+        var length = ConvertTo(Build(call.Arguments[1], row, typeof(int)), typeof(int));
         return Expression.Call(target, stringSubstringWithLength, start, length);
     }
 
@@ -732,6 +755,7 @@ sealed class ExpressionBuilder(Schema schema)
     static readonly MethodInfo stringSubstringWithLength = StringMethod("Substring", typeof(int), typeof(int));
     static readonly MethodInfo stringIndexOf = StringMethod("IndexOf", typeof(string));
     static readonly MethodInfo stringReplace = StringMethod("Replace", typeof(string), typeof(string));
+    static readonly MethodInfo stringConcat = StringMethod("Concat", typeof(string), typeof(string));
 
     // The generic Contains<TSource>(source, value) definition, closed per member type by BuildIn.
     static readonly MethodInfo enumerableContains = typeof(Enumerable).GetMethods()
