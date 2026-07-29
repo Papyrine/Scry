@@ -199,6 +199,7 @@ It is off unless mapped, and Development-only by default. See [Query explorer](d
 ## Documentation
 
 - [Getting started](docs/getting-started.md)
+- [Comparisons](docs/comparisons.md)
 - [Annotations](docs/annotations.md)
 - [Source generator](docs/source-generator.md)
 - [Writing queries](docs/querying.md)
