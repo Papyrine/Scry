@@ -10,7 +10,7 @@ public sealed class ScryQuery
     /// A hash of the queryable surface this client was generated against. Attached to each
     /// request so the server can identify a client generated against a different model.
     /// </summary>
-    public const string SchemaStamp = "f0fc8cc5a6fa0a51b23480d0cb05daf7afe41cb78a460358abe7f74dee4042f1";
+    public const string SchemaStamp = "8PyMxab6ClGyNIDQ";
 
     readonly global::Scry.Client.ScryClient client;
 

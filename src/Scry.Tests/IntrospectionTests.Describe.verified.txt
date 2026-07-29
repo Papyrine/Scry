@@ -281,5 +281,5 @@
     }
   ],
   QueryEndpoint: /api/query,
-  SchemaStamp: f8f716b35836d8d00e72571b7593e20580a68b1a252ecbfe9dfff2b48209ff5f
+  SchemaStamp: -PcWs1g22NAOclcb
 }

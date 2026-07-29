@@ -369,7 +369,7 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
     }
   ],
   QueryEndpoint: /api/query,
-  SchemaStamp: f8f716b35836d8d00e72571b7593e20580a68b1a252ecbfe9dfff2b48209ff5f
+  SchemaStamp: -PcWs1g22NAOclcb
 }
 ```
 <sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L285' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>

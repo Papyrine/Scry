@@ -1,16 +1,27 @@
-// Linked into both Scry.SourceGenerator (netstandard2.0) and Scry.Server, so the two sides compute
-// the stamp from one implementation. BCL references are fully qualified because the two projects
-// have different global usings.
+// Linked into both Scry.Server (net10.0) and Scry.SourceGenerator, so the two sides compute the stamp
+// from one implementation. The generator multi-targets netstandard2.0 (the target Roslyn loads as an
+// analyzer) as well as net10.0, which is what the SHA256 #if below is for — not the server. BCL
+// references are fully qualified because the two projects have different global usings.
 
 /// <summary>
-/// Computes the schema stamp: a SHA-256 hash over a canonical description of the queryable surface
-/// (sources, query-model types with their members, enums). The generator computes it from metadata
-/// and bakes it into the generated client; the server computes it from reflection at startup. Equal
-/// surfaces yield equal stamps, so a mismatch identifies a client generated against a different
+/// Computes the schema stamp: a truncated SHA-256 over a canonical description of the queryable
+/// surface (sources, query-model types with their members, enums). The generator computes it from
+/// metadata and bakes it into the generated client; the server computes it from reflection at startup.
+/// Equal surfaces yield equal stamps, so a mismatch identifies a client generated against a different
 /// model. Every list is sorted ordinal so metadata order and reflection order cannot diverge.
 /// </summary>
 static class SchemaStamp
 {
+    /// <summary>
+    /// Bytes of the digest kept, base64url-encoded into the 16-character stamp. The stamp is a
+    /// fingerprint, not a security boundary: nothing trusts it (every request is re-validated against
+    /// the real schema regardless), and it is only ever compared pairwise — one client's against one
+    /// server's — so the birthday bound does not apply and a collision costs at most a missed reload
+    /// prompt. 96 bits puts that at roughly 1 in 10^29 per rename. 12 divides by 3, so the base64
+    /// encoding needs no padding.
+    /// </summary>
+    const int StampBytes = 12;
+
     public static string Compute(
         System.Collections.Generic.List<(string Name, string Kind, string Model)> sources,
         System.Collections.Generic.List<(string Model, System.Collections.Generic.List<(string Name, string Type)> Members)> types,
@@ -60,12 +71,19 @@ static class SchemaStamp
         var hash = System.Security.Cryptography.SHA256.HashData(bytes);
 #endif
 
-        var hex = new System.Text.StringBuilder(hash.Length * 2);
-        foreach (var value in hash)
-        {
-            hex.Append(value.ToString("x2", System.Globalization.CultureInfo.InvariantCulture));
-        }
+        return Encode(hash);
+    }
 
-        return hex.ToString();
+    // Base64url (RFC 4648 §5) over the leading StampBytes: the stamp travels in a JSON body, an HTTP
+    // header, and a generated C# constant, and '-' and '_' are safe in all three where '+' and '/'
+    // are not. No '=' padding to strip, since StampBytes divides by 3.
+    static string Encode(byte[] hash)
+    {
+        var truncated = new byte[StampBytes];
+        System.Array.Copy(hash, truncated, StampBytes);
+
+        return System.Convert.ToBase64String(truncated)
+            .Replace('+', '-')
+            .Replace('/', '_');
     }
 }

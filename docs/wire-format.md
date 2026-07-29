@@ -358,7 +358,7 @@ public sealed record QueryResponse(int Version, ResultKind Kind, JsonElement Pay
   "version": 1,
   "kind": "List",
   "payload": [ { "name": "Alice", "status": "FullTime" } ],
-  "stamp": "f8f716b35836d8d00e72571b7593e20580a68b1a252ecbfe9dfff2b48209ff5f"
+  "stamp": "9PcWs1g22NAOclcT"
 }
 ```
 
@@ -419,7 +419,9 @@ The `ScryJson` options, the `$type` discriminator strings, and the enum member n
 
 `version` covers the *format*. The **schema stamp** covers the *model* — the allow-listed surface a client was generated against.
 
-The stamp is a SHA-256 hash over a canonical description of the queryable surface: sources with their kinds, query-model types with their members and type displays, and re-emitted enums with their values, each list sorted ordinal. The generator computes it from the model DLL's metadata and bakes it into the generated `ScryQuery` as `SchemaStamp`; the server computes it from the real model by reflection. Both sides compile the same source, so equal surfaces produce equal stamps.
+The stamp is a SHA-256 over a canonical description of the queryable surface — sources with their kinds, query-model types with their members and type displays, and re-emitted enums with their values, each list sorted ordinal — truncated to 96 bits and base64url-encoded, giving a 16-character string. The generator computes it from the model DLL's metadata and bakes it into the generated `ScryQuery` as `SchemaStamp`; the server computes it from the real model by reflection. Both sides compile the same source, so equal surfaces produce equal stamps.
+
+Truncation is safe because the stamp is a **fingerprint, not a security boundary**. Nothing trusts it — every request is re-validated against the real schema whatever stamp arrives, so a forged one buys an attacker nothing but the suppression of their own reload prompt. And it is only ever compared pairwise, one client's against one server's, so the birthday bound does not apply: the chance two genuinely different surfaces collide is 2⁻⁹⁶, and the cost if they did is a missed reload prompt.
 
 The stamp travels in three places:
 
@@ -572,7 +574,7 @@ Over HTTP, request and response look like this:
     ResponseHeaders: {
       Scry-Schema-Stamp: a3b2edd1bc384796cc3e90ae40f16fdda5cb6136bf7badeb9da35653a7d74fcd
     },
-    ResponseContent: {"version":1,"kind":"List","payload":[{"name":"Aaron","status":"FullTime","manager":"Alice","department":"Engineering"},{"name":"Alice","status":"FullTime","manager":null,"department":"Engineering"},{"name":"Carol","status":"Contractor","manager":null,"department":"Sales"}]}
+    ResponseContent: {"version":1,"kind":"List","payload":[{"name":"Aaron","status":"FullTime","manager":"Alice","department":"Engineering"},{"name":"Alice","status":"FullTime","manager":null,"department":"Engineering"},{"name":"Carol","status":"Contractor","manager":null,"department":"Sales"}],"stamp":"a3b2edd1bc384796cc3e90ae40f16fdda5cb6136bf7badeb9da35653a7d74fcd"}
   }
 ]
 ```
