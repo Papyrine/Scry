@@ -482,10 +482,10 @@ sealed class QueryTranslator
                 case UnaryExpression {NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked} convert:
                     expression = convert.Operand;
                     continue;
-                case MethodCallExpression {Object: null, Arguments.Count: 1} call when call.Type.IsByRefLike:
+                case MethodCallExpression {Object: null, Arguments.Count: 1, Type.IsByRefLike: true} call:
                     expression = call.Arguments[0];
                     continue;
-                case MethodCallExpression {Object: { } instance, Arguments.Count: 0} call when call.Type.IsByRefLike:
+                case MethodCallExpression {Object: { } instance, Arguments.Count: 0, Type.IsByRefLike: true}:
                     expression = instance;
                     continue;
                 default:
