@@ -1,7 +1,12 @@
 // Linked into both Scry.Server (net10.0) and Scry.SourceGenerator, so the two sides compute the stamp
-// from one implementation. The generator multi-targets netstandard2.0 (the target Roslyn loads as an
-// analyzer) as well as net10.0, which is what the SHA256 #if below is for — not the server. BCL
-// references are fully qualified because the two projects have different global usings.
+// from one implementation. The generator also multi-targets netstandard2.0 — the target Roslyn loads
+// as an analyzer — so this file must compile there too.
+//
+// That is what the SHA256 #if is for, and it is not optional in either direction: SHA256.HashData is
+// .NET 5+, so netstandard2.0 cannot use it, while CA1850 demands it over ComputeHash on the net10
+// targets and TreatWarningsAsErrors turns that into a build error.
+//
+// BCL references are fully qualified because the two projects have different global usings.
 
 /// <summary>
 /// Computes the schema stamp: a truncated SHA-256 over a canonical description of the queryable
@@ -62,16 +67,13 @@ static class SchemaStamp
 
         var bytes = System.Text.Encoding.UTF8.GetBytes(builder.ToString());
 #if NETSTANDARD2_0
-        byte[] hash;
         using (var sha = System.Security.Cryptography.SHA256.Create())
         {
-            hash = sha.ComputeHash(bytes);
+            return Encode(sha.ComputeHash(bytes));
         }
 #else
-        var hash = System.Security.Cryptography.SHA256.HashData(bytes);
+        return Encode(System.Security.Cryptography.SHA256.HashData(bytes));
 #endif
-
-        return Encode(hash);
     }
 
     // Base64url (RFC 4648 §5) over the leading StampBytes: the stamp travels in a JSON body, an HTTP

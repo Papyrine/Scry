@@ -297,12 +297,12 @@ fullTimers = await Query.Employee
   {
     RequestUri: http://localhost/api/query,
     RequestMethod: POST,
-    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"expr","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"expr","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"expr","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"expr","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"a3b2edd1bc384796cc3e90ae40f16fdda5cb6136bf7badeb9da35653a7d74fcd"},
+    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"expr","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"expr","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"expr","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"expr","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"o7Lt0bw4R5bMPpCu"},
     ResponseStatus: OK 200,
     ResponseHeaders: {
-      Scry-Schema-Stamp: a3b2edd1bc384796cc3e90ae40f16fdda5cb6136bf7badeb9da35653a7d74fcd
+      Scry-Schema-Stamp: o7Lt0bw4R5bMPpCu
     },
-    ResponseContent: {"version":1,"kind":"List","payload":[{"name":"Aaron","status":"FullTime","manager":"Alice","department":"Engineering"},{"name":"Alice","status":"FullTime","manager":null,"department":"Engineering"},{"name":"Carol","status":"Contractor","manager":null,"department":"Sales"}],"stamp":"a3b2edd1bc384796cc3e90ae40f16fdda5cb6136bf7badeb9da35653a7d74fcd"}
+    ResponseContent: {"version":1,"kind":"List","payload":[{"name":"Aaron","status":"FullTime","manager":"Alice","department":"Engineering"},{"name":"Alice","status":"FullTime","manager":null,"department":"Engineering"},{"name":"Carol","status":"Contractor","manager":null,"department":"Sales"}],"stamp":"o7Lt0bw4R5bMPpCu"}
   }
 ]
 ```
