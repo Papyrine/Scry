@@ -185,6 +185,13 @@ Two caveats if it is kept:
 - **A signed self-contained token is stateful about its key.** With the ephemeral default key a cursor dies on restart or across instances; set a stable `CursorSigningKey` for a scaled-out or restart-tolerant deployment (see [Limits](#limits)).
 
 
+### Handling a rejected cursor
+
+An `Invalid paging cursor.` `400` is not always the client's fault. Beyond a genuinely malformed token, it is what a **valid** cursor produces once the key that signed it is gone — a restart or a different instance under the ephemeral default. Treat it as *resume point lost*, and re-request the first page rather than surfacing an error: the rows are all still there.
+
+If the same redeploy also changed the model, the rejection additionally carries the [stale-client marker](schema-versioning.md#when-the-break-arrives) and reaches the client as `ScryStaleClientException`, so an app already handling that gets the reload prompt instead — no paging-specific work needed. The plain-`400` case is the one worth a retry-from-the-start path.
+
+
 ## Scope
 
 The `page` terminal targets a **non-grouped** query. Out of scope:

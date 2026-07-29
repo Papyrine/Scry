@@ -182,7 +182,7 @@ public enum ClrTypeTag
     Enum
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L74-L92' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireTypeTags' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/ClrTypeTag.cs#L3-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireTypeTags' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The tag is a hint, not an instruction. The server parses the value into the **member's** type at the comparison site, so `tag` never dictates what CLR type is constructed. Types with no dedicated tag (`TimeOnly`, `TimeSpan`, `DateTimeOffset`, `char`) travel as `String` and are reconciled the same way. A `Bytes` value carries a `byte[]` as a base64 string.
@@ -226,7 +226,7 @@ public enum UnaryOp
     Negate
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L20-L44' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireBinaryOps' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/BinaryOp.cs#L3-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireBinaryOps' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 When one side is a constant, its type is inferred from the other side, and nullable/non-nullable operands are coerced to match.
@@ -260,7 +260,7 @@ public enum KnownFunction
     DateDay
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L46-L60' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 There is no free-form method name anywhere in the format. This enum is the complete set of behaviour a client can request.
@@ -285,7 +285,7 @@ public enum AggregateFn
     Max
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L62-L72' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireAggregates' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/AggregateFn.cs#L3-L13' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireAggregates' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `selector` is omitted for `Count`. An aggregate is valid **only** as a projection member in a `select` that follows a `groupBy`.
@@ -407,7 +407,7 @@ public static class WireFormat
     public const string SchemaStampHeader = "Scry-Schema-Stamp";
 }
 ```
-<sup><a href='/src/Scry.Wire/Enums.cs#L3-L18' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireVersion' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/WireFormat.cs#L3-L18' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireVersion' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `QueryRequest.Create` and `QueryResponse.Create` stamp the current version. The server rejects a request whose `version` is **greater** than its own — a newer client against an older server fails closed rather than being partially understood. Older requests continue to be accepted.
