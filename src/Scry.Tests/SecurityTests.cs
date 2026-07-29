@@ -165,14 +165,16 @@ public class SecurityTests
                     [new MemberNode(["Address", "City"])]))
             ]));
 
+    // Ordering a deduplicated query is allowed, but only by the member it deduplicated: every other
+    // column was folded away, so naming one would order by something the rows no longer carry.
     [Test]
-    public void RejectsOrderByAfterDistinct() =>
+    public void RejectsOrderByAfterDistinctOnAnUnprojectedMember() =>
         AssertRejected(QueryRequest.Create(
             "Employee",
             [
                 new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))])),
                 new DistinctOp(),
-                new OrderByOp(new MemberNode(["Name"]), Descending: false)
+                new OrderByOp(new MemberNode(["Status"]), Descending: false)
             ]));
 
     [Test]

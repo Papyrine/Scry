@@ -28,8 +28,10 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         var tailIsOrdered = false;
         var sawSkipOrTake = false;
         // Distinct deduplicates the projected rows, so it is applied after the projection is built
-        // rather than inline with the operators over the entity query.
+        // rather than inline with the operators over the entity query. Ordering and paging written
+        // after it describe those deduplicated values and are held back with it.
         var distinct = false;
+        List<QueryOp> afterDistinct = [];
 
         foreach (var op in request.Pipeline)
         {
@@ -57,6 +59,14 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                     tailIsOrdered = false;
                     query = query.Provider.CreateQuery(
                         CallQueryable("Reverse", [query.ElementType], query.Expression));
+                    break;
+                // Over a deduplicated query the ordering describes the projected values, so it is held
+                // back and applied to those rather than to the rows that fed them.
+                case OrderByOp deduplicated when distinct:
+                    afterDistinct.Add(deduplicated);
+                    break;
+                case SkipOp or TakeOp when distinct:
+                    afterDistinct.Add(op);
                     break;
                 case OrderByOp orderBy:
                     orderings.Add((orderBy.Key, orderBy.Descending));
@@ -134,18 +144,44 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         // equality of its own for a provider to deduplicate on — only enumeration can shape it back
         // afterwards — which is why the validator confines this to a single projected member.
         if (distinct &&
-            terminal is CountOp or LongCountOp or AnyOp)
+            (terminal is CountOp or LongCountOp or AnyOp || afterDistinct.Count > 0))
         {
             var values = ApplySelectTyped(query, builder.BuildSingleValueSelector(select!.Projection, elementType));
             var deduped = values.Provider.CreateQuery(
                 CallQueryable("Distinct", [values.ElementType], values.Expression));
 
-            return terminal switch
+            // The values are their own ordering key: there is one member, and it is what was
+            // deduplicated, so ordering by it is ordering the sequence itself.
+            foreach (var op in afterDistinct)
             {
-                CountOp => Scalar(Execute<int>(deduped, "Count")),
-                LongCountOp => Scalar(Execute<long>(deduped, "LongCount")),
-                _ => Scalar(Execute<bool>(deduped, "Any"))
-            };
+                deduped = op switch
+                {
+                    OrderByOp order => ApplyOrder(deduped, Identity(deduped.ElementType), order.Descending, then: false),
+                    SkipOp skip => ApplyPaging(deduped, "Skip", skip.Count),
+                    TakeOp take => ApplyPaging(deduped, "Take", take.Count),
+                    _ => throw new ScryValidationException($"Unsupported operator '{op.GetType().Name}' after Distinct.")
+                };
+            }
+
+            switch (terminal)
+            {
+                case CountOp:
+                    return Scalar(Execute<int>(deduped, "Count"));
+                case LongCountOp:
+                    return Scalar(Execute<long>(deduped, "LongCount"));
+                case AnyOp:
+                    return Scalar(Execute<bool>(deduped, "Any"));
+            }
+
+            // One value per row, so each is shaped back under the single projected member's name.
+            var name = select.Projection.Members[0].Name;
+            var shaped = new List<Dictionary<string, object?>>();
+            foreach (var value in deduped)
+            {
+                shaped.Add(new(StringComparer.Ordinal) { [name] = value });
+            }
+
+            return QueryResponse.Create(ResultKind.List, JsonSerializer.SerializeToElement(shaped, ScryJson.Options));
         }
 
         // Every other folding terminal reads the rows themselves and projects nothing. None of them can
@@ -351,6 +387,13 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     static IQueryable<object[]> ApplySelect(IQueryable query, LambdaExpression selector) =>
         (IQueryable<object[]>)query.Provider.CreateQuery(
             CallQueryable("Select", [query.ElementType, typeof(object[])], query.Expression, Expression.Quote(selector)));
+
+    // v => v, for ordering a sequence by the values it already holds.
+    static LambdaExpression Identity(Type type)
+    {
+        var parameter = Expression.Parameter(type, "v");
+        return Expression.Lambda(parameter, parameter);
+    }
 
     static IQueryable ApplySelectTyped(IQueryable query, LambdaExpression selector) =>
         query.Provider.CreateQuery(

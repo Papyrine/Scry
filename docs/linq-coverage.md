@@ -1,4 +1,4 @@
-# LINQ coverage
+﻿# LINQ coverage
 
 What Scry supports compared to the LINQ surface EF Core can translate server-side. This page is both the reference ("will this query work?") and the roadmap — unchecked items are candidates, not commitments.
 
@@ -19,7 +19,7 @@ For usage detail on the supported surface (position rules, limits, examples), se
 | `Skip(n)` / `Take(n)` | `Take` capped by `MaxPageSize`. |
 | `Select(projection)` | At most one; must construct an object. |
 | `GroupBy(key)` | Single key, must be followed by a `Select`. |
-| `Distinct()` | Deduplicates the projected rows; only the `Select` and a terminal may follow. |
+| `Distinct()` | Deduplicates the projected rows; over a single projected member it can also be ordered and paged. |
 | `Reverse()` | Inverts the ordering; requires a preceding `OrderBy`, as EF does. |
 | `Where(predicate)` after `GroupBy` | SQL `HAVING` — reads the group key and aggregates. |
 | `Join(…)` / `LeftJoin(…)` | Each side policy-filtered independently first; carries its own projection. |
@@ -100,8 +100,7 @@ Everything below is translatable by EF Core but has no wire representation in Sc
 
 Fit the closed-vocabulary pattern — each is a new enum member or a small op record plus validator, builder, and generator work. Roughly ordered by expected demand.
 
-- [ ] Ordering a deduplicated query — `Distinct().OrderBy(…)`, and paging over it. Both need ordering keys expressed against the *projection* rather than the row, which is also what would let `Skip`/`Take` follow a `Distinct`.
-- [ ] Counting a `Distinct` over more than one projected member. `COUNT(DISTINCT x)` is single-column in SQL; a multi-column form needs a projection type with real equality, which the shaped `object[]` row deliberately is not.
+- [ ] Ordering, paging, or counting a `Distinct` over **more than one** projected member. All three now work over a single member, by projecting it as the typed value it is. A multi-column form needs a projection type with real equality and ordering, which the shaped `object[]` row deliberately is not — and which EF rejects `ValueTuple` for in exactly these paths.
 - [ ] `StartsWith`/`EndsWith`/`Contains` with a `StringComparison` — deliberately omitted for the same reason as `DayOfWeek`: SQL Server's provider has no translation for those overloads, so they would compile and then fail at execution. Case-insensitive matching is a column collation concern, not a query one.
 - [ ] `DayOfWeek` — deliberately omitted, not overlooked: SQL Server's provider has no translation for it, so it would compile client-side and then fail at execution. Worth adding behind provider capability detection, or when a supporting provider is targeted.
 - [ ] The rest of the SQL Server math surface — `Exp`, `Log`, `Log10`, `Sign`, and the trig functions. All are translated by the provider; none has been asked for yet.

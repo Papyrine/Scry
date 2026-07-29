@@ -73,9 +73,18 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
                 case OrderByOp orderBy:
                     EnsureNotGrouped(sawGroupBy, "OrderBy");
-                    EnsureNotProjected(sawSelect, "OrderBy");
-                    EnsureNotDistinct(sawDistinct, "OrderBy");
-                    ValidateScalar(orderBy.Key, rootType, "OrderBy key");
+                    if (sawDistinct)
+                    {
+                        // Over a deduplicated query the key names the projected member rather than a
+                        // row member — the rows the ordering describes are the deduplicated ones.
+                        EnsureDeduplicatedKey(orderBy.Key, projection, "OrderBy");
+                    }
+                    else
+                    {
+                        EnsureNotProjected(sawSelect, "OrderBy");
+                        ValidateScalar(orderBy.Key, rootType, "OrderBy key");
+                    }
+
                     sawOrdering = true;
                     break;
 
@@ -90,12 +99,12 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     break;
 
                 case SkipOp skip:
-                    EnsureNotDistinct(sawDistinct, "Skip");
+                    EnsurePageableDistinct(sawDistinct, sawOrdering, projection, "Skip");
                     EnsureNonNegative(skip.Count, "Skip");
                     break;
 
                 case TakeOp take:
-                    EnsureNotDistinct(sawDistinct, "Take");
+                    EnsurePageableDistinct(sawDistinct, sawOrdering, projection, "Take");
                     EnsureNonNegative(take.Count, "Take");
                     if (take.Count > options.MaxPageSize)
                     {
@@ -890,6 +899,46 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         if (sawGroupBy)
         {
             throw Reject($"{op} over a Distinct query is not supported after GroupBy.");
+        }
+
+        if (projection is not { Members: [{ Value: NodeValue { Node: MemberNode } }] })
+        {
+            throw Reject($"{op} over a Distinct query requires the Select to project exactly one member.");
+        }
+    }
+
+    /// <summary>
+    /// An ordering over a deduplicated query names one of the projected members, not a row member —
+    /// the rows it describes are the deduplicated ones. Confined to a single-member projection for the
+    /// same reason folding one is: the shaped <c>object[]</c> row has no ordering of its own, so only a
+    /// projection of one value can be ordered as the typed value it is.
+    /// </summary>
+    static void EnsureDeduplicatedKey(Node key, Projection? projection, string op)
+    {
+        if (projection is not { Members: [{ Value: NodeValue { Node: MemberNode } } single] })
+        {
+            throw Reject($"{op} over a Distinct query requires the Select to project exactly one member.");
+        }
+
+        if (key is not MemberNode { Path: [var name] } ||
+            !string.Equals(name, single.Name, StringComparison.Ordinal))
+        {
+            throw Reject($"{op} over a Distinct query may only order by its projected member '{single.Name}'.");
+        }
+    }
+
+    // Paging a deduplicated query slices an order, so it needs one — otherwise it would be slicing an
+    // order the deduplication never defined.
+    static void EnsurePageableDistinct(bool sawDistinct, bool sawOrdering, Projection? projection, string op)
+    {
+        if (!sawDistinct)
+        {
+            return;
+        }
+
+        if (!sawOrdering)
+        {
+            throw Reject($"{op} over a Distinct query requires an OrderBy — a deduplication does not preserve one.");
         }
 
         if (projection is not { Members: [{ Value: NodeValue { Node: MemberNode } }] })

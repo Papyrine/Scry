@@ -97,7 +97,7 @@ public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjec
 | `Take(n)` | `take` | `n` must be non-negative and `<= MaxPageSize`. |
 | `GroupBy(key)` | `groupBy` | Exactly one key, at most one `GroupBy`, and it must be followed by a `Select`. |
 | `Select(projection)` | `select` | At most one, and it must construct an object. |
-| `Distinct()` | `distinct` | Deduplicates the **projected** rows. Only the `Select` and a terminal may follow it. |
+| `Distinct()` | `distinct` | Deduplicates the **projected** rows. Over a single projected member it can also be ordered and paged — see [below](#deduplicating). |
 | `Reverse()` | `reverse` | Inverts the ordering. Requires a preceding `OrderBy`. |
 | `Join(inner, …)` / `LeftJoin(inner, …)` | `join` | Joins a second source — see [below](#joins). Carries its own projection; only a terminal may follow. |
 
@@ -366,6 +366,24 @@ The date functions apply to `DateTime`, `DateOnly`, `DateTimeOffset`, and `TimeO
 There is no free-form method call node in the wire format, so this list is the complete set of behaviour a client can ask the database to perform. **Provider support is still the outer bound**: a function only reaches SQL if the EF provider translates it, which is why `DayOfWeek` — which SQL Server's provider does not translate — has no entry.
 
 Functions are **expression-level**: they read a row inside a `Where` predicate, an ordering or group key, a terminal predicate, an aggregate selector, or a [projection member](#computed-projection-members).
+
+
+### Deduplicating
+
+`Distinct()` deduplicates the **projected** rows, so it dedupes the members the query asked for rather than whole entities:
+
+```cs
+await Query.Order
+    .Select(_ => new RegionRow(_.Region))
+    .Distinct()
+    .OrderBy(_ => _.Region)
+    .Take(5)
+    .ToListAsync();
+```
+
+Ordering and paging a deduplicated query are confined to a **single projected member**, and the ordering may only name that member. A shaped row is an array of values with no ordering or equality of its own, so only a projection of one value can be ordered as the typed value it is — the same limit that confines [counting a distinct query](#terminals) to one member. Paging requires an ordering: without one it would slice an order the deduplication never defined.
+
+Filtering after a `Distinct` is rejected outright; a `Where` there would be describing the rows that fed it. Filter before deduplicating.
 
 
 ### Joins
@@ -682,6 +700,7 @@ stateDiagram-v2
     Restricting --> Deduplicated: Distinct
     Projected --> Deduplicated: Distinct
     Deduplicated --> Projected: Select
+    Deduplicated --> Deduplicated: OrderBy / Skip / Take (one member)
     Source --> [*]: terminal
     Restricting --> [*]: terminal
     Projected --> [*]: terminal
@@ -693,9 +712,10 @@ Nothing orders, skips, or takes after `GroupBy`; a `GroupBy` cannot reach a term
 one exception — it filters the groups rather than the rows, and reads only the key and aggregates.
 `ThenBy` and `Reverse` without a preceding `OrderBy` are rejected, and nothing may follow a terminal.
 
-`Distinct` deduplicates the projected rows, so the only thing that may follow it is the `Select` it
-deduplicates and a terminal. Filtering or ordering after it would be describing the rows that fed it,
-and paging after it would be slicing an order that a deduplication cannot preserve.<!-- endInclude -->
+`Distinct` deduplicates the projected rows, so what may follow it is the `Select` it deduplicates, a
+terminal, and — over a **single projected member** — an `OrderBy` naming that member, plus `Skip` and
+`Take` over the resulting order. Filtering after it would be describing the rows that fed it, and
+paging without an ordering would be slicing an order the deduplication never defined.<!-- endInclude -->
 
 
 ## Errors

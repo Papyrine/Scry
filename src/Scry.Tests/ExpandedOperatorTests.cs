@@ -202,13 +202,44 @@ public class ExpandedOperatorTests
     }
 
     [Test]
-    public void PagingAfterDistinctIsRejected()
+    public async Task OrderingADeduplicatedQuery()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var rows = await client.Source<Order>("Order")
+            .Select(_ => new RegionRow(_.Region))
+            .Distinct()
+            .OrderByDescending(_ => _.Region)
+            .ToListAsync();
+
+        Assert.That(rows.Select(_ => _.Region), Is.EqualTo(["South", "North"]));
+    }
+
+    [Test]
+    public async Task PagingADeduplicatedQuery()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // Top-N over deduplicated values: the ordering makes the slice well defined.
+        var rows = await client.Source<Order>("Order")
+            .Select(_ => new RegionRow(_.Region))
+            .Distinct()
+            .OrderBy(_ => _.Region)
+            .Take(1)
+            .ToListAsync();
+
+        Assert.That(rows.Single().Region, Is.EqualTo("North"));
+    }
+
+    [Test]
+    public void PagingADeduplicatedQueryWithoutOrderingIsRejected()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        // An ordering cannot survive a Distinct, so slicing its output would be slicing an undefined
-        // order — the same reason EF warns about the shape.
+        // Without an ordering the slice would be of an order the deduplication never defined.
         var exception = Assert.ThrowsAsync<ScryValidationException>(
             () => client.Source<Order>("Order")
                 .Select(_ => new RegionRow(_.Region))
@@ -216,7 +247,50 @@ public class ExpandedOperatorTests
                 .Take(1)
                 .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("Take is not allowed after Distinct"));
+        Assert.That(exception!.Message, Does.Contain("requires an OrderBy"));
+    }
+
+    [Test]
+    public void OrderingADeduplicatedQueryByAnotherMemberIsRejected()
+    {
+        using var context = TestContext.CreateSeeded();
+
+        // Only the deduplicated member survives the Distinct, so it is the only thing to order by.
+        var request = QueryRequest.Create(
+            "Order",
+            [
+                new SelectOp(new([new("Region", new NodeValue(new MemberNode(["Region"])))])),
+                new DistinctOp(),
+                new OrderByOp(new MemberNode(["Amount"]), Descending: false)
+            ]);
+
+        var exception = Assert.Throws<ScryValidationException>(
+            () => SharedProcessor.Instance.Execute(request, context));
+
+        Assert.That(exception!.Message, Does.Contain("projected member"));
+    }
+
+    [Test]
+    public void OrderingADeduplicatedQueryOverSeveralMembersIsRejected()
+    {
+        using var context = TestContext.CreateSeeded();
+
+        var request = QueryRequest.Create(
+            "Order",
+            [
+                new SelectOp(new(
+                [
+                    new("Region", new NodeValue(new MemberNode(["Region"]))),
+                    new("Amount", new NodeValue(new MemberNode(["Amount"])))
+                ])),
+                new DistinctOp(),
+                new OrderByOp(new MemberNode(["Region"]), Descending: false)
+            ]);
+
+        var exception = Assert.Throws<ScryValidationException>(
+            () => SharedProcessor.Instance.Execute(request, context));
+
+        Assert.That(exception!.Message, Does.Contain("exactly one member"));
     }
 
     [Test]
