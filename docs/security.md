@@ -107,6 +107,7 @@ public enum KnownFunction
     DateHour,
     DateMinute,
     DateSecond,
+    DateMillisecond,
     DateDayOfYear,
     DateDate,
     DateAddYears,
@@ -119,6 +120,9 @@ public enum KnownFunction
     MathCeiling,
     MathFloor,
     MathRound,
+    MathTruncate,
+    MathSqrt,
+    MathPow,
 
     /// <summary>
     /// Membership of a client-supplied set (SQL <c>IN</c>). The target is the value being tested and
@@ -127,7 +131,7 @@ public enum KnownFunction
     In
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L50' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Unknown discriminators fail deserialization rather than being ignored, so a request that names anything outside these sets is rejected at the JSON layer.

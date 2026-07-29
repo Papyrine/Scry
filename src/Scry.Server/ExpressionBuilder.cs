@@ -651,6 +651,7 @@ sealed class ExpressionBuilder(Schema schema)
                 KnownFunction.DateHour => TemporalProperty(target, "Hour"),
                 KnownFunction.DateMinute => TemporalProperty(target, "Minute"),
                 KnownFunction.DateSecond => TemporalProperty(target, "Second"),
+                KnownFunction.DateMillisecond => TemporalProperty(target, "Millisecond"),
                 KnownFunction.DateDayOfYear => TemporalProperty(target, "DayOfYear"),
                 KnownFunction.DateDate => TemporalProperty(target, "Date"),
                 KnownFunction.DateAddYears => TemporalAdd(call, target, "AddYears", row),
@@ -664,6 +665,15 @@ sealed class ExpressionBuilder(Schema schema)
                 KnownFunction.MathCeiling => MathCall("Ceiling", target),
                 KnownFunction.MathFloor => MathCall("Floor", target),
                 KnownFunction.MathRound => BuildRound(call, target, row),
+                KnownFunction.MathTruncate => MathCall("Truncate", target),
+
+                // Sqrt and Pow are defined over double alone, so a decimal or integer member is widened
+                // to reach them — which is also the type the provider computes them in.
+                KnownFunction.MathSqrt => Expression.Call(mathSqrt, ConvertTo(NonNullable(target), typeof(double))),
+                KnownFunction.MathPow => Expression.Call(
+                    mathPow,
+                    ConvertTo(NonNullable(target), typeof(double)),
+                    ConvertTo(NonNullable(Build(call.Arguments[0], row, typeof(double))), typeof(double))),
 
                 KnownFunction.In => BuildIn(call, target),
 
@@ -709,11 +719,19 @@ sealed class ExpressionBuilder(Schema schema)
         return Expression.Call(value, method, ConvertTo(argument, method.GetParameters()[0].ParameterType));
     }
 
-    static Expression MathCall(string name, Expression target)
-    {
-        var value = Nullable.GetUnderlyingType(target.Type) is null
+    /// <summary>
+    /// Reads the value out of an optional member. A function is defined over the value, not over its
+    /// nullability; under EF the unwrap is part of the translated expression, so a null row simply
+    /// yields null rather than faulting.
+    /// </summary>
+    static Expression NonNullable(Expression target) =>
+        Nullable.GetUnderlyingType(target.Type) is null
             ? target
             : Expression.Property(target, "Value");
+
+    static Expression MathCall(string name, Expression target)
+    {
+        var value = NonNullable(target);
 
         var method = typeof(Math).GetMethod(name, [value.Type]) ??
                      throw new ScryValidationException($"Math.{name} is not defined for '{value.Type.Name}'.");
@@ -971,6 +989,9 @@ sealed class ExpressionBuilder(Schema schema)
     static readonly MethodInfo stringIndexOf = StringMethod("IndexOf", typeof(string));
     static readonly MethodInfo stringReplace = StringMethod("Replace", typeof(string), typeof(string));
     static readonly MethodInfo stringConcat = StringMethod("Concat", typeof(string), typeof(string));
+
+    static readonly MethodInfo mathSqrt = typeof(Math).GetMethod("Sqrt", [typeof(double)])!;
+    static readonly MethodInfo mathPow = typeof(Math).GetMethod("Pow", [typeof(double), typeof(double)])!;
 
     // The generic Contains<TSource>(source, value) definition, closed per member type by BuildIn.
     static readonly MethodInfo enumerableContains = typeof(Enumerable).GetMethods()

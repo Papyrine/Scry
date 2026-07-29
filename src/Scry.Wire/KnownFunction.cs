@@ -24,6 +24,7 @@ public enum KnownFunction
     DateHour,
     DateMinute,
     DateSecond,
+    DateMillisecond,
     DateDayOfYear,
     DateDate,
     DateAddYears,
@@ -36,6 +37,9 @@ public enum KnownFunction
     MathCeiling,
     MathFloor,
     MathRound,
+    MathTruncate,
+    MathSqrt,
+    MathPow,
 
     /// <summary>
     /// Membership of a client-supplied set (SQL <c>IN</c>). The target is the value being tested and

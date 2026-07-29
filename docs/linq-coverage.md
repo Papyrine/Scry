@@ -79,7 +79,7 @@ Both are tracked in [Not yet supported](#not-yet-supported).
 
 ### Functions
 
-See [the full table](querying.md#functions). In summary — string: `Contains`, `StartsWith`, `EndsWith`, `ToLower`, `ToUpper`, `Length`, `Trim`/`TrimStart`/`TrimEnd`, `Substring`, `IndexOf`, `Replace`, `IsNullOrEmpty`, `IsNullOrWhiteSpace`. Date: `Year`, `Month`, `Day`, `Hour`, `Minute`, `Second`, `DayOfYear`, `Date`, and the `Add*` methods. Math: `Abs`, `Ceiling`, `Floor`, `Round`. Plus `Contains` over a client-supplied set, which becomes a SQL `IN`.
+See [the full table](querying.md#functions). In summary — string: `Contains`, `StartsWith`, `EndsWith`, `ToLower`, `ToUpper`, `Length`, `Trim`/`TrimStart`/`TrimEnd`, `Substring`, `IndexOf`, `Replace`, `IsNullOrEmpty`, `IsNullOrWhiteSpace`. Date: `Year`, `Month`, `Day`, `Hour`, `Minute`, `Second`, `Millisecond`, `DayOfYear`, `Date`, and the `Add*` methods. Math: `Abs`, `Ceiling`, `Floor`, `Round`, `Truncate`, `Sqrt`, `Pow`. Plus `Contains` over a client-supplied set, which becomes a SQL `IN`.
 
 Functions are expression-level: they read a row in a predicate, an ordering or group key, a terminal predicate, an aggregate selector, or a projection member.
 
@@ -104,7 +104,7 @@ Fit the closed-vocabulary pattern — each is a new enum member or a small op re
 - [ ] Counting a `Distinct` over more than one projected member. `COUNT(DISTINCT x)` is single-column in SQL; a multi-column form needs a projection type with real equality, which the shaped `object[]` row deliberately is not.
 - [ ] `string.Concat` / interpolation, `char` members, `StartsWith` with a `StringComparison`.
 - [ ] `DayOfWeek` — deliberately omitted, not overlooked: SQL Server's provider has no translation for it, so it would compile client-side and then fail at execution. Worth adding behind provider capability detection, or when a supporting provider is targeted.
-- [ ] `Math.Pow` / `Sqrt` / `Truncate`, and the remaining sub-second date parts (`Millisecond`).
+- [ ] The rest of the SQL Server math surface — `Exp`, `Log`, `Log10`, `Sign`, and the trig functions. All are translated by the provider; none has been asked for yet.
 
 ### Needs design
 

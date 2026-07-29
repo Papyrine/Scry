@@ -304,6 +304,7 @@ public enum KnownFunction
     DateHour,
     DateMinute,
     DateSecond,
+    DateMillisecond,
     DateDayOfYear,
     DateDate,
     DateAddYears,
@@ -316,6 +317,9 @@ public enum KnownFunction
     MathCeiling,
     MathFloor,
     MathRound,
+    MathTruncate,
+    MathSqrt,
+    MathPow,
 
     /// <summary>
     /// Membership of a client-supplied set (SQL <c>IN</c>). The target is the value being tested and
@@ -324,7 +328,7 @@ public enum KnownFunction
     In
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L50' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Mapped from:
@@ -343,7 +347,7 @@ Mapped from:
 | `text.IndexOf(value)` | `StringIndexOf` |
 | `text.Replace(from, to)` | `StringReplace` |
 | `date.Year` / `.Month` / `.Day` | `DateYear` / `DateMonth` / `DateDay` |
-| `date.Hour` / `.Minute` / `.Second` | `DateHour` / `DateMinute` / `DateSecond` |
+| `date.Hour` / `.Minute` / `.Second` / `.Millisecond` | `DateHour` / `DateMinute` / `DateSecond` / `DateMillisecond` |
 | `date.DayOfYear` | `DateDayOfYear` |
 | `date.Date` | `DateDate` |
 | `date.AddYears(n)` / `.AddMonths(n)` / `.AddDays(n)` | `DateAddYears` / `DateAddMonths` / `DateAddDays` |
@@ -351,6 +355,8 @@ Mapped from:
 | `Math.Abs(value)` | `MathAbs` |
 | `Math.Ceiling(value)` / `Math.Floor(value)` | `MathCeiling` / `MathFloor` |
 | `Math.Round(value[, digits])` | `MathRound` |
+| `Math.Truncate(value)` | `MathTruncate` |
+| `Math.Sqrt(value)` / `Math.Pow(value, exponent)` | `MathSqrt` / `MathPow` |
 | `set.Contains(_.Member)` | `In` |
 
 The date functions apply to `DateTime`, `DateOnly`, `DateTimeOffset`, and `TimeOnly`, and an optional member is unwrapped before the part is read. Only the parts a type actually has are available: asking for the `Hour` of a `DateOnly` is rejected. The trim functions map only the whitespace-trimming overloads — the `params char[]` forms have no SQL equivalent.

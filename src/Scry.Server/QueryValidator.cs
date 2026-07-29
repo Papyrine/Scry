@@ -738,11 +738,14 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 KnownFunction.DateHour or
                 KnownFunction.DateMinute or
                 KnownFunction.DateSecond or
+                KnownFunction.DateMillisecond or
                 KnownFunction.DateDayOfYear or
                 KnownFunction.DateDate or
                 KnownFunction.MathAbs or
                 KnownFunction.MathCeiling or
-                KnownFunction.MathFloor => (0, 0),
+                KnownFunction.MathFloor or
+                KnownFunction.MathTruncate or
+                KnownFunction.MathSqrt => (0, 0),
 
             KnownFunction.StringContains or
                 KnownFunction.StringStartsWith or
@@ -756,6 +759,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 KnownFunction.DateAddSeconds => (1, 1),
 
             KnownFunction.StringReplace => (2, 2),
+            KnownFunction.MathPow => (1, 1),
             KnownFunction.StringSubstring => (1, 2),
             KnownFunction.MathRound => (0, 1),
 

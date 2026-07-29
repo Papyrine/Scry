@@ -521,10 +521,14 @@ sealed class QueryTranslator
                 "Ceiling" => KnownFunction.MathCeiling,
                 "Floor" => KnownFunction.MathFloor,
                 "Round" => KnownFunction.MathRound,
+                "Truncate" => KnownFunction.MathTruncate,
+                "Sqrt" => KnownFunction.MathSqrt,
+                "Pow" => KnownFunction.MathPow,
                 _ => throw Unsupported(call)
             };
 
-            // Math.Round(value, digits) carries the digit count as its one argument.
+            // Math.Round(value, digits) and Math.Pow(value, exponent) carry their second operand as the
+            // one argument; the rest take none.
             var arguments = call.Arguments.Count > 1
                 ? new[] { TranslateExpr(call.Arguments[1], root) }
                 : [];
@@ -791,6 +795,9 @@ sealed class QueryTranslator
                         return true;
                     case "Second":
                         function = KnownFunction.DateSecond;
+                        return true;
+                    case "Millisecond":
+                        function = KnownFunction.DateMillisecond;
                         return true;
                     case "DayOfYear":
                         function = KnownFunction.DateDayOfYear;

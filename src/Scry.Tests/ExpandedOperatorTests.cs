@@ -334,6 +334,7 @@ public class ExpandedOperatorTests
         var byHour = await Orders().CountAsync(_ => _.Placed.Hour == 14);
         var byMinute = await Orders().CountAsync(_ => _.Placed.Minute == 30);
         var bySecond = await Orders().CountAsync(_ => _.Placed.Second == 59);
+        var byMillisecond = await Orders().CountAsync(_ => _.Placed.Millisecond == 0);
         var byDayOfYear = await Orders().CountAsync(_ => _.Placed.DayOfYear == 365);
         var byDatePart = await Orders().CountAsync(_ => _.Placed.Date == new DateTime(2026, 3, 4));
         var byAddDays = await Orders().CountAsync(_ => _.Placed.AddDays(1).Day == 5);
@@ -346,6 +347,7 @@ public class ExpandedOperatorTests
             Assert.That(byHour, Is.EqualTo(1));
             Assert.That(byMinute, Is.EqualTo(1));
             Assert.That(bySecond, Is.EqualTo(1));
+            Assert.That(byMillisecond, Is.EqualTo(3), "none of the seeded times carry milliseconds");
             Assert.That(byDayOfYear, Is.EqualTo(1), "31 December 2025");
             Assert.That(byDatePart, Is.EqualTo(1));
             Assert.That(byAddDays, Is.EqualTo(1));
@@ -374,6 +376,10 @@ public class ExpandedOperatorTests
 
         IQueryable<Order> Orders() => client.Source<Order>("Order");
 
+        var bySqrt = await Orders().CountAsync(_ => Math.Sqrt((double)_.Amount) > 15d);
+        var byPow = await Orders().CountAsync(_ => Math.Pow((double)_.Quantity, 2d) == 49d);
+        var byTruncate = await Orders().CountAsync(_ => Math.Truncate(_.Amount / 3) == 33m);
+
         var byAbs = await Orders().CountAsync(_ => Math.Abs(_.Amount) == 75m);
         var byRound = await Orders().CountAsync(_ => Math.Round(_.Amount / 3, 2) == 33.33m);
         var byCeiling = await Orders().CountAsync(_ => Math.Ceiling(_.Amount / 3) == 34m);
@@ -381,6 +387,9 @@ public class ExpandedOperatorTests
 
         Assert.Multiple(() =>
         {
+            Assert.That(bySqrt, Is.EqualTo(1), "only 250 has a root above 15");
+            Assert.That(byPow, Is.EqualTo(1), "the order with quantity 7");
+            Assert.That(byTruncate, Is.EqualTo(1));
             Assert.That(byAbs, Is.EqualTo(1));
             Assert.That(byRound, Is.EqualTo(1));
             Assert.That(byCeiling, Is.EqualTo(1));
