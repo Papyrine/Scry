@@ -33,7 +33,26 @@ For usage detail on the supported surface (position rules, limits, examples), se
 
 ### Aggregates
 
-`Count`, `Sum`, `Average`, `Min`, `Max` — only inside a projection over a `GroupBy`. See [grouping](querying.md#grouping-and-aggregates).
+`Count`, `Sum`, `Average`, `Min`, `Max` are supported in exactly one position: as a projection value in the `Select` that follows a `GroupBy`, aggregating over the rows of each group. See [grouping](querying.md#grouping-and-aggregates).
+
+<!-- snippet: clientGroupBy -->
+<a id='snippet-clientGroupBy'></a>
+```cs
+regions = await Query.Order
+    .GroupBy(_ => _.Region)
+    .Select(_ => new RegionSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
+    .ToListAsync();
+```
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L43-L48' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Every other position an aggregate can appear in EF Core has no wire representation:
+
+- As a **terminal over the whole query** — `SumAsync(_ => _.Salary)`, `MaxAsync(_ => _.Hired)` on an ungrouped query. (`CountAsync` and `AnyAsync` are the exception: they exist as dedicated terminals.)
+- Over a **collection navigation in a projection** — `.Select(_ => new { _.Name, Orders = _.Orders.Count() })`. Collection navigations are not exposed at all.
+- In a **predicate** — `.Where(g => g.Count() > 5)` after a `GroupBy` (SQL `HAVING`), or any aggregate-based subquery inside a `Where`.
+
+All three are tracked in [Not yet supported](#not-yet-supported).
 
 ### Expression operators
 
