@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// Round-trips the operators, terminals and functions added beyond the original closed set, each one
 /// written as client LINQ and executed against LocalDB — so the translator, the validator, the
 /// rebinder and the SQL EF produces are all covered by the same assertion.
@@ -677,6 +677,70 @@ public class ExpandedOperatorTests
                 .ToListAsync());
 
         Assert.That(exception!.Message, Does.Contain("ordered"));
+    }
+
+    [Test]
+    public async Task StringConcatenation()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+        var separator = " of ";
+
+        // Both spellings mean the same thing: an Add of two strings, which the server rebinds to
+        // string.Concat.
+        var byOperator = await client.Source<Employee>("Employee")
+            .CountAsync(_ => _.Name + separator + _.Address.City == "Alice of London");
+        var byConcat = await client.Source<Employee>("Employee")
+            .CountAsync(_ => string.Concat(_.Name, separator, _.Address.City) == "Alice of London");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(byOperator, Is.EqualTo(1));
+            Assert.That(byConcat, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public async Task InterpolatedString()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var rows = await client.Source<Employee>("Employee")
+            .Where(_ => _.Name == "Alice")
+            .Select(_ => new NameRow($"{_.Name} ({_.Address.City})"))
+            .ToListAsync();
+
+        Assert.That(rows.Single().Name, Is.EqualTo("Alice (London)"));
+    }
+
+    [Test]
+    public void AFormattedInterpolationHoleIsRejected()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // A format specifier would change the value, and the database has no equivalent spelling.
+        var exception = Assert.ThrowsAsync<NotSupportedException>(
+            () => client.Source<Order>("Order")
+                .Select(_ => new NameRow($"{_.Amount:N2}"))
+                .ToListAsync());
+
+        Assert.That(exception!.Message, Does.Contain("plain holes").Or.Contain("string values"));
+    }
+
+    [Test]
+    public void ANonStringInterpolationHoleIsRejected()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var exception = Assert.ThrowsAsync<NotSupportedException>(
+            () => client.Source<Order>("Order")
+                .Select(_ => new NameRow($"{_.Region}-{_.Amount}"))
+                .ToListAsync());
+
+        Assert.That(exception!.Message, Does.Contain("string values"));
     }
 
     static ScryClient ClientFor(TestContext context) =>

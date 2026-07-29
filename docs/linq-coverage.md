@@ -75,7 +75,7 @@ Both are tracked in [Not yet supported](#not-yet-supported).
 
 ### Expression operators
 
-`==` `!=` `<` `<=` `>` `>=` `&&` `||` `!` `+` `-` `*` `/` `%` `??` `?:` and unary `-`.
+`==` `!=` `<` `<=` `>` `>=` `&&` `||` `!` `+` `-` `*` `/` `%` `??` `?:` and unary `-`. Over two strings `+` is concatenation, which `string.Concat` and a plain-hole interpolated string both lower to.
 
 ### Functions
 
@@ -102,7 +102,7 @@ Fit the closed-vocabulary pattern — each is a new enum member or a small op re
 
 - [ ] Ordering a deduplicated query — `Distinct().OrderBy(…)`, and paging over it. Both need ordering keys expressed against the *projection* rather than the row, which is also what would let `Skip`/`Take` follow a `Distinct`.
 - [ ] Counting a `Distinct` over more than one projected member. `COUNT(DISTINCT x)` is single-column in SQL; a multi-column form needs a projection type with real equality, which the shaped `object[]` row deliberately is not.
-- [ ] `string.Concat` / interpolation, `char` members, `StartsWith` with a `StringComparison`.
+- [ ] `StartsWith`/`EndsWith`/`Contains` with a `StringComparison` — deliberately omitted for the same reason as `DayOfWeek`: SQL Server's provider has no translation for those overloads, so they would compile and then fail at execution. Case-insensitive matching is a column collation concern, not a query one.
 - [ ] `DayOfWeek` — deliberately omitted, not overlooked: SQL Server's provider has no translation for it, so it would compile client-side and then fail at execution. Worth adding behind provider capability detection, or when a supporting provider is targeted.
 - [ ] The rest of the SQL Server math surface — `Exp`, `Log`, `Log10`, `Sign`, and the trig functions. All are translated by the provider; none has been asked for yet.
 

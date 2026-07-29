@@ -273,6 +273,8 @@ Binary operator 'ExclusiveOr' is not supported by Scry.
 
 `??` requires a nullable left operand, and the two branches of a `?:` must have the same type; both are checked server-side when the expression is rebound.
 
+`string.Concat` and an **interpolated string** both mean that same `+`. An interpolated string lowers to `string.Format` inside an expression tree, which no provider translates, so a plain-hole interpolation is rewritten into the concatenation it is equivalent to. A hole carrying alignment or a format specifier (`$"{_.Amount:N2}"`) is rejected — it would change the value, and the database has no equivalent spelling — as is a non-string hole, whose conversion has no single spelling across providers.
+
 `Convert` / `ConvertChecked` nodes — which the C# compiler inserts freely around enums, nullables, and numeric widening — are transparently unwrapped rather than encoded.
 
 
