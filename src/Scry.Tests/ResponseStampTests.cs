@@ -10,7 +10,9 @@ public class ResponseStampTests
 {
     // A model frozen at a surface where ManagerId was still non-nullable. Alice has no manager, so a
     // result carrying her cannot be read — drift that no alias can bridge, since nothing was renamed.
+    // ReSharper disable NotAccessedPositionalProperty.Local
     record PreNullableEmployee(string Name, int ManagerId);
+    // ReSharper restore NotAccessedPositionalProperty.Local
 
     [Test]
     public void EveryResponseCarriesTheServerStamp()

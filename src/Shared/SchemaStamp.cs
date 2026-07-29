@@ -25,14 +25,14 @@ static class SchemaStamp
     /// prompt. 96 bits puts that at roughly 1 in 10^29 per rename. 12 divides by 3, so the base64
     /// encoding needs no padding.
     /// </summary>
-    const int StampBytes = 12;
+    const int stampBytes = 12;
 
     public static string Compute(
-        System.Collections.Generic.List<(string Name, string Kind, string Model)> sources,
-        System.Collections.Generic.List<(string Model, System.Collections.Generic.List<(string Name, string Type)> Members)> types,
-        System.Collections.Generic.List<(string Name, System.Collections.Generic.List<string> Members)> enums)
+        List<(string Name, string Kind, string Model)> sources,
+        List<(string Model, List<(string Name, string Type)> Members)> types,
+        List<(string Name, List<string> Members)> enums)
     {
-        var builder = new System.Text.StringBuilder();
+        var builder = new StringBuilder();
         // Versions the canonical form itself, so a future change to what is hashed cannot silently
         // collide with stamps produced by the old form.
         builder.Append("scry-schema-v1\n");
@@ -65,15 +65,9 @@ static class SchemaStamp
             }
         }
 
-        var bytes = System.Text.Encoding.UTF8.GetBytes(builder.ToString());
-#if NETSTANDARD2_0
-        using (var sha = System.Security.Cryptography.SHA256.Create())
-        {
-            return Encode(sha.ComputeHash(bytes));
-        }
-#else
-        return Encode(System.Security.Cryptography.SHA256.HashData(bytes));
-#endif
+        var bytes = Encoding.UTF8.GetBytes(builder.ToString());
+
+        return Encode(SHA256.HashData(bytes));
     }
 
     // Base64url (RFC 4648 §5) over the leading StampBytes: the stamp travels in a JSON body, an HTTP
@@ -81,10 +75,10 @@ static class SchemaStamp
     // are not. No '=' padding to strip, since StampBytes divides by 3.
     static string Encode(byte[] hash)
     {
-        var truncated = new byte[StampBytes];
-        System.Array.Copy(hash, truncated, StampBytes);
+        var truncated = new byte[stampBytes];
+        Array.Copy(hash, truncated, stampBytes);
 
-        return System.Convert.ToBase64String(truncated)
+        return Convert.ToBase64String(truncated)
             .Replace('+', '-')
             .Replace('/', '_');
     }

@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-
 /// <summary>
 /// Encodes and decodes opaque, HMAC-signed keyset paging cursors. A cursor carries the ordering-key
 /// values of a page's last row as tagged constants; the server turns them back into a seek predicate.
@@ -86,7 +84,7 @@ static class CursorCodec
             decimal number => (number.ToString(culture), ClrTypeTag.Decimal),
             double number => (number.ToString(culture), ClrTypeTag.Double),
             DateTime date => (date.ToString("O", culture), ClrTypeTag.DateTime),
-            DateOnly date => (date.ToString("O", culture), ClrTypeTag.DateOnly),
+            Date date => (date.ToString("O", culture), ClrTypeTag.DateOnly),
             Guid guid => (guid.ToString(), ClrTypeTag.Guid),
             byte[] bytes => (Convert.ToBase64String(bytes), ClrTypeTag.Bytes),
             Enum enumeration => (enumeration.ToString(), ClrTypeTag.Enum),
