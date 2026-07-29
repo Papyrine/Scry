@@ -211,11 +211,6 @@ It is off unless mapped, and Development-only by default. See [Query explorer](d
 - [Sample](docs/sample.md)
 
 
-## License
-
-Source is MIT. Binary releases are subject to the [Open Source Maintenance Fee](OsmfEula.txt).
-
-
 ## Icon
 
 [Ripple](https://thenounproject.com/icon/ripple-2664516/) by [Zach Bogart](https://thenounproject.com/creator/zachbogart/) via [The Noun Project](https://thenounproject.com)
