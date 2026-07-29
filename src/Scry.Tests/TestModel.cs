@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 
 // begin-snippet: previousNamesEnumValue
 public enum Status
@@ -85,6 +85,10 @@ public class Order
     // memory. Discount is optional, which is what the coalesce and nullable-aggregate paths need.
     public DateTime Placed { get; set; }
     public decimal? Discount { get; set; }
+
+    // A char member: primitive, so already a scalar on both sides. Present to pin that a char constant
+    // survives the wire, where it rides the String tag.
+    public char Grade { get; set; }
 
     // begin-snippet: queryableCollection
     // Opted in for aggregation: a client can ask how many lines an order has, or what they total, but
@@ -275,7 +279,7 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
         context.Orders.AddRange(
             new()
             {
-                Region = "North", Amount = 100m, Quantity = 3, Sku = 1000, Placed = new(2026, 3, 4, 9, 30, 15), Discount = 10m,
+                Region = "North", Amount = 100m, Quantity = 3, Sku = 1000, Placed = new(2026, 3, 4, 9, 30, 15), Discount = 10m, Grade = 'A',
                 Lines =
                 [
                     new() { Sku = "A-1", Quantity = 2, Price = 25m },
@@ -286,11 +290,11 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
             // (a numeric Int64 tag would overflow).
             new()
             {
-                Region = "North", Amount = 250m, Quantity = 7, Sku = ulong.MaxValue, Placed = new(2026, 7, 20, 14, 5, 0), Discount = null,
+                Region = "North", Amount = 250m, Quantity = 7, Sku = ulong.MaxValue, Placed = new(2026, 7, 20, 14, 5, 0), Discount = null, Grade = 'B',
                 Lines = [new() { Sku = "B-1", Quantity = 5, Price = 50m }]
             },
             // No lines at all, so an aggregate over an empty collection is covered.
-            new() { Region = "South", Amount = 75m, Quantity = 1, Sku = 3000, Placed = new(2025, 12, 31, 23, 59, 59), Discount = 5m });
+            new() { Region = "South", Amount = 75m, Quantity = 1, Sku = 3000, Placed = new(2025, 12, 31, 23, 59, 59), Discount = 5m, Grade = 'A' });
 
         context.Tickets.AddRange(
             new() { Name = "Login bug", IsOpen = true },

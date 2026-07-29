@@ -817,6 +817,25 @@ public class ExpandedOperatorTests
         Assert.That(exception!.Message, Does.Contain("string values"));
     }
 
+    [Test]
+    public async Task CharMemberAndConstant()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+        var wanted = 'A';
+
+        // char is primitive, so it is already a scalar on both sides. Its constant has no tag of its
+        // own and rides the String tag, reconciled to the member's type server-side.
+        var byLiteral = await client.Source<Order>("Order").CountAsync(_ => _.Grade == 'B');
+        var byCaptured = await client.Source<Order>("Order").CountAsync(_ => _.Grade == wanted);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(byLiteral, Is.EqualTo(1));
+            Assert.That(byCaptured, Is.EqualTo(2));
+        });
+    }
+
     static ScryClient ClientFor(TestContext context) =>
         new((request, _) => Task.FromResult(SharedProcessor.Instance.Execute(request, context)));
 }

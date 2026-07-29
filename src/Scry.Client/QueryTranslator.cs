@@ -1025,6 +1025,10 @@ sealed class QueryTranslator
         {
             null => new(null, ClrTypeTag.Null),
             string text => new(text, ClrTypeTag.String),
+            // No tag of its own; the server reconciles it against the member's type. A comparison
+            // promotes char to int, so the value often arrives as a code point instead — which the
+            // server also accepts.
+            char character => new(character.ToString(), ClrTypeTag.String),
             bool flag => new(flag ? "true" : "false", ClrTypeTag.Boolean),
             Enum enumeration => new(enumeration.ToString(), ClrTypeTag.Enum),
             int number => new(number.ToString(culture), ClrTypeTag.Int32),

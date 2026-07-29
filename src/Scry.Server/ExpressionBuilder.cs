@@ -1086,6 +1086,24 @@ sealed class ExpressionBuilder(Schema schema)
             return bool.Parse(value);
         }
 
+        // C# promotes char to int to compare it, so the literal reaches the wire as a code point about
+        // as often as it does as the character itself. Both spell the same value.
+        if (underlying == typeof(char))
+        {
+            if (value.Length == 1)
+            {
+                return value[0];
+            }
+
+            if (int.TryParse(value, NumberStyles.Integer, culture, out var code) &&
+                code is >= char.MinValue and <= char.MaxValue)
+            {
+                return (char)code;
+            }
+
+            throw new ScryValidationException($"'{value}' is not a character.");
+        }
+
         if (underlying == typeof(int))
         {
             return int.Parse(value, culture);

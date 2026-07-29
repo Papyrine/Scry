@@ -1,4 +1,4 @@
-# Writing queries
+﻿# Writing queries
 
 Client queries are ordinary C# LINQ written against the generated query models. Nothing runs client-side: the expression tree is **captured**, translated to the [wire AST](wire-format.md), and sent to the server when a terminal operator is awaited.
 
@@ -471,6 +471,8 @@ fullTimers = await Query.Employee
 <!-- endSnippet -->
 
 `status` and `top` are locals; the translator compiles and invokes those sub-expressions, then emits their values. Calls to custom methods are fine on this path as long as they do not touch the query parameter — `.Where(_ => _.Name == BuildName())` sends the *result* of `BuildName()`.
+
+A `char` has no tag of its own: C# promotes it to an `int` to compare it, so its literal reaches the wire as a code point about as often as it does as the character itself, and the server accepts either against a `char` member.
 
 A constant is carried as an invariant-culture string plus a type tag, and reconciled against the member type at the comparison site on the server. Enums travel as their **name**, not their numeric value.
 

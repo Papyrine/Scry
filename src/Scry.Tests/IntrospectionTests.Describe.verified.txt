@@ -218,6 +218,13 @@
           IsCollection: false
         },
         {
+          Name: Grade,
+          TypeDisplay: char,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false
+        },
+        {
           Name: Id,
           TypeDisplay: int,
           NeedsNullDefault: false,
@@ -384,5 +391,5 @@
     }
   ],
   QueryEndpoint: /api/query,
-  SchemaStamp: _IiM4QeqErFVSY9V
+  SchemaStamp: Z-IAQrVOwMIgzKdZ
 }
