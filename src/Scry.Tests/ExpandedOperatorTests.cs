@@ -498,6 +498,110 @@ public class ExpandedOperatorTests
                 .ToListAsync());
     }
 
+    [Test]
+    public async Task HavingFiltersGroups()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // Two orders in North, one in South: the group filter keeps only the region with more than one.
+        var rows = await client.Source<Order>("Order")
+            .GroupBy(_ => _.Region)
+            .Where(_ => _.Count() > 1)
+            .Select(_ => new OrderShape(_.Key, _.Sum(_ => _.Amount)))
+            .ToListAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rows.Single().Region, Is.EqualTo("North"));
+            Assert.That(rows.Single().Amount, Is.EqualTo(350m));
+        });
+    }
+
+    [Test]
+    public async Task HavingOverAnAggregateAndTheKey()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var rows = await client.Source<Order>("Order")
+            .GroupBy(_ => _.Region)
+            .Where(_ => _.Sum(_ => _.Amount) > 100m && _.Key != "South")
+            .Select(_ => new OrderShape(_.Key, _.Sum(_ => _.Amount)))
+            .ToListAsync();
+
+        Assert.That(rows.Single().Region, Is.EqualTo("North"));
+    }
+
+    [Test]
+    public async Task SeveralGroupFiltersConjoin()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var rows = await client.Source<Order>("Order")
+            .GroupBy(_ => _.Region)
+            .Where(_ => _.Count() > 1)
+            .Where(_ => _.Max(_ => _.Amount) > 1000m)
+            .Select(_ => new OrderShape(_.Key, _.Sum(_ => _.Amount)))
+            .ToListAsync();
+
+        Assert.That(rows, Is.Empty);
+    }
+
+    [Test]
+    public void HavingOverANonKeyMemberIsRejected()
+    {
+        using var context = TestContext.CreateSeeded();
+
+        // Region is the key, Amount is not: every other column has been folded away by the grouping.
+        var request = QueryRequest.Create(
+            "Order",
+            [
+                new GroupByOp([new MemberNode(["Region"])]),
+                new WhereOp(new BinaryNode(
+                    BinaryOp.GreaterThan,
+                    new MemberNode(["Amount"]),
+                    new ConstNode("1", ClrTypeTag.Decimal))),
+                new SelectOp(new([new("Region", new NodeValue(new MemberNode(["Region"])))]))
+            ]);
+
+        var exception = Assert.Throws<ScryValidationException>(
+            () => SharedProcessor.Instance.Execute(request, context));
+
+        Assert.That(exception!.Message, Does.Contain("group key or aggregates"));
+    }
+
+    [Test]
+    public async Task ReverseInvertsTheOrdering()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var rows = await client.Source<Employee>("Employee")
+            .OrderBy(_ => _.Name)
+            .Reverse()
+            .Select(_ => new NameRow(_.Name))
+            .ToListAsync();
+
+        Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Carol", "Bob", "Alice", "Aaron"]));
+    }
+
+    [Test]
+    public void ReverseWithoutOrderingIsRejected()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var exception = Assert.ThrowsAsync<ScryValidationException>(
+            () => client.Source<Employee>("Employee")
+                .Reverse()
+                .Select(_ => new NameRow(_.Name))
+                .ToListAsync());
+
+        Assert.That(exception!.Message, Does.Contain("ordered"));
+    }
+
     static ScryClient ClientFor(TestContext context) =>
         new((request, _) => Task.FromResult(SharedProcessor.Instance.Execute(request, context)));
 }

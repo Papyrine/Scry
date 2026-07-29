@@ -18,6 +18,9 @@ public class Department
 {
     public int Id { get; set; }
     public string Name { get; set; } = "";
+
+    // Deliberately not opted in: Employee carries a row policy in some tests, and a collection of a
+    // policied type is refused at startup.
     public List<Employee> Employees { get; set; } = [];
 }
 
@@ -82,6 +85,29 @@ public class Order
     // memory. Discount is optional, which is what the coalesce and nullable-aggregate paths need.
     public DateTime Placed { get; set; }
     public decimal? Discount { get; set; }
+
+    // begin-snippet: queryableCollection
+    // Opted in for aggregation: a client can ask how many lines an order has, or what they total, but
+    // can never enumerate them into a result.
+    [QueryableCollection]
+    public List<OrderLine> Lines { get; set; } = [];
+    // end-snippet
+}
+
+/// <summary>
+/// The element type of the one exposed collection. Carries no row policy — a collection of a policied
+/// type is refused at startup, which <see cref="CollectionSubqueryTests"/> pins.
+/// </summary>
+[Queryable]
+public class OrderLine
+{
+    public int Id { get; set; }
+    public string Sku { get; set; } = "";
+    public int Quantity { get; set; }
+    public decimal Price { get; set; }
+
+    public int OrderId { get; set; }
+    public Order? Order { get; set; }
 }
 
 /// <summary>
@@ -161,6 +187,17 @@ public sealed class ActiveOnlyPolicy :
 }
 // end-snippet
 
+/// <summary>
+/// Never attached by default. Registering it proves the startup refusal to expose a collection whose
+/// element type is policied — <see cref="Order.Lines"/> is a collection of <see cref="OrderLine"/>.
+/// </summary>
+public sealed class BulkLinesOnlyPolicy :
+    IReturnablePolicy<OrderLine>
+{
+    public IQueryable<OrderLine> Filter(IQueryable<OrderLine> source, ScryPolicyContext context) =>
+        source.Where(_ => _.Quantity > 1);
+}
+
 /// <summary>The [ReturnableWith] policy on <see cref="Ticket"/>: scopes queries to open tickets.</summary>
 public sealed class OpenTicketsOnlyPolicy :
     IReturnablePolicy<Ticket>
@@ -186,6 +223,7 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<Order> Orders => Set<Order>();
+    public DbSet<OrderLine> OrderLines => Set<OrderLine>();
     public DbSet<Ticket> Tickets => Set<Ticket>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
@@ -235,10 +273,23 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
             new() { Name = "Carol", Status = Status.Contractor, Active = true, Department = sales, Salary = 120_000, Avatar = [], Address = new() { City = "Paris", Country = "FR", Zip = "75001" } });
 
         context.Orders.AddRange(
-            new() { Region = "North", Amount = 100m, Quantity = 3, Sku = 1000, Placed = new(2026, 3, 4, 9, 30, 15), Discount = 10m },
+            new()
+            {
+                Region = "North", Amount = 100m, Quantity = 3, Sku = 1000, Placed = new(2026, 3, 4, 9, 30, 15), Discount = 10m,
+                Lines =
+                [
+                    new() { Sku = "A-1", Quantity = 2, Price = 25m },
+                    new() { Sku = "A-2", Quantity = 1, Price = 50m }
+                ]
+            },
             // Sku is deliberately above long.MaxValue to prove the value survives the String-tag path
             // (a numeric Int64 tag would overflow).
-            new() { Region = "North", Amount = 250m, Quantity = 7, Sku = ulong.MaxValue, Placed = new(2026, 7, 20, 14, 5, 0), Discount = null },
+            new()
+            {
+                Region = "North", Amount = 250m, Quantity = 7, Sku = ulong.MaxValue, Placed = new(2026, 7, 20, 14, 5, 0), Discount = null,
+                Lines = [new() { Sku = "B-1", Quantity = 5, Price = 50m }]
+            },
+            // No lines at all, so an aggregate over an empty collection is covered.
             new() { Region = "South", Amount = 75m, Quantity = 1, Sku = 3000, Placed = new(2025, 12, 31, 23, 59, 59), Discount = 5m });
 
         context.Tickets.AddRange(

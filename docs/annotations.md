@@ -10,6 +10,7 @@ The model is **default-deny**: a type that carries none of the opt-in attributes
 | `[QueryableView]` | class, struct | Opts a keyless EF Core entity (a database view) into client querying. |
 | `[QueryablePoco]` | class, struct | Opts a non-persisted POCO into client querying; the server supplies the data. |
 | `[QueryableComplex]` | class, struct | Opts an EF complex type (e.g. a JSON-mapped value object) in as a traversable member type, not a root source. |
+| `[QueryableCollection]` | property | Opts a collection navigation in for aggregation only — never for enumeration. |
 | `[QueryIgnore]` | property, field | Excludes a member from an opted-in type. |
 | `[PreviousNames("...")]` | class, struct, property, field | Keeps accepting the names a source, member, or enum value used to be exposed under. |
 | `[ReturnableWith(typeof(TPolicy))]` | class, struct | Attaches a server-side row policy. |
@@ -70,7 +71,7 @@ public class SalesRegion
     public string Name { get; set; } = "";
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L102-L115' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSource' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L128-L141' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSource' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The generated entry point exposes the configured name, while the **model class name stays derived from the CLR type**:
@@ -170,7 +171,7 @@ On a member:
 [PreviousNames("FullName")]
 public string Name { get; set; } = "";
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L29-L33' title='Snippet source file'>snippet source</a> | <a href='#snippet-previousNamesMember' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L32-L36' title='Snippet source file'>snippet source</a> | <a href='#snippet-previousNamesMember' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 On an enum value:
@@ -342,7 +343,7 @@ public class Address
     public string Zip { get; set; } = "";
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L57-L67' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableComplex' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L60-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableComplex' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 paired with the usual EF mapping on the owning entity:
@@ -354,7 +355,7 @@ modelBuilder.Entity<Employee>()
     .ComplexProperty(_ => _.Address)
     .ToJson();
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L196-L200' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L234-L238' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A complex type is **not a root source**: it produces no property on the generated `ScryQuery` and no server resolver. It is reachable only by traversing into it from an opted-in entity/view/POCO — for example `Employee.Address.City`. Its members follow the same exposure rules as any other type (`[QueryIgnore]` still hides `Zip`), and the traversal is bounded by `MaxNavigationDepth` like any navigation. How EF stores the type — a JSON column or separate columns — is transparent to Scry; the server rebinds the member path onto EF, which translates it either way.
@@ -436,9 +437,29 @@ A property whose type is another opted-in type is a **reference navigation**. It
 A navigation cannot itself be a value — it cannot be compared, ordered by, grouped by, or used as a projection leaf. `Projection member must reference a scalar value.` is the rejection returned.
 
 
+### Collections
+
+A property whose type is a collection of another opted-in type is a **collection navigation**. Unlike every other member it stays invisible even on an exposed type until it opts in:
+
+<!-- snippet: queryableCollection -->
+<a id='snippet-queryableCollection'></a>
+```cs
+// Opted in for aggregation: a client can ask how many lines an order has, or what they total, but
+// can never enumerate them into a result.
+[QueryableCollection]
+public List<OrderLine> Lines { get; set; } = [];
+```
+<sup><a href='/src/Scry.Tests/TestModel.cs#L89-L94' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableCollection' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+An exposed collection is **aggregable, not projectable**. A client can ask a question about it — `Any`, `All`, `Count`, `Sum`, `Average`, `Min`, `Max`, which the database answers as a correlated subquery — but can never enumerate its rows, project it, traverse through it in a member path, or order by it. Every answer is a scalar, so a response can never carry an unbounded nested collection. See [subqueries](querying.md#collection-subqueries).
+
+The element type must itself be opted in, and must **not carry a [row policy](policies.md)** — a policy filters a source, and a subquery has none, so aggregating a policied collection would count exactly the rows the policy hides. The server refuses to start in that case, naming the member.
+
+
 ### Not exposed
 
-- **Collection navigations** (`List<Employee> Employees`). There is no wire node for traversing a collection, so a client cannot fan out, `Any()` into a child set, or aggregate across one. For a collection-derived value, expose it as a view or a computed scalar on the parent. This includes collection-valued complex types (`OwnsMany` / JSON arrays).
+- **Collection navigations without `[QueryableCollection]`**, including collection-valued complex types (`OwnsMany` / JSON arrays), whose elements are not opted-in root types.
 - **Complex types that are not themselves opted in.** Adding `[QueryableComplex]` to the target type makes it traversable.
 - **Write-only or non-public properties, indexers, and fields.**
 

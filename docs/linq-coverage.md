@@ -20,6 +20,12 @@ For usage detail on the supported surface (position rules, limits, examples), se
 | `Select(projection)` | At most one; must construct an object. |
 | `GroupBy(key)` | Single key, must be followed by a `Select`. |
 | `Distinct()` | Deduplicates the projected rows; only the `Select` and a terminal may follow. |
+| `Reverse()` | Inverts the ordering; requires a preceding `OrderBy`, as EF does. |
+| `Where(predicate)` after `GroupBy` | SQL `HAVING` — reads the group key and aggregates. |
+
+### Collection subqueries
+
+A collection navigation opted in with [`[QueryableCollection]`](annotations.md#collections) is **aggregable, not projectable**: `Any`, `All`, `Count`, `Sum`, `Average`, `Min`, `Max` over it, answered as a correlated subquery, in any position a value can appear. Its rows can never be enumerated, so a response never carries a nested collection. See [collection subqueries](querying.md#collection-subqueries).
 
 ### Terminals
 
@@ -100,18 +106,21 @@ Fit the closed-vocabulary pattern — each is a new enum member or a small op re
 
 ### Needs design
 
-Structurally bigger than the current pipeline — multiple sources per request, subqueries, or new type-surface in the generator. Each needs a security review before a wire shape.
+Structurally bigger than the current pipeline — multiple sources per request, subqueries, or new type-surface in the generator. Each needs a security review before a wire shape, and the notes below are that review as far as it has been taken.
 
-- [ ] Collection navigations — currently not generated at all, so nothing can traverse into one. Prerequisite for most of the rest of this group.
-- [ ] Subqueries in predicates (`_.Orders.Any(o => …)`, `_.Orders.Count > n`).
-- [ ] `SelectMany`.
-- [ ] `Join` / `GroupJoin` / `LeftJoin` / `RightJoin` / `FullJoin` — cross-source queries; interacts with per-source [row policies](policies.md), which must keep applying to every joined source.
-- [ ] Set operations: `Union`, `Concat`, `Intersect`, `Except` — the request would carry more than one pipeline.
-- [ ] Composite group keys; `Where` after `GroupBy` (SQL `HAVING`).
-- [ ] `OfType` / `Cast` — inheritance hierarchies are not modelled in the generated surface.
-- [ ] `DefaultIfEmpty`.
-- [ ] `Reverse` — EF translates it only over an explicit ordering.
-- [ ] `Contains` over a **server-side** sequence (a subquery `IN`) rather than a client-supplied set.
+- [ ] `Contains` over a **server-side** sequence (a subquery `IN`) rather than a client-supplied set. Closest to the shipped [collection subqueries](querying.md#collection-subqueries), but tests a value against a *different* source rather than a collection hanging off the row, so it needs the cross-source decision below.
+- [ ] `SelectMany` — needs collections *projectable*, which the shipped design deliberately excludes; revisit only with a bounded nested-result shape.
+
+**Cross-source queries.** `Join` / `GroupJoin` / `LeftJoin` / `RightJoin` / `FullJoin`, and the set operations `Union` / `Concat` / `Intersect` / `Except`. Both need a request that carries more than one root, which the wire has no shape for — every request is one `root` plus one pipeline today. The blocking decision is not the wire but the [row policies](policies.md): the central guarantee is that a policy is applied to a source *before* any client operator, so every joined or unioned source must be policy-filtered independently before being combined, and a join must not become a way to observe rows through a source whose policy would hide them. Until that composition is specified, a join is the single most dangerous operator to add.
+
+- [ ] `Join` / `GroupJoin` / `LeftJoin` / `RightJoin` / `FullJoin`.
+- [ ] Set operations: `Union`, `Concat`, `Intersect`, `Except`.
+- [ ] `DefaultIfEmpty` — only meaningful alongside joins.
+
+**Other.**
+
+- [ ] Composite group keys. The key type needs real structural equality for the provider to group on; the shaped `object[]` row does not have it, and EF rejects `ValueTuple` in the aggregate paths (the same wall `Distinct` hit). Needs a generated or runtime key type.
+- [ ] `OfType` / `Cast` — inheritance hierarchies are not modelled in the generated surface at all: one query model is emitted per opted-in type with no relationship between them.
 - [ ] Streaming results (`ToAsyncEnumerable`) — needs a streaming wire; see [Writing queries](querying.md#future-enhancements).
 
 ### Not gaps

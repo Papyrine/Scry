@@ -48,6 +48,43 @@ public class GeneratorTests
     }
 
     [Test]
+    public Task CollectionNavigation()
+    {
+        // Lines opts in and is emitted as an aggregable list; Tags is a collection of a type that is
+        // not opted in, and Notes is a collection that never asked to be exposed. Both stay invisible.
+        const string model = """
+            using System.Collections.Generic;
+            using Scry;
+
+            namespace Sample.Model;
+
+            [Queryable]
+            public class Order
+            {
+                public int Id { get; set; }
+                public string Region { get; set; } = "";
+                [QueryableCollection] public List<OrderLine> Lines { get; set; } = [];
+                [QueryableCollection] public List<Tag> Tags { get; set; } = [];
+                public List<OrderLine> Notes { get; set; } = [];
+            }
+
+            [Queryable]
+            public class OrderLine
+            {
+                public int Id { get; set; }
+                public decimal Price { get; set; }
+            }
+
+            public class Tag
+            {
+                public string Name { get; set; } = "";
+            }
+            """;
+
+        return VerifyGenerated(model);
+    }
+
+    [Test]
     public Task NamedSources()
     {
         const string model = """

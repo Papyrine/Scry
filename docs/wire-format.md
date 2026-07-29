@@ -77,6 +77,7 @@ Because `root` is part of the contract, prefer setting `Name` over relying on th
 [JsonDerivedType(typeof(SelectOp), "select")]
 [JsonDerivedType(typeof(GroupByOp), "groupBy")]
 [JsonDerivedType(typeof(DistinctOp), "distinct")]
+[JsonDerivedType(typeof(ReverseOp), "reverse")]
 [JsonDerivedType(typeof(CountOp), "count")]
 [JsonDerivedType(typeof(LongCountOp), "longCount")]
 [JsonDerivedType(typeof(AnyOp), "any")]
@@ -88,7 +89,7 @@ Because `root` is part of the contract, prefer setting `Name` over relying on th
 [JsonDerivedType(typeof(PageOp), "page")]
 public abstract record QueryOp;
 ```
-<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L28' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L29' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 | `$type` | Payload | Meaning |
@@ -118,6 +119,8 @@ stateDiagram-v2
     Restricting --> Restricting: (any order, any number)
     Source --> Grouped: GroupBy
     Restricting --> Grouped: GroupBy
+    Grouped --> Grouped: Where (HAVING)
+    Restricting --> Restricting: Reverse
     Source --> Projected: Select
     Restricting --> Projected: Select
     Grouped --> Projected: Select (mandatory)
@@ -131,9 +134,10 @@ stateDiagram-v2
     Deduplicated --> [*]: terminal
 ```
 
-Nothing filters, orders, skips, or takes after `GroupBy`; a `GroupBy` cannot reach a terminal without
-a `Select` in between; and there is no second `GroupBy` or `Select`. `ThenBy` without a preceding
-`OrderBy` is rejected, and nothing may follow a terminal.
+Nothing orders, skips, or takes after `GroupBy`; a `GroupBy` cannot reach a terminal without a
+`Select` in between; and there is no second `GroupBy` or `Select`. A `Where` after `GroupBy` is the
+one exception — it filters the groups rather than the rows, and reads only the key and aggregates.
+`ThenBy` and `Reverse` without a preceding `OrderBy` are rejected, and nothing may follow a terminal.
 
 `Distinct` deduplicates the projected rows, so the only thing that may follow it is the `Select` it
 deduplicates and a terminal. Filtering or ordering after it would be describing the rows that fed it,
@@ -152,10 +156,11 @@ and paging after it would be slicing an order that a deduplication cannot preser
 [JsonDerivedType(typeof(UnaryNode), "unary")]
 [JsonDerivedType(typeof(CallNode), "call")]
 [JsonDerivedType(typeof(ConditionalNode), "conditional")]
+[JsonDerivedType(typeof(SubqueryNode), "subquery")]
 [JsonDerivedType(typeof(AggregateNode), "aggregate")]
 public abstract record Node;
 ```
-<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L18' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -621,12 +626,12 @@ Over HTTP, request and response look like this:
   {
     RequestUri: http://localhost/api/query,
     RequestMethod: POST,
-    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"node","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"o7Lt0bw4R5bMPpCu"},
+    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"node","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"WsQ9hxzDNvqFuufg"},
     ResponseStatus: OK 200,
     ResponseHeaders: {
-      Scry-Schema-Stamp: o7Lt0bw4R5bMPpCu
+      Scry-Schema-Stamp: WsQ9hxzDNvqFuufg
     },
-    ResponseContent: {"version":1,"kind":"List","payload":[{"name":"Aaron","status":"FullTime","manager":"Alice","department":"Engineering"},{"name":"Alice","status":"FullTime","manager":null,"department":"Engineering"},{"name":"Carol","status":"Contractor","manager":null,"department":"Sales"}],"stamp":"o7Lt0bw4R5bMPpCu"}
+    ResponseContent: {"version":1,"kind":"List","payload":[{"name":"Aaron","status":"FullTime","manager":"Alice","department":"Engineering"},{"name":"Alice","status":"FullTime","manager":null,"department":"Engineering"},{"name":"Carol","status":"Contractor","manager":null,"department":"Sales"}],"stamp":"WsQ9hxzDNvqFuufg"}
   }
 ]
 ```

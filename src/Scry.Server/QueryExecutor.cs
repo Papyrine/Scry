@@ -18,6 +18,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         GroupByOp? groupBy = null;
         SelectOp? select = null;
         QueryOp? terminal = null;
+        Node? groupFilter = null;
         // Captured alongside inline application so the page terminal can rebuild the ordering into a
         // total order (append the primary key) and a keyset seek predicate.
         List<(Node Key, bool Descending)> orderings = [];
@@ -33,9 +34,23 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         {
             switch (op)
             {
+                // A Where after GroupBy filters the groups, not the rows, so it cannot be applied to the
+                // entity query — it waits for the grouping to be built. Several of them conjoin.
+                case WhereOp having when groupBy is not null:
+                    groupFilter = groupFilter is null
+                        ? having.Predicate
+                        : new BinaryNode(BinaryOp.AndAlso, groupFilter, having.Predicate);
+                    break;
                 case WhereOp where:
                     tailIsOrdered = false;
                     query = Apply(query, "Where", builder.BuildPredicate(where.Predicate, elementType));
+                    break;
+                case ReverseOp:
+                    // The declared ordering no longer describes the rows, so a keyset cursor cannot
+                    // seek over it; paging falls back to offset.
+                    tailIsOrdered = false;
+                    query = query.Provider.CreateQuery(
+                        CallQueryable("Reverse", [query.ElementType], query.Expression));
                     break;
                 case OrderByOp orderBy:
                     orderings.Add((orderBy.Key, orderBy.Descending));
@@ -120,7 +135,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 return Aggregate(query, aggregate, elementType);
         }
 
-        var (projected, plan) = BuildProjected(query, elementType, groupBy, select);
+        var (projected, plan) = BuildProjected(query, elementType, groupBy, select, groupFilter);
 
         if (distinct)
         {
@@ -185,13 +200,19 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         IQueryable query,
         Type elementType,
         GroupByOp? groupBy,
-        SelectOp? select)
+        SelectOp? select,
+        Node? groupFilter)
     {
         if (groupBy is not null)
         {
             var keySelector = builder.BuildKeySelector(groupBy.Keys[0], elementType);
             var keyType = keySelector.ReturnType;
             var grouped = ApplyGroupBy(query, keySelector, elementType, keyType);
+            if (groupFilter is not null)
+            {
+                grouped = Apply(grouped, "Where", builder.BuildGroupPredicate(groupFilter, elementType, keyType));
+            }
+
             var groupPlan = builder.BuildGroupProjection(select!.Projection, elementType, keyType);
             return (ApplySelect(grouped, groupPlan.Selector), groupPlan);
         }

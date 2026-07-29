@@ -189,7 +189,7 @@ public class ScryGenerator :
             // than whatever the server's current model calls them.
             var members = string.Join(
                 ", ",
-                source.Properties.Where(_ => !_.IsNavigation).Select(_ => $"\"{_.Name}\""));
+                source.Properties.Where(_ => !_.IsNavigation && !_.IsCollection).Select(_ => $"\"{_.Name}\""));
 
             builder.AppendLine();
             builder.AppendLine(

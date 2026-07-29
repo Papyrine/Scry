@@ -5,5 +5,12 @@ enum MemberKind
     Scalar,
 
     /// <summary>A reference navigation to another queryable type — traversable in a member path.</summary>
-    Navigation
+    Navigation,
+
+    /// <summary>
+    /// A collection navigation opted in with <c>[QueryableCollection]</c>. Aggregable but neither
+    /// traversable nor projectable: it is the target of a subquery, never a step in a member path or a
+    /// projection leaf.
+    /// </summary>
+    Collection
 }

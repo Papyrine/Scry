@@ -82,7 +82,7 @@ public static ScryClient ForHttp(HttpClient http, string endpoint) =>
 public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjection = null) =>
     new CaptureQueryable<T>(new(this, name, defaultProjection));
 ```
-<sup><a href='/src/Scry.Client/ScryClient.cs#L22-L34' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Client/ScryClient.cs#L20-L32' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -90,7 +90,7 @@ public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjec
 
 | LINQ | Wire op | Notes |
 | --- | --- | --- |
-| `Where(predicate)` | `where` | Not allowed after `GroupBy` or `Select`. |
+| `Where(predicate)` | `where` | Filters rows. Written after `GroupBy` it filters groups instead — see [below](#filtering-groups). Not allowed after `Select`. |
 | `OrderBy(key)` / `OrderByDescending(key)` | `orderBy` | Key must be a scalar member. Not allowed after `GroupBy` or `Select`. |
 | `ThenBy(key)` / `ThenByDescending(key)` | `thenBy` | Must follow an `OrderBy`. |
 | `Skip(n)` | `skip` | `n` must be non-negative. |
@@ -98,8 +98,9 @@ public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjec
 | `GroupBy(key)` | `groupBy` | Exactly one key, at most one `GroupBy`, and it must be followed by a `Select`. |
 | `Select(projection)` | `select` | At most one, and it must construct an object. |
 | `Distinct()` | `distinct` | Deduplicates the **projected** rows. Only the `Select` and a terminal may follow it. |
+| `Reverse()` | `reverse` | Inverts the ordering. Requires a preceding `OrderBy`. |
 
-Any other LINQ operator — `Join`, `SelectMany`, `Union`, `Reverse`, … — throws:
+Any other LINQ operator — `Join`, `SelectMany`, `Union`, … — throws:
 
 ```
 LINQ operator 'Join' is not supported by Scry.
@@ -358,6 +359,30 @@ There is no free-form method call node in the wire format, so this list is the c
 Functions are **expression-level**: they read a row inside a `Where` predicate, an ordering or group key, a terminal predicate, an aggregate selector, or a [projection member](#computed-projection-members).
 
 
+### Collection subqueries
+
+A collection navigation opted in with [`[QueryableCollection]`](annotations.md#collections) can be asked a question, which the database answers as a correlated subquery:
+
+```cs
+await Query.Department
+    .Where(_ => _.Employees.Any(e => e.Status == Status.Contractor))
+    .Select(_ => new DepartmentRow(_.Name, _.Employees.Count(e => e.Active)))
+    .ToListAsync();
+```
+
+| C# | Meaning |
+| --- | --- |
+| `_.Items.Any()` / `.Any(predicate)` | Whether the collection has any matching element. |
+| `_.Items.All(predicate)` | Whether every element matches. True for an empty collection, as in LINQ. |
+| `_.Items.Count()` / `.Count(predicate)` / `.Count` | How many elements match. |
+| `_.Items.Sum(selector)` / `.Average(selector)` | Folded over the elements. |
+| `_.Items.Min(selector)` / `.Max(selector)` | Null over an empty collection rather than a fault. |
+
+A `Where` may precede any of them — `_.Items.Where(i => i.Active).Count()` — and folds into the subquery's own filter.
+
+The result is always a **scalar**, so a subquery can appear anywhere a value can: a predicate, an ordering key, a projection leaf, an aggregate selector. What it cannot do is return rows. A collection is never projectable, never traversable in a member path (`_.Items.Name` is rejected), and a subquery may not appear inside another subquery — the cost is per-row and would compound. Inside the subquery, the predicate and selector read the collection's *element*, against that type's own allow-list.
+
+
 ### Set membership
 
 `Contains` over a client-side collection becomes a SQL `IN`:
@@ -560,6 +585,27 @@ Constraints:
 To aggregate a whole sequence rather than each group, use the [aggregate terminals](#terminals) — `SumAsync`, `AverageAsync`, `MinAsync`, `MaxAsync` — which need no `GroupBy` and must precede any `Select`.
 
 
+### Filtering groups
+
+A `Where` written **after** a `GroupBy` filters the groups rather than the rows — SQL `HAVING`:
+
+```cs
+await Query.Order
+    .GroupBy(_ => _.Region)
+    .Where(_ => _.Count() > 1 && _.Sum(_ => _.Amount) > 100m)
+    .Select(_ => new RegionSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
+    .ToListAsync();
+```
+
+Its predicate reads a group, so — exactly like the grouped `Select` — it may name only the group key and aggregates. Every other column has been folded away by the grouping, and naming one is rejected:
+
+```
+A predicate after GroupBy may only reference the group key or aggregates.
+```
+
+Several group filters conjoin, so `.Where(…).Where(…)` after a `GroupBy` means both. A `Where` written *before* the `GroupBy` still filters rows in the ordinary way, and the two compose as they do in SQL: row filters narrow what is grouped, group filters narrow what the grouping produced.
+
+
 ## Ordering rules
 
 The pipeline is validated as a whole. In order:
@@ -580,6 +626,8 @@ stateDiagram-v2
     Restricting --> Restricting: (any order, any number)
     Source --> Grouped: GroupBy
     Restricting --> Grouped: GroupBy
+    Grouped --> Grouped: Where (HAVING)
+    Restricting --> Restricting: Reverse
     Source --> Projected: Select
     Restricting --> Projected: Select
     Grouped --> Projected: Select (mandatory)
@@ -593,9 +641,10 @@ stateDiagram-v2
     Deduplicated --> [*]: terminal
 ```
 
-Nothing filters, orders, skips, or takes after `GroupBy`; a `GroupBy` cannot reach a terminal without
-a `Select` in between; and there is no second `GroupBy` or `Select`. `ThenBy` without a preceding
-`OrderBy` is rejected, and nothing may follow a terminal.
+Nothing orders, skips, or takes after `GroupBy`; a `GroupBy` cannot reach a terminal without a
+`Select` in between; and there is no second `GroupBy` or `Select`. A `Where` after `GroupBy` is the
+one exception — it filters the groups rather than the rows, and reads only the key and aggregates.
+`ThenBy` and `Reverse` without a preceding `OrderBy` are rejected, and nothing may follow a terminal.
 
 `Distinct` deduplicates the projected rows, so the only thing that may follow it is the `Select` it
 deduplicates and a terminal. Filtering or ordering after it would be describing the rows that fed it,

@@ -15,6 +15,7 @@ namespace Scry.Wire;
 [JsonDerivedType(typeof(SelectOp), "select")]
 [JsonDerivedType(typeof(GroupByOp), "groupBy")]
 [JsonDerivedType(typeof(DistinctOp), "distinct")]
+[JsonDerivedType(typeof(ReverseOp), "reverse")]
 [JsonDerivedType(typeof(CountOp), "count")]
 [JsonDerivedType(typeof(LongCountOp), "longCount")]
 [JsonDerivedType(typeof(AnyOp), "any")]

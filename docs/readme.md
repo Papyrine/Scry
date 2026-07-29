@@ -8,6 +8,7 @@ Type-safe, serializable LINQ from a client to a server-side EF Core model.
 | Page | Contents |
 | --- | --- |
 | [Getting started](getting-started.md) | The three-project layout, wiring the model, server, and client end to end. |
+| [Comparisons](comparisons.md) | Scry against GraphQL, OData, hand-written endpoints, gRPC, and expression-tree serializers — and when to pick one of those instead. |
 | [Annotations](annotations.md) | `[Queryable]`, `[QueryableView]`, `[QueryablePoco]`, `[QueryIgnore]`, `[ReturnableWith]`, and what each exposes. |
 | [Source generator](source-generator.md) | How the model assembly is read by path, the MSBuild wiring, what is emitted, and troubleshooting. |
 | [Writing queries](querying.md) | The supported LINQ surface: operators, expressions, functions, projections, grouping, terminals. |

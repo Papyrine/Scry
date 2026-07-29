@@ -199,25 +199,13 @@ sealed class ExpressionBuilder(Schema schema)
 
         foreach (var member in projection.Members)
         {
-            var expression = ((NodeValue)member.Value).Node;
-            switch (expression)
+            if (member.Value is not NodeValue value)
             {
-                case AggregateNode aggregate:
-                {
-                    var leaf = BuildAggregate(aggregate, parameter, element);
-                    leaves.Add(Box(leaf));
-                    break;
-                }
-                case MemberNode:
-                {
-                    var leaf = Expression.Property(parameter, "Key");
-                    leaves.Add(Box(leaf));
-                    break;
-                }
-                default:
-                    throw new ScryValidationException("Unsupported grouped projection member.");
+                throw new ScryValidationException("Unsupported grouped projection member.");
             }
 
+            // Reading the group is what Build already does when the row is a grouping.
+            leaves.Add(Box(Build(value.Node, parameter, null)));
             shape.Add([member.Name]);
         }
 
@@ -315,17 +303,109 @@ sealed class ExpressionBuilder(Schema schema)
         return underlying is null ? promoted : typeof(Nullable<>).MakeGenericType(promoted);
     }
 
+    /// <summary>
+    /// Builds one expression against the row it reads. When that row is an
+    /// <see cref="IGrouping{TKey,TElement}"/> — a <c>HAVING</c> predicate or a grouped projection — the
+    /// same two nodes mean something else: a member path is the key the query grouped by, and an
+    /// aggregate folds the group's rows. Both are read off the row's own type, so nothing has to be
+    /// threaded through the recursion.
+    /// </summary>
     Expression Build(Node node, Expression row, Type? expected) =>
         node switch
         {
+            MemberNode when IsGrouping(row.Type) => Expression.Property(row, "Key"),
+            AggregateNode aggregate when IsGrouping(row.Type) =>
+                BuildAggregate(aggregate, (ParameterExpression)row, row.Type.GetGenericArguments()[1]),
             MemberNode member => BuildMemberAccess(row, member.Path),
             ConstNode constant => BuildConstant(constant, expected),
             BinaryNode binary => BuildBinary(binary, row),
             UnaryNode unary => BuildUnary(unary, row),
             CallNode call => BuildCall(call, row),
             ConditionalNode conditional => BuildConditional(conditional, row),
+            SubqueryNode subquery => BuildSubquery(subquery, row),
             _ => throw new ScryValidationException($"Unsupported expression '{node.GetType().Name}'.")
         };
+
+    /// <summary>
+    /// Rebinds a question about a collection navigation onto the <see cref="Enumerable"/> call EF
+    /// translates into a correlated subquery. The inner predicate and selector are lambdas over the
+    /// collection's element, so they are built against a parameter of that type rather than the row.
+    /// </summary>
+    Expression BuildSubquery(SubqueryNode subquery, Expression row)
+    {
+        var collection = BuildMemberAccess(row, subquery.Path);
+        var element = Schema.CollectionElement(collection.Type) ??
+                      throw new ScryValidationException($"'{string.Join('.', subquery.Path)}' is not a collection.");
+
+        // All takes its predicate directly; for everything else a predicate narrows the collection
+        // first, which is what lets Count and the aggregates carry one at all.
+        var source = collection;
+        if (subquery.Predicate is { } filter &&
+            subquery.Function != SubqueryFn.All)
+        {
+            source = Expression.Call(
+                enumerableWhere.MakeGenericMethod(element),
+                source,
+                ElementLambda(filter, element, typeof(bool)));
+        }
+
+        switch (subquery.Function)
+        {
+            case SubqueryFn.Any:
+                return Expression.Call(enumerableAny.MakeGenericMethod(element), source);
+
+            case SubqueryFn.All:
+                return Expression.Call(
+                    enumerableAll.MakeGenericMethod(element),
+                    source,
+                    ElementLambda(subquery.Predicate!, element, typeof(bool)));
+
+            case SubqueryFn.Count:
+                return Expression.Call(enumerableCount.MakeGenericMethod(element), source);
+        }
+
+        var parameter = Expression.Parameter(element, "x");
+        var body = Build(subquery.Selector!, parameter, null);
+
+        // Min/Max over an empty collection is SQL NULL, so the selected value is made nullable rather
+        // than faulting when a row has no elements.
+        if (subquery.Function is SubqueryFn.Min or SubqueryFn.Max &&
+            body.Type.IsValueType &&
+            Nullable.GetUnderlyingType(body.Type) is null)
+        {
+            body = Expression.Convert(body, typeof(Nullable<>).MakeGenericType(body.Type));
+        }
+
+        var selector = Expression.Lambda(body, parameter);
+        return subquery.Function switch
+        {
+            SubqueryFn.Sum => Expression.Call(SumOrAverage("Sum", element, body.Type), source, selector),
+            SubqueryFn.Average => Expression.Call(SumOrAverage("Average", element, body.Type), source, selector),
+            SubqueryFn.Min => Expression.Call(MinOrMax("Min", element, body.Type), source, selector),
+            SubqueryFn.Max => Expression.Call(MinOrMax("Max", element, body.Type), source, selector),
+            _ => throw new ScryValidationException($"Unsupported subquery function '{subquery.Function}'.")
+        };
+    }
+
+    LambdaExpression ElementLambda(Node node, Type element, Type? expected)
+    {
+        var parameter = Expression.Parameter(element, "x");
+        return Expression.Lambda(Build(node, parameter, expected), parameter);
+    }
+
+    static bool IsGrouping(Type type) =>
+        type.IsGenericType &&
+        type.GetGenericTypeDefinition() == typeof(IGrouping<,>);
+
+    /// <summary>
+    /// Builds a <c>HAVING</c> predicate <c>IGrouping&lt;TKey,TElement&gt; =&gt; bool</c>, filtering the
+    /// groups a <c>GroupBy</c> produced rather than the rows that fed it.
+    /// </summary>
+    public LambdaExpression BuildGroupPredicate(Node predicate, Type element, Type key)
+    {
+        var parameter = Expression.Parameter(typeof(IGrouping<,>).MakeGenericType(key, element), "g");
+        return Expression.Lambda(Build(predicate, parameter, typeof(bool)), parameter);
+    }
 
     Expression BuildConditional(ConditionalNode conditional, Expression row)
     {
@@ -762,6 +842,30 @@ sealed class ExpressionBuilder(Schema schema)
         .Single(_ =>
             _ is { Name: "Contains", IsGenericMethodDefinition: true } &&
             _.GetParameters().Length == 2);
+
+    // The collection-subquery methods, closed per element type. Enumerable rather than Queryable: a
+    // navigation collection is an IEnumerable in the expression tree, which is the shape EF translates
+    // into a correlated subquery.
+    static readonly MethodInfo enumerableAny = EnumerableMethod("Any", 1);
+    static readonly MethodInfo enumerableAll = EnumerableMethod("All", 2);
+
+    // Where has an indexed overload too; the wanted one takes Func<TSource, bool> — two generic
+    // arguments — rather than Func<TSource, int, bool>.
+    static readonly MethodInfo enumerableWhere = typeof(Enumerable).GetMethods()
+        .Single(_ =>
+            _ is { Name: "Where", IsGenericMethodDefinition: true } &&
+            _.GetParameters().Length == 2 &&
+            _.GetParameters()[1].ParameterType.GetGenericArguments().Length == 2);
+
+    static MethodInfo EnumerableMethod(string name, int parameters) =>
+        typeof(Enumerable).GetMethods()
+            .Single(_ =>
+                _.Name == name &&
+                _.IsGenericMethodDefinition &&
+                _.GetGenericArguments().Length == 1 &&
+                _.GetParameters().Length == parameters &&
+                _.GetParameters()[0].ParameterType.IsGenericType &&
+                _.GetParameters()[0].ParameterType.GetGenericTypeDefinition() == typeof(IEnumerable<>));
 
     // string.Compare(string, string) — the seek predicate uses it so a string ordering key rebinds to
     // a SQL relational comparison (EF has no translation for the > / < operators on string directly).

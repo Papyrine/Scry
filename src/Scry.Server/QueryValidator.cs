@@ -48,10 +48,18 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             switch (op)
             {
                 case WhereOp where:
-                    EnsureNotGrouped(sawGroupBy, "Where");
                     EnsureNotProjected(sawSelect, "Where");
                     EnsureNotDistinct(sawDistinct, "Where");
-                    ValidatePredicate(where.Predicate, rootType);
+                    if (sawGroupBy)
+                    {
+                        // Written after GroupBy it filters the groups, not the rows — SQL HAVING.
+                        ValidateHaving(where.Predicate, rootType, groupKeys, depth: 0);
+                    }
+                    else
+                    {
+                        ValidatePredicate(where.Predicate, rootType);
+                    }
+
                     break;
 
                 case OrderByOp orderBy:
@@ -132,6 +140,16 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     }
 
                     sawDistinct = true;
+                    break;
+
+                case ReverseOp:
+                    if (!sawOrdering)
+                    {
+                        throw Reject("Reverse requires an ordered query — add an OrderBy.");
+                    }
+
+                    EnsureNotGrouped(sawGroupBy, "Reverse");
+                    EnsureNotDistinct(sawDistinct, "Reverse");
                     break;
 
                 case CountOp count:
@@ -339,6 +357,80 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         }
     }
 
+    /// <summary>
+    /// Validates a <c>HAVING</c> predicate. It reads a group rather than a row, so the only members it
+    /// may name are the group key — every other column has been folded away — and aggregates, which are
+    /// rejected everywhere else outside a grouped projection.
+    /// </summary>
+    void ValidateHaving(Node node, Type elementType, IReadOnlyList<MemberNode>? groupKeys, int depth)
+    {
+        if (depth > options.MaxExpressionDepth)
+        {
+            throw Reject("Expression nesting is too deep.");
+        }
+
+        switch (node)
+        {
+            case MemberNode member:
+                if (groupKeys is null ||
+                    !groupKeys.Any(_ => PathEquals(_.Path, member.Path)))
+                {
+                    throw Reject("A predicate after GroupBy may only reference the group key or aggregates.");
+                }
+
+                break;
+
+            case AggregateNode aggregate:
+                if (aggregate.Selector is { } selector)
+                {
+                    ValidateScalar(selector, elementType, "Aggregate selector");
+                }
+                else if (aggregate.Function != AggregateFn.Count)
+                {
+                    throw Reject($"Aggregate '{aggregate.Function}' requires a selector.");
+                }
+
+                break;
+
+            case ConstNode:
+                break;
+
+            case BinaryNode binary:
+                ValidateHaving(binary.Left, elementType, groupKeys, depth + 1);
+                ValidateHaving(binary.Right, elementType, groupKeys, depth + 1);
+                break;
+
+            case UnaryNode unary:
+                ValidateHaving(unary.Operand, elementType, groupKeys, depth + 1);
+                break;
+
+            case ConditionalNode conditional:
+                ValidateHaving(conditional.Test, elementType, groupKeys, depth + 1);
+                ValidateHaving(conditional.IfTrue, elementType, groupKeys, depth + 1);
+                ValidateHaving(conditional.IfFalse, elementType, groupKeys, depth + 1);
+                break;
+
+            case CallNode call:
+                var (min, max) = Arity(call.Function);
+                if (call.Arguments.Count < min ||
+                    call.Arguments.Count > max)
+                {
+                    throw Reject($"Function '{call.Function}' does not take {call.Arguments.Count} argument(s).");
+                }
+
+                ValidateHaving(call.Target, elementType, groupKeys, depth + 1);
+                foreach (var argument in call.Arguments)
+                {
+                    ValidateHaving(argument, elementType, groupKeys, depth + 1);
+                }
+
+                break;
+
+            default:
+                throw Reject($"Unsupported expression '{node.GetType().Name}'.");
+        }
+    }
+
     static bool ReadsRow(Node node) =>
         node switch
         {
@@ -409,6 +501,10 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     ValidateCall(call, elementType, depth);
                     break;
 
+                case SubqueryNode subquery:
+                    ValidateSubquery(subquery, elementType, depth);
+                    break;
+
                 case AggregateNode:
                     throw Reject("Aggregates are only allowed as a projection member in a grouped Select.");
 
@@ -453,6 +549,92 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         foreach (var argument in call.Arguments)
         {
             ValidateExpr(argument, elementType, depth + 1);
+        }
+    }
+
+    /// <summary>
+    /// Validates a question asked about a collection navigation. The path must end at an exposed
+    /// collection, and the inner predicate and selector are validated against the collection's element
+    /// type — a different allow-list from the row the subquery hangs off, and the reason they cannot
+    /// simply be validated in place.
+    /// </summary>
+    void ValidateSubquery(SubqueryNode subquery, Type elementType, int depth)
+    {
+        var member = ResolvePath(subquery.Path, elementType, requireScalar: false, "Subquery");
+        if (member.Kind != MemberKind.Collection)
+        {
+            throw Reject($"'{string.Join('.', subquery.Path)}' is not an aggregable collection.");
+        }
+
+        var target = Schema.CollectionElement(member.Type) ??
+                     throw Reject($"'{string.Join('.', subquery.Path)}' is not a collection.");
+
+        switch (subquery.Function)
+        {
+            case SubqueryFn.All when subquery.Predicate is null:
+                throw Reject("All over a collection requires a predicate.");
+
+            case SubqueryFn.Any or SubqueryFn.All or SubqueryFn.Count:
+                if (subquery.Selector is not null)
+                {
+                    throw Reject($"'{subquery.Function}' over a collection does not take a selector.");
+                }
+
+                break;
+
+            case SubqueryFn.Sum or SubqueryFn.Average or SubqueryFn.Min or SubqueryFn.Max:
+                if (subquery.Selector is null)
+                {
+                    throw Reject($"'{subquery.Function}' over a collection requires a selector.");
+                }
+
+                break;
+
+            default:
+                throw Reject($"Unsupported subquery function '{subquery.Function}'.");
+        }
+
+        if (subquery.Predicate is { } predicate)
+        {
+            EnsureNoNestedSubquery(predicate);
+            ValidateExpr(predicate, target, depth + 1);
+        }
+
+        if (subquery.Selector is { } selector)
+        {
+            EnsureNoNestedSubquery(selector);
+            ValidateScalar(selector, target, "Subquery selector");
+        }
+    }
+
+    // A subquery costs a correlated query per row; one inside another multiplies that per element, and
+    // the depth limit alone does not bound it meaningfully. One level is the whole allowance.
+    static void EnsureNoNestedSubquery(Node node)
+    {
+        switch (node)
+        {
+            case SubqueryNode:
+                throw Reject("A subquery may not appear inside another subquery.");
+            case BinaryNode binary:
+                EnsureNoNestedSubquery(binary.Left);
+                EnsureNoNestedSubquery(binary.Right);
+                break;
+            case UnaryNode unary:
+                EnsureNoNestedSubquery(unary.Operand);
+                break;
+            case ConditionalNode conditional:
+                EnsureNoNestedSubquery(conditional.Test);
+                EnsureNoNestedSubquery(conditional.IfTrue);
+                EnsureNoNestedSubquery(conditional.IfFalse);
+                break;
+            case CallNode call:
+                EnsureNoNestedSubquery(call.Target);
+                foreach (var argument in call.Arguments)
+                {
+                    EnsureNoNestedSubquery(argument);
+                }
+
+                break;
         }
     }
 

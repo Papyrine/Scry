@@ -28,6 +28,11 @@
       Model: OrderQueryModel
     },
     {
+      Name: OrderLine,
+      Kind: Entity,
+      Model: OrderLineQueryModel
+    },
+    {
       Name: Region,
       Kind: Entity,
       Model: SalesRegionQueryModel
@@ -51,13 +56,15 @@
           Name: City,
           TypeDisplay: string,
           NeedsNullDefault: true,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         },
         {
           Name: Country,
           TypeDisplay: string,
           NeedsNullDefault: true,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         }
       ]
     },
@@ -68,13 +75,15 @@
           Name: Id,
           TypeDisplay: int,
           NeedsNullDefault: false,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         },
         {
           Name: Name,
           TypeDisplay: string,
           NeedsNullDefault: true,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         }
       ]
     },
@@ -85,13 +94,15 @@
           Name: Department,
           TypeDisplay: string,
           NeedsNullDefault: true,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         },
         {
           Name: Headcount,
           TypeDisplay: int,
           NeedsNullDefault: false,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         }
       ]
     },
@@ -102,61 +113,71 @@
           Name: Active,
           TypeDisplay: bool,
           NeedsNullDefault: false,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         },
         {
           Name: Address,
           TypeDisplay: AddressQueryModel?,
           NeedsNullDefault: false,
-          IsNavigation: true
+          IsNavigation: true,
+          IsCollection: false
         },
         {
           Name: Avatar,
           TypeDisplay: byte[],
           NeedsNullDefault: true,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         },
         {
           Name: Department,
           TypeDisplay: DepartmentQueryModel?,
           NeedsNullDefault: false,
-          IsNavigation: true
+          IsNavigation: true,
+          IsCollection: false
         },
         {
           Name: DepartmentId,
           TypeDisplay: int,
           NeedsNullDefault: false,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         },
         {
           Name: Id,
           TypeDisplay: int,
           NeedsNullDefault: false,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         },
         {
           Name: Manager,
           TypeDisplay: EmployeeQueryModel?,
           NeedsNullDefault: false,
-          IsNavigation: true
+          IsNavigation: true,
+          IsCollection: false
         },
         {
           Name: ManagerId,
           TypeDisplay: int?,
           NeedsNullDefault: false,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         },
         {
           Name: Name,
           TypeDisplay: string,
           NeedsNullDefault: true,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         },
         {
           Name: Status,
           TypeDisplay: Status,
           NeedsNullDefault: false,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         }
       ]
     },
@@ -167,13 +188,15 @@
           Name: Date,
           TypeDisplay: global::System.DateOnly,
           NeedsNullDefault: false,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         },
         {
           Name: Name,
           TypeDisplay: string,
           NeedsNullDefault: true,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         }
       ]
     },
@@ -184,43 +207,104 @@
           Name: Amount,
           TypeDisplay: decimal,
           NeedsNullDefault: false,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         },
         {
           Name: Discount,
           TypeDisplay: decimal?,
           NeedsNullDefault: false,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         },
         {
           Name: Id,
           TypeDisplay: int,
           NeedsNullDefault: false,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
+        },
+        {
+          Name: Lines,
+          TypeDisplay: global::System.Collections.Generic.IReadOnlyList<OrderLineQueryModel>,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: true
         },
         {
           Name: Placed,
           TypeDisplay: global::System.DateTime,
           NeedsNullDefault: false,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         },
         {
           Name: Quantity,
           TypeDisplay: uint,
           NeedsNullDefault: false,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         },
         {
           Name: Region,
           TypeDisplay: string,
           NeedsNullDefault: true,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         },
         {
           Name: Sku,
           TypeDisplay: ulong,
           NeedsNullDefault: false,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
+        }
+      ]
+    },
+    {
+      Model: OrderLineQueryModel,
+      Members: [
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false
+        },
+        {
+          Name: Order,
+          TypeDisplay: OrderQueryModel?,
+          NeedsNullDefault: false,
+          IsNavigation: true,
+          IsCollection: false
+        },
+        {
+          Name: OrderId,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false
+        },
+        {
+          Name: Price,
+          TypeDisplay: decimal,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false
+        },
+        {
+          Name: Quantity,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false
+        },
+        {
+          Name: Sku,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false
         }
       ]
     },
@@ -231,13 +315,15 @@
           Name: Region,
           TypeDisplay: string,
           NeedsNullDefault: true,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         },
         {
           Name: Total,
           TypeDisplay: decimal,
           NeedsNullDefault: false,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         }
       ]
     },
@@ -248,13 +334,15 @@
           Name: Id,
           TypeDisplay: int,
           NeedsNullDefault: false,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         },
         {
           Name: Name,
           TypeDisplay: string,
           NeedsNullDefault: true,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         }
       ]
     },
@@ -265,19 +353,22 @@
           Name: Id,
           TypeDisplay: int,
           NeedsNullDefault: false,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         },
         {
           Name: IsOpen,
           TypeDisplay: bool,
           NeedsNullDefault: false,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         },
         {
           Name: Name,
           TypeDisplay: string,
           NeedsNullDefault: true,
-          IsNavigation: false
+          IsNavigation: false,
+          IsCollection: false
         }
       ]
     }
@@ -293,5 +384,5 @@
     }
   ],
   QueryEndpoint: /api/query,
-  SchemaStamp: cUJ2bSEAp0O2bG_0
+  SchemaStamp: _IiM4QeqErFVSY9V
 }

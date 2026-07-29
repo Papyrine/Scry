@@ -122,6 +122,19 @@ sealed class Schema
 
     static ScryMemberInfo DescribeMember(Member member, Dictionary<string, ScryEnumInfo> enums)
     {
+        // Mirrors the generator's emission exactly: the schema stamp hashes this string, so any
+        // divergence would read as model drift on every client.
+        if (member.Kind == MemberKind.Collection)
+        {
+            var element = CollectionElement(member.Type)!;
+            return new(
+                member.Name,
+                $"global::System.Collections.Generic.IReadOnlyList<{element.Name}QueryModel>",
+                NeedsNullDefault: true,
+                IsNavigation: false,
+                IsCollection: true);
+        }
+
         if (member.Kind == MemberKind.Navigation)
         {
             // Unwrap Nullable<T> so an optional struct complex member displays as its model, not Nullable`1.
@@ -247,6 +260,27 @@ sealed class Schema
         foreach (var (type, name, _, _) in discovered)
         {
             schema.RegisterSourcePreviousNames(type, schema.sources[name]);
+        }
+
+        // A row policy filters a source. A subquery over a collection has no source for it to filter,
+        // so aggregating over a policied type would count exactly the rows the policy exists to hide.
+        // Refusing here makes that a startup failure rather than a silent leak at query time.
+        var policied = discovered
+            .Where(_ => _.Policy is not null)
+            .Select(_ => _.Type)
+            .ToHashSet();
+        foreach (var (owner, member) in schema.types.Values
+                     .SelectMany(meta => meta.Members.Values.Select(member => (meta.ClrType, member)))
+                     .Where(_ => _.member.Kind == MemberKind.Collection))
+        {
+            var element = CollectionElement(member.Type)!;
+            if (policied.Contains(element))
+            {
+                throw new(
+                    $"'{owner.Name}.{member.Name}' is a [QueryableCollection] of '{element.Name}', which has a row policy. " +
+                    "Aggregating a collection cannot apply that policy — a policy filters a source, and a subquery has none — " +
+                    "so exposing it would count rows the policy hides. Remove the attribute, or drop the policy.");
+            }
         }
 
         // Enum value names travel on the wire as constants, so a renamed value needs the same
@@ -427,6 +461,35 @@ sealed class Schema
         return type.GetCustomAttribute<ReturnableWithAttribute>()?.Policy;
     }
 
+    /// <summary>
+    /// The element type of a collection member, or null when the type is not a collection. A string is
+    /// excluded deliberately — it is <c>IEnumerable&lt;char&gt;</c> and is always a scalar here.
+    /// </summary>
+    public static Type? CollectionElement(Type type)
+    {
+        if (type == typeof(string))
+        {
+            return null;
+        }
+
+        if (type.IsArray)
+        {
+            return type.GetElementType();
+        }
+
+        if (type.IsGenericType &&
+            type.GetGenericTypeDefinition() is var definition &&
+            (definition == typeof(IEnumerable<>) ||
+             typeof(IEnumerable<>).MakeGenericType(type.GetGenericArguments()[0]).IsAssignableFrom(type)))
+        {
+            return type.GetGenericArguments()[0];
+        }
+
+        return type.GetInterfaces()
+            .FirstOrDefault(_ => _.IsGenericType && _.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+            ?.GetGenericArguments()[0];
+    }
+
     static TypeMeta BuildTypeMeta(Type type, HashSet<Type> queryableTypes)
     {
         var meta = new TypeMeta(type);
@@ -456,7 +519,17 @@ sealed class Schema
                 continue;
             }
 
-            // Anything else (collections, non-queryable complex types) is intentionally excluded.
+            // A collection navigation is exposed only when the member asks for it and its element type
+            // is itself opted in — default-deny applies to the member, not just to the type.
+            if (property.GetCustomAttribute<QueryableCollectionAttribute>() is not null &&
+                CollectionElement(property.PropertyType) is { } element &&
+                queryableTypes.Contains(element))
+            {
+                meta.Members[property.Name] = new(property.Name, property, MemberKind.Collection);
+                continue;
+            }
+
+            // Anything else (an un-opted-in collection, a non-queryable complex type) stays excluded.
             EnsureNoPreviousNames(type, property);
         }
 

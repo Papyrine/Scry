@@ -9,6 +9,7 @@ static class MetadataModelReader
     const string queryablePocoAttribute = "Scry.QueryablePocoAttribute";
     const string queryableComplexAttribute = "Scry.QueryableComplexAttribute";
     const string queryIgnoreAttribute = "Scry.QueryIgnoreAttribute";
+    const string queryableCollectionAttribute = "Scry.QueryableCollectionAttribute";
     const string keylessAttribute = "Microsoft.EntityFrameworkCore.KeylessAttribute";
 
     public static ModelExtract Read(string? dllPath)
@@ -74,7 +75,8 @@ static class MetadataModelReader
             }
 
             var signature = property.DecodeSignature(decoder, genericContext: null);
-            if (Classify(reader, signature.ReturnType, modelByFullName, enums) is { } info)
+            var collectionOptIn = HasAttribute(reader, property.GetCustomAttributes(), queryableCollectionAttribute);
+            if (Classify(reader, signature.ReturnType, modelByFullName, enums, collectionOptIn) is { } info)
             {
                 properties.Add(info with { Name = reader.GetString(property.Name) });
             }
@@ -87,7 +89,8 @@ static class MetadataModelReader
         MetadataReader reader,
         DecodedType type,
         Dictionary<string, string> modelByFullName,
-        Dictionary<string, EnumInfo> enums)
+        Dictionary<string, EnumInfo> enums,
+        bool collectionOptIn)
     {
         var nullable = false;
         if (type is NullableDecoded outer)
@@ -130,6 +133,17 @@ static class MetadataModelReader
                 when modelByFullName.TryGetValue(navigation.FullName, out var modelName):
                 // Reference navigation to another queryable type: nullable, no initializer.
                 return new("", $"{modelName}?", NeedsNullDefault: false, IsNavigation: true);
+
+            // A collection navigation, exposed only when the member opted in and its element is itself
+            // a queryable type. Emitted as a read-only list: it is aggregated, never assigned.
+            // Mirrors Schema.DescribeMember, which the schema stamp requires to be identical.
+            case CollectionDecoded {Element: NamedDecoded element}
+                when collectionOptIn && modelByFullName.TryGetValue(element.FullName, out var elementModel):
+                return new(
+                    "",
+                    $"global::System.Collections.Generic.IReadOnlyList<{elementModel}>",
+                    NeedsNullDefault: true,
+                    IsCollection: true);
 
             default:
                 return null;

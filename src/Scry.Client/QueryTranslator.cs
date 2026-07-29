@@ -75,6 +75,9 @@ sealed class QueryTranslator
             case "Distinct":
                 throw new NotSupportedException("Distinct with an equality comparer is not supported by Scry.");
 
+            case "Reverse":
+                return new ReverseOp();
+
             default:
                 throw new NotSupportedException($"LINQ operator '{call.Method.Name}' is not supported by Scry.");
         }
@@ -302,6 +305,21 @@ sealed class QueryTranslator
                         TranslateExpr(conditional.IfTrue, root),
                         TranslateExpr(conditional.IfFalse, root));
 
+                // Inside a grouped Where the row being read is a group: its Key is whatever the query
+                // grouped by, and a call taking the group itself folds that group's rows.
+                case MemberExpression {Member.Name: "Key"} key
+                    when key.Expression == root && IsGrouping(root.Type):
+                    return new MemberNode(groupKey ?? throw new NotSupportedException("No group key in scope."));
+
+                case MethodCallExpression aggregate
+                    when IsGrouping(root.Type) && IsCallOver(aggregate, root):
+                    return TranslateAggregate(aggregate);
+
+                // The Count property a collection carries means the same as calling Count().
+                case MemberExpression {Member.Name: "Count", Expression: { } owner}
+                    when IsRootedCollection(owner, root):
+                    return new SubqueryNode(MemberPath((MemberExpression)owner), SubqueryFn.Count, null, null);
+
                 case MemberExpression member when IsKnownProperty(member, out var function):
                     return new CallNode(function, TranslateExpr(member.Expression!, root), []);
 
@@ -372,6 +390,14 @@ sealed class QueryTranslator
             return new CallNode(math, TranslateExpr(call.Arguments[0], root), arguments);
         }
 
+        // _.Orders.Any(o => …) — a question about a collection navigation, which the server evaluates
+        // as a correlated subquery. Checked before the set-membership form below, whose Contains reads
+        // a closure collection rather than one belonging to the row.
+        if (TrySubquery(call, root) is { } subquery)
+        {
+            return subquery;
+        }
+
         // ids.Contains(_.Id) — membership of a client-side set, which becomes a SQL IN. The set must be
         // closure state (evaluated here into constants) and the tested value must come from the row.
         if (IsSetContains(call, root, out var set, out var value))
@@ -431,6 +457,83 @@ sealed class QueryTranslator
                 throw Unsupported(call);
         }
     }
+
+    /// <summary>
+    /// Translates a question asked about a collection navigation — <c>_.Orders.Any(o =&gt; …)</c>,
+    /// <c>_.Orders.Count()</c>, <c>_.Orders.Sum(o =&gt; o.Total)</c> — into a subquery node, including
+    /// the <c>Where(…).Count()</c> form, whose filter folds into the subquery's own predicate. Returns
+    /// null when the call is not one of these, so the caller can go on trying other forms.
+    /// </summary>
+    SubqueryNode? TrySubquery(MethodCallExpression call, ParameterExpression root)
+    {
+        var function = call.Method.Name switch
+        {
+            "Any" => SubqueryFn.Any,
+            "All" => SubqueryFn.All,
+            "Count" => SubqueryFn.Count,
+            "Sum" => SubqueryFn.Sum,
+            "Average" => SubqueryFn.Average,
+            "Min" => SubqueryFn.Min,
+            "Max" => SubqueryFn.Max,
+            _ => (SubqueryFn?)null
+        };
+
+        if (function is null ||
+            call.Arguments.Count == 0)
+        {
+            return null;
+        }
+
+        // A preceding Where over the same collection contributes the subquery's predicate.
+        var source = call.Arguments[0];
+        Expression? filter = null;
+        if (source is MethodCallExpression {Method.Name: "Where", Arguments.Count: 2} where)
+        {
+            source = where.Arguments[0];
+            filter = where.Arguments[1];
+        }
+
+        if (!IsRootedCollection(source, root))
+        {
+            return null;
+        }
+
+        var path = MemberPath((MemberExpression)source);
+        var argument = call.Arguments.Count > 1 ? Lambda(call.Arguments[1]) : null;
+        var predicate = filter is null ? null : Lambda(filter);
+
+        // Any/All/Count take a predicate; the rest take a value selector.
+        Node? selector = null;
+        if (argument is not null)
+        {
+            if (function is SubqueryFn.Any or SubqueryFn.All or SubqueryFn.Count)
+            {
+                predicate = predicate is null
+                    ? argument
+                    : throw new NotSupportedException(
+                        $"'{call.Method.Name}' over a collection cannot combine a Where with its own predicate.");
+            }
+            else
+            {
+                selector = TranslateExpr(argument.Body, argument.Parameters[0]);
+            }
+        }
+
+        return new(
+            path,
+            function.Value,
+            predicate is null ? null : TranslateExpr(predicate.Body, predicate.Parameters[0]),
+            selector);
+    }
+
+    // A member path rooted at the query parameter whose value is a collection — the shape the
+    // generated model gives a collection navigation.
+    static bool IsRootedCollection(Expression expression, ParameterExpression root) =>
+        expression is MemberExpression member &&
+        IsRooted(member, root) &&
+        member.Type != typeof(string) &&
+        member.Type.GetInterfaces()
+            .Any(_ => _.IsGenericType && _.GetGenericTypeDefinition() == typeof(IEnumerable<>));
 
     // The receiver holds the candidate set and must be closure state; the tested value must read from
     // the row. Both the instance form (List.Contains) and the static form (Enumerable.Contains) map here.
@@ -503,6 +606,16 @@ sealed class QueryTranslator
 
         return values.Cast<object?>().Select(ConstantOf);
     }
+
+    static bool IsGrouping(Type type) =>
+        type.IsGenericType &&
+        type.GetGenericTypeDefinition() == typeof(IGrouping<,>);
+
+    // A call applied to the group itself — g.Count(), g.Sum(x => …) — rather than to something read
+    // out of it, such as g.Key.ToUpper(), which is an ordinary function over the key.
+    static bool IsCallOver(MethodCallExpression call, ParameterExpression target) =>
+        call.Object == target ||
+        (call.Arguments.Count > 0 && call.Arguments[0] == target);
 
     static bool IsTemporal(Type? type) =>
         type == typeof(DateTime) ||

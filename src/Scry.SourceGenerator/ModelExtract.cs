@@ -23,7 +23,16 @@ record struct SourceInfo(
 /// True for a reference navigation to another query model. Excluded from the default projection the
 /// entry point emits, which lists scalars only — matching the server's own default projection.
 /// </param>
-record struct PropertyInfo(string Name, string TypeDisplay, bool NeedsNullDefault, bool IsNavigation = false);
+/// <param name="IsCollection">
+/// True for an aggregable collection navigation. Excluded from the default projection for the same
+/// reason as a navigation: it is not a scalar leaf, and its rows are never returned.
+/// </param>
+record struct PropertyInfo(
+    string Name,
+    string TypeDisplay,
+    bool NeedsNullDefault,
+    bool IsNavigation = false,
+    bool IsCollection = false);
 
 /// <summary>An enum referenced by a model, re-emitted so the client needs no server reference.</summary>
 record struct EnumInfo(string Name, EquatableArray<string> Members);

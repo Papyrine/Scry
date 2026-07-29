@@ -21,9 +21,13 @@ Not assumed:
 
 ### 1. Default-deny allow-list
 
-A type is invisible unless it carries `[Queryable]`, `[QueryableView]`, `[QueryablePoco]`, or `[QueryableComplex]`. A property is invisible if it carries `[QueryIgnore]`, has no public instance getter, or is not a scalar or a navigation to another opted-in type. Collection navigations are never exposed.
+A type is invisible unless it carries `[Queryable]`, `[QueryableView]`, `[QueryablePoco]`, or `[QueryableComplex]`. A property is invisible if it carries `[QueryIgnore]`, has no public instance getter, or is not a scalar or a navigation to another opted-in type.
 
 Adding an entity to the `DbContext` does not expose it. Adding a property to an exposed entity does expose it — that is the one direction where the default is open, and it is why the surface should be reviewed alongside model changes.
+
+**Collection navigations are the exception to that**: they are invisible even on an exposed type until the *member itself* carries `[QueryableCollection]`, so adding one to a model never widens a surface by accident. An exposed collection is **aggregable, not projectable** — a client can ask `Any`, `All`, `Count`, `Sum`, `Average`, `Min`, or `Max` about it, evaluated as a correlated subquery, but can never enumerate its rows. Every answer is a scalar, so no request can return an unbounded nested collection and the page bounds are unchanged. Inside the subquery the element type's own allow-list applies, a `[QueryIgnore]`d member stays hidden, and a subquery may not appear inside another subquery.
+
+A collection whose element type carries a [row policy](policies.md) is **refused at startup**. A policy filters a source; a subquery has none, so aggregating a policied collection would count exactly the rows the policy exists to hide. The same caveat applies more narrowly to reference navigations, which are not policy-filtered when traversed — see [what Scry does not do](#what-scry-does-not-do).
 
 **Complex types and JSON columns** follow the same default-deny rule. A complex/value type — including one mapped into a JSON column — is invisible until it carries `[QueryableComplex]`, and even then only its allow-listed scalar leaves are reachable (`[QueryIgnore]` still hides members). Exposing a complex type does not transitively expose anything: a nested type it references is reachable only if it too is opted in, so a JSON column cannot smuggle in an entity or an unlisted field. Traversal into a complex member counts against `MaxNavigationDepth` exactly like a navigation, bounding how deeply a client can descend into nested JSON. How EF stores the type (JSON or columns) never changes what is reachable — the allow-list is built from the CLR/annotation surface, not the storage mapping.
 
@@ -44,6 +48,7 @@ The wire format has no node for an arbitrary method call, no node for raw SQL, a
 [JsonDerivedType(typeof(SelectOp), "select")]
 [JsonDerivedType(typeof(GroupByOp), "groupBy")]
 [JsonDerivedType(typeof(DistinctOp), "distinct")]
+[JsonDerivedType(typeof(ReverseOp), "reverse")]
 [JsonDerivedType(typeof(CountOp), "count")]
 [JsonDerivedType(typeof(LongCountOp), "longCount")]
 [JsonDerivedType(typeof(AnyOp), "any")]
@@ -55,7 +60,7 @@ The wire format has no node for an arbitrary method call, no node for raw SQL, a
 [JsonDerivedType(typeof(PageOp), "page")]
 public abstract record QueryOp;
 ```
-<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L28' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L29' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: wireExpressions -->
@@ -68,10 +73,11 @@ public abstract record QueryOp;
 [JsonDerivedType(typeof(UnaryNode), "unary")]
 [JsonDerivedType(typeof(CallNode), "call")]
 [JsonDerivedType(typeof(ConditionalNode), "conditional")]
+[JsonDerivedType(typeof(SubqueryNode), "subquery")]
 [JsonDerivedType(typeof(AggregateNode), "aggregate")]
 public abstract record Node;
 ```
-<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L18' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: wireFunctions -->
@@ -269,6 +275,8 @@ app.MapScry("/api/query")
 **Rate limiting and cost control.** The limits bound the *shape* of a query, not its cost. An allow-listed query over a large unindexed table is still expensive, and `MaxPageSize` caps an explicit `Take` rather than implicitly paging an unbounded query. Apply ASP.NET Core rate limiting, a command timeout, and the usual database-side controls.
 
 **Column-level authorization per user.** `[QueryIgnore]` is static: a column is exposed or it is not. There is no per-caller column masking. Expose a view containing only the permitted columns instead.
+
+**Row policies on traversed navigations.** A policy is applied to the *source* a query names, not to types reached from it. Traversing a reference navigation reads the target row directly — `_.Manager!.Name` returns a manager the `Employee` policy would have filtered out of a top-level query. Do not rely on a row policy to hide a row that is reachable as a navigation target from an exposed type; hide the member with `[QueryIgnore]`, or do not expose the navigation. Collection navigations avoid the wider version of this by refusing to expose a policied element type at all.
 
 **Auditing.** Nothing is logged by default. `ScryProcessor.Execute` is the single choke point for recording what was asked for.
 
