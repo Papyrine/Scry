@@ -171,6 +171,6 @@ Readers coming from TypeScript will spot the family resemblance to tRPC, and it 
 
 ## Summary
 
-Scry is not a smaller GraphQL or a typed OData. It is a narrower bet: give up cross-language reach, writes, and public-contract stability, and in exchange the query language, the client types, and the server model collapse into a single C# type system with a default-deny allow-list enforced at runtime.
+Scry is not a smaller GraphQL or a typed OData. It is a narrower design, and a deliberate trade: give up cross-language reach, writes, and public-contract stability, and in return the query language, the client types, and the server model collapse into a single C# type system with a default-deny allow-list enforced at runtime.
 
-That bet pays off for a Blazor WASM front end talking to its own back end, built by one team, deployed together. Outside that shape, one of the alternatives above is the better tool.
+That trade pays off for a Blazor WASM front end talking to its own back end, built by one team, deployed together. Outside that shape, one of the alternatives above is the better tool.
