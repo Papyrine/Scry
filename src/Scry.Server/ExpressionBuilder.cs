@@ -247,8 +247,8 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         var inner = Expression.Parameter(
             grouped ? typeof(IEnumerable<>).MakeGenericType(innerType) : innerType,
             "i");
-        var leaves = new List<Expression>();
-        var shape = new List<IReadOnlyList<string>>();
+        var leaves = new List<Expression>(members.Count);
+        var shape = new List<IReadOnlyList<string>>(members.Count);
 
         foreach (var member in members)
         {
@@ -392,8 +392,8 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
     {
         var groupingType = typeof(IGrouping<,>).MakeGenericType(key, element);
         var parameter = Expression.Parameter(groupingType, "g");
-        var leaves = new List<Expression>();
-        var shape = new List<IReadOnlyList<string>>();
+        var leaves = new List<Expression>(projection.Members.Count);
+        var shape = new List<IReadOnlyList<string>>(projection.Members.Count);
 
         foreach (var member in projection.Members)
         {

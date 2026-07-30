@@ -781,7 +781,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             return (false, orderings);
         }
 
-        var pkKeys = new List<(Node, bool)>();
+        var pkKeys = new List<(Node, bool)>(primaryKey.Properties.Count);
         foreach (var property in primaryKey.Properties)
         {
             // The key must be an exposable scalar to build a member node for the tiebreaker/cursor.

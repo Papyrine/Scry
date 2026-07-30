@@ -349,9 +349,9 @@ sealed class QueryTranslator
 
     Projection FromNew(NewExpression construction, ParameterExpression parameter, bool grouped)
     {
-        var members = new List<ProjectionMember>();
         var names = ProjectionNames(construction);
         var arguments = construction.Arguments;
+        var members = new List<ProjectionMember>(arguments.Count);
         for (var i = 0; i < arguments.Count; i++)
         {
             members.Add(new(names[i], ProjectionValue(arguments[i], parameter, grouped)));
@@ -362,7 +362,7 @@ sealed class QueryTranslator
 
     Projection FromMemberInit(MemberInitExpression init, ParameterExpression parameter, bool grouped)
     {
-        var members = new List<ProjectionMember>();
+        var members = new List<ProjectionMember>(init.Bindings.Count);
         foreach (var binding in init.Bindings)
         {
             if (binding is not MemberAssignment assignment)
