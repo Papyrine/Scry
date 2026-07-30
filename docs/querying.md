@@ -1,4 +1,4 @@
-# Writing queries
+﻿# Writing queries
 
 Client queries are ordinary C# LINQ written against the generated query models. Nothing runs client-side: the expression tree is **captured**, translated to the [wire AST](wire-format.md), and sent to the server when a terminal operator is awaited.
 
@@ -272,6 +272,16 @@ Binary operator 'ExclusiveOr' is not supported by Scry.
 ```
 
 `??` requires a nullable left operand, and the two branches of a `?:` must have the same type; both are checked server-side when the expression is rebound.
+
+The `StringComparison` overloads of `Contains`, `StartsWith`, `EndsWith` and `Equals` ask for a **case sensitivity**, and are supported when the server has configured a collation for it:
+
+```cs
+.Where(_ => _.Name.StartsWith(term, StringComparison.OrdinalIgnoreCase))
+```
+
+The client names only the sensitivity it wants; which collation implements it is [server configuration](server.md#limits). That is deliberate and load-bearing: a collation cannot be a query parameter — it is emitted into the SQL text — so it is the one value that must never come from a request. A server that has configured neither collation rejects the query rather than guessing.
+
+The comparison the database then makes is **its own, under that collation** — not the .NET culture rules the `StringComparison` value names. Only the case sensitivity survives the crossing. Collation is also a relational concept, so a non-relational provider cannot offer it.
 
 `string.Concat` and an **interpolated string** both mean that same `+`. An interpolated string lowers to `string.Format` inside an expression tree, which no provider translates, so a plain-hole interpolation is rewritten into the concatenation it is equivalent to. A hole carrying alignment or a format specifier (`$"{_.Amount:N2}"`) is rejected — it would change the value, and the database has no equivalent spelling — as is a non-string hole, whose conversion has no single spelling across providers.
 

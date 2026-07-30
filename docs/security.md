@@ -1,4 +1,4 @@
-# Security model
+﻿# Security model
 
 Scry lets a client compose queries. The design assumption is that **the client is hostile**: the generated code, the LINQ, and the serialized request are all attacker-controlled. Every guarantee is enforced on the server, at runtime, against the real model assembly.
 
@@ -75,10 +75,11 @@ public abstract record QueryOp;
 [JsonDerivedType(typeof(CallNode), "call")]
 [JsonDerivedType(typeof(ConditionalNode), "conditional")]
 [JsonDerivedType(typeof(SubqueryNode), "subquery")]
+[JsonDerivedType(typeof(CollateNode), "collate")]
 [JsonDerivedType(typeof(AggregateNode), "aggregate")]
 public abstract record Node;
 ```
-<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L18' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L19' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: wireFunctions -->
@@ -175,6 +176,8 @@ public void RejectsIgnoredProperty() =>
 ### 4. Typed rebinding
 
 CLR types are introduced only from the schema, never from the wire. Member access is built by looking the name up in the allow-list and using the `PropertyInfo` found there, so there is no path from a wire string to a reflected member that was not already allow-listed.
+
+**Collations are the exception that proves the rule.** A collation cannot be a query parameter — a provider emits it into the SQL text — so a request never carries one. A client asks only for a [case sensitivity](querying.md#operators-1); which collation implements it is server configuration, and a server that has configured none rejects the request. That keeps the invariant below intact: no attacker-supplied string reaches SQL as anything but a parameter.
 
 Constants are the one attacker-supplied value that reaches the query. They travel as a string plus a type tag and are parsed into the **member's** type at the comparison site — not into whatever type the tag claims. They become `Expression.Constant` nodes, which EF Core parameterizes; they are never concatenated into SQL.
 

@@ -552,6 +552,19 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     ValidateSubquery(subquery, elementType, depth);
                     break;
 
+                case CollateNode collate:
+                    // A server that has configured no collation for the requested sensitivity cannot
+                    // answer the question, and must not guess at one.
+                    if (Collation(collate.Match) is null)
+                    {
+                        throw Reject(
+                            $"This server has no {collate.Match} collation configured — set ScryOptions.{collate.Match}Collation to enable it.");
+                    }
+
+                    node = collate.Target;
+                    depth += 1;
+                    continue;
+
                 case AggregateNode:
                     throw Reject("Aggregates are only allowed as a projection member in a grouped Select.");
 
@@ -729,6 +742,14 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             break;
         }
     }
+
+    string? Collation(StringMatch match) =>
+        match switch
+        {
+            StringMatch.CaseSensitive => options.CaseSensitiveCollation,
+            StringMatch.CaseInsensitive => options.CaseInsensitiveCollation,
+            _ => null
+        };
 
     static (int Min, int Max) Arity(KnownFunction function) =>
         function switch

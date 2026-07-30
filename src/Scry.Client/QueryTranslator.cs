@@ -565,6 +565,28 @@ sealed class QueryTranslator
 
         Node Argument(int index) => TranslateExpr(call.Arguments[index], root);
 
+        // The StringComparison overloads ask for a case sensitivity rather than a different operation,
+        // so the target is read under it and the ordinary function applies on top.
+        if (call.Arguments.Count == 2 &&
+            call.Arguments[^1].Type == typeof(StringComparison) &&
+            call.Method.Name is "Contains" or "StartsWith" or "EndsWith" or "Equals")
+        {
+            var function = call.Method.Name switch
+            {
+                "Contains" => KnownFunction.StringContains,
+                "StartsWith" => KnownFunction.StringStartsWith,
+                "EndsWith" => KnownFunction.StringEndsWith,
+                _ => (KnownFunction?)null
+            };
+
+            var collated = new CollateNode(TranslateExpr(call.Object!, root), Sensitivity(call.Arguments[1]));
+
+            // Equals is a comparison rather than a function; under a collation it is an ordinary one.
+            return function is null
+                ? new BinaryNode(BinaryOp.Equal, collated, TranslateExpr(call.Arguments[0], root))
+                : new CallNode(function.Value, collated, [TranslateExpr(call.Arguments[0], root)]);
+        }
+
         switch (call.Method.Name)
         {
             case "Contains" when call.Arguments.Count == 1:
@@ -693,6 +715,30 @@ sealed class QueryTranslator
         member.Type != typeof(string) &&
         member.Type.GetInterfaces()
             .Any(_ => _.IsGenericType && _.GetGenericTypeDefinition() == typeof(IEnumerable<>));
+
+    /// <summary>
+    /// Reads the case sensitivity a <see cref="StringComparison"/> asks for. Only that much of it
+    /// survives: the comparison the database then makes is its own, under the collation the server
+    /// configured, which is not the culture rules the .NET value names.
+    /// </summary>
+    static StringMatch Sensitivity(Expression comparison)
+    {
+        if (Evaluate(comparison) is not StringComparison value)
+        {
+            throw new NotSupportedException("A string comparison mode must be a constant.");
+        }
+
+        return value switch
+        {
+            StringComparison.Ordinal or
+                StringComparison.CurrentCulture or
+                StringComparison.InvariantCulture => StringMatch.CaseSensitive,
+            StringComparison.OrdinalIgnoreCase or
+                StringComparison.CurrentCultureIgnoreCase or
+                StringComparison.InvariantCultureIgnoreCase => StringMatch.CaseInsensitive,
+            _ => throw new NotSupportedException($"String comparison '{value}' is not supported by Scry.")
+        };
+    }
 
     // The params overloads pass their arguments as a single constructed array.
     static IReadOnlyList<Expression> ConcatArguments(MethodCallExpression call) =>

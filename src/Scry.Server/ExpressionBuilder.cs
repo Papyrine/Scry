@@ -3,7 +3,7 @@
 /// entity types. This is the only place CLR types are introduced — always from the schema, never
 /// from the wire.
 /// </summary>
-sealed class ExpressionBuilder(Schema schema)
+sealed class ExpressionBuilder(Schema schema, ScryOptions options)
 {
     /// <summary>Builds a predicate lambda <c>TElement =&gt; bool</c>.</summary>
     public LambdaExpression BuildPredicate(Node predicate, Type type)
@@ -452,6 +452,7 @@ sealed class ExpressionBuilder(Schema schema)
             CallNode call => BuildCall(call, row),
             ConditionalNode conditional => BuildConditional(conditional, row),
             SubqueryNode subquery => BuildSubquery(subquery, row),
+            CollateNode collate => BuildCollate(collate, row),
             _ => throw new ScryValidationException($"Unsupported expression '{node.GetType().Name}'.")
         };
 
@@ -515,6 +516,46 @@ sealed class ExpressionBuilder(Schema schema)
             _ => throw new ScryValidationException($"Unsupported subquery function '{subquery.Function}'.")
         };
     }
+
+    /// <summary>
+    /// Reads a string under a configured collation, which is what makes the comparisons wrapping it
+    /// case-sensitive or not. The collation name comes from server options and is the one value here
+    /// that reaches the SQL as text rather than as a parameter — which is exactly why a request names
+    /// only the sensitivity it wants.
+    /// </summary>
+    Expression BuildCollate(CollateNode collate, Expression row)
+    {
+        var target = Build(collate.Target, row, typeof(string));
+        var collation = collate.Match switch
+        {
+            StringMatch.CaseSensitive => options.CaseSensitiveCollation,
+            StringMatch.CaseInsensitive => options.CaseInsensitiveCollation,
+            _ => null
+        };
+
+        if (collation is null)
+        {
+            throw new ScryValidationException($"This server has no {collate.Match} collation configured.");
+        }
+
+        if (collateMethod is null)
+        {
+            throw new ScryValidationException(
+                "Collation requires a relational provider; this model is not backed by one.");
+        }
+
+        return Expression.Call(
+            collateMethod.MakeGenericMethod(target.Type),
+            Expression.Constant(EF.Functions),
+            target,
+            Expression.Constant(collation));
+    }
+
+    // Resolved by name rather than referenced: a collation is a relational concept, and Scry.Server
+    // itself depends only on EF Core proper, so a non-relational model simply cannot offer it.
+    static readonly MethodInfo? collateMethod = Type
+        .GetType("Microsoft.EntityFrameworkCore.RelationalDbFunctionsExtensions, Microsoft.EntityFrameworkCore.Relational")
+        ?.GetMethod("Collate");
 
     LambdaExpression ElementLambda(Node node, Type element, Type? expected)
     {

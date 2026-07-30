@@ -33,6 +33,27 @@ public sealed class ScryOptions(Type contextType)
     // end-snippet
 
     /// <summary>
+    /// The collation applied when a client asks for a case-sensitive string comparison. Null — the
+    /// default — rejects such a request instead, so the feature is opt-in per deployment.
+    /// </summary>
+    /// <remarks>
+    /// This is deliberately a server setting rather than something a request carries. A collation
+    /// cannot be a query parameter: it is emitted into the SQL text, so accepting one from a client
+    /// would be the one place an attacker-supplied string reached SQL as anything but a parameter.
+    /// Naming it here keeps the request to an intent — case-sensitive or not — and the SQL-affecting
+    /// string under the server's control. Set it to a collation the database actually has, e.g.
+    /// <c>Latin1_General_CS_AS</c> on SQL Server.
+    /// </remarks>
+    public string? CaseSensitiveCollation { get; set; }
+
+    /// <summary>
+    /// The collation applied when a client asks for a case-insensitive string comparison. Null — the
+    /// default — rejects such a request. See <see cref="CaseSensitiveCollation"/> for why this is
+    /// configured rather than requested; e.g. <c>Latin1_General_CI_AS</c> on SQL Server.
+    /// </summary>
+    public string? CaseInsensitiveCollation { get; set; }
+
+    /// <summary>
     /// HMAC key used to sign keyset paging cursors. When null a random per-process key is used, so
     /// cursors do not survive a restart or work across multiple instances — set a stable key for a
     /// scaled-out or restart-tolerant deployment. Signing enforces the opaque-cursor contract; it is

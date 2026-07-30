@@ -13,6 +13,7 @@ namespace Scry.Wire;
 [JsonDerivedType(typeof(CallNode), "call")]
 [JsonDerivedType(typeof(ConditionalNode), "conditional")]
 [JsonDerivedType(typeof(SubqueryNode), "subquery")]
+[JsonDerivedType(typeof(CollateNode), "collate")]
 [JsonDerivedType(typeof(AggregateNode), "aggregate")]
 public abstract record Node;
 // end-snippet

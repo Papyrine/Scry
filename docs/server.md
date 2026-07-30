@@ -1,4 +1,4 @@
-# Server
+﻿# Server
 
 `Scry.Server` validates an incoming query AST against the allow-list, rebinds it onto the real EF Core entity types, applies row policies, executes it against a `DbContext`, and returns the projected rows.
 
@@ -99,6 +99,8 @@ Every limit is enforced during validation, before any expression is rebound or e
 | `MaxPipelineLength` | 32 | Pipelines with more operators than the limit. |
 | `MaxExpressionDepth` | 32 | Predicate/expression trees nested deeper than the limit. |
 | `MaxInValues` | 1000 | `Contains` over a client-supplied set larger than the limit. Bounds the SQL `IN` list a single request can build. |
+
+`CaseSensitiveCollation` and `CaseInsensitiveCollation` are not limits but capabilities: both default to null, which rejects a request asking for that case sensitivity. Set them to collations the database has (`Latin1_General_CS_AS`, `Latin1_General_CI_AS` on SQL Server) to enable [case-sensitive matching](querying.md#operators-1). They are server settings because a collation is emitted into the SQL text rather than parameterized, so accepting one from a request would be the only place an attacker-supplied string reached SQL as anything but a parameter.
 
 
 ## POCO sources

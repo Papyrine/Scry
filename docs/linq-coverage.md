@@ -83,6 +83,8 @@ See [the full table](querying.md#functions). In summary — string: `Contains`, 
 
 Functions are expression-level: they read a row in a predicate, an ordering or group key, a terminal predicate, an aggregate selector, or a projection member.
 
+The `StringComparison` overloads are supported through a **collation** rather than through the overload EF cannot translate: the request names a case sensitivity and the server maps it to a collation it configured. See [case sensitivity](querying.md#operators-1).
+
 ### Computed projection members
 
 A projection leaf can be any of the above rather than only a member path — `Select(_ => new { Shouted = _.Name.ToUpper(), Net = _.Amount - _.Discount })`. See [projections](querying.md#computed-projection-members). The same holds inside a nested object, whose navigation is inferred from the paths an expression reads, and in a grouped `Select`, where the key and aggregates compose — `_.Sum(…) / _.Count()`.
@@ -100,7 +102,6 @@ Everything below is translatable by EF Core but has no wire representation in Sc
 
 Fit the closed-vocabulary pattern — each is a new enum member or a small op record plus validator, builder, and generator work. Roughly ordered by expected demand.
 
-- [ ] `StartsWith`/`EndsWith`/`Contains` with a `StringComparison` — deliberately omitted for the same reason as `DayOfWeek`: SQL Server's provider has no translation for those overloads, so they would compile and then fail at execution. Case-insensitive matching is a column collation concern, not a query one.
 - [ ] `DayOfWeek` — deliberately omitted, not overlooked: SQL Server's provider has no translation for it, so it would compile client-side and then fail at execution. Worth adding behind provider capability detection, or when a supporting provider is targeted.
 - [ ] The rest of the SQL Server math surface — `Exp`, `Log`, `Log10`, `Sign`, and the trig functions. All are translated by the provider; none has been asked for yet.
 

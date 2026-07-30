@@ -5,7 +5,7 @@
 sealed class QueryExecutor(Schema schema, ScryOptions options)
 {
     QueryValidator validator = new(schema, options);
-    ExpressionBuilder builder = new(schema);
+    ExpressionBuilder builder = new(schema, options);
 
     public QueryResponse Execute(QueryRequest request, DbContext db, IServiceProvider services)
     {
