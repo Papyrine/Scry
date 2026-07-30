@@ -339,6 +339,13 @@ public enum KnownFunction
     /// </summary>
     StringConcat,
 
+    /// <summary>
+    /// The target's value as text — <c>ToString()</c> with no arguments. The formatted overload is not
+    /// part of the set: no provider translates it, and the SQL function that would express it reads
+    /// the server's language, so the same row would format differently per connection.
+    /// </summary>
+    StringFrom,
+
     MathAbs,
     MathCeiling,
     MathFloor,
@@ -368,7 +375,7 @@ public enum KnownFunction
     In
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L78' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L85' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 There is no free-form method name anywhere in the format. This enum is the complete set of behaviour a client can request.

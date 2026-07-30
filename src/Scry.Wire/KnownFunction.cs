@@ -47,6 +47,13 @@ public enum KnownFunction
     /// </summary>
     StringConcat,
 
+    /// <summary>
+    /// The target's value as text — <c>ToString()</c> with no arguments. The formatted overload is not
+    /// part of the set: no provider translates it, and the SQL function that would express it reads
+    /// the server's language, so the same row would format differently per connection.
+    /// </summary>
+    StringFrom,
+
     MathAbs,
     MathCeiling,
     MathFloor,

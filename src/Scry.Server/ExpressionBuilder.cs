@@ -970,6 +970,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
                 KnownFunction.DateAddSeconds => TemporalAdd(call, target, "AddSeconds", row),
 
                 KnownFunction.StringConcat => BuildConcat(target, Build(call.Arguments[0], row, null)),
+                KnownFunction.StringFrom => BuildStringFrom(target),
 
                 KnownFunction.MathAbs => MathCall("Abs", target),
                 KnownFunction.MathCeiling => MathCall("Ceiling", target),
@@ -1261,6 +1262,48 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         Type.GetTypeCode(type) is TypeCode.Byte or TypeCode.SByte or TypeCode.Int16 or TypeCode.UInt16 or
             TypeCode.Int32 or TypeCode.UInt32 or TypeCode.Int64 or TypeCode.UInt64 or
             TypeCode.Single or TypeCode.Double or TypeCode.Decimal;
+
+    /// <summary>
+    /// Reads a value as text. Restricted to the types a provider converts: a value whose text form the
+    /// database cannot produce is refused here rather than faulting once the query runs.
+    /// </summary>
+    /// <remarks>
+    /// An enum is the notable exclusion. Its text form is a member name, which lives in the model
+    /// rather than in the database — the column holds the underlying value — so converting one in SQL
+    /// would yield a number where the client expects a name.
+    /// </remarks>
+    static Expression BuildStringFrom(Expression target)
+    {
+        var value = NonNullable(target);
+        if (value.Type == typeof(string))
+        {
+            return value;
+        }
+
+        if (value.Type.IsEnum)
+        {
+            throw new ScryValidationException(
+                "ToString is not supported over an enum: its text is a member name the database does not " +
+                "hold, so the conversion would yield the underlying number instead.");
+        }
+
+        if (!convertibleToText.Contains(value.Type))
+        {
+            throw new ScryValidationException($"ToString is not supported over '{value.Type.Name}'.");
+        }
+
+        return Expression.Call(value, value.Type.GetMethod("ToString", Type.EmptyTypes)!);
+    }
+
+    // The scalar shapes a relational provider can render as text. Deliberately a list rather than
+    // "anything with a ToString": every CLR type has one, and almost none of them mean anything in SQL.
+    static readonly HashSet<Type> convertibleToText =
+    [
+        typeof(bool), typeof(char), typeof(sbyte), typeof(byte), typeof(short), typeof(ushort),
+        typeof(int), typeof(uint), typeof(long), typeof(ulong), typeof(float), typeof(double),
+        typeof(decimal), typeof(DateTime), typeof(Date), typeof(TimeOnly), typeof(DateTimeOffset),
+        typeof(TimeSpan), typeof(Guid), typeof(byte[])
+    ];
 
     /// <summary>
     /// Joins two operands into a string, reproducing the shape C# compiles <c>+</c> to.

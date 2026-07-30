@@ -338,7 +338,33 @@ var rows = await client.Source<Order>("Order")
 
 Only the non-string side is converted, which is what tells the provider which side is already text. The alternative — converting both — leaves the operands indistinguishable, and the provider reads the whole expression as arithmetic and fails trying to cast the string to a number.
 
-`string.Concat` and an **interpolated string** both mean that same `+`, non-string parts included. An interpolated string lowers to `string.Format` inside an expression tree, which no provider translates, so a plain-hole interpolation is rewritten into the concatenation it is equivalent to. A hole carrying alignment or a format specifier (`$"{_.Amount:N2}"`) is still rejected: it would change the value, and the database has no equivalent spelling.
+
+#### Reading a value as text
+
+`ToString()` reads a value as text explicitly, wherever a value can appear:
+
+<!-- snippet: clientToString -->
+<a id='snippet-clientToString'></a>
+```cs
+var rows = await client.Source<Order>("Order")
+    .Where(_ => _.Region == "South")
+    .Select(_ => new {Quantity = _.Quantity.ToString(), Amount = _.Amount.ToString()})
+    .ToListAsync();
+```
+<sup><a href='/src/Scry.Tests/ToStringTests.cs#L15-L20' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientToString' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+It is restricted to the scalar shapes a provider renders — the numeric types, `char`, `bool`, the date and time types, `Guid`, and `byte[]`. An **enum** is refused: its text is a member name that lives in the model rather than the database, whose column holds the underlying value, so converting one in SQL would answer with a number where the client expects a name. Anything else is refused too, rather than translated into something that faults at execution.
+
+**The overload taking a format — `ToString("N2")`, and the interpolated `$"{_.Amount:N2}"` — is not supported**, and refused on the client before a request is sent. Three things stand in the way, and the last is the one that matters:
+
+- No provider translates it. EF's own converter takes the argument-less form only.
+- It *appears* to work in a projection, because EF evaluates it client-side after the rows have been read. The same expression in a `Where`, an `OrderBy`, or a `GroupBy` fails outright — which is the tell that no SQL was ever produced for it.
+- The SQL function that would express it, `FORMAT`, reads the server's language. `N2` yields `1,234.50` under `us_english` and `1.234,50` under `de-DE`, so the same row would format differently per connection — the same objection that keeps [`DayOfWeek`](#functions) from being expressed the obvious way, except that here there is no deterministic composition to build instead.
+
+Format the value after the query returns, where .NET's own culture rules apply and mean what they say.
+
+`string.Concat` and an **interpolated string** both mean that same `+`, non-string parts included. An interpolated string lowers to `string.Format` inside an expression tree, which no provider translates, so a plain-hole interpolation is rewritten into the concatenation it is equivalent to. A hole carrying alignment or a format specifier (`$"{_.Amount:N2}"`) is still rejected, as is `ToString("N2")` — see [reading a value as text](#reading-a-value-as-text).
 
 `Convert` / `ConvertChecked` nodes — which the C# compiler inserts freely around enums, nullables, and numeric widening — are transparently unwrapped rather than encoded.
 
@@ -394,6 +420,13 @@ public enum KnownFunction
     /// </summary>
     StringConcat,
 
+    /// <summary>
+    /// The target's value as text — <c>ToString()</c> with no arguments. The formatted overload is not
+    /// part of the set: no provider translates it, and the SQL function that would express it reads
+    /// the server's language, so the same row would format differently per connection.
+    /// </summary>
+    StringFrom,
+
     MathAbs,
     MathCeiling,
     MathFloor,
@@ -423,7 +456,7 @@ public enum KnownFunction
     In
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L78' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L85' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Mapped from:
@@ -459,6 +492,7 @@ Mapped from:
 | `Math.Asin(value)` / `Math.Acos(value)` / `Math.Atan(value)` | `MathAsin` / `MathAcos` / `MathAtan` |
 | `Math.Atan2(y, x)` | `MathAtan2` |
 | `a + b` where either is a string | `StringConcat` |
+| `value.ToString()` | `StringFrom` |
 | `set.Contains(_.Member)` | `In` |
 
 `DayOfWeek` is the one function whose SQL the server composes rather than handing the provider a CLR expression to translate. SQL Server has no deterministic day-of-week function — `DATEPART(weekday, …)` reads `@@DATEFIRST`, a session setting, so the same row can answer differently on two connections — which is why EF refuses to translate `DateTime.DayOfWeek` at all. Scry carries the intent on the wire and builds the arithmetic server-side: whole days from a fixed Monday, modulo seven, numbered exactly as `System.DayOfWeek` is. It depends on nothing but the date, and is refused on a provider whose deterministic date arithmetic has not been verified rather than answered approximately.

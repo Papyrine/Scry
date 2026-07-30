@@ -91,7 +91,7 @@ The other two positions EF Core allows an aggregate in are both reachable as wel
 
 ### Functions
 
-See [the full table](querying.md#functions). In summary — string: `Contains`, `StartsWith`, `EndsWith`, `ToLower`, `ToUpper`, `Length`, `Trim`/`TrimStart`/`TrimEnd`, `Substring`, `IndexOf`, `Replace`, `IsNullOrEmpty`, `IsNullOrWhiteSpace`. Date: `Year`, `Month`, `Day`, `Hour`, `Minute`, `Second`, `Millisecond`, `DayOfYear`, `DayOfWeek`, `Date`, and the `Add*` methods. Math: `Abs`, `Ceiling`, `Floor`, `Round`, `Truncate`, `Sqrt`, `Pow`, `Exp`, `Log`, `Log10`, and the trigonometric functions (`Sin`, `Cos`, `Tan`, `Asin`, `Acos`, `Atan`, `Atan2`). Plus `Contains` over a client-supplied set, which becomes a SQL `IN`.
+See [the full table](querying.md#functions). In summary — string: `Contains`, `StartsWith`, `EndsWith`, `ToLower`, `ToUpper`, `Length`, `Trim`/`TrimStart`/`TrimEnd`, `Substring`, `IndexOf`, `Replace`, `IsNullOrEmpty`, `IsNullOrWhiteSpace`, and `ToString()` for reading any other scalar as text. Date: `Year`, `Month`, `Day`, `Hour`, `Minute`, `Second`, `Millisecond`, `DayOfYear`, `DayOfWeek`, `Date`, and the `Add*` methods. Math: `Abs`, `Ceiling`, `Floor`, `Round`, `Truncate`, `Sqrt`, `Pow`, `Exp`, `Log`, `Log10`, and the trigonometric functions (`Sin`, `Cos`, `Tan`, `Asin`, `Acos`, `Atan`, `Atan2`). Plus `Contains` over a client-supplied set, which becomes a SQL `IN`.
 
 Functions are expression-level: they read a row in a predicate, an ordering or group key, a terminal predicate, an aggregate selector, or a projection member.
 
@@ -115,6 +115,7 @@ Nothing here is blocked on Scry's design. Each item is left out for a stated rea
 Nothing to design; the surface underneath does not carry them.
 
 - `FullJoin` — `Queryable.FullJoin` is a .NET 11 addition. On net10 the client cannot express it and EF cannot execute it, so there is nothing to carry. The wire deliberately does not reserve a join kind for it: an operator the server would only reject is not worth committing to the contract.
+- `ToString(format)`, and the interpolated `$"{value:N2}"`. No provider translates it — EF's converter takes the argument-less form only — and the SQL function that would express it, `FORMAT`, reads the server's language, so the same row would format differently per connection. Unlike [`DayOfWeek`](querying.md#functions) there is no deterministic composition to build instead. It appears to work in a projection only because EF evaluates it client-side once the rows are read; the same expression in a `Where`, `OrderBy` or `GroupBy` fails. See [reading a value as text](querying.md#reading-a-value-as-text).
 - `Math.Sign` — the provider translates it, but SQL's `SIGN` returns its argument's type while `Math.Sign` returns `int`, so the result does not materialize: a query using it succeeds in a predicate, where nothing is read back, and faults in a projection. Translating is not sufficient on its own, and unlike [`DayOfWeek`](querying.md#functions) there is no deterministic composition to build instead — the translation is right, only its result type is unreadable.
 
 ### Deliberately left out

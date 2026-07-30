@@ -665,6 +665,21 @@ sealed class QueryTranslator
     {
         var declaring = call.Method.DeclaringType;
 
+        // Reads a value as text, whatever its type. Only the argument-less form: an overload taking a
+        // format is refused, since no provider translates it — see the note on StringFrom.
+        if (call is {Method.Name: "ToString", Object: { } instance, Arguments.Count: 0})
+        {
+            return new CallNode(KnownFunction.StringFrom, TranslateExpr(instance, root), []);
+        }
+
+        if (call is {Method.Name: "ToString", Arguments.Count: > 0})
+        {
+            throw new NotSupportedException(
+                "ToString with a format is not supported by Scry. No provider translates it, and the SQL " +
+                "function that would express it reads the server's language, so the same row would " +
+                "format differently per connection. Format the value after the query returns.");
+        }
+
         if (declaring == typeof(string))
         {
             return TranslateStringMethod(call, root);
