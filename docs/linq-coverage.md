@@ -121,11 +121,14 @@ Nothing to design; the surface underneath does not carry them.
 
 Considered and rejected, for reasons that have not changed.
 
-- `Cast<T>` — not [`OfType<T>`](querying.md#narrowing-to-a-derived-type) under another name. `OfType` **filters**: a row that is not a `T` is left out. `Cast` **asserts**: every row is required to be a `T` already, and one that is not is an error rather than an omission. They agree only when the assertion happens to hold, and differ exactly where it matters.
+- `Cast<T>` — not [`OfType<T>`](querying.md#narrowing-to-a-derived-type) under another name. `OfType` **filters**: a row that is not a `T` is left out. `Cast` **asserts**: every row is required to be a `T` already, and one that is not is an error rather than an omission.
 
-  The assertion is the part with no translation. A query cannot say "return these rows, and fail if any of them is not a `Vehicle`" — nothing in SQL raises on a row it was asked to return. That leaves two ways to carry it, and both are worse than refusing: materialize every row and check the discriminator outside the database, which gives up the reason for sending a query at all; or emit the filter instead, which silently turns a loud failure into a quietly shorter answer. A client that wrote `Cast` because it believed every row qualified would be told nothing when it did not.
+  EF does carry the assertion, which is worth stating plainly because the shape of it is surprising: the query runs and returns every row, and the *materializer* throws `InvalidCastException` on the first one that is not a `T`. Nothing in SQL raises — the failure happens on the way back, reading rows the database was perfectly willing to return.
 
-  Casting the other way — up to a base — is well defined, and changes nothing worth carrying. The wire names a *source*, never a CLR type, and a response is projected by member name, so an upcast alters only the client's static view of rows it was already receiving. There is no server-side effect for it to request.
+  That is why it is left out rather than unimplementable. Whether the query succeeds depends on which rows exist, not on what the query says, so it cannot be settled at the gate: every other rejection Scry makes is a property of the request, decided before anything is rebound or executed. This one would pass validation, reach the database, and surface as a generic `500` — the response for a failure the server will not describe — where the client asked a question that was answerable in principle. `OfType` says the useful half of the same intent and is decidable up front.
+
+  Casting the other way — up to a base — is well defined and changes nothing worth carrying. The wire names a *source*, never a CLR type, and a response is projected by member name, so an upcast alters only the client's static view of rows it was already receiving.
+
 - `DefaultIfEmpty` — translatable, and left out anyway. Its purpose in LINQ is the outer-join idiom: `GroupJoin`, then `SelectMany` over the group with `DefaultIfEmpty` on it, which is how a left outer join was spelled before there was an operator for one. [`LeftJoin`, `RightJoin` and `GroupJoin`](querying.md#joins) now say it directly, and Scry could not spell the idiom regardless — it needs `SelectMany` with a result selector over a group, which is excluded in the entry below.
 
   Standalone it asks something else: yield one row when the result would otherwise be empty. EF does translate that, so the objection is not that it cannot be carried. It is what arrives. The row is `null` — an absent row, not a row of default values — and a Scry response is a list of projected objects, so it lands as a null element in the client's list. Every row would need a null check before use, to learn the one thing the feature conveys: that the result was empty. An empty list already says that, in the shape the client handles anyway.
@@ -135,7 +138,7 @@ Considered and rejected, for reasons that have not changed.
 
 ### Not gaps
 
-Listed in EF's `QueryableMethods` but rejected by EF's own relational translation, so Scry not carrying them loses nothing:
+Listed in EF's `QueryableMethods`, and on `Queryable` rather than only `Enumerable` — so they reach EF rather than quietly enumerating client-side — but rejected by its relational translation. Each throws *could not be translated* against a real database, so Scry not carrying them loses nothing:
 
 `Aggregate`, `Zip`, `SequenceEqual`, `SkipWhile` / `TakeWhile`, `MaxBy` / `MinBy`, and every overload taking an `IEqualityComparer` / `IComparer`.
 
