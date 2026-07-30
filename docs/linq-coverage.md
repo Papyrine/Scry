@@ -129,8 +129,8 @@ Structurally bigger than the current pipeline — multiple sources per request, 
 
 **Other.**
 
-- [ ] `OfType` / `Cast` — inheritance hierarchies are not modelled in the generated surface at all: one query model is emitted per opted-in type with no relationship between them.
-- [ ] Streaming results (`ToAsyncEnumerable`) — needs a streaming wire; see [Writing queries](querying.md#future-enhancements).
+- [ ] `OfType` / `Cast`. Blocked on the *generated surface*, not on the pipeline. One query model is emitted per opted-in type with no relationship between them, so there is no derived type for `OfType<T>` to name. Shipping it means teaching `MetadataModelReader` and `Schema` to carry base/derived links in lockstep, emitting that relationship into the generated models, extending `ScryIntrospection` so the explorer can synthesize it, and re-stamping the schema. The security rule is already settled and simple: `OfType<T>` requires `T` to be independently allow-listed, and both types' row policies apply, so the narrowing composes.
+- [ ] Streaming results (`ToAsyncEnumerable`). Blocked on the *transport*, not on the query pipeline: `QueryResponse` is one materialized batch of rows, so streaming means a second response shape (chunked or newline-delimited) and a client that surfaces it. Independent of everything else on this page. See [Writing queries](querying.md#future-enhancements).
 
 ### Not gaps
 
