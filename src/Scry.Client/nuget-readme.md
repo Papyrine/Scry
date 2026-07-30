@@ -13,6 +13,8 @@ This package also ships the Scry source generator, so a client project needs onl
 <sup><a href='/samples/Sample.Client/Sample.Client.csproj#L7-L10' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientModelPath' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
+Register the client over a **named** `HttpClient`, so its base address — and any handler pipeline it grows — stays separate from every other call the application makes:
+
 <!-- snippet: clientRegistration -->
 <a id='snippet-clientRegistration'></a>
 ```cs
@@ -25,6 +27,22 @@ builder.Services.AddScryClient(
 builder.Services.AddScoped<ScryQuery>();
 ```
 <sup><a href='/samples/Sample.Client/Program.cs#L14-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Blazor WebAssembly is the exception: there is one `HttpClient`, the browser backs it, and it already points at the app's own origin, so nothing needs disambiguating and the shorter overload avoids pulling `Microsoft.Extensions.Http` into the payload.
+
+<!-- snippet: clientWasmRegistration -->
+<a id='snippet-clientWasmRegistration'></a>
+```cs
+services.AddScoped(
+    _ => new HttpClient
+    {
+        BaseAddress = new("https://localhost")
+    });
+services.AddScryClient("/api/query");
+services.AddScoped<ScryQuery>();
+```
+<sup><a href='/samples/Sample.Tests/ClientRegistrationTests.cs#L19-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientWasmRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: clientQuery -->
