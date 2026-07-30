@@ -59,6 +59,13 @@ public enum KnownFunction
     MathFloor,
     MathRound,
     MathTruncate,
+    /// <summary>
+    /// The sign of the target: -1, 0, or 1. The server composes it from comparisons rather than from
+    /// SQL's own function, whose result takes the argument's type and so cannot be read back as the
+    /// <see cref="int"/> this returns.
+    /// </summary>
+    MathSign,
+
     MathSqrt,
     MathPow,
     MathExp,

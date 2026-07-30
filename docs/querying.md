@@ -432,6 +432,13 @@ public enum KnownFunction
     MathFloor,
     MathRound,
     MathTruncate,
+    /// <summary>
+    /// The sign of the target: -1, 0, or 1. The server composes it from comparisons rather than from
+    /// SQL's own function, whose result takes the argument's type and so cannot be read back as the
+    /// <see cref="int"/> this returns.
+    /// </summary>
+    MathSign,
+
     MathSqrt,
     MathPow,
     MathExp,
@@ -456,7 +463,7 @@ public enum KnownFunction
     In
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L85' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L92' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Mapped from:
@@ -486,6 +493,7 @@ Mapped from:
 | `Math.Round(value[, digits])` | `MathRound` |
 | `Math.Truncate(value)` | `MathTruncate` |
 | `Math.Sqrt(value)` / `Math.Pow(value, exponent)` | `MathSqrt` / `MathPow` |
+| `Math.Sign(value)` | `MathSign` |
 | `Math.Exp(value)` | `MathExp` |
 | `Math.Log(value[, base])` / `Math.Log10(value)` | `MathLog` / `MathLog10` |
 | `Math.Sin(value)` / `Math.Cos(value)` / `Math.Tan(value)` | `MathSin` / `MathCos` / `MathTan` |
@@ -503,7 +511,21 @@ Every function past `Math.Sqrt` is defined over `double` alone, so an integer or
 
 An arithmetic expression promotes its operands the way C# does, to the widest of their types, so `(double)_.Quantity / 2d` over an integer member is computed in floating point rather than as integer division. A comparison instead reads its constant at the member's type, which is what lets `_.Amount > 80` compare decimals.
 
-There is no free-form method call node in the wire format, so this list is the complete set of behaviour a client can ask the database to perform. **Provider support is still the outer bound**: a function only reaches SQL if the EF provider translates it, and translating is not enough on its own — the result has to materialize too. `Math.Sign` has no entry because the translation it does produce cannot be read back: SQL's `SIGN` returns its argument's type, while `Math.Sign` returns `int`, so a query using it succeeds in a predicate and faults in a projection.
+`Math.Sign` reads as -1, 0, or 1:
+
+<!-- snippet: clientSign -->
+<a id='snippet-clientSign'></a>
+```cs
+var rows = await client.Source<Order>("Order")
+    .Select(_ => new {_.Amount, Sign = Math.Sign(_.Amount - 100m)})
+    .ToListAsync();
+```
+<sup><a href='/src/Scry.Tests/SignTests.cs#L18-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientSign' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+It is the second function the server composes rather than handing straight to the provider. The provider does translate it, but SQL's `SIGN` returns its argument's type while the CLR method returns an `int`, so its result cannot be read back — the query succeeds in a predicate, where nothing is materialized, and faults in a projection. Two comparisons and a conditional say the same thing, translate anywhere, and yield an int because that is what they are built from. A null value keeps its sign null rather than being called zero, which is what an unguarded comparison chain would answer.
+
+There is no free-form method call node in the wire format, so this list is the complete set of behaviour a client can ask the database to perform. **Provider support is still the outer bound**: a function only reaches SQL if the EF provider translates it, and translating is not enough on its own — the result has to materialize too. That is what keeps [`ToString(format)`](#reading-a-value-as-text) out: the provider does not translate it at all, and the SQL function that would express it reads the server's language.
 
 Functions are **expression-level**: they read a row inside a `Where` predicate, an ordering or group key, a terminal predicate, an aggregate selector, or a [projection member](#computed-projection-members).
 

@@ -1096,6 +1096,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 KnownFunction.MathFloor or
                 KnownFunction.MathTruncate or
                 KnownFunction.StringFrom or
+                KnownFunction.MathSign or
                 KnownFunction.MathSqrt or
                 KnownFunction.MathExp or
                 KnownFunction.MathLog10 or

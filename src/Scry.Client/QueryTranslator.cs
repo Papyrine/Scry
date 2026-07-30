@@ -709,6 +709,7 @@ sealed class QueryTranslator
                 "Floor" => KnownFunction.MathFloor,
                 "Round" => KnownFunction.MathRound,
                 "Truncate" => KnownFunction.MathTruncate,
+                "Sign" => KnownFunction.MathSign,
                 "Sqrt" => KnownFunction.MathSqrt,
                 "Pow" => KnownFunction.MathPow,
                 "Exp" => KnownFunction.MathExp,

@@ -980,6 +980,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
 
                 // These are defined over double alone, so a decimal or integer member is widened to
                 // reach them — which is also the type the provider computes them in.
+                KnownFunction.MathSign => BuildSign(target),
                 KnownFunction.MathSqrt => Double1("Sqrt", target),
                 KnownFunction.MathExp => Double1("Exp", target),
                 KnownFunction.MathLog10 => Double1("Log10", target),
@@ -1114,6 +1115,47 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         Nullable.GetUnderlyingType(target.Type) is null
             ? target
             : Expression.Property(target, "Value");
+
+    /// <summary>
+    /// Builds the sign of a value as -1, 0, or 1, from comparisons rather than from SQL's own
+    /// <c>SIGN</c>.
+    /// </summary>
+    /// <remarks>
+    /// The provider does translate <see cref="Math.Sign(decimal)"/>, but SQL's <c>SIGN</c> returns its
+    /// argument's type while the CLR method returns an <see cref="int"/>, so the result cannot be read
+    /// back: the query succeeds in a predicate, where nothing is materialized, and faults in a
+    /// projection. Two comparisons and a conditional say the same thing, are translated by any
+    /// relational provider, and yield an int because that is what they are built from.
+    /// </remarks>
+    static Expression BuildSign(Expression target)
+    {
+        var value = NonNullable(target);
+        if (Rank(value.Type) is null)
+        {
+            throw new ScryValidationException($"Sign is not supported over '{value.Type.Name}'.");
+        }
+
+        var zero = Expression.Constant(Activator.CreateInstance(value.Type), value.Type);
+        var sign = Expression.Condition(
+            Expression.GreaterThan(value, zero),
+            Expression.Constant(1),
+            Expression.Condition(
+                Expression.LessThan(value, zero),
+                Expression.Constant(-1),
+                Expression.Constant(0)));
+
+        if (Nullable.GetUnderlyingType(target.Type) is null)
+        {
+            return sign;
+        }
+
+        // A comparison against null is neither greater nor less, so an unguarded chain would answer
+        // zero — the sign of a value that is not there. Null in, null out instead.
+        return Expression.Condition(
+            Expression.Equal(target, Expression.Constant(null, target.Type)),
+            Expression.Constant(null, typeof(int?)),
+            Expression.Convert(sign, typeof(int?)));
+    }
 
     // A Math method defined over double alone: the target is widened to reach it.
     static Expression Double1(string name, Expression target) =>
