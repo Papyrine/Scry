@@ -18,6 +18,27 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         return Expression.Lambda(body, parameter);
     }
 
+    /// <summary>
+    /// Builds the selector a flatten applies: <c>TElement =&gt; IEnumerable&lt;TChild&gt;</c>, reading the
+    /// named collection navigation off the row.
+    /// </summary>
+    public (LambdaExpression Selector, Type Element) BuildCollectionSelector(IReadOnlyList<string> path, Type type)
+    {
+        var parameter = Expression.Parameter(type, "e");
+        var collection = BuildMemberAccess(parameter, path);
+        var element = Schema.CollectionElement(collection.Type) ??
+                      throw new ScryValidationException($"'{string.Join('.', path)}' is not a collection.");
+
+        // The lambda is typed to return IEnumerable<T> so the Queryable.SelectMany overload binds
+        // regardless of how the navigation is declared. The delegate type carries that, rather than a
+        // Convert around the body — a conversion node stops EF expanding the navigation at all.
+        var selector = Expression.Lambda(
+            typeof(Func<,>).MakeGenericType(type, typeof(IEnumerable<>).MakeGenericType(element)),
+            collection,
+            parameter);
+        return (selector, element);
+    }
+
     /// <summary>Builds a key selector lambda <c>TElement =&gt; TKey</c>.</summary>
     public LambdaExpression BuildKeySelector(Node key, Type type)
     {

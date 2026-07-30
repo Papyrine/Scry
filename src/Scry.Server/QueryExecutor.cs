@@ -92,6 +92,17 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                     tailIsOrdered = false;
                     query = ApplyPaging(query, "Take", take.Count);
                     break;
+                case SelectManyOp flatten:
+                    tailIsOrdered = false;
+                    var (collection, child) = builder.BuildCollectionSelector(flatten.Path, elementType);
+                    query = query.Provider.CreateQuery(
+                        CallQueryable(
+                            "SelectMany",
+                            [elementType, child],
+                            query.Expression,
+                            Expression.Quote(collection)));
+                    elementType = child;
+                    break;
                 case DistinctOp:
                     distinct = true;
                     break;

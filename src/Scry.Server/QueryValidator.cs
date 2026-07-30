@@ -31,6 +31,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         var rootType = root.ClrType;
         var sawOrdering = false;
         var sawOuterFilter = false;
+        var sawSelectMany = false;
         var sawGroupBy = false;
         var sawSelect = false;
         var sawDistinct = false;
@@ -80,6 +81,26 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                         ValidatePredicate(where.Predicate, rootType);
                     }
 
+                    break;
+
+                case SelectManyOp flatten:
+                    if (sawSelectMany)
+                    {
+                        throw Reject("Only one SelectMany is allowed.");
+                    }
+
+                    EnsureNotGrouped(sawGroupBy, "SelectMany");
+                    EnsureNotProjected(sawSelect, "SelectMany");
+                    EnsureNotDistinct(sawDistinct, "SelectMany");
+
+                    // Everything after the flatten reads the collection's element, so the root the rest
+                    // of the pipeline is validated against changes here.
+                    rootType = ValidateSelectMany(flatten, rootType);
+                    sawSelectMany = true;
+
+                    // An ordering written before the flatten described the rows it consumed, so it can
+                    // no longer be extended and cannot seed a cursor.
+                    sawOrdering = false;
                     break;
 
                 case OrderByOp orderBy:
@@ -733,6 +754,23 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 $"Source '{root.Name}' carries a row policy, so it cannot be the outer side of a " +
                 "RightJoin — swap the sides and use LeftJoin.");
         }
+    }
+
+    /// <summary>
+    /// Validates a flatten and returns the element type the rest of the pipeline reads. The element is
+    /// allow-listed in its own right; it carries no row policy, because a <c>[QueryableCollection]</c>
+    /// of a policied type is already refused at startup.
+    /// </summary>
+    Type ValidateSelectMany(SelectManyOp flatten, Type rootType)
+    {
+        var member = ResolvePath(flatten.Path, rootType, requireScalar: false, "SelectMany");
+        if (member.Kind != MemberKind.Collection)
+        {
+            throw Reject($"'{string.Join('.', flatten.Path)}' is not a queryable collection.");
+        }
+
+        return Schema.CollectionElement(member.Type) ??
+               throw Reject($"'{string.Join('.', flatten.Path)}' is not a collection.");
     }
 
     void ValidateJoin(JoinOp join, Type outerType)

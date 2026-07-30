@@ -46,6 +46,7 @@ The wire format has no node for an arbitrary method call, no node for raw SQL, a
 [JsonDerivedType(typeof(SkipOp), "skip")]
 [JsonDerivedType(typeof(TakeOp), "take")]
 [JsonDerivedType(typeof(SelectOp), "select")]
+[JsonDerivedType(typeof(SelectManyOp), "selectMany")]
 [JsonDerivedType(typeof(GroupByOp), "groupBy")]
 [JsonDerivedType(typeof(DistinctOp), "distinct")]
 [JsonDerivedType(typeof(ReverseOp), "reverse")]
@@ -62,7 +63,7 @@ The wire format has no node for an arbitrary method call, no node for raw SQL, a
 [JsonDerivedType(typeof(PageOp), "page")]
 public abstract record QueryOp;
 ```
-<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L32' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: wireExpressions -->

@@ -6,6 +6,8 @@ stateDiagram-v2
     [*] --> Source
     Source --> Restricting: Where / OrderBy / ThenBy / Skip / Take
     Restricting --> Restricting: (any order, any number)
+    Source --> Restricting: SelectMany
+    Restricting --> Restricting: SelectMany
     Source --> Grouped: GroupBy
     Restricting --> Grouped: GroupBy
     Grouped --> Grouped: Where (HAVING)
@@ -33,6 +35,10 @@ one exception — it filters the groups rather than the rows, and reads only the
 
 A set operation combines the projected rows with a second source, so like a join only a terminal may
 follow: the combined rows come from two sources and have no single root left to read.
+
+`SelectMany` flattens a collection into its elements, so it leaves the query restricting — but against
+a different row. Everything after it is written against the element, at most one is allowed, and an
+ordering written before it does not carry across.
 
 `Distinct` deduplicates the projected rows, so what may follow it is the `Select` it deduplicates, a
 terminal, and — over a flat projection of up to eight members — an `OrderBy` naming one of them, plus

@@ -18,6 +18,7 @@ For usage detail on the supported surface (position rules, limits, examples), se
 | `ThenBy(key)` / `ThenByDescending(key)` | |
 | `Skip(n)` / `Take(n)` | `Take` capped by `MaxPageSize`. |
 | `Select(projection)` | At most one; must construct an object. |
+| `SelectMany(collection)` | Flattens a `[QueryableCollection]`; one per query, and later operators read the element. |
 | `GroupBy(key)` | One key, or up to eight members grouped at once. Must be followed by a `Select`. |
 | `Distinct()` | Deduplicates the projected rows; can also be ordered, paged and counted over a flat projection of up to eight members. |
 | `Reverse()` | Inverts the ordering; requires a preceding `OrderBy`, as EF does. |
@@ -118,7 +119,6 @@ Fit the closed-vocabulary pattern — each is a new enum member or a small op re
 
 Structurally bigger than the current pipeline — multiple sources per request, subqueries, or new type-surface in the generator. Each needs a security review before a wire shape, and the notes below are that review as far as it has been taken.
 
-- [ ] `SelectMany` — needs collections *projectable*, which the shipped design deliberately excludes; revisit only with a bounded nested-result shape.
 
 **Cross-source queries.** `Join`, `LeftJoin` and the [set operations](querying.md#set-operations) are supported. The policy composition they were gated on is settled: each side is resolved and policy-filtered independently before the two meet, so a join can only narrow. 
 

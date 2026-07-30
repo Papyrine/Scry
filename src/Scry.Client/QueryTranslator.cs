@@ -69,6 +69,21 @@ sealed class QueryTranslator
             case "Select":
                 return new SelectOp(TranslateProjection(Lambda(call.Arguments[1])));
 
+            case "SelectMany" when call.Arguments.Count == 2:
+                var flatten = Lambda(call.Arguments[1]);
+                if (flatten.Body is not MemberExpression collection ||
+                    !Rooted(collection, flatten.Parameters[0]))
+                {
+                    throw new NotSupportedException(
+                        "SelectMany must name a collection on the row, as in '.SelectMany(_ => _.Lines)'.");
+                }
+
+                return new SelectManyOp(MemberPath(collection));
+
+            case "SelectMany":
+                throw new NotSupportedException(
+                    "SelectMany with a result selector is not supported by Scry — flatten first, then Select.");
+
             case "Distinct" when call.Arguments.Count == 1:
                 return new DistinctOp();
 

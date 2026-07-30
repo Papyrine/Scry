@@ -95,6 +95,7 @@ public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjec
 | `ThenBy(key)` / `ThenByDescending(key)` | `thenBy` | Must follow an `OrderBy`. |
 | `Skip(n)` | `skip` | `n` must be non-negative. |
 | `Take(n)` | `take` | `n` must be non-negative and `<= MaxPageSize`. |
+| `SelectMany(collection)` | `selectMany` | Flattens a `[QueryableCollection]` — see [below](#flattening-a-collection). One per query; later operators read the element. |
 | `GroupBy(key)` | `groupBy` | One key, or up to eight members grouped at once. At most one `GroupBy`, and it must be followed by a `Select`. |
 | `Select(projection)` | `select` | At most one, and it must construct an object. |
 | `Distinct()` | `distinct` | Deduplicates the **projected** rows. It can also be ordered, paged and counted — see [below](#deduplicating). |
@@ -547,6 +548,33 @@ A `Where` may precede any of them — `_.Items.Where(i => i.Active).Count()` —
 
 The result is always a **scalar**, so a subquery can appear anywhere a value can: a predicate, an ordering key, a projection leaf, an aggregate selector. What it cannot do is return rows. A collection is never projectable, never traversable in a member path (`_.Items.Name` is rejected), and a subquery may not appear inside another subquery — the cost is per-row and would compound. Inside the subquery, the predicate and selector read the collection's *element*, against that type's own allow-list.
 
+#### Flattening a collection
+
+`SelectMany` goes the other way: rather than folding a collection to a scalar, it replaces the row being queried with the collection's elements.
+
+<!-- snippet: clientSelectMany -->
+<a id='snippet-clientSelectMany'></a>
+```cs
+var lines = await client.Source<Order>("Order")
+    .SelectMany(_ => _.Lines)
+    .Select(_ => new Line(_.Sku, _.Quantity))
+    .ToListAsync();
+```
+<sup><a href='/src/Scry.Tests/SelectManyTests.cs#L20-L25' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientSelectMany' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Everything before the flatten is written against the row, everything after it against the element — so a `Where` on either side reads whatever that side's allow-list exposes, and the projection, ordering, grouping and terminals all describe the elements.
+
+This is safe for the same reason the aggregates are: the element type is allow-listed in its own right, and a `[QueryableCollection]` of a type carrying a [row policy](policies.md) is [refused at startup](annotations.md#collections), so there is no policy for the flatten to bypass.
+
+Three restrictions:
+
+- **One flatten per query.** The fan-out is multiplicative, and nothing in the model needs a second.
+- **It must name a collection on the row** — `.SelectMany(_ => _.Lines)`. Reference navigations may precede the collection; the collection is the last segment.
+- **No result selector.** `SelectMany(collection, (row, element) => …)` would produce a two-rooted row like a join's, without a join's projection to name the sides. Flatten first, then `Select`.
+
+Any ordering written before the flatten described the rows it consumed, so it does not carry across; order after it instead.
+
 
 ### Set membership
 
@@ -841,6 +869,8 @@ stateDiagram-v2
     [*] --> Source
     Source --> Restricting: Where / OrderBy / ThenBy / Skip / Take
     Restricting --> Restricting: (any order, any number)
+    Source --> Restricting: SelectMany
+    Restricting --> Restricting: SelectMany
     Source --> Grouped: GroupBy
     Restricting --> Grouped: GroupBy
     Grouped --> Grouped: Where (HAVING)
@@ -868,6 +898,10 @@ one exception — it filters the groups rather than the rows, and reads only the
 
 A set operation combines the projected rows with a second source, so like a join only a terminal may
 follow: the combined rows come from two sources and have no single root left to read.
+
+`SelectMany` flattens a collection into its elements, so it leaves the query restricting — but against
+a different row. Everything after it is written against the element, at most one is allowed, and an
+ordering written before it does not carry across.
 
 `Distinct` deduplicates the projected rows, so what may follow it is the `Select` it deduplicates, a
 terminal, and — over a flat projection of up to eight members — an `OrderBy` naming one of them, plus
