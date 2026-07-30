@@ -162,6 +162,24 @@ builder.Services.AddScoped<ScryQuery>();
 
 `AddScryClient` registers a `ScryClient` that POSTs to the given endpoint using the registered `HttpClient`. `ScryQuery` is generated into the `Scry.Generated` namespace.
 
+That overload takes whichever `HttpClient` the container holds, which is what a WebAssembly app wants: there is exactly one, it points at the app's own origin, and the browser backs it rather than a socket pool. **Anywhere else, name the client Scry should use** — a bare `HttpClient` registration is discouraged outside WASM to begin with, and an ambient one may well belong to another API:
+
+<!-- snippet: clientNamedRegistration -->
+<a id='snippet-clientNamedRegistration'></a>
+```cs
+var scry = services.AddHttpClient("scry", _ => _.BaseAddress = new("http://localhost/"));
+services.AddScryClient(
+    "/api/query",
+    _ => _.GetRequiredService<IHttpClientFactory>().CreateClient("scry"));
+services.AddScoped<ScryQuery>();
+```
+<sup><a href='/samples/Sample.Tests/ClientRegistrationTests.cs#L17-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientNamedRegistration' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+The factory is reached through the delegate rather than being a dependency of `Scry.Client`, so an application that does not otherwise want `Microsoft.Extensions.Http` does not acquire it by referencing Scry.
+
+Either way the client is registered **scoped**, not transient. It records the schema stamp each response advertises and raises [`SchemaStaleDetected`](schema-versioning.md) at most once, so a fresh instance per injection would reset that and never report drift. That is also why a typed client (`AddHttpClient<ScryClient>`) is the wrong shape here: the factory registers those transient.
+
 
 ## 4. Write a query
 
