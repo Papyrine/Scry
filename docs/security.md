@@ -179,7 +179,11 @@ CLR types are introduced only from the schema, never from the wire. Member acces
 
 **Collations are the exception that proves the rule.** A collation cannot be a query parameter — a provider emits it into the SQL text — so a request never carries one. A client asks only for a [case sensitivity](querying.md#operators-1); which collation implements it is server configuration, and a server that has configured none rejects the request. That keeps the invariant below intact: no attacker-supplied string reaches SQL as anything but a parameter.
 
-Constants are the one attacker-supplied value that reaches the query. They travel as a string plus a type tag and are parsed into the **member's** type at the comparison site — not into whatever type the tag claims. They become `Expression.Constant` nodes, which EF Core parameterizes; they are never concatenated into SQL.
+Constants are the one attacker-supplied value that reaches the query. They travel as a string plus a type tag and are parsed into the **member's** type at the comparison site — not into whatever type the tag claims.
+
+A parsed value is then emitted the way a captured variable reaches a query — a member read off a holder object — which is the shape EF Core's funcletizer lifts into a **query parameter**. The value is bound, never written into the statement text.
+
+That shape is deliberate and worth keeping. A bare `Expression.Constant` is *not* parameterized: EF inlines it into the SQL, escaped by the provider's type mapping. Escaping makes that safe from injection, but it makes the statement text differ per value, so every distinct value a client sends compiles and caches a plan of its own — a cheap way for a hostile client to flood the plan cache. Binding gives one plan for every value. A null is the exception and stays a literal: there is one of it, so nothing is gained, and a literal null keeps EF's `IS NULL` rewriting straightforward.
 
 
 ### 5. Row policies
@@ -281,6 +285,8 @@ public async Task DisallowedPropertyRejectedWith400()
 app.MapScry("/api/query")
     .RequireAuthorization("Reader");
 ```
+
+**Plan-cache pressure from set membership.** Scalar constants are bound as parameters, but the values of a `Contains` set are still emitted into the statement, so a client varying the *size* of that set produces a distinct statement each time. `MaxInValues` bounds how large one gets; if plan-cache pressure matters for a deployment, lower it.
 
 **Rate limiting and cost control.** The limits bound the *shape* of a query, not its cost. An allow-listed query over a large unindexed table is still expensive, and `MaxPageSize` caps an explicit `Take` rather than implicitly paging an unbounded query. Apply ASP.NET Core rate limiting, a command timeout, and the usual database-side controls.
 
