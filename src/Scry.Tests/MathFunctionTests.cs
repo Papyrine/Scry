@@ -46,7 +46,7 @@ public class MathFunctionTests
 
         var rows = await client.Source<Order>("Order")
             .Where(_ => _.Amount == 75m)
-            .Select(_ => new {Value = Math.Exp((double)_.Quantity)})
+            .Select(_ => new {Value = Math.Exp(_.Quantity)})
             .ToListAsync();
 
         Assert.That(rows.Single().Value, Is.EqualTo(Math.Exp(1d)).Within(0.0001));
@@ -63,10 +63,10 @@ public class MathFunctionTests
             .Select(
                 _ => new
                 {
-                    Sin = Math.Sin((double)_.Quantity),
-                    Cos = Math.Cos((double)_.Quantity),
-                    Tan = Math.Tan((double)_.Quantity),
-                    Atan = Math.Atan((double)_.Quantity)
+                    Sin = Math.Sin(_.Quantity),
+                    Cos = Math.Cos(_.Quantity),
+                    Tan = Math.Tan(_.Quantity),
+                    Atan = Math.Atan(_.Quantity)
                 })
             .ToListAsync();
 
@@ -93,8 +93,8 @@ public class MathFunctionTests
             .Select(
                 _ => new
                 {
-                    Asin = Math.Asin((double)_.Quantity / 2d),
-                    Acos = Math.Acos((double)_.Quantity / 2d)
+                    Asin = Math.Asin(_.Quantity / 2d),
+                    Acos = Math.Acos(_.Quantity / 2d)
                 })
             .ToListAsync();
 
@@ -115,7 +115,7 @@ public class MathFunctionTests
 
         var rows = await client.Source<Order>("Order")
             .Where(_ => _.Amount == 75m)
-            .Select(_ => new {Value = Math.Atan2((double)_.Quantity, 2d)})
+            .Select(_ => new {Value = Math.Atan2(_.Quantity, 2d)})
             .ToListAsync();
 
         Assert.That(rows.Single().Value, Is.EqualTo(Math.Atan2(1d, 2d)).Within(0.0001));
@@ -149,7 +149,7 @@ public class MathFunctionTests
             .Select(
                 _ => new
                 {
-                    Halved = (double)_.Quantity / 2d,
+                    Halved = _.Quantity / 2d,
                     Scaled = _.Amount * 2,
                     Integral = _.Quantity / 2
                 })

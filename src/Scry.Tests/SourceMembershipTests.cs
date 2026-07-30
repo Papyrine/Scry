@@ -39,7 +39,7 @@ public class SourceMembershipTests
             .ToListAsync();
         // end-snippet
 
-        Assert.That(rows.Select(_ => _.Name), Is.EqualTo(new[] { "Bob", "Carol" }));
+        Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Bob", "Carol"]));
     }
 
     [Test]

@@ -29,8 +29,8 @@ public class CompositeGroupKeyTests
         Assert.Multiple(() =>
         {
             Assert.That(rows, Has.Count.EqualTo(3));
-            Assert.That(rows.Single(_ => _.Region == "North" && _.Grade == 'A').Total, Is.EqualTo(100m));
-            Assert.That(rows.Single(_ => _.Region == "North" && _.Grade == 'B').Total, Is.EqualTo(250m));
+            Assert.That(rows.Single(_ => _ is {Region: "North", Grade: 'A'}).Total, Is.EqualTo(100m));
+            Assert.That(rows.Single(_ => _ is {Region: "North", Grade: 'B'}).Total, Is.EqualTo(250m));
             Assert.That(rows.Single(_ => _.Region == "South").Total, Is.EqualTo(75m));
         });
     }

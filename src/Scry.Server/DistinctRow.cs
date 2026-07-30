@@ -12,7 +12,7 @@
 static class DistinctRow
 {
     /// <summary>The row types by arity. Beyond this a deduplicated projection can only be enumerated.</summary>
-    public static readonly System.Type[] ByArity =
+    public static readonly Type[] ByArity =
     [
         typeof(DistinctRow<>).GetGenericTypeDefinition(),
         typeof(DistinctRow<,>).GetGenericTypeDefinition(),

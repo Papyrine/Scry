@@ -592,7 +592,7 @@ public class ExpandedOperatorTests
             .Select(_ => new NameRow(_.Key.ToUpper()))
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Name).Order(), Is.EqualTo(new[] { "NORTH", "SOUTH" }));
+        Assert.That(rows.Select(_ => _.Name).Order(), Is.EqualTo(["NORTH", "SOUTH"]));
     }
 
     [Test]

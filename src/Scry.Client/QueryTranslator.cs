@@ -960,7 +960,7 @@ sealed class QueryTranslator
             var character = format[i];
 
             // Doubled braces are an escaped literal brace.
-            if ((character == '{' || character == '}') &&
+            if (character is '{' or '}' &&
                 i + 1 < format.Length &&
                 format[i + 1] == character)
             {
