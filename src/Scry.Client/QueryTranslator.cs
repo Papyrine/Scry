@@ -91,6 +91,8 @@ sealed class QueryTranslator
                 return TranslateJoin(call, JoinKind.Inner);
             case "LeftJoin":
                 return TranslateJoin(call, JoinKind.Left);
+            case "RightJoin":
+                return TranslateJoin(call, JoinKind.Right);
 
             default:
                 throw new NotSupportedException($"LINQ operator '{call.Method.Name}' is not supported by Scry.");
@@ -204,8 +206,16 @@ sealed class QueryTranslator
     static List<JoinMember> JoinMembers(LambdaExpression result)
     {
         var members = new List<JoinMember>();
-        foreach (var (name, value) in NestedMembers(result.Body))
+        foreach (var (name, raw) in NestedMembers(result.Body))
         {
+            // A member read from a side the join can leave unmatched is assigned to a nullable target,
+            // so the compiler wraps the read in a widening convert. That is the shape the server
+            // produces anyway, so unwrap it rather than reject the projection.
+            var value = raw is UnaryExpression { NodeType: ExpressionType.Convert } convert &&
+                        Nullable.GetUnderlyingType(convert.Type) == convert.Operand.Type
+                ? convert.Operand
+                : raw;
+
             // Each leaf must say which side it reads, so it has to be a plain path rooted at one of
             // the two parameters — the joined pair has no single root to resolve it against.
             var side = Rooted(value, result.Parameters[0])

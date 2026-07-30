@@ -198,8 +198,13 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
             var root = member.Side == JoinSide.Outer ? (Expression)outer : inner;
             var leaf = BuildMemberAccess(root, member.Path);
 
-            if (kind == JoinKind.Left &&
-                member.Side == JoinSide.Inner &&
+            // A side the join can leave unmatched yields SQL NULL, so a non-nullable value read from
+            // it is widened; without that the shaper faults materializing the null.
+            var optional = member.Side == JoinSide.Inner
+                ? kind == JoinKind.Left
+                : kind == JoinKind.Right;
+
+            if (optional &&
                 leaf.Type.IsValueType &&
                 Nullable.GetUnderlyingType(leaf.Type) is null)
             {

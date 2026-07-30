@@ -10,6 +10,8 @@ public class JoinTests
 
     record TicketRow(string Employee, string Ticket);
 
+    record EmployeeWithDepartment(string Employee, string? Department, int? DepartmentId);
+
     // ReSharper restore NotAccessedPositionalProperty.Local
 
     [Test]
@@ -75,6 +77,98 @@ public class JoinTests
             Assert.That(rows, Has.Count.EqualTo(4));
             Assert.That(rows.Select(_ => _.Department), Is.All.Null);
         });
+    }
+
+    [Test]
+    public async Task RightJoinKeepsUnmatchedInnerRows()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // Joined on id to id so that two employees have no department at that key — the unmatched
+        // inner rows a right join is there to keep.
+        // begin-snippet: clientRightJoin
+        var rows = await client.Source<Department>("Department")
+            .RightJoin(
+                client.Source<Employee>("Employee"),
+                _ => _.Id,
+                _ => _.Id,
+                (department, employee) => new EmployeeWithDepartment(
+                    employee.Name,
+                    department!.Name,
+                    department.Id))
+            .ToListAsync();
+        // end-snippet
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rows, Has.Count.EqualTo(4));
+            Assert.That(rows.Count(_ => _.Department is null), Is.EqualTo(2));
+
+            // The outer side is the absent one, so its non-nullable int is widened rather than faulting.
+            Assert.That(rows.Count(_ => _.DepartmentId is null), Is.EqualTo(2));
+            Assert.That(rows.Single(_ => _.Employee == "Alice").Department, Is.EqualTo("Engineering"));
+        });
+    }
+
+    [Test]
+    public void RightJoinRejectsANarrowedOuterSide()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // EF hoists the outer predicate out of the join, silently turning the right join into an inner
+        // one. Scry refuses the shape rather than answering it wrongly.
+        var exception = Assert.ThrowsAsync<ScryValidationException>(
+            () => client.Source<Department>("Department")
+                .Where(_ => _.Name == "Engineering")
+                .RightJoin(
+                    client.Source<Employee>("Employee"),
+                    _ => _.Id,
+                    _ => _.Id,
+                    (department, employee) => new EmployeeWithDepartment(employee.Name, department!.Name, department.Id))
+                .ToListAsync());
+
+        Assert.That(exception!.Message, Does.Contain("RightJoin cannot narrow its outer side"));
+    }
+
+    [Test]
+    public void RightJoinRejectsAPoliciedOuterSide()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // A row policy is a filter, so it would be hoisted the same way — leaving the policy applied
+        // but the join semantics wrong. Refused at validation instead.
+        var exception = Assert.ThrowsAsync<ScryValidationException>(
+            () => client.Source<Ticket>("Ticket")
+                .RightJoin(
+                    client.Source<Employee>("Employee"),
+                    _ => _.Id,
+                    _ => _.Id,
+                    (ticket, employee) => new TicketRow(employee.Name, ticket!.Name))
+                .ToListAsync());
+
+        Assert.That(exception!.Message, Does.Contain("cannot be the outer side of a RightJoin"));
+    }
+
+    [Test]
+    public async Task RightJoinAppliesTheInnerSidePolicy()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var rows = await client.Source<Employee>("Employee")
+            .RightJoin(
+                client.Source<Ticket>("Ticket"),
+                _ => _.Id,
+                _ => _.Id,
+                (employee, ticket) => new TicketRow(employee!.Name, ticket.Name))
+            .ToListAsync();
+
+        // The policy filters the inner source before the join, so the closed ticket cannot reappear
+        // through the side a right join preserves.
+        Assert.That(rows.Select(_ => _.Ticket), Does.Not.Contain("Old typo"));
     }
 
     [Test]

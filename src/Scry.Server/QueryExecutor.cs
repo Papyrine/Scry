@@ -327,7 +327,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
         var joined = (IQueryable<object[]>)outer.Provider.CreateQuery(
             CallQueryable(
-                join.Kind == JoinKind.Left ? "LeftJoin" : "Join",
+                JoinMethod(join.Kind),
                 [outerType, innerType, outerKey.ReturnType, typeof(object[])],
                 outer.Expression,
                 inner.Expression,
@@ -337,6 +337,15 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
         return (joined, new(selector, shape));
     }
+
+    static string JoinMethod(JoinKind kind) =>
+        kind switch
+        {
+            JoinKind.Inner => "Join",
+            JoinKind.Left => "LeftJoin",
+            JoinKind.Right => "RightJoin",
+            _ => throw new ScryValidationException($"Unsupported join kind '{kind}'.")
+        };
 
     static Node? TerminalPredicate(QueryOp? terminal) =>
         terminal switch

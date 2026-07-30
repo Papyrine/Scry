@@ -122,8 +122,8 @@ Structurally bigger than the current pipeline — multiple sources per request, 
 
 **Cross-source queries.** `Join`, `LeftJoin` and the [set operations](querying.md#set-operations) are supported. The policy composition they were gated on is settled: each side is resolved and policy-filtered independently before the two meet, so a join can only narrow. 
 
-- [x] `Join` / `LeftJoin`.
-- [ ] `RightJoin` / `FullJoin` — the same shape as `LeftJoin`, but the outer row can be absent, so the *outer* projection needs the nullable widening the inner side already gets.
+- [x] `Join` / `LeftJoin` / `RightJoin`. A right join widens the *outer* side instead of the inner, and refuses a narrowed outer side — see [Joins](querying.md#joins).
+- [ ] `FullJoin` — blocked on the framework, not on design: `Queryable.FullJoin` is a .NET 11 addition, so on net10 the client cannot express it and EF cannot execute it.
 - [ ] `GroupJoin` — returns a collection per outer row, which the [collections design](annotations.md#collections) deliberately keeps unprojectable.
 - [ ] `DefaultIfEmpty` — only meaningful alongside joins.
 

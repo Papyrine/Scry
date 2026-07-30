@@ -22,13 +22,15 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             throw Reject($"Pipeline exceeds the maximum length of {options.MaxPipelineLength}.");
         }
 
-        ValidatePipeline(request.Pipeline, source.ClrType);
+        ValidatePipeline(request.Pipeline, source);
         return source;
     }
 
-    void ValidatePipeline(IReadOnlyList<QueryOp> pipeline, Type rootType)
+    void ValidatePipeline(IReadOnlyList<QueryOp> pipeline, ScrySource root)
     {
+        var rootType = root.ClrType;
         var sawOrdering = false;
+        var sawOuterFilter = false;
         var sawGroupBy = false;
         var sawSelect = false;
         var sawDistinct = false;
@@ -65,6 +67,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             switch (op)
             {
                 case WhereOp where:
+                    sawOuterFilter = true;
                     EnsureNotProjected(sawSelect, "Where");
                     EnsureNotDistinct(sawDistinct, "Where");
                     if (sawGroupBy)
@@ -107,11 +110,13 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     break;
 
                 case SkipOp skip:
+                    sawOuterFilter = true;
                     EnsurePageableDistinct(sawDistinct, sawOrdering, projection, "Skip");
                     EnsureNonNegative(skip.Count, "Skip");
                     break;
 
                 case TakeOp take:
+                    sawOuterFilter = true;
                     EnsurePageableDistinct(sawDistinct, sawOrdering, projection, "Take");
                     EnsureNonNegative(take.Count, "Take");
                     if (take.Count > options.MaxPageSize)
@@ -187,6 +192,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     EnsureNotGrouped(sawGroupBy, "Join");
                     EnsureNotProjected(sawSelect, "Join");
                     EnsureNotDistinct(sawDistinct, "Join");
+                    EnsureUnnarrowedRightJoinOuter(join.Kind, sawOuterFilter, root);
                     ValidateJoin(join, rootType);
                     sawJoin = true;
                     break;
@@ -687,6 +693,34 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
     /// root goes through, and each projected member is validated against the side it names — the two
     /// sides never share an allow-list.
     /// </summary>
+    // EF hoists a predicate on the outer side of a RightJoin out of the join and into the WHERE of the
+    // combined query, which silently turns the right join into an inner one — unmatched inner rows are
+    // dropped rather than kept with nulls. Refusing the shape is better than answering it wrongly. The
+    // inner side has no such problem: EF keeps it as a subquery, which is why LeftJoin filters its
+    // inner source freely. A row policy on the outer source is hoisted the same way, so a policied
+    // source cannot be the outer side of a right join at all.
+    static void EnsureUnnarrowedRightJoinOuter(JoinKind kind, bool sawOuterFilter, ScrySource root)
+    {
+        if (kind != JoinKind.Right)
+        {
+            return;
+        }
+
+        if (sawOuterFilter)
+        {
+            throw Reject(
+                "RightJoin cannot narrow its outer side — remove the Where, Skip, or Take before it, " +
+                "or swap the sides and use LeftJoin.");
+        }
+
+        if (root.PolicyType is not null)
+        {
+            throw Reject(
+                $"Source '{root.Name}' carries a row policy, so it cannot be the outer side of a " +
+                "RightJoin — swap the sides and use LeftJoin.");
+        }
+    }
+
     void ValidateJoin(JoinOp join, Type outerType)
     {
         if (!schema.TryGetSource(join.Root, out var inner))

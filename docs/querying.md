@@ -99,7 +99,7 @@ public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjec
 | `Select(projection)` | `select` | At most one, and it must construct an object. |
 | `Distinct()` | `distinct` | Deduplicates the **projected** rows. It can also be ordered, paged and counted — see [below](#deduplicating). |
 | `Reverse()` | `reverse` | Inverts the ordering. Requires a preceding `OrderBy`. |
-| `Join(inner, …)` / `LeftJoin(inner, …)` | `join` | Joins a second source — see [below](#joins). Carries its own projection; only a terminal may follow. |
+| `Join(inner, …)` / `LeftJoin(inner, …)` / `RightJoin(inner, …)` | `join` | Joins a second source — see [below](#joins). Carries its own projection; only a terminal may follow. |
 | `Union` / `Concat` / `Intersect` / `Except` | `set` | Combines a second source — see [below](#set-operations). Both sides project the same shape. |
 
 Any other LINQ operator — `SelectMany`, `GroupJoin`, `Cast`, … — throws:
@@ -455,10 +455,33 @@ var rows = await client.Source<Employee>("Employee")
         (employee, department) => new EmployeeDepartment(employee.Name, department.Name))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/JoinTests.cs#L44-L53' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientJoin' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/JoinTests.cs#L46-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientJoin' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `LeftJoin` keeps every outer row, with nulls where the inner side has no match. A value read from the inner side of a left join comes back nullable, so an unmatched row yields null rather than a fault.
+
+`RightJoin` is the mirror image — every *inner* row survives, and the widening applies to the outer side instead:
+
+<!-- snippet: clientRightJoin -->
+<a id='snippet-clientRightJoin'></a>
+```cs
+var rows = await client.Source<Department>("Department")
+    .RightJoin(
+        client.Source<Employee>("Employee"),
+        _ => _.Id,
+        _ => _.Id,
+        (department, employee) => new EmployeeWithDepartment(
+            employee.Name,
+            department!.Name,
+            department.Id))
+    .ToListAsync();
+```
+<sup><a href='/src/Scry.Tests/JoinTests.cs#L90-L101' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRightJoin' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+It carries one restriction the other two do not: **the outer side of a `RightJoin` may not be narrowed.** A `Where`, `Skip`, or `Take` before it, or a [row policy](policies.md) on the outer source, is rejected. EF hoists such a predicate out of the join and into the `WHERE` of the combined query, which silently turns the right join into an inner one — unmatched inner rows are dropped instead of kept with nulls. Refusing the shape is better than answering it wrongly; swap the sides and use `LeftJoin`, which has no such problem because EF keeps the inner side as a subquery.
+
+`FullJoin` is not supported: `Queryable.FullJoin` does not exist on .NET 10, so neither the client can express it nor EF can execute it.
 
 **Each side is resolved and [policy-filtered](policies.md) independently, before the two meet.** A join is therefore only ever narrowing: no row that a direct query of the inner source would hide is observable through one. That is what makes the operator safe to expose at all.
 

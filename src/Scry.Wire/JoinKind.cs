@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+﻿namespace Scry.Wire;
 
 // begin-snippet: wireJoinKinds
 /// <summary>Which rows a join keeps.</summary>
@@ -8,7 +8,10 @@ public enum JoinKind
     Inner,
 
     /// <summary>Every outer row, with nulls where the inner side has no match.</summary>
-    Left
+    Left,
+
+    /// <summary>Every inner row, with nulls where the outer side has no match.</summary>
+    Right
 }
 
 /// <summary>Which side of a join a projected member reads from.</summary>
