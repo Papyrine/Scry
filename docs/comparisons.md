@@ -1,4 +1,4 @@
-# Comparisons
+﻿# Comparisons
 
 Scry fills a narrow slot: a **single first-party client**, written in **C#**, that needs to shape its own **read** queries against a **server-owned EF Core model** — without the server hand-writing an endpoint per screen.
 
@@ -165,7 +165,7 @@ Readers coming from TypeScript will spot the family resemblance to tRPC, and it 
 - **Writes are in scope.** Scry is read-only by design — see [Out of scope](linq-coverage.md#out-of-scope). Pair it with ordinary endpoints.
 - **The read model is not EF Core.** Non-EF data can be surfaced as a [`[QueryablePoco]` source](server.md#poco-sources), but that runs the pipeline in memory over the supplied sequence — fine for lookup tables, not for a primary data path.
 - **The query shapes are few and stable.** Four endpoints that rarely change are not a problem worth a query engine.
-- **The queries need operators Scry does not carry.** Joins, set operations, subqueries in predicates, and collection navigations are all unsupported today — check [LINQ coverage](linq-coverage.md) against real queries before committing.
+- **The queries need operators Scry does not carry.** The vocabulary is closed and covers most of what EF Core translates — joins, set operations, grouping, subqueries and collection aggregates included — but it is a fixed set rather than arbitrary LINQ, and it grows one audited addition at a time. Check [LINQ coverage](linq-coverage.md) against real queries before committing.
 - **The UI runs on the server.** See above.
 
 

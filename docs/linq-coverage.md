@@ -1,6 +1,6 @@
 ﻿# LINQ coverage
 
-What Scry supports compared to the LINQ surface EF Core can translate server-side. This page is both the reference ("will this query work?") and the roadmap — unchecked items are candidates, not commitments.
+What Scry supports compared to the LINQ surface EF Core can translate server-side, and — for everything left out — why. This page began as a roadmap as well as a reference. Nothing is left on it that is blocked on Scry's own design: what remains unsupported is waiting on the framework, excluded on purpose, or not asked for.
 
 Scry's wire vocabulary is a **deliberately closed set**. Every operator, function, and expression node must be individually representable, validatable, and rebindable — see the [security model](security.md). So the goal is not parity with EF Core; it is covering the operations remote clients actually need, one auditable addition at a time. Anything outside the set throws `NotSupportedException` on the client at translation time, before a request is sent.
 
@@ -24,7 +24,8 @@ For usage detail on the supported surface (position rules, limits, examples), se
 | `Distinct()` | Deduplicates the projected rows; can also be ordered, paged and counted over a flat projection of up to eight members. |
 | `Reverse()` | Inverts the ordering; requires a preceding `OrderBy`, as EF does. |
 | `Where(predicate)` after `GroupBy` | SQL `HAVING` — reads the group key and aggregates. |
-| `Join(…)` / `LeftJoin(…)` | Each side policy-filtered independently first; carries its own projection. |
+| `Join(…)` / `LeftJoin(…)` / `RightJoin(…)` | Each side policy-filtered independently first; carries its own projection. A right join may not narrow its outer side. |
+| `GroupJoin(…)` | Aggregating form only — the group is folded to a scalar, never projected, so the response stays flat. |
 | `Union` / `Concat` / `Intersect` / `Except` | Each side policy-filtered first; both project the same shape. |
 
 ### Membership of another source
@@ -48,6 +49,7 @@ A collection navigation opted in with [`[QueryableCollection]`](annotations.md#c
 | `AnyAsync` | Optional predicate. |
 | `AllAsync(predicate)` | |
 | `SumAsync` / `AverageAsync` / `MinAsync` / `MaxAsync` | Over the whole sequence, no `GroupBy` needed. |
+| `ToAsyncEnumerable` | [Streams](querying.md#streaming-rows) the rows; neither side holds the whole result. |
 | `ToPageAsync` | Scry-specific bounded [page envelope](paging.md). |
 
 ### Aggregates
@@ -77,12 +79,10 @@ var sum = await client.Source<Order>("Order")
 <sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L136-L140' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAggregateTerminal' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-The remaining positions an aggregate can appear in EF Core have no wire representation:
+The other two positions EF Core allows an aggregate in are both reachable as well:
 
-- Over a **collection navigation in a projection** — `.Select(_ => new { _.Name, Orders = _.Orders.Count() })`. Collection navigations are not exposed at all.
-- In a **predicate** — `.Where(g => g.Count() > 5)` after a `GroupBy` (SQL `HAVING`), or any aggregate-based subquery inside a `Where`.
-
-Both are tracked in [Not yet supported](#not-yet-supported).
+- Over an **opted-in collection navigation**, in a projection or anywhere else a value can appear — `.Select(_ => new { _.Name, Lines = _.Lines.Count() })`. Answered as a correlated subquery; see [collection subqueries](#collection-subqueries).
+- In a **predicate** — `.Where(_ => _.Count() > 5)` after a `GroupBy`, which is SQL `HAVING`, and aggregate subqueries inside an ordinary `Where`.
 
 ### Expression operators
 
@@ -105,33 +105,30 @@ A leaf must read at least one row member: a constant-only leaf is rejected, as E
 Reaching the wire is necessary but not sufficient: a function still has to be one the **EF provider** translates. Scry validates and rebinds it, then EF decides. Where a provider has no translation the query fails at execution rather than at validation — so a function with no SQL Server translation is left out of the closed set rather than shipped as a trap.
 
 
-## Not yet supported
+## Not supported
 
-Everything below is translatable by EF Core but has no wire representation in Scry. Grouped by how well it fits the existing design.
+Nothing here is blocked on Scry's design. Each item is left out for a stated reason.
 
-### Likely additions
+### Waiting on the framework or the provider
 
-Fit the closed-vocabulary pattern — each is a new enum member or a small op record plus validator, builder, and generator work. Roughly ordered by expected demand.
+Nothing to design; the surface underneath does not exist yet.
 
-- [ ] `DayOfWeek` — deliberately omitted, not overlooked: SQL Server's provider has no translation for it, so it would compile client-side and then fail at execution. Worth adding behind provider capability detection, or when a supporting provider is targeted.
-- [ ] The rest of the SQL Server math surface — `Exp`, `Log`, `Log10`, `Sign`, and the trig functions. All are translated by the provider; none has been asked for yet.
+- `FullJoin` — `Queryable.FullJoin` is a .NET 11 addition. On net10 the client cannot express it and EF cannot execute it, so there is nothing to carry. The wire deliberately does not reserve a join kind for it: an operator the server would only reject is not worth committing to the contract.
+- `DayOfWeek` — omitted deliberately rather than overlooked. SQL Server's provider has no translation for it, so it would validate, rebind, and then fail at execution. A function that reaches the wire but not SQL is a trap; it belongs behind provider capability detection, or in a build targeting a provider that translates it.
 
-### Needs design
+### Not asked for
 
-Structurally bigger than the current pipeline — multiple sources per request, subqueries, or new type-surface in the generator. Each needs a security review before a wire shape, and the notes below are that review as far as it has been taken.
+Fits the closed-vocabulary pattern — a new enum member plus validator, builder, and generator work — but nothing needs it yet.
 
+- The rest of the SQL Server math surface: `Exp`, `Log`, `Log10`, `Sign`, and the trigonometric functions. All are translated by the provider.
 
-**Cross-source queries.** `Join`, `LeftJoin` and the [set operations](querying.md#set-operations) are supported. The policy composition they were gated on is settled: each side is resolved and policy-filtered independently before the two meet, so a join can only narrow. 
+### Deliberately left out
 
-- [x] `Join` / `LeftJoin` / `RightJoin`. A right join widens the *outer* side instead of the inner, and refuses a narrowed outer side — see [Joins](querying.md#joins).
-- [ ] `FullJoin` — blocked on the framework, not on design: `Queryable.FullJoin` is a .NET 11 addition, so on net10 the client cannot express it and EF cannot execute it.
-- [x] `GroupJoin`, in its aggregating form — the group is folded to a scalar, never projected, so the response stays flat. See [Aggregating the matches](querying.md#aggregating-the-matches).
-- [x] `DefaultIfEmpty` — nothing to add. Its only use in LINQ is expressing an outer join, which `LeftJoin`, `RightJoin` and `GroupJoin` now do directly; standalone it would yield an all-null row, which a projected response has no use for.
+Considered and rejected, for reasons that have not changed.
 
-**Other.**
-
-- [x] `OfType`. The generated models now carry the same derivation the server's types do, so a query can narrow to a derived type that opted in on its own. `Cast` stays rejected: it asserts a type rather than filtering to it. See [Narrowing to a derived type](querying.md#narrowing-to-a-derived-type).
-- [x] Streaming results (`ToAsyncEnumerable`). A second response shape — newline-delimited JSON off a companion endpoint — so neither side holds the whole result. See [Streaming rows](querying.md#streaming-rows).
+- `Cast<T>` — a cast asserts a type rather than filtering to it, so a row of the wrong type has no answer. [`OfType`](querying.md#narrowing-to-a-derived-type) is the operator that means "the ones that are".
+- `DefaultIfEmpty` — its only use in LINQ is expressing an outer join, which `LeftJoin`, `RightJoin` and `GroupJoin` now do directly. Standalone it yields an all-null row, which a projected response has no use for.
+- `GroupJoin` **projecting** its group, and `SelectMany` with a **result selector**. The first would put a nested collection in a response, which is exactly what keeps collections [aggregable and not projectable](annotations.md#collections); the second would produce a two-rooted row without a join's projection to name the sides. Both have a supported form: aggregate the group, or flatten first and then `Select`.
 
 ### Not gaps
 

@@ -1,4 +1,4 @@
-# Writing queries
+﻿# Writing queries
 
 Client queries are ordinary C# LINQ written against the generated query models. Nothing runs client-side: the expression tree is **captured**, translated to the [wire AST](wire-format.md), and sent to the server when a terminal operator is awaited.
 
@@ -104,10 +104,10 @@ public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjec
 | `Join(inner, …)` / `LeftJoin(inner, …)` / `RightJoin(inner, …)` / `GroupJoin(inner, …)` | `join` | Joins a second source — see [below](#joins). Carries its own projection; only a terminal may follow. |
 | `Union` / `Concat` / `Intersect` / `Except` | `set` | Combines a second source — see [below](#set-operations). Both sides project the same shape. |
 
-Any other LINQ operator — `SelectMany`, `GroupJoin`, `Cast`, … — throws:
+Any other LINQ operator — `Cast`, `Zip`, `SkipWhile`, … — throws:
 
 ```
-LINQ operator 'SelectMany' is not supported by Scry.
+LINQ operator 'Zip' is not supported by Scry.
 ```
 
 [LINQ coverage](linq-coverage.md) tracks the full supported/unsupported matrix against what EF Core can translate.
