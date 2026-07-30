@@ -305,12 +305,12 @@ fullTimers = await Query.Employee
   {
     RequestUri: http://localhost/api/query,
     RequestMethod: POST,
-    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"node","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"WsQ9hxzDNvqFuufg"},
+    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"node","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"kvjmqYpUM4vid96H"},
     ResponseStatus: OK 200,
     ResponseHeaders: {
-      Scry-Schema-Stamp: WsQ9hxzDNvqFuufg
+      Scry-Schema-Stamp: kvjmqYpUM4vid96H
     },
-    ResponseContent: {"version":1,"kind":"List","payload":[{"name":"Aaron","status":"FullTime","manager":"Alice","department":"Engineering"},{"name":"Alice","status":"FullTime","manager":null,"department":"Engineering"},{"name":"Carol","status":"Contractor","manager":null,"department":"Sales"}],"stamp":"WsQ9hxzDNvqFuufg"}
+    ResponseContent: {"version":1,"kind":"List","payload":[{"name":"Aaron","status":"FullTime","manager":"Alice","department":"Engineering"},{"name":"Alice","status":"FullTime","manager":null,"department":"Engineering"},{"name":"Carol","status":"Contractor","manager":null,"department":"Sales"}],"stamp":"kvjmqYpUM4vid96H"}
   }
 ]
 ```
@@ -354,5 +354,5 @@ public async Task DisallowedPropertyRejectedWith400()
     Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L151-L178' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L206-L233' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->

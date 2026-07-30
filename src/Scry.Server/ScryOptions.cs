@@ -1,4 +1,4 @@
-namespace Scry;
+﻿namespace Scry;
 
 /// <summary>
 /// Configures the server-side query executor: which model to expose, in-memory POCO sources,
@@ -30,6 +30,19 @@ public sealed class ScryOptions(Type contextType)
     /// becomes a SQL <c>IN</c>). Default 1000.
     /// </summary>
     public int MaxInValues { get; set; } = 1000;
+
+    /// <summary>
+    /// Maximum number of rows a streamed query may return, or null — the default — for no limit.
+    /// </summary>
+    /// <remarks>
+    /// Null matches <c>ToListAsync</c>, which has never been bounded either: <see cref="MaxPageSize"/>
+    /// caps <c>Take</c> and a page, not an unbounded enumeration. Streaming is the safer of the two
+    /// server-side, since the rows are never buffered — but it holds a connection and a response open
+    /// for as long as the client reads, which is the reason to offer a bound at all. A stream that
+    /// reaches the limit ends with an error marker rather than a short result, so a client cannot
+    /// mistake truncation for the end of the data.
+    /// </remarks>
+    public int? MaxStreamRows { get; set; }
     // end-snippet
 
     /// <summary>

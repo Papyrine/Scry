@@ -82,7 +82,7 @@ public static ScryClient ForHttp(HttpClient http, string endpoint) =>
 public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjection = null) =>
     new CaptureQueryable<T>(new(this, name, defaultProjection));
 ```
-<sup><a href='/src/Scry.Client/ScryClient.cs#L20-L32' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Client/ScryClient.cs#L33-L45' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -126,6 +126,7 @@ Terminals are `async` extension methods on `IQueryable<T>` from `Scry.Client`. A
 | `ToHashSetAsync()` | `Task<HashSet<T>>` | list |
 | `ToDictionaryAsync(keySelector[, elementSelector][, comparer])` | `Task<Dictionary<TKey, …>>` | list |
 | `ToLookupAsync(keySelector[, elementSelector][, comparer])` | `Task<ILookup<TKey, …>>` | list |
+| `ToAsyncEnumerable()` | `IAsyncEnumerable<T>` | [stream](#streaming-rows) |
 | `FirstAsync([predicate])` | `Task<T?>` | single |
 | `FirstOrDefaultAsync([predicate])` | `Task<T?>` | single |
 | `SingleAsync([predicate])` | `Task<T?>` | single |
@@ -184,7 +185,36 @@ page = await Query.Employee
 
 Keyset paging needs an ordered, [seek-safe](paging.md#the-seek-safe-rule) query; otherwise `Cursor` is null and paging falls back to offset. The [sample](sample.md) shows both an offset page and a cursor page.
 
-The collection-shaping terminals (`ToArrayAsync`, `ToHashSetAsync`, `ToDictionaryAsync`, `ToLookupAsync`) all send the same **list** request as `ToListAsync` and reshape the returned rows in memory — there is no streaming wire, so their key/element selectors and comparers run client-side over the materialised result.
+The collection-shaping terminals (`ToArrayAsync`, `ToHashSetAsync`, `ToDictionaryAsync`, `ToLookupAsync`) all send the same **list** request as `ToListAsync` and reshape the returned rows in memory — their key/element selectors and comparers are client-side concerns, so they run over the materialised result rather than becoming part of the query.
+
+
+### Streaming rows
+
+`ToAsyncEnumerable` sends the same request `ToListAsync` does, and reads the rows off a [streaming endpoint](server.md#endpoints) as they arrive rather than as one response:
+
+<!-- snippet: clientStream -->
+<a id='snippet-clientStream'></a>
+```cs
+var names = new List<string>();
+await foreach (var row in query.Employee
+                   .Where(_ => _.Active)
+                   .OrderBy(_ => _.Name)
+                   .Select(_ => new NameRow(_.Name))
+                   .ToAsyncEnumerable())
+{
+    names.Add(row.Name);
+}
+```
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L134-L144' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientStream' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Neither side holds the whole result: the server never buffers the rows and the client yields each as it is read. That makes it the right terminal for a result too large to sit in memory comfortably, and unnecessary for one that is not — a small result costs an extra round-trip's worth of framing for nothing.
+
+Only a query that **returns rows** can stream. A folded terminal (`CountAsync`, `AnyAsync`, an aggregate) has one value and nothing to enumerate, and a paged one is a single envelope; asking to stream either is rejected.
+
+**A stream is only complete once it has been enumerated to the end.** The server closes a stream with an explicit marker, and its absence throws. That matters because a stream commits to a success status before the first row is written: once that has happened a later failure cannot become a `400` or a `500`, so a dropped connection or a faulting provider would otherwise be indistinguishable from a short result. Rejections still arrive as a status with a body — [validation runs to completion before anything is rebound](security.md), so nothing has been written when a query is refused. Abandoning the enumeration early is supported and stops the server, but what was read is then a prefix by the caller's own choice rather than something to detect.
+
+`MaxStreamRows` bounds a stream, and is unset by default — matching `ToListAsync`, which has never been bounded either, since `MaxPageSize` caps an explicit `Take` rather than implicitly paging an unbounded query. Streaming is the safer of the two server-side because the rows are never buffered; the reason to bound it anyway is that it holds a connection open for as long as the client reads. A stream that reaches the limit ends with an error marker rather than a short result.
 
 Each takes an optional `CancellationToken`. There are no predicate overloads on the client — filter with `Where` first:
 
@@ -982,4 +1012,4 @@ A deployed client can also drift from the server's model over time — see [Sche
 
 ## Future enhancements
 
-- **Streaming results (`ToAsyncEnumerable`).** The wire currently carries each query result as a single response, so there is nothing to enumerate incrementally. `ToAsyncEnumerable` therefore throws `NotSupportedException` for now; use `ToListAsync`. A streaming wire (chunked or paged transport that yields rows as they arrive) is the intended way to make it real, at which point the terminal would stream rather than buffer.
+- Nothing outstanding. [`ToAsyncEnumerable`](#streaming-rows) was the last entry here; see the [coverage matrix](linq-coverage.md) for what LINQ surface is and is not supported.

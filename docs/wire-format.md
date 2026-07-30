@@ -1,4 +1,4 @@
-# Wire format
+﻿# Wire format
 
 `Scry.Wire` defines the serializable query AST shared by client and server. It is a **restricted, closed node vocabulary** — not general expression-tree serialization — which is what makes every query exhaustively validatable.
 
@@ -470,6 +470,30 @@ The client checks that `kind` matches the terminal it sent and throws `ScryWireE
 The payload itself always carries the **current** name — the aliases are a translation table for a reader generated before the rename, never a second serialization. A reader that does not understand the field ignores it.
 
 
+### Streamed results
+
+A request sent to the [`…/stream` endpoint](server.md#endpoints) comes back as newline-delimited JSON (`application/x-ndjson`) instead: one JSON value per line, a marker line opening and closing the rows.
+
+```
+{"$scry":"begin","version":1,"stamp":"WsQ9hxzDNvqFuufg"}
+{"name":"Aaron","status":"FullTime"}
+{"name":"Alice","status":"FullTime"}
+{"$scry":"end"}
+```
+
+The rows between the markers are exactly the objects a `list` payload holds, so a reader materializes them the same way. The opening marker carries what a single response carries on the envelope — the version, the schema stamp, and any enum aliases, sent under the same rule as [above](#response).
+
+`$scry` is what tells a marker from a row. Projected member names come from the client's own C# identifiers, and `$` cannot start one, so no row can collide with it.
+
+**The closing marker is load-bearing.** A stream commits to a success status before its first row is written, so a failure past that point cannot become a `400` or a `500`. Without an explicit end, a truncated response — a dropped connection, a faulting provider, a killed server — would be indistinguishable from a complete one, and a reader would silently return a short answer. A reader must therefore require the marker and fail without it. A failure the server does notice closes the stream instead with:
+
+```
+{"$scry":"error","error":"The query returned more than the maximum of 1000 streamed rows."}
+```
+
+carrying a validation message, which is the client's own doing, or a generic one — the same rule a non-streamed `500` follows, so nothing internal leaks either way.
+
+
 ## Versioning
 
 <!-- snippet: wireVersion -->
@@ -654,12 +678,12 @@ Over HTTP, request and response look like this:
   {
     RequestUri: http://localhost/api/query,
     RequestMethod: POST,
-    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"node","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"WsQ9hxzDNvqFuufg"},
+    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"node","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"kvjmqYpUM4vid96H"},
     ResponseStatus: OK 200,
     ResponseHeaders: {
-      Scry-Schema-Stamp: WsQ9hxzDNvqFuufg
+      Scry-Schema-Stamp: kvjmqYpUM4vid96H
     },
-    ResponseContent: {"version":1,"kind":"List","payload":[{"name":"Aaron","status":"FullTime","manager":"Alice","department":"Engineering"},{"name":"Alice","status":"FullTime","manager":null,"department":"Engineering"},{"name":"Carol","status":"Contractor","manager":null,"department":"Sales"}],"stamp":"WsQ9hxzDNvqFuufg"}
+    ResponseContent: {"version":1,"kind":"List","payload":[{"name":"Aaron","status":"FullTime","manager":"Alice","department":"Engineering"},{"name":"Alice","status":"FullTime","manager":null,"department":"Engineering"},{"name":"Carol","status":"Contractor","manager":null,"department":"Sales"}],"stamp":"kvjmqYpUM4vid96H"}
   }
 ]
 ```

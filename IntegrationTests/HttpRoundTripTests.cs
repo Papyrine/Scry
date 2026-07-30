@@ -27,6 +27,8 @@ public class HttpRoundTripTests
 
     record VehicleRow(string Name, int Wheels);
 
+    record NameRow(string Name);
+
     static readonly string[] activeEmployeeNames = ["Aaron", "Alice", "Carol"];
 
     static readonly string[] departmentNames = ["Engineering", "Sales"];
@@ -123,6 +125,59 @@ public class HttpRoundTripTests
             .ToListAsync();
 
         Assert.That(rows.Select(_ => _.Wheels), Is.EqualTo([2, 4]));
+    }
+
+    [Test]
+    public async Task StreamedRowsOverHttp()
+    {
+        // The same request ToListAsync sends, read a row at a time off the streaming endpoint.
+        // begin-snippet: clientStream
+        var names = new List<string>();
+        await foreach (var row in query.Employee
+                           .Where(_ => _.Active)
+                           .OrderBy(_ => _.Name)
+                           .Select(_ => new NameRow(_.Name))
+                           .ToAsyncEnumerable())
+        {
+            names.Add(row.Name);
+        }
+        // end-snippet
+
+        Assert.That(names, Is.EqualTo(activeEmployeeNames));
+    }
+
+    [Test]
+    public async Task StreamedRowsMatchTheListedOnesOverHttp()
+    {
+        var streamed = new List<string>();
+        await foreach (var row in query.Employee.Select(_ => new NameRow(_.Name)).ToAsyncEnumerable())
+        {
+            streamed.Add(row.Name);
+        }
+
+        var listed = await query.Employee.Select(_ => new NameRow(_.Name)).ToListAsync();
+
+        Assert.That(streamed, Is.EqualTo(listed.Select(_ => _.Name)));
+    }
+
+    [Test]
+    public void StreamingAQueryTheServerRejectsFailsBeforeAnyRowArrives()
+    {
+        // Validation runs to completion before anything is rebound, so a rejection is still a 400 with
+        // a body rather than a stream that stops part-way.
+        var exception = Assert.ThrowsAsync<ScryRequestException>(
+            async () =>
+            {
+                await foreach (var _ in query.Employee
+                                   .Select(row => new NameRow(row.Name))
+                                   .Take(1_000_000)
+                                   .ToAsyncEnumerable())
+                {
+                    Assert.Fail("No row should arrive from a rejected query.");
+                }
+            });
+
+        Assert.That(exception!.StatusCode, Is.EqualTo(400));
     }
 
     [Test]

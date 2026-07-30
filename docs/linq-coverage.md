@@ -131,7 +131,7 @@ Structurally bigger than the current pipeline — multiple sources per request, 
 **Other.**
 
 - [x] `OfType`. The generated models now carry the same derivation the server's types do, so a query can narrow to a derived type that opted in on its own. `Cast` stays rejected: it asserts a type rather than filtering to it. See [Narrowing to a derived type](querying.md#narrowing-to-a-derived-type).
-- [ ] Streaming results (`ToAsyncEnumerable`). Blocked on the *transport*, not on the query pipeline: `QueryResponse` is one materialized batch of rows, so streaming means a second response shape (chunked or newline-delimited) and a client that surfaces it. Independent of everything else on this page. See [Writing queries](querying.md#future-enhancements).
+- [x] Streaming results (`ToAsyncEnumerable`). A second response shape — newline-delimited JSON off a companion endpoint — so neither side holds the whole result. See [Streaming rows](querying.md#streaming-rows).
 
 ### Not gaps
 

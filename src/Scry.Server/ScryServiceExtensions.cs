@@ -1,4 +1,4 @@
-namespace Scry;
+﻿namespace Scry;
 
 /// <summary>Registration and endpoint wiring for the Scry server.</summary>
 public static class ScryServiceExtensions
@@ -29,7 +29,122 @@ public static class ScryServiceExtensions
             processor.ValidateAgainstModel(db);
         }
 
-        return endpoints.MapPost(pattern, Handle);
+        // Two endpoints, one call: the streaming one is the same query surface read a row at a time,
+        // so making callers opt in separately would only invite deployments where one is protected and
+        // the other is not. Conventions applied to the returned builder reach both.
+        return new Endpoints(
+        [
+            endpoints.MapPost(pattern, Handle),
+            endpoints.MapPost($"{pattern.TrimEnd('/')}/stream", HandleStream)
+        ]);
+    }
+
+    sealed class Endpoints(IReadOnlyList<IEndpointConventionBuilder> builders) :
+        IEndpointConventionBuilder
+    {
+        public void Add(Action<EndpointBuilder> convention)
+        {
+            foreach (var builder in builders)
+            {
+                builder.Add(convention);
+            }
+        }
+
+        public void Finally(Action<EndpointBuilder> convention)
+        {
+            foreach (var builder in builders)
+            {
+                builder.Finally(convention);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Streams a list result as newline-delimited JSON. Validation has already run to completion by the
+    /// time the first row is pulled, so a rejection is still a 400 with a body; past that point the
+    /// status is committed and a failure is reported through the stream's closing marker instead.
+    /// </summary>
+    static async Task HandleStream(HttpContext context)
+    {
+        var services = context.RequestServices;
+        var options = services.GetRequiredService<ScryOptions>();
+        var processor = services.GetRequiredService<ScryProcessor>();
+
+        context.Response.Headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
+
+        string body;
+        using (var reader = new StreamReader(context.Request.Body))
+        {
+            body = await reader.ReadToEndAsync(context.RequestAborted);
+        }
+
+        QueryRequest request;
+        try
+        {
+            request = ScryJson.DeserializeRequest(body);
+        }
+        catch (ScryWireException exception)
+        {
+            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, staleClient: false);
+            return;
+        }
+
+        var drifted = request.Stamp is { } stamp && stamp != processor.SchemaStamp;
+
+        ScryStreamMarker begin;
+        IAsyncEnumerable<Dictionary<string, object?>> rows;
+        try
+        {
+            var db = (DbContext)services.GetRequiredService(options.ContextType);
+            (begin, rows) = processor.Stream(request, db, services, context.RequestAborted);
+        }
+        catch (ScryValidationException exception)
+        {
+            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, exception.StaleClient);
+            return;
+        }
+        catch (Exception)
+        {
+            await WriteError(context, StatusCodes.Status500InternalServerError, "Query execution failed.", drifted);
+            return;
+        }
+
+        context.Response.ContentType = ScryStream.ContentType;
+        await WriteLine(context, begin);
+
+        try
+        {
+            await foreach (var row in rows)
+            {
+                await WriteLine(context, row);
+            }
+        }
+        catch (Exception exception) when (!context.RequestAborted.IsCancellationRequested)
+        {
+            // The status is long since sent, so this is the only channel left to say the rows are not
+            // the whole answer. A validation message is the client's own doing and is safe to repeat;
+            // anything else would leak internals, exactly as it would on a non-streamed response.
+            await WriteLine(
+                context,
+                new ScryStreamMarker
+                {
+                    Kind = ScryStream.Error,
+                    Error = exception is ScryValidationException ? exception.Message : "Query execution failed."
+                });
+            return;
+        }
+
+        await WriteLine(context, new ScryStreamMarker {Kind = ScryStream.End});
+    }
+
+    static async Task WriteLine<T>(HttpContext context, T value)
+    {
+        await context.Response.WriteAsync(JsonSerializer.Serialize(value, ScryJson.Options), context.RequestAborted);
+        await context.Response.WriteAsync("\n", context.RequestAborted);
+
+        // Flushed per line: a stream a client reads incrementally is the point, and a buffered response
+        // would deliver it as one block anyway.
+        await context.Response.Body.FlushAsync(context.RequestAborted);
     }
 
     static async Task Handle(HttpContext context)

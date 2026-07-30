@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+﻿namespace Scry.Wire;
 
 /// <summary>
 /// Centralized, cached <see cref="JsonSerializerOptions"/> and fail-closed (de)serialization for the
@@ -42,6 +42,24 @@ public static class ScryJson
         try
         {
             return response.Payload.Deserialize<T>(Options);
+        }
+        finally
+        {
+            EnumAliasScope.Current = null;
+        }
+    }
+
+    /// <summary>
+    /// Deserializes one row of a streamed result. The streaming counterpart of
+    /// <see cref="DeserializePayload{T}"/>: a stream carries its enum aliases once, on the opening
+    /// marker, so they are passed per row instead of read off a response.
+    /// </summary>
+    public static T? DeserializeRow<T>(JsonElement row, IReadOnlyList<EnumAlias>? aliases)
+    {
+        EnumAliasScope.Current = aliases ?? [];
+        try
+        {
+            return row.Deserialize<T>(Options);
         }
         finally
         {

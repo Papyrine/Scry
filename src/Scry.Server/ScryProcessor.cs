@@ -1,4 +1,4 @@
-namespace Scry;
+﻿namespace Scry;
 
 /// <summary>
 /// Executes a query request against a <see cref="DbContext"/>, applying validation, allow-list,
@@ -81,6 +81,72 @@ public sealed class ScryProcessor
             };
         }
     }
+
+    /// <summary>
+    /// Validates a request and returns its rows as a stream rather than a materialized result, plus the
+    /// opening marker a transport writes before them.
+    /// </summary>
+    /// <remarks>
+    /// Validation has run to completion by the time this returns — a rejected query never reaches EF —
+    /// so a transport can commit to a success status before pulling the first row. A failure after that
+    /// point is the provider's, and belongs in the stream's closing marker rather than a status code.
+    /// </remarks>
+    public (ScryStreamMarker Begin, IAsyncEnumerable<Dictionary<string, object?>> Rows) Stream(
+        QueryRequest request,
+        DbContext data,
+        IServiceProvider services,
+        Cancel cancel = default)
+    {
+        var drifted = request.Stamp is { } requestStamp && requestStamp != schema.Stamp;
+        QueryExecutor.RowSet rows;
+        try
+        {
+            rows = executor.Stream(request, data, services);
+        }
+        catch (ScryValidationException exception) when (drifted)
+        {
+            throw new ScryValidationException($"{exception.Message} The request's schema stamp does not match this server's model, so the client was generated against a different model surface — regenerate the client.")
+            {
+                StaleClient = true
+            };
+        }
+
+        var begin = new ScryStreamMarker
+        {
+            Kind = ScryStream.Begin,
+            Version = WireFormat.Version,
+            Stamp = schema.Stamp,
+            EnumAliases = drifted && schema.EnumAliases.Count > 0 ? schema.EnumAliases : null
+        };
+
+        return (begin, Shape(rows, options.MaxStreamRows, cancel));
+    }
+
+    static async IAsyncEnumerable<Dictionary<string, object?>> Shape(
+        QueryExecutor.RowSet rows,
+        int? maxRows,
+        [EnumeratorCancellation] Cancel cancel)
+    {
+        var count = 0;
+        await foreach (var row in QueryExecutor.Enumerate(rows, cancel))
+        {
+            if (count++ == maxRows)
+            {
+                // Thrown rather than returned: the transport turns it into the stream's error marker,
+                // so the client sees a truncated result as a failure rather than as the end of the data.
+                throw new ScryValidationException($"The query returned more than the maximum of {maxRows} streamed rows.");
+            }
+
+            yield return QueryExecutor.ShapeRow(row, rows);
+        }
+    }
+
+    /// <summary>Streams a request without a service provider (no DI-resolved policies).</summary>
+    public (ScryStreamMarker Begin, IAsyncEnumerable<Dictionary<string, object?>> Rows) Stream(
+        QueryRequest request,
+        DbContext data,
+        Cancel cancel = default) =>
+        Stream(request, data, EmptyServiceProvider.Instance, cancel);
 
     /// <summary>Executes a request without a service provider (no DI-resolved policies).</summary>
     public QueryResponse Execute(QueryRequest request, DbContext data) =>

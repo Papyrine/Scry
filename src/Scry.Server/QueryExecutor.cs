@@ -6,7 +6,94 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 {
     QueryValidator validator = new(schema, options);
 
+    /// <summary>
+    /// A list result that has not been read yet: the row source, how to shape each row, and whether
+    /// the rows arrive as <see cref="DistinctRow"/> records rather than shaped arrays. Materializing it
+    /// and streaming it differ only in how the rows are pulled, so both go through one pipeline walk.
+    /// </summary>
+    internal readonly record struct RowSet(IQueryable Rows, ProjectionPlan Plan, bool Deduplicated);
+
     public QueryResponse Execute(QueryRequest request, DbContext db, IServiceProvider services)
+    {
+        var (response, rows) = Run(request, db, services);
+        if (response is { } complete)
+        {
+            return complete;
+        }
+
+        var shaped = new List<Dictionary<string, object?>>();
+        foreach (var row in rows!.Value.Rows)
+        {
+            shaped.Add(ShapeRow(row!, rows.Value));
+        }
+
+        return QueryResponse.Create(ResultKind.List, JsonSerializer.SerializeToElement(shaped, ScryJson.Options));
+    }
+
+    /// <summary>
+    /// Prepares a list-shaped query for streaming. Everything a request can be rejected for has already
+    /// happened by the time this returns — validation runs to completion before anything is rebound —
+    /// so a caller that has a <see cref="RowSet"/> in hand can commit to a success status before
+    /// writing a row.
+    /// </summary>
+    public RowSet Stream(QueryRequest request, DbContext db, IServiceProvider services)
+    {
+        var (response, rows) = Run(request, db, services);
+        if (rows is not { } set)
+        {
+            throw new ScryValidationException(
+                $"Only a query that returns rows can be streamed; this one returns {response!.Kind}. " +
+                "Drop the terminal operator, or use the non-streaming endpoint.");
+        }
+
+        return set;
+    }
+
+    /// <summary>
+    /// Pulls a <see cref="RowSet"/>'s rows without materializing them. A provider that enumerates
+    /// asynchronously — every EF one does — is read that way, so a streamed response never buffers the
+    /// result server-side and never blocks a request thread on the database. An in-memory source (a
+    /// POCO one) has nothing to await and is read directly.
+    /// </summary>
+    public static IAsyncEnumerable<object> Enumerate(RowSet set, Cancel cancel) =>
+        (IAsyncEnumerable<object>)enumerators
+            .GetOrAdd(
+                set.Rows.ElementType,
+                _ => typeof(QueryExecutor)
+                    .GetMethod(nameof(EnumerateTyped), BindingFlags.NonPublic | BindingFlags.Static)!
+                    .MakeGenericMethod(_))
+            .Invoke(null, [set.Rows, cancel])!;
+
+    static readonly ConcurrentDictionary<Type, MethodInfo> enumerators = new();
+
+    static async IAsyncEnumerable<object> EnumerateTyped<T>(IQueryable<T> rows, [EnumeratorCancellation] Cancel cancel)
+    {
+        if (rows is IAsyncEnumerable<T> asynchronous)
+        {
+            await foreach (var row in asynchronous.WithCancellation(cancel))
+            {
+                yield return row!;
+            }
+
+            yield break;
+        }
+
+        foreach (var row in rows)
+        {
+            cancel.ThrowIfCancellationRequested();
+            yield return row!;
+        }
+    }
+
+    /// <summary>Shapes one row of a <see cref="RowSet"/> into its response object.</summary>
+    internal static Dictionary<string, object?> ShapeRow(object row, RowSet set) =>
+        set.Deduplicated
+            ? Shape(ExpressionBuilder.ReadDistinctRow(row, set.Plan.Shape.Count), set.Plan)
+            : Shape((object[])row, set.Plan);
+
+    // Walks the pipeline once and either produces a finished response — every terminal does — or the
+    // unread rows of a list result, which the caller materializes or streams.
+    (QueryResponse? Response, RowSet? Rows) Run(QueryRequest request, DbContext db, IServiceProvider services)
     {
         var source = validator.Validate(request);
         var elementType = source.ClrType;
@@ -149,7 +236,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
         if (terminal is PageOp page)
         {
-            return Page(builder, query, elementType, select, orderings, tailIsOrdered && !sawSkipOrTake, page, source, db);
+            return (Page(builder, query, elementType, select, orderings, tailIsOrdered && !sawSkipOrTake, page, source, db), null);
         }
 
         // A join projects straight to the shaped row, so it replaces the projection step entirely and
@@ -160,16 +247,12 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
             return terminal switch
             {
-                CountOp => Scalar(Execute<int>(joined, "Count")),
-                LongCountOp => Scalar(Execute<long>(joined, "LongCount")),
-                AnyOp => Scalar(Execute<bool>(joined, "Any")),
-                FirstOp firstRow => Single(ExecuteRow(joined, firstRow.OrDefault ? "FirstOrDefault" : "First"), joinPlan),
-                SingleOp singleRow => Single(ExecuteRow(joined, singleRow.OrDefault ? "SingleOrDefault" : "Single"), joinPlan),
-                _ => QueryResponse.Create(
-                    ResultKind.List,
-                    JsonSerializer.SerializeToElement(
-                        joined.ToList().Select(_ => Shape(_, joinPlan)).ToArray(),
-                        ScryJson.Options))
+                CountOp => (Scalar(Execute<int>(joined, "Count")), null),
+                LongCountOp => (Scalar(Execute<long>(joined, "LongCount")), null),
+                AnyOp => (Scalar(Execute<bool>(joined, "Any")), null),
+                FirstOp firstRow => (Single(ExecuteRow(joined, firstRow.OrDefault ? "FirstOrDefault" : "First"), joinPlan), null),
+                SingleOp singleRow => (Single(ExecuteRow(joined, singleRow.OrDefault ? "SingleOrDefault" : "Single"), joinPlan), null),
+                _ => (null, new RowSet(joined, joinPlan, Deduplicated: false))
             };
         }
 
@@ -208,21 +291,14 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             switch (terminal)
             {
                 case CountOp:
-                    return Scalar(Execute<int>(combined, "Count"));
+                    return (Scalar(Execute<int>(combined, "Count")), null);
                 case LongCountOp:
-                    return Scalar(Execute<long>(combined, "LongCount"));
+                    return (Scalar(Execute<long>(combined, "LongCount")), null);
                 case AnyOp:
-                    return Scalar(Execute<bool>(combined, "Any"));
+                    return (Scalar(Execute<bool>(combined, "Any")), null);
             }
 
-            var setPlan = new ProjectionPlan(leftSelector, shape);
-            var setRows = new List<Dictionary<string, object?>>();
-            foreach (var row in combined)
-            {
-                setRows.Add(Shape(ExpressionBuilder.ReadDistinctRow(row!, shape.Count), setPlan));
-            }
-
-            return QueryResponse.Create(ResultKind.List, JsonSerializer.SerializeToElement(setRows, ScryJson.Options));
+            return (null, new RowSet(combined, new(leftSelector, shape), Deduplicated: true));
         }
 
         // Ordering, paging and folding all need the deduplicated rows to have equality and ordering of
@@ -259,21 +335,14 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             switch (terminal)
             {
                 case CountOp:
-                    return Scalar(Execute<int>(deduped, "Count"));
+                    return (Scalar(Execute<int>(deduped, "Count")), null);
                 case LongCountOp:
-                    return Scalar(Execute<long>(deduped, "LongCount"));
+                    return (Scalar(Execute<long>(deduped, "LongCount")), null);
                 case AnyOp:
-                    return Scalar(Execute<bool>(deduped, "Any"));
+                    return (Scalar(Execute<bool>(deduped, "Any")), null);
             }
 
-            var rowPlan = new ProjectionPlan(selector, shape);
-            var shaped = new List<Dictionary<string, object?>>();
-            foreach (var row in deduped)
-            {
-                shaped.Add(Shape(ExpressionBuilder.ReadDistinctRow(row!, shape.Count), rowPlan));
-            }
-
-            return QueryResponse.Create(ResultKind.List, JsonSerializer.SerializeToElement(shaped, ScryJson.Options));
+            return (null, new RowSet(deduped, new(selector, shape), Deduplicated: true));
         }
 
         // Every other folding terminal reads the rows themselves and projects nothing. None of them can
@@ -281,16 +350,16 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         switch (terminal)
         {
             case CountOp:
-                return Scalar(Execute<int>(query, "Count"));
+                return (Scalar(Execute<int>(query, "Count")), null);
             case LongCountOp:
-                return Scalar(Execute<long>(query, "LongCount"));
+                return (Scalar(Execute<long>(query, "LongCount")), null);
             case AnyOp:
-                return Scalar(Execute<bool>(query, "Any"));
+                return (Scalar(Execute<bool>(query, "Any")), null);
             case AllOp all:
-                return Scalar(
-                    Execute<bool>(query, "All", Expression.Quote(builder.BuildPredicate(all.Predicate, elementType))));
+                return (Scalar(
+                    Execute<bool>(query, "All", Expression.Quote(builder.BuildPredicate(all.Predicate, elementType)))), null);
             case AggregateOp aggregate:
-                return Aggregate(builder, query, aggregate, elementType);
+                return (Aggregate(builder, query, aggregate, elementType), null);
         }
 
         var (projected, plan) = BuildProjected(builder, query, elementType, groupBy, select, groupFilter);
@@ -303,24 +372,22 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         if (terminal is FirstOp first)
         {
             var row = ExecuteRow(projected, first.OrDefault ? "FirstOrDefault" : "First");
-            return Single(row, plan);
+            return (Single(row, plan), null);
         }
 
         if (terminal is SingleOp single)
         {
             var row = ExecuteRow(projected, single.OrDefault ? "SingleOrDefault" : "Single");
-            return Single(row, plan);
+            return (Single(row, plan), null);
         }
 
         if (terminal is LastOp last)
         {
             var row = ExecuteRow(projected, last.OrDefault ? "LastOrDefault" : "Last");
-            return Single(row, plan);
+            return (Single(row, plan), null);
         }
 
-        var rows = projected.ToList();
-        var array = rows.Select(_ => Shape(_, plan)).ToArray();
-        return QueryResponse.Create(ResultKind.List, JsonSerializer.SerializeToElement(array, ScryJson.Options));
+        return (null, new RowSet(projected, plan, Deduplicated: false));
     }
 
     /// <summary>

@@ -65,13 +65,49 @@ public static class ScryQueryableExtensions
         (await ToListAsync(source, cancel)).ToLookup(keySelector, elementSelector, comparer);
 
     /// <summary>
-    /// Streaming enumeration is not supported yet. Scry currently returns each query result in a single
-    /// response, so there is nothing to stream incrementally; a streaming wire is tracked as a future
-    /// enhancement (see docs/querying.md, "Future enhancements"). Use <see cref="ToListAsync{T}"/> for now.
+    /// Executes the query and yields rows as they arrive, without the server or the client holding the
+    /// whole result. The same request <see cref="ToListAsync{T}"/> sends, read from the streaming
+    /// endpoint instead.
     /// </summary>
-    public static IAsyncEnumerable<T> ToAsyncEnumerable<T>(this IQueryable<T> source, Cancel cancel = default) =>
-        throw new NotSupportedException(
-            "ToAsyncEnumerable is not supported yet — streaming results is a planned enhancement. Use ToListAsync for now.");
+    /// <remarks>
+    /// The rows are only the whole result if the enumeration runs to completion: a stream that ends
+    /// without the server's closing marker throws rather than returning a short answer. Abandoning the
+    /// enumeration early is fine — it disposes the response and the server stops — but it means what
+    /// was read is a prefix, which is the caller's own doing rather than something to detect.
+    /// </remarks>
+    public static async IAsyncEnumerable<T> ToAsyncEnumerable<T>(
+        this IQueryable<T> source,
+        [EnumeratorCancellation] Cancel cancel = default)
+    {
+        if (source.Provider is not QueryProvider provider)
+        {
+            throw new("This IQueryable is not a Scry source.");
+        }
+
+        var client = provider.Client;
+        await foreach (var row in client.StreamAsync(source.ToScryRequest(), cancel).WithCancellation(cancel))
+        {
+            yield return MaterializeRow<T>(source, row, client);
+        }
+    }
+
+    // Mirrors Materialize: a row that will not read into the client's model is drift when the stamps
+    // already disagree, and a real bug when they do not.
+    static T MaterializeRow<T>(IQueryable source, JsonElement row, ScryClient client)
+    {
+        try
+        {
+            return ScryJson.DeserializeRow<T>(row, client.StreamAliases)!;
+        }
+        catch (JsonException exception)
+            when (source.Provider is QueryProvider {Client.SchemaStale: true})
+        {
+            throw new ScryStaleClientException(
+                $"A streamed row could not be read into this client's generated model: {exception.Message} " +
+                "The server's queryable surface has changed — regenerate the client, or reload the deployed app.",
+                exception);
+        }
+    }
 
     /// <summary>Executes the query and returns the first row, or default if empty.</summary>
     public static Task<T?> FirstOrDefaultAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>

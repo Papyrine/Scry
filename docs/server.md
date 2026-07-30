@@ -1,4 +1,4 @@
-﻿# Server
+# Server
 
 `Scry.Server` validates an incoming query AST against the allow-list, rebinds it onto the real EF Core entity types, applies row policies, executes it against a `DbContext`, and returns the projected rows.
 
@@ -47,7 +47,14 @@ app.MapScry("/api/query");
 <sup><a href='/samples/Sample.Server/Program.cs#L43-L45' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-One `POST` endpoint. The request body is a [`QueryRequest`](wire-format.md); the response body is a `QueryResponse`. `MapScry` returns an `IEndpointConventionBuilder`, so the usual conventions apply:
+Two `POST` endpoints, from the one call:
+
+| Route | Request | Response |
+| --- | --- | --- |
+| the pattern given | [`QueryRequest`](wire-format.md) | one `QueryResponse` |
+| `…/stream` | the same `QueryRequest` | [newline-delimited rows](wire-format.md#streamed-results), for [`ToAsyncEnumerable`](querying.md#streaming-rows) |
+
+They are mapped together deliberately. The streaming route is the same query surface read a row at a time, so opting into it separately would only invite deployments where one is protected and the other is not. `MapScry` returns an `IEndpointConventionBuilder` covering **both**, so the usual conventions apply once:
 
 ```cs
 app.MapScry("/api/query")
@@ -86,8 +93,21 @@ public int MaxExpressionDepth { get; set; } = 32;
 /// becomes a SQL <c>IN</c>). Default 1000.
 /// </summary>
 public int MaxInValues { get; set; } = 1000;
+
+/// <summary>
+/// Maximum number of rows a streamed query may return, or null — the default — for no limit.
+/// </summary>
+/// <remarks>
+/// Null matches <c>ToListAsync</c>, which has never been bounded either: <see cref="MaxPageSize"/>
+/// caps <c>Take</c> and a page, not an unbounded enumeration. Streaming is the safer of the two
+/// server-side, since the rows are never buffered — but it holds a connection and a response open
+/// for as long as the client reads, which is the reason to offer a bound at all. A stream that
+/// reaches the limit ends with an error marker rather than a short result, so a client cannot
+/// mistake truncation for the end of the data.
+/// </remarks>
+public int? MaxStreamRows { get; set; }
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L33' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Every limit is enforced during validation, before any expression is rebound or executed.
@@ -99,6 +119,7 @@ Every limit is enforced during validation, before any expression is rebound or e
 | `MaxPipelineLength` | 32 | Pipelines with more operators than the limit. |
 | `MaxExpressionDepth` | 32 | Predicate/expression trees nested deeper than the limit. |
 | `MaxInValues` | 1000 | `Contains` over a client-supplied set larger than the limit. Bounds the SQL `IN` list a single request can build. |
+| `MaxStreamRows` | unset | Nothing by default. Set it to cap a [streamed](querying.md#streaming-rows) result; the stream then ends with an error marker rather than a short one. Like `MaxPageSize`, it does not implicitly bound an unbounded query — it bounds one that asked to stream. |
 
 `CaseSensitiveCollation` and `CaseInsensitiveCollation` are not limits but capabilities: both default to null, which rejects a request asking for that case sensitivity. Set them to collations the database has (`Latin1_General_CS_AS`, `Latin1_General_CI_AS` on SQL Server) to enable [case-sensitive matching](querying.md#operators-1). They are server settings because a collation is emitted into the SQL text rather than parameterized, so accepting one from a request would be the only place an attacker-supplied string reached SQL as anything but a parameter.
 
@@ -171,7 +192,7 @@ Because `ScryClient` takes an arbitrary transport delegate, the same processor a
 static ScryClient ClientFor(TestContext context) =>
     new((request, _) => Task.FromResult(SharedProcessor.Instance.Execute(request, context)));
 ```
-<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L359-L362' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessClient' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L368-L371' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessClient' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 

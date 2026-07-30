@@ -1,4 +1,4 @@
-namespace Scry.Client;
+﻿namespace Scry.Client;
 
 /// <summary>
 /// The client entry point. Exposes allow-listed sources as <see cref="IQueryable{T}"/> and sends
@@ -7,15 +7,28 @@ namespace Scry.Client;
 public sealed class ScryClient
 {
     readonly Func<QueryRequest, Cancel, Task<QueryResponse>> transport;
+    readonly Func<QueryRequest, Cancel, IAsyncEnumerable<JsonElement>>? streamTransport;
 
-    /// <summary>Creates a client over a custom transport.</summary>
-    public ScryClient(Func<QueryRequest, Cancel, Task<QueryResponse>> transport) =>
+    /// <summary>
+    /// Creates a client over a custom transport. <paramref name="streamTransport"/> is optional: a
+    /// transport that cannot stream simply has no <c>ToAsyncEnumerable</c>, which says so rather than
+    /// quietly buffering the whole result and pretending to.
+    /// </summary>
+    public ScryClient(
+        Func<QueryRequest, Cancel, Task<QueryResponse>> transport,
+        Func<QueryRequest, Cancel, IAsyncEnumerable<JsonElement>>? streamTransport = null)
+    {
         this.transport = transport;
+        this.streamTransport = streamTransport;
+    }
 
     // The HTTP transport is an instance method so each response can record the server's advertised
     // schema stamp; a static one could not reach the client it belongs to.
-    ScryClient(HttpClient http, string endpoint) =>
+    ScryClient(HttpClient http, string endpoint)
+    {
         transport = (request, cancel) => PostAsync(http, endpoint, request, cancel);
+        streamTransport = (request, cancel) => StreamAsync(http, $"{endpoint.TrimEnd('/')}/stream", request, cancel);
+    }
 
     // begin-snippet: scryClientApi
     /// <summary>Creates a client that POSTs queries to an HTTP endpoint.</summary>
@@ -103,6 +116,106 @@ public sealed class ScryClient
         staleRaised = true;
         SchemaStaleDetected?.Invoke(new(SchemaStamp!, ServerSchemaStamp!));
     }
+
+    internal IAsyncEnumerable<JsonElement> StreamAsync(QueryRequest request, Cancel cancel)
+    {
+        if (streamTransport is not { } stream)
+        {
+            throw new NotSupportedException(
+                "This client's transport does not stream. Use ToListAsync, or construct the client with a " +
+                "stream transport (ScryClient.ForHttp does).");
+        }
+
+        return stream(request, cancel);
+    }
+
+    /// <summary>
+    /// Reads a newline-delimited response, yielding one row per line. The stream's own markers are
+    /// consumed here rather than surfaced: the opening one records the server's stamp and its enum
+    /// aliases, and the closing one decides whether the rows that arrived are the whole result.
+    /// </summary>
+    async IAsyncEnumerable<JsonElement> StreamAsync(
+        HttpClient http,
+        string endpoint,
+        QueryRequest request,
+        [EnumeratorCancellation] Cancel cancel)
+    {
+        var json = ScryJson.Serialize(request);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var message = new HttpRequestMessage(HttpMethod.Post, endpoint) {Content = content};
+
+        using var response = await http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancel);
+
+        if (response.Headers.TryGetValues(WireFormat.SchemaStampHeader, out var values))
+        {
+            RecordServerStamp(values.FirstOrDefault());
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancel);
+            if (TryParseError(body) is { StaleClient: true, Error.Length: > 0 } error)
+            {
+                throw new ScryStaleClientException(error.Error);
+            }
+
+            throw new ScryRequestException((int) response.StatusCode, body);
+        }
+
+        await using var lines = await response.Content.ReadAsStreamAsync(cancel);
+        using var reader = new StreamReader(lines);
+
+        var ended = false;
+        while (await reader.ReadLineAsync(cancel) is { } line)
+        {
+            if (line.Length == 0)
+            {
+                continue;
+            }
+
+            var element = JsonSerializer.Deserialize<JsonElement>(line, ScryJson.Options);
+            if (!element.TryGetProperty(ScryStream.MarkerProperty, out var kind))
+            {
+                yield return element;
+                continue;
+            }
+
+            var marker = element.Deserialize<ScryStreamMarker>(ScryJson.Options)!;
+            switch (kind.GetString())
+            {
+                case ScryStream.Begin:
+                    if (marker.Stamp is { } stamp)
+                    {
+                        RecordServerStamp(stamp);
+                    }
+
+                    StreamAliases = marker.EnumAliases;
+                    break;
+
+                case ScryStream.End:
+                    ended = true;
+                    break;
+
+                case ScryStream.Error:
+                    throw new ScryWireException(
+                        $"The server ended the stream early: {marker.Error ?? "no reason given"}");
+            }
+        }
+
+        // Absent closing marker: the connection ended before the server said it was finished, so the
+        // rows that arrived are a prefix of the answer rather than the answer.
+        if (!ended)
+        {
+            throw new ScryWireException(
+                "The result stream ended without its closing marker, so the rows received are incomplete.");
+        }
+    }
+
+    /// <summary>
+    /// The enum aliases the current stream opened with, so a row read mid-stream resolves a renamed
+    /// value the same way a single response's payload does.
+    /// </summary>
+    internal IReadOnlyList<EnumAlias>? StreamAliases { get; private set; }
 
     async Task<QueryResponse> PostAsync(
         HttpClient http,

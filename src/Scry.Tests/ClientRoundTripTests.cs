@@ -1,4 +1,4 @@
-[TestFixture]
+﻿[TestFixture]
 public class ClientRoundTripTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -300,14 +300,23 @@ public class ClientRoundTripTests
     }
 
     [Test]
-    public void ToAsyncEnumerableNotSupportedYet()
+    public void ToAsyncEnumerableNeedsATransportThatStreams()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        // Streaming is a planned enhancement; the terminal throws rather than silently buffering.
-        Assert.Throws<NotSupportedException>(() =>
-            client.Source<Employee>("Employee").ToAsyncEnumerable());
+        // This client is built over a single-response transport. Rather than quietly buffering the
+        // whole result and calling it a stream, the terminal says so.
+        var exception = Assert.ThrowsAsync<NotSupportedException>(
+            async () =>
+            {
+                await foreach (var _ in client.Source<Employee>("Employee").ToAsyncEnumerable())
+                {
+                    Assert.Fail("No row should arrive over a transport that cannot stream.");
+                }
+            });
+
+        Assert.That(exception!.Message, Does.Contain("does not stream"));
     }
 
     [Test]
