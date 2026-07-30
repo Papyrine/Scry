@@ -1,9 +1,16 @@
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 
 /// <summary>The allow-listed surface of a queryable CLR type.</summary>
 sealed class TypeMeta(Type clrType)
 {
     public Type ClrType { get; } = clrType;
+
+    /// <summary>
+    /// The nearest allow-listed base type, when the CLR type derives from one. Its members are part of
+    /// <see cref="Members"/> here — reflection reports inherited properties — but are described to
+    /// tooling only once, on the base, so the generated models can inherit rather than repeat them.
+    /// </summary>
+    public Type? Base { get; set; }
     public Dictionary<string, Member> Members { get; } = new(StringComparer.Ordinal);
 
     /// <summary>

@@ -1,4 +1,4 @@
-// Linked into both Scry.Server (net10.0) and Scry.SourceGenerator, so the two sides compute the stamp
+﻿// Linked into both Scry.Server (net10.0) and Scry.SourceGenerator, so the two sides compute the stamp
 // from one implementation. The generator also multi-targets netstandard2.0 — the target Roslyn loads
 // as an analyzer — so this file must compile there too. SHA256.HashData is .NET 5+; Polyfill (a
 // source-only package, so nothing extra to bundle into the analyzer) supplies it on netstandard2.0,
@@ -25,7 +25,7 @@ static class SchemaStamp
 
     public static string Compute(
         List<(string Name, string Kind, string Model)> sources,
-        List<(string Model, List<(string Name, string Type)> Members)> types,
+        List<(string Model, string? Base, List<(string Name, string Type)> Members)> types,
         List<(string Name, List<string> Members)> enums)
     {
         var builder = new StringBuilder();
@@ -40,9 +40,11 @@ static class SchemaStamp
         }
 
         types.Sort((left, right) => string.CompareOrdinal(left.Model, right.Model));
-        foreach (var (model, members) in types)
+        foreach (var (model, baseModel, members) in types)
         {
-            builder.Append($"type {model}\n");
+            // The base is appended rather than given a line of its own, so a model with no allow-listed
+            // hierarchy — which is every model until one opts a derived type in — stamps unchanged.
+            builder.Append(baseModel is null ? $"type {model}\n" : $"type {model} : {baseModel}\n");
             members.Sort((left, right) => string.CompareOrdinal(left.Name, right.Name));
             foreach (var (name, type) in members)
             {

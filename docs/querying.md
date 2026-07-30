@@ -95,6 +95,7 @@ public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjec
 | `ThenBy(key)` / `ThenByDescending(key)` | `thenBy` | Must follow an `OrderBy`. |
 | `Skip(n)` | `skip` | `n` must be non-negative. |
 | `Take(n)` | `take` | `n` must be non-negative and `<= MaxPageSize`. |
+| `OfType<T>()` | `ofType` | Narrows to a derived type — see [below](#narrowing-to-a-derived-type). Later operators read the derived type. |
 | `SelectMany(collection)` | `selectMany` | Flattens a `[QueryableCollection]` — see [below](#flattening-a-collection). One per query; later operators read the element. |
 | `GroupBy(key)` | `groupBy` | One key, or up to eight members grouped at once. At most one `GroupBy`, and it must be followed by a `Select`. |
 | `Select(projection)` | `select` | At most one, and it must construct an object. |
@@ -572,6 +573,33 @@ A `Where` may precede any of them — `_.Items.Where(i => i.Active).Count()` —
 
 The result is always a **scalar**, so a subquery can appear anywhere a value can: a predicate, an ordering key, a projection leaf, an aggregate selector. What it cannot do is return rows. A collection is never projectable, never traversable in a member path (`_.Items.Name` is rejected), and a subquery may not appear inside another subquery — the cost is per-row and would compound. Inside the subquery, the predicate and selector read the collection's *element*, against that type's own allow-list.
 
+#### Narrowing to a derived type
+
+`OfType` restricts the query to the rows of a derived type, which every later operator then reads:
+
+<!-- snippet: clientOfType -->
+<a id='snippet-clientOfType'></a>
+```cs
+var rows = await client.Source<Asset>("Asset")
+    .OfType<Vehicle>()
+    .Select(_ => new VehicleRow(_.Name, _.Wheels))
+    .ToListAsync();
+```
+<sup><a href='/src/Scry.Tests/OfTypeTests.cs#L21-L26' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientOfType' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Everything before the narrowing is written against the base and everything after against the derived type, so a member the derived type declares is only nameable once the query has narrowed to it.
+
+The type is named on the wire exactly as a request's own root is, and resolved through the same allow-list — no CLR type ever comes off the wire. Three things have to hold, all checked server-side:
+
+- The name must be a source the server allow-lists. A type that [did not opt in](annotations.md#inheritance) has no wire name at all, so it is unreachable however it is spelled.
+- It must actually derive from the type being queried. Widening back to a base is rejected: it would let a query rooted at a derived source reach rows that source never contained.
+- It must not be the type already being queried, which would not narrow anything.
+
+The derived type's own [row policy](policies.md) applies on top of the base's. Both narrow, so what survives is what a direct query of either source would have returned.
+
+`Cast` is not supported. A cast asserts a type rather than filtering to it, so a row of the wrong type has no answer; `OfType` is the operator that means "the ones that are".
+
 #### Flattening a collection
 
 `SelectMany` goes the other way: rather than folding a collection to a scalar, it replaces the row being queried with the collection's elements.
@@ -893,6 +921,8 @@ stateDiagram-v2
     [*] --> Source
     Source --> Restricting: Where / OrderBy / ThenBy / Skip / Take
     Restricting --> Restricting: (any order, any number)
+    Source --> Restricting: OfType
+    Restricting --> Restricting: OfType
     Source --> Restricting: SelectMany
     Restricting --> Restricting: SelectMany
     Source --> Grouped: GroupBy
@@ -922,6 +952,9 @@ one exception — it filters the groups rather than the rows, and reads only the
 
 A set operation combines the projected rows with a second source, so like a join only a terminal may
 follow: the combined rows come from two sources and have no single root left to read.
+
+`OfType` narrows to a derived type, leaving the query restricting but against that type — so the
+members it declares become nameable and the base's stay so.
 
 `SelectMany` flattens a collection into its elements, so it leaves the query restricting — but against
 a different row. Everything after it is written against the element, at most one is allowed, and an

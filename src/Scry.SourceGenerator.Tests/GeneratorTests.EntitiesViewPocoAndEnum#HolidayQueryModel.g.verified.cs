@@ -4,7 +4,8 @@
 namespace Scry.Generated;
 
 /// <summary>Client query model for the 'Holiday' poco source.</summary>
-public sealed class HolidayQueryModel
+[global::Scry.Client.ScryModel("Holiday", "Name", "Date")]
+public class HolidayQueryModel
 {
     public string Name { get; init; } = null!;
     public global::System.DateOnly Date { get; init; }

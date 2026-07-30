@@ -76,6 +76,7 @@ Because `root` is part of the contract, prefer setting `Name` over relying on th
 [JsonDerivedType(typeof(TakeOp), "take")]
 [JsonDerivedType(typeof(SelectOp), "select")]
 [JsonDerivedType(typeof(SelectManyOp), "selectMany")]
+[JsonDerivedType(typeof(OfTypeOp), "ofType")]
 [JsonDerivedType(typeof(GroupByOp), "groupBy")]
 [JsonDerivedType(typeof(DistinctOp), "distinct")]
 [JsonDerivedType(typeof(ReverseOp), "reverse")]
@@ -92,7 +93,7 @@ Because `root` is part of the contract, prefer setting `Name` over relying on th
 [JsonDerivedType(typeof(PageOp), "page")]
 public abstract record QueryOp;
 ```
-<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L32' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L33' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 | `$type` | Payload | Meaning |
@@ -120,6 +121,8 @@ stateDiagram-v2
     [*] --> Source
     Source --> Restricting: Where / OrderBy / ThenBy / Skip / Take
     Restricting --> Restricting: (any order, any number)
+    Source --> Restricting: OfType
+    Restricting --> Restricting: OfType
     Source --> Restricting: SelectMany
     Restricting --> Restricting: SelectMany
     Source --> Grouped: GroupBy
@@ -149,6 +152,9 @@ one exception — it filters the groups rather than the rows, and reads only the
 
 A set operation combines the projected rows with a second source, so like a join only a terminal may
 follow: the combined rows come from two sources and have no single root left to read.
+
+`OfType` narrows to a derived type, leaving the query restricting but against that type — so the
+members it declares become nameable and the base's stay so.
 
 `SelectMany` flattens a collection into its elements, so it leaves the query restricting — but against
 a different row. Everything after it is written against the element, at most one is allowed, and an

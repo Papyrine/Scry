@@ -69,6 +69,14 @@ sealed class QueryTranslator
             case "Select":
                 return new SelectOp(TranslateProjection(Lambda(call.Arguments[1])));
 
+            case "OfType":
+                return new OfTypeOp(ModelSource(call.Method.GetGenericArguments()[0]));
+
+            case "Cast":
+                throw new NotSupportedException(
+                    "Cast is not supported by Scry. Use OfType to narrow to a derived type — a cast asserts " +
+                    "a type rather than filtering to it, so a row of the wrong type has no answer.");
+
             case "SelectMany" when call.Arguments.Count == 2:
                 var flatten = Lambda(call.Arguments[1]);
                 if (flatten.Body is not MemberExpression collection ||
@@ -308,6 +316,15 @@ sealed class QueryTranslator
 
         return members;
     }
+
+    // The wire name of the source a generated query model stands for. Only the generator can know it —
+    // a model's CLR name and its source name diverge the moment a [Queryable(Name = "...")] renames
+    // one — so it is carried on the model rather than guessed from the type name.
+    // Falls back to the type's own name for a hand-built source, whose caller chose the source names
+    // anyway. Nothing rests on getting it right here: the server re-resolves the name against its
+    // allow-list, so a wrong guess is a rejected request rather than a reachable type.
+    static string ModelSource(Type model) =>
+        model.GetCustomAttribute<ScryModelAttribute>()?.Source ?? model.Name;
 
     static bool Rooted(Expression expression, ParameterExpression root) =>
         expression is MemberExpression member && IsRooted(member, root);

@@ -130,7 +130,8 @@ Everything lands in the `Scry.Generated` namespace.
 namespace Scry.Generated;
 
 /// <summary>Client query model for the 'Employee' entity source.</summary>
-public sealed class EmployeeQueryModel
+[global::Scry.Client.ScryModel("Employee", "Id", "Name", "Status", "Active", "ManagerId", "Avatar")]
+public class EmployeeQueryModel
 {
     public int Id { get; init; }
     public string Name { get; init; } = null!;
@@ -141,7 +142,7 @@ public sealed class EmployeeQueryModel
     public byte[] Avatar { get; init; } = null!;
 }
 ```
-<sup><a href='/src/Scry.SourceGenerator.Tests/GeneratorTests.EntitiesViewPocoAndEnum%23EmployeeQueryModel.g.verified.cs#L1-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-GeneratorTests.EntitiesViewPocoAndEnum#EmployeeQueryModel.g.verified.cs' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.SourceGenerator.Tests/GeneratorTests.EntitiesViewPocoAndEnum%23EmployeeQueryModel.g.verified.cs#L1-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-GeneratorTests.EntitiesViewPocoAndEnum#EmployeeQueryModel.g.verified.cs' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Note what is *absent*: `Salary` is `[QueryIgnore]`, and `Department`/`DepartmentId` appear only if `Department` is itself opted in.

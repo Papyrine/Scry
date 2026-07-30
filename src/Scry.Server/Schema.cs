@@ -1,4 +1,4 @@
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore.Metadata;
 
 /// <summary>
@@ -90,7 +90,7 @@ sealed class Schema
         var (sourceInfos, typeInfos, enumInfos) = DescribeSurface();
         return SchemaStamp.Compute(
             sourceInfos.Select(_ => (_.Name, _.Kind, _.Model)).ToList(),
-            typeInfos.Select(_ => (_.Model, _.Members.Select(member => (member.Name, member.TypeDisplay)).ToList())).ToList(),
+            typeInfos.Select(_ => (_.Model, _.Base, _.Members.Select(member => (member.Name, member.TypeDisplay)).ToList())).ToList(),
             enumInfos.Select(_ => (_.Name, _.Values.ToList())).ToList());
     }
 
@@ -100,12 +100,18 @@ sealed class Schema
 
         var typeInfos = types.Values
             .OrderBy(_ => _.ClrType.Name, StringComparer.Ordinal)
-            .Select(_ => new ScryTypeInfo(
-                $"{_.ClrType.Name}QueryModel",
-                _.Members.Values
+            .Select(meta => new ScryTypeInfo(
+                $"{meta.ClrType.Name}QueryModel",
+                // Declared members only. Reflection reports the base's properties here too, but the
+                // generated model inherits them, so describing them again would make the two sides
+                // disagree about the surface and read as drift on every client.
+                Declared(meta)
                     .OrderBy(_ => _.Name, StringComparer.Ordinal)
                     .Select(_ => DescribeMember(_, enums))
-                    .ToList()))
+                    .ToList())
+            {
+                Base = meta.Base is { } clrBase ? $"{clrBase.Name}QueryModel" : null
+            })
             .ToList();
 
         var sourceInfos = sources.Values
@@ -118,6 +124,19 @@ sealed class Schema
             .ToList();
 
         return (sourceInfos, typeInfos, enumInfos);
+    }
+
+    // The members a type contributes itself: everything it exposes, less whatever its allow-listed
+    // base already exposes under the same name.
+    IEnumerable<Member> Declared(TypeMeta meta)
+    {
+        if (meta.Base is not { } clrBase ||
+            !types.TryGetValue(clrBase, out var baseMeta))
+        {
+            return meta.Members.Values;
+        }
+
+        return meta.Members.Values.Where(_ => !baseMeta.Members.ContainsKey(_.Name));
     }
 
     static ScryMemberInfo DescribeMember(Member member, Dictionary<string, ScryEnumInfo> enums)
@@ -219,7 +238,7 @@ sealed class Schema
                     schema.entitySourceTypes.Add(type);
                 }
             }
-            else if (type.GetCustomAttribute<QueryableComplexAttribute>() is not null)
+            else if (type.GetCustomAttribute<QueryableComplexAttribute>(inherit: false) is not null)
             {
                 // A complex type is a traversable member type, not a root source: it gets member
                 // metadata (below) but no source entry and no resolver.
@@ -245,6 +264,21 @@ sealed class Schema
         foreach (var type in queryableTypes)
         {
             schema.types[type] = BuildTypeMeta(type, queryableTypes);
+        }
+
+        // Pass 1b: link each type to its nearest allow-listed base, which is what OfType narrows along
+        // and what lets the generated models inherit rather than repeat the base's members. A base that
+        // was not opted in is skipped over, so leaving it out hides it without hiding its descendants.
+        foreach (var meta in schema.types.Values)
+        {
+            for (var candidate = meta.ClrType.BaseType; candidate is not null; candidate = candidate.BaseType)
+            {
+                if (queryableTypes.Contains(candidate))
+                {
+                    meta.Base = candidate;
+                    break;
+                }
+            }
         }
 
         // Pass 2: register each source with its resolver. Complex types are deliberately absent.
@@ -412,24 +446,31 @@ sealed class Schema
         // The source name defaults to the type name and is overridden by the attribute's Name. This
         // must stay in lockstep with the generator's MetadataModelReader.TryClassify, which derives
         // the same name from metadata alone.
+        //
+        // Every lookup here is inherit: false. An opt-in attribute is a statement about the type it is
+        // written on, so a derived type has to opt in on its own — otherwise adding a subclass to the
+        // model would silently expose it and its members, which is the opposite of default-deny. It is
+        // also what the generator does, since metadata attributes are declared-only, and the two
+        // classifiers have to agree. A row policy is deliberately not read this way: it inherits, so a
+        // subclass cannot shed the policy its base carries.
         kind = default;
         name = type.Name;
 
-        if (type.GetCustomAttribute<QueryablePocoAttribute>() is { } poco)
+        if (type.GetCustomAttribute<QueryablePocoAttribute>(inherit: false) is { } poco)
         {
             kind = SourceKind.Poco;
             name = Named(poco.Name, name);
             return true;
         }
 
-        if (type.GetCustomAttribute<QueryableViewAttribute>() is { } view)
+        if (type.GetCustomAttribute<QueryableViewAttribute>(inherit: false) is { } view)
         {
             kind = SourceKind.View;
             name = Named(view.Name, name);
             return true;
         }
 
-        if (type.GetCustomAttribute<QueryableAttribute>() is { } queryable)
+        if (type.GetCustomAttribute<QueryableAttribute>(inherit: false) is { } queryable)
         {
             // EF [Keyless] on a [Queryable] type means it is a view.
             kind = IsKeyless(type) ? SourceKind.View : SourceKind.Entity;

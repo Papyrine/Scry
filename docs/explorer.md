@@ -91,6 +91,16 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
   MaxPageSize: 1000,
   Sources: [
     {
+      Name: Asset,
+      Kind: Entity,
+      Model: AssetQueryModel
+    },
+    {
+      Name: Building,
+      Kind: Entity,
+      Model: BuildingQueryModel
+    },
+    {
       Name: Department,
       Kind: Entity,
       Model: DepartmentQueryModel
@@ -134,6 +144,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Name: Ticket,
       Kind: Entity,
       Model: TicketQueryModel
+    },
+    {
+      Name: Vehicle,
+      Kind: Entity,
+      Model: VehicleQueryModel
     }
   ],
   Types: [
@@ -155,6 +170,38 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCollection: false
         }
       ]
+    },
+    {
+      Model: AssetQueryModel,
+      Members: [
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false
+        }
+      ]
+    },
+    {
+      Model: BuildingQueryModel,
+      Members: [
+        {
+          Name: Floors,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false
+        }
+      ],
+      Base: AssetQueryModel
     },
     {
       Model: DepartmentQueryModel,
@@ -466,6 +513,19 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCollection: false
         }
       ]
+    },
+    {
+      Model: VehicleQueryModel,
+      Members: [
+        {
+          Name: Wheels,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false
+        }
+      ],
+      Base: AssetQueryModel
     }
   ],
   Enums: [
@@ -479,10 +539,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
     }
   ],
   QueryEndpoint: /api/query,
-  SchemaStamp: Z-IAQrVOwMIgzKdZ
+  SchemaStamp: ypcGkl474RZ5_iYE
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L395' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L455' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names, member names with the exact C# type spelling the source generator would emit, and the re-emitted enums. It carries **no** policies, resolvers, connection details, or CLR internals.

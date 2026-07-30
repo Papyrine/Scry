@@ -362,7 +362,7 @@ public static class ScryQueryableExtensions
         }
 
         var pipeline = new List<QueryOp>(QueryTranslator.Translate(source.Expression));
-        AddDefaultProjection(pipeline, provider, terminal);
+        AddDefaultProjection(pipeline, provider, terminal, typeof(T));
         if (terminal is not null)
         {
             pipeline.Add(terminal);
@@ -376,13 +376,25 @@ public static class ScryQueryableExtensions
     /// Without it the server picks the response keys from its own model, which a client generated
     /// before a member rename cannot read; naming them here makes the response keys the client's own.
     /// </summary>
-    static void AddDefaultProjection(List<QueryOp> pipeline, QueryProvider provider, QueryOp? terminal)
+    static void AddDefaultProjection(
+        List<QueryOp> pipeline,
+        QueryProvider provider,
+        QueryOp? terminal,
+        Type element)
     {
         // A grouped query's Select is the aggregate projection and is mandatory; the scalar terminals
         // return a single value and project nothing. Neither wants a member projection bolted on. A
         // terminal carrying its own predicate is rejected server-side once a Select is present, so it
         // falls back to the server's default projection rather than being made invalid.
-        if (provider.DefaultProjection is not { Count: > 0 } members ||
+        // An operator that changes which row is being read leaves the source's own member list
+        // describing rows the query no longer returns, so the members come off the element type the
+        // query ended up with. A hand-built source has no model to read them from and falls back to
+        // the server's default projection.
+        var members = pipeline.Any(_ => _ is OfTypeOp or SelectManyOp)
+            ? element.GetCustomAttribute<ScryModelAttribute>()?.Members
+            : provider.DefaultProjection;
+
+        if (members is not { Count: > 0 } ||
             terminal is CountOp or LongCountOp or AnyOp or AllOp or AggregateOp ||
             terminal is FirstOp { Predicate: not null } or SingleOp { Predicate: not null } or LastOp { Predicate: not null } ||
             // A join carries its own projection, since a member has to name which side it reads.

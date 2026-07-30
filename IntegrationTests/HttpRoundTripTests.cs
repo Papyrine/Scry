@@ -1,4 +1,4 @@
-// UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
+﻿// UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
 // Core's own ToListAsync/CountAsync IQueryable extensions and collide with the Scry client terminals.
 using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 
@@ -24,6 +24,8 @@ public class HttpRoundTripTests
     record RegionSummary(string Region, decimal Total, int Count);
 
     record HeadcountRow(string Department, int Headcount);
+
+    record VehicleRow(string Name, int Wheels);
 
     static readonly string[] activeEmployeeNames = ["Aaron", "Alice", "Carol"];
 
@@ -89,6 +91,38 @@ public class HttpRoundTripTests
 
         Assert.That(rows.Select(_ => _.Department), Is.EqualTo(departmentNames));
         Assert.That(rows.Sum(_ => _.Headcount), Is.EqualTo(4));
+    }
+
+    [Test]
+    public async Task NarrowedToADerivedTypeOverHttp()
+    {
+        // Proves the whole hierarchy path end to end: the generated VehicleQueryModel inherits
+        // AssetQueryModel, carries the wire source name the client narrows with, and the server
+        // resolves that name through its own allow-list before executing the OfType.
+        var rows = await query.Asset
+            .OfType<VehicleQueryModel>()
+            .OrderBy(_ => _.Name)
+            .Select(_ => new VehicleRow(_.Name, _.Wheels))
+            .ToListAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Trailer", "Van"]));
+            Assert.That(rows.Single(_ => _.Name == "Van").Wheels, Is.EqualTo(4));
+        });
+    }
+
+    [Test]
+    public async Task NarrowedRowsProjectTheDerivedMembersByDefaultOverHttp()
+    {
+        // With no Select, the members projected come from the type the query narrowed to — not from
+        // the source it started at, which knows nothing about Wheels.
+        var rows = await query.Asset
+            .OfType<VehicleQueryModel>()
+            .OrderBy(_ => _.Name)
+            .ToListAsync();
+
+        Assert.That(rows.Select(_ => _.Wheels), Is.EqualTo([2, 4]));
     }
 
     [Test]

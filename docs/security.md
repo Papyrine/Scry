@@ -1,4 +1,4 @@
-# Security model
+﻿# Security model
 
 Scry lets a client compose queries. The design assumption is that **the client is hostile**: the generated code, the LINQ, and the serialized request are all attacker-controlled. Every guarantee is enforced on the server, at runtime, against the real model assembly.
 
@@ -29,6 +29,8 @@ Adding an entity to the `DbContext` does not expose it. Adding a property to an 
 
 A collection whose element type carries a [row policy](policies.md) is **refused at startup**. A policy filters a source; a subquery has none, so aggregating a policied collection would count exactly the rows the policy exists to hide. The same caveat applies more narrowly to reference navigations, which are not policy-filtered when traversed — see [what Scry does not do](#what-scry-does-not-do).
 
+**Inheritance is not transitive either.** An opt-in attribute is read off the type it is written on and never inherited, so a subclass of an exposed type is invisible until it opts in itself. Adding one to a model exposes neither its rows nor the members it declares, and no query can narrow to it: [`OfType`](querying.md#narrowing-to-a-derived-type) names the target as a wire string, which is resolved through the allow-list and then checked to actually derive from the type being queried — so it can only ever narrow, never widen back to a base or across to an unrelated source. A [row policy](policies.md) is the deliberate exception: it *is* inherited, so a subclass cannot shed the one its base carries, and where both carry one, both apply.
+
 **Complex types and JSON columns** follow the same default-deny rule. A complex/value type — including one mapped into a JSON column — is invisible until it carries `[QueryableComplex]`, and even then only its allow-listed scalar leaves are reachable (`[QueryIgnore]` still hides members). Exposing a complex type does not transitively expose anything: a nested type it references is reachable only if it too is opted in, so a JSON column cannot smuggle in an entity or an unlisted field. Traversal into a complex member counts against `MaxNavigationDepth` exactly like a navigation, bounding how deeply a client can descend into nested JSON. How EF stores the type (JSON or columns) never changes what is reachable — the allow-list is built from the CLR/annotation surface, not the storage mapping.
 
 
@@ -47,6 +49,7 @@ The wire format has no node for an arbitrary method call, no node for raw SQL, a
 [JsonDerivedType(typeof(TakeOp), "take")]
 [JsonDerivedType(typeof(SelectOp), "select")]
 [JsonDerivedType(typeof(SelectManyOp), "selectMany")]
+[JsonDerivedType(typeof(OfTypeOp), "ofType")]
 [JsonDerivedType(typeof(GroupByOp), "groupBy")]
 [JsonDerivedType(typeof(DistinctOp), "distinct")]
 [JsonDerivedType(typeof(ReverseOp), "reverse")]
@@ -63,7 +66,7 @@ The wire format has no node for an arbitrary method call, no node for raw SQL, a
 [JsonDerivedType(typeof(PageOp), "page")]
 public abstract record QueryOp;
 ```
-<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L32' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L33' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: wireExpressions -->
@@ -276,7 +279,7 @@ public async Task DisallowedPropertyRejectedWith400()
     Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L117-L144' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L151-L178' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 

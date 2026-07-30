@@ -1,4 +1,4 @@
-namespace Scry.SourceGenerator;
+﻿namespace Scry.SourceGenerator;
 
 /// <summary>
 /// Reads the server model assembly (pointed at by the <c>ScryModelDll</c> build property) and
@@ -99,7 +99,7 @@ public class ScryGenerator :
 
         foreach (var source in extract.Sources)
         {
-            context.AddSource($"{source.ModelName}.g.cs", EmitModel(source));
+            context.AddSource($"{source.ModelName}.g.cs", EmitModel(source, extract));
         }
 
         if (extract.Enums.Length > 0)
@@ -110,16 +110,25 @@ public class ScryGenerator :
         context.AddSource("ScryQuery.g.cs", EmitQuery(extract));
     }
 
-    static string EmitModel(SourceInfo source)
+    static string EmitModel(SourceInfo source, ModelExtract extract)
     {
         var descriptor = source.Kind == SourceKind.Complex
             ? "complex type"
             : $"{source.Kind.ToString().ToLowerInvariant()} source";
+        // Not sealed, and inheriting where the CLR type does: OfType on the client is only expressible
+        // if the generated models carry the same derivation the server's types do.
+        var inherits = source.BaseModelName is null ? "" : $" : {source.BaseModelName}";
+
+        // A complex type is a member type, not a source, so it has no wire name to carry.
+        var attribute = source.Kind == SourceKind.Complex
+            ? ""
+            : $"[global::Scry.Client.ScryModel({Arguments(source.SourceName, ScalarMembers(source, extract))})]{Environment.NewLine}";
+
         var builder = Header();
         builder.AppendLine(
             $$"""
             /// <summary>Client query model for the '{{source.SourceName}}' {{descriptor}}.</summary>
-            public sealed class {{source.ModelName}}
+            {{attribute}}public class {{source.ModelName}}{{inherits}}
             {
             """);
         foreach (var property in source.Properties)
@@ -131,6 +140,29 @@ public class ScryGenerator :
         builder.AppendLine("}");
         return builder.ToString();
     }
+
+    // The scalar members a query written against this model projects when it writes no Select: the
+    // ones it declares plus everything it inherits, base-first so the generated order matches the
+    // declaration order a reader would expect. Navigations and collections are excluded — they are not
+    // scalar leaves, matching the server's own default projection.
+    static List<string> ScalarMembers(SourceInfo source, ModelExtract extract)
+    {
+        var members = new List<string>();
+        if (source.BaseModelName is { } baseName &&
+            extract.Sources.FirstOrDefault(_ => _.ModelName == baseName) is {ModelName: not null} baseSource)
+        {
+            members.AddRange(ScalarMembers(baseSource, extract));
+        }
+
+        members.AddRange(
+            source.Properties
+                .Where(_ => _ is {IsNavigation: false, IsCollection: false})
+                .Select(_ => _.Name));
+        return members;
+    }
+
+    static string Arguments(string source, List<string> members) =>
+        string.Join(", ", new[] {source}.Concat(members).Select(_ => $"\"{_}\""));
 
     static string EmitEnums(EquatableArray<EnumInfo> enums)
     {
@@ -187,9 +219,7 @@ public class ScryGenerator :
             // The scalar members ride along so a query that writes no Select still projects them by
             // name. That keeps the response keyed by the names this client was generated with, rather
             // than whatever the server's current model calls them.
-            var members = string.Join(
-                ", ",
-                source.Properties.Where(_ => _ is {IsNavigation: false, IsCollection: false}).Select(_ => $"\"{_.Name}\""));
+            var members = string.Join(", ", ScalarMembers(source, extract).Select(_ => $"\"{_}\""));
 
             builder.AppendLine();
             builder.AppendLine(
@@ -212,7 +242,7 @@ public class ScryGenerator :
             .Select(_ => (_.SourceName, _.Kind.ToString(), _.ModelName))
             .ToList();
         var types = extract.Sources
-            .Select(_ => (_.ModelName, _.Properties.Select(property => (property.Name, property.TypeDisplay)).ToList()))
+            .Select(_ => (_.ModelName, _.BaseModelName, _.Properties.Select(property => (property.Name, property.TypeDisplay)).ToList()))
             .ToList();
         var enums = extract.Enums
             .Select(_ => (_.Name, _.Members.ToList()))

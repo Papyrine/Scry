@@ -4,7 +4,7 @@
 namespace Scry.Generated;
 
 /// <summary>Client query model for the 'Address' complex type.</summary>
-public sealed class AddressQueryModel
+public class AddressQueryModel
 {
     public string City { get; init; } = null!;
     public string Country { get; init; } = null!;

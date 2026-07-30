@@ -4,7 +4,8 @@
 namespace Scry.Generated;
 
 /// <summary>Client query model for the 'Order' entity source.</summary>
-public sealed class OrderQueryModel
+[global::Scry.Client.ScryModel("Order", "Id", "Region")]
+public class OrderQueryModel
 {
     public int Id { get; init; }
     public string Region { get; init; } = null!;

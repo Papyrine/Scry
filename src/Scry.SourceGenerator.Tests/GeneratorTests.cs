@@ -1,4 +1,4 @@
-[TestFixture]
+﻿[TestFixture]
 public class GeneratorTests
 {
     [Test]
@@ -41,6 +41,39 @@ public class GeneratorTests
             public class Secret
             {
                 public string Token { get; set; } = "";
+            }
+            """;
+
+        return VerifyGenerated(model);
+    }
+
+    [Test]
+    public Task Hierarchy()
+    {
+        // Vehicle opts in and so inherits the base model, declaring only its own members. Artwork
+        // derives from an opted-in type but never opted in itself, so it is not emitted at all —
+        // opting in is a statement about the type it is written on, not about its subclasses.
+        const string model = """
+            using Scry;
+
+            namespace Sample.Model;
+
+            [Queryable]
+            public class Asset
+            {
+                public int Id { get; set; }
+                public string Name { get; set; } = "";
+            }
+
+            [Queryable]
+            public class Vehicle : Asset
+            {
+                public int Wheels { get; set; }
+            }
+
+            public class Artwork : Asset
+            {
+                public string Medium { get; set; } = "";
             }
             """;
 

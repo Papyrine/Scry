@@ -92,6 +92,22 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                     tailIsOrdered = false;
                     query = ApplyPaging(query, "Take", take.Count);
                     break;
+                case OfTypeOp narrowed:
+                    tailIsOrdered = false;
+                    if (!schema.TryGetSource(narrowed.Type, out var derived))
+                    {
+                        throw new ScryValidationException($"Unknown source '{narrowed.Type}'.");
+                    }
+
+                    query = query.Provider.CreateQuery(
+                        CallQueryable("OfType", [derived.ClrType], query.Expression));
+
+                    // The derived type's own policy applies on top of the base's. Both narrow, so the
+                    // rows that survive are those a direct query of either source would have returned.
+                    query = ApplyPolicy(query, derived, db, services);
+                    elementType = derived.ClrType;
+                    break;
+
                 case SelectManyOp flatten:
                     tailIsOrdered = false;
                     var (collection, child) = builder.BuildCollectionSelector(flatten.Path, elementType);

@@ -3,6 +3,16 @@
   MaxPageSize: 1000,
   Sources: [
     {
+      Name: Asset,
+      Kind: Entity,
+      Model: AssetQueryModel
+    },
+    {
+      Name: Building,
+      Kind: Entity,
+      Model: BuildingQueryModel
+    },
+    {
       Name: Department,
       Kind: Entity,
       Model: DepartmentQueryModel
@@ -46,6 +56,11 @@
       Name: Ticket,
       Kind: Entity,
       Model: TicketQueryModel
+    },
+    {
+      Name: Vehicle,
+      Kind: Entity,
+      Model: VehicleQueryModel
     }
   ],
   Types: [
@@ -67,6 +82,38 @@
           IsCollection: false
         }
       ]
+    },
+    {
+      Model: AssetQueryModel,
+      Members: [
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false
+        }
+      ]
+    },
+    {
+      Model: BuildingQueryModel,
+      Members: [
+        {
+          Name: Floors,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false
+        }
+      ],
+      Base: AssetQueryModel
     },
     {
       Model: DepartmentQueryModel,
@@ -378,6 +425,19 @@
           IsCollection: false
         }
       ]
+    },
+    {
+      Model: VehicleQueryModel,
+      Members: [
+        {
+          Name: Wheels,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false
+        }
+      ],
+      Base: AssetQueryModel
     }
   ],
   Enums: [
@@ -391,5 +451,5 @@
     }
   ],
   QueryEndpoint: /api/query,
-  SchemaStamp: Z-IAQrVOwMIgzKdZ
+  SchemaStamp: ypcGkl474RZ5_iYE
 }

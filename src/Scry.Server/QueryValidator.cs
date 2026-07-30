@@ -83,6 +83,21 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
                     break;
 
+                case OfTypeOp narrowed:
+                    EnsureNotGrouped(sawGroupBy, "OfType");
+                    EnsureNotProjected(sawSelect, "OfType");
+                    EnsureNotDistinct(sawDistinct, "OfType");
+                    if (sawJoin || sawSet)
+                    {
+                        throw Reject("OfType is not allowed after a Join or a set operation.");
+                    }
+
+                    // Everything after the narrowing reads the derived type, whose members the base
+                    // does not expose. The narrowing itself is validated against the schema, never
+                    // against a CLR type named on the wire.
+                    rootType = ValidateOfType(narrowed, rootType);
+                    break;
+
                 case SelectManyOp flatten:
                     if (sawSelectMany)
                     {
@@ -749,6 +764,33 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 $"Source '{root.Name}' carries a row policy, so it cannot be the outer side of a " +
                 "RightJoin — swap the sides and use LeftJoin.");
         }
+    }
+
+    /// <summary>
+    /// Validates a narrowing to a derived type and returns the type the rest of the pipeline reads.
+    /// The name is resolved through the same allow-list a request's own root goes through, so a type
+    /// that was not opted in cannot be reached however it is spelled — and it must actually derive
+    /// from the type being queried, which is what keeps the narrowing a narrowing.
+    /// </summary>
+    Type ValidateOfType(OfTypeOp narrowed, Type rootType)
+    {
+        if (!schema.TryGetSource(narrowed.Type, out var derived))
+        {
+            throw Reject($"Unknown source '{narrowed.Type}'.");
+        }
+
+        var target = derived.ClrType;
+        if (target == rootType)
+        {
+            throw Reject($"OfType to '{narrowed.Type}' does not narrow — it is the type already being queried.");
+        }
+
+        if (!rootType.IsAssignableFrom(target))
+        {
+            throw Reject($"'{narrowed.Type}' does not derive from '{rootType.Name}'.");
+        }
+
+        return target;
     }
 
     /// <summary>

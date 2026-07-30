@@ -18,6 +18,7 @@ For usage detail on the supported surface (position rules, limits, examples), se
 | `ThenBy(key)` / `ThenByDescending(key)` | |
 | `Skip(n)` / `Take(n)` | `Take` capped by `MaxPageSize`. |
 | `Select(projection)` | At most one; must construct an object. |
+| `OfType<T>()` | Narrows to a derived type that is allow-listed in its own right; later operators read it. |
 | `SelectMany(collection)` | Flattens a `[QueryableCollection]`; one per query, and later operators read the element. |
 | `GroupBy(key)` | One key, or up to eight members grouped at once. Must be followed by a `Select`. |
 | `Distinct()` | Deduplicates the projected rows; can also be ordered, paged and counted over a flat projection of up to eight members. |
@@ -129,7 +130,7 @@ Structurally bigger than the current pipeline — multiple sources per request, 
 
 **Other.**
 
-- [ ] `OfType` / `Cast`. Blocked on the *generated surface*, not on the pipeline. One query model is emitted per opted-in type with no relationship between them, so there is no derived type for `OfType<T>` to name. Shipping it means teaching `MetadataModelReader` and `Schema` to carry base/derived links in lockstep, emitting that relationship into the generated models, extending `ScryIntrospection` so the explorer can synthesize it, and re-stamping the schema. The security rule is already settled and simple: `OfType<T>` requires `T` to be independently allow-listed, and both types' row policies apply, so the narrowing composes.
+- [x] `OfType`. The generated models now carry the same derivation the server's types do, so a query can narrow to a derived type that opted in on its own. `Cast` stays rejected: it asserts a type rather than filtering to it. See [Narrowing to a derived type](querying.md#narrowing-to-a-derived-type).
 - [ ] Streaming results (`ToAsyncEnumerable`). Blocked on the *transport*, not on the query pipeline: `QueryResponse` is one materialized batch of rows, so streaming means a second response shape (chunked or newline-delimited) and a client that surfaces it. Independent of everything else on this page. See [Writing queries](querying.md#future-enhancements).
 
 ### Not gaps

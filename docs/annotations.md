@@ -1,4 +1,4 @@
-# Annotations
+﻿# Annotations
 
 `Scry.Annotations` (namespace `Scry`, targeting `netstandard2.0`) holds the attributes that define the allow-list. They are applied to the **server** model. Both the source generator and the server runtime read the same attributes and derive the same surface from them.
 
@@ -49,6 +49,42 @@ The source name exposed to clients defaults to the **type name** — `Employee`.
 If the type also carries EF Core's `[Keyless]`, Scry classifies it as a view rather than an entity. The two are resolved identically (`DbContext.Set<T>()`); the distinction is reported through introspection so tooling can label it.
 
 
+### Inheritance
+
+**`[Queryable]` is never inherited.** It is a statement about the type it is written on, so a derived type has to opt in on its own:
+
+<!-- snippet: queryableHierarchy -->
+<a id='snippet-queryableHierarchy'></a>
+```cs
+[Queryable]
+public class Asset
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+}
+
+[Queryable]
+public class Vehicle : Asset
+{
+    public int Wheels { get; set; }
+}
+
+[Queryable]
+public class Building : Asset
+{
+    public int Floors { get; set; }
+}
+```
+<sup><a href='/src/Scry.Tests/TestModel.cs#L76-L95' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableHierarchy' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+That is default-deny applied to the hierarchy: adding a subclass to the model exposes nothing until someone says so. A type left out is unreachable — it has no wire name, its members are not readable, and no query can narrow to it — while its own descendants stay reachable if they opted in, since the base link skips over types that did not.
+
+An opted-in derived type is a source in its own right (`Query.Vehicle`), *and* something a query rooted at the base can narrow to with [`OfType`](querying.md#narrowing-to-a-derived-type). The generated model inherits the base's, declaring only the members the CLR type declares, so the base's members are readable before and after the narrowing and the derived ones only after.
+
+A [`[ReturnableWith]`](#returnablewith) policy *is* inherited, deliberately: a subclass cannot shed the policy its base carries. When both carry one, both apply.
+
+
 ## Naming a source
 
 The source name is part of the **wire contract**. Renaming the CLR type would otherwise change the `root` of every request and break already-deployed clients, so all three opt-in attributes take a `Name` that decouples the two:
@@ -71,7 +107,7 @@ public class SalesRegion
     public string Name { get; set; } = "";
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L132-L145' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSource' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L166-L179' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSource' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The generated entry point exposes the configured name, while the **model class name stays derived from the CLR type**:
@@ -247,13 +283,21 @@ public DbSet<Department> Departments => Set<Department>();
 public DbSet<Employee> Employees => Set<Employee>();
 public DbSet<Order> Orders => Set<Order>();
 public DbSet<EmployeeSummary> EmployeeSummaries => Set<EmployeeSummary>();
+public DbSet<Asset> Assets => Set<Asset>();
 
-protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+protected override void OnModelCreating(ModelBuilder modelBuilder)
+{
     modelBuilder.Entity<EmployeeSummary>()
         .HasNoKey()
         .ToView("EmployeeSummary");
+
+    // Table-per-hierarchy: the derived types share the base table and are told apart by a
+    // discriminator, which is what OfType narrows on.
+    modelBuilder.Entity<Vehicle>();
+    modelBuilder.Entity<Building>();
+}
 ```
-<sup><a href='/samples/Sample.Model/SampleContext.cs#L6-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-dbContext' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Model/SampleContext.cs#L6-L24' title='Snippet source file'>snippet source</a> | <a href='#snippet-dbContext' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `[QueryableView]` is equivalent to putting `[Queryable]` on a type that EF has marked `[Keyless]`; use it when the keyless configuration lives in `OnModelCreating` rather than on the type.
@@ -355,7 +399,7 @@ modelBuilder.Entity<Employee>()
     .ComplexProperty(_ => _.Address)
     .ToJson();
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L238-L242' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L274-L278' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A complex type is **not a root source**: it produces no property on the generated `ScryQuery` and no server resolver. It is reachable only by traversing into it from an opted-in entity/view/POCO — for example `Employee.Address.City`. Its members follow the same exposure rules as any other type (`[QueryIgnore]` still hides `Zip`), and the traversal is bounded by `MaxNavigationDepth` like any navigation. How EF stores the type — a JSON column or separate columns — is transparent to Scry; the server rebinds the member path onto EF, which translates it either way.
@@ -449,7 +493,7 @@ A property whose type is a collection of another opted-in type is a **collection
 [QueryableCollection]
 public List<OrderLine> Lines { get; set; } = [];
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L93-L98' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableCollection' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L127-L132' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableCollection' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 An exposed collection is **aggregable, not projectable**. A client can ask a question about it — `Any`, `All`, `Count`, `Sum`, `Average`, `Min`, `Max`, which the database answers as a correlated subquery — but can never enumerate its rows, project it, traverse through it in a member path, or order by it. Every answer is a scalar, so a response can never carry an unbounded nested collection. See [subqueries](querying.md#collection-subqueries).
@@ -471,4 +515,4 @@ Two independent components read the same attributes:
 - `MetadataModelReader` in the generator, over `System.Reflection.Metadata`, at build time.
 - `Schema` in the server, over `System.Reflection`, at startup.
 
-They deliberately agree on classification and on the C# type spelling each member gets — the server's introspection output reproduces the generator's emission exactly, which is what lets the [query explorer](explorer.md) synthesize an identical model in the browser. The server's copy is the one that matters for security: it is rebuilt at runtime from the real assembly and validates every request regardless of what the client was generated against.
+They deliberately agree on classification, on which base type each model derives from, and on the C# type spelling each member gets — the server's introspection output reproduces the generator's emission exactly, which is what lets the [query explorer](explorer.md) synthesize an identical model in the browser. The server's copy is the one that matters for security: it is rebuilt at runtime from the real assembly and validates every request regardless of what the client was generated against.

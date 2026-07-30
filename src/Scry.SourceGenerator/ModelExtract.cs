@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// The allow-listed model surface extracted from the server model assembly. Structural equality
 /// (via <see cref="EquatableArray{T}"/>) lets the incremental pipeline skip regeneration when an
 /// unrelated change to the DLL leaves the queryable surface unchanged.
@@ -12,11 +12,18 @@ record struct ModelExtract(
 }
 
 /// <summary>A queryable source: its wire name, the generated model name, and its members.</summary>
+/// <remarks>
+/// <c>Properties</c> holds the members the type declares itself. <c>BaseModelName</c> is the generated
+/// model this one derives from, when the CLR type derives from another opted-in type: the emitted
+/// model inherits it rather than repeating its members, which is what makes <c>OfType</c> expressible
+/// in the generated surface. Null where there is no opted-in base.
+/// </remarks>
 record struct SourceInfo(
     string SourceName,
     string ModelName,
     SourceKind Kind,
-    EquatableArray<PropertyInfo> Properties);
+    EquatableArray<PropertyInfo> Properties,
+    string? BaseModelName = null);
 
 /// <summary>An allow-listed property and the C# type the client DTO should expose.</summary>
 /// <param name="IsNavigation">

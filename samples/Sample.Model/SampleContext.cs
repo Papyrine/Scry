@@ -1,4 +1,4 @@
-namespace Sample.Model;
+﻿namespace Sample.Model;
 
 public sealed class SampleContext(DbContextOptions<SampleContext> options) :
     DbContext(options)
@@ -8,11 +8,19 @@ public sealed class SampleContext(DbContextOptions<SampleContext> options) :
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<EmployeeSummary> EmployeeSummaries => Set<EmployeeSummary>();
+    public DbSet<Asset> Assets => Set<Asset>();
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
         modelBuilder.Entity<EmployeeSummary>()
             .HasNoKey()
             .ToView("EmployeeSummary");
+
+        // Table-per-hierarchy: the derived types share the base table and are told apart by a
+        // discriminator, which is what OfType narrows on.
+        modelBuilder.Entity<Vehicle>();
+        modelBuilder.Entity<Building>();
+    }
     // end-snippet
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
@@ -89,6 +97,23 @@ public sealed class SampleContext(DbContextOptions<SampleContext> options) :
                 Created = new(2026, 3, 1),
                 Department = sales,
                 Salary = 120_000
+            });
+
+        context.Assets.AddRange(
+            new Vehicle
+            {
+                Name = "Van",
+                Wheels = 4
+            },
+            new Vehicle
+            {
+                Name = "Trailer",
+                Wheels = 2
+            },
+            new Building
+            {
+                Name = "Depot",
+                Floors = 3
             });
 
         context.Orders.AddRange(

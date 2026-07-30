@@ -1,4 +1,4 @@
-// In-process tests of the browser-Roslyn layer. These run on the desktop host (not WASM), so they are
+﻿// In-process tests of the browser-Roslyn layer. These run on the desktop host (not WASM), so they are
 // fast and deterministic — they cover the completion/diagnostics/translation LOGIC. The Playwright
 // suite (samples/Sample.Tests) remains the thin layer that proves it all actually works inside WASM.
 [TestFixture]
@@ -161,7 +161,7 @@ public class RoslynLayerTests
         var source = ModelSynthesizer.Synthesize(introspection, executable: true);
 
         Assert.That(source, Does.Contain("public enum Status"));
-        Assert.That(source, Does.Contain("public sealed class EmployeeQueryModel"));
+        Assert.That(source, Does.Contain("public class EmployeeQueryModel"));
         Assert.That(source, Does.Contain("public string Name { get; init; } = null!;"));
         Assert.That(source, Does.Contain("IQueryable<EmployeeQueryModel> Employee"));
         // The scalar member list mirrors the generator's entry point, so a snippet without a Select

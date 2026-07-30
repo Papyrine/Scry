@@ -14,6 +14,7 @@
 [JsonDerivedType(typeof(TakeOp), "take")]
 [JsonDerivedType(typeof(SelectOp), "select")]
 [JsonDerivedType(typeof(SelectManyOp), "selectMany")]
+[JsonDerivedType(typeof(OfTypeOp), "ofType")]
 [JsonDerivedType(typeof(GroupByOp), "groupBy")]
 [JsonDerivedType(typeof(DistinctOp), "distinct")]
 [JsonDerivedType(typeof(ReverseOp), "reverse")]

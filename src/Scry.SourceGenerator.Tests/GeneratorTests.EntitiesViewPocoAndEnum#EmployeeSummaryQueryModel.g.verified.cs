@@ -4,7 +4,8 @@
 namespace Scry.Generated;
 
 /// <summary>Client query model for the 'EmployeeSummary' view source.</summary>
-public sealed class EmployeeSummaryQueryModel
+[global::Scry.Client.ScryModel("EmployeeSummary", "Department", "Headcount")]
+public class EmployeeSummaryQueryModel
 {
     public string Department { get; init; } = null!;
     public int Headcount { get; init; }

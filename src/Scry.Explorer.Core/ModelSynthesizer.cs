@@ -1,4 +1,4 @@
-namespace Scry.Explorer.Core;
+﻿namespace Scry.Explorer.Core;
 
 /// <summary>
 /// Turns a <see cref="ScryIntrospection"/> into the C# source the design-time generator would emit:
@@ -39,9 +39,16 @@ public static class ModelSynthesizer
 
         foreach (var type in introspection.Types)
         {
+            // Mirrors the generator: not sealed, and inheriting where the server's types do, so a
+            // snippet can narrow with OfType exactly as generated client code can.
+            var inherits = type.Base is null ? "" : $" : {type.Base}";
+            var attribute = executable && introspection.Sources.Any(_ => _.Model == type.Model)
+                ? $"[global::Scry.Client.ScryModel({Arguments(type, introspection)})]{Environment.NewLine}"
+                : "";
+
             builder.AppendLine(
                 $$"""
-                public sealed class {{type.Model}}
+                {{attribute}}public class {{type.Model}}{{inherits}}
                 {
                 """);
             foreach (var member in type.Members)
@@ -82,11 +89,8 @@ public static class ModelSynthesizer
                 // a Select produces the same wire request a generated client would.
                 var members = string.Join(
                     ", ",
-                    introspection.Types
-                        .Single(_ => _.Model == source.Model)
-                        .Members
-                        .Where(_ => _ is {IsNavigation: false, IsCollection: false})
-                        .Select(_ => $"\"{_.Name}\""));
+                    ScalarMembers(introspection.Types.Single(_ => _.Model == source.Model), introspection)
+                        .Select(_ => $"\"{_}\""));
                 builder.AppendLine($"    public global::System.Linq.IQueryable<{source.Model}> {source.Name} => client.Source<{source.Model}>(\"{source.Name}\", [{members}]);");
             }
         }
@@ -102,5 +106,29 @@ public static class ModelSynthesizer
         builder.AppendLine("}");
 
         return builder.ToString();
+    }
+
+    // The scalar members a snippet projects when it writes no Select: declared plus inherited,
+    // base-first, matching the generator's own walk so the two produce the same wire request.
+    static List<string> ScalarMembers(ScryTypeInfo type, ScryIntrospection introspection)
+    {
+        var members = new List<string>();
+        if (type.Base is { } baseModel &&
+            introspection.Types.FirstOrDefault(_ => _.Model == baseModel) is { } baseType)
+        {
+            members.AddRange(ScalarMembers(baseType, introspection));
+        }
+
+        members.AddRange(
+            type.Members
+                .Where(_ => _ is {IsNavigation: false, IsCollection: false})
+                .Select(_ => _.Name));
+        return members;
+    }
+
+    static string Arguments(ScryTypeInfo type, ScryIntrospection introspection)
+    {
+        var source = introspection.Sources.First(_ => _.Model == type.Model).Name;
+        return string.Join(", ", new[] {source}.Concat(ScalarMembers(type, introspection)).Select(_ => $"\"{_}\""));
     }
 }

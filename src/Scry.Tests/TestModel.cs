@@ -69,6 +69,40 @@ public class Address
 }
 // end-snippet
 
+/// <summary>
+/// The root of a TPH hierarchy. Opting the base in exposes its own members; a derived type is only
+/// reachable — and its own members only readable — once it is opted in on its own.
+/// </summary>
+// begin-snippet: queryableHierarchy
+[Queryable]
+public class Asset
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+}
+
+[Queryable]
+public class Vehicle : Asset
+{
+    public int Wheels { get; set; }
+}
+
+[Queryable]
+public class Building : Asset
+{
+    public int Floors { get; set; }
+}
+// end-snippet
+
+/// <summary>
+/// Derives from <see cref="Asset"/> but is deliberately <i>not</i> opted in, so narrowing to it is
+/// rejected and its own members stay unreachable.
+/// </summary>
+public class Artwork : Asset
+{
+    public string Medium { get; set; } = "";
+}
+
 [Queryable]
 public class Order
 {
@@ -229,17 +263,26 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderLine> OrderLines => Set<OrderLine>();
     public DbSet<Ticket> Tickets => Set<Ticket>();
+    public DbSet<Asset> Assets => Set<Asset>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
         configurationBuilder.Properties<decimal>().HavePrecision(18, 2);
 
     // Map the Address complex type into a JSON column, the scenario complex-type support targets.
-    protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
         // begin-snippet: complexToJson
         modelBuilder.Entity<Employee>()
             .ComplexProperty(_ => _.Address)
             .ToJson();
-    // end-snippet
+        // end-snippet
+
+        // Table-per-hierarchy: every derived type shares the base table and is told apart by a
+        // discriminator, which is what OfType narrows on.
+        modelBuilder.Entity<Vehicle>();
+        modelBuilder.Entity<Building>();
+        modelBuilder.Entity<Artwork>();
+    }
 
     static SqlInstance<TestContext> sqlInstance = null!;
     static SqlDatabase<TestContext> database = null!;
@@ -295,6 +338,12 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
             },
             // No lines at all, so an aggregate over an empty collection is covered.
             new() { Region = "South", Amount = 75m, Quantity = 1, Sku = 3000, Placed = new(2025, 12, 31, 23, 59, 59), Discount = 5m, Grade = 'A' });
+
+        context.Assets.AddRange(
+            new Vehicle {Name = "Van", Wheels = 4},
+            new Vehicle {Name = "Trailer", Wheels = 2},
+            new Building {Name = "Depot", Floors = 3},
+            new Artwork {Name = "Mural", Medium = "Paint"});
 
         context.Tickets.AddRange(
             new() { Name = "Login bug", IsOpen = true },

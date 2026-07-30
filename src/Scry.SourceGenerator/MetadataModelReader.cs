@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// Reads the allow-listed query surface from a server model assembly using
 /// <see cref="MetadataReader"/> — metadata only, never loading or executing the assembly.
 /// </summary>
@@ -40,13 +40,20 @@ static class MetadataModelReader
             }
 
             var modelByFullName = discovered.ToDictionary(_ => _.FullName, _ => _.ModelName, StringComparer.Ordinal);
+            var discoveredByFullName = discovered.ToDictionary(_ => _.FullName, StringComparer.Ordinal);
             var enums = new Dictionary<string, EnumInfo>(StringComparer.Ordinal);
 
             var sources = ImmutableArray.CreateBuilder<SourceInfo>();
             foreach (var entry in discovered)
             {
                 var properties = ReadProperties(reader, entry.Type, decoder, modelByFullName, enums);
-                sources.Add(new(entry.SourceName, entry.ModelName, entry.Kind, new(properties)));
+                sources.Add(
+                    new(
+                        entry.SourceName,
+                        entry.ModelName,
+                        entry.Kind,
+                        new(properties),
+                        NearestOptedInBase(reader, entry.Type, discoveredByFullName)));
             }
 
             return new(null, new(sources.ToImmutable()), new(enums.Values.ToImmutableArray()));
@@ -54,6 +61,33 @@ static class MetadataModelReader
         catch (Exception exception)
         {
             return new($"Failed to read model assembly '{dllPath}': {exception.Message}", new([]), new([]));
+        }
+    }
+
+    // Walks up the base chain to the first type that was itself opted in, skipping any that were not —
+    // so leaving a base out hides it without hiding its descendants. Must stay in lockstep with
+    // Schema's own base-linking, which does the same walk over reflection.
+    static string? NearestOptedInBase(
+        MetadataReader reader,
+        TypeDefinition type,
+        Dictionary<string, Discovered> discovered)
+    {
+        var current = type;
+        while (true)
+        {
+            // A base outside this assembly is a TypeReference, which cannot have been opted in here —
+            // the walk ends rather than trying to follow it.
+            if (current.BaseType.IsNil ||
+                current.BaseType.Kind != HandleKind.TypeDefinition)
+            {
+                return null;
+            }
+
+            current = reader.GetTypeDefinition((TypeDefinitionHandle)current.BaseType);
+            if (discovered.TryGetValue(FullName(reader, current), out var match))
+            {
+                return match.ModelName;
+            }
         }
     }
 
