@@ -1,3 +1,4 @@
+// ReSharper disable UnusedVariable
 namespace Sample.Client.Pages;
 
 // Documentation-only example backing the "grammar" section of docs/paging.md. Not wired to a page;
@@ -14,7 +15,10 @@ public static class PagingGrammar
             .ThenBy(_ => _.Id)
             .ToPageAsync(20);
 
-        foreach (var row in page.Items) { /* ... */ }
+        foreach (var row in page.Items)
+        {
+             /* ... */
+        }
 
         // Page 2 — the same query, resumed with the previous page's cursor (a keyset seek).
         if (page.HasMore)

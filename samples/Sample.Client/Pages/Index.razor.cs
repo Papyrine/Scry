@@ -33,7 +33,8 @@ public partial class Index
         try
         {
             // begin-snippet: clientQuery
-            employees = await Query.Employee
+            employees = await Query
+                .Employee
                 .Where(_ => _.Active)
                 .OrderBy(_ => _.Name)
                 .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
@@ -41,14 +42,16 @@ public partial class Index
             // end-snippet
 
             // begin-snippet: clientGroupBy
-            regions = await Query.Order
+            regions = await Query
+                .Order
                 .GroupBy(_ => _.Region)
                 .Select(_ => new RegionSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
                 .ToListAsync();
             // end-snippet
 
             // begin-snippet: clientClosureCapture
-            fullTimers = await Query.Employee
+            fullTimers = await Query
+                .Employee
                 .Where(_ => _.Status == status)
                 .OrderBy(_ => _.Name)
                 .Take(top)
@@ -61,7 +64,8 @@ public partial class Index
             // begin-snippet: clientNestedProjection
             // Projecting into the Department navigation builds a nested result object rather than
             // flattening it — the response is { Name, Department: { Name } }.
-            cards = await Query.Employee
+            cards = await Query
+                .Employee
                 .Where(_ => _.Active)
                 .OrderBy(_ => _.Name)
                 .Select(_ => new EmployeeCard(_.Name, new DepartmentCard(_.Department!.Name)))

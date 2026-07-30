@@ -33,10 +33,11 @@ public class IndexPageTests
     {
         await using var context = new BunitContext();
         context.Services.AddSingleton(new ScryClient((_, _) =>
-            Task.FromException<QueryResponse>(new ScryStaleClientException(
-                "Property 'Renamed' is not allow-listed on 'Employee'. The request's schema stamp does " +
-                "not match this server's model, so the client was generated against a different model " +
-                "surface — regenerate the client."))));
+            Task.FromException<QueryResponse>(
+                new ScryStaleClientException(
+                    "Property 'Renamed' is not allow-listed on 'Employee'. The request's schema stamp does " +
+                    "not match this server's model, so the client was generated against a different model " +
+                    "surface — regenerate the client."))));
         context.Services.AddSingleton<ScryQuery>();
 
         var page = context.Render<IndexPage>();

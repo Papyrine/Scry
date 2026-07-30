@@ -1,4 +1,4 @@
-﻿# Comparisons
+# Comparisons
 
 Scry fills a narrow slot: a **single first-party client**, written in **C#**, that needs to shape its own **read** queries against a **server-owned EF Core model** — without the server hand-writing an endpoint per screen.
 
@@ -32,13 +32,14 @@ Active employees, ordered by name, with the manager and department names:
 <!-- snippet: clientQuery -->
 <a id='snippet-clientQuery'></a>
 ```cs
-employees = await Query.Employee
+employees = await Query
+    .Employee
     .Where(_ => _.Active)
     .OrderBy(_ => _.Name)
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L35-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L35-L42' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 GraphQL, with Hot Chocolate's filtering and sorting conventions:

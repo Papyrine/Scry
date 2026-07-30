@@ -687,11 +687,21 @@ sealed class QueryTranslator
                 "Truncate" => KnownFunction.MathTruncate,
                 "Sqrt" => KnownFunction.MathSqrt,
                 "Pow" => KnownFunction.MathPow,
+                "Exp" => KnownFunction.MathExp,
+                "Log" => KnownFunction.MathLog,
+                "Log10" => KnownFunction.MathLog10,
+                "Sin" => KnownFunction.MathSin,
+                "Cos" => KnownFunction.MathCos,
+                "Tan" => KnownFunction.MathTan,
+                "Asin" => KnownFunction.MathAsin,
+                "Acos" => KnownFunction.MathAcos,
+                "Atan" => KnownFunction.MathAtan,
+                "Atan2" => KnownFunction.MathAtan2,
                 _ => throw Unsupported(call)
             };
 
-            // Math.Round(value, digits) and Math.Pow(value, exponent) carry their second operand as the
-            // one argument; the rest take none.
+            // The two-operand forms — Round(value, digits), Pow(value, exponent), Log(value, base),
+            // Atan2(y, x) — carry their second operand as the one argument; the rest take none.
             var arguments = call.Arguments.Count > 1
                 ? new[] { TranslateExpr(call.Arguments[1], root) }
                 : [];

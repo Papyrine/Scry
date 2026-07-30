@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+﻿namespace Scry.Wire;
 
 // begin-snippet: wireFunctions
 /// <summary>The closed set of functions a client may call on a value. No free-form method names.</summary>
@@ -40,6 +40,20 @@ public enum KnownFunction
     MathTruncate,
     MathSqrt,
     MathPow,
+    MathExp,
+
+    /// <summary>Natural logarithm, or — with one argument — the logarithm to that base.</summary>
+    MathLog,
+    MathLog10,
+    MathSin,
+    MathCos,
+    MathTan,
+    MathAsin,
+    MathAcos,
+    MathAtan,
+
+    /// <summary>The angle whose tangent is the target over the argument (<c>Math.Atan2(y, x)</c>).</summary>
+    MathAtan2,
 
     /// <summary>
     /// Membership of a client-supplied set (SQL <c>IN</c>). The target is the value being tested and

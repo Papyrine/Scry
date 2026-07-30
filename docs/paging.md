@@ -29,7 +29,10 @@ var page = await Query.Employee
     .ThenBy(_ => _.Id)
     .ToPageAsync(20);
 
-foreach (var row in page.Items) { /* ... */ }
+foreach (var row in page.Items)
+{
+     /* ... */
+}
 
 // Page 2 — the same query, resumed with the previous page's cursor (a keyset seek).
 if (page.HasMore)
@@ -41,7 +44,7 @@ if (page.HasMore)
         .ToPageAsync(20, page.Cursor);
 }
 ```
-<sup><a href='/samples/Sample.Client/Pages/PagingGrammar.cs#L9-L28' title='Snippet source file'>snippet source</a> | <a href='#snippet-pagingGrammar' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/PagingGrammar.cs#L10-L32' title='Snippet source file'>snippet source</a> | <a href='#snippet-pagingGrammar' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Roles of the pieces:

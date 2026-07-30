@@ -59,12 +59,13 @@ A collection navigation opted in with [`[QueryableCollection]`](annotations.md#c
 <!-- snippet: clientGroupBy -->
 <a id='snippet-clientGroupBy'></a>
 ```cs
-regions = await Query.Order
+regions = await Query
+    .Order
     .GroupBy(_ => _.Region)
     .Select(_ => new RegionSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L43-L48' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L44-L50' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 …and as a **terminal folding the whole sequence** to one scalar, which needs no `GroupBy`:
@@ -90,7 +91,7 @@ The other two positions EF Core allows an aggregate in are both reachable as wel
 
 ### Functions
 
-See [the full table](querying.md#functions). In summary — string: `Contains`, `StartsWith`, `EndsWith`, `ToLower`, `ToUpper`, `Length`, `Trim`/`TrimStart`/`TrimEnd`, `Substring`, `IndexOf`, `Replace`, `IsNullOrEmpty`, `IsNullOrWhiteSpace`. Date: `Year`, `Month`, `Day`, `Hour`, `Minute`, `Second`, `Millisecond`, `DayOfYear`, `Date`, and the `Add*` methods. Math: `Abs`, `Ceiling`, `Floor`, `Round`, `Truncate`, `Sqrt`, `Pow`. Plus `Contains` over a client-supplied set, which becomes a SQL `IN`.
+See [the full table](querying.md#functions). In summary — string: `Contains`, `StartsWith`, `EndsWith`, `ToLower`, `ToUpper`, `Length`, `Trim`/`TrimStart`/`TrimEnd`, `Substring`, `IndexOf`, `Replace`, `IsNullOrEmpty`, `IsNullOrWhiteSpace`. Date: `Year`, `Month`, `Day`, `Hour`, `Minute`, `Second`, `Millisecond`, `DayOfYear`, `Date`, and the `Add*` methods. Math: `Abs`, `Ceiling`, `Floor`, `Round`, `Truncate`, `Sqrt`, `Pow`, `Exp`, `Log`, `Log10`, and the trigonometric functions (`Sin`, `Cos`, `Tan`, `Asin`, `Acos`, `Atan`, `Atan2`). Plus `Contains` over a client-supplied set, which becomes a SQL `IN`.
 
 Functions are expression-level: they read a row in a predicate, an ordering or group key, a terminal predicate, an aggregate selector, or a projection member.
 
@@ -115,12 +116,7 @@ Nothing to design; the surface underneath does not exist yet.
 
 - `FullJoin` — `Queryable.FullJoin` is a .NET 11 addition. On net10 the client cannot express it and EF cannot execute it, so there is nothing to carry. The wire deliberately does not reserve a join kind for it: an operator the server would only reject is not worth committing to the contract.
 - `DayOfWeek` — omitted deliberately rather than overlooked. SQL Server's provider has no translation for it, so it would validate, rebind, and then fail at execution. A function that reaches the wire but not SQL is a trap; it belongs behind provider capability detection, or in a build targeting a provider that translates it.
-
-### Not asked for
-
-Fits the closed-vocabulary pattern — a new enum member plus validator, builder, and generator work — but nothing needs it yet.
-
-- The rest of the SQL Server math surface: `Exp`, `Log`, `Log10`, `Sign`, and the trigonometric functions. All are translated by the provider.
+- `Math.Sign` — the same category, one step later. The provider does translate it, but SQL's `SIGN` returns its argument's type while `Math.Sign` returns `int`, so the result does not materialize: a query using it succeeds in a predicate, where nothing is read back, and faults in a projection. Translating is not sufficient on its own.
 
 ### Deliberately left out
 

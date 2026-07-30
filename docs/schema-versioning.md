@@ -153,7 +153,7 @@ catch (ScryStaleClientException)
     stale = true;
 }
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L71-L80' title='Snippet source file'>snippet source</a> | <a href='#snippet-handleStaleClient' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L75-L84' title='Snippet source file'>snippet source</a> | <a href='#snippet-handleStaleClient' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The stale branch renders a directed placeholder in place of the data — the fix is a reload, and the banner offering one is already visible above:

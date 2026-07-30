@@ -5,13 +5,14 @@ Client queries are ordinary C# LINQ written against the generated query models. 
 <!-- snippet: clientQuery -->
 <a id='snippet-clientQuery'></a>
 ```cs
-employees = await Query.Employee
+employees = await Query
+    .Employee
     .Where(_ => _.Active)
     .OrderBy(_ => _.Name)
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L35-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L35-L42' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The supported surface is deliberately closed. Anything outside it fails fast with a clear `NotSupportedException` at translation time — before a request is ever sent.
@@ -372,6 +373,20 @@ public enum KnownFunction
     MathTruncate,
     MathSqrt,
     MathPow,
+    MathExp,
+
+    /// <summary>Natural logarithm, or — with one argument — the logarithm to that base.</summary>
+    MathLog,
+    MathLog10,
+    MathSin,
+    MathCos,
+    MathTan,
+    MathAsin,
+    MathAcos,
+    MathAtan,
+
+    /// <summary>The angle whose tangent is the target over the argument (<c>Math.Atan2(y, x)</c>).</summary>
+    MathAtan2,
 
     /// <summary>
     /// Membership of a client-supplied set (SQL <c>IN</c>). The target is the value being tested and
@@ -380,7 +395,7 @@ public enum KnownFunction
     In
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L50' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L64' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Mapped from:
@@ -409,11 +424,20 @@ Mapped from:
 | `Math.Round(value[, digits])` | `MathRound` |
 | `Math.Truncate(value)` | `MathTruncate` |
 | `Math.Sqrt(value)` / `Math.Pow(value, exponent)` | `MathSqrt` / `MathPow` |
+| `Math.Exp(value)` | `MathExp` |
+| `Math.Log(value[, base])` / `Math.Log10(value)` | `MathLog` / `MathLog10` |
+| `Math.Sin(value)` / `Math.Cos(value)` / `Math.Tan(value)` | `MathSin` / `MathCos` / `MathTan` |
+| `Math.Asin(value)` / `Math.Acos(value)` / `Math.Atan(value)` | `MathAsin` / `MathAcos` / `MathAtan` |
+| `Math.Atan2(y, x)` | `MathAtan2` |
 | `set.Contains(_.Member)` | `In` |
 
 The date functions apply to `DateTime`, `DateOnly`, `DateTimeOffset`, and `TimeOnly`, and an optional member is unwrapped before the part is read. Only the parts a type actually has are available: asking for the `Hour` of a `DateOnly` is rejected. The trim functions map only the whitespace-trimming overloads — the `params char[]` forms have no SQL equivalent.
 
-There is no free-form method call node in the wire format, so this list is the complete set of behaviour a client can ask the database to perform. **Provider support is still the outer bound**: a function only reaches SQL if the EF provider translates it, which is why `DayOfWeek` — which SQL Server's provider does not translate — has no entry.
+Every function past `Math.Sqrt` is defined over `double` alone, so an integer or decimal member is widened to reach it — which is also the type the provider computes it in. `Math.Log` is the natural logarithm with no second argument and a logarithm to that base with one.
+
+An arithmetic expression promotes its operands the way C# does, to the widest of their types, so `(double)_.Quantity / 2d` over an integer member is computed in floating point rather than as integer division. A comparison instead reads its constant at the member's type, which is what lets `_.Amount > 80` compare decimals.
+
+There is no free-form method call node in the wire format, so this list is the complete set of behaviour a client can ask the database to perform. **Provider support is still the outer bound**: a function only reaches SQL if the EF provider translates it, and translating is not enough on its own — the result has to materialize too. `DayOfWeek` has no entry because SQL Server's provider does not translate it, and `Math.Sign` has none because the translation it does produce cannot be read back: SQL's `SIGN` returns its argument's type, while `Math.Sign` returns `int`, so a query using it succeeds in a predicate and faults in a projection.
 
 Functions are **expression-level**: they read a row inside a `Where` predicate, an ordering or group key, a terminal predicate, an aggregate selector, or a [projection member](#computed-projection-members).
 
@@ -684,14 +708,15 @@ Literals become constants. So does **any sub-expression that does not reference 
 <!-- snippet: clientClosureCapture -->
 <a id='snippet-clientClosureCapture'></a>
 ```cs
-fullTimers = await Query.Employee
+fullTimers = await Query
+    .Employee
     .Where(_ => _.Status == status)
     .OrderBy(_ => _.Name)
     .Take(top)
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L50-L57' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L52-L60' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `status` and `top` are locals; the translator compiles and invokes those sub-expressions, then emits their values. Calls to custom methods are fine on this path as long as they do not touch the query parameter — `.Where(_ => _.Name == BuildName())` sends the *result* of `BuildName()`.
@@ -792,13 +817,14 @@ Projecting a **constructed object** into a navigation nests the result under tha
 ```cs
 // Projecting into the Department navigation builds a nested result object rather than
 // flattening it — the response is { Name, Department: { Name } }.
-cards = await Query.Employee
+cards = await Query
+    .Employee
     .Where(_ => _.Active)
     .OrderBy(_ => _.Name)
     .Select(_ => new EmployeeCard(_.Name, new DepartmentCard(_.Department!.Name)))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L61-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientNestedProjection' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L64-L73' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientNestedProjection' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The client factors the shared navigation (`_.Department`) out of the nested members and emits a `NestedValue` in the wire AST; the server descends the navigation and shapes the leaves under it, producing nested JSON:
@@ -845,12 +871,13 @@ Rules for a nested projection member:
 <!-- snippet: clientGroupBy -->
 <a id='snippet-clientGroupBy'></a>
 ```cs
-regions = await Query.Order
+regions = await Query
+    .Order
     .GroupBy(_ => _.Region)
     .Select(_ => new RegionSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L43-L48' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L44-L50' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The key may be **composite** — up to eight members, grouped on all of them at once. Each part is then read by the name the key type gave it:

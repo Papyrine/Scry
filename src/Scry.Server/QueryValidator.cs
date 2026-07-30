@@ -1077,7 +1077,15 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 KnownFunction.MathCeiling or
                 KnownFunction.MathFloor or
                 KnownFunction.MathTruncate or
-                KnownFunction.MathSqrt => (0, 0),
+                KnownFunction.MathSqrt or
+                KnownFunction.MathExp or
+                KnownFunction.MathLog10 or
+                KnownFunction.MathSin or
+                KnownFunction.MathCos or
+                KnownFunction.MathTan or
+                KnownFunction.MathAsin or
+                KnownFunction.MathAcos or
+                KnownFunction.MathAtan => (0, 0),
 
             KnownFunction.StringContains or
                 KnownFunction.StringStartsWith or
@@ -1091,7 +1099,11 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 KnownFunction.DateAddSeconds => (1, 1),
 
             KnownFunction.StringReplace => (2, 2),
-            KnownFunction.MathPow => (1, 1),
+            KnownFunction.MathPow or
+                KnownFunction.MathAtan2 => (1, 1),
+
+            // Math.Log is the natural logarithm with no argument and a logarithm to a base with one.
+            KnownFunction.MathLog => (0, 1),
             KnownFunction.StringSubstring => (1, 2),
             KnownFunction.MathRound => (0, 1),
 

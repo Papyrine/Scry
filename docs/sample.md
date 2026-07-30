@@ -256,13 +256,14 @@ A filter, an ordering, and a projection that reaches through two navigations:
 <!-- snippet: clientQuery -->
 <a id='snippet-clientQuery'></a>
 ```cs
-employees = await Query.Employee
+employees = await Query
+    .Employee
     .Where(_ => _.Active)
     .OrderBy(_ => _.Name)
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L35-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L35-L42' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A group-by with aggregates:
@@ -270,12 +271,13 @@ A group-by with aggregates:
 <!-- snippet: clientGroupBy -->
 <a id='snippet-clientGroupBy'></a>
 ```cs
-regions = await Query.Order
+regions = await Query
+    .Order
     .GroupBy(_ => _.Region)
     .Select(_ => new RegionSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L43-L48' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L44-L50' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 And a query parameterized by closure-captured locals — the values are evaluated client-side and sent as constants, which is how an app builds a filtered query at runtime:
@@ -283,14 +285,15 @@ And a query parameterized by closure-captured locals — the values are evaluate
 <!-- snippet: clientClosureCapture -->
 <a id='snippet-clientClosureCapture'></a>
 ```cs
-fullTimers = await Query.Employee
+fullTimers = await Query
+    .Employee
     .Where(_ => _.Status == status)
     .OrderBy(_ => _.Name)
     .Take(top)
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L50-L57' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L52-L60' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 

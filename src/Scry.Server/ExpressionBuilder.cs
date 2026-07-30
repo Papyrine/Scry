@@ -813,10 +813,31 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
             return Expression.OrElse(leftBool, rightBool);
         }
 
-        // Infer the constant's type from the typed (non-constant) operand.
+        // Arithmetic promotes its operands to a common type; a comparison instead reads its constant at
+        // the other side's type, which is what makes '_.Amount > 100' compare decimals. Inferring the
+        // type that way for arithmetic too would compute in the member's type rather than the one C#
+        // would have: '_.Quantity / 2d' over an integer member would answer 0.
+        var arithmetic = binary.Op is
+            BinaryOp.Add or BinaryOp.Subtract or BinaryOp.Multiply or BinaryOp.Divide or BinaryOp.Modulo;
+
         Expression left;
         Expression right;
-        if (binary is {Left: ConstNode, Right: not ConstNode})
+        if (arithmetic)
+        {
+            if (binary is {Left: ConstNode, Right: not ConstNode})
+            {
+                right = Build(binary.Right, row, null);
+                left = Build(binary.Left, row, Widest(right.Type, binary.Left));
+            }
+            else
+            {
+                left = Build(binary.Left, row, null);
+                right = Build(binary.Right, row, Widest(left.Type, binary.Right));
+            }
+
+            Promote(ref left, ref right);
+        }
+        else if (binary is {Left: ConstNode, Right: not ConstNode})
         {
             right = Build(binary.Right, row, null);
             left = Build(binary.Left, row, right.Type);
@@ -928,13 +949,26 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
                 KnownFunction.MathRound => BuildRound(call, target, row),
                 KnownFunction.MathTruncate => MathCall("Truncate", target),
 
-                // Sqrt and Pow are defined over double alone, so a decimal or integer member is widened
-                // to reach them — which is also the type the provider computes them in.
-                KnownFunction.MathSqrt => Expression.Call(mathSqrt, ConvertTo(NonNullable(target), typeof(double))),
-                KnownFunction.MathPow => Expression.Call(
-                    mathPow,
-                    ConvertTo(NonNullable(target), typeof(double)),
-                    ConvertTo(NonNullable(Build(call.Arguments[0], row, typeof(double))), typeof(double))),
+                // These are defined over double alone, so a decimal or integer member is widened to
+                // reach them — which is also the type the provider computes them in.
+                KnownFunction.MathSqrt => Double1("Sqrt", target),
+                KnownFunction.MathExp => Double1("Exp", target),
+                KnownFunction.MathLog10 => Double1("Log10", target),
+                KnownFunction.MathSin => Double1("Sin", target),
+                KnownFunction.MathCos => Double1("Cos", target),
+                KnownFunction.MathTan => Double1("Tan", target),
+                KnownFunction.MathAsin => Double1("Asin", target),
+                KnownFunction.MathAcos => Double1("Acos", target),
+                KnownFunction.MathAtan => Double1("Atan", target),
+
+                KnownFunction.MathPow => Double2("Pow", target, call, row),
+                KnownFunction.MathAtan2 => Double2("Atan2", target, call, row),
+
+                // With no argument this is the natural logarithm; with one it is the logarithm to that
+                // base, which is a second double operand exactly like Pow's exponent.
+                KnownFunction.MathLog => call.Arguments.Count == 0
+                    ? Double1("Log", target)
+                    : Double2("Log", target, call, row),
 
                 KnownFunction.In => BuildIn(call, target),
 
@@ -989,6 +1023,24 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         Nullable.GetUnderlyingType(target.Type) is null
             ? target
             : Expression.Property(target, "Value");
+
+    // A Math method defined over double alone: the target is widened to reach it.
+    static Expression Double1(string name, Expression target) =>
+        Expression.Call(DoubleMethod(name, 1), ConvertTo(NonNullable(target), typeof(double)));
+
+    // The same, for the two-operand forms — the second operand is the call's one argument.
+    Expression Double2(string name, Expression target, CallNode call, Expression row) =>
+        Expression.Call(
+            DoubleMethod(name, 2),
+            ConvertTo(NonNullable(target), typeof(double)),
+            ConvertTo(NonNullable(Build(call.Arguments[0], row, typeof(double))), typeof(double)));
+
+    static readonly ConcurrentDictionary<(string Name, int Arity), MethodInfo> doubleMethods = new();
+
+    static MethodInfo DoubleMethod(string name, int arity) =>
+        doubleMethods.GetOrAdd(
+            (name, arity),
+            key => typeof(Math).GetMethod(key.Name, [..Enumerable.Repeat(typeof(double), key.Arity)])!);
 
     static Expression MathCall(string name, Expression target)
     {
@@ -1252,6 +1304,84 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         return Expression.Convert(expression, typeof(object));
     }
 
+    /// <summary>
+    /// The type to read a constant at when it sits opposite <paramref name="other"/> in an arithmetic
+    /// expression: its own, when that is wider, and otherwise the type it is being combined with.
+    /// </summary>
+    /// <remarks>
+    /// Reading it at the other operand's type is what makes a bare literal take the member's type
+    /// rather than its own, and it is the only way a value whose CLR type the wire has no tag for — an
+    /// unsigned or narrow integer, which rides as a string — can be parsed at all. But it must not
+    /// narrow a constant that was written wider than the member, which is what silently turns a
+    /// floating-point expression into an integer one.
+    /// </remarks>
+    static Type Widest(Type other, Node node)
+    {
+        if (node is not ConstNode constant)
+        {
+            return other;
+        }
+
+        var declared = TagToType(constant.Tag);
+        var value = Nullable.GetUnderlyingType(other) ?? other;
+
+        return Rank(declared) is { } declaredRank && Rank(value) is { } valueRank && declaredRank > valueRank
+            ? declared
+            : other;
+    }
+
+    /// <summary>
+    /// Applies C#'s numeric promotion to the operands of an arithmetic expression: both are converted
+    /// to the widest of their types before the operation.
+    /// </summary>
+    /// <remarks>
+    /// The client's own cast is not on the wire — translation drops conversions, since nearly all of
+    /// them are nullable lifting or enum boxing that the server reproduces anyway — so the promotion is
+    /// reapplied here from the operand types themselves. Without it an expression written to evaluate
+    /// in floating point would be computed in an integer member's type and silently answer something
+    /// else. Nullability is preserved, so a null operand still propagates rather than becoming a zero.
+    /// </remarks>
+    static void Promote(ref Expression left, ref Expression right)
+    {
+        var leftValue = Nullable.GetUnderlyingType(left.Type) ?? left.Type;
+        var rightValue = Nullable.GetUnderlyingType(right.Type) ?? right.Type;
+
+        if (leftValue == rightValue ||
+            Rank(leftValue) is not { } leftRank ||
+            Rank(rightValue) is not { } rightRank)
+        {
+            return;
+        }
+
+        var target = leftRank >= rightRank ? leftValue : rightValue;
+
+        // A nullable operand makes the whole expression nullable, exactly as it does in C#.
+        if (Nullable.GetUnderlyingType(left.Type) is not null ||
+            Nullable.GetUnderlyingType(right.Type) is not null)
+        {
+            target = typeof(Nullable<>).MakeGenericType(target);
+        }
+
+        left = ConvertTo(left, target);
+        right = ConvertTo(right, target);
+    }
+
+    // Only pairs C# itself would have promoted can reach here, so the ordering needs no rule for the
+    // pairs C# refuses to convert between — decimal and double have no implicit conversion either way,
+    // so an expression mixing them could not have been written.
+    static int? Rank(Type type) =>
+        Type.GetTypeCode(type) switch
+        {
+            TypeCode.Byte or TypeCode.SByte => 1,
+            TypeCode.Int16 or TypeCode.UInt16 => 2,
+            TypeCode.Int32 or TypeCode.UInt32 => 3,
+            TypeCode.Int64 or TypeCode.UInt64 => 4,
+            TypeCode.Decimal => 5,
+            TypeCode.Single => 6,
+            TypeCode.Double => 7,
+            _ => null
+        };
+
     static void Coerce(ref Expression left, ref Expression right)
     {
         if (left.Type == right.Type)
@@ -1292,8 +1422,6 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
     static readonly MethodInfo stringReplace = StringMethod("Replace", typeof(string), typeof(string));
     static readonly MethodInfo stringConcat = StringMethod("Concat", typeof(string), typeof(string));
 
-    static readonly MethodInfo mathSqrt = typeof(Math).GetMethod("Sqrt", [typeof(double)])!;
-    static readonly MethodInfo mathPow = typeof(Math).GetMethod("Pow", [typeof(double), typeof(double)])!;
 
     // The generic Contains<TSource>(source, value) definition, closed per member type by BuildIn.
     static readonly MethodInfo enumerableContains = typeof(Enumerable).GetMethods()

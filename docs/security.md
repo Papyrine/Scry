@@ -130,6 +130,20 @@ public enum KnownFunction
     MathTruncate,
     MathSqrt,
     MathPow,
+    MathExp,
+
+    /// <summary>Natural logarithm, or — with one argument — the logarithm to that base.</summary>
+    MathLog,
+    MathLog10,
+    MathSin,
+    MathCos,
+    MathTan,
+    MathAsin,
+    MathAcos,
+    MathAtan,
+
+    /// <summary>The angle whose tangent is the target over the argument (<c>Math.Atan2(y, x)</c>).</summary>
+    MathAtan2,
 
     /// <summary>
     /// Membership of a client-supplied set (SQL <c>IN</c>). The target is the value being tested and
@@ -138,7 +152,7 @@ public enum KnownFunction
     In
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L50' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L64' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Unknown discriminators fail deserialization rather than being ignored, so a request that names anything outside these sets is rejected at the JSON layer.
