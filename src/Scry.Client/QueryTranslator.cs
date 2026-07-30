@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// Translates a captured LINQ expression tree into the wire AST. Supports the closed operator set;
 /// anything outside it throws a clear <see cref="NotSupportedException"/> at translation time.
 /// </summary>
@@ -543,6 +543,13 @@ sealed class QueryTranslator
             return subquery;
         }
 
+        // Query.Department.Select(_ => _.Name).Contains(_.Name) — membership of a set drawn from
+        // another source, which the server resolves and policy-filters before the test.
+        if (TryInSource(call, root) is { } inSource)
+        {
+            return inSource;
+        }
+
         // ids.Contains(_.Id) — membership of a client-side set, which becomes a SQL IN. The set must be
         // closure state (evaluated here into constants) and the tested value must come from the row.
         if (IsSetContains(call, root, out var set, out var value))
@@ -837,6 +844,63 @@ sealed class QueryTranslator
         }
 
         return chain;
+    }
+
+    /// <summary>
+    /// Translates membership of a set drawn from another Scry source — the candidates come from a
+    /// captured query rather than from closure state, so they are named rather than evaluated. Returns
+    /// null when the call is not that, so the caller can go on trying the client-side set form.
+    /// </summary>
+    InSourceNode? TryInSource(MethodCallExpression call, ParameterExpression root)
+    {
+        if (call.Method.Name != "Contains" ||
+            !IsSetContains(call, root, out var set, out var value))
+        {
+            return null;
+        }
+
+        if (Evaluate(set) is not IQueryable {Provider: QueryProvider provider} queryable)
+        {
+            return null;
+        }
+
+        // Walked directly rather than run through the operator translator: the Select here names a
+        // bare value to compare against, where an ordinary projection must construct an object.
+        Node? predicate = null;
+        Node? selector = null;
+        var current = queryable.Expression;
+        while (current is MethodCallExpression inner)
+        {
+            switch (inner.Method.Name)
+            {
+                case "Select" when selector is null && inner.Arguments.Count == 2:
+                    var projection = Lambda(inner.Arguments[1]);
+                    selector = TranslateExpr(projection.Body, projection.Parameters[0]);
+                    break;
+
+                case "Where" when inner.Arguments.Count == 2:
+                    var filter = Lambda(inner.Arguments[1]);
+                    var clause = TranslateExpr(filter.Body, filter.Parameters[0]);
+                    predicate = predicate is null
+                        ? clause
+                        : new BinaryNode(BinaryOp.AndAlso, clause, predicate);
+                    break;
+
+                default:
+                    throw new NotSupportedException(
+                        "The source of a membership test may only carry a Where and a Select of one value.");
+            }
+
+            current = inner.Arguments[0];
+        }
+
+        if (selector is null)
+        {
+            throw new NotSupportedException(
+                "A membership test against another source must Select the single value to compare against.");
+        }
+
+        return new(TranslateExpr(value, root), provider.Root, selector, predicate);
     }
 
     // The receiver holds the candidate set and must be closure state; the tested value must read from

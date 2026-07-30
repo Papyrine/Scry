@@ -42,10 +42,11 @@ public abstract record QueryOp;
 [JsonDerivedType(typeof(ConditionalNode), "conditional")]
 [JsonDerivedType(typeof(SubqueryNode), "subquery")]
 [JsonDerivedType(typeof(CollateNode), "collate")]
+[JsonDerivedType(typeof(InSourceNode), "inSource")]
 [JsonDerivedType(typeof(AggregateNode), "aggregate")]
 public abstract record Node;
 ```
-<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L19' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L20' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Referenced by `Scry.Client` and `Scry.Server`; it is rarely used directly.

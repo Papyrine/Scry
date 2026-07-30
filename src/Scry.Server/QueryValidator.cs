@@ -552,6 +552,10 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     ValidateSubquery(subquery, elementType, depth);
                     break;
 
+                case InSourceNode inSource:
+                    ValidateInSource(inSource, elementType, depth);
+                    break;
+
                 case CollateNode collate:
                     // A server that has configured no collation for the requested sensitivity cannot
                     // answer the question, and must not guess at one.
@@ -740,6 +744,60 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             }
 
             break;
+        }
+    }
+
+    /// <summary>
+    /// Validates membership of a set drawn from another source. The named source goes through the same
+    /// allow-list a request's own root does, and the selector and filter are validated against <i>its</i>
+    /// type — the two sides never share an allow-list.
+    /// </summary>
+    void ValidateInSource(InSourceNode inSource, Type elementType, int depth)
+    {
+        if (!schema.TryGetSource(inSource.Root, out var inner))
+        {
+            throw Reject($"Unknown source '{inSource.Root}'.");
+        }
+
+        ValidateScalar(inSource.Value, elementType, "Membership value");
+        ValidateScalar(inSource.Selector, inner.ClrType, "Membership selector");
+        EnsureNoNestedSource(inSource.Selector);
+
+        if (inSource.Predicate is { } predicate)
+        {
+            EnsureNoNestedSource(predicate);
+            ValidateExpr(predicate, inner.ClrType, depth + 1);
+        }
+    }
+
+    // One level only. A membership test costs a subquery; nesting them multiplies that per row, and
+    // the depth limit alone does not bound it meaningfully — the same reasoning as for subqueries.
+    static void EnsureNoNestedSource(Node node)
+    {
+        switch (node)
+        {
+            case InSourceNode:
+                throw Reject("A membership test against another source may not appear inside another.");
+            case BinaryNode binary:
+                EnsureNoNestedSource(binary.Left);
+                EnsureNoNestedSource(binary.Right);
+                break;
+            case UnaryNode unary:
+                EnsureNoNestedSource(unary.Operand);
+                break;
+            case ConditionalNode conditional:
+                EnsureNoNestedSource(conditional.Test);
+                EnsureNoNestedSource(conditional.IfTrue);
+                EnsureNoNestedSource(conditional.IfFalse);
+                break;
+            case CallNode call:
+                EnsureNoNestedSource(call.Target);
+                foreach (var argument in call.Arguments)
+                {
+                    EnsureNoNestedSource(argument);
+                }
+
+                break;
         }
     }
 

@@ -24,6 +24,10 @@ For usage detail on the supported surface (position rules, limits, examples), se
 | `Where(predicate)` after `GroupBy` | SQL `HAVING` — reads the group key and aggregates. |
 | `Join(…)` / `LeftJoin(…)` | Each side policy-filtered independently first; carries its own projection. |
 
+### Membership of another source
+
+`Contains` over a query against a second source becomes a SQL `IN (SELECT …)`. That source is resolved and policy-filtered before the test, the same way a join resolves its second side, so membership is only ever of rows the caller could have queried directly. See [membership of another source](querying.md#membership-of-another-source).
+
 ### Collection subqueries
 
 A collection navigation opted in with [`[QueryableCollection]`](annotations.md#collections) is **aggregable, not projectable**: `Any`, `All`, `Count`, `Sum`, `Average`, `Min`, `Max` over it, answered as a correlated subquery, in any position a value can appear. Its rows can never be enumerated, so a response never carries a nested collection. See [collection subqueries](querying.md#collection-subqueries).
@@ -109,7 +113,6 @@ Fit the closed-vocabulary pattern — each is a new enum member or a small op re
 
 Structurally bigger than the current pipeline — multiple sources per request, subqueries, or new type-surface in the generator. Each needs a security review before a wire shape, and the notes below are that review as far as it has been taken.
 
-- [ ] `Contains` over a **server-side** sequence (a subquery `IN`) rather than a client-supplied set. Closest to the shipped [collection subqueries](querying.md#collection-subqueries), but tests a value against a *different* source rather than a collection hanging off the row, so it needs the cross-source decision below.
 - [ ] `SelectMany` — needs collections *projectable*, which the shipped design deliberately excludes; revisit only with a bounded nested-result shape.
 
 **Cross-source queries.** `Join` and `LeftJoin` are [supported](querying.md#joins). The policy composition they were gated on is settled: each side is resolved and policy-filtered independently before the two meet, so a join can only narrow. The set operations remain open, and share the harder half of the problem — they combine two sources into one *sequence*, so unlike a join they cannot resolve the ambiguity by projecting both sides at the point they meet.

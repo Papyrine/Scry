@@ -430,6 +430,26 @@ Three rules follow from the joined row having two roots:
 Each side is validated against its own allow-list: a `[QueryIgnore]`d member stays hidden on both, and naming an outer member on the inner side is rejected. The two key selectors must produce the same type.
 
 
+### Membership of another source
+
+`Contains` over a query against a **second source** becomes a SQL `IN (SELECT …)`:
+
+```cs
+await Query.Employee
+    .Where(_ => Query.Department
+        .Where(d => d.Active)
+        .Select(d => d.Id)
+        .Contains(_.DepartmentId))
+    .ToListAsync();
+```
+
+The named source is resolved and [policy-filtered](policies.md) before the test, exactly as a [join](#joins) resolves its second side. Membership is therefore only ever of rows the caller could have queried directly: a row the source's policy hides is not in the set, so the test cannot be used to learn that it exists.
+
+Only a `Where` and the `Select` naming the compared value cross into the other source — anything else would describe rows the test has already consumed — and a membership test may not appear inside another. Each side is validated against its own allow-list, so a `[QueryIgnore]`d member stays hidden on both.
+
+The `Select` here names a **bare value** rather than constructing an object, unlike an ordinary projection: it is the single value being compared, not a row shape.
+
+
 ### Collection subqueries
 
 A collection navigation opted in with [`[QueryableCollection]`](annotations.md#collections) can be asked a question, which the database answers as a correlated subquery:

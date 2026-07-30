@@ -76,10 +76,11 @@ public abstract record QueryOp;
 [JsonDerivedType(typeof(ConditionalNode), "conditional")]
 [JsonDerivedType(typeof(SubqueryNode), "subquery")]
 [JsonDerivedType(typeof(CollateNode), "collate")]
+[JsonDerivedType(typeof(InSourceNode), "inSource")]
 [JsonDerivedType(typeof(AggregateNode), "aggregate")]
 public abstract record Node;
 ```
-<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L19' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L20' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: wireFunctions -->
@@ -191,7 +192,7 @@ That shape is deliberate and worth keeping. A bare `Expression.Constant` is *not
 An `IReturnablePolicy<T>` is applied to the source before any client operator, so client filters can<!-- include: policy-ordering. path: /docs/includes/policy-ordering.include.md -->
 only narrow an already-authorized set.<!-- endInclude -->
 
-A [join](querying.md#joins) resolves its second source through the same path: that source's policy is applied **before** the two sides meet, so a join can only narrow and never becomes a way to observe rows through a source whose policy hides them. The same reasoning is why a [collection navigation](annotations.md#collections) of a policied type is refused outright — there, the aggregate has no source for a policy to filter.
+A [join](querying.md#joins) and a [membership test against another source](querying.md#membership-of-another-source) both resolve their second source through the same path: that source's policy is applied **before** the two sides meet, so a join can only narrow and never becomes a way to observe rows through a source whose policy hides them. The same reasoning is why a [collection navigation](annotations.md#collections) of a policied type is refused outright — there, the aggregate has no source for a policy to filter.
 
 See [Row policies](policies.md).
 

@@ -3,7 +3,12 @@
 /// entity types. This is the only place CLR types are introduced — always from the schema, never
 /// from the wire.
 /// </summary>
-sealed class ExpressionBuilder(Schema schema, ScryOptions options)
+/// <remarks>
+/// <c>sources</c> resolves a named source, already policy-filtered, for a node that reads one — a
+/// membership test against another source. Null where no such node can occur, which makes the
+/// omission a rejection rather than an unfiltered read.
+/// </remarks>
+sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, IQueryable>? sources = null)
 {
     /// <summary>Builds a predicate lambda <c>TElement =&gt; bool</c>.</summary>
     public LambdaExpression BuildPredicate(Node predicate, Type type)
@@ -453,6 +458,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options)
             ConditionalNode conditional => BuildConditional(conditional, row),
             SubqueryNode subquery => BuildSubquery(subquery, row),
             CollateNode collate => BuildCollate(collate, row),
+            InSourceNode inSource => BuildInSource(inSource, row),
             _ => throw new ScryValidationException($"Unsupported expression '{node.GetType().Name}'.")
         };
 
@@ -556,6 +562,71 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options)
     static readonly MethodInfo? collateMethod = Type
         .GetType("Microsoft.EntityFrameworkCore.RelationalDbFunctionsExtensions, Microsoft.EntityFrameworkCore.Relational")
         ?.GetMethod("Collate");
+
+    /// <summary>
+    /// Rebinds membership of a set drawn from another source onto <c>Contains</c> over that source's
+    /// query, which EF translates to <c>IN (SELECT …)</c>. The source arrives already policy-filtered,
+    /// so the set can only hold rows the caller could have queried directly.
+    /// </summary>
+    Expression BuildInSource(InSourceNode inSource, Expression row)
+    {
+        if (sources is null)
+        {
+            throw new ScryValidationException("A membership test against another source is not available here.");
+        }
+
+        var inner = sources(inSource.Root);
+        var element = inner.ElementType;
+
+        if (inSource.Predicate is { } predicate)
+        {
+            inner = inner.Provider.CreateQuery(
+                Expression.Call(
+                    typeof(Queryable),
+                    "Where",
+                    [element],
+                    inner.Expression,
+                    Expression.Quote(ElementLambda(predicate, element, typeof(bool)))));
+        }
+
+        var value = Build(inSource.Value, row, null);
+        var selector = ElementLambda(inSource.Selector, element, null);
+        var candidates = inner.Provider.CreateQuery(
+            Expression.Call(
+                typeof(Queryable),
+                "Select",
+                [element, selector.ReturnType],
+                inner.Expression,
+                Expression.Quote(selector)));
+
+        // The tested value and the candidates must agree on type for Contains to bind.
+        var candidateValues = candidates.Expression;
+        if (selector.ReturnType != value.Type)
+        {
+            var target = Nullable.GetUnderlyingType(selector.ReturnType) == value.Type
+                ? selector.ReturnType
+                : value.Type;
+            if (target != value.Type)
+            {
+                value = Expression.Convert(value, target);
+            }
+            else
+            {
+                throw new ScryValidationException(
+                    $"A membership test compares '{value.Type.Name}' against '{selector.ReturnType.Name}'.");
+            }
+        }
+
+        return Expression.Call(
+            queryableContains.MakeGenericMethod(value.Type),
+            candidateValues,
+            value);
+    }
+
+    static readonly MethodInfo queryableContains = typeof(Queryable).GetMethods()
+        .Single(_ =>
+            _ is { Name: "Contains", IsGenericMethodDefinition: true } &&
+            _.GetParameters().Length == 2);
 
     LambdaExpression ElementLambda(Node node, Type element, Type? expected)
     {

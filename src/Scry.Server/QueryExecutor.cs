@@ -5,12 +5,15 @@
 sealed class QueryExecutor(Schema schema, ScryOptions options)
 {
     QueryValidator validator = new(schema, options);
-    ExpressionBuilder builder = new(schema, options);
 
     public QueryResponse Execute(QueryRequest request, DbContext db, IServiceProvider services)
     {
         var source = validator.Validate(request);
         var elementType = source.ClrType;
+
+        // Built per request so a node that reads another source resolves it the same way the root was
+        // resolved — through the schema, and policy-filtered — rather than reaching a DbSet directly.
+        var builder = new ExpressionBuilder(schema, options, name => ResolveSource(name, db, services));
 
         var query = source.Resolve(db, services);
         query = ApplyPolicy(query, source, db, services);
@@ -115,14 +118,14 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
         if (terminal is PageOp page)
         {
-            return Page(query, elementType, select, orderings, tailIsOrdered && !sawSkipOrTake, page, source, db);
+            return Page(builder, query, elementType, select, orderings, tailIsOrdered && !sawSkipOrTake, page, source, db);
         }
 
         // A join projects straight to the shaped row, so it replaces the projection step entirely and
         // the folding terminals below fold the joined rows.
         if (join is not null)
         {
-            var (joined, joinPlan) = BuildJoined(query, elementType, join, db, services);
+            var (joined, joinPlan) = BuildJoined(builder, query, elementType, join, db, services);
 
             return terminal switch
             {
@@ -204,10 +207,10 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 return Scalar(
                     Execute<bool>(query, "All", Expression.Quote(builder.BuildPredicate(all.Predicate, elementType))));
             case AggregateOp aggregate:
-                return Aggregate(query, aggregate, elementType);
+                return Aggregate(builder, query, aggregate, elementType);
         }
 
-        var (projected, plan) = BuildProjected(query, elementType, groupBy, select, groupFilter);
+        var (projected, plan) = BuildProjected(builder, query, elementType, groupBy, select, groupFilter);
 
         if (distinct)
         {
@@ -243,6 +246,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// only narrow, and no row hidden from a direct query of the inner source is observable through one.
     /// </summary>
     (IQueryable<object[]> Query, ProjectionPlan Plan) BuildJoined(
+        ExpressionBuilder builder,
         IQueryable outer,
         Type outerType,
         JoinOp join,
@@ -295,7 +299,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// picks its aggregate overload from the value type, which <see cref="ExpressionBuilder"/> has
     /// already widened to one that exists.
     /// </summary>
-    QueryResponse Aggregate(IQueryable query, AggregateOp aggregate, Type elementType)
+    static QueryResponse Aggregate(ExpressionBuilder builder, IQueryable query, AggregateOp aggregate, Type elementType)
     {
         var selector = builder.BuildAggregateSelector(aggregate.Selector, elementType, aggregate.Function);
         var values = ApplySelectTyped(query, selector);
@@ -315,7 +319,18 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         return Scalar(values.Provider.Execute(call));
     }
 
-    (IQueryable<object[]> Query, ProjectionPlan Plan) BuildProjected(
+    IQueryable ResolveSource(string name, DbContext db, IServiceProvider services)
+    {
+        if (!schema.TryGetSource(name, out var source))
+        {
+            throw new ScryValidationException($"Unknown source '{name}'.");
+        }
+
+        return ApplyPolicy(source.Resolve(db, services), source, db, services);
+    }
+
+    static (IQueryable<object[]> Query, ProjectionPlan Plan) BuildProjected(
+        ExpressionBuilder builder,
         IQueryable query,
         Type elementType,
         GroupByOp? groupBy,
@@ -495,6 +510,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         };
 
     QueryResponse Page(
+        ExpressionBuilder builder,
         IQueryable query,
         Type elementType,
         SelectOp? select,
