@@ -77,8 +77,10 @@ sealed class QueryTranslator
 
             case "Cast":
                 throw new NotSupportedException(
-                    "Cast is not supported by Scry. Use OfType to narrow to a derived type — a cast asserts " +
-                    "a type rather than filtering to it, so a row of the wrong type has no answer.");
+                    "Cast is not supported by Scry. Its check runs when a row is materialized into an entity, " +
+                    "and a Scry query always ends in a projection instead — so the assertion would be dropped " +
+                    "and the derived members read as null over rows of any other type. Use OfType, which " +
+                    "narrows by filtering and needs no check on the way back.");
 
             case "SelectMany" when call.Arguments.Count == 2:
                 var flatten = Lambda(call.Arguments[1]);
