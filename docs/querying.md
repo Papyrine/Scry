@@ -95,7 +95,7 @@ public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjec
 | `ThenBy(key)` / `ThenByDescending(key)` | `thenBy` | Must follow an `OrderBy`. |
 | `Skip(n)` | `skip` | `n` must be non-negative. |
 | `Take(n)` | `take` | `n` must be non-negative and `<= MaxPageSize`. |
-| `GroupBy(key)` | `groupBy` | Exactly one key, at most one `GroupBy`, and it must be followed by a `Select`. |
+| `GroupBy(key)` | `groupBy` | One key, or up to eight members grouped at once. At most one `GroupBy`, and it must be followed by a `Select`. |
 | `Select(projection)` | `select` | At most one, and it must construct an object. |
 | `Distinct()` | `distinct` | Deduplicates the **projected** rows. It can also be ordered, paged and counted — see [below](#deduplicating). |
 | `Reverse()` | `reverse` | Inverts the ordering. Requires a preceding `OrderBy`. |
@@ -742,6 +742,21 @@ regions = await Query.Order
 ```
 <sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L43-L48' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
+
+The key may be **composite** — up to eight members, grouped on all of them at once. Each part is then read by the name the key type gave it:
+
+<!-- snippet: clientCompositeGroupBy -->
+<a id='snippet-clientCompositeGroupBy'></a>
+```cs
+var rows = await client.Source<Order>("Order")
+    .GroupBy(_ => new {_.Region, _.Grade})
+    .Select(_ => new RegionTotal(_.Key.Region, _.Key.Grade, _.Sum(o => o.Amount)))
+    .ToListAsync();
+```
+<sup><a href='/src/Scry.Tests/CompositeGroupKeyTests.cs#L22-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCompositeGroupBy' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Every part of a composite key must be a plain member of the row, so that a later `_.Key.Region` can be matched back to the member it grouped by; a computed key is only allowed as the single key. Reading a member off the key that the query did not group by is rejected rather than becoming a read of an ungrouped row member, and a group filter reads the parts the same way the projection does.
 
 <!-- snippet: wireAggregates -->
 <a id='snippet-wireAggregates'></a>

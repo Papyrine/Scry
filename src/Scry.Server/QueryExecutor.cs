@@ -404,7 +404,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     {
         if (groupBy is not null)
         {
-            var keySelector = builder.BuildKeySelector(groupBy.Keys[0], elementType);
+            var keySelector = builder.BuildGroupKeySelector(groupBy.Keys, elementType);
             var keyType = keySelector.ReturnType;
             var grouped = ApplyGroupBy(query, keySelector, elementType, keyType);
             if (groupFilter is not null)

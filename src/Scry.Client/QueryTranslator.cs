@@ -6,6 +6,10 @@ sealed class QueryTranslator
 {
     IReadOnlyList<string>? groupKey;
 
+    // The member path behind each part of a composite group key, by the name the key type gave it —
+    // what 'g.Key.Region' is resolved through. Null while the query grouped by a single key.
+    Dictionary<string, IReadOnlyList<string>>? groupKeyParts;
+
     public static IReadOnlyList<QueryOp> Translate(Expression expression)
     {
         var translator = new QueryTranslator();
@@ -60,11 +64,7 @@ sealed class QueryTranslator
                 return new TakeOp(IntArgument(call.Arguments[1]));
 
             case "GroupBy":
-                var keyLambda = Lambda(call.Arguments[1]);
-                var key = TranslateExpr(keyLambda.Body, keyLambda.Parameters[0]);
-                groupKey = (key as MemberNode)?.Path ??
-                           throw new NotSupportedException("GroupBy key must be a member access.");
-                return new GroupByOp([key]);
+                return TranslateGroupBy(Lambda(call.Arguments[1]));
 
             case "Select":
                 return new SelectOp(TranslateProjection(Lambda(call.Arguments[1])));
@@ -201,6 +201,47 @@ sealed class QueryTranslator
         }
 
         return (provider.Root, predicate);
+    }
+
+    // A key built from several members groups on all of them at once. Each part keeps the name the key
+    // type gave it, so a later read of 'g.Key.Region' can be resolved back to the member it grouped by;
+    // the server matches the same paths to the positions it grouped at.
+    GroupByOp TranslateGroupBy(LambdaExpression keyLambda)
+    {
+        var parameter = keyLambda.Parameters[0];
+
+        if (keyLambda.Body is NewExpression or MemberInitExpression)
+        {
+            var keys = new List<Node>();
+            var parts = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+            foreach (var (name, value) in NestedMembers(keyLambda.Body))
+            {
+                if (value is not MemberExpression member ||
+                    !Rooted(member, parameter))
+                {
+                    throw new NotSupportedException(
+                        $"Composite GroupBy key '{name}' must be a member access on the grouped row.");
+                }
+
+                parts.Add(name, MemberPath(member));
+                keys.Add(new MemberNode(MemberPath(member)));
+            }
+
+            if (keys.Count == 0)
+            {
+                throw new NotSupportedException("A composite GroupBy key must have at least one member.");
+            }
+
+            groupKey = null;
+            groupKeyParts = parts;
+            return new(keys);
+        }
+
+        var key = TranslateExpr(keyLambda.Body, parameter);
+        groupKey = (key as MemberNode)?.Path ??
+                   throw new NotSupportedException("GroupBy key must be a member access.");
+        groupKeyParts = null;
+        return new([key]);
     }
 
     static List<JoinMember> JoinMembers(LambdaExpression result)
@@ -513,6 +554,14 @@ sealed class QueryTranslator
 
                 // Inside a grouped Where the row being read is a group: its Key is whatever the query
                 // grouped by, and a call taking the group itself folds that group's rows.
+                // One part of a composite key: 'g.Key.Region' is the member the query grouped by.
+                case MemberExpression {Expression: MemberExpression {Member.Name: "Key"} owner} part
+                    when owner.Expression == root && IsGrouping(root.Type) && groupKeyParts is not null:
+                    return groupKeyParts.TryGetValue(part.Member.Name, out var path)
+                        ? new MemberNode(path)
+                        : throw new NotSupportedException(
+                            $"'{part.Member.Name}' is not one of the query's group keys.");
+
                 case MemberExpression {Member.Name: "Key"} key
                     when key.Expression == root && IsGrouping(root.Type):
                     return new MemberNode(groupKey ?? throw new NotSupportedException("No group key in scope."));

@@ -18,7 +18,7 @@ For usage detail on the supported surface (position rules, limits, examples), se
 | `ThenBy(key)` / `ThenByDescending(key)` | |
 | `Skip(n)` / `Take(n)` | `Take` capped by `MaxPageSize`. |
 | `Select(projection)` | At most one; must construct an object. |
-| `GroupBy(key)` | Single key, must be followed by a `Select`. |
+| `GroupBy(key)` | One key, or up to eight members grouped at once. Must be followed by a `Select`. |
 | `Distinct()` | Deduplicates the projected rows; can also be ordered, paged and counted over a flat projection of up to eight members. |
 | `Reverse()` | Inverts the ordering; requires a preceding `OrderBy`, as EF does. |
 | `Where(predicate)` after `GroupBy` | SQL `HAVING` — reads the group key and aggregates. |
@@ -129,7 +129,6 @@ Structurally bigger than the current pipeline — multiple sources per request, 
 
 **Other.**
 
-- [ ] Composite group keys. The key type needs real structural equality for the provider to group on; the shaped `object[]` row does not have it, and EF rejects `ValueTuple` in the aggregate paths (the same wall `Distinct` hit). Needs a generated or runtime key type.
 - [ ] `OfType` / `Cast` — inheritance hierarchies are not modelled in the generated surface at all: one query model is emitted per opted-in type with no relationship between them.
 - [ ] Streaming results (`ToAsyncEnumerable`) — needs a streaming wire; see [Writing queries](querying.md#future-enhancements).
 

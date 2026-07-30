@@ -139,9 +139,23 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
                     EnsureNotDistinct(sawDistinct, "GroupBy");
 
-                    if (groupBy.Keys.Count != 1)
+                    if (groupBy.Keys.Count == 0)
                     {
-                        throw Reject("Exactly one GroupBy key is supported.");
+                        throw Reject("GroupBy requires at least one key.");
+                    }
+
+                    if (groupBy.Keys.Count > DistinctRow.ByArity.Length)
+                    {
+                        throw Reject(
+                            $"GroupBy supports at most {DistinctRow.ByArity.Length} keys.");
+                    }
+
+                    // A composite key is addressed one part at a time in the projection, so every part
+                    // has to be a member path there is a name to match it back by.
+                    if (groupBy.Keys.Count > 1 &&
+                        groupBy.Keys.Any(_ => _ is not MemberNode))
+                    {
+                        throw Reject("Every key of a composite GroupBy must be a member.");
                     }
 
                     foreach (var key in groupBy.Keys)

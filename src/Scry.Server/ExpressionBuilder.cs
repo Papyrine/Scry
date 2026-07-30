@@ -26,6 +26,36 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         return Expression.Lambda(body, parameter);
     }
 
+    // The keys the current query grouped by, in order, once more than one — what a member read inside
+    // a grouped projection or a HAVING predicate is resolved against. Null while a single key is in
+    // scope, where every such read means the whole key and no matching is needed.
+    IReadOnlyList<Node>? compositeKeys;
+
+    /// <summary>
+    /// Builds the key selector for a <c>GroupBy</c>. Several keys are projected into a
+    /// <see cref="DistinctRow"/> carrying its member mappings, which is what lets the provider
+    /// decompose the key into columns and group on them; a bare shaped row has no equality to group by.
+    /// </summary>
+    public LambdaExpression BuildGroupKeySelector(IReadOnlyList<Node> keys, Type type)
+    {
+        if (keys.Count == 1)
+        {
+            compositeKeys = null;
+            return BuildKeySelector(keys[0], type);
+        }
+
+        var parameter = Expression.Parameter(type, "e");
+        var values = keys.Select(_ => Build(_, parameter, null)).ToList();
+        var row = DistinctRow.ByArity[values.Count - 1].MakeGenericType([..values.Select(_ => _.Type)]);
+        var constructor = row.GetConstructors().Single();
+        var members = constructor.GetParameters()
+            .Select(_ => (MemberInfo)row.GetProperty(_.Name!)!)
+            .ToArray();
+
+        compositeKeys = keys;
+        return Expression.Lambda(Expression.New(constructor, values, members), parameter);
+    }
+
     /// <summary>
     /// Builds a selector <c>TElement =&gt; object[]</c> projecting the requested scalar leaves, plus a
     /// shape describing how to fold the array back into (possibly nested) JSON.
@@ -452,7 +482,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
     Expression Build(Node node, Expression row, Type? expected) =>
         node switch
         {
-            MemberNode when IsGrouping(row.Type) => Expression.Property(row, "Key"),
+            MemberNode member when IsGrouping(row.Type) => BuildGroupKey(member, row),
             AggregateNode aggregate when IsGrouping(row.Type) =>
                 BuildAggregate(aggregate, (ParameterExpression)row, row.Type.GetGenericArguments()[1]),
             MemberNode member => BuildMemberAccess(row, member.Path),
@@ -637,6 +667,29 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
     {
         var parameter = Expression.Parameter(element, "x");
         return Expression.Lambda(Build(node, parameter, expected), parameter);
+    }
+
+    // A member read against a group means the key. With one key that is the whole key; with several it
+    // names one of them, matched back to the position it was grouped at.
+    Expression BuildGroupKey(MemberNode member, Expression row)
+    {
+        var key = Expression.Property(row, "Key");
+        if (compositeKeys is null)
+        {
+            return key;
+        }
+
+        for (var i = 0; i < compositeKeys.Count; i++)
+        {
+            if (compositeKeys[i] is MemberNode candidate &&
+                candidate.Path.SequenceEqual(member.Path))
+            {
+                return Expression.Property(key, $"Value{i + 1}");
+            }
+        }
+
+        throw new ScryValidationException(
+            $"'{string.Join(".", member.Path)}' is not one of the query's group keys.");
     }
 
     static bool IsGrouping(Type type) =>
