@@ -402,7 +402,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         {
             switch (member.Value)
             {
-                case NodeValue { Node: AggregateNode aggregate }:
+                case NodeValue {Node: AggregateNode aggregate}:
                     if (!grouped)
                     {
                         throw Reject("Aggregates are only allowed in a Select following GroupBy.");
@@ -415,7 +415,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
                     break;
 
-                case NodeValue { Node: MemberNode memberNode }:
+                case NodeValue {Node: MemberNode memberNode}:
                     if (grouped)
                     {
                         if (groupKeys is null ||
@@ -1269,7 +1269,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
     {
         EnsureRowShaped(projection, op);
 
-        if (key is not MemberNode { Path: [var name] } ||
+        if (key is not MemberNode {Path: [var name]} ||
             projection!.Members.All(_ => !string.Equals(_.Name, name, StringComparison.Ordinal)))
         {
             throw Reject($"{op} over a Distinct query may only order by one of its projected members.");
