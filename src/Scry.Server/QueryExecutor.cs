@@ -23,6 +23,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         QueryOp? terminal = null;
         Node? groupFilter = null;
         JoinOp? join = null;
+        SetOp? set = null;
         // Captured alongside inline application so the page terminal can rebuild the ordering into a
         // total order (append the primary key) and a keyset seek predicate.
         List<(Node Key, bool Descending)> orderings = [];
@@ -97,6 +98,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 case JoinOp joined:
                     join = joined;
                     break;
+                case SetOp combined:
+                    set = combined;
+                    break;
                 case GroupByOp group:
                     groupBy = group;
                     break;
@@ -140,6 +144,58 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                         joined.ToList().Select(_ => Shape(_, joinPlan)).ToArray(),
                         ScryJson.Options))
             };
+        }
+
+        // Both sides of a set operation are materialized as the same row type, which is what lets a
+        // provider compare them — and, for every kind but Concat, deduplicate across them.
+        if (set is not null)
+        {
+            if (builder.BuildDistinctRow(select!.Projection, elementType) is not var (leftSelector, shape))
+            {
+                throw new ScryValidationException(
+                    $"A set operation is limited to {DistinctRow.ByArity.Length} projected members.");
+            }
+
+            var otherSource = ResolveSource(set.Root, db, services);
+            var otherType = otherSource.ElementType;
+            if (set.Predicate is { } otherPredicate)
+            {
+                otherSource = Apply(otherSource, "Where", builder.BuildPredicate(otherPredicate, otherType));
+            }
+
+            if (builder.BuildDistinctRow(set.Projection, otherType) is not var (rightSelector, _) ||
+                rightSelector.ReturnType != leftSelector.ReturnType)
+            {
+                throw new ScryValidationException(
+                    "Both sides of a set operation must project members of the same types.");
+            }
+
+            var rowType = leftSelector.ReturnType;
+            var combined = ApplySelectTyped(query, leftSelector).Provider.CreateQuery(
+                CallQueryable(
+                    set.Kind.ToString(),
+                    [rowType],
+                    ApplySelectTyped(query, leftSelector).Expression,
+                    ApplySelectTyped(otherSource, rightSelector).Expression));
+
+            switch (terminal)
+            {
+                case CountOp:
+                    return Scalar(Execute<int>(combined, "Count"));
+                case LongCountOp:
+                    return Scalar(Execute<long>(combined, "LongCount"));
+                case AnyOp:
+                    return Scalar(Execute<bool>(combined, "Any"));
+            }
+
+            var setPlan = new ProjectionPlan(leftSelector, shape);
+            var setRows = new List<Dictionary<string, object?>>();
+            foreach (var row in combined)
+            {
+                setRows.Add(Shape(ExpressionBuilder.ReadDistinctRow(row!, shape.Count), setPlan));
+            }
+
+            return QueryResponse.Create(ResultKind.List, JsonSerializer.SerializeToElement(setRows, ScryJson.Options));
         }
 
         // Ordering, paging and folding all need the deduplicated rows to have equality and ordering of

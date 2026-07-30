@@ -100,11 +100,12 @@ public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjec
 | `Distinct()` | `distinct` | Deduplicates the **projected** rows. It can also be ordered, paged and counted — see [below](#deduplicating). |
 | `Reverse()` | `reverse` | Inverts the ordering. Requires a preceding `OrderBy`. |
 | `Join(inner, …)` / `LeftJoin(inner, …)` | `join` | Joins a second source — see [below](#joins). Carries its own projection; only a terminal may follow. |
+| `Union` / `Concat` / `Intersect` / `Except` | `set` | Combines a second source — see [below](#set-operations). Both sides project the same shape. |
 
-Any other LINQ operator — `Join`, `SelectMany`, `Union`, … — throws:
+Any other LINQ operator — `SelectMany`, `GroupJoin`, `Cast`, … — throws:
 
 ```
-LINQ operator 'Join' is not supported by Scry.
+LINQ operator 'SelectMany' is not supported by Scry.
 ```
 
 [LINQ coverage](linq-coverage.md) tracks the full supported/unsupported matrix against what EF Core can translate.
@@ -411,6 +412,31 @@ Ordering, paging and counting a deduplicated query all materialize it as a row w
 Plain enumeration has none of those limits — `Select(…).Distinct().ToListAsync()` works over any projection, nested members included.
 
 Filtering after a `Distinct` is rejected outright; a `Where` there would be describing the rows that fed it. Filter before deduplicating.
+
+
+### Set operations
+
+Two sources can be combined into one sequence:
+
+<!-- snippet: clientUnion -->
+<a id='snippet-clientUnion'></a>
+```cs
+var rows = await client.Source<Order>("Order")
+    .Select(_ => new Label(_.Region, _.Amount))
+    .Union(client.Source<OrderLine>("OrderLine")
+        .Select(_ => new Label(_.Sku, _.Price)))
+    .ToListAsync();
+```
+<sup><a href='/src/Scry.Tests/SetOperationTests.cs#L19-L25' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientUnion' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+`Union` deduplicates across the two sides, `Concat` keeps duplicates, `Intersect` keeps rows on both, and `Except` keeps rows on the first that are not on the second.
+
+The second source is resolved and [policy-filtered](policies.md) before the two are combined, exactly as a [join](#joins) resolves its second side — so a row a policy hides can never appear through one.
+
+Both sides carry **their own projection**, and the two must agree: same member names, in the same order, of the same types. That is what makes one shape out of two sources, and a combined row carries no record of which side produced it — which is also why only `Count`, `LongCount`, and `Any` may follow. Ordering or filtering the result would need a root the combined rows no longer have.
+
+The combined rows are materialized as a row with one property per projected member, so the same flat, at-most-eight-member shape a [deduplicated query](#deduplicating) needs applies here. Only a `Where` and the `Select` cross into the other source.
 
 
 ### Joins
@@ -791,6 +817,8 @@ stateDiagram-v2
     Deduplicated --> Deduplicated: OrderBy / Skip / Take
     Source --> [*]: terminal
     Restricting --> [*]: terminal
+    Projected --> Combined: Union / Concat / Intersect / Except
+    Combined --> [*]: terminal
     Projected --> [*]: terminal
     Deduplicated --> [*]: terminal
 ```
@@ -799,6 +827,9 @@ Nothing orders, skips, or takes after `GroupBy`; a `GroupBy` cannot reach a term
 `Select` in between; and there is no second `GroupBy` or `Select`. A `Where` after `GroupBy` is the
 one exception — it filters the groups rather than the rows, and reads only the key and aggregates.
 `ThenBy` and `Reverse` without a preceding `OrderBy` are rejected, and nothing may follow a terminal.
+
+A set operation combines the projected rows with a second source, so like a join only a terminal may
+follow: the combined rows come from two sources and have no single root left to read.
 
 `Distinct` deduplicates the projected rows, so what may follow it is the `Select` it deduplicates, a
 terminal, and — over a flat projection of up to eight members — an `OrderBy` naming one of them, plus

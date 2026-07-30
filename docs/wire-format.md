@@ -79,6 +79,7 @@ Because `root` is part of the contract, prefer setting `Name` over relying on th
 [JsonDerivedType(typeof(DistinctOp), "distinct")]
 [JsonDerivedType(typeof(ReverseOp), "reverse")]
 [JsonDerivedType(typeof(JoinOp), "join")]
+[JsonDerivedType(typeof(SetOp), "set")]
 [JsonDerivedType(typeof(CountOp), "count")]
 [JsonDerivedType(typeof(LongCountOp), "longCount")]
 [JsonDerivedType(typeof(AnyOp), "any")]
@@ -90,7 +91,7 @@ Because `root` is part of the contract, prefer setting `Name` over relying on th
 [JsonDerivedType(typeof(PageOp), "page")]
 public abstract record QueryOp;
 ```
-<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L30' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 | `$type` | Payload | Meaning |
@@ -132,6 +133,8 @@ stateDiagram-v2
     Deduplicated --> Deduplicated: OrderBy / Skip / Take
     Source --> [*]: terminal
     Restricting --> [*]: terminal
+    Projected --> Combined: Union / Concat / Intersect / Except
+    Combined --> [*]: terminal
     Projected --> [*]: terminal
     Deduplicated --> [*]: terminal
 ```
@@ -140,6 +143,9 @@ Nothing orders, skips, or takes after `GroupBy`; a `GroupBy` cannot reach a term
 `Select` in between; and there is no second `GroupBy` or `Select`. A `Where` after `GroupBy` is the
 one exception — it filters the groups rather than the rows, and reads only the key and aggregates.
 `ThenBy` and `Reverse` without a preceding `OrderBy` are rejected, and nothing may follow a terminal.
+
+A set operation combines the projected rows with a second source, so like a join only a terminal may
+follow: the combined rows come from two sources and have no single root left to read.
 
 `Distinct` deduplicates the projected rows, so what may follow it is the `Select` it deduplicates, a
 terminal, and — over a flat projection of up to eight members — an `OrderBy` naming one of them, plus

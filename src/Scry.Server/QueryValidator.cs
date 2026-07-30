@@ -33,6 +33,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         var sawSelect = false;
         var sawDistinct = false;
         var sawJoin = false;
+        var sawSet = false;
         var terminalIndex = -1;
         IReadOnlyList<MemberNode>? groupKeys = null;
         Projection? projection = null;
@@ -52,6 +53,13 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 op is not (CountOp or LongCountOp or AnyOp or FirstOp or SingleOp))
             {
                 throw Reject("Only Count, LongCount, Any, First, or Single may follow a Join.");
+            }
+
+            // Combined rows come from two sources, so there is no single root left to read.
+            if (sawSet &&
+                op is not (CountOp or LongCountOp or AnyOp))
+            {
+                throw Reject("Only Count, LongCount, or Any may follow a set operation.");
             }
 
             switch (op)
@@ -181,6 +189,23 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     EnsureNotDistinct(sawDistinct, "Join");
                     ValidateJoin(join, rootType);
                     sawJoin = true;
+                    break;
+
+                case SetOp set:
+                    if (sawSet)
+                    {
+                        throw Reject("Only one set operation is allowed.");
+                    }
+
+                    EnsureNotGrouped(sawGroupBy, "A set operation");
+                    EnsureNotDistinct(sawDistinct, "A set operation");
+                    if (sawJoin)
+                    {
+                        throw Reject("A set operation is not allowed after a Join.");
+                    }
+
+                    ValidateSet(set, projection);
+                    sawSet = true;
                     break;
 
                 case CountOp count:
@@ -613,6 +638,47 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         foreach (var argument in call.Arguments)
         {
             ValidateExpr(argument, elementType, depth + 1);
+        }
+    }
+
+    /// <summary>
+    /// Validates a set operation. The second source is looked up by name in the same allow-list a
+    /// request's own root goes through, and its projection is validated against <i>its</i> type. Both
+    /// sides must name the same members: the combined rows are one shape, and a row carries no record
+    /// of which side produced it.
+    /// </summary>
+    void ValidateSet(SetOp set, Projection? projection)
+    {
+        if (!schema.TryGetSource(set.Root, out var other))
+        {
+            throw Reject($"Unknown source '{set.Root}'.");
+        }
+
+        // The combined rows are materialized as a row with one property per member, which is what lets
+        // a provider compare them at all — so the same flat, bounded shape a Distinct needs applies.
+        EnsureRowShaped(projection, "A set operation");
+
+        ValidateProjection(set.Projection, other.ClrType, grouped: false, groupKeys: null, depth: 0);
+        EnsureRowShaped(set.Projection, "A set operation");
+
+        if (set.Projection.Members.Count != projection!.Members.Count)
+        {
+            throw Reject("Both sides of a set operation must project the same number of members.");
+        }
+
+        for (var i = 0; i < projection.Members.Count; i++)
+        {
+            if (!string.Equals(projection.Members[i].Name, set.Projection.Members[i].Name, StringComparison.Ordinal))
+            {
+                throw Reject(
+                    $"Both sides of a set operation must project the same members, but '{projection.Members[i].Name}' " +
+                    $"and '{set.Projection.Members[i].Name}' differ.");
+            }
+        }
+
+        if (set.Predicate is { } predicate)
+        {
+            ValidatePredicate(predicate, other.ClrType);
         }
     }
 

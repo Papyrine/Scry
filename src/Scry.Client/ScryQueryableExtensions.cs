@@ -1,4 +1,4 @@
-namespace Scry.Client;
+﻿namespace Scry.Client;
 
 /// <summary>Async terminal operators that execute a captured Scry query against the server.</summary>
 public static class ScryQueryableExtensions
@@ -386,7 +386,7 @@ public static class ScryQueryableExtensions
             terminal is CountOp or LongCountOp or AnyOp or AllOp or AggregateOp ||
             terminal is FirstOp { Predicate: not null } or SingleOp { Predicate: not null } or LastOp { Predicate: not null } ||
             // A join carries its own projection, since a member has to name which side it reads.
-            pipeline.Any(_ => _ is SelectOp or GroupByOp or JoinOp))
+            pipeline.Any(_ => _ is SelectOp or GroupByOp or JoinOp or SetOp))
         {
             return;
         }

@@ -78,6 +78,15 @@ sealed class QueryTranslator
             case "Reverse":
                 return new ReverseOp();
 
+            case "Union":
+                return TranslateSet(call, SetKind.Union);
+            case "Concat":
+                return TranslateSet(call, SetKind.Concat);
+            case "Intersect":
+                return TranslateSet(call, SetKind.Intersect);
+            case "Except":
+                return TranslateSet(call, SetKind.Except);
+
             case "Join":
                 return TranslateJoin(call, JoinKind.Inner);
             case "LeftJoin":
@@ -86,6 +95,52 @@ sealed class QueryTranslator
             default:
                 throw new NotSupportedException($"LINQ operator '{call.Method.Name}' is not supported by Scry.");
         }
+    }
+
+    /// <summary>
+    /// Translates <c>left.Union(right)</c> and its siblings. The other side is a captured Scry source
+    /// of its own, so its root, filters and projection are read straight off it — both sides project
+    /// their own shape, and the server checks the two agree.
+    /// </summary>
+    static SetOp TranslateSet(MethodCallExpression call, SetKind kind)
+    {
+        if (call.Arguments.Count != 2)
+        {
+            throw new NotSupportedException($"'{call.Method.Name}' with an equality comparer is not supported by Scry.");
+        }
+
+        if (Evaluate(call.Arguments[1]) is not IQueryable {Provider: QueryProvider provider} queryable)
+        {
+            throw new NotSupportedException($"The other side of '{call.Method.Name}' must be a Scry source.");
+        }
+
+        Node? predicate = null;
+        Projection? projection = null;
+        foreach (var op in Translate(queryable.Expression))
+        {
+            switch (op)
+            {
+                case WhereOp where:
+                    predicate = predicate is null
+                        ? where.Predicate
+                        : new BinaryNode(BinaryOp.AndAlso, predicate, where.Predicate);
+                    break;
+                case SelectOp select when projection is null:
+                    projection = select.Projection;
+                    break;
+                default:
+                    throw new NotSupportedException(
+                        $"The other side of '{call.Method.Name}' may only carry a Where and a Select.");
+            }
+        }
+
+        if (projection is null)
+        {
+            throw new NotSupportedException(
+                $"The other side of '{call.Method.Name}' must Select the shape both sides share.");
+        }
+
+        return new(kind, provider.Root, predicate, projection);
     }
 
     /// <summary>

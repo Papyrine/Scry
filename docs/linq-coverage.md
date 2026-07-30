@@ -1,4 +1,4 @@
-# LINQ coverage
+﻿# LINQ coverage
 
 What Scry supports compared to the LINQ surface EF Core can translate server-side. This page is both the reference ("will this query work?") and the roadmap — unchecked items are candidates, not commitments.
 
@@ -23,6 +23,7 @@ For usage detail on the supported surface (position rules, limits, examples), se
 | `Reverse()` | Inverts the ordering; requires a preceding `OrderBy`, as EF does. |
 | `Where(predicate)` after `GroupBy` | SQL `HAVING` — reads the group key and aggregates. |
 | `Join(…)` / `LeftJoin(…)` | Each side policy-filtered independently first; carries its own projection. |
+| `Union` / `Concat` / `Intersect` / `Except` | Each side policy-filtered first; both project the same shape. |
 
 ### Membership of another source
 
@@ -119,12 +120,11 @@ Structurally bigger than the current pipeline — multiple sources per request, 
 
 - [ ] `SelectMany` — needs collections *projectable*, which the shipped design deliberately excludes; revisit only with a bounded nested-result shape.
 
-**Cross-source queries.** `Join` and `LeftJoin` are [supported](querying.md#joins). The policy composition they were gated on is settled: each side is resolved and policy-filtered independently before the two meet, so a join can only narrow. The set operations remain open, and share the harder half of the problem — they combine two sources into one *sequence*, so unlike a join they cannot resolve the ambiguity by projecting both sides at the point they meet.
+**Cross-source queries.** `Join`, `LeftJoin` and the [set operations](querying.md#set-operations) are supported. The policy composition they were gated on is settled: each side is resolved and policy-filtered independently before the two meet, so a join can only narrow. 
 
 - [x] `Join` / `LeftJoin`.
 - [ ] `RightJoin` / `FullJoin` — the same shape as `LeftJoin`, but the outer row can be absent, so the *outer* projection needs the nullable widening the inner side already gets.
 - [ ] `GroupJoin` — returns a collection per outer row, which the [collections design](annotations.md#collections) deliberately keeps unprojectable.
-- [ ] Set operations: `Union`, `Concat`, `Intersect`, `Except` — both sides must project to the same shape before combining, which needs a projection the pipeline can carry per side.
 - [ ] `DefaultIfEmpty` — only meaningful alongside joins.
 
 **Other.**

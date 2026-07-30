@@ -20,6 +20,8 @@ stateDiagram-v2
     Deduplicated --> Deduplicated: OrderBy / Skip / Take
     Source --> [*]: terminal
     Restricting --> [*]: terminal
+    Projected --> Combined: Union / Concat / Intersect / Except
+    Combined --> [*]: terminal
     Projected --> [*]: terminal
     Deduplicated --> [*]: terminal
 ```
@@ -28,6 +30,9 @@ Nothing orders, skips, or takes after `GroupBy`; a `GroupBy` cannot reach a term
 `Select` in between; and there is no second `GroupBy` or `Select`. A `Where` after `GroupBy` is the
 one exception — it filters the groups rather than the rows, and reads only the key and aggregates.
 `ThenBy` and `Reverse` without a preceding `OrderBy` are rejected, and nothing may follow a terminal.
+
+A set operation combines the projected rows with a second source, so like a join only a terminal may
+follow: the combined rows come from two sources and have no single root left to read.
 
 `Distinct` deduplicates the projected rows, so what may follow it is the `Select` it deduplicates, a
 terminal, and — over a flat projection of up to eight members — an `OrderBy` naming one of them, plus

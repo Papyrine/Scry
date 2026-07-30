@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+﻿namespace Scry.Wire;
 
 /// <summary>
 /// A single operator in the query pipeline, applied left-to-right. The set is closed; the server
@@ -17,6 +17,7 @@ namespace Scry.Wire;
 [JsonDerivedType(typeof(DistinctOp), "distinct")]
 [JsonDerivedType(typeof(ReverseOp), "reverse")]
 [JsonDerivedType(typeof(JoinOp), "join")]
+[JsonDerivedType(typeof(SetOp), "set")]
 [JsonDerivedType(typeof(CountOp), "count")]
 [JsonDerivedType(typeof(LongCountOp), "longCount")]
 [JsonDerivedType(typeof(AnyOp), "any")]
