@@ -202,6 +202,9 @@ sealed class Schema
             throw new("No model configured. Call options.UseModel<TContext>() in AddScry.");
         }
 
+        EnsureCollationIsAName(options.CaseSensitiveCollation, nameof(options.CaseSensitiveCollation));
+        EnsureCollationIsAName(options.CaseInsensitiveCollation, nameof(options.CaseInsensitiveCollation));
+
         var schema = new Schema();
         var discovered = new List<(Type Type, string Name, SourceKind Kind, Type? Policy)>();
 
@@ -450,6 +453,35 @@ sealed class Schema
 
     static bool IsKeyless(Type type) =>
         type.GetCustomAttribute<KeylessAttribute>() is not null;
+
+    /// <summary>
+    /// A collation is the one configured value that reaches the database as SQL text rather than as a
+    /// parameter, so its shape is checked at startup rather than trusted. Every real collation name is
+    /// a bare identifier; anything else is a configuration mistake at best.
+    /// </summary>
+    /// <remarks>
+    /// A request can never carry one — the wire names a <see cref="StringMatch"/> and the string is
+    /// looked up here — so this guards the remaining path: a deployment wiring the option up from
+    /// somewhere it does not control. Providers do quote the name, but that is provider-overridable
+    /// behaviour rather than a guarantee this library can make, so it is not relied on.
+    /// </remarks>
+    static void EnsureCollationIsAName(string? collation, string option)
+    {
+        if (collation is null)
+        {
+            return;
+        }
+
+        if (collation.Length == 0 ||
+            collation.Length > 128 ||
+            !collation.All(_ => char.IsAsciiLetterOrDigit(_) || _ == '_'))
+        {
+            throw new(
+                $"ScryOptions.{option} must be a plain collation name — letters, digits and underscores only. " +
+                "It is emitted into SQL rather than parameterized, so it has to be trusted configuration, " +
+                "never a value taken from a request or from anywhere a caller can influence.");
+        }
+    }
 
     static Type? ResolvePolicy(Type type, ScryOptions options)
     {

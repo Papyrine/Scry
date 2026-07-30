@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// A client asks for a case sensitivity; the server decides which collation implements it. The
 /// collation is the one value that cannot be a query parameter — it is emitted into the SQL text —
 /// so it is never carried on the wire.
@@ -100,6 +100,26 @@ public class CollationTests
             Assert.That(json, Does.Not.Contain("Latin1"));
         });
     }
+
+    [Test]
+    public void AMalformedCollationIsRefusedAtStartup()
+    {
+        // The wire cannot carry a collation, so this guards the remaining path: a deployment wiring
+        // the option up from somewhere it does not control. Checked once, at startup.
+        var exception = Assert.Throws<Exception>(
+            () => ScryProcessor.Create<TestContext>(
+                options =>
+                {
+                    options.AddPocoSource<Holiday>(_ => Holiday.Seed());
+                    options.CaseSensitiveCollation = "Latin1_General_CS_AS; DROP TABLE Orders --";
+                }));
+
+        Assert.That(exception!.Message, Does.Contain("plain collation name"));
+    }
+
+    [Test]
+    public void AWellFormedCollationIsAccepted() =>
+        Assert.DoesNotThrow(() => Collating());
 
     static ScryClient ClientFor(TestContext context, ScryProcessor processor) =>
         new((request, _) => Task.FromResult(processor.Execute(request, context)));

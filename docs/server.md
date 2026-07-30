@@ -102,6 +102,10 @@ Every limit is enforced during validation, before any expression is rebound or e
 
 `CaseSensitiveCollation` and `CaseInsensitiveCollation` are not limits but capabilities: both default to null, which rejects a request asking for that case sensitivity. Set them to collations the database has (`Latin1_General_CS_AS`, `Latin1_General_CI_AS` on SQL Server) to enable [case-sensitive matching](querying.md#operators-1). They are server settings because a collation is emitted into the SQL text rather than parameterized, so accepting one from a request would be the only place an attacker-supplied string reached SQL as anything but a parameter.
 
+Treat them like a connection string: **trusted configuration, never a value taken from a request** or from anywhere a caller can influence. A request cannot carry a collation — the wire names a case sensitivity and the string is looked up here — so the only remaining path is a deployment wiring the option up from somewhere it does not control. Both are checked at startup and must be plain names (letters, digits, underscores); a provider does quote the name as well, but that is provider-overridable behaviour rather than a guarantee.
+
+Applying a collation also costs an index. `WHERE col COLLATE X = @p` is not SARGable, so an index built under the column's own collation cannot be seeked and the query degrades to a scan. Where a whole column should be matched one way, setting the **column's** collation is both faster and simpler than asking per query.
+
 
 ## POCO sources
 
