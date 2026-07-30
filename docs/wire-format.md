@@ -317,6 +317,12 @@ public enum KnownFunction
     DateSecond,
     DateMillisecond,
     DateDayOfYear,
+
+    /// <summary>
+    /// The day of the week, numbered as <see cref="System.DayOfWeek"/> does — 0 for Sunday. The server
+    /// owns how that is expressed in SQL, since the obvious formulation is not deterministic.
+    /// </summary>
+    DateDayOfWeek,
     DateDate,
     DateAddYears,
     DateAddMonths,
@@ -353,7 +359,7 @@ public enum KnownFunction
     In
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L64' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 There is no free-form method name anywhere in the format. This enum is the complete set of behaviour a client can request.

@@ -359,6 +359,12 @@ public enum KnownFunction
     DateSecond,
     DateMillisecond,
     DateDayOfYear,
+
+    /// <summary>
+    /// The day of the week, numbered as <see cref="System.DayOfWeek"/> does — 0 for Sunday. The server
+    /// owns how that is expressed in SQL, since the obvious formulation is not deterministic.
+    /// </summary>
+    DateDayOfWeek,
     DateDate,
     DateAddYears,
     DateAddMonths,
@@ -395,7 +401,7 @@ public enum KnownFunction
     In
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L64' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Mapped from:
@@ -416,6 +422,7 @@ Mapped from:
 | `date.Year` / `.Month` / `.Day` | `DateYear` / `DateMonth` / `DateDay` |
 | `date.Hour` / `.Minute` / `.Second` / `.Millisecond` | `DateHour` / `DateMinute` / `DateSecond` / `DateMillisecond` |
 | `date.DayOfYear` | `DateDayOfYear` |
+| `date.DayOfWeek` | `DateDayOfWeek` |
 | `date.Date` | `DateDate` |
 | `date.AddYears(n)` / `.AddMonths(n)` / `.AddDays(n)` | `DateAddYears` / `DateAddMonths` / `DateAddDays` |
 | `date.AddHours(n)` / `.AddMinutes(n)` / `.AddSeconds(n)` | `DateAddHours` / `DateAddMinutes` / `DateAddSeconds` |
@@ -431,13 +438,15 @@ Mapped from:
 | `Math.Atan2(y, x)` | `MathAtan2` |
 | `set.Contains(_.Member)` | `In` |
 
+`DayOfWeek` is the one function whose SQL the server composes rather than handing the provider a CLR expression to translate. SQL Server has no deterministic day-of-week function — `DATEPART(weekday, …)` reads `@@DATEFIRST`, a session setting, so the same row can answer differently on two connections — which is why EF refuses to translate `DateTime.DayOfWeek` at all. Scry carries the intent on the wire and builds the arithmetic server-side: whole days from a fixed Monday, modulo seven, numbered exactly as `System.DayOfWeek` is. It depends on nothing but the date, and is refused on a provider whose deterministic date arithmetic has not been verified rather than answered approximately.
+
 The date functions apply to `DateTime`, `DateOnly`, `DateTimeOffset`, and `TimeOnly`, and an optional member is unwrapped before the part is read. Only the parts a type actually has are available: asking for the `Hour` of a `DateOnly` is rejected. The trim functions map only the whitespace-trimming overloads — the `params char[]` forms have no SQL equivalent.
 
 Every function past `Math.Sqrt` is defined over `double` alone, so an integer or decimal member is widened to reach it — which is also the type the provider computes it in. `Math.Log` is the natural logarithm with no second argument and a logarithm to that base with one.
 
 An arithmetic expression promotes its operands the way C# does, to the widest of their types, so `(double)_.Quantity / 2d` over an integer member is computed in floating point rather than as integer division. A comparison instead reads its constant at the member's type, which is what lets `_.Amount > 80` compare decimals.
 
-There is no free-form method call node in the wire format, so this list is the complete set of behaviour a client can ask the database to perform. **Provider support is still the outer bound**: a function only reaches SQL if the EF provider translates it, and translating is not enough on its own — the result has to materialize too. `DayOfWeek` has no entry because SQL Server's provider does not translate it, and `Math.Sign` has none because the translation it does produce cannot be read back: SQL's `SIGN` returns its argument's type, while `Math.Sign` returns `int`, so a query using it succeeds in a predicate and faults in a projection.
+There is no free-form method call node in the wire format, so this list is the complete set of behaviour a client can ask the database to perform. **Provider support is still the outer bound**: a function only reaches SQL if the EF provider translates it, and translating is not enough on its own — the result has to materialize too. `Math.Sign` has no entry because the translation it does produce cannot be read back: SQL's `SIGN` returns its argument's type, while `Math.Sign` returns `int`, so a query using it succeeds in a predicate and faults in a projection.
 
 Functions are **expression-level**: they read a row inside a `Where` predicate, an ordering or group key, a terminal predicate, an aggregate selector, or a [projection member](#computed-projection-members).
 

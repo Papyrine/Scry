@@ -935,6 +935,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
                 KnownFunction.DateSecond => TemporalProperty(target, "Second"),
                 KnownFunction.DateMillisecond => TemporalProperty(target, "Millisecond"),
                 KnownFunction.DateDayOfYear => TemporalProperty(target, "DayOfYear"),
+                KnownFunction.DateDayOfWeek => BuildDayOfWeek(target),
                 KnownFunction.DateDate => TemporalProperty(target, "Date"),
                 KnownFunction.DateAddYears => TemporalAdd(call, target, "AddYears", row),
                 KnownFunction.DateAddMonths => TemporalAdd(call, target, "AddMonths", row),
@@ -987,6 +988,68 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
 
     // A date part reads off the value, so an optional member is unwrapped first. Under EF that unwrap
     // is part of the translated SQL expression and a null row simply yields null.
+    /// <summary>
+    /// Builds the day of the week, numbered as <see cref="DayOfWeek"/> is — 0 for Sunday.
+    /// </summary>
+    /// <remarks>
+    /// SQL Server has no deterministic day-of-week function: <c>DATEPART(weekday, …)</c> reads
+    /// <c>@@DATEFIRST</c>, a session setting, so the same row answers differently on two connections.
+    /// That is why EF refuses to translate <see cref="DateTime.DayOfWeek"/> at all rather than
+    /// translating it wrongly. Counting whole days from a fixed Monday and taking the remainder depends
+    /// on nothing but the date, translates in full, and numbers the days exactly as .NET does. The wire
+    /// carries only the intent; the server owns the SQL, the same way it owns a collation.
+    /// </remarks>
+    static Expression BuildDayOfWeek(Expression target)
+    {
+        var value = NonNullable(target);
+
+        if (DateDiffDay(value.Type) is not { } dateDiffDay)
+        {
+            throw new ScryValidationException(
+                "DayOfWeek is only supported on SQL Server, whose provider supplies the deterministic " +
+                "date arithmetic it is built from. No other provider has been verified to answer it " +
+                "the same way, so it is refused here rather than translated into something that reads " +
+                "a session setting.");
+        }
+
+        var epoch = Expression.Constant(Epoch(value.Type), value.Type);
+        var days = Expression.Call(dateDiffDay, Expression.Constant(EF.Functions, typeof(DbFunctions)), epoch, value);
+
+        // The epoch is a Monday, so +1 lands Sunday on zero. The second remainder is for dates before
+        // the epoch, where the day count — and so the first remainder — is negative.
+        var shifted = Expression.Modulo(Expression.Add(days, Expression.Constant(1)), Expression.Constant(7));
+        return Expression.Modulo(Expression.Add(shifted, Expression.Constant(7)), Expression.Constant(7));
+    }
+
+    // Boxed per branch on purpose: DateTime converts implicitly to DateTimeOffset, so an unboxed
+    // conditional would silently hand back the wrong type for a DateTime member.
+    static object Epoch(Type type)
+    {
+        if (type == typeof(Date))
+        {
+            return new Date(1900, 1, 1);
+        }
+
+        if (type == typeof(DateTimeOffset))
+        {
+            return new DateTimeOffset(new DateTime(1900, 1, 1), TimeSpan.Zero);
+        }
+
+        return new DateTime(1900, 1, 1);
+    }
+
+    // Resolved by name rather than referenced: Scry.Server depends on EF Core alone, not on any one
+    // provider's package. Null when the SQL Server provider is not part of the application at all.
+    static readonly Type? sqlServerFunctions = Type.GetType(
+        "Microsoft.EntityFrameworkCore.SqlServerDbFunctionsExtensions, Microsoft.EntityFrameworkCore.SqlServer");
+
+    static readonly ConcurrentDictionary<Type, MethodInfo?> dateDiffDays = new();
+
+    static MethodInfo? DateDiffDay(Type type) =>
+        dateDiffDays.GetOrAdd(
+            type,
+            key => sqlServerFunctions?.GetMethod("DateDiffDay", [typeof(DbFunctions), key, key]));
+
     static Expression TemporalProperty(Expression target, string name)
     {
         var value = Nullable.GetUnderlyingType(target.Type) is null

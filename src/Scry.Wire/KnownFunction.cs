@@ -26,6 +26,12 @@ public enum KnownFunction
     DateSecond,
     DateMillisecond,
     DateDayOfYear,
+
+    /// <summary>
+    /// The day of the week, numbered as <see cref="System.DayOfWeek"/> does — 0 for Sunday. The server
+    /// owns how that is expressed in SQL, since the obvious formulation is not deterministic.
+    /// </summary>
+    DateDayOfWeek,
     DateDate,
     DateAddYears,
     DateAddMonths,

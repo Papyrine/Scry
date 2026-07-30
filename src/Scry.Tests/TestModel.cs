@@ -306,6 +306,14 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
     public static TestContext CreateSeeded() =>
         database.NewConnectionOwnedDbContext();
 
+    /// <summary>
+    /// A database of its own, for a test that needs data the shared seed does not have. The shared one
+    /// is read-only by design — writing to it would leak into every other test in the assembly — so
+    /// anything that has to insert builds its own and disposes it.
+    /// </summary>
+    public static Task<SqlDatabase<TestContext>> CreateIsolated(string name) =>
+        sqlInstance.Build(name);
+
     static void Seed(TestContext context)
     {
         var engineering = new Department { Name = "Engineering" };

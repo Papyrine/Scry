@@ -1072,6 +1072,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 KnownFunction.DateSecond or
                 KnownFunction.DateMillisecond or
                 KnownFunction.DateDayOfYear or
+                KnownFunction.DateDayOfWeek or
                 KnownFunction.DateDate or
                 KnownFunction.MathAbs or
                 KnownFunction.MathCeiling or

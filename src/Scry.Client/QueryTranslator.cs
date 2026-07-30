@@ -1198,6 +1198,9 @@ sealed class QueryTranslator
                     case "DayOfYear":
                         function = KnownFunction.DateDayOfYear;
                         return true;
+                    case "DayOfWeek":
+                        function = KnownFunction.DateDayOfWeek;
+                        return true;
                     case "Date":
                         function = KnownFunction.DateDate;
                         return true;
@@ -1313,6 +1316,9 @@ sealed class QueryTranslator
             // server also accepts.
             char character => new(character.ToString(), ClrTypeTag.String),
             bool flag => new(flag ? "true" : "false", ClrTypeTag.Boolean),
+            // Compared against a day-of-week the server computes as a number, and not part of any
+            // model's schema, so this one enum travels as its value rather than by name.
+            DayOfWeek day => new(((int) day).ToString(culture), ClrTypeTag.Int32),
             Enum enumeration => new(enumeration.ToString(), ClrTypeTag.Enum),
             int number => new(number.ToString(culture), ClrTypeTag.Int32),
             long number => new(number.ToString(culture), ClrTypeTag.Int64),
