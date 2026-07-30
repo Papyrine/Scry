@@ -14,13 +14,11 @@ public class ClientRegistrationTests
         var server = await SharedScryServer.InstanceAsync();
         var services = new ServiceCollection();
 
-        // begin-snippet: clientNamedRegistration
         var scry = services.AddHttpClient("scry", _ => _.BaseAddress = new("http://localhost/"));
         services.AddScryClient(
             "/api/query",
             _ => _.GetRequiredService<IHttpClientFactory>().CreateClient("scry"));
         services.AddScoped<ScryQuery>();
-        // end-snippet
 
         // Points the named client at the in-process server instead of a socket.
         scry.ConfigurePrimaryHttpMessageHandler(server.CreateHandler);

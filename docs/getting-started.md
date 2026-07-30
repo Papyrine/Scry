@@ -1,4 +1,4 @@
-# Getting started
+﻿# Getting started
 
 A Scry solution has three projects:
 
@@ -149,34 +149,22 @@ Register the client and the generated entry point:
 <!-- snippet: clientRegistration -->
 <a id='snippet-clientRegistration'></a>
 ```cs
-builder.Services.AddScoped(
-    _ => new HttpClient
-    {
-        BaseAddress = new(builder.HostEnvironment.BaseAddress)
-    });
-builder.Services.AddScryClient("/api/query");
-builder.Services.AddScoped<ScryQuery>();
-```
-<sup><a href='/samples/Sample.Client/Program.cs#L13-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
-<!-- endSnippet -->
-
-`AddScryClient` registers a `ScryClient` that POSTs to the given endpoint using the registered `HttpClient`. `ScryQuery` is generated into the `Scry.Generated` namespace.
-
-That overload takes whichever `HttpClient` the container holds, which is what a WebAssembly app wants: there is exactly one, it points at the app's own origin, and the browser backs it rather than a socket pool. **Anywhere else, name the client Scry should use** — a bare `HttpClient` registration is discouraged outside WASM to begin with, and an ambient one may well belong to another API:
-
-<!-- snippet: clientNamedRegistration -->
-<a id='snippet-clientNamedRegistration'></a>
-```cs
-var scry = services.AddHttpClient("scry", _ => _.BaseAddress = new("http://localhost/"));
-services.AddScryClient(
+builder.Services.AddHttpClient(
+    "scry",
+    _ => _.BaseAddress = new(builder.HostEnvironment.BaseAddress));
+builder.Services.AddScryClient(
     "/api/query",
     _ => _.GetRequiredService<IHttpClientFactory>().CreateClient("scry"));
-services.AddScoped<ScryQuery>();
+builder.Services.AddScoped<ScryQuery>();
 ```
-<sup><a href='/samples/Sample.Tests/ClientRegistrationTests.cs#L17-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientNamedRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Program.cs#L14-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-The factory is reached through the delegate rather than being a dependency of `Scry.Client`, so an application that does not otherwise want `Microsoft.Extensions.Http` does not acquire it by referencing Scry.
+`AddScryClient` registers a `ScryClient` that POSTs to the given endpoint using the `HttpClient` the delegate resolves — here a **named** one, so Scry's base address, and any handler pipeline it grows, stay separate from every other call the app makes. `ScryQuery` is generated into the `Scry.Generated` namespace.
+
+The factory is reached through that delegate rather than being a dependency of `Scry.Client`, so an application that does not otherwise want `Microsoft.Extensions.Http` does not acquire it by referencing Scry.
+
+There is a shorter overload — `AddScryClient("/api/query")` — that takes whichever `HttpClient` the container holds. That is a fair shortcut in WebAssembly, where the browser backs `HttpClient`, there is exactly one, and it already points at the app's own origin. Prefer naming the client anywhere else: a bare `HttpClient` registration is discouraged outside WASM to begin with, and an ambient one may well belong to another API, which Scry would then quietly post to.
 
 Either way the client is registered **scoped**, not transient. It records the schema stamp each response advertises and raises [`SchemaStaleDetected`](schema-versioning.md) at most once, so a fresh instance per injection would reset that and never report drift. That is also why a typed client (`AddHttpClient<ScryClient>`) is the wrong shape here: the factory registers those transient.
 

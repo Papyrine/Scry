@@ -16,15 +16,15 @@ This package also ships the Scry source generator, so a client project needs onl
 <!-- snippet: clientRegistration -->
 <a id='snippet-clientRegistration'></a>
 ```cs
-builder.Services.AddScoped(
-    _ => new HttpClient
-    {
-        BaseAddress = new(builder.HostEnvironment.BaseAddress)
-    });
-builder.Services.AddScryClient("/api/query");
+builder.Services.AddHttpClient(
+    "scry",
+    _ => _.BaseAddress = new(builder.HostEnvironment.BaseAddress));
+builder.Services.AddScryClient(
+    "/api/query",
+    _ => _.GetRequiredService<IHttpClientFactory>().CreateClient("scry"));
 builder.Services.AddScoped<ScryQuery>();
 ```
-<sup><a href='/samples/Sample.Client/Program.cs#L13-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Program.cs#L14-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: clientQuery -->
