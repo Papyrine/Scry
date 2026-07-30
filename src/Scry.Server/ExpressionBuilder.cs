@@ -1299,10 +1299,26 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
     // "anything with a ToString": every CLR type has one, and almost none of them mean anything in SQL.
     static readonly HashSet<Type> convertibleToText =
     [
-        typeof(bool), typeof(char), typeof(sbyte), typeof(byte), typeof(short), typeof(ushort),
-        typeof(int), typeof(uint), typeof(long), typeof(ulong), typeof(float), typeof(double),
-        typeof(decimal), typeof(DateTime), typeof(Date), typeof(TimeOnly), typeof(DateTimeOffset),
-        typeof(TimeSpan), typeof(Guid), typeof(byte[])
+        typeof(bool),
+        typeof(char),
+        typeof(sbyte),
+        typeof(byte),
+        typeof(short),
+        typeof(ushort),
+        typeof(int),
+        typeof(uint),
+        typeof(long),
+        typeof(ulong),
+        typeof(float),
+        typeof(double),
+        typeof(decimal),
+        typeof(DateTime),
+        typeof(Date),
+        typeof(Time),
+        typeof(DateTimeOffset),
+        typeof(TimeSpan),
+        typeof(Guid),
+        typeof(byte[])
     ];
 
     /// <summary>
