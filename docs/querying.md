@@ -1,4 +1,4 @@
-﻿# Writing queries
+# Writing queries
 
 Client queries are ordinary C# LINQ written against the generated query models. Nothing runs client-side: the expression tree is **captured**, translated to the [wire AST](wire-format.md), and sent to the server when a terminal operator is awaited.
 
@@ -902,7 +902,22 @@ var rows = await client.Source<Order>("Order")
 <sup><a href='/src/Scry.Tests/CompositeGroupKeyTests.cs#L22-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCompositeGroupBy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-Every part of a composite key must be a plain member of the row, so that a later `_.Key.Region` can be matched back to the member it grouped by; a computed key is only allowed as the single key. Reading a member off the key that the query did not group by is rejected rather than becoming a read of an ungrouped row member, and a group filter reads the parts the same way the projection does.
+Reading a member off the key that the query did not group by is rejected rather than becoming a read of an ungrouped row member, and a group filter reads the parts the same way the projection does.
+
+A key can also be **computed** rather than read, whether on its own or as one part of a composite one:
+
+<!-- snippet: clientComputedGroupKey -->
+<a id='snippet-clientComputedGroupKey'></a>
+```cs
+var rows = await client.Source<Order>("Order")
+    .GroupBy(_ => _.Placed.DayOfWeek)
+    .Select(_ => new {Day = _.Key, Count = _.Count()})
+    .ToListAsync();
+```
+<sup><a href='/src/Scry.Tests/ComputedGroupKeyTests.cs#L15-L20' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientComputedGroupKey' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+The two kinds differ only in how the key names itself on the wire. A key that is a plain member says so by its path, which is what the server matches it back to the position it grouped at; a computed key has no path, so it is named by that position directly. Everything after that is the same — the key composes with aggregates, and a group filter reads it identically.
 
 <!-- snippet: wireAggregates -->
 <a id='snippet-wireAggregates'></a>
@@ -934,7 +949,7 @@ public enum AggregateFn
 
 Constraints:
 
-- Exactly one group key, and it must be a member access.
+- One group key, or up to eight members grouped at once. Each may be a member of the row or an expression computed from it.
 - `OrderBy` and `ThenBy` are not allowed after `GroupBy`; a `Where` after it is a [group filter](#filtering-groups).
 - The key and aggregates may be [composed into expressions](#computed-projection-members) — `_.Sum(…) / _.Count()`.
 - Nested projections are not allowed in a grouped `Select`.

@@ -277,7 +277,7 @@ Reference the model project with ReferenceOutputAssembly="false" so it builds fi
 
 **Generated code is stale after changing the model.** This is what the stamp exists to prevent, so first confirm the model project actually rebuilt. In Rider or Visual Studio the analyzer host caches generator assemblies; a restart clears it. The generator's `AssemblyVersion` tracks the package version specifically so an upgraded package gets a distinct identity rather than serving a cached, frozen generator.
 
-**Build order flakiness in CI.** Confirm the `ReferenceOutputAssembly="false"` project reference is present. Without it, nothing orders the model build ahead of the client compile.
+**Build order flakiness in CI.** Confirm the `ReferenceOutputAssembly="false"` project reference is present. Without it, nothing orders the model build ahead of the client compile. A [solution-level build dependency](https://learn.microsoft.com/en-us/visualstudio/ide/how-to-create-and-remove-project-dependencies) (`<BuildDependency>` in `.slnx`, `ProjectDependencies` in `.sln`) is not a substitute — it only applies when the build is entered through that solution, so building the client project directly, or from another solution, loses the ordering.
 
 
 ## Reading generated code

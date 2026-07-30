@@ -20,7 +20,7 @@ For usage detail on the supported surface (position rules, limits, examples), se
 | `Select(projection)` | At most one; must construct an object. |
 | `OfType<T>()` | Narrows to a derived type that is allow-listed in its own right; later operators read it. |
 | `SelectMany(collection)` | Flattens a `[QueryableCollection]`; one per query, and later operators read the element. |
-| `GroupBy(key)` | One key, or up to eight members grouped at once. Must be followed by a `Select`. |
+| `GroupBy(key)` | One key, or up to eight members grouped at once; each a member or an expression computed from the row. Must be followed by a `Select`. |
 | `Distinct()` | Deduplicates the projected rows; can also be ordered, paged and counted over a flat projection of up to eight members. |
 | `Reverse()` | Inverts the ordering; requires a preceding `OrderBy`, as EF does. |
 | `Where(predicate)` after `GroupBy` | SQL `HAVING` — reads the group key and aggregates. |

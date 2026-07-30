@@ -516,6 +516,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
     Expression Build(Node node, Expression row, Type? expected) =>
         node switch
         {
+            GroupKeyNode key when IsGrouping(row.Type) => BuildGroupKeyAt(key.Index, row),
             MemberNode member when IsGrouping(row.Type) => BuildGroupKey(member, row),
             AggregateNode aggregate when IsGrouping(row.Type) =>
                 BuildAggregate(aggregate, (ParameterExpression)row, row.Type.GetGenericArguments()[1]),
@@ -707,10 +708,9 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
     // names one of them, matched back to the position it was grouped at.
     Expression BuildGroupKey(MemberNode member, Expression row)
     {
-        var key = Expression.Property(row, "Key");
         if (compositeKeys is null)
         {
-            return key;
+            return BuildGroupKeyAt(0, row);
         }
 
         for (var i = 0; i < compositeKeys.Count; i++)
@@ -718,12 +718,37 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
             if (compositeKeys[i] is MemberNode candidate &&
                 candidate.Path.SequenceEqual(member.Path))
             {
-                return Expression.Property(key, $"Value{i + 1}");
+                return BuildGroupKeyAt(i, row);
             }
         }
 
         throw new ScryValidationException(
             $"'{string.Join(".", member.Path)}' is not one of the query's group keys.");
+    }
+
+    // The same read by position rather than by path, which is how a computed key — one with no path to
+    // match — names itself.
+    Expression BuildGroupKeyAt(int index, Expression row)
+    {
+        var key = Expression.Property(row, "Key");
+        if (compositeKeys is null)
+        {
+            if (index != 0)
+            {
+                throw new ScryValidationException($"Group key {index} was read, but the query grouped by one.");
+            }
+
+            return key;
+        }
+
+        if (index < 0 ||
+            index >= compositeKeys.Count)
+        {
+            throw new ScryValidationException(
+                $"Group key {index} was read, but the query grouped by {compositeKeys.Count}.");
+        }
+
+        return Expression.Property(key, $"Value{index + 1}");
     }
 
     static bool IsGrouping(Type type) =>

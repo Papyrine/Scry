@@ -38,7 +38,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         var sawJoin = false;
         var sawSet = false;
         var terminalIndex = -1;
-        IReadOnlyList<MemberNode>? groupKeys = null;
+        IReadOnlyList<Node>? groupKeys = null;
         Projection? projection = null;
 
         for (var i = 0; i < pipeline.Count; i++)
@@ -186,20 +186,13 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                             $"GroupBy supports at most {DistinctRow.ByArity.Length} keys.");
                     }
 
-                    // A composite key is addressed one part at a time in the projection, so every part
-                    // has to be a member path there is a name to match it back by.
-                    if (groupBy.Keys.Count > 1 &&
-                        groupBy.Keys.Any(_ => _ is not MemberNode))
-                    {
-                        throw Reject("Every key of a composite GroupBy must be a member.");
-                    }
 
                     foreach (var key in groupBy.Keys)
                     {
                         ValidateScalar(key, rootType, "GroupBy key");
                     }
 
-                    groupKeys = [..groupBy.Keys.OfType<MemberNode>()];
+                    groupKeys = groupBy.Keys;
                     sawGroupBy = true;
                     break;
 
@@ -392,7 +385,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         Projection projection,
         Type rootType,
         bool grouped,
-        IReadOnlyList<MemberNode>? groupKeys,
+        IReadOnlyList<Node>? groupKeys,
         int depth)
     {
         if (depth > options.MaxNavigationDepth)
@@ -426,7 +419,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     if (grouped)
                     {
                         if (groupKeys is null ||
-                            !groupKeys.Any(_ => PathEquals(_.Path, memberNode.Path)))
+                            !groupKeys.OfType<MemberNode>().Any(_ => PathEquals(_.Path, memberNode.Path)))
                         {
                             throw Reject("A grouped projection may only reference the group key or aggregates.");
                         }
@@ -482,7 +475,24 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
     /// may name are the group key — every other column has been folded away — and aggregates, which are
     /// rejected everywhere else outside a grouped projection.
     /// </summary>
-    void ValidateHaving(Node node, Type elementType, IReadOnlyList<MemberNode>? groupKeys, int depth)
+    // A group key read by position rather than by path — the form a computed key takes, since it has
+    // no path to name it by. Only meaningful where a grouping is in scope, and only for a key the
+    // query actually has.
+    static void EnsureGroupKeyInRange(GroupKeyNode key, IReadOnlyList<Node>? groupKeys)
+    {
+        if (groupKeys is null)
+        {
+            throw Reject("A group key can only be read in the Select or Where that follows a GroupBy.");
+        }
+
+        if (key.Index < 0 ||
+            key.Index >= groupKeys.Count)
+        {
+            throw Reject($"Group key {key.Index} is out of range; the query grouped by {groupKeys.Count}.");
+        }
+    }
+
+    void ValidateHaving(Node node, Type elementType, IReadOnlyList<Node>? groupKeys, int depth)
     {
         while (true)
         {
@@ -493,9 +503,13 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
             switch (node)
             {
+                case GroupKeyNode key:
+                    EnsureGroupKeyInRange(key, groupKeys);
+                    break;
+
                 case MemberNode member:
                     if (groupKeys is null ||
-                        !groupKeys.Any(_ => PathEquals(_.Path, member.Path)))
+                        !groupKeys.OfType<MemberNode>().Any(_ => PathEquals(_.Path, member.Path)))
                     {
                         throw Reject("A predicate after GroupBy may only reference the group key or aggregates.");
                     }
@@ -652,6 +666,9 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
                 case AggregateNode:
                     throw Reject("Aggregates are only allowed as a projection member in a grouped Select.");
+
+                case GroupKeyNode:
+                    throw Reject("A group key can only be read in the Select or Where that follows a GroupBy.");
 
                 default:
                     throw Reject($"Unsupported expression '{node.GetType().Name}'.");

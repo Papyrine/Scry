@@ -1,4 +1,4 @@
-# Wire format
+﻿# Wire format
 
 `Scry.Wire` defines the serializable query AST shared by client and server. It is a **restricted, closed node vocabulary** — not general expression-tree serialization — which is what makes every query exhaustively validatable.
 
@@ -182,9 +182,10 @@ paging without an ordering would be slicing an order the deduplication never def
 [JsonDerivedType(typeof(CollateNode), "collate")]
 [JsonDerivedType(typeof(InSourceNode), "inSource")]
 [JsonDerivedType(typeof(AggregateNode), "aggregate")]
+[JsonDerivedType(typeof(GroupKeyNode), "groupKey")]
 public abstract record Node;
 ```
-<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L20' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -392,6 +393,17 @@ public enum AggregateFn
 <!-- endSnippet -->
 
 `selector` is omitted for `Count`. An aggregate is valid **only** as a projection member in a `select` that follows a `groupBy`.
+
+
+### `groupKey`
+
+```json
+{ "$type": "groupKey", "index": 0 }
+```
+
+The key a query grouped by, read in the `select` or `where` that follows the `groupBy`, and rejected anywhere else. `index` selects the part of a composite key and is zero for a single one.
+
+A key that is a plain member is named instead by its own `member` node, whose path the server matches back to the position it grouped at — so an existing client's grouped requests are unchanged by this node's existence. It is for the keys with no path to name: one computed from an expression, where the only thing left to say is which of the query's keys is meant.
 
 
 ## Projections

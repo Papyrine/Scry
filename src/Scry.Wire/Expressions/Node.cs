@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+﻿namespace Scry.Wire;
 
 /// <summary>
 /// A value expression used in predicates and projections. The set of node types is closed, so the
@@ -16,5 +16,6 @@ namespace Scry.Wire;
 [JsonDerivedType(typeof(CollateNode), "collate")]
 [JsonDerivedType(typeof(InSourceNode), "inSource")]
 [JsonDerivedType(typeof(AggregateNode), "aggregate")]
+[JsonDerivedType(typeof(GroupKeyNode), "groupKey")]
 public abstract record Node;
 // end-snippet

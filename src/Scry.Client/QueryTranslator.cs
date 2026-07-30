@@ -4,11 +4,14 @@
 /// </summary>
 sealed class QueryTranslator
 {
-    IReadOnlyList<string>? groupKey;
+    // How to say "the key" for a query that grouped by one. A key that is a plain member says so by
+    // its own path, which is what the server matches it back by; a computed key has no path, so it is
+    // named by position instead.
+    Node? groupKeyNode;
 
-    // The member path behind each part of a composite group key, by the name the key type gave it —
-    // what 'g.Key.Region' is resolved through. Null while the query grouped by a single key.
-    Dictionary<string, IReadOnlyList<string>>? groupKeyParts;
+    // The same, per part of a composite key, by the name the key type gave it — what 'g.Key.Region' is
+    // resolved through. Null while the query grouped by a single key.
+    Dictionary<string, Node>? groupKeyParts;
 
     public static IReadOnlyList<QueryOp> Translate(Expression expression)
     {
@@ -238,18 +241,14 @@ sealed class QueryTranslator
         if (keyLambda.Body is NewExpression or MemberInitExpression)
         {
             var keys = new List<Node>();
-            var parts = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+            var parts = new Dictionary<string, Node>(StringComparer.Ordinal);
             foreach (var (name, value) in NestedMembers(keyLambda.Body))
             {
-                if (value is not MemberExpression member ||
-                    !Rooted(member, parameter))
-                {
-                    throw new NotSupportedException(
-                        $"Composite GroupBy key '{name}' must be a member access on the grouped row.");
-                }
+                var key = TranslateExpr(value, parameter);
+                keys.Add(key);
 
-                parts.Add(name, MemberPath(member));
-                keys.Add(new MemberNode(MemberPath(member)));
+                // A member part is named back by its path; a computed one by its position.
+                parts.Add(name, key is MemberNode member ? member : new GroupKeyNode(keys.Count - 1));
             }
 
             if (keys.Count == 0)
@@ -257,16 +256,15 @@ sealed class QueryTranslator
                 throw new NotSupportedException("A composite GroupBy key must have at least one member.");
             }
 
-            groupKey = null;
+            groupKeyNode = null;
             groupKeyParts = parts;
             return new(keys);
         }
 
-        var key = TranslateExpr(keyLambda.Body, parameter);
-        groupKey = (key as MemberNode)?.Path ??
-                   throw new NotSupportedException("GroupBy key must be a member access.");
+        var single = TranslateExpr(keyLambda.Body, parameter);
+        groupKeyNode = single is MemberNode path ? path : new GroupKeyNode(0);
         groupKeyParts = null;
-        return new([key]);
+        return new([single]);
     }
 
     List<JoinMember> JoinMembers(LambdaExpression result, JoinKind kind)
@@ -606,14 +604,14 @@ sealed class QueryTranslator
                 // One part of a composite key: 'g.Key.Region' is the member the query grouped by.
                 case MemberExpression {Expression: MemberExpression {Member.Name: "Key"} owner} part
                     when owner.Expression == root && IsGrouping(root.Type) && groupKeyParts is not null:
-                    return groupKeyParts.TryGetValue(part.Member.Name, out var path)
-                        ? new MemberNode(path)
+                    return groupKeyParts.TryGetValue(part.Member.Name, out var resolved)
+                        ? resolved
                         : throw new NotSupportedException(
                             $"'{part.Member.Name}' is not one of the query's group keys.");
 
                 case MemberExpression {Member.Name: "Key"} key
                     when key.Expression == root && IsGrouping(root.Type):
-                    return new MemberNode(groupKey ?? throw new NotSupportedException("No group key in scope."));
+                    return groupKeyNode ?? throw new NotSupportedException("No group key in scope.");
 
                 case MethodCallExpression aggregate
                     when IsGrouping(root.Type) && IsCallOver(aggregate, root):
