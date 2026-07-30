@@ -87,7 +87,7 @@ The other two positions EF Core allows an aggregate in are both reachable as wel
 
 ### Expression operators
 
-`==` `!=` `<` `<=` `>` `>=` `&&` `||` `!` `+` `-` `*` `/` `%` `??` `?:` and unary `-`. Over two strings `+` is concatenation, which `string.Concat` and a plain-hole interpolated string both lower to.
+`==` `!=` `<` `<=` `>` `>=` `&&` `||` `!` `+` `-` `*` `/` `%` `??` `?:` and unary `-`. Where either operand is a string, `+` is concatenation and the other operand is converted by the database; `string.Concat` and a plain-hole interpolated string both mean the same thing.
 
 ### Functions
 

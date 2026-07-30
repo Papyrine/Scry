@@ -1117,6 +1117,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 KnownFunction.DateAddSeconds => (1, 1),
 
             KnownFunction.StringReplace => (2, 2),
+            KnownFunction.StringConcat => (1, 1),
             KnownFunction.MathPow or
                 KnownFunction.MathAtan2 => (1, 1),
 

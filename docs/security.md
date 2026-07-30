@@ -130,6 +130,14 @@ public enum KnownFunction
     DateAddHours,
     DateAddMinutes,
     DateAddSeconds,
+    /// <summary>
+    /// Joins the target and the argument into one string, converting either if it is not one already.
+    /// C# writes this as <c>+</c>, but the operator alone does not say it: an Add of a string and a
+    /// number is a concatenation, while an Add of two numbers is arithmetic, and only the client can
+    /// tell which was written.
+    /// </summary>
+    StringConcat,
+
     MathAbs,
     MathCeiling,
     MathFloor,
@@ -159,7 +167,7 @@ public enum KnownFunction
     In
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L78' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Unknown discriminators fail deserialization rather than being ignored, so a request that names anything outside these sets is rejected at the JSON layer.

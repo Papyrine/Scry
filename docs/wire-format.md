@@ -1,4 +1,4 @@
-﻿# Wire format
+# Wire format
 
 `Scry.Wire` defines the serializable query AST shared by client and server. It is a **restricted, closed node vocabulary** — not general expression-tree serialization — which is what makes every query exhaustively validatable.
 
@@ -331,6 +331,14 @@ public enum KnownFunction
     DateAddHours,
     DateAddMinutes,
     DateAddSeconds,
+    /// <summary>
+    /// Joins the target and the argument into one string, converting either if it is not one already.
+    /// C# writes this as <c>+</c>, but the operator alone does not say it: an Add of a string and a
+    /// number is a concatenation, while an Add of two numbers is arithmetic, and only the client can
+    /// tell which was written.
+    /// </summary>
+    StringConcat,
+
     MathAbs,
     MathCeiling,
     MathFloor,
@@ -360,7 +368,7 @@ public enum KnownFunction
     In
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L78' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 There is no free-form method name anywhere in the format. This enum is the complete set of behaviour a client can request.

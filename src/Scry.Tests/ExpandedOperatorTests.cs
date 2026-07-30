@@ -797,17 +797,19 @@ public class ExpandedOperatorTests
     }
 
     [Test]
-    public void ANonStringInterpolationHoleIsRejected()
+    public async Task ANonStringInterpolationHoleIsConverted()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<NotSupportedException>(
-            () => client.Source<Order>("Order")
-                .Select(_ => new NameRow($"{_.Region}-{_.Amount}"))
-                .ToListAsync());
+        // A hole that is not a string is converted by the database, the same as a non-string operand
+        // of '+' is — see StringConcatTests.
+        var rows = await client.Source<Order>("Order")
+            .Where(_ => _.Region == "South")
+            .Select(_ => new NameRow($"{_.Region}-{_.Amount}"))
+            .ToListAsync();
 
-        Assert.That(exception!.Message, Does.Contain("string values"));
+        Assert.That(rows.Single().Name, Does.StartWith("South-75"));
     }
 
     [Test]

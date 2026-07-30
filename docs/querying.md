@@ -299,7 +299,7 @@ public enum UnaryOp
 <sup><a href='/src/Scry.Wire/BinaryOp.cs#L3-L29' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireBinaryOps' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-C# `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, `+`, `-`, `*`, `/`, `%`, `??`, `!`, and unary `-` map onto these, and `?:` becomes a `conditional` node. `+` over two strings is concatenation — the wire records the operator, never the method, so the server reconstructs it from the operand types. Any other operator (`&`, `|`, `^`, `<<`, `>>`) throws:
+C# `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, `+`, `-`, `*`, `/`, `%`, `??`, `!`, and unary `-` map onto these, and `?:` becomes a `conditional` node. `+` over strings is concatenation, which travels as its own [`StringConcat`](#functions) function rather than as the operator: an Add of a string and a number is a concatenation while an Add of two numbers is arithmetic, and only the client — which can still see the `string.Concat` the compiler resolved — can tell which was written. Any other operator (`&`, `|`, `^`, `<<`, `>>`) throws:
 
 ```
 Binary operator 'ExclusiveOr' is not supported by Scry.
@@ -324,7 +324,21 @@ The client names only the sensitivity it wants; which collation implements it is
 
 The comparison the database then makes is **its own, under that collation** — not the .NET culture rules the `StringComparison` value names. Only the case sensitivity survives the crossing. Collation is also a relational concept, so a non-relational provider cannot offer it.
 
-`string.Concat` and an **interpolated string** both mean that same `+`. An interpolated string lowers to `string.Format` inside an expression tree, which no provider translates, so a plain-hole interpolation is rewritten into the concatenation it is equivalent to. A hole carrying alignment or a format specifier (`$"{_.Amount:N2}"`) is rejected — it would change the value, and the database has no equivalent spelling — as is a non-string hole, whose conversion has no single spelling across providers.
+An operand that is **not a string** is converted by the database:
+
+<!-- snippet: clientStringConcat -->
+<a id='snippet-clientStringConcat'></a>
+```cs
+var rows = await client.Source<Order>("Order")
+    .Select(_ => new {Label = _.Region + "-" + _.Quantity})
+    .ToListAsync();
+```
+<sup><a href='/src/Scry.Tests/StringConcatTests.cs#L16-L20' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientStringConcat' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Only the non-string side is converted, which is what tells the provider which side is already text. The alternative — converting both — leaves the operands indistinguishable, and the provider reads the whole expression as arithmetic and fails trying to cast the string to a number.
+
+`string.Concat` and an **interpolated string** both mean that same `+`, non-string parts included. An interpolated string lowers to `string.Format` inside an expression tree, which no provider translates, so a plain-hole interpolation is rewritten into the concatenation it is equivalent to. A hole carrying alignment or a format specifier (`$"{_.Amount:N2}"`) is still rejected: it would change the value, and the database has no equivalent spelling.
 
 `Convert` / `ConvertChecked` nodes — which the C# compiler inserts freely around enums, nullables, and numeric widening — are transparently unwrapped rather than encoded.
 
@@ -372,6 +386,14 @@ public enum KnownFunction
     DateAddHours,
     DateAddMinutes,
     DateAddSeconds,
+    /// <summary>
+    /// Joins the target and the argument into one string, converting either if it is not one already.
+    /// C# writes this as <c>+</c>, but the operator alone does not say it: an Add of a string and a
+    /// number is a concatenation, while an Add of two numbers is arithmetic, and only the client can
+    /// tell which was written.
+    /// </summary>
+    StringConcat,
+
     MathAbs,
     MathCeiling,
     MathFloor,
@@ -401,7 +423,7 @@ public enum KnownFunction
     In
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L78' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Mapped from:
@@ -436,6 +458,7 @@ Mapped from:
 | `Math.Sin(value)` / `Math.Cos(value)` / `Math.Tan(value)` | `MathSin` / `MathCos` / `MathTan` |
 | `Math.Asin(value)` / `Math.Acos(value)` / `Math.Atan(value)` | `MathAsin` / `MathAcos` / `MathAtan` |
 | `Math.Atan2(y, x)` | `MathAtan2` |
+| `a + b` where either is a string | `StringConcat` |
 | `set.Contains(_.Member)` | `In` |
 
 `DayOfWeek` is the one function whose SQL the server composes rather than handing the provider a CLR expression to translate. SQL Server has no deterministic day-of-week function — `DATEPART(weekday, …)` reads `@@DATEFIRST`, a session setting, so the same row can answer differently on two connections — which is why EF refuses to translate `DateTime.DayOfWeek` at all. Scry carries the intent on the wire and builds the arithmetic server-side: whole days from a fixed Monday, modulo seven, numbered exactly as `System.DayOfWeek` is. It depends on nothing but the date, and is refused on a provider whose deterministic date arithmetic has not been verified rather than answered approximately.

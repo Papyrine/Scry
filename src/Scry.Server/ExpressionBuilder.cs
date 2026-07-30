@@ -969,6 +969,8 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
                 KnownFunction.DateAddMinutes => TemporalAdd(call, target, "AddMinutes", row),
                 KnownFunction.DateAddSeconds => TemporalAdd(call, target, "AddSeconds", row),
 
+                KnownFunction.StringConcat => BuildConcat(target, Build(call.Arguments[0], row, null)),
+
                 KnownFunction.MathAbs => MathCall("Abs", target),
                 KnownFunction.MathCeiling => MathCall("Ceiling", target),
                 KnownFunction.MathFloor => MathCall("Floor", target),
@@ -1260,6 +1262,29 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
             TypeCode.Int32 or TypeCode.UInt32 or TypeCode.Int64 or TypeCode.UInt64 or
             TypeCode.Single or TypeCode.Double or TypeCode.Decimal;
 
+    /// <summary>
+    /// Joins two operands into a string, reproducing the shape C# compiles <c>+</c> to.
+    /// </summary>
+    /// <remarks>
+    /// A string operand is left alone and only a non-string one is boxed, which is what tells the
+    /// provider which side is already text. Converting both instead loses that: the operands become
+    /// indistinguishable and the provider reads the whole thing as arithmetic, casting the string to a
+    /// number and failing at execution.
+    /// </remarks>
+    static Expression BuildConcat(Expression left, Expression right)
+    {
+        if (left.Type == typeof(string) &&
+            right.Type == typeof(string))
+        {
+            return Expression.Call(stringConcat, left, right);
+        }
+
+        return Expression.Add(ConcatOperand(left), ConcatOperand(right), stringConcatObjects);
+    }
+
+    static Expression ConcatOperand(Expression expression) =>
+        expression.Type == typeof(string) ? expression : Expression.Convert(expression, typeof(object));
+
     static Expression ConvertTo(Expression expression, Type target) =>
         expression.Type == target ? expression : Expression.Convert(expression, target);
 
@@ -1509,6 +1534,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
     static readonly MethodInfo stringIndexOf = StringMethod("IndexOf", typeof(string));
     static readonly MethodInfo stringReplace = StringMethod("Replace", typeof(string), typeof(string));
     static readonly MethodInfo stringConcat = StringMethod("Concat", typeof(string), typeof(string));
+    static readonly MethodInfo stringConcatObjects = StringMethod("Concat", typeof(object), typeof(object));
 
 
     // The generic Contains<TSource>(source, value) definition, closed per member type by BuildIn.

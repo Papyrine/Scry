@@ -590,6 +590,17 @@ sealed class QueryTranslator
                 case UnaryExpression {NodeType: ExpressionType.Negate} negate:
                     return new UnaryNode(UnaryOp.Negate, TranslateExpr(negate.Operand, root));
 
+                // C# compiles string concatenation to an Add carrying string.Concat as its method. The
+                // operator alone cannot say which was meant — an Add of a string and a number is a
+                // concatenation, an Add of two numbers is arithmetic — so the intent is recorded here,
+                // where the method is still visible, rather than guessed from the operand types later.
+                case BinaryExpression {NodeType: ExpressionType.Add, Method: {Name: "Concat"} method} concat
+                    when method.DeclaringType == typeof(string):
+                    return new CallNode(
+                        KnownFunction.StringConcat,
+                        TranslateExpr(concat.Left, root),
+                        [TranslateExpr(concat.Right, root)]);
+
                 case BinaryExpression binary:
                     return new BinaryNode(MapBinary(binary.NodeType), TranslateExpr(binary.Left, root), TranslateExpr(binary.Right, root));
 
@@ -798,10 +809,8 @@ sealed class QueryTranslator
             case "Replace" when call.Arguments.Count == 2:
                 return new CallNode(KnownFunction.StringReplace, Target(), [Argument(0), Argument(1)]);
 
-            // Concatenation has no function of its own: it is an Add of two strings, which the server
-            // already rebinds to string.Concat.
             case "Concat":
-                return ConcatChain([..ConcatArguments(call).Select(_ => StringOperand(_, root))]);
+                return ConcatChain([..ConcatArguments(call).Select(_ => TranslateExpr(_, root))]);
 
             // An interpolated string lowers to string.Format inside an expression tree, which no
             // provider translates. Plain holes carry no formatting, so they mean the same as a
@@ -925,26 +934,6 @@ sealed class QueryTranslator
             : [..call.Arguments];
 
     /// <summary>
-    /// Reads one operand of a concatenation. Only strings are joined: the conversion a non-string hole
-    /// would need has no single spelling across providers, so it is refused here rather than guessed at.
-    /// </summary>
-    Node StringOperand(Expression expression, ParameterExpression root)
-    {
-        if (Unconverted(expression).Type != typeof(string))
-        {
-            throw new NotSupportedException(
-                "Only string values can be concatenated — convert the value before interpolating it.");
-        }
-
-        return TranslateExpr(expression, root);
-    }
-
-    static Expression Unconverted(Expression expression) =>
-        expression is UnaryExpression {NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked} convert
-            ? convert.Operand
-            : expression;
-
-    /// <summary>
     /// Splits a format string into its literal runs and holes. A hole carrying alignment or a format
     /// specifier is refused: it would change the value, and the database has no equivalent spelling.
     /// </summary>
@@ -989,7 +978,7 @@ sealed class QueryTranslator
                 literal.Clear();
             }
 
-            parts.Add(StringOperand(arguments[index], root));
+            parts.Add(TranslateExpr(arguments[index], root));
             i = close;
         }
 
@@ -1011,7 +1000,7 @@ sealed class QueryTranslator
         var chain = parts[0];
         foreach (var part in parts.Skip(1))
         {
-            chain = new BinaryNode(BinaryOp.Add, chain, part);
+            chain = new CallNode(KnownFunction.StringConcat, chain, [part]);
         }
 
         return chain;

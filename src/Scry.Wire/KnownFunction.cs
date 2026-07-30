@@ -39,6 +39,14 @@ public enum KnownFunction
     DateAddHours,
     DateAddMinutes,
     DateAddSeconds,
+    /// <summary>
+    /// Joins the target and the argument into one string, converting either if it is not one already.
+    /// C# writes this as <c>+</c>, but the operator alone does not say it: an Add of a string and a
+    /// number is a concatenation, while an Add of two numbers is arithmetic, and only the client can
+    /// tell which was written.
+    /// </summary>
+    StringConcat,
+
     MathAbs,
     MathCeiling,
     MathFloor,
