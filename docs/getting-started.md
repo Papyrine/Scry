@@ -1,4 +1,4 @@
-﻿# Getting started
+# Getting started
 
 A Scry solution has three projects:
 
@@ -164,7 +164,23 @@ builder.Services.AddScoped<ScryQuery>();
 
 The factory is reached through that delegate rather than being a dependency of `Scry.Client`, so an application that does not otherwise want `Microsoft.Extensions.Http` does not acquire it by referencing Scry.
 
-There is a shorter overload — `AddScryClient("/api/query")` — that takes whichever `HttpClient` the container holds. That is a fair shortcut in WebAssembly, where the browser backs `HttpClient`, there is exactly one, and it already points at the app's own origin. Prefer naming the client anywhere else: a bare `HttpClient` registration is discouraged outside WASM to begin with, and an ambient one may well belong to another API, which Scry would then quietly post to.
+A shorter overload takes whichever `HttpClient` the container holds:
+
+<!-- snippet: clientWasmRegistration -->
+<a id='snippet-clientWasmRegistration'></a>
+```cs
+services.AddScoped(
+    _ => new HttpClient
+    {
+        BaseAddress = new("https://localhost")
+    });
+services.AddScryClient("/api/query");
+services.AddScoped<ScryQuery>();
+```
+<sup><a href='/samples/Sample.Tests/ClientRegistrationTests.cs#L19-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientWasmRegistration' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+That is a fair shortcut in WebAssembly, where the browser backs `HttpClient`, there is exactly one, and it already points at the app's own origin — so there is nothing for a name to disambiguate, and it saves the app a `Microsoft.Extensions.Http` reference it would otherwise carry into the browser. Prefer naming the client anywhere else: a bare `HttpClient` registration is discouraged outside WASM to begin with, and an ambient one may well belong to another API, which Scry would then quietly post to.
 
 Either way the client is registered **scoped**, not transient. It records the schema stamp each response advertises and raises [`SchemaStaleDetected`](schema-versioning.md) at most once, so a fresh instance per injection would reset that and never report drift. That is also why a typed client (`AddHttpClient<ScryClient>`) is the wrong shape here: the factory registers those transient.
 

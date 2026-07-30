@@ -1,12 +1,42 @@
 /// <summary>
-/// Registering the client over a named <see cref="HttpClient"/>, which is what an application that is
-/// not Blazor WebAssembly should do: the ambient registration the parameterless overload picks up may
-/// belong to another API, and a bare HttpClient in the container is discouraged there anyway.
+/// The two ways to register the client. A named <see cref="HttpClient"/> is what an application that
+/// is not Blazor WebAssembly should use: the ambient registration the parameterless overload picks up
+/// may belong to another API, and a bare HttpClient in the container is discouraged there anyway.
 /// </summary>
 [TestFixture]
 public class ClientRegistrationTests
 {
     record NameRow(string Name);
+
+    [Test]
+    public async Task ResolvesTheClientFromTheAmbientHttpClient()
+    {
+        var services = new ServiceCollection();
+
+        // The WebAssembly shortcut: one HttpClient, already pointed at the app's own origin, so there
+        // is nothing for a name to disambiguate. In a real app the address comes from
+        // builder.HostEnvironment.BaseAddress.
+        // begin-snippet: clientWasmRegistration
+        services.AddScoped(
+            _ => new HttpClient
+            {
+                BaseAddress = new("https://localhost")
+            });
+        services.AddScryClient("/api/query");
+        services.AddScoped<ScryQuery>();
+        // end-snippet
+
+        await using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        // Resolving is the whole of what this overload does differently — it reaches the same
+        // ScryClient the named form does, by a different route — so the round trip is covered by the
+        // test below rather than repeated here.
+        Assert.That(scope.ServiceProvider.GetRequiredService<ScryQuery>(), Is.Not.Null);
+        Assert.That(
+            scope.ServiceProvider.GetRequiredService<ScryClient>(),
+            Is.SameAs(scope.ServiceProvider.GetRequiredService<ScryClient>()));
+    }
 
     [Test]
     public async Task ResolvesTheClientFromANamedHttpClient()
