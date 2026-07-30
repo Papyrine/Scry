@@ -1,4 +1,4 @@
-# Writing queries
+﻿# Writing queries
 
 Client queries are ordinary C# LINQ written against the generated query models. Nothing runs client-side: the expression tree is **captured**, translated to the [wire AST](wire-format.md), and sent to the server when a terminal operator is awaited.
 
@@ -740,7 +740,7 @@ The type is named on the wire exactly as a request's own root is, and resolved t
 
 The derived type's own [row policy](policies.md) applies on top of the base's. Both narrow, so what survives is what a direct query of either source would have returned.
 
-`Cast` is not supported. A cast asserts a type rather than filtering to it, so a row of the wrong type has no answer; `OfType` is the operator that means "the ones that are".
+`Cast` is **not** the same operator spelled differently, and is not supported. `OfType` filters — a row that is not the derived type is left out. `Cast` asserts — every row is required to be that type already, and one that is not is an error rather than an omission. Nothing in SQL raises on a row it was asked to return, so the assertion cannot travel: carrying it would mean either reading every row back and checking outside the database, or quietly substituting the filter and reporting a short answer where a failure was due. `OfType` is the operator that means "the ones that are"; an upcast to a base is a no-op here, since the wire names a source rather than a type and projects by member name.
 
 #### Flattening a collection
 

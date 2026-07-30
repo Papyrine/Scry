@@ -121,7 +121,11 @@ Nothing to design; the surface underneath does not carry them.
 
 Considered and rejected, for reasons that have not changed.
 
-- `Cast<T>` — a cast asserts a type rather than filtering to it, so a row of the wrong type has no answer. [`OfType`](querying.md#narrowing-to-a-derived-type) is the operator that means "the ones that are".
+- `Cast<T>` — not [`OfType<T>`](querying.md#narrowing-to-a-derived-type) under another name. `OfType` **filters**: a row that is not a `T` is left out. `Cast` **asserts**: every row is required to be a `T` already, and one that is not is an error rather than an omission. They agree only when the assertion happens to hold, and differ exactly where it matters.
+
+  The assertion is the part with no translation. A query cannot say "return these rows, and fail if any of them is not a `Vehicle`" — nothing in SQL raises on a row it was asked to return. That leaves two ways to carry it, and both are worse than refusing: materialize every row and check the discriminator outside the database, which gives up the reason for sending a query at all; or emit the filter instead, which silently turns a loud failure into a quietly shorter answer. A client that wrote `Cast` because it believed every row qualified would be told nothing when it did not.
+
+  Casting the other way — up to a base — is well defined, and changes nothing worth carrying. The wire names a *source*, never a CLR type, and a response is projected by member name, so an upcast alters only the client's static view of rows it was already receiving. There is no server-side effect for it to request.
 - `DefaultIfEmpty` — its only use in LINQ is expressing an outer join, which `LeftJoin`, `RightJoin` and `GroupJoin` now do directly. Standalone it yields an all-null row, which a projected response has no use for.
 - `GroupJoin` **projecting** its group, and `SelectMany` with a **result selector**. The first would put a nested collection in a response, which is exactly what keeps collections [aggregable and not projectable](annotations.md#collections); the second would produce a two-rooted row without a join's projection to name the sides. Both have a supported form: aggregate the group, or flatten first and then `Select`.
 
