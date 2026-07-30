@@ -100,7 +100,7 @@ public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjec
 | `Select(projection)` | `select` | At most one, and it must construct an object. |
 | `Distinct()` | `distinct` | Deduplicates the **projected** rows. It can also be ordered, paged and counted — see [below](#deduplicating). |
 | `Reverse()` | `reverse` | Inverts the ordering. Requires a preceding `OrderBy`. |
-| `Join(inner, …)` / `LeftJoin(inner, …)` / `RightJoin(inner, …)` | `join` | Joins a second source — see [below](#joins). Carries its own projection; only a terminal may follow. |
+| `Join(inner, …)` / `LeftJoin(inner, …)` / `RightJoin(inner, …)` / `GroupJoin(inner, …)` | `join` | Joins a second source — see [below](#joins). Carries its own projection; only a terminal may follow. |
 | `Union` / `Concat` / `Intersect` / `Except` | `set` | Combines a second source — see [below](#set-operations). Both sides project the same shape. |
 
 Any other LINQ operator — `SelectMany`, `GroupJoin`, `Cast`, … — throws:
@@ -493,6 +493,30 @@ Three rules follow from the joined row having two roots:
 - Only `Where` crosses into the inner side. Ordering, paging, and grouping there would describe rows the join has already consumed, so filter each side first and join last.
 
 Each side is validated against its own allow-list: a `[QueryIgnore]`d member stays hidden on both, and naming an outer member on the inner side is rejected. The two key selectors must produce the same type.
+
+#### Aggregating the matches
+
+`GroupJoin` pairs each outer row with the matching inner rows as a group, and the projection folds that group to a scalar:
+
+<!-- snippet: clientGroupJoin -->
+<a id='snippet-clientGroupJoin'></a>
+```cs
+var rows = await client.Source<Department>("Department")
+    .GroupJoin(
+        client.Source<Employee>("Employee"),
+        _ => _.Id,
+        _ => _.DepartmentId,
+        (department, employees) => new DepartmentSize(department.Name, employees.Count()))
+    .ToListAsync();
+```
+<sup><a href='/src/Scry.Tests/GroupJoinTests.cs#L22-L30' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupJoin' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+An outer row with no matches survives with an empty group — `Count()` is zero, and `Min`/`Max`/`Sum` come back null — which makes it the way to ask "how many, and how much" about a second source without a row per match.
+
+The group is **only ever aggregated**. Reading a member off the inner side is rejected: there is no single inner row to read it from, and returning the group itself would make the response nested. A `GroupJoin` that aggregates nothing is also rejected — it is the outer query with a join that costs something and changes nothing.
+
+The inner side is resolved and [policy-filtered](policies.md) before the grouping, exactly as for an ordinary join, so a count over the group counts only rows a direct query would have returned.
 
 
 ### Membership of another source

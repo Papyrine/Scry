@@ -124,8 +124,8 @@ Structurally bigger than the current pipeline — multiple sources per request, 
 
 - [x] `Join` / `LeftJoin` / `RightJoin`. A right join widens the *outer* side instead of the inner, and refuses a narrowed outer side — see [Joins](querying.md#joins).
 - [ ] `FullJoin` — blocked on the framework, not on design: `Queryable.FullJoin` is a .NET 11 addition, so on net10 the client cannot express it and EF cannot execute it.
-- [ ] `GroupJoin` — returns a collection per outer row, which the [collections design](annotations.md#collections) deliberately keeps unprojectable.
-- [ ] `DefaultIfEmpty` — only meaningful alongside joins.
+- [x] `GroupJoin`, in its aggregating form — the group is folded to a scalar, never projected, so the response stays flat. See [Aggregating the matches](querying.md#aggregating-the-matches).
+- [x] `DefaultIfEmpty` — nothing to add. Its only use in LINQ is expressing an outer join, which `LeftJoin`, `RightJoin` and `GroupJoin` now do directly; standalone it would yield an all-null row, which a projected response has no use for.
 
 **Other.**
 

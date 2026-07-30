@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+﻿namespace Scry.Wire;
 
 /// <summary>
 /// Joins a second source to the pipeline. <see cref="Root"/> names that source exactly as a request's
@@ -20,5 +20,13 @@ public sealed record JoinOp(
     IReadOnlyList<JoinMember> Result) :
     QueryOp;
 
-/// <summary>One projected member of a join, naming the side it reads from.</summary>
-public sealed record JoinMember(string Name, JoinSide Side, IReadOnlyList<string> Path);
+/// <summary>
+/// One projected member of a join, naming the side it reads from. <see cref="Path"/> is the member
+/// read off that side; for a <see cref="JoinKind.Group"/> join the inner side is a group rather than
+/// a row, so its members carry an <see cref="Aggregate"/> and an empty path instead.
+/// </summary>
+public sealed record JoinMember(string Name, JoinSide Side, IReadOnlyList<string> Path)
+{
+    /// <summary>Folds the inner group to a scalar. Only valid on the inner side of a group join.</summary>
+    public AggregateNode? Aggregate { get; init; }
+}

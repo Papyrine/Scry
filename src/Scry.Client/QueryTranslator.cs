@@ -108,6 +108,8 @@ sealed class QueryTranslator
                 return TranslateJoin(call, JoinKind.Left);
             case "RightJoin":
                 return TranslateJoin(call, JoinKind.Right);
+            case "GroupJoin":
+                return TranslateJoin(call, JoinKind.Group);
 
             default:
                 throw new NotSupportedException($"LINQ operator '{call.Method.Name}' is not supported by Scry.");
@@ -188,7 +190,7 @@ sealed class QueryTranslator
             TranslateExpr(outerKey.Body, outerKey.Parameters[0]),
             TranslateExpr(innerKey.Body, innerKey.Parameters[0]),
             innerPredicate,
-            JoinMembers(result));
+            JoinMembers(result, kind));
     }
 
     // The joined source is a captured queryable of its own. Only Where survives the crossing: every
@@ -259,18 +261,33 @@ sealed class QueryTranslator
         return new([key]);
     }
 
-    static List<JoinMember> JoinMembers(LambdaExpression result)
+    List<JoinMember> JoinMembers(LambdaExpression result, JoinKind kind)
     {
         var members = new List<JoinMember>();
         foreach (var (name, raw) in NestedMembers(result.Body))
         {
-            // A member read from a side the join can leave unmatched is assigned to a nullable target,
-            // so the compiler wraps the read in a widening convert. That is the shape the server
-            // produces anyway, so unwrap it rather than reject the projection.
+            // A value read from a side the join can leave unmatched — or an aggregate over an
+            // possibly-empty group — is assigned to a nullable target, so the compiler wraps it in a
+            // widening convert. That is the shape the server produces anyway, so unwrap it rather than
+            // reject the projection.
             var value = raw is UnaryExpression { NodeType: ExpressionType.Convert } convert &&
                         Nullable.GetUnderlyingType(convert.Type) == convert.Operand.Type
                 ? convert.Operand
                 : raw;
+
+            // The inner side of a group join is a group rather than a row, so the only thing a member
+            // can be there is an aggregate folding it.
+            if (kind == JoinKind.Group &&
+                value is MethodCallExpression fold &&
+                IsCallOver(fold, result.Parameters[1]))
+            {
+                members.Add(
+                    new(name, JoinSide.Inner, [])
+                    {
+                        Aggregate = TranslateAggregate(fold)
+                    });
+                continue;
+            }
 
             // Each leaf must say which side it reads, so it has to be a plain path rooted at one of
             // the two parameters — the joined pair has no single root to resolve it against.

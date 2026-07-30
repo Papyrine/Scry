@@ -723,11 +723,6 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         }
     }
 
-    /// <summary>
-    /// Validates a join. The inner source is looked up by name in the same allow-list a request's own
-    /// root goes through, and each projected member is validated against the side it names — the two
-    /// sides never share an allow-list.
-    /// </summary>
     // EF hoists a predicate on the outer side of a RightJoin out of the join and into the WHERE of the
     // combined query, which silently turns the right join into an inner one — unmatched inner rows are
     // dropped rather than kept with nulls. Refusing the shape is better than answering it wrongly. The
@@ -773,6 +768,11 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                throw Reject($"'{string.Join('.', flatten.Path)}' is not a collection.");
     }
 
+    /// <summary>
+    /// Validates a join. The inner source is looked up by name in the same allow-list a request's own
+    /// root goes through, and each projected member is validated against the side it names — the two
+    /// sides never share an allow-list.
+    /// </summary>
     void ValidateJoin(JoinOp join, Type outerType)
     {
         if (!schema.TryGetSource(join.Root, out var inner))
@@ -795,6 +795,9 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             throw Reject("A join must project at least one member.");
         }
 
+        var grouped = join.Kind == JoinKind.Group;
+        var sawAggregate = false;
+
         foreach (var member in join.Result)
         {
             var side = member.Side switch
@@ -804,7 +807,54 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 _ => throw Reject($"Unsupported join side '{member.Side}'.")
             };
 
+            if (member.Aggregate is { } aggregate)
+            {
+                if (!grouped ||
+                    member.Side != JoinSide.Inner)
+                {
+                    throw Reject(
+                        $"Join projection member '{member.Name}' aggregates, which only the inner side " +
+                        "of a GroupJoin may do.");
+                }
+
+                if (aggregate.Function != AggregateFn.Count)
+                {
+                    if (aggregate.Selector is not { } selector)
+                    {
+                        throw Reject($"Aggregate '{aggregate.Function}' requires a selector.");
+                    }
+
+                    // Against the inner side's own allow-list — the two sides never share one.
+                    ValidateScalar(selector, innerType, "Aggregate selector");
+                }
+                else if (aggregate.Selector is not null)
+                {
+                    throw Reject("Count over a joined group does not take a selector.");
+                }
+
+                sawAggregate = true;
+                continue;
+            }
+
+            // The inner side of a group join is a group of rows, so there is no single row to read a
+            // member off — only an aggregate folds it to something a response row can hold.
+            if (grouped &&
+                member.Side == JoinSide.Inner)
+            {
+                throw Reject(
+                    $"Join projection member '{member.Name}' reads the inner side of a GroupJoin " +
+                    "directly. The inner side is a group — aggregate it, or use Join.");
+            }
+
             ResolvePath(member.Path, side, requireScalar: true, "Join projection member");
+        }
+
+        // Without one, a group join is an outer query with the inner side joined and discarded —
+        // which is just the outer query, at the cost of the join.
+        if (grouped &&
+            !sawAggregate)
+        {
+            throw Reject("A GroupJoin must aggregate its inner side at least once.");
         }
     }
 

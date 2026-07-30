@@ -355,6 +355,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             JoinKind.Inner => "Join",
             JoinKind.Left => "LeftJoin",
             JoinKind.Right => "RightJoin",
+            JoinKind.Group => "GroupJoin",
             _ => throw new ScryValidationException($"Unsupported join kind '{kind}'.")
         };
 

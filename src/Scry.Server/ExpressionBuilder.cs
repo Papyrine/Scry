@@ -240,12 +240,25 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         JoinKind kind)
     {
         var outer = Expression.Parameter(outerType, "o");
-        var inner = Expression.Parameter(innerType, "i");
+
+        // A group join pairs each outer row with the matching inner rows, so its result selector takes
+        // the group rather than a row — and the only thing the projection may do with it is aggregate.
+        var grouped = kind == JoinKind.Group;
+        var inner = Expression.Parameter(
+            grouped ? typeof(IEnumerable<>).MakeGenericType(innerType) : innerType,
+            "i");
         var leaves = new List<Expression>();
         var shape = new List<IReadOnlyList<string>>();
 
         foreach (var member in members)
         {
+            if (member.Aggregate is { } aggregate)
+            {
+                leaves.Add(BuildAggregate(aggregate, inner, innerType));
+                shape.Add([member.Name]);
+                continue;
+            }
+
             var root = member.Side == JoinSide.Outer ? (Expression)outer : inner;
             var leaf = BuildMemberAccess(root, member.Path);
 
