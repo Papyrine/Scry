@@ -32,11 +32,13 @@ public class ExpandedOperatorTests
         var client = ClientFor(context);
         string[] wanted = ["North", "West"];
 
+        // begin-snippet: clientSetMembership
         var rows = await client.Source<Order>("Order")
             .Where(_ => wanted.Contains(_.Region))
             .OrderBy(_ => _.Amount)
             .Select(_ => new OrderShape(_.Region, _.Amount))
             .ToListAsync();
+        // end-snippet
 
         Assert.That(rows.Select(_ => _.Amount), Is.EqualTo([100m, 250m]));
     }
@@ -131,9 +133,11 @@ public class ExpandedOperatorTests
         await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
+        // begin-snippet: clientAggregateTerminal
         var sum = await client.Source<Order>("Order")
             .Where(_ => _.Region == "North")
             .SumAsync(_ => _.Amount);
+        // end-snippet
 
         Assert.That(sum, Is.EqualTo(350m));
     }
@@ -225,12 +229,14 @@ public class ExpandedOperatorTests
         var client = ClientFor(context);
 
         // Top-N over deduplicated values: the ordering makes the slice well defined.
+        // begin-snippet: clientDistinctPaging
         var rows = await client.Source<Order>("Order")
             .Select(_ => new RegionRow(_.Region))
             .Distinct()
             .OrderBy(_ => _.Region)
             .Take(1)
             .ToListAsync();
+        // end-snippet
 
         Assert.That(rows.Single().Region, Is.EqualTo("North"));
     }
@@ -489,12 +495,14 @@ public class ExpandedOperatorTests
         await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
+        // begin-snippet: clientComputedProjection
         var rows = await client.Source<Order>("Order")
             .OrderBy(_ => _.Amount)
             .Select(_ => new OrderShape(
                 _.Region == "North" ? "N" : "S",
                 _.Amount - (_.Discount ?? 0m)))
             .ToListAsync();
+        // end-snippet
 
         Assert.Multiple(() =>
         {
@@ -545,10 +553,12 @@ public class ExpandedOperatorTests
 
         // The navigation the nested object descends into is inferred from the path inside the
         // expression, not from a bare path.
+        // begin-snippet: clientNestedComputed
         var rows = await client.Source<Employee>("Employee")
             .Where(_ => _.Name == "Alice")
             .Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name.ToUpper())))
             .ToListAsync();
+        // end-snippet
 
         Assert.That(rows.Single().Department.Name, Is.EqualTo("ENGINEERING"));
     }
@@ -593,10 +603,12 @@ public class ExpandedOperatorTests
 
         // North holds two orders totalling 350; the mean is computed from two aggregates rather than
         // asked for directly.
+        // begin-snippet: clientGroupedComputed
         var rows = await client.Source<Order>("Order")
             .GroupBy(_ => _.Region)
             .Select(_ => new OrderShape(_.Key, _.Sum(_ => _.Amount) / _.Count()))
             .ToListAsync();
+        // end-snippet
 
         Assert.That(rows.Single(_ => _.Region == "North").Amount, Is.EqualTo(175m));
     }
@@ -654,11 +666,13 @@ public class ExpandedOperatorTests
         await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
+        // begin-snippet: clientHaving
         var rows = await client.Source<Order>("Order")
             .GroupBy(_ => _.Region)
             .Where(_ => _.Sum(_ => _.Amount) > 100m && _.Key != "South")
             .Select(_ => new OrderShape(_.Key, _.Sum(_ => _.Amount)))
             .ToListAsync();
+        // end-snippet
 
         Assert.That(rows.Single().Region, Is.EqualTo("North"));
     }

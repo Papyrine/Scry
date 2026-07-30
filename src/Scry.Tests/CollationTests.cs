@@ -47,10 +47,12 @@ public class CollationTests
         await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, Collating());
 
+        // begin-snippet: clientCaseInsensitive
         var rows = await client.Source<Employee>("Employee")
             .Where(_ => _.Name.Contains("LIC", StringComparison.OrdinalIgnoreCase))
             .Select(_ => new NameRow(_.Name))
             .ToListAsync();
+        // end-snippet
 
         Assert.That(rows.Single().Name, Is.EqualTo("Alice"));
     }

@@ -1,4 +1,4 @@
-﻿# LINQ coverage
+# LINQ coverage
 
 What Scry supports compared to the LINQ surface EF Core can translate server-side. This page is both the reference ("will this query work?") and the roadmap — unchecked items are candidates, not commitments.
 
@@ -64,11 +64,15 @@ regions = await Query.Order
 
 …and as a **terminal folding the whole sequence** to one scalar, which needs no `GroupBy`:
 
+<!-- snippet: clientAggregateTerminal -->
+<a id='snippet-clientAggregateTerminal'></a>
 ```cs
-var total = await Query.Order
+var sum = await client.Source<Order>("Order")
     .Where(_ => _.Region == "North")
     .SumAsync(_ => _.Amount);
 ```
+<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L136-L140' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAggregateTerminal' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
 The remaining positions an aggregate can appear in EF Core have no wire representation:
 

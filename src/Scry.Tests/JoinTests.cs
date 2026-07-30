@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// A join resolves its second source through the same allow-list and row policy a root goes through,
 /// before the two sides meet — so it can only ever narrow.
 /// </summary>
@@ -41,6 +41,7 @@ public class JoinTests
         await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
+        // begin-snippet: clientJoin
         var rows = await client.Source<Employee>("Employee")
             .Where(_ => _.Active)
             .Join(
@@ -49,6 +50,7 @@ public class JoinTests
                 _ => _.Id,
                 (employee, department) => new EmployeeDepartment(employee.Name, department.Name))
             .ToListAsync();
+        // end-snippet
 
         Assert.That(rows.Select(_ => _.Employee).Order(), Is.EqualTo(["Aaron", "Alice"]));
     }

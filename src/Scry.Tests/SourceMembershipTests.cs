@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// Membership of a set drawn from another source becomes a SQL <c>IN (SELECT …)</c>. The named source
 /// is resolved and policy-filtered before the test, so membership is only ever of rows the caller
 /// could have queried directly.
@@ -28,6 +28,7 @@ public class SourceMembershipTests
         await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
+        // begin-snippet: clientSourceMembership
         var rows = await client.Source<Employee>("Employee")
             .Where(_ => client.Source<Department>("Department")
                 .Where(d => d.Name == "Sales")
@@ -36,6 +37,7 @@ public class SourceMembershipTests
             .OrderBy(_ => _.Name)
             .Select(_ => new NameRow(_.Name))
             .ToListAsync();
+        // end-snippet
 
         Assert.That(rows.Select(_ => _.Name), Is.EqualTo(new[] { "Bob", "Carol" }));
     }

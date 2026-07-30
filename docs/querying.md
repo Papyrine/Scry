@@ -1,4 +1,4 @@
-﻿# Writing queries
+# Writing queries
 
 Client queries are ordinary C# LINQ written against the generated query models. Nothing runs client-side: the expression tree is **captured**, translated to the [wire AST](wire-format.md), and sent to the server when a terminal operator is awaited.
 
@@ -275,9 +275,16 @@ Binary operator 'ExclusiveOr' is not supported by Scry.
 
 The `StringComparison` overloads of `Contains`, `StartsWith`, `EndsWith` and `Equals` ask for a **case sensitivity**, and are supported when the server has configured a collation for it:
 
+<!-- snippet: clientCaseInsensitive -->
+<a id='snippet-clientCaseInsensitive'></a>
 ```cs
-.Where(_ => _.Name.StartsWith(term, StringComparison.OrdinalIgnoreCase))
+var rows = await client.Source<Employee>("Employee")
+    .Where(_ => _.Name.Contains("LIC", StringComparison.OrdinalIgnoreCase))
+    .Select(_ => new NameRow(_.Name))
+    .ToListAsync();
 ```
+<sup><a href='/src/Scry.Tests/CollationTests.cs#L50-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCaseInsensitive' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
 The client names only the sensitivity it wants; which collation implements it is [server configuration](server.md#limits). That is deliberate and load-bearing: a collation cannot be a query parameter — it is emitted into the SQL text — so it is the one value that must never come from a request. A server that has configured neither collation rejects the query rather than guessing.
 
@@ -382,14 +389,18 @@ Functions are **expression-level**: they read a row inside a `Where` predicate, 
 
 `Distinct()` deduplicates the **projected** rows, so it dedupes the members the query asked for rather than whole entities:
 
+<!-- snippet: clientDistinctPaging -->
+<a id='snippet-clientDistinctPaging'></a>
 ```cs
-await Query.Order
+var rows = await client.Source<Order>("Order")
     .Select(_ => new RegionRow(_.Region))
     .Distinct()
     .OrderBy(_ => _.Region)
-    .Take(5)
+    .Take(1)
     .ToListAsync();
 ```
+<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L232-L239' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientDistinctPaging' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
 Ordering, paging and counting a deduplicated query all materialize it as a row with one property per projected member — a shaped row is an array of values with no equality or ordering of its own. Three rules follow:
 
@@ -406,16 +417,20 @@ Filtering after a `Distinct` is rejected outright; a `Where` there would be desc
 
 A second source can be joined in, naming it exactly as a query names its own root:
 
+<!-- snippet: clientJoin -->
+<a id='snippet-clientJoin'></a>
 ```cs
-await Query.Employee
+var rows = await client.Source<Employee>("Employee")
     .Where(_ => _.Active)
     .Join(
-        Query.Department.Where(_ => _.Name != "Archive"),
-        employee => employee.DepartmentId,
-        department => department.Id,
-        (employee, department) => new Row(employee.Name, department.Name))
+        client.Source<Department>("Department").Where(_ => _.Name == "Engineering"),
+        _ => _.DepartmentId,
+        _ => _.Id,
+        (employee, department) => new EmployeeDepartment(employee.Name, department.Name))
     .ToListAsync();
 ```
+<sup><a href='/src/Scry.Tests/JoinTests.cs#L44-L53' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientJoin' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
 `LeftJoin` keeps every outer row, with nulls where the inner side has no match. A value read from the inner side of a left join comes back nullable, so an unmatched row yields null rather than a fault.
 
@@ -434,14 +449,20 @@ Each side is validated against its own allow-list: a `[QueryIgnore]`d member sta
 
 `Contains` over a query against a **second source** becomes a SQL `IN (SELECT …)`:
 
+<!-- snippet: clientSourceMembership -->
+<a id='snippet-clientSourceMembership'></a>
 ```cs
-await Query.Employee
-    .Where(_ => Query.Department
-        .Where(d => d.Active)
+var rows = await client.Source<Employee>("Employee")
+    .Where(_ => client.Source<Department>("Department")
+        .Where(d => d.Name == "Sales")
         .Select(d => d.Id)
         .Contains(_.DepartmentId))
+    .OrderBy(_ => _.Name)
+    .Select(_ => new NameRow(_.Name))
     .ToListAsync();
 ```
+<sup><a href='/src/Scry.Tests/SourceMembershipTests.cs#L31-L40' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientSourceMembership' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
 The named source is resolved and [policy-filtered](policies.md) before the test, exactly as a [join](#joins) resolves its second side. Membership is therefore only ever of rows the caller could have queried directly: a row the source's policy hides is not in the set, so the test cannot be used to learn that it exists.
 
@@ -454,12 +475,16 @@ The `Select` here names a **bare value** rather than constructing an object, unl
 
 A collection navigation opted in with [`[QueryableCollection]`](annotations.md#collections) can be asked a question, which the database answers as a correlated subquery:
 
+<!-- snippet: clientCollectionSubquery -->
+<a id='snippet-clientCollectionSubquery'></a>
 ```cs
-await Query.Department
-    .Where(_ => _.Employees.Any(e => e.Status == Status.Contractor))
-    .Select(_ => new DepartmentRow(_.Name, _.Employees.Count(e => e.Active)))
+var rows = await client.Source<Order>("Order")
+    .OrderBy(_ => _.Id)
+    .Select(_ => new OrderRow(_.Region, _.Lines.Count(l => l.Quantity > 1)))
     .ToListAsync();
 ```
+<sup><a href='/src/Scry.Tests/CollectionSubqueryTests.cs#L85-L90' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCollectionSubquery' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
 | C# | Meaning |
 | --- | --- |
@@ -478,13 +503,17 @@ The result is always a **scalar**, so a subquery can appear anywhere a value can
 
 `Contains` over a client-side collection becomes a SQL `IN`:
 
+<!-- snippet: clientSetMembership -->
+<a id='snippet-clientSetMembership'></a>
 ```cs
-var wanted = new[] { "Engineering", "Sales" };
-
-await Query.Employee
-    .Where(_ => wanted.Contains(_.Department!.Name))
+var rows = await client.Source<Order>("Order")
+    .Where(_ => wanted.Contains(_.Region))
+    .OrderBy(_ => _.Amount)
+    .Select(_ => new OrderShape(_.Region, _.Amount))
     .ToListAsync();
 ```
+<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L35-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientSetMembership' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
 The collection must be closure state — it is evaluated on the client and its values ride the wire as constants — and the tested value must come from the row. The number of values is capped by [`MaxInValues`](server.md#limits) (default 1000). An empty collection matches nothing.
 
@@ -542,31 +571,48 @@ Every projection leaf must resolve to an allow-listed **scalar**. A navigation c
 
 A leaf can be any expression, not only a member path — the same vocabulary a predicate is built from, computed by the database and returned as a column:
 
+<!-- snippet: clientComputedProjection -->
+<a id='snippet-clientComputedProjection'></a>
 ```cs
-.Select(_ => new
-{
-    Shouted = _.Name.ToUpper(),
-    Net = _.Amount - (_.Discount ?? 0m),
-    Band = _.Amount > 100m ? "large" : "small",
-    Label = _.Region + " / " + _.Name
-})
+var rows = await client.Source<Order>("Order")
+    .OrderBy(_ => _.Amount)
+    .Select(_ => new OrderShape(
+        _.Region == "North" ? "N" : "S",
+        _.Amount - (_.Discount ?? 0m)))
+    .ToListAsync();
 ```
+<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L498-L505' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientComputedProjection' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
 The same allow-list applies inside a computed leaf as anywhere else: a `[QueryIgnore]`d member is no more reachable through an expression than through a plain path, and the expression-depth limit still holds.
 
 This holds inside a [nested object](#nested-result-objects) too — the navigation it descends into is inferred from the paths an expression reads, wherever they sit inside it:
 
+<!-- snippet: clientNestedComputed -->
+<a id='snippet-clientNestedComputed'></a>
 ```cs
-.Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name.ToUpper())))
+var rows = await client.Source<Employee>("Employee")
+    .Where(_ => _.Name == "Alice")
+    .Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name.ToUpper())))
+    .ToListAsync();
 ```
+<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L556-L561' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientNestedComputed' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
 One restriction: a leaf must **read at least one member of the row**. `Select(_ => new { Kind = "employee" })` is rejected — the client already has that value, and EF refuses a constant in a client projection.
 
 A **grouped** `Select` composes the same way, over what a group has: its key and aggregates.
 
+<!-- snippet: clientGroupedComputed -->
+<a id='snippet-clientGroupedComputed'></a>
 ```cs
-.Select(_ => new RegionSummary(_.Key.ToUpper(), _.Sum(_ => _.Amount) / _.Count()))
+var rows = await client.Source<Order>("Order")
+    .GroupBy(_ => _.Region)
+    .Select(_ => new OrderShape(_.Key, _.Sum(_ => _.Amount) / _.Count()))
+    .ToListAsync();
 ```
+<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L606-L611' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupedComputed' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
 That does not widen what a group can read. Every column but the key has been folded away, so naming one — even buried inside an expression — is still rejected.
 
@@ -692,13 +738,17 @@ To aggregate a whole sequence rather than each group, use the [aggregate termina
 
 A `Where` written **after** a `GroupBy` filters the groups rather than the rows — SQL `HAVING`:
 
+<!-- snippet: clientHaving -->
+<a id='snippet-clientHaving'></a>
 ```cs
-await Query.Order
+var rows = await client.Source<Order>("Order")
     .GroupBy(_ => _.Region)
-    .Where(_ => _.Count() > 1 && _.Sum(_ => _.Amount) > 100m)
-    .Select(_ => new RegionSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
+    .Where(_ => _.Sum(_ => _.Amount) > 100m && _.Key != "South")
+    .Select(_ => new OrderShape(_.Key, _.Sum(_ => _.Amount)))
     .ToListAsync();
 ```
+<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L669-L675' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientHaving' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
 Its predicate reads a group, so — exactly like the grouped `Select` — it may name only the group key and aggregates. Every other column has been folded away by the grouping, and naming one is rejected:
 

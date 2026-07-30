@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// Collection navigations are aggregable but never projectable: every question here folds a
 /// collection to a scalar, evaluated by the database as a correlated subquery.
 /// </summary>
@@ -82,10 +82,12 @@ public class CollectionSubqueryTests
         await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
+        // begin-snippet: clientCollectionSubquery
         var rows = await client.Source<Order>("Order")
             .OrderBy(_ => _.Id)
             .Select(_ => new OrderRow(_.Region, _.Lines.Count(l => l.Quantity > 1)))
             .ToListAsync();
+        // end-snippet
 
         Assert.That(rows.Select(_ => _.Lines), Is.EqualTo([1, 1, 0]));
     }
