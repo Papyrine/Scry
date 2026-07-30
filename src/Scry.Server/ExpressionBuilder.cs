@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// Rebinds a validated query AST onto real CLR <see cref="Expression"/> trees over the server's
 /// entity types. This is the only place CLR types are introduced — always from the schema, never
 /// from the wire.
@@ -233,6 +233,63 @@ sealed class ExpressionBuilder(Schema schema)
         return (
             Expression.Lambda(outerBody, outerParameter),
             Expression.Lambda(innerBody, innerParameter));
+    }
+
+    /// <summary>
+    /// Builds a selector projecting into a <see cref="DistinctRow"/> — one typed property per leaf —
+    /// plus the shape those leaves fold back into. This is what lets a deduplicated projection be
+    /// ordered, paged or counted: the shaped <c>object[]</c> row has no equality or ordering of its own.
+    /// Returns null when the projection has more leaves than there are row arities.
+    /// </summary>
+    /// <remarks>
+    /// The member mappings passed to <see cref="Expression.New(ConstructorInfo,IEnumerable{Expression},IEnumerable{MemberInfo})"/>
+    /// are the point of the whole thing. Without them a provider sees an opaque constructor call and
+    /// cannot decompose the projection into columns, so it can neither push it into a subquery to count
+    /// it nor order by one of its members — which is exactly how a plain record behaves, and why one
+    /// is not enough on its own.
+    /// </remarks>
+    public (LambdaExpression Selector, IReadOnlyList<IReadOnlyList<string>> Shape)? BuildDistinctRow(
+        Projection projection,
+        Type type)
+    {
+        var parameter = Expression.Parameter(type, "e");
+        var leaves = new List<Expression>();
+        var shape = new List<IReadOnlyList<string>>();
+        Flatten(projection, parameter, [], leaves, shape);
+
+        if (leaves.Count == 0 ||
+            leaves.Count > DistinctRow.ByArity.Length)
+        {
+            return null;
+        }
+
+        var row = DistinctRow.ByArity[leaves.Count - 1].MakeGenericType([..leaves.Select(_ => _.Type)]);
+        var constructor = row.GetConstructors().Single();
+        var members = constructor.GetParameters()
+            .Select(_ => (MemberInfo)row.GetProperty(_.Name!)!)
+            .ToArray();
+
+        return (Expression.Lambda(Expression.New(constructor, leaves, members), parameter), shape);
+    }
+
+    /// <summary>Reads a <see cref="DistinctRow"/>'s values back out, in projection order.</summary>
+    public static object[] ReadDistinctRow(object row, int count)
+    {
+        var type = row.GetType();
+        var values = new object[count];
+        for (var i = 0; i < count; i++)
+        {
+            values[i] = type.GetProperty($"Value{i + 1}")!.GetValue(row)!;
+        }
+
+        return values;
+    }
+
+    /// <summary>Builds a key selector over a <see cref="DistinctRow"/> for the leaf at <paramref name="index"/>.</summary>
+    public static LambdaExpression BuildDistinctRowKey(Type row, int index)
+    {
+        var parameter = Expression.Parameter(row, "r");
+        return Expression.Lambda(Expression.Property(parameter, $"Value{index + 1}"), parameter);
     }
 
     /// <summary>

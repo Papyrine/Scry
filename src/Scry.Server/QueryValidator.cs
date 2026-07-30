@@ -901,10 +901,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             throw Reject($"{op} over a Distinct query is not supported after GroupBy.");
         }
 
-        if (projection is not { Members: [{ Value: NodeValue { Node: MemberNode } }] })
-        {
-            throw Reject($"{op} over a Distinct query requires the Select to project exactly one member.");
-        }
+        EnsureRowShaped(projection, op);
     }
 
     /// <summary>
@@ -915,15 +912,12 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
     /// </summary>
     static void EnsureDeduplicatedKey(Node key, Projection? projection, string op)
     {
-        if (projection is not { Members: [{ Value: NodeValue { Node: MemberNode } } single] })
-        {
-            throw Reject($"{op} over a Distinct query requires the Select to project exactly one member.");
-        }
+        EnsureRowShaped(projection, op);
 
         if (key is not MemberNode { Path: [var name] } ||
-            !string.Equals(name, single.Name, StringComparison.Ordinal))
+            projection!.Members.All(_ => !string.Equals(_.Name, name, StringComparison.Ordinal)))
         {
-            throw Reject($"{op} over a Distinct query may only order by its projected member '{single.Name}'.");
+            throw Reject($"{op} over a Distinct query may only order by one of its projected members.");
         }
     }
 
@@ -941,9 +935,31 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             throw Reject($"{op} over a Distinct query requires an OrderBy — a deduplication does not preserve one.");
         }
 
-        if (projection is not { Members: [{ Value: NodeValue { Node: MemberNode } }] })
+        EnsureRowShaped(projection, op);
+    }
+
+    /// <summary>
+    /// Ordering, paging and folding a deduplicated query all materialize it as a row with one property
+    /// per projected member, so the projection has to be a flat list of them: a nested object would
+    /// contribute several leaves under one name, leaving nothing for an ordering to name.
+    /// </summary>
+    static void EnsureRowShaped(Projection? projection, string op)
+    {
+        if (projection is null ||
+            projection.Members.Count == 0)
         {
-            throw Reject($"{op} over a Distinct query requires the Select to project exactly one member.");
+            throw Reject($"{op} over a Distinct query requires a Select.");
+        }
+
+        if (projection.Members.Any(_ => _.Value is not NodeValue))
+        {
+            throw Reject($"{op} over a Distinct query does not support a nested projection member.");
+        }
+
+        if (projection.Members.Count > DistinctRow.ByArity.Length)
+        {
+            throw Reject(
+                $"{op} over a Distinct query is limited to {DistinctRow.ByArity.Length} projected members.");
         }
     }
 

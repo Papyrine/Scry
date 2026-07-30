@@ -1,4 +1,4 @@
-﻿# Writing queries
+# Writing queries
 
 Client queries are ordinary C# LINQ written against the generated query models. Nothing runs client-side: the expression tree is **captured**, translated to the [wire AST](wire-format.md), and sent to the server when a terminal operator is awaited.
 
@@ -97,7 +97,7 @@ public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjec
 | `Take(n)` | `take` | `n` must be non-negative and `<= MaxPageSize`. |
 | `GroupBy(key)` | `groupBy` | Exactly one key, at most one `GroupBy`, and it must be followed by a `Select`. |
 | `Select(projection)` | `select` | At most one, and it must construct an object. |
-| `Distinct()` | `distinct` | Deduplicates the **projected** rows. Over a single projected member it can also be ordered and paged — see [below](#deduplicating). |
+| `Distinct()` | `distinct` | Deduplicates the **projected** rows. It can also be ordered, paged and counted — see [below](#deduplicating). |
 | `Reverse()` | `reverse` | Inverts the ordering. Requires a preceding `OrderBy`. |
 | `Join(inner, …)` / `LeftJoin(inner, …)` | `join` | Joins a second source — see [below](#joins). Carries its own projection; only a terminal may follow. |
 
@@ -381,7 +381,13 @@ await Query.Order
     .ToListAsync();
 ```
 
-Ordering and paging a deduplicated query are confined to a **single projected member**, and the ordering may only name that member. A shaped row is an array of values with no ordering or equality of its own, so only a projection of one value can be ordered as the typed value it is — the same limit that confines [counting a distinct query](#terminals) to one member. Paging requires an ordering: without one it would slice an order the deduplication never defined.
+Ordering, paging and counting a deduplicated query all materialize it as a row with one property per projected member — a shaped row is an array of values with no equality or ordering of its own. Three rules follow:
+
+- The ordering must name one of the **projected** members. Every other column was folded away by the deduplication.
+- Paging requires an ordering: without one it would slice an order the deduplication never defined.
+- The projection must be a flat list of at most eight members. A nested object contributes several leaves under one name, leaving nothing for an ordering to name.
+
+Plain enumeration has none of those limits — `Select(…).Distinct().ToListAsync()` works over any projection, nested members included.
 
 Filtering after a `Distinct` is rejected outright; a `Where` there would be describing the rows that fed it. Filter before deduplicating.
 
@@ -702,7 +708,7 @@ stateDiagram-v2
     Restricting --> Deduplicated: Distinct
     Projected --> Deduplicated: Distinct
     Deduplicated --> Projected: Select
-    Deduplicated --> Deduplicated: OrderBy / Skip / Take (one member)
+    Deduplicated --> Deduplicated: OrderBy / Skip / Take
     Source --> [*]: terminal
     Restricting --> [*]: terminal
     Projected --> [*]: terminal
@@ -715,8 +721,8 @@ one exception — it filters the groups rather than the rows, and reads only the
 `ThenBy` and `Reverse` without a preceding `OrderBy` are rejected, and nothing may follow a terminal.
 
 `Distinct` deduplicates the projected rows, so what may follow it is the `Select` it deduplicates, a
-terminal, and — over a **single projected member** — an `OrderBy` naming that member, plus `Skip` and
-`Take` over the resulting order. Filtering after it would be describing the rows that fed it, and
+terminal, and — over a flat projection of up to eight members — an `OrderBy` naming one of them, plus
+`Skip` and `Take` over the resulting order. Filtering after it would be describing the rows that fed it, and
 paging without an ordering would be slicing an order the deduplication never defined.<!-- endInclude -->
 
 

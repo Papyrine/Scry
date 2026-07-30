@@ -129,7 +129,7 @@ stateDiagram-v2
     Restricting --> Deduplicated: Distinct
     Projected --> Deduplicated: Distinct
     Deduplicated --> Projected: Select
-    Deduplicated --> Deduplicated: OrderBy / Skip / Take (one member)
+    Deduplicated --> Deduplicated: OrderBy / Skip / Take
     Source --> [*]: terminal
     Restricting --> [*]: terminal
     Projected --> [*]: terminal
@@ -142,8 +142,8 @@ one exception — it filters the groups rather than the rows, and reads only the
 `ThenBy` and `Reverse` without a preceding `OrderBy` are rejected, and nothing may follow a terminal.
 
 `Distinct` deduplicates the projected rows, so what may follow it is the `Select` it deduplicates, a
-terminal, and — over a **single projected member** — an `OrderBy` naming that member, plus `Skip` and
-`Take` over the resulting order. Filtering after it would be describing the rows that fed it, and
+terminal, and — over a flat projection of up to eight members — an `OrderBy` naming one of them, plus
+`Skip` and `Take` over the resulting order. Filtering after it would be describing the rows that fed it, and
 paging without an ordering would be slicing an order the deduplication never defined.<!-- endInclude -->
 
 

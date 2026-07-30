@@ -21,6 +21,8 @@ public class ExpandedOperatorTests
 
     record DepartmentTwoCard(string Name, int Length);
 
+    record HolidayRow(string Name, Date Date);
+
     // ReSharper restore NotAccessedPositionalProperty.Local
 
     [Test]
@@ -268,29 +270,6 @@ public class ExpandedOperatorTests
             () => SharedProcessor.Instance.Execute(request, context));
 
         Assert.That(exception!.Message, Does.Contain("projected member"));
-    }
-
-    [Test]
-    public void OrderingADeduplicatedQueryOverSeveralMembersIsRejected()
-    {
-        using var context = TestContext.CreateSeeded();
-
-        var request = QueryRequest.Create(
-            "Order",
-            [
-                new SelectOp(new(
-                [
-                    new("Region", new NodeValue(new MemberNode(["Region"]))),
-                    new("Amount", new NodeValue(new MemberNode(["Amount"])))
-                ])),
-                new DistinctOp(),
-                new OrderByOp(new MemberNode(["Region"]), Descending: false)
-            ]);
-
-        var exception = Assert.Throws<ScryValidationException>(
-            () => SharedProcessor.Instance.Execute(request, context));
-
-        Assert.That(exception!.Message, Does.Contain("exactly one member"));
     }
 
     [Test]
@@ -834,6 +813,104 @@ public class ExpandedOperatorTests
             Assert.That(byLiteral, Is.EqualTo(1));
             Assert.That(byCaptured, Is.EqualTo(2));
         });
+    }
+
+    [Test]
+    public async Task OrderingADeduplicatedQueryOverSeveralMembers()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // Two North orders differ by amount, so all three pairs survive deduplication.
+        var rows = await client.Source<Order>("Order")
+            .Select(_ => new OrderShape(_.Region, _.Amount))
+            .Distinct()
+            .OrderBy(_ => _.Amount)
+            .ToListAsync();
+
+        Assert.That(rows.Select(_ => _.Amount), Is.EqualTo([75m, 100m, 250m]));
+    }
+
+    [Test]
+    public async Task CountingADeduplicatedQueryOverSeveralMembers()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var pairs = await client.Source<Order>("Order")
+            .Select(_ => new OrderShape(_.Region, _.Amount))
+            .Distinct()
+            .CountAsync();
+
+        // Region alone collapses to two; the pair does not.
+        var regions = await client.Source<Order>("Order")
+            .Select(_ => new RegionRow(_.Region))
+            .Distinct()
+            .CountAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(pairs, Is.EqualTo(3));
+            Assert.That(regions, Is.EqualTo(2));
+        });
+    }
+
+    [Test]
+    public async Task PagingADeduplicatedQueryOverSeveralMembers()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var rows = await client.Source<Order>("Order")
+            .Select(_ => new OrderShape(_.Region, _.Amount))
+            .Distinct()
+            .OrderByDescending(_ => _.Amount)
+            .Take(2)
+            .ToListAsync();
+
+        Assert.That(rows.Select(_ => _.Amount), Is.EqualTo([250m, 100m]));
+    }
+
+    [Test]
+    public async Task DeduplicatingOverSeveralMembersInAnInMemorySource()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // A POCO source deduplicates under LINQ to Objects, where the row's own structural equality
+        // is what makes it work.
+        var count = await client.Source<Holiday>("Holiday")
+            .Select(_ => new HolidayRow(_.Name, _.Date))
+            .Distinct()
+            .CountAsync();
+
+        Assert.That(count, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void OrderingADeduplicatedQueryByANestedMemberIsRejected()
+    {
+        using var context = TestContext.CreateSeeded();
+
+        // A nested object contributes several leaves under one name, leaving nothing to order by.
+        var request = QueryRequest.Create(
+            "Employee",
+            [
+                new SelectOp(new(
+                [
+                    new("Name", new NodeValue(new MemberNode(["Name"]))),
+                    new("Department", new NestedValue(
+                        ["Department"],
+                        new([new("Name", new NodeValue(new MemberNode(["Name"])))])))
+                ])),
+                new DistinctOp(),
+                new OrderByOp(new MemberNode(["Name"]), Descending: false)
+            ]);
+
+        var exception = Assert.Throws<ScryValidationException>(
+            () => SharedProcessor.Instance.Execute(request, context));
+
+        Assert.That(exception!.Message, Does.Contain("nested projection member"));
     }
 
     static ScryClient ClientFor(TestContext context) =>

@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// Orchestrates the full server pipeline for one request: validate against the allow-list, resolve
 /// the source, apply the row policy, rebind the AST to an EF query, execute, and shape the result.
 /// </summary>
@@ -139,24 +139,31 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             };
         }
 
-        // Folding a deduplicated sequence reads one value per row, so it is projected as that value's
-        // own type and deduplicated there. The shaped object[] a row projection produces has no
-        // equality of its own for a provider to deduplicate on — only enumeration can shape it back
-        // afterwards — which is why the validator confines this to a single projected member.
+        // Ordering, paging and folding all need the deduplicated rows to have equality and ordering of
+        // their own, which a shaped object[] does not. Those go through a row type instead; plain
+        // enumeration keeps the object[] path below, which has no arity limit.
         if (distinct &&
             (terminal is CountOp or LongCountOp or AnyOp || afterDistinct.Count > 0))
         {
-            var values = ApplySelectTyped(query, builder.BuildSingleValueSelector(select!.Projection, elementType));
-            var deduped = values.Provider.CreateQuery(
-                CallQueryable("Distinct", [values.ElementType], values.Expression));
+            if (builder.BuildDistinctRow(select!.Projection, elementType) is not var (selector, shape))
+            {
+                throw new ScryValidationException(
+                    $"A Distinct query of more than {DistinctRow.ByArity.Length} projected members can only be enumerated.");
+            }
 
-            // The values are their own ordering key: there is one member, and it is what was
-            // deduplicated, so ordering by it is ordering the sequence itself.
+            var rowType = selector.ReturnType;
+            var deduped = ApplySelectTyped(query, selector).Provider.CreateQuery(
+                CallQueryable("Distinct", [rowType], ApplySelectTyped(query, selector).Expression));
+
             foreach (var op in afterDistinct)
             {
                 deduped = op switch
                 {
-                    OrderByOp order => ApplyOrder(deduped, Identity(deduped.ElementType), order.Descending, then: false),
+                    OrderByOp order => ApplyOrder(
+                        deduped,
+                        ExpressionBuilder.BuildDistinctRowKey(rowType, DistinctLeaf(select.Projection, order.Key)),
+                        order.Descending,
+                        then: false),
                     SkipOp skip => ApplyPaging(deduped, "Skip", skip.Count),
                     TakeOp take => ApplyPaging(deduped, "Take", take.Count),
                     _ => throw new ScryValidationException($"Unsupported operator '{op.GetType().Name}' after Distinct.")
@@ -173,12 +180,11 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                     return Scalar(Execute<bool>(deduped, "Any"));
             }
 
-            // One value per row, so each is shaped back under the single projected member's name.
-            var name = select.Projection.Members[0].Name;
+            var rowPlan = new ProjectionPlan(selector, shape);
             var shaped = new List<Dictionary<string, object?>>();
-            foreach (var value in deduped)
+            foreach (var row in deduped)
             {
-                shaped.Add(new(StringComparer.Ordinal) { [name] = value });
+                shaped.Add(Shape(ExpressionBuilder.ReadDistinctRow(row!, shape.Count), rowPlan));
             }
 
             return QueryResponse.Create(ResultKind.List, JsonSerializer.SerializeToElement(shaped, ScryJson.Options));
@@ -388,11 +394,22 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         (IQueryable<object[]>)query.Provider.CreateQuery(
             CallQueryable("Select", [query.ElementType, typeof(object[])], query.Expression, Expression.Quote(selector)));
 
-    // v => v, for ordering a sequence by the values it already holds.
-    static LambdaExpression Identity(Type type)
+    // Which projected leaf an ordering names. The validator has already established that the key names
+    // one of them and that none of them is nested, so member position is leaf position.
+    static int DistinctLeaf(Projection projection, Node key)
     {
-        var parameter = Expression.Parameter(type, "v");
-        return Expression.Lambda(parameter, parameter);
+        if (key is MemberNode { Path: [var name] })
+        {
+            for (var i = 0; i < projection.Members.Count; i++)
+            {
+                if (string.Equals(projection.Members[i].Name, name, StringComparison.Ordinal))
+                {
+                    return i;
+                }
+            }
+        }
+
+        throw new ScryValidationException("An ordering after Distinct must name a projected member.");
     }
 
     static IQueryable ApplySelectTyped(IQueryable query, LambdaExpression selector) =>

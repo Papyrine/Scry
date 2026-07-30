@@ -1,4 +1,4 @@
-[TestFixture]
+﻿[TestFixture]
 public class SecurityTests
 {
     // begin-snippet: rejectIgnoredProperty
@@ -187,15 +187,24 @@ public class SecurityTests
                 new TakeOp(5)
             ]));
 
+    // Ordering, paging and counting a deduplicated query materialize it as a row with one property per
+    // projected member, so the arity is bounded. Beyond it the query can still be enumerated.
     [Test]
-    public void RejectsCountingADistinctQueryOverSeveralMembers() =>
+    public void RejectsCountingADistinctQueryBeyondTheRowArity() =>
         AssertRejected(QueryRequest.Create(
             "Employee",
             [
                 new SelectOp(new(
                 [
-                    new("Name", new NodeValue(new MemberNode(["Name"]))),
-                    new("Status", new NodeValue(new MemberNode(["Status"])))
+                    new("A", new NodeValue(new MemberNode(["Id"]))),
+                    new("B", new NodeValue(new MemberNode(["Name"]))),
+                    new("C", new NodeValue(new MemberNode(["Status"]))),
+                    new("D", new NodeValue(new MemberNode(["Active"]))),
+                    new("E", new NodeValue(new MemberNode(["ManagerId"]))),
+                    new("F", new NodeValue(new MemberNode(["DepartmentId"]))),
+                    new("G", new NodeValue(new MemberNode(["Avatar"]))),
+                    new("H", new NodeValue(new MemberNode(["Address", "City"]))),
+                    new("I", new NodeValue(new MemberNode(["Address", "Country"])))
                 ])),
                 new DistinctOp(),
                 new CountOp()
