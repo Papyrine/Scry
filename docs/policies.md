@@ -27,7 +27,7 @@ public sealed class ActiveOnlyPolicy :
         source.Where(_ => _.Active);
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L218-L226' title='Snippet source file'>snippet source</a> | <a href='#snippet-returnablePolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L240-L248' title='Snippet source file'>snippet source</a> | <a href='#snippet-returnablePolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The `context` carries the request-scoped service provider and the active `DbContext`:
@@ -85,6 +85,8 @@ var response = Processor(_ => _.AddPolicy<Employee, ActiveOnlyPolicy>()).Execute
 <!-- endSnippet -->
 
 Code registration is the better fit when the policy lives in the server project and the model project should not reference it.
+
+Either form also covers every opted-in type deriving from the one it names. A policy is the one annotation that [inherits](annotations.md#inheritance), so a subclass cannot shed the one its base carries — which matters because an opted-in subclass is a source in its own right, queryable without naming the base. Where several apply they all narrow, base-most first, and registering one in code replaces the attribute on that same type without displacing what that type inherits.
 
 
 ## Ordering guarantee

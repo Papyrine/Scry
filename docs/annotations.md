@@ -1,4 +1,4 @@
-﻿# Annotations
+# Annotations
 
 `Scry.Annotations` (namespace `Scry`, targeting `netstandard2.0`) holds the attributes that define the allow-list. They are applied to the **server** model. Both the source generator and the server runtime read the same attributes and derive the same surface from them.
 
@@ -82,7 +82,7 @@ That is default-deny applied to the hierarchy: adding a subclass to the model ex
 
 An opted-in derived type is a source in its own right (`Query.Vehicle`), *and* something a query rooted at the base can narrow to with [`OfType`](querying.md#narrowing-to-a-derived-type). The generated model inherits the base's, declaring only the members the CLR type declares, so the base's members are readable before and after the narrowing and the derived ones only after.
 
-A [`[ReturnableWith]`](#returnablewith) policy *is* inherited, deliberately: a subclass cannot shed the policy its base carries. When both carry one, both apply.
+A [`[ReturnableWith]`](#returnablewith) policy *is* inherited, deliberately: a subclass cannot shed the policy its base carries. When both carry one, both apply, base-most first. A policy registered in code with `AddPolicy` inherits the same way — being a source in its own right is what makes that matter, since a derived source is reachable without naming the base at all.
 
 
 ## Naming a source
@@ -399,7 +399,7 @@ modelBuilder.Entity<Employee>()
     .ComplexProperty(_ => _.Address)
     .ToJson();
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L274-L278' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L336-L340' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A complex type is **not a root source**: it produces no property on the generated `ScryQuery` and no server resolver. It is reachable only by traversing into it from an opted-in entity/view/POCO — for example `Employee.Address.City`. Its members follow the same exposure rules as any other type (`[QueryIgnore]` still hides `Zip`), and the traversal is bounded by `MaxNavigationDepth` like any navigation. How EF stores the type — a JSON column or separate columns — is transparent to Scry; the server rebinds the member path onto EF, which translates it either way.

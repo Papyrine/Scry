@@ -91,6 +91,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
   MaxPageSize: 1000,
   Sources: [
     {
+      Name: Announcement,
+      Kind: Entity,
+      Model: AnnouncementQueryModel
+    },
+    {
       Name: Asset,
       Kind: Entity,
       Model: AssetQueryModel
@@ -129,6 +134,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Name: OrderLine,
       Kind: Entity,
       Model: OrderLineQueryModel
+    },
+    {
+      Name: Post,
+      Kind: Entity,
+      Model: PostQueryModel
     },
     {
       Name: Region,
@@ -170,6 +180,19 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCollection: false
         }
       ]
+    },
+    {
+      Model: AnnouncementQueryModel,
+      Members: [
+        {
+          Name: Pinned,
+          TypeDisplay: bool,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false
+        }
+      ],
+      Base: PostQueryModel
     },
     {
       Model: AssetQueryModel,
@@ -451,6 +474,32 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       ]
     },
     {
+      Model: PostQueryModel,
+      Members: [
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false
+        },
+        {
+          Name: Published,
+          TypeDisplay: bool,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false
+        }
+      ]
+    },
+    {
       Model: RegionSummaryQueryModel,
       Members: [
         {
@@ -539,10 +588,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
     }
   ],
   QueryEndpoint: /api/query,
-  SchemaStamp: ypcGkl474RZ5_iYE
+  SchemaStamp: PyMVU6yBhTV2qnT2
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L455' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L504' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names, member names with the exact C# type spelling the source generator would emit, and the re-emitted enums. It carries **no** policies, resolvers, connection details, or CLR internals.

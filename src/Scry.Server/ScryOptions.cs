@@ -90,7 +90,11 @@ public sealed class ScryOptions(Type contextType)
         where T : class =>
         AddPocoSource(_ => items);
 
-    /// <summary>Attaches a row/instance policy to an entity, overriding any <c>[ReturnableWith]</c>.</summary>
+    /// <summary>
+    /// Attaches a row/instance policy to an entity, replacing any <c>[ReturnableWith]</c> on that same
+    /// type. Like the attribute it also covers every opted-in type deriving from that one, whose own
+    /// policies narrow further rather than replace this one.
+    /// </summary>
     public void AddPolicy<TEntity, TPolicy>()
         where TPolicy : IReturnablePolicy<TEntity> =>
         Policies[typeof(TEntity)] = typeof(TPolicy);

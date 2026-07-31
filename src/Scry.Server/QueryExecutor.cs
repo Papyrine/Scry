@@ -104,6 +104,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
         var query = source.Resolve(db, services);
         query = ApplyPolicy(query, source, db, services);
+        // How much of the policy chain the query already carries, so narrowing to a subclass applies
+        // only what that subclass adds rather than repeating its base's.
+        var appliedPolicies = source.Policies.Count;
 
         GroupByOp? groupBy = null;
         SelectOp? select = null;
@@ -189,9 +192,10 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                     query = query.Provider.CreateQuery(
                         CallQueryable("OfType", [derived.ClrType], query.Expression));
 
-                    // The derived type's own policy applies on top of the base's. Both narrow, so the
+                    // The derived type's own policies apply on top of the base's. Both narrow, so the
                     // rows that survive are those a direct query of either source would have returned.
-                    query = ApplyPolicy(query, derived, db, services);
+                    query = ApplyPolicies(query, derived, appliedPolicies, db, services);
+                    appliedPolicies = derived.Policies.Count;
                     elementType = derived.ClrType;
                     break;
 
@@ -517,29 +521,69 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         return (ApplySelect(query, plan.Selector), plan);
     }
 
-    // The IReturnablePolicy<T>.Filter method, keyed by the policied source type. Bounded by the schema.
-    static readonly ConcurrentDictionary<Type, MethodInfo> policyFilters = new();
+    // The type a policy filters and its IReturnablePolicy<T>.Filter, keyed by the policy type — not by
+    // the source's, which is a different type whenever the policy is inherited. Bounded by the schema.
+    static readonly ConcurrentDictionary<Type, (Type EntityType, MethodInfo Filter)> policyFilters = new();
 
-    static IQueryable ApplyPolicy(IQueryable query, ScrySource source, DbContext db, IServiceProvider services)
+    /// <summary>
+    /// Applies every policy the source carries, base-most first, so the rows a client can go on to
+    /// filter are those all of them allow. A policy declared on a base filters that base's rows, so the
+    /// query is widened to the type the policy was written against and narrowed back afterwards.
+    /// </summary>
+    static IQueryable ApplyPolicy(IQueryable query, ScrySource source, DbContext db, IServiceProvider services) =>
+        ApplyPolicies(query, source, 0, db, services);
+
+    /// <summary>
+    /// The same, for a query that already carries the first <paramref name="from"/> of the source's
+    /// policies. A source's chain extends its base's rather than replacing it, so narrowing to a
+    /// subclass leaves only the levels below the base still to apply — and a policy is a filter to
+    /// apply once, not one to repeat per narrowing.
+    /// </summary>
+    static IQueryable ApplyPolicies(IQueryable query, ScrySource source, int from, DbContext db, IServiceProvider services)
     {
-        if (source.PolicyType is not { } policyType)
+        if (source.Policies.Count == from)
+        {
+            return Retype(query, source.ClrType);
+        }
+
+        var context = new ScryPolicyContext(services, db);
+        foreach (var policyType in source.Policies.Skip(from))
+        {
+            var policy = services.GetService(policyType) ?? Activator.CreateInstance(policyType);
+            if (policy is null)
+            {
+                throw new($"Could not create policy '{policyType.Name}'.");
+            }
+
+            var (entityType, filter) = policyFilters.GetOrAdd(policyType, PolicyFilter);
+            query = (IQueryable)filter.Invoke(policy, [Retype(query, entityType), context])!;
+        }
+
+        return Retype(query, source.ClrType);
+    }
+
+    static (Type EntityType, MethodInfo Filter) PolicyFilter(Type policyType)
+    {
+        var entityType = RowPolicy.EntityType(policyType);
+        return (entityType, typeof(IReturnablePolicy<>)
+            .MakeGenericType(entityType)
+            .GetMethod(nameof(IReturnablePolicy<>.Filter))!);
+    }
+
+    /// <summary>
+    /// Moves a query between two types of one hierarchy. Widening is a Cast — every row already is one
+    /// — and narrowing is an OfType, which the discriminator answers. Both are no-ops when the types
+    /// already agree, which is every source whose policies are all its own.
+    /// </summary>
+    static IQueryable Retype(IQueryable query, Type target)
+    {
+        if (query.ElementType == target)
         {
             return query;
         }
 
-        var policy = services.GetService(policyType) ?? Activator.CreateInstance(policyType);
-        if (policy is null)
-        {
-            throw new($"Could not create policy '{policyType.Name}'.");
-        }
-
-        var filter = policyFilters.GetOrAdd(
-            source.ClrType,
-            clrType => typeof(IReturnablePolicy<>)
-                .MakeGenericType(clrType)
-                .GetMethod(nameof(IReturnablePolicy<>.Filter))!);
-        var context = new ScryPolicyContext(services, db);
-        return (IQueryable)filter.Invoke(policy, [query, context])!;
+        var method = target.IsAssignableFrom(query.ElementType) ? "Cast" : "OfType";
+        return query.Provider.CreateQuery(CallQueryable(method, [target], query.Expression));
     }
 
     static IQueryable Apply(IQueryable query, string method, LambdaExpression argument) =>

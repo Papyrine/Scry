@@ -215,6 +215,28 @@ public class Holiday
     ];
 }
 
+/// <summary>
+/// A TPH root that carries a row policy, with a derived type that opts in and carries one of its own.
+/// This is the shape the inheritance guarantee is about: querying <see cref="Announcement"/> directly
+/// must apply the base's policy as well as its own, or opting a subclass in would shed the base's.
+/// Nothing else queries these, so the rows stay predictable.
+/// </summary>
+[Queryable]
+[ReturnableWith(typeof(PublishedPostsOnlyPolicy))]
+public class Post
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public bool Published { get; set; }
+}
+
+[Queryable]
+[ReturnableWith(typeof(PinnedAnnouncementsOnlyPolicy))]
+public class Announcement : Post
+{
+    public bool Pinned { get; set; }
+}
+
 // begin-snippet: returnablePolicy
 /// <summary>A row policy that scopes <see cref="Employee"/> queries to active rows only.</summary>
 public sealed class ActiveOnlyPolicy :
@@ -255,6 +277,45 @@ public sealed class ClosedTicketsOnlyPolicy :
         source.Where(_ => !_.IsOpen);
 }
 
+/// <summary>The policy on the TPH root <see cref="Post"/>, inherited by <see cref="Announcement"/>.</summary>
+public sealed class PublishedPostsOnlyPolicy :
+    IReturnablePolicy<Post>
+{
+    public IQueryable<Post> Filter(IQueryable<Post> source, ScryPolicyContext context) =>
+        source.Where(_ => _.Published);
+}
+
+/// <summary><see cref="Announcement"/>'s own policy, which narrows on top of the one it inherits.</summary>
+public sealed class PinnedAnnouncementsOnlyPolicy :
+    IReturnablePolicy<Announcement>
+{
+    public IQueryable<Announcement> Filter(IQueryable<Announcement> source, ScryPolicyContext context) =>
+        source.Where(_ => _.Pinned);
+}
+
+/// <summary>
+/// Never attached by default. Registered to prove an AddPolicy replaces the attribute on the type it
+/// names without displacing what that type inherits.
+/// </summary>
+public sealed class AllAnnouncementsPolicy :
+    IReturnablePolicy<Announcement>
+{
+    public IQueryable<Announcement> Filter(IQueryable<Announcement> source, ScryPolicyContext context) =>
+        source;
+}
+
+/// <summary>
+/// Never attached by default. Registered against the TPH root <see cref="Asset"/>, which carries no
+/// attribute of its own, to prove a programmatic policy reaches the types deriving from it too. The
+/// name it hides is the row the inheritance tests then look for.
+/// </summary>
+public sealed class VisibleAssetsOnlyPolicy :
+    IReturnablePolicy<Asset>
+{
+    public IQueryable<Asset> Filter(IQueryable<Asset> source, ScryPolicyContext context) =>
+        source.Where(_ => _.Name != "Trailer");
+}
+
 public sealed class TestContext(DbContextOptions<TestContext> options) :
     DbContext(options)
 {
@@ -264,6 +325,7 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
     public DbSet<OrderLine> OrderLines => Set<OrderLine>();
     public DbSet<Ticket> Tickets => Set<Ticket>();
     public DbSet<Asset> Assets => Set<Asset>();
+    public DbSet<Post> Posts => Set<Post>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
         configurationBuilder.Properties<decimal>().HavePrecision(18, 2);
@@ -282,6 +344,7 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
         modelBuilder.Entity<Vehicle>();
         modelBuilder.Entity<Building>();
         modelBuilder.Entity<Artwork>();
+        modelBuilder.Entity<Announcement>();
     }
 
     static SqlInstance<TestContext> sqlInstance = null!;
@@ -357,6 +420,15 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
             new() { Name = "Login bug", IsOpen = true },
             new() { Name = "Signup crash", IsOpen = true },
             new() { Name = "Old typo", IsOpen = false });
+
+        // Each announcement fails a different one of the two policies, so which of them ran shows in
+        // which rows come back. "Unpublished notice" is the row the base's policy exists to hide.
+        context.Posts.AddRange(
+            new Post { Name = "Draft post", Published = false },
+            new Post { Name = "Live post", Published = true },
+            new Announcement { Name = "Unpublished notice", Published = false, Pinned = true },
+            new Announcement { Name = "Unpinned notice", Published = true, Pinned = false },
+            new Announcement { Name = "Live notice", Published = true, Pinned = true });
 
         context.SaveChanges();
     }

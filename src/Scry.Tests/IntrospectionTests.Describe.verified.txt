@@ -3,6 +3,11 @@
   MaxPageSize: 1000,
   Sources: [
     {
+      Name: Announcement,
+      Kind: Entity,
+      Model: AnnouncementQueryModel
+    },
+    {
       Name: Asset,
       Kind: Entity,
       Model: AssetQueryModel
@@ -41,6 +46,11 @@
       Name: OrderLine,
       Kind: Entity,
       Model: OrderLineQueryModel
+    },
+    {
+      Name: Post,
+      Kind: Entity,
+      Model: PostQueryModel
     },
     {
       Name: Region,
@@ -82,6 +92,19 @@
           IsCollection: false
         }
       ]
+    },
+    {
+      Model: AnnouncementQueryModel,
+      Members: [
+        {
+          Name: Pinned,
+          TypeDisplay: bool,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false
+        }
+      ],
+      Base: PostQueryModel
     },
     {
       Model: AssetQueryModel,
@@ -363,6 +386,32 @@
       ]
     },
     {
+      Model: PostQueryModel,
+      Members: [
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false
+        },
+        {
+          Name: Published,
+          TypeDisplay: bool,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false
+        }
+      ]
+    },
+    {
       Model: RegionSummaryQueryModel,
       Members: [
         {
@@ -451,5 +500,5 @@
     }
   ],
   QueryEndpoint: /api/query,
-  SchemaStamp: ypcGkl474RZ5_iYE
+  SchemaStamp: PyMVU6yBhTV2qnT2
 }

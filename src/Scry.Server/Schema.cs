@@ -225,14 +225,14 @@ sealed class Schema
         EnsureCollationIsAName(options.CaseInsensitiveCollation, nameof(options.CaseInsensitiveCollation));
 
         var schema = new Schema();
-        var discovered = new List<(Type Type, string Name, SourceKind Kind, Type? Policy)>();
+        var discovered = new List<(Type Type, string Name, SourceKind Kind, IReadOnlyList<Type> Policies)>();
 
         foreach (var type in contextType.Assembly.GetTypes())
         {
             if (TryClassify(type, out var kind, out var name))
             {
-                var policy = ResolvePolicy(type, options);
-                discovered.Add((type, name, kind, policy));
+                var policies = ResolvePolicies(type, name, options);
+                discovered.Add((type, name, kind, policies));
                 if (kind is SourceKind.Entity or SourceKind.View)
                 {
                     schema.entitySourceTypes.Add(type);
@@ -282,14 +282,14 @@ sealed class Schema
         }
 
         // Pass 2: register each source with its resolver. Complex types are deliberately absent.
-        foreach (var (type, name, kind, policy) in discovered)
+        foreach (var (type, name, kind, policies) in discovered)
         {
             if (schema.sources.ContainsKey(name))
             {
                 throw new($"Duplicate queryable source name '{name}'.");
             }
 
-            schema.sources[name] = new(name, type, kind, policy, BuildResolver(type, kind, options));
+            schema.sources[name] = new(name, type, kind, policies, BuildResolver(type, kind, options));
         }
 
         // Pass 3: register the previous names sources still answer to. Deferred until every current
@@ -303,7 +303,7 @@ sealed class Schema
         // so aggregating over a policied type would count exactly the rows the policy exists to hide.
         // Refusing here makes that a startup failure rather than a silent leak at query time.
         var policied = discovered
-            .Where(_ => _.Policy is not null)
+            .Where(_ => _.Policies.Count > 0)
             .Select(_ => _.Type)
             .ToHashSet();
         foreach (var (owner, member) in schema.types.Values
@@ -451,8 +451,8 @@ sealed class Schema
         // written on, so a derived type has to opt in on its own — otherwise adding a subclass to the
         // model would silently expose it and its members, which is the opposite of default-deny. It is
         // also what the generator does, since metadata attributes are declared-only, and the two
-        // classifiers have to agree. A row policy is deliberately not read this way: it inherits, so a
-        // subclass cannot shed the policy its base carries.
+        // classifiers have to agree. A row policy is the deliberate exception, and ResolvePolicies
+        // walks the base chain for it: a subclass cannot shed the policy its base carries.
         kind = default;
         name = type.Name;
 
@@ -524,14 +524,49 @@ sealed class Schema
         }
     }
 
-    static Type? ResolvePolicy(Type type, ScryOptions options)
+    /// <summary>
+    /// The row policies a source carries, ordered base-most first. The type's own declaration is read
+    /// first and then every base's in turn, which is the one place inheritance is deliberate: the
+    /// opt-in attributes are declared-only (see <see cref="TryClassify"/>) so a subclass has to expose
+    /// itself, but a policy it inherits is one it must not be able to shed by opting in.
+    /// </summary>
+    /// <remarks>
+    /// A programmatic <c>AddPolicy</c> replaces the attribute on the same type, which is what it
+    /// documents. It does not replace what a base declares — that would let registering a policy
+    /// remove one — so both stay in the chain and both narrow.
+    /// </remarks>
+    static IReadOnlyList<Type> ResolvePolicies(Type type, string name, ScryOptions options)
     {
-        if (options.Policies.TryGetValue(type, out var configured))
+        List<Type> policies = [];
+        for (var candidate = type; candidate is not null; candidate = candidate.BaseType)
         {
-            return configured;
+            // inherit: false, because the walk is done here. Reading the attribute inheritably would
+            // find a base's policy again at every level below it and apply it once per level.
+            var policy = options.Policies.GetValueOrDefault(candidate) ??
+                         candidate.GetCustomAttribute<ReturnableWithAttribute>(inherit: false)?.Policy;
+            if (policy is null)
+            {
+                continue;
+            }
+
+            // The policy filters the type it was written against, which the executor widens the query
+            // to. One written against something outside this hierarchy has no rows here to filter.
+            var entityType = RowPolicy.EntityType(policy);
+            if (!entityType.IsAssignableFrom(type))
+            {
+                throw new(
+                    $"Row policy '{policy.Name}' on '{candidate.Name}' filters '{entityType.Name}', which " +
+                    $"source '{name}' does not derive from. A policy has to be written against the type it " +
+                    "is attached to, or one of its bases.");
+            }
+
+            policies.Add(policy);
         }
 
-        return type.GetCustomAttribute<ReturnableWithAttribute>()?.Policy;
+        // Collected derived-first and applied base-first, so narrowing to a subclass filters exactly as
+        // the base it narrows from would have — the invariant the OfType operator relies on.
+        policies.Reverse();
+        return policies;
     }
 
     /// <summary>

@@ -775,7 +775,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 "or swap the sides and use LeftJoin.");
         }
 
-        if (root.PolicyType is not null)
+        if (root.Policies.Count > 0)
         {
             throw Reject(
                 $"Source '{root.Name}' carries a row policy, so it cannot be the outer side of a " +
