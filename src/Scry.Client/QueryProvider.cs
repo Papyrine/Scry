@@ -2,11 +2,26 @@
 /// An <see cref="IQueryProvider"/> that captures LINQ expressions instead of executing them. The
 /// captured tree is translated to the wire AST by the async terminal methods.
 /// </summary>
-sealed class QueryProvider(ScryClient client, string root, IReadOnlyList<string>? defaultProjection) :
+sealed class QueryProvider(
+    ScryClient client,
+    string root,
+    IReadOnlyList<string>? defaultProjection,
+    ScryCall? call = null) :
     IQueryProvider
 {
     public ScryClient Client { get; } = client;
     public string Root { get; } = root;
+
+    /// <summary>
+    /// The per-query header hooks, or null for a query that asked for none. Carried on the provider
+    /// rather than in the captured expression because headers are not a wire concept: the translator
+    /// would have nowhere to put them, and the server is never told they existed.
+    /// </summary>
+    public ScryCall? Call { get; } = call;
+
+    /// <summary>The same source and client, with <paramref name="replacement"/> as its header hooks.</summary>
+    public QueryProvider With(ScryCall replacement) =>
+        new(Client, Root, DefaultProjection, replacement);
 
     /// <summary>
     /// The scalar members of this source's query model, supplied by the generated entry point. A query

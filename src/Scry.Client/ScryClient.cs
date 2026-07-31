@@ -6,28 +6,57 @@
 /// </summary>
 public sealed class ScryClient
 {
-    readonly Func<QueryRequest, Cancel, Task<QueryResponse>> transport;
-    readonly Func<QueryRequest, Cancel, IAsyncEnumerable<JsonElement>>? streamTransport;
+    readonly Func<QueryRequest, ScryCall?, Cancel, Task<QueryResponse>> transport;
+    readonly Func<QueryRequest, ScryCall?, Cancel, IAsyncEnumerable<JsonElement>>? streamTransport;
 
     /// <summary>
     /// Creates a client over a custom transport. <paramref name="streamTransport"/> is optional: a
     /// transport that cannot stream simply has no <c>ToAsyncEnumerable</c>, which says so rather than
     /// quietly buffering the whole result and pretending to.
     /// </summary>
+    /// <remarks>
+    /// Per-query headers are HTTP's, so a transport supplied here does not receive them and a query
+    /// carrying them is refused rather than sent without them. Use <see cref="ForHttp"/> for those.
+    /// </remarks>
     public ScryClient(
         Func<QueryRequest, Cancel, Task<QueryResponse>> transport,
         Func<QueryRequest, Cancel, IAsyncEnumerable<JsonElement>>? streamTransport = null)
     {
-        this.transport = transport;
-        this.streamTransport = streamTransport;
+        this.transport = (request, call, cancel) =>
+        {
+            RefuseHeaders(call);
+            return transport(request, cancel);
+        };
+
+        this.streamTransport = streamTransport is null
+            ? null
+            : (request, call, cancel) =>
+            {
+                RefuseHeaders(call);
+                return streamTransport(request, cancel);
+            };
     }
 
     // The HTTP transport is an instance method so each response can record the server's advertised
     // schema stamp; a static one could not reach the client it belongs to.
     ScryClient(HttpClient http, string endpoint)
     {
-        transport = (request, cancel) => PostAsync(http, endpoint, request, cancel);
-        streamTransport = (request, cancel) => StreamAsync(http, $"{endpoint.TrimEnd('/')}/stream", request, cancel);
+        transport = (request, call, cancel) => PostAsync(http, endpoint, request, call, cancel);
+        streamTransport = (request, call, cancel) => StreamAsync(http, $"{endpoint.TrimEnd('/')}/stream", request, call, cancel);
+    }
+
+    // A custom transport has nowhere to put a header, so a query that asked for one cannot be honoured.
+    // Refusing keeps WithHeader from looking like it worked on a client that never sent it.
+    static void RefuseHeaders(ScryCall? call)
+    {
+        if (call is null)
+        {
+            return;
+        }
+
+        throw new NotSupportedException(
+            "Per-query headers require the HTTP transport. Build the client with ScryClient.ForHttp, or drop " +
+            "WithHeader/WithHeaders/OnResponseHeaders from the query.");
     }
 
     // begin-snippet: scryClientApi
@@ -85,9 +114,9 @@ public sealed class ScryClient
 
     bool staleRaised;
 
-    internal async Task<QueryResponse> SendAsync(QueryRequest request, Cancel cancel)
+    internal async Task<QueryResponse> SendAsync(QueryRequest request, ScryCall? call, Cancel cancel)
     {
-        var response = await transport(request, cancel);
+        var response = await transport(request, call, cancel);
 
         // Every successful response carries the server's stamp, so drift detection works over any
         // transport rather than only HTTP. The HTTP transport has already recorded the same value from
@@ -117,7 +146,7 @@ public sealed class ScryClient
         SchemaStaleDetected?.Invoke(new(SchemaStamp!, ServerSchemaStamp!));
     }
 
-    internal IAsyncEnumerable<JsonElement> StreamAsync(QueryRequest request, Cancel cancel)
+    internal IAsyncEnumerable<JsonElement> StreamAsync(QueryRequest request, ScryCall? call, Cancel cancel)
     {
         if (streamTransport is not { } stream)
         {
@@ -126,7 +155,7 @@ public sealed class ScryClient
                 "stream transport (ScryClient.ForHttp does).");
         }
 
-        return stream(request, cancel);
+        return stream(request, call, cancel);
     }
 
     /// <summary>
@@ -138,11 +167,13 @@ public sealed class ScryClient
         HttpClient http,
         string endpoint,
         QueryRequest request,
+        ScryCall? call,
         [EnumeratorCancellation] Cancel cancel)
     {
         var json = ScryJson.Serialize(request);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
         using var message = new HttpRequestMessage(HttpMethod.Post, endpoint) {Content = content};
+        call?.Configure(message.Headers);
 
         using var response = await http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancel);
 
@@ -150,6 +181,10 @@ public sealed class ScryClient
         {
             RecordServerStamp(values.FirstOrDefault());
         }
+
+        // Read here rather than after the rows: this is the point the response headers are known, and
+        // every path below it either throws or hands control to the caller mid-enumeration.
+        call?.Read(response.Headers);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -221,20 +256,30 @@ public sealed class ScryClient
         HttpClient http,
         string endpoint,
         QueryRequest request,
+        ScryCall? call,
         Cancel cancel)
     {
         var json = ScryJson.Serialize(request);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
-        using var message = await http.PostAsync(endpoint, content, cancel);
+
+        // Built explicitly rather than posted through HttpClient.PostAsync: a per-query header needs a
+        // request message of its own to be written onto.
+        using var message = new HttpRequestMessage(HttpMethod.Post, endpoint) {Content = content};
+        call?.Configure(message.Headers);
+
+        using var response = await http.SendAsync(message, cancel);
 
         // Recorded from failures too: a rejection caused by schema drift is exactly when this matters.
-        if (message.Headers.TryGetValues(WireFormat.SchemaStampHeader, out var values))
+        if (response.Headers.TryGetValues(WireFormat.SchemaStampHeader, out var values))
         {
             RecordServerStamp(values.FirstOrDefault());
         }
 
-        var body = await message.Content.ReadAsStringAsync(cancel);
-        if (message.IsSuccessStatusCode)
+        // Read before the body is inspected, so the hook still runs on the paths below that throw.
+        call?.Read(response.Headers);
+
+        var body = await response.Content.ReadAsStringAsync(cancel);
+        if (response.IsSuccessStatusCode)
         {
             return ScryJson.DeserializeResponse(body);
         }
@@ -247,7 +292,7 @@ public sealed class ScryClient
             throw new ScryStaleClientException(error.Error);
         }
 
-        throw new ScryRequestException((int) message.StatusCode, body);
+        throw new ScryRequestException((int) response.StatusCode, body);
     }
 
     // A non-success body is usually the endpoint's ScryError, but may be anything once proxies or

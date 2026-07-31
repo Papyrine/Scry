@@ -45,6 +45,10 @@ public class HttpRoundTripTests
         {
             options.AddPocoSource(_ => Sample.Model.Holiday.Seed());
             options.MaxPageSize = 200;
+            // Filters nothing, so every other test is unaffected; it is here to prove the header path
+            // reaches a policy and back. Order is used rather than Employee because Employee is the
+            // element of a [QueryableCollection], which refuses a policied element type at startup.
+            options.AddPolicy<Sample.Model.Order, EchoHeaderPolicy>();
         });
 
         app = builder.Build();
@@ -482,4 +486,72 @@ public class HttpRoundTripTests
         // 400 test). Here we confirm an unknown root is rejected through the typed client path.
         Assert.ThrowsAsync<ScryRequestException>(() =>
             client.Source<EmployeeQueryModel>("Secret").ToListAsync());
+
+    // The whole header path over real HTTP: the client attaches one, the server's row policy reads it
+    // off ScryPolicyContext and answers on the response, and the client reads that back.
+    [Test]
+    public async Task HeadersRoundTripThroughAPolicyOverHttp()
+    {
+        string? echoed = null;
+
+        var rows = await query.Order
+            .WithHeader("X-Correlation", "round-trip-1")
+            .OnResponseHeaders(_ => echoed = _.GetValues("X-Scry-Echo").Single())
+            .Select(_ => new RegionRow(_.Region))
+            .ToListAsync();
+
+        Assert.That(rows, Is.Not.Empty);
+        Assert.That(echoed, Is.EqualTo("round-trip-1"));
+    }
+
+    // The streaming endpoint commits its status and headers before the first row, so a policy's write
+    // has to land ahead of that rather than after the response has started.
+    [Test]
+    public async Task HeadersRoundTripThroughAPolicyOverTheStreamingEndpoint()
+    {
+        string? echoed = null;
+        var regions = new List<string>();
+
+        await foreach (var row in query.Order
+                           .WithHeader("X-Correlation", "round-trip-2")
+                           .OnResponseHeaders(_ => echoed = _.GetValues("X-Scry-Echo").Single())
+                           .Select(_ => new RegionRow(_.Region))
+                           .ToAsyncEnumerable())
+        {
+            regions.Add(row.Region);
+        }
+
+        Assert.That(regions, Is.Not.Empty);
+        Assert.That(echoed, Is.EqualTo("round-trip-2"));
+    }
+
+    // A rejected query still has response headers, and they are the ones worth reading.
+    [Test]
+    public void ResponseHeadersAreReadableOnARejectedQueryOverHttp()
+    {
+        string? stamp = null;
+
+        var rejected = client.Source<EmployeeQueryModel>("Secret")
+            .OnResponseHeaders(_ => stamp = _.GetValues(WireFormat.SchemaStampHeader).Single());
+
+        Assert.ThrowsAsync<ScryRequestException>(() => rejected.ToListAsync());
+        Assert.That(stamp, Is.EqualTo(ScryQuery.SchemaStamp));
+    }
+
+    record RegionRow(string Region);
+}
+
+/// <summary>
+/// Filters nothing: it exists to prove a request header reaches a row policy and that a response
+/// header written by one reaches the client. Echoing a client-chosen value back is safe; keying an
+/// actual filter off one would not be, since the client controls it.
+/// </summary>
+public sealed class EchoHeaderPolicy :
+    IReturnablePolicy<Sample.Model.Order>
+{
+    public IQueryable<Sample.Model.Order> Filter(IQueryable<Sample.Model.Order> source, ScryPolicyContext context)
+    {
+        context.ResponseHeaders["X-Scry-Echo"] = context.RequestHeaders["X-Correlation"];
+        return source;
+    }
 }

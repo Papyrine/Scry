@@ -1,4 +1,4 @@
-﻿# Writing queries
+# Writing queries
 
 Client queries are ordinary C# LINQ written against the generated query models. Nothing runs client-side: the expression tree is **captured**, translated to the [wire AST](wire-format.md), and sent to the server when a terminal operator is awaited.
 
@@ -83,7 +83,7 @@ public static ScryClient ForHttp(HttpClient http, string endpoint) =>
 public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjection = null) =>
     new CaptureQueryable<T>(new(this, name, defaultProjection));
 ```
-<sup><a href='/src/Scry.Client/ScryClient.cs#L33-L45' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Client/ScryClient.cs#L62-L74' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -206,7 +206,7 @@ await foreach (var row in query.Employee
     names.Add(row.Name);
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L134-L144' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientStream' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L138-L148' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientStream' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Neither side holds the whole result: the server never buffers the rows and the client yields each as it is read. That makes it the right terminal for a result too large to sit in memory comfortably, and unnecessary for one that is not — a small result costs an extra round-trip's worth of framing for nothing.
@@ -245,6 +245,51 @@ var request = client.Source<Employee>("Employee")
 <!-- endSnippet -->
 
 which produces the wire request without contacting the server.
+
+
+## Headers
+
+`HttpClient.DefaultRequestHeaders` covers every call a client makes. These three operators cover **one query**:
+
+<!-- snippet: queryHeaders -->
+<a id='snippet-queryHeaders'></a>
+```cs
+/// <summary>Sends <paramref name="name"/>: <paramref name="value"/> with this query's request.</summary>
+public static IQueryable<T> WithHeader<T>(this IQueryable<T> source, string name, string value) =>
+    source.WithHeaders(_ => _.TryAddWithoutValidation(name, value));
+
+/// <summary>Configures the headers of this query's request.</summary>
+public static IQueryable<T> WithHeaders<T>(this IQueryable<T> source, Action<HttpRequestHeaders> configure) =>
+    Rebind(source, _ => ScryCall.Configuring(_, configure));
+
+/// <summary>
+/// Reads the headers of this query's response, including when the query fails — a trace or
+/// correlation header is most useful on the response that went wrong.
+/// </summary>
+public static IQueryable<T> OnResponseHeaders<T>(this IQueryable<T> source, Action<HttpResponseHeaders> read) =>
+    Rebind(source, _ => ScryCall.Reading(_, read));
+```
+<sup><a href='/src/Scry.Client/ScryHeaderExtensions.cs#L23-L38' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryHeaders' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+They are transport concerns rather than query operators. Nothing they carry enters the [wire request](wire-format.md), so the server sees them only as HTTP headers and the validator never meets them:
+
+```cs
+var rows = await Query.Order
+    .WithHeader("X-Correlation", correlationId)
+    .OnResponseHeaders(_ => trace = _.GetValues("X-Trace").Single())
+    .Where(_ => _.Amount > 100)
+    .ToListAsync();
+```
+
+Position in the chain does not matter — the operator swaps the provider that carries the hooks and leaves the captured expression untouched, so operators written on either side of it translate as usual. Repeating one composes rather than replaces.
+
+`OnResponseHeaders` runs on **failed** responses too, which is where a trace or correlation header is most worth having; it runs before the failure becomes an exception. On a streamed query it runs once the response headers are read, before the first row.
+
+Headers ride the HTTP transport, so a query carrying them needs a client built by `ScryClient.ForHttp`. A [custom transport delegate](server.md#hosting-without-the-http-endpoint) has nowhere to put them and refuses the query rather than sending it silently stripped. A header attached to the inner side of a join or a set operator is likewise ignored: those fold into the single request the outer query sends.
+
+> [!WARNING]
+> Whatever the client sends is attacker-controlled by the time the server reads it. Treat these as hint data — a correlation id, a trace id, a client build — and never as an authorization input. See [row policies](policies.md#reading-and-writing-headers).
 
 
 ## Expressions

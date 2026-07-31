@@ -30,21 +30,40 @@ public sealed class ActiveOnlyPolicy :
 <sup><a href='/src/Scry.Tests/TestModel.cs#L240-L248' title='Snippet source file'>snippet source</a> | <a href='#snippet-returnablePolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-The `context` carries the request-scoped service provider and the active `DbContext`:
+The `context` carries the request-scoped service provider, the active `DbContext`, and the call's HTTP headers:
 
 <!-- snippet: policyContext -->
 <a id='snippet-policyContext'></a>
 ```cs
-public sealed class ScryPolicyContext(IServiceProvider services, DbContext db)
+public sealed class ScryPolicyContext(
+    IServiceProvider services,
+    DbContext db,
+    IHeaderDictionary requestHeaders,
+    IHeaderDictionary responseHeaders)
 {
+    /// <summary>Context for a processor hosted outside the HTTP endpoint, which has no headers.</summary>
+    public ScryPolicyContext(IServiceProvider services, DbContext db) :
+        this(services, db, new HeaderDictionary(), new HeaderDictionary())
+    {
+    }
+
     /// <summary>The request-scoped service provider (e.g. for the current user/tenant).</summary>
     public IServiceProvider Services { get; } = services;
 
     /// <summary>The active <see cref="DbContext"/>.</summary>
     public DbContext Db { get; } = db;
+
+    /// <summary>
+    /// The headers the caller sent. Client-supplied and therefore untrusted — hint data, never an
+    /// authorization input.
+    /// </summary>
+    public IHeaderDictionary RequestHeaders { get; } = requestHeaders;
+
+    /// <summary>The headers of the response being built. Writes here reach the client.</summary>
+    public IHeaderDictionary ResponseHeaders { get; } = responseHeaders;
 }
 ```
-<sup><a href='/src/Scry.Server/ScryPolicyContext.cs#L4-L13' title='Snippet source file'>snippet source</a> | <a href='#snippet-policyContext' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryPolicyContext.cs#L7-L35' title='Snippet source file'>snippet source</a> | <a href='#snippet-policyContext' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 so a realistic policy resolves whatever it needs from DI:
@@ -62,6 +81,32 @@ public sealed class TenantPolicy :
 ```
 
 The returned `IQueryable<T>` is composed into the query, so the filter is translated to SQL along with everything else — it is not a post-filter over materialized rows.
+
+
+## Reading and writing headers
+
+`RequestHeaders` is what the caller sent, and `ResponseHeaders` is the response being built — the live `HttpContext` dictionaries when the query came through `MapScry`, so a write is on the response by the time it is sent rather than needing to be copied there:
+
+```cs
+public sealed class AuditedPolicy :
+    IReturnablePolicy<Order>
+{
+    public IQueryable<Order> Filter(IQueryable<Order> source, ScryPolicyContext context)
+    {
+        var correlation = context.RequestHeaders["X-Correlation"].ToString();
+        context.ResponseHeaders["X-Scry-Policy"] = "orders";
+        logger.LogInformation("Order query {Correlation}", correlation);
+        return source.Where(_ => !_.Archived);
+    }
+}
+```
+
+A policy runs while the query is being built, which is before the response starts on either endpoint — including the streaming one, where headers are fixed once the first row is written. So a write always lands.
+
+> [!WARNING]
+> `RequestHeaders` is **attacker-controlled**. The client chooses every value in it, so a policy that scopes rows by a request header is not scoping anything — an attacker sends a different one. Use it for correlation, tracing, and diagnostics. Take identity and tenancy from the authenticated principal via `context.Services`, which the [auth middleware](security.md#what-scry-does-not-do) established.
+
+Off the HTTP endpoint — `ScryProcessor` [hosted directly](server.md#hosting-without-the-http-endpoint) — both are empty dictionaries unless the caller supplies them, so a policy that reads one gets nothing rather than faulting.
 
 
 ## Registering a policy

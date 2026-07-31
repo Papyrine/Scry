@@ -180,7 +180,16 @@ Execute a request against any `DbContext` instance:
 var response = processor.Execute(request, dbContext);
 ```
 
-There are two `Execute` overloads: one taking an `IServiceProvider` (used to resolve policies) and one without, which falls back to activating policies via their parameterless constructor.
+There are three `Execute` overloads: one taking an `IServiceProvider` (used to resolve policies), one without — which falls back to activating policies via their parameterless constructor — and one that additionally takes a request and a response `IHeaderDictionary`:
+
+```cs
+var responseHeaders = new HeaderDictionary();
+var response = processor.Execute(request, dbContext, services, requestHeaders, responseHeaders);
+```
+
+Those reach [row policies](policies.md#reading-and-writing-headers) as `ScryPolicyContext.RequestHeaders` and `ResponseHeaders`. `MapScry` passes the live `HttpContext` dictionaries; a transport of its own supplies whatever it has, or nothing — the shorter overloads pass empty dictionaries, so a policy that reads a header off the HTTP endpoint gets nothing rather than faulting. `Stream` mirrors the same pair.
+
+Note this is the only channel for headers: they are not part of the [wire request](wire-format.md), so the [per-query header operators](querying.md#headers) on the client work over HTTP alone and refuse a query sent through a custom transport delegate rather than dropping what they were asked to send.
 
 `processor.Describe()` returns the [introspection](explorer.md#introspection) contract.
 
