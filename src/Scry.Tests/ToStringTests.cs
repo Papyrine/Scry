@@ -66,7 +66,10 @@ public class ToStringTests
 
         var rows = await client.Source<Order>("Order")
             .Where(_ => _.Region == "South")
-            .Select(_ => new {Label = _.Region + "/" + _.Quantity.ToString()})
+            .Select(_ => new
+            {
+                Label = $"{_.Region}/{_.Quantity}"
+            })
             .ToListAsync();
 
         Assert.That(rows.Single().Label, Is.EqualTo("South/1"));
