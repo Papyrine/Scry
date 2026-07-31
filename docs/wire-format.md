@@ -17,6 +17,28 @@ All (de)serialization goes through `ScryJson`, whose options are part of the con
 - Deserialization is **fail-closed**: unknown discriminators and malformed JSON throw `ScryWireException`, they are not skipped.
 
 
+### Why the options aren't configurable
+
+There is no API for supplying custom `JsonSerializerOptions`, and that is deliberate.
+
+**There is nothing to configure them *from*.** Unlike a normal ASP.NET application there is no single deployment holding both ends: the client is built separately, against a model DLL by path, and shipped somewhere else — a browser, another service, a third party's codebase. Any option would have to be set identically on both sides, out of band, with nothing verifying that it was. `version` catches a mismatched wire *format*; it cannot catch a client whose naming policy differs from the server's, which fails as an unexplained parse error or, worse, as a request the server reads as empty.
+
+**Several of the options are the security model, not a preference.** Fail-closed deserialization is what keeps the node vocabulary *closed*, and closed is what makes every request exhaustively validatable — see the [security model](security.md). Options handed in from outside can carry `UnmappedMemberHandling.Skip`, a custom `TypeInfoResolver`, a `ReferenceHandler`, or a converter that resurrects a type the AST does not name. Each of those reopens the vocabulary, and a setting that is able to disable an invariant is one that gets disabled by whoever is debugging a `400`.
+
+**There is nothing for a converter to attach to.** The usual reason to want one is a model type `System.Text.Json` cannot write. The exposed [scalar set](annotations.md#scalars) is closed, and a type outside it is not exposed at all — a strongly-typed ID or value object is invisible to clients unless it is `[QueryableComplex]`, whose own members are that same closed set again.
+
+**A fixed format is what makes another client possible.** This page is only writable because the encoding is one thing rather than per-deployment. The same applies in-tree: the [explorer](explorer.md) reuses `ToScryRequest` and `ScryJson` specifically so the request it shows is the one production sends.
+
+What is usually wanted instead already exists, in a narrower place:
+
+| Want | Reach for |
+| --- | --- |
+| Bound what a query may ask for | [`ScryOptions` limits](server.md#options) — pipeline length, expression and navigation depth, page size, `IN` values, streamed rows |
+| Change a name on the wire | [`Name`](annotations.md#naming-a-source) and [`[PreviousNames]`](annotations.md#renaming) — a versioned rename with a migration window, rather than a global reshaping |
+| Compression, body size limits, headers | Ordinary ASP.NET Core middleware — these sit outside the wire |
+| Readable JSON while debugging | Re-serialize locally with `WriteIndented`; the payload is already a `JsonElement` |
+
+
 ## Request
 
 <!-- snippet: wireRequest -->
