@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// A question asked about a collection navigation, evaluated by the database as a correlated

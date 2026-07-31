@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>One member of a projection. Its value is either an expression or a nested projection
 /// (used to project into a related entity via a navigation property).</summary>

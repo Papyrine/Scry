@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// Terminal: folds the whole sequence to a single scalar. <see cref="Selector"/> is the member being

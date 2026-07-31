@@ -1,4 +1,4 @@
-namespace Scry.Explorer.Core;
+namespace Scry;
 
 /// <summary>
 /// An in-browser Roslyn workspace over the synthesized query models. The user's query expression is
@@ -9,7 +9,7 @@ public sealed class RoslynWorkspace
 {
     // The user's expression is spliced between these so it is a legal method body. The usings make
     // LINQ operators (System.Linq), the synthesized models/enums (Scry.Generated), and the Scry
-    // terminal operators (Scry.Client: ToListAsync/FirstAsync/CountAsync/...) resolve —
+    // terminal operators (Scry: ToListAsync/FirstAsync/CountAsync/...) resolve —
     // so completion offers them and diagnostics do not falsely flag them.
     const string header =
         """
@@ -17,8 +17,8 @@ public sealed class RoslynWorkspace
         using System.Linq;
         using System.Collections.Generic;
         using Scry.Generated;
-        using Scry.Client;
-        namespace Scry.Editor;
+        using Scry;
+        namespace Scry;
         static class Editor
         {
             static object Run(global::Scry.Generated.ScryQuery Query)

@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// Inverts the ordering. Requires an ordered query — reversing an unordered one would invert an order

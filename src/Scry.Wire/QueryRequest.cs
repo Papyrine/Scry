@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// A serialized query: the root source name plus an ordered pipeline of operators. This is the

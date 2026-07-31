@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 // begin-snippet: wireBinaryOps
 /// <summary>Binary operators allowed in a predicate or projection expression.</summary>

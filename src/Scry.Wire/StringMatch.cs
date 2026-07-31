@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 // begin-snippet: wireStringMatch
 /// <summary>

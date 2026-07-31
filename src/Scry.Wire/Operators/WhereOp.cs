@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// Filters the sequence by a predicate. Written after a <see cref="GroupByOp"/> it filters the groups

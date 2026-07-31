@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 // begin-snippet: wireSetKinds
 /// <summary>How two sequences are combined.</summary>

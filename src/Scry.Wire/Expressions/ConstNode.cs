@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// A literal constant. <see cref="Value"/> is the invariant-culture string form (null for a null

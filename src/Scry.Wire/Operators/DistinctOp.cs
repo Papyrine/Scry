@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// Removes duplicate rows. Applied to the projected rows, so it deduplicates the members the query

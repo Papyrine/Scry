@@ -1,4 +1,4 @@
-namespace Scry.Client;
+namespace Scry;
 
 /// <summary>Registration helpers for the Scry client.</summary>
 public static class ScryClientServiceExtensions

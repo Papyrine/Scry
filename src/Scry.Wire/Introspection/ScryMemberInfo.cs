@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// An allow-listed member. <see cref="TypeDisplay"/> is the exact C# the source generator would emit

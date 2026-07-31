@@ -1,5 +1,3 @@
-using Scry.Wire;
-
 /// <summary>
 /// Ambient context for <see cref="TolerantEnumConverterFactory"/>: non-null exactly while a response
 /// payload is being deserialized (see <c>ScryJson.DeserializePayload</c>), carrying the response's

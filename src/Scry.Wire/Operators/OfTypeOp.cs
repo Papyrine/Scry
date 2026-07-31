@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// Narrows the sequence to the rows of a derived type, which every later operator then reads.

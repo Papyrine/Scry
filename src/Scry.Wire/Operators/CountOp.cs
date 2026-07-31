@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// Terminal: returns the element count as a scalar, optionally counting only elements matching a

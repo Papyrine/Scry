@@ -4,7 +4,7 @@
 namespace Scry.Generated;
 
 /// <summary>Client query model for the 'Headcount' view source.</summary>
-[global::Scry.Client.ScryModel("Headcount", "Total")]
+[global::Scry.ScryModel("Headcount", "Total")]
 public class EmployeeSummaryQueryModel
 {
     public int Total { get; init; }

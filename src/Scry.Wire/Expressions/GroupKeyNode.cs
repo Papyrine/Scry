@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// The key a query grouped by, read inside the projection or group filter that follows. Only valid

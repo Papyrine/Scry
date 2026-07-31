@@ -5,10 +5,8 @@ using BlazorMonaco.Editor;
 using BlazorMonaco.Languages;
 using Microsoft.CodeAnalysis;
 using Microsoft.JSInterop;
-using Scry.Explorer.Core;
-using Scry.Wire;
 
-namespace Scry.Explorer.Ui;
+namespace Scry;
 
 public partial class App
 {

@@ -8,4 +8,3 @@ global using Microsoft.AspNetCore.Routing;
 global using Microsoft.EntityFrameworkCore;
 global using Microsoft.Extensions.DependencyInjection;
 global using Scry;
-global using Scry.Wire;

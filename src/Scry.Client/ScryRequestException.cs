@@ -1,4 +1,4 @@
-﻿namespace Scry.Client;
+﻿namespace Scry;
 
 /// <summary>Thrown when the server rejects or fails a query.</summary>
 public sealed class ScryRequestException(int statusCode, string body) :

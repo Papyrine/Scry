@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// Thrown when a query fails in a way attributable to this client being generated against an older

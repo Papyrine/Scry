@@ -1,4 +1,4 @@
-﻿namespace Scry.Wire;
+﻿namespace Scry;
 
 /// <summary>
 /// Centralized, cached <see cref="JsonSerializerOptions"/> and fail-closed (de)serialization for the

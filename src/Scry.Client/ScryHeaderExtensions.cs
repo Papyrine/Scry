@@ -1,4 +1,4 @@
-namespace Scry.Client;
+namespace Scry;
 
 /// <summary>
 /// Attaches HTTP headers to a single query, and reads the headers of the response it returns.

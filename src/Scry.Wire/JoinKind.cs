@@ -1,4 +1,4 @@
-﻿namespace Scry.Wire;
+﻿namespace Scry;
 
 // begin-snippet: wireJoinKinds
 /// <summary>Which rows a join keeps.</summary>

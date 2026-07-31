@@ -1,4 +1,4 @@
-namespace Scry.Client;
+namespace Scry;
 
 /// <summary>
 /// Attached by the generator to each query model, naming the wire source the model stands for and

@@ -63,6 +63,8 @@ Sample.Model (EF Core + [Queryable])
 
 `Scry.SourceGenerator` is not published on its own — it is packed inside `Scry.Client` as an analyzer, so referencing `Scry.Client` is all a client project needs.
 
+Every package puts its public types in the single `Scry` namespace, so one `using Scry;` covers all of them. The generated query models are the exception — they land in `Scry.Generated`, which keeps names derived from the server model out of Scry's own API surface.
+
 ## Requirements
 
 - .NET 10 (`net10.0`) for `Scry.Wire`, `Scry.Client`, `Scry.Server`, and `Scry.Server.Explorer`.

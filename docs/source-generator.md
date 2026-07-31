@@ -130,7 +130,7 @@ Everything lands in the `Scry.Generated` namespace.
 namespace Scry.Generated;
 
 /// <summary>Client query model for the 'Employee' entity source.</summary>
-[global::Scry.Client.ScryModel("Employee", "Id", "Name", "Status", "Active", "ManagerId", "Avatar")]
+[global::Scry.ScryModel("Employee", "Id", "Name", "Status", "Active", "ManagerId", "Avatar")]
 public class EmployeeQueryModel
 {
     public int Id { get; init; }
@@ -196,9 +196,9 @@ public sealed class ScryQuery
     /// </summary>
     public const string SchemaStamp = "2iosRX6CXtpmJbM0";
 
-    readonly global::Scry.Client.ScryClient client;
+    readonly global::Scry.ScryClient client;
 
-    public ScryQuery(global::Scry.Client.ScryClient client)
+    public ScryQuery(global::Scry.ScryClient client)
     {
         this.client = client;
         client.SchemaStamp = SchemaStamp;

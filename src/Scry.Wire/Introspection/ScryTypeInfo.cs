@@ -1,4 +1,4 @@
-﻿namespace Scry.Wire;
+﻿namespace Scry;
 
 /// <summary>
 /// A generated client query-model type and its allow-listed members. <see cref="Members"/> lists the

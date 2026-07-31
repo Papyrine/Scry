@@ -98,6 +98,8 @@ See [docs/security.md](docs/security.md) for the full threat model.
 
 `Scry.SourceGenerator` is packed inside `Scry.Client` rather than published separately.
 
+Every package puts its public types in the single `Scry` namespace, so one `using Scry;` covers all of them. The generated query models are the exception — they land in `Scry.Generated`.
+
 
 ## At a glance
 

@@ -1,4 +1,4 @@
-﻿namespace Scry.Wire;
+﻿namespace Scry;
 
 /// <summary>
 /// A single operator in the query pipeline, applied left-to-right. The set is closed; the server

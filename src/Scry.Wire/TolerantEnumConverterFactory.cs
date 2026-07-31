@@ -1,5 +1,3 @@
-using Scry.Wire;
-
 /// <summary>
 /// Wraps <see cref="JsonStringEnumConverter"/> for every enum, byte-identical on write and on every
 /// successful read. On an unrecognised value name it consults <see cref="EnumAliasScope"/>: inside a

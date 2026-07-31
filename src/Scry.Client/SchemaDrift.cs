@@ -1,4 +1,4 @@
-namespace Scry.Client;
+namespace Scry;
 
 /// <summary>
 /// Reports that the server's queryable surface no longer matches the one this client was generated

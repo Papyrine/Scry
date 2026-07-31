@@ -1,4 +1,4 @@
-﻿namespace Scry.Client;
+﻿namespace Scry;
 
 /// <summary>
 /// The client entry point. Exposes allow-listed sources as <see cref="IQueryable{T}"/> and sends

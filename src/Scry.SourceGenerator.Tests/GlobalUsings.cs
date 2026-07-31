@@ -6,5 +6,4 @@ global using Microsoft.CodeAnalysis;
 global using Microsoft.CodeAnalysis.CSharp;
 global using Microsoft.CodeAnalysis.Diagnostics;
 global using Scry;
-global using Scry.SourceGenerator;
 global using VerifyTests.DiffPlex;

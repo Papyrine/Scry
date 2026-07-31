@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <RootNamespace>Scry</RootNamespace>
     <TargetFramework>netstandard2.0</TargetFramework>
     <PackageReadmeFile>nuget-readme.md</PackageReadmeFile>
   </PropertyGroup>

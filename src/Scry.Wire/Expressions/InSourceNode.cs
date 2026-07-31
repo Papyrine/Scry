@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// Membership of a set drawn from another source — SQL <c>IN (SELECT …)</c>. <see cref="Value"/> reads

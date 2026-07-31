@@ -6,6 +6,4 @@ global using Microsoft.AspNetCore.TestHost;
 global using Microsoft.Extensions.DependencyInjection;
 global using NUnit.Framework;
 global using Scry;
-global using Scry.Client;
 global using Scry.Generated;
-global using Scry.Wire;

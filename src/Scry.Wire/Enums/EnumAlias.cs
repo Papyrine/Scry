@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// One renamed enum value: the name the server currently serializes it under, and the previous names

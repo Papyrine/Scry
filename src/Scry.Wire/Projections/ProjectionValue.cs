@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 // begin-snippet: wireProjectionValues
 /// <summary>The value of a projection member.</summary>

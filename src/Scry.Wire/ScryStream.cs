@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// The newline-delimited JSON format a streamed result travels in. One JSON value per line: a

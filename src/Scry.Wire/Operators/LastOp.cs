@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// Terminal: returns the last element (or default) optionally matching a predicate. Requires an

@@ -1,4 +1,4 @@
-﻿namespace Scry.Explorer.Core;
+﻿namespace Scry;
 
 /// <summary>
 /// Turns a <see cref="ScryIntrospection"/> into the C# source the design-time generator would emit:
@@ -43,7 +43,7 @@ public static class ModelSynthesizer
             // snippet can narrow with OfType exactly as generated client code can.
             var inherits = type.Base is null ? "" : $" : {type.Base}";
             var attribute = executable && introspection.Sources.Any(_ => _.Model == type.Model)
-                ? $"[global::Scry.Client.ScryModel({Arguments(type, introspection)})]{Environment.NewLine}"
+                ? $"[global::Scry.ScryModel({Arguments(type, introspection)})]{Environment.NewLine}"
                 : "";
 
             builder.AppendLine(
@@ -75,9 +75,9 @@ public static class ModelSynthesizer
                 $$"""
                     public const string SchemaStamp = "{{introspection.SchemaStamp}}";
 
-                    readonly global::Scry.Client.ScryClient client;
+                    readonly global::Scry.ScryClient client;
 
-                    public ScryQuery(global::Scry.Client.ScryClient client)
+                    public ScryQuery(global::Scry.ScryClient client)
                     {
                         this.client = client;
                         client.SchemaStamp = SchemaStamp;

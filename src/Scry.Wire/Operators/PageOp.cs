@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// Terminal: returns a bounded page of rows plus whether more exist. <see cref="Size"/> is the

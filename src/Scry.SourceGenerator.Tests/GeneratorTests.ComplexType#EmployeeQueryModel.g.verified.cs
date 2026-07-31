@@ -4,7 +4,7 @@
 namespace Scry.Generated;
 
 /// <summary>Client query model for the 'Employee' entity source.</summary>
-[global::Scry.Client.ScryModel("Employee", "Id", "Name")]
+[global::Scry.ScryModel("Employee", "Id", "Name")]
 public class EmployeeQueryModel
 {
     public int Id { get; init; }

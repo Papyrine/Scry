@@ -1,4 +1,4 @@
-namespace Scry.Explorer.Core;
+namespace Scry;
 
 /// <summary>
 /// Compiles a user's query expression in the browser, runs it against a capturing client to build
@@ -75,7 +75,7 @@ public sealed class SnippetExecutor
         // captured expression tree.
         var client = new ScryClient((_, _) => Task.FromResult<QueryResponse>(null!));
         var query = Activator.CreateInstance(assembly.GetType("Scry.Generated.ScryQuery")!, client)!;
-        var runner = assembly.GetType("Scry.Editor.Runner")!;
+        var runner = assembly.GetType("Scry.Runner")!;
         return (QueryRequest)runner.GetMethod("Run")!.Invoke(null, [query])!;
     }
 
@@ -104,18 +104,18 @@ public sealed class SnippetExecutor
     // is left intact and translated as part of the pipeline instead.
     static Dictionary<string, string> scalarTerminals = new(StringComparer.Ordinal)
     {
-        ["FirstAsync"] = "new global::Scry.Wire.FirstOp(false, null)",
-        ["First"] = "new global::Scry.Wire.FirstOp(false, null)",
-        ["FirstOrDefaultAsync"] = "new global::Scry.Wire.FirstOp(true, null)",
-        ["FirstOrDefault"] = "new global::Scry.Wire.FirstOp(true, null)",
-        ["SingleAsync"] = "new global::Scry.Wire.SingleOp(false, null)",
-        ["Single"] = "new global::Scry.Wire.SingleOp(false, null)",
-        ["SingleOrDefaultAsync"] = "new global::Scry.Wire.SingleOp(true, null)",
-        ["SingleOrDefault"] = "new global::Scry.Wire.SingleOp(true, null)",
-        ["CountAsync"] = "new global::Scry.Wire.CountOp()",
-        ["Count"] = "new global::Scry.Wire.CountOp()",
-        ["AnyAsync"] = "new global::Scry.Wire.AnyOp(null)",
-        ["Any"] = "new global::Scry.Wire.AnyOp(null)"
+        ["FirstAsync"] = "new global::Scry.FirstOp(false, null)",
+        ["First"] = "new global::Scry.FirstOp(false, null)",
+        ["FirstOrDefaultAsync"] = "new global::Scry.FirstOp(true, null)",
+        ["FirstOrDefault"] = "new global::Scry.FirstOp(true, null)",
+        ["SingleAsync"] = "new global::Scry.SingleOp(false, null)",
+        ["Single"] = "new global::Scry.SingleOp(false, null)",
+        ["SingleOrDefaultAsync"] = "new global::Scry.SingleOp(true, null)",
+        ["SingleOrDefault"] = "new global::Scry.SingleOp(true, null)",
+        ["CountAsync"] = "new global::Scry.CountOp()",
+        ["Count"] = "new global::Scry.CountOp()",
+        ["AnyAsync"] = "new global::Scry.AnyOp(null)",
+        ["Any"] = "new global::Scry.AnyOp(null)"
     };
 
     /// <summary>
@@ -161,13 +161,12 @@ public sealed class SnippetExecutor
           using System;
           using System.Linq;
           using System.Collections.Generic;
-          using Scry.Client;
-          using Scry.Wire;
+          using Scry;
           using Scry.Generated;
-          namespace Scry.Editor;
+          namespace Scry;
           public static class Runner
           {
-              public static global::Scry.Wire.QueryRequest Run(global::Scry.Generated.ScryQuery Query)
+              public static global::Scry.QueryRequest Run(global::Scry.Generated.ScryQuery Query)
                   => ({{expression}}).ToScryRequest({{terminal}});
           }
 

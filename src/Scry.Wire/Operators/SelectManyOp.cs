@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// Flattens a collection navigation into a sequence of its elements, which every later operator then

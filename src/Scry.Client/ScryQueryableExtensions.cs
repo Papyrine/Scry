@@ -1,4 +1,4 @@
-﻿namespace Scry.Client;
+﻿namespace Scry;
 
 /// <summary>Async terminal operators that execute a captured Scry query against the server.</summary>
 public static class ScryQueryableExtensions

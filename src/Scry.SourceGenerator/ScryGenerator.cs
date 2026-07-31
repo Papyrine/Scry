@@ -1,4 +1,4 @@
-﻿namespace Scry.SourceGenerator;
+﻿namespace Scry;
 
 /// <summary>
 /// Reads the server model assembly (pointed at by the <c>ScryModelDll</c> build property) and
@@ -122,7 +122,7 @@ public class ScryGenerator :
         // A complex type is a member type, not a source, so it has no wire name to carry.
         var attribute = source.Kind == SourceKind.Complex
             ? ""
-            : $"[global::Scry.Client.ScryModel({Arguments(source.SourceName, ScalarMembers(source, extract))})]{Environment.NewLine}";
+            : $"[global::Scry.ScryModel({Arguments(source.SourceName, ScalarMembers(source, extract))})]{Environment.NewLine}";
 
         var builder = Header();
         builder.AppendLine(
@@ -200,9 +200,9 @@ public class ScryGenerator :
                 /// </summary>
                 public const string SchemaStamp = "{{ComputeStamp(extract)}}";
 
-                readonly global::Scry.Client.ScryClient client;
+                readonly global::Scry.ScryClient client;
 
-                public ScryQuery(global::Scry.Client.ScryClient client)
+                public ScryQuery(global::Scry.ScryClient client)
                 {
                     this.client = client;
                     client.SchemaStamp = SchemaStamp;

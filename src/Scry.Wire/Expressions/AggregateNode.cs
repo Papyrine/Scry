@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// An aggregate over a group. <see cref="Selector"/> is the member being aggregated (null for

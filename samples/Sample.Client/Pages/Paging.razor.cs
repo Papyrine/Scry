@@ -1,4 +1,3 @@
-using Scry.Wire;
 
 namespace Sample.Client.Pages;
 

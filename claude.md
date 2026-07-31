@@ -45,7 +45,9 @@ dotnet test src/Scry.slnx --filter "FullyQualifiedName~SecurityTests.RejectsIgno
 
 ## Architecture / data flow
 
-The pipeline crosses four projects. Key files to read at each stage:
+The pipeline crosses four projects. Every shipped project puts its public types in the single **`Scry`** namespace regardless of assembly name — `Scry.Client`, `Scry.Wire`, `Scry.Server`, `Scry.Annotations`, and the explorer assemblies all contribute to it, and each sets `<RootNamespace>Scry</RootNamespace>`. The one exception is `Scry.Generated`, which the source generator emits into: those names come from the *consumer's* model, so they are kept out of `Scry` to avoid colliding with the API surface.
+
+Key files to read at each stage:
 
 **Client capture — `Scry.Client` (no EF dependency).**
 - `ScryClient.Source<T>(name)` returns an `IQueryable<T>` backed by `QueryProvider` / `CaptureQueryable` — a capture-only provider that throws on synchronous enumeration.
@@ -56,12 +58,12 @@ The pipeline crosses four projects. Key files to read at each stage:
 - `QueryRequest` (version + root source name + pipeline), `QueryOp` (the closed operator set incl. terminals), `Node` (the closed expression set), `Enums.cs` (`KnownFunction` — the only callable functions), `QueryResponse`, `ScryIntrospection`, `ScryJson` (the shared `JsonSerializerOptions`). Polymorphism uses a `$type` discriminator; unknown discriminators **fail** deserialization rather than being ignored. Adding a wire node means editing the `[JsonDerivedType]` list here.
 - The wire is a **hard compatibility contract**: enum *names*, `$type` discriminators, and `ScryJson.Options` are all part of it — changing any is a wire break. `QueryRequest.Version` is validated server-side.
 
-**Server validate/execute — `Scry.Server` (public types live in namespace `Scry`, not `Scry.Server`).**
+**Server validate/execute — `Scry.Server`.**
 - `Schema.Build(options)` builds the allow-list at startup from the **real** model assembly, independent of what the client was generated against.
 - `ScryProcessor.Execute` is the single choke point (validation → allow-list → policies → shaping); use it for auditing/other transports. `QueryValidator` is the authoritative gate and runs to completion **before** anything is rebound — a rejected query never reaches EF Core. `ExpressionBuilder` is the only place CLR types are introduced, and always from the schema, never from the wire; `QueryExecutor` / `ProjectionPlan` rebind onto EF and shape the result.
 - `ScryServiceExtensions`: `AddScry<TContext>` (DI + `AddPocoSource`) and `MapScry(pattern)` (the HTTP endpoint; wire/validation failures → 400 with a specific message, everything else → generic 500). `IReturnablePolicy<T>` / `ScryPolicyContext` implement per-source row policies applied **before** any client operator, so client filters can only narrow an authorized set.
 
-**Annotations — `Scry.Annotations` (types are in namespace `Scry`, not `Scry.Annotations`).** Default-deny allow-list: `[Queryable]`, `[QueryableView]`, `[QueryablePoco]` opt a type in (optional `Name` override); `[QueryIgnore]` hides a member; `[ReturnableWith(policyType)]` attaches a row policy. A `[QueryablePoco]` has no table, so its rows must be supplied via `AddPocoSource` (server throws at startup otherwise). This package is the single source of truth that both the generator and the server read; the generator matches the attributes by hardcoded full-name strings (e.g. `"Scry.QueryableAttribute"`).
+**Annotations — `Scry.Annotations`.** Default-deny allow-list: `[Queryable]`, `[QueryableView]`, `[QueryablePoco]` opt a type in (optional `Name` override); `[QueryIgnore]` hides a member; `[ReturnableWith(policyType)]` attaches a row policy. A `[QueryablePoco]` has no table, so its rows must be supplied via `AddPocoSource` (server throws at startup otherwise). This package is the single source of truth that both the generator and the server read; the generator matches the attributes by hardcoded full-name strings (e.g. `"Scry.QueryableAttribute"`).
 
 ## The source generator (`Scry.SourceGenerator`)
 
@@ -81,6 +83,6 @@ Opt-in GraphiQL-style explorer that runs **Roslyn in the browser** (Blazor WASM)
 
 ## Code conventions
 
-- Internal (non-public) types omit the file-scoped namespace and live in the global namespace; only public API types are namespaced. Each project's `GlobalUsings.cs` carries a `global using` for its own namespace so the global-namespace types can still reach the public ones.
+- Internal (non-public) types omit the file-scoped namespace and live in the global namespace; only public API types are namespaced, and the only namespace is `Scry` (see [Architecture](#architecture--data-flow)). Each project's `GlobalUsings.cs` carries `global using Scry;` so the global-namespace types can still reach the public ones.
 - Lambda parameters are conventionally named `_` (e.g. `.Where(_ => _.Active)`, `.Select(_ => _.Name)`), including where the parameter is used. `Cancel` is the project alias for `CancellationToken` (via global usings / Polyfill).
 - Line comments go on their **own line directly above** the code, never trailing. `.editorconfig` promotes many ReSharper hints to errors and the build enforces code style — match surrounding style.

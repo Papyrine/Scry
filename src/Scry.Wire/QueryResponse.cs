@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// A serialized query result. <see cref="Payload"/> is a JSON array of projected rows for

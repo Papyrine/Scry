@@ -39,9 +39,9 @@ public sealed class ScryQuery
     /// </summary>
     public const string SchemaStamp = "2iosRX6CXtpmJbM0";
 
-    readonly global::Scry.Client.ScryClient client;
+    readonly global::Scry.ScryClient client;
 
-    public ScryQuery(global::Scry.Client.ScryClient client)
+    public ScryQuery(global::Scry.ScryClient client)
     {
         this.client = client;
         client.SchemaStamp = SchemaStamp;
@@ -165,7 +165,7 @@ page = await Query.Employee
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Department!.Name))
     .ToPageAsync(pageSize);
 ```
-<sup><a href='/samples/Sample.Client/Pages/Paging.razor.cs#L22-L30' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientPaging' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Paging.razor.cs#L21-L29' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientPaging' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 or, resuming by cursor:
@@ -181,7 +181,7 @@ page = await Query.Employee
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Department!.Name))
     .ToPageAsync(pageSize, from);
 ```
-<sup><a href='/samples/Sample.Client/Pages/KeysetPaging.razor.cs#L22-L30' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCursorPaging' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/KeysetPaging.razor.cs#L21-L29' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCursorPaging' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Keyset paging needs an ordered, [seek-safe](paging.md#the-seek-safe-rule) query; otherwise `Cursor` is null and paging falls back to offset. The [sample](sample.md) shows both an offset page and a cursor page.
@@ -362,7 +362,7 @@ var rows = await client.Source<Employee>("Employee")
     .Select(_ => new NameRow(_.Name))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/CollationTests.cs#L50-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCaseInsensitive' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/CollationTests.cs#L60-L65' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCaseInsensitive' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The client names only the sensitivity it wants; which collation implements it is [server configuration](server.md#limits). That is deliberate and load-bearing: a collation cannot be a query parameter — it is emitted into the SQL text — so it is the one value that must never come from a request. A server that has configured neither collation rejects the query rather than guessing.
@@ -723,7 +723,7 @@ var rows = await client.Source<Employee>("Employee")
     .Select(_ => new NameRow(_.Name))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/SourceMembershipTests.cs#L31-L40' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientSourceMembership' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/SourceMembershipTests.cs#L37-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientSourceMembership' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The named source is resolved and [policy-filtered](policies.md) before the test, exactly as a [join](#joins) resolves its second side. Membership is therefore only ever of rows the caller could have queried directly: a row the source's policy hides is not in the set, so the test cannot be used to learn that it exists.

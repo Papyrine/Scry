@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// Thrown when a query request or response cannot be parsed. The (de)serializer fails closed:

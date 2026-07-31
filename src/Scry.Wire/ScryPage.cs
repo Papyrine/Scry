@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// A bounded page of query results: the rows for this page, whether a further page exists, and an

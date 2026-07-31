@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 // begin-snippet: wireTypeTags
 /// <summary>The CLR shape of a constant literal on the wire. The server reconciles it against the

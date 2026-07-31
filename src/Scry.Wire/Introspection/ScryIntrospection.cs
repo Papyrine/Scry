@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// A read-only description of a Scry server's allow-listed query surface, served to tooling (the

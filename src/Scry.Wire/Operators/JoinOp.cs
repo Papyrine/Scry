@@ -1,4 +1,4 @@
-﻿namespace Scry.Wire;
+﻿namespace Scry;
 
 /// <summary>
 /// Joins a second source to the pipeline. <see cref="Root"/> names that source exactly as a request's

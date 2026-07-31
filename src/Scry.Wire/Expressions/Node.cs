@@ -1,4 +1,4 @@
-﻿namespace Scry.Wire;
+﻿namespace Scry;
 
 /// <summary>
 /// A value expression used in predicates and projections. The set of node types is closed, so the

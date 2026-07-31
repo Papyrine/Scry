@@ -12,9 +12,9 @@ public sealed class ScryQuery
     /// </summary>
     public const string SchemaStamp = "hZlhN8n4rt8WMU47";
 
-    readonly global::Scry.Client.ScryClient client;
+    readonly global::Scry.ScryClient client;
 
-    public ScryQuery(global::Scry.Client.ScryClient client)
+    public ScryQuery(global::Scry.ScryClient client)
     {
         this.client = client;
         client.SchemaStamp = SchemaStamp;

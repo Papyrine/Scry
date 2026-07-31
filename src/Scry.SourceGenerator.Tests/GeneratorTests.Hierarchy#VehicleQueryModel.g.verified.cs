@@ -4,7 +4,7 @@
 namespace Scry.Generated;
 
 /// <summary>Client query model for the 'Vehicle' entity source.</summary>
-[global::Scry.Client.ScryModel("Vehicle", "Id", "Name", "Wheels")]
+[global::Scry.ScryModel("Vehicle", "Id", "Name", "Wheels")]
 public class VehicleQueryModel : AssetQueryModel
 {
     public int Wheels { get; init; }

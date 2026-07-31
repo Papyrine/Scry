@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 /// <summary>
 /// Reads a string value under a particular case sensitivity, so the comparisons wrapping it are made

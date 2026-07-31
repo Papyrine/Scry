@@ -1,4 +1,4 @@
-namespace Scry.Wire;
+namespace Scry;
 
 // begin-snippet: wireVersion
 /// <summary>Wire format version constants.</summary>

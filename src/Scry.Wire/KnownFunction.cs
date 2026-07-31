@@ -1,4 +1,4 @@
-﻿namespace Scry.Wire;
+﻿namespace Scry;
 
 // begin-snippet: wireFunctions
 /// <summary>The closed set of functions a client may call on a value. No free-form method names.</summary>
