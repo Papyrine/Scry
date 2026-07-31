@@ -85,7 +85,7 @@ public static class ScryQueryableExtensions
         }
 
         var client = provider.Client;
-        await foreach (var row in client.StreamAsync(source.ToScryRequest(), cancel).WithCancellation(cancel))
+        await foreach (var row in client.StreamAsync(source.ToScryRequest(), provider.Call, cancel).WithCancellation(cancel))
         {
             yield return MaterializeRow<T>(source, row, client);
         }
@@ -451,7 +451,7 @@ public static class ScryQueryableExtensions
             throw new("This IQueryable is not a Scry source.");
         }
 
-        return provider.Client.SendAsync(source.ToScryRequest(terminal), cancel);
+        return provider.Client.SendAsync(source.ToScryRequest(terminal), provider.Call, cancel);
     }
 
     static void EnsureKind(QueryResponse response, ResultKind expected)

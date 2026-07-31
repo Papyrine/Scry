@@ -13,9 +13,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// </summary>
     internal readonly record struct RowSet(IQueryable Rows, ProjectionPlan Plan, bool Deduplicated);
 
-    public QueryResponse Execute(QueryRequest request, DbContext db, IServiceProvider services)
+    public QueryResponse Execute(QueryRequest request, DbContext db, CallScope scope)
     {
-        var (response, rows) = Run(request, db, services);
+        var (response, rows) = Run(request, db, scope);
         if (response is { } complete)
         {
             return complete;
@@ -36,9 +36,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// so a caller that has a <see cref="RowSet"/> in hand can commit to a success status before
     /// writing a row.
     /// </summary>
-    public RowSet Stream(QueryRequest request, DbContext db, IServiceProvider services)
+    public RowSet Stream(QueryRequest request, DbContext db, CallScope scope)
     {
-        var (response, rows) = Run(request, db, services);
+        var (response, rows) = Run(request, db, scope);
         if (rows is not { } set)
         {
             throw new ScryValidationException(
@@ -93,17 +93,17 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
     // Walks the pipeline once and either produces a finished response — every terminal does — or the
     // unread rows of a list result, which the caller materializes or streams.
-    (QueryResponse? Response, RowSet? Rows) Run(QueryRequest request, DbContext db, IServiceProvider services)
+    (QueryResponse? Response, RowSet? Rows) Run(QueryRequest request, DbContext db, CallScope scope)
     {
         var source = validator.Validate(request);
         var elementType = source.ClrType;
 
         // Built per request so a node that reads another source resolves it the same way the root was
         // resolved — through the schema, and policy-filtered — rather than reaching a DbSet directly.
-        var builder = new ExpressionBuilder(schema, options, name => ResolveSource(name, db, services));
+        var builder = new ExpressionBuilder(schema, options, name => ResolveSource(name, db, scope));
 
-        var query = source.Resolve(db, services);
-        query = ApplyPolicy(query, source, db, services);
+        var query = source.Resolve(db, scope.Services);
+        query = ApplyPolicy(query, source, db, scope);
         // How much of the policy chain the query already carries, so narrowing to a subclass applies
         // only what that subclass adds rather than repeating its base's.
         var appliedPolicies = source.Policies.Count;
@@ -194,7 +194,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
                     // The derived type's own policies apply on top of the base's. Both narrow, so the
                     // rows that survive are those a direct query of either source would have returned.
-                    query = ApplyPolicies(query, derived, appliedPolicies, db, services);
+                    query = ApplyPolicies(query, derived, appliedPolicies, db, scope);
                     appliedPolicies = derived.Policies.Count;
                     elementType = derived.ClrType;
                     break;
@@ -247,7 +247,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         // the folding terminals below fold the joined rows.
         if (join is not null)
         {
-            var (joined, joinPlan) = BuildJoined(builder, query, elementType, join, db, services);
+            var (joined, joinPlan) = BuildJoined(builder, query, elementType, join, db, scope);
 
             return terminal switch
             {
@@ -270,7 +270,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                     $"A set operation is limited to {DistinctRow.ByArity.Length} projected members.");
             }
 
-            var otherSource = ResolveSource(set.Root, db, services);
+            var otherSource = ResolveSource(set.Root, db, scope);
             var otherType = otherSource.ElementType;
             if (set.Predicate is { } otherPredicate)
             {
@@ -405,7 +405,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         Type outerType,
         JoinOp join,
         DbContext db,
-        IServiceProvider services)
+        CallScope scope)
     {
         if (!schema.TryGetSource(join.Root, out var innerSource))
         {
@@ -413,7 +413,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         }
 
         var innerType = innerSource.ClrType;
-        var inner = ApplyPolicy(innerSource.Resolve(db, services), innerSource, db, services);
+        var inner = ApplyPolicy(innerSource.Resolve(db, scope.Services), innerSource, db, scope);
 
         if (join.InnerPredicate is { } predicate)
         {
@@ -483,14 +483,14 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         return Scalar(values.Provider.Execute(call));
     }
 
-    IQueryable ResolveSource(string name, DbContext db, IServiceProvider services)
+    IQueryable ResolveSource(string name, DbContext db, CallScope scope)
     {
         if (!schema.TryGetSource(name, out var source))
         {
             throw new ScryValidationException($"Unknown source '{name}'.");
         }
 
-        return ApplyPolicy(source.Resolve(db, services), source, db, services);
+        return ApplyPolicy(source.Resolve(db, scope.Services), source, db, scope);
     }
 
     static (IQueryable<object[]> Query, ProjectionPlan Plan) BuildProjected(
@@ -530,8 +530,8 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// filter are those all of them allow. A policy declared on a base filters that base's rows, so the
     /// query is widened to the type the policy was written against and narrowed back afterwards.
     /// </summary>
-    static IQueryable ApplyPolicy(IQueryable query, ScrySource source, DbContext db, IServiceProvider services) =>
-        ApplyPolicies(query, source, 0, db, services);
+    static IQueryable ApplyPolicy(IQueryable query, ScrySource source, DbContext db, CallScope scope) =>
+        ApplyPolicies(query, source, 0, db, scope);
 
     /// <summary>
     /// The same, for a query that already carries the first <paramref name="from"/> of the source's
@@ -539,17 +539,17 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// subclass leaves only the levels below the base still to apply — and a policy is a filter to
     /// apply once, not one to repeat per narrowing.
     /// </summary>
-    static IQueryable ApplyPolicies(IQueryable query, ScrySource source, int from, DbContext db, IServiceProvider services)
+    static IQueryable ApplyPolicies(IQueryable query, ScrySource source, int from, DbContext db, CallScope scope)
     {
         if (source.Policies.Count == from)
         {
             return Retype(query, source.ClrType);
         }
 
-        var context = new ScryPolicyContext(services, db);
+        var context = new ScryPolicyContext(scope.Services, db, scope.RequestHeaders, scope.ResponseHeaders);
         foreach (var policyType in source.Policies.Skip(from))
         {
-            var policy = services.GetService(policyType) ?? Activator.CreateInstance(policyType);
+            var policy = scope.Services.GetService(policyType) ?? Activator.CreateInstance(policyType);
             if (policy is null)
             {
                 throw new($"Could not create policy '{policyType.Name}'.");

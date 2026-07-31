@@ -335,7 +335,7 @@ public async Task DisallowedPropertyRejectedWith400()
     Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L206-L233' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L210-L237' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -356,6 +356,8 @@ app.MapScry("/api/query")
 
 **Row policies on traversed navigations.** A policy is applied to the *source* a query names, not to types reached from it. Traversing a reference navigation reads the target row directly — `_.Manager!.Name` returns a manager the `Employee` policy would have filtered out of a top-level query. Do not rely on a row policy to hide a row that is reachable as a navigation target from an exposed type; hide the member with `[QueryIgnore]`, or do not expose the navigation. Collection navigations avoid the wider version of this by refusing to expose a policied element type at all.
 
+**Trusting a request header.** A row policy can read the call's headers off `ScryPolicyContext.RequestHeaders`, and the client can attach them [per query](querying.md#headers). Every one of them is chosen by the client and therefore attacker-controlled — a policy that scopes rows by `X-Tenant` scopes nothing, because an attacker sends a different `X-Tenant`. They are hint data: correlation ids, trace ids, a client build. Identity and tenancy come from the authenticated principal, resolved through `context.Services`.
+
 **Auditing.** Nothing is logged by default. `ScryProcessor.Execute` is the single choke point for recording what was asked for.
 
 **CORS, CSRF, TLS.** Ordinary ASP.NET Core concerns, unchanged by Scry.
@@ -366,6 +368,7 @@ app.MapScry("/api/query")
 - [ ] Every `[Queryable]` type is intended to be client-readable, and its exposed properties reviewed.
 - [ ] Sensitive columns carry `[QueryIgnore]` — and any newly added ones too.
 - [ ] Multi-tenant sources have a row policy.
+- [ ] No row policy scopes rows by a request header — those are client-chosen.
 - [ ] The query endpoint requires authentication/authorization.
 - [ ] `MaxPageSize` matches what the UI actually needs.
 - [ ] The [explorer](explorer.md) is either unmapped or behind a real guard in production.

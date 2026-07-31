@@ -46,12 +46,29 @@ public sealed class ScryProcessor
     }
 
     /// <summary>Validates and executes a request, returning the shaped result.</summary>
-    public QueryResponse Execute(QueryRequest request, DbContext data, IServiceProvider services)
+    public QueryResponse Execute(QueryRequest request, DbContext data, IServiceProvider services) =>
+        Execute(request, data, services, new HeaderDictionary(), new HeaderDictionary());
+
+    /// <summary>
+    /// Validates and executes a request, exposing <paramref name="requestHeaders"/> to row policies and
+    /// letting them write to <paramref name="responseHeaders"/>.
+    /// </summary>
+    /// <remarks>
+    /// The HTTP endpoint passes the live <see cref="HttpContext"/> dictionaries, so a policy's writes
+    /// are already on the response by the time it is sent. Another transport can pass a
+    /// <see cref="HeaderDictionary"/> of its own and do what it likes with what comes back.
+    /// </remarks>
+    public QueryResponse Execute(
+        QueryRequest request,
+        DbContext data,
+        IServiceProvider services,
+        IHeaderDictionary requestHeaders,
+        IHeaderDictionary responseHeaders)
     {
         var drifted = request.Stamp is { } requestStamp && requestStamp != schema.Stamp;
         try
         {
-            var response = executor.Execute(request, data, services) with
+            var response = executor.Execute(request, data, new(services, requestHeaders, responseHeaders)) with
             {
                 // Carried on every response, not only a drifted one: this is the signal a client uses
                 // to notice drift in the first place, and it is the only such channel for a transport
@@ -95,13 +112,30 @@ public sealed class ScryProcessor
         QueryRequest request,
         DbContext data,
         IServiceProvider services,
+        Cancel cancel = default) =>
+        Stream(request, data, services, new HeaderDictionary(), new HeaderDictionary(), cancel);
+
+    /// <summary>
+    /// Streams a request, exposing <paramref name="requestHeaders"/> to row policies and letting them
+    /// write to <paramref name="responseHeaders"/>.
+    /// </summary>
+    /// <remarks>
+    /// Policies run while the query is built, which is before this returns — so a policy's writes are
+    /// in hand while a transport can still send headers, rather than after the response has started.
+    /// </remarks>
+    public (ScryStreamMarker Begin, IAsyncEnumerable<Dictionary<string, object?>> Rows) Stream(
+        QueryRequest request,
+        DbContext data,
+        IServiceProvider services,
+        IHeaderDictionary requestHeaders,
+        IHeaderDictionary responseHeaders,
         Cancel cancel = default)
     {
         var drifted = request.Stamp is { } requestStamp && requestStamp != schema.Stamp;
         QueryExecutor.RowSet rows;
         try
         {
-            rows = executor.Stream(request, data, services);
+            rows = executor.Stream(request, data, new(services, requestHeaders, responseHeaders));
         }
         catch (ScryValidationException exception) when (drifted)
         {

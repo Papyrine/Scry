@@ -96,7 +96,18 @@ public static class ScryServiceExtensions
         try
         {
             var db = (DbContext)services.GetRequiredService(options.ContextType);
-            (begin, rows) = processor.Stream(request, db, services, context.RequestAborted);
+
+            // The live response dictionary, so a policy's writes are already on the response rather
+            // than needing a copy step that could run after the stream has started and headers are
+            // fixed. Validation and policies both complete before Stream returns, so anything written
+            // is in place before the begin marker below.
+            (begin, rows) = processor.Stream(
+                request,
+                db,
+                services,
+                context.Request.Headers,
+                context.Response.Headers,
+                context.RequestAborted);
         }
         catch (ScryValidationException exception)
         {
@@ -187,7 +198,12 @@ public static class ScryServiceExtensions
         try
         {
             var db = (DbContext)services.GetRequiredService(options.ContextType);
-            var response = processor.Execute(request, db, services);
+            var response = processor.Execute(
+                request,
+                db,
+                services,
+                context.Request.Headers,
+                context.Response.Headers);
 
             context.Response.ContentType = "application/json";
             await context.Response.WriteAsync(ScryJson.Serialize(response), context.RequestAborted);
