@@ -6,8 +6,18 @@
 [TestFixture]
 public class CollationTests
 {
-    // ReSharper disable once NotAccessedPositionalProperty.Local
+    // ReSharper disable NotAccessedPositionalProperty.Local
     record NameRow(string Name);
+
+    record EmployeeCard(string Name, DepartmentCard Department);
+
+    record DepartmentCard(string Name, bool Matches);
+
+    record EmployeeFlag(string Name, DepartmentFlag Department);
+
+    record DepartmentFlag(bool Matches);
+
+    // ReSharper restore NotAccessedPositionalProperty.Local
 
     static ScryProcessor Collating() =>
         ScryProcessor.Create<TestContext>(
@@ -104,6 +114,45 @@ public class CollationTests
     }
 
     [Test]
+    public void ACollatedMemberIsRebasedOntoTheNestedNavigation()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context, Collating());
+
+        // A nested projection rebases its members onto the navigation it descends into, so every path
+        // inside it is relative to Department. A collated member is still a member: asking for a case
+        // sensitivity must not change which row the path names.
+        var request = client.Source<Employee>("Employee")
+            .Select(_ => new EmployeeCard(
+                _.Name,
+                new(_.Department!.Name, _.Department!.Name.Contains("Eng", StringComparison.OrdinalIgnoreCase))))
+            .ToScryRequest();
+
+        Assert.That(CollatedPathIn(request, "Matches"), Is.EqualTo(new[] {"Name"}));
+    }
+
+    [Test]
+    public void ACollatedMemberAloneNamesTheNestedNavigation()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context, Collating());
+
+        // The navigation is inferred from the paths the members read. A collated member is the only
+        // one here, so it alone has to name Department — nothing else can.
+        var request = client.Source<Employee>("Employee")
+            .Select(_ => new EmployeeFlag(
+                _.Name,
+                new(_.Department!.Name.Contains("Eng", StringComparison.OrdinalIgnoreCase))))
+            .ToScryRequest();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Nested(request).Path, Is.EqualTo(new[] {"Department"}));
+            Assert.That(CollatedPathIn(request, "Matches"), Is.EqualTo(new[] {"Name"}));
+        });
+    }
+
+    [Test]
     public void AMalformedCollationIsRefusedAtStartup()
     {
         // The wire cannot carry a collation, so this guards the remaining path: a deployment wiring
@@ -122,6 +171,20 @@ public class CollationTests
     [Test]
     public void AWellFormedCollationIsAccepted() =>
         Assert.DoesNotThrow(() => Collating());
+
+    // The member path under a collation, as the nested projection sends it.
+    static IReadOnlyList<string> CollatedPathIn(QueryRequest request, string member)
+    {
+        var value = (NodeValue) Nested(request).Projection.Members.Single(_ => _.Name == member).Value;
+        var collated = (CollateNode) ((CallNode) value.Node).Target;
+        return ((MemberNode) collated.Target).Path;
+    }
+
+    static NestedValue Nested(QueryRequest request)
+    {
+        var select = (SelectOp) request.Pipeline.Single();
+        return (NestedValue) select.Projection.Members.Single(_ => _.Name == "Department").Value;
+    }
 
     static ScryClient ClientFor(TestContext context, ScryProcessor processor) =>
         new((request, _) => Task.FromResult(processor.Execute(request, context)));

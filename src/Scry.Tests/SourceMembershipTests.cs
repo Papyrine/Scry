@@ -6,8 +6,14 @@
 [TestFixture]
 public class SourceMembershipTests
 {
-    // ReSharper disable once NotAccessedPositionalProperty.Local
+    // ReSharper disable NotAccessedPositionalProperty.Local
     record NameRow(string Name);
+
+    record EmployeeCard(string Name, DepartmentCard Department);
+
+    record DepartmentCard(string Name, bool InSales);
+
+    // ReSharper restore NotAccessedPositionalProperty.Local
 
     [Test]
     public async Task MembershipOfAnotherSource()
@@ -136,6 +142,37 @@ public class SourceMembershipTests
                     .Contains(_.DepartmentId)));
 
         Assert.That(exception!.Message, Does.Contain("Where and a Select"));
+    }
+
+    [Test]
+    public async Task MembershipInsideANestedProjection()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // The tested value reads the row, so it names the navigation the nested projection descends
+        // into and is rebased onto it like any other member. The selector reads a Department row
+        // instead, so it keeps the path it was written with.
+        var rows = await client.Source<Employee>("Employee")
+            .OrderBy(_ => _.Name)
+            .Select(_ => new EmployeeCard(
+                _.Name,
+                new(_.Department!.Name,
+                    client.Source<Department>("Department")
+                        .Where(d => d.Name == "Sales")
+                        .Select(d => d.Name)
+                        .Contains(_.Department!.Name))))
+            .ToListAsync();
+
+        // Aaron and Alice are in Engineering, Bob and Carol in Sales.
+        Assert.That(
+            rows.Select(_ => $"{_.Name} {_.Department.Name} {_.Department.InSales}"),
+            Is.EqualTo([
+                "Aaron Engineering False",
+                "Alice Engineering False",
+                "Bob Sales True",
+                "Carol Sales True"
+            ]));
     }
 
     static ScryClient ClientFor(TestContext context) =>
