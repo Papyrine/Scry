@@ -97,6 +97,19 @@ Functions are expression-level: they read a row in a predicate, an ordering or g
 
 The `StringComparison` overloads are supported through a **collation** rather than through the overload EF cannot translate: the request names a case sensitivity and the server maps it to a collation it configured. See [case sensitivity](querying.md#operators-1).
 
+### Anonymous types
+
+An object a query constructs can be an **anonymous type**, a record, or an object initializer — the three spell the same wire projection, and every position LINQ constructs one in takes any of them:
+
+- A **`Select`** — `Select(_ => new { _.Name, Manager = _.Manager!.Name })`. The member names come off the anonymous type; a record or constructor call takes them from the constructor parameter names, capitalized. See [projections](querying.md#projections).
+- **Nested inside a projection** — `Select(_ => new { _.Name, Department = new { _.Department!.Name } })`, which nests the result under that member rather than flattening it. One level, and every member sharing one navigation. See [nested result objects](querying.md#nested-result-objects).
+- A **composite `GroupBy` key** — `GroupBy(_ => new { _.Region, _.Grade })`. Each part keeps the name the key type gave it, so `_.Key.Region` in the following `Select` resolves back to the member it grouped by. See [grouping](querying.md#grouping-and-aggregates).
+- A **join result selector** — `(outer, inner) => new { … }`, each leaf a member path naming the side it reads. See [joins](querying.md#joins).
+
+The result reads back into the anonymous type on the client: a response is keyed by member name, so it materializes exactly as a record or a named class does.
+
+Nowhere else. An anonymous type has no ordering of its own and the wire carries no constructed value outside a projection, so `OrderBy(_ => new { … })` is rejected at translation time — order by one key and add the rest with `ThenBy` ([ordering rules](querying.md#ordering-rules)).
+
 ### Computed projection members
 
 A projection leaf can be any of the above rather than only a member path — `Select(_ => new { Shouted = _.Name.ToUpper(), Net = _.Amount - _.Discount })`. See [projections](querying.md#computed-projection-members). The same holds inside a nested object, whose navigation is inferred from the paths an expression reads, and in a grouped `Select`, where the key and aggregates compose — `_.Sum(…) / _.Count()`.
