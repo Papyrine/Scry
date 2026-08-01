@@ -22,8 +22,10 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- The stamp must be byte-identical between generated clients and the server; both compile the
-         same shared source. -->
+         same shared source. Which source names are expressible is shared for the same reason: the
+         generator refuses to emit one it cannot write, so the server has to refuse the same set. -->
     <Compile Include="..\Shared\SchemaStamp.cs" Link="SchemaStamp.cs" />
+    <Compile Include="..\Shared\CSharpIdentifier.cs" Link="CSharpIdentifier.cs" />
     <PackageReference Include="Polyfill" PrivateAssets="all" />
     <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />

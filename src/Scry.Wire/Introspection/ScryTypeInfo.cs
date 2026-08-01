@@ -13,4 +13,11 @@ public sealed record ScryTypeInfo(string Model, IReadOnlyList<ScryMemberInfo> Me
     /// opted-in hierarchy.
     /// </summary>
     public string? Base { get; init; }
+
+    /// <summary>
+    /// The deprecation the model declares on the CLR type with <c>[Obsolete]</c>, in the same form as
+    /// <see cref="ScryMemberInfo.Obsolete"/>: null when absent, otherwise the message, or empty when
+    /// the attribute carried none.
+    /// </summary>
+    public string? Obsolete { get; init; }
 }

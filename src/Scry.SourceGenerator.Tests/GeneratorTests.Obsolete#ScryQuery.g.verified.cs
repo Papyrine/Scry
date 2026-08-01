@@ -11,7 +11,7 @@ public sealed class ScryQuery
     /// A hash of the queryable surface this client was generated against. Attached to each
     /// request so the server can identify a client generated against a different model.
     /// </summary>
-    public const string SchemaStamp = "8PyMxab6ClGyNIDQ";
+    public const string SchemaStamp = "yBqMAsrOsp3FNrXj";
 
     readonly global::Scry.ScryClient client;
 
@@ -21,15 +21,14 @@ public sealed class ScryQuery
         client.SchemaStamp = SchemaStamp;
     }
 
-    public global::System.Linq.IQueryable<EmployeeQueryModel> Staff =>
-        client.Source<EmployeeQueryModel>("Staff", ["Id", "Name"]);
+    public global::System.Linq.IQueryable<EmployeeQueryModel> Employee =>
+        client.Source<EmployeeQueryModel>("Employee", ["Id", "Code", "Name", "Active"]);
 
-    public global::System.Linq.IQueryable<EmployeeSummaryQueryModel> Headcount =>
-        client.Source<EmployeeSummaryQueryModel>("Headcount", ["Total"]);
+    [global::System.ObsoleteAttribute("Flattened into Employee.Name.")]
+    public global::System.Linq.IQueryable<DepartmentQueryModel> Department =>
+        client.Source<DepartmentQueryModel>("Department", ["Id"]);
 
-    public global::System.Linq.IQueryable<HolidayQueryModel> PublicHoliday =>
-        client.Source<HolidayQueryModel>("PublicHoliday", ["Name"]);
-
-    public global::System.Linq.IQueryable<OrderQueryModel> Order =>
-        client.Source<OrderQueryModel>("Order", ["Amount"]);
+    [global::System.ObsoleteAttribute("Superseded by Employee.Active.")]
+    public global::System.Linq.IQueryable<RetiredQueryModel> Retired =>
+        client.Source<RetiredQueryModel>("Retired", ["Id"]);
 }

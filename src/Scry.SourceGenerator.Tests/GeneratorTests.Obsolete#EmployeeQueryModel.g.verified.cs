@@ -5,14 +5,14 @@
 namespace Scry.Generated;
 
 /// <summary>Client query model for the 'Employee' entity source.</summary>
-[global::Scry.ScryModel("Employee", "Id", "Name", "Status", "Active", "ManagerId", "Avatar")]
+[global::Scry.ScryModel("Employee", "Id", "Code", "Name", "Active")]
 public class EmployeeQueryModel
 {
     public int Id { get; init; }
+    [global::System.ObsoleteAttribute("Use Name instead: \"FullName\" was split in the C:\\Payroll migration.")]
+    public string Code { get; init; } = null!;
     public string Name { get; init; } = null!;
-    public Status Status { get; init; }
+    [global::System.ObsoleteAttribute]
     public bool Active { get; init; }
-    public int? ManagerId { get; init; }
-    public EmployeeQueryModel? Manager { get; init; }
-    public byte[] Avatar { get; init; } = null!;
+    public DepartmentQueryModel? Department { get; init; }
 }

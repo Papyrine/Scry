@@ -87,6 +87,9 @@ sealed class Schema
 
     string ComputeStamp()
     {
+        // Deprecation is deliberately not hashed, matching the generator: [Obsolete] leaves the
+        // queryable surface exactly as it was, and hashing it would report every deployed client as
+        // stale over what is only a note to whoever next rebuilds one.
         var (sourceInfos, typeInfos, enumInfos) = DescribeSurface();
         return SchemaStamp.Compute(
             sourceInfos.Select(_ => (_.Name, _.Kind, _.Model)).ToList(),
@@ -110,13 +113,17 @@ sealed class Schema
                     .Select(_ => DescribeMember(_, enums))
                     .ToList())
             {
-                Base = meta.Base is { } clrBase ? $"{clrBase.Name}QueryModel" : null
+                Base = meta.Base is { } clrBase ? $"{clrBase.Name}QueryModel" : null,
+                Obsolete = ObsoleteOf(meta.ClrType)
             })
             .ToList();
 
         var sourceInfos = sources.Values
             .OrderBy(_ => _.Name, StringComparer.Ordinal)
-            .Select(_ => new ScrySourceInfo(_.Name, _.Kind.ToString(), $"{_.ClrType.Name}QueryModel"))
+            .Select(_ => new ScrySourceInfo(_.Name, _.Kind.ToString(), $"{_.ClrType.Name}QueryModel")
+            {
+                Obsolete = ObsoleteOf(_.ClrType)
+            })
             .ToList();
 
         var enumInfos = enums.Values
@@ -139,7 +146,13 @@ sealed class Schema
         return meta.Members.Values.Where(_ => !baseMeta.Members.ContainsKey(_.Name));
     }
 
-    static ScryMemberInfo DescribeMember(Member member, Dictionary<string, ScryEnumInfo> enums)
+    static ScryMemberInfo DescribeMember(Member member, Dictionary<string, ScryEnumInfo> enums) =>
+        DescribeShape(member, enums) with
+        {
+            Obsolete = ObsoleteOf(member.Property)
+        };
+
+    static ScryMemberInfo DescribeShape(Member member, Dictionary<string, ScryEnumInfo> enums)
     {
         // Mirrors the generator's emission exactly: the schema stamp hashes this string, so any
         // divergence would read as model drift on every client.
@@ -181,6 +194,33 @@ sealed class Schema
         }
 
         return new(member.Name, nullable ? $"{display}?" : display, NeedsNullDefault: false, IsNavigation: false);
+    }
+
+    /// <summary>
+    /// The deprecation an annotated member or type carries, in the form introspection publishes it:
+    /// null when it is not <c>[Obsolete]</c>, otherwise the message, or empty when the attribute gave
+    /// none. Only the message is read — the <c>error</c> flag is dropped, because an obsolete member
+    /// is still one this server validates and executes, and a client build break would claim
+    /// otherwise. <c>[QueryIgnore]</c> is the hard stop.
+    /// </summary>
+    /// <remarks>
+    /// <c>inherit: false</c>, matching the metadata side (attributes there are declared-only) and the
+    /// opt-in attributes above. Must stay in lockstep with MetadataModelReader.ObsoleteOf, which the
+    /// generator reads the same attribute with.
+    /// </remarks>
+    static string? ObsoleteOf(MemberInfo member)
+    {
+        if (member.GetCustomAttribute<ObsoleteAttribute>(inherit: false) is not { } obsolete)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(obsolete.Message))
+        {
+            return "";
+        }
+
+        return obsolete.Message;
     }
 
     // Mirrors MetadataModelReader's PrimitiveKeyword + ScalarKeyword so introspection type displays
@@ -231,6 +271,7 @@ sealed class Schema
         {
             if (TryClassify(type, out var kind, out var name))
             {
+                EnsureNameIsIdentifier(type, name);
                 var policies = ResolvePolicies(type, name, options);
                 discovered.Add((type, name, kind, policies));
                 if (kind is SourceKind.Entity or SourceKind.View)
@@ -340,6 +381,31 @@ sealed class Schema
         schema.EnumAliases = schema.BuildEnumAliases();
         schema.Stamp = schema.ComputeStamp();
         return schema;
+    }
+
+    /// <summary>
+    /// Refuses a source name that cannot be written as a C# member name. A source name is not only a
+    /// wire name — the generated client exposes it as a property, and so does the model the explorer
+    /// synthesizes from introspection — so one that is not an identifier produces code neither can
+    /// compile. The generator reports the same name as SCRY003; failing here means the mistake
+    /// surfaces at startup whichever side is built first.
+    /// </summary>
+    /// <remarks>
+    /// Only the current name is checked. A [PreviousNames] entry is a wire name and nothing else — the
+    /// generator ignores it entirely — so it never has to be expressible in C#.
+    /// </remarks>
+    static void EnsureNameIsIdentifier(Type type, string name)
+    {
+        if (CSharpIdentifier.IsValid(name))
+        {
+            return;
+        }
+
+        throw new(
+            $"Source name '{name}' on '{type.Name}' cannot be written as a C# property name. A source " +
+            "name is also the property the generated client and the explorer expose it as, so it has to " +
+            "be one C# can express. Set [Queryable(Name = \"...\")] to a plain identifier that is not a " +
+            "reserved keyword.");
     }
 
     static IReadOnlyList<string> PreviousNamesOf(MemberInfo member) =>

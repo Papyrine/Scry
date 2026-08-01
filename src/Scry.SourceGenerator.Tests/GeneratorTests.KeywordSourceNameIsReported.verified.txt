@@ -1,0 +1,16 @@
+﻿{
+  Diagnostics: [
+    {
+      Message: The source name 'class' cannot be written as a C# property name, so the entry point exposing it cannot be generated. Set [Queryable(Name = "...")] to a plain identifier that is not a reserved keyword.,
+      Severity: Error,
+      Descriptor: {
+        Id: SCRY003,
+        Title: Scry source name cannot be a C# property name,
+        MessageFormat: The source name '{0}' cannot be written as a C# property name, so the entry point exposing it cannot be generated. Set [Queryable(Name = "...")] to a plain identifier that is not a reserved keyword.,
+        Category: Scry,
+        DefaultSeverity: Error,
+        IsEnabledByDefault: true
+      }
+    }
+  ]
+}

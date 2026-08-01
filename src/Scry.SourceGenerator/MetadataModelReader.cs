@@ -11,6 +11,7 @@ static class MetadataModelReader
     const string queryIgnoreAttribute = "Scry.QueryIgnoreAttribute";
     const string queryableCollectionAttribute = "Scry.QueryableCollectionAttribute";
     const string keylessAttribute = "Microsoft.EntityFrameworkCore.KeylessAttribute";
+    const string obsoleteAttribute = "System.ObsoleteAttribute";
 
     public static ModelExtract Read(string? dllPath)
     {
@@ -35,7 +36,14 @@ static class MetadataModelReader
                 {
                     var simpleName = reader.GetString(type.Name);
                     var fullName = FullName(reader, type);
-                    discovered.Add(new(type, fullName, $"{simpleName}QueryModel", kind, sourceName));
+                    discovered.Add(
+                        new(
+                            type,
+                            fullName,
+                            $"{simpleName}QueryModel",
+                            kind,
+                            sourceName,
+                            ObsoleteOf(reader, type.GetCustomAttributes(), decoder)));
                 }
             }
 
@@ -53,7 +61,8 @@ static class MetadataModelReader
                         entry.ModelName,
                         entry.Kind,
                         new(properties),
-                        NearestOptedInBase(reader, entry.Type, discoveredByFullName)));
+                        NearestOptedInBase(reader, entry.Type, discoveredByFullName),
+                        entry.Obsolete));
             }
 
             return new(null, new(sources.ToImmutable()), new(enums.Values.ToImmutableArray()));
@@ -112,7 +121,12 @@ static class MetadataModelReader
             var collectionOptIn = HasAttribute(reader, property.GetCustomAttributes(), queryableCollectionAttribute);
             if (Classify(reader, signature.ReturnType, modelByFullName, enums, collectionOptIn) is { } info)
             {
-                properties.Add(info with { Name = reader.GetString(property.Name) });
+                properties.Add(
+                    info with
+                    {
+                        Name = reader.GetString(property.Name),
+                        Obsolete = ObsoleteOf(reader, property.GetCustomAttributes(), decoder)
+                    });
             }
         }
 
@@ -290,6 +304,51 @@ static class MetadataModelReader
         return null;
     }
 
+    /// <summary>
+    /// The deprecation carried by <c>[Obsolete]</c>: null when absent, otherwise the message, or empty
+    /// when the attribute gave none. Only the message is read — the <c>error</c> flag is deliberately
+    /// dropped, because an obsolete member is still one the server will happily execute a query
+    /// against, and turning a server-side annotation into an unfixable client build break would say
+    /// otherwise. <c>[QueryIgnore]</c> is the hard stop.
+    /// </summary>
+    /// <remarks>
+    /// Must stay in lockstep with Schema.ObsoleteOf, which reads the same attribute over reflection.
+    /// A malformed attribute blob is treated as a bare deprecation rather than failing the build,
+    /// matching how <see cref="NameArgument"/> handles one.
+    /// </remarks>
+    static string? ObsoleteOf(
+        MetadataReader reader,
+        CustomAttributeHandleCollection attributes,
+        SignatureDecoder decoder)
+    {
+        foreach (var handle in attributes)
+        {
+            var attribute = reader.GetCustomAttribute(handle);
+            if (AttributeTypeName(reader, attribute) != obsoleteAttribute)
+            {
+                continue;
+            }
+
+            try
+            {
+                // The message is the first fixed argument on every overload that takes one; the
+                // parameterless overload has none.
+                if (attribute.DecodeValue(decoder).FixedArguments is [{Value: string message}, ..] &&
+                    !string.IsNullOrWhiteSpace(message))
+                {
+                    return message;
+                }
+            }
+            catch (BadImageFormatException)
+            {
+            }
+
+            return "";
+        }
+
+        return null;
+    }
+
     static bool IsEnum(MetadataReader reader, TypeDefinitionHandle handle)
     {
         var definition = reader.GetTypeDefinition(handle);
@@ -407,5 +466,6 @@ static class MetadataModelReader
         string FullName,
         string ModelName,
         SourceKind Kind,
-        string SourceName);
+        string SourceName,
+        string? Obsolete);
 }

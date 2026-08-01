@@ -63,6 +63,33 @@ public class IntrospectionTests
         Assert.That(addressModel.Members.Select(_ => _.Name), Is.EquivalentTo(["City", "Country"]));
     }
 
+    // The stamp is deliberately not asserted here: Describe's snapshot carries it, and that it did not
+    // move when these annotations were added is the check that deprecation stays out of it. Hashing it
+    // would report every deployed client as stale over a note to whoever next rebuilds one.
+    [Test]
+    public void ObsoleteIsCarriedForMembersSourcesAndTypes()
+    {
+        var introspection = SharedProcessor.Instance.Describe();
+
+        // An [Obsolete] with a message: the message is what the generated client's warning quotes.
+        var headcount = introspection.Types.Single(_ => _.Model == "DepartmentHeadcountQueryModel")
+            .Members.Single(_ => _.Name == "Headcount");
+        Assert.That(headcount.Obsolete, Is.EqualTo("Counts open roles too; use the Region rollup."));
+
+        // A bare [Obsolete] is empty rather than null — deprecated, with nothing to add. It rides on
+        // the source as well as the type, so the entry point a query starts from warns too.
+        Assert.That(introspection.Types.Single(_ => _.Model == "RegionSummaryQueryModel").Obsolete, Is.Empty);
+        Assert.That(introspection.Sources.Single(_ => _.Name == "RegionSummary").Obsolete, Is.Empty);
+
+        // Null everywhere else: absent from the payload entirely, so nothing changes for a member
+        // nobody deprecated.
+        Assert.That(introspection.Types.Single(_ => _.Model == "EmployeeQueryModel").Obsolete, Is.Null);
+        Assert.That(
+            introspection.Types.Single(_ => _.Model == "DepartmentHeadcountQueryModel")
+                .Members.Single(_ => _.Name == "Department").Obsolete,
+            Is.Null);
+    }
+
     [Test]
     public void GuardrailAcceptsCorrectlyAnnotatedModel()
     {

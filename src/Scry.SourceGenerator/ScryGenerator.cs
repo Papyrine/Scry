@@ -56,6 +56,14 @@ public class ScryGenerator :
         DiagnosticSeverity.Error,
         true);
 
+    static readonly DiagnosticDescriptor invalidSourceName = new(
+        "SCRY003",
+        "Scry source name cannot be a C# property name",
+        "The source name '{0}' cannot be written as a C# property name, so the entry point exposing it cannot be generated. Set [Queryable(Name = \"...\")] to a plain identifier that is not a reserved keyword.",
+        "Scry",
+        DiagnosticSeverity.Error,
+        true);
+
     static void Emit(SourceProductionContext context, ModelExtract extract)
     {
         if (extract.Error is { } error)
@@ -69,30 +77,45 @@ public class ScryGenerator :
             return;
         }
 
-        // Emitting duplicates would otherwise surface as a CS0102 on generated code the user cannot
-        // see. The server rejects the same clash at startup. Two axes clash independently: the
-        // generated model class name (all types, incl. complex) and the entry-point property name
-        // (sources only — complex types emit no entry point).
+        // Both checks below catch a model that would emit code the user cannot see to fix, and both
+        // are refused at startup by the server too. Emitting duplicates would surface as a CS0102;
+        // emitting a source name that is not an identifier would not parse at all. Nothing is emitted
+        // when either fires, so the consumer sees the reported cause rather than its consequences.
+        //
+        // Duplicates clash on two axes independently: the generated model class name (all types, incl.
+        // complex) and the entry-point property name (sources only — complex types emit no entry
+        // point). The identifier rule likewise applies to source names only, since a model name is
+        // derived from the CLR type name and a complex type has no entry point to name.
         var seenModels = new HashSet<string>(StringComparer.Ordinal);
         var seenSources = new HashSet<string>(StringComparer.Ordinal);
-        var duplicated = false;
+        var invalid = false;
         foreach (var source in extract.Sources)
         {
             if (!seenModels.Add(source.ModelName))
             {
                 context.ReportDiagnostic(Diagnostic.Create(duplicateSource, Location.None, source.SourceName));
-                duplicated = true;
+                invalid = true;
             }
 
-            if (source.Kind != SourceKind.Complex &&
-                !seenSources.Add(source.SourceName))
+            if (source.Kind == SourceKind.Complex)
+            {
+                continue;
+            }
+
+            if (!seenSources.Add(source.SourceName))
             {
                 context.ReportDiagnostic(Diagnostic.Create(duplicateSource, Location.None, source.SourceName));
-                duplicated = true;
+                invalid = true;
+            }
+
+            if (!CSharpIdentifier.IsValid(source.SourceName))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(invalidSourceName, Location.None, source.SourceName));
+                invalid = true;
             }
         }
 
-        if (duplicated)
+        if (invalid)
         {
             return;
         }
@@ -128,17 +151,36 @@ public class ScryGenerator :
         builder.AppendLine(
             $$"""
             /// <summary>Client query model for the '{{source.SourceName}}' {{descriptor}}.</summary>
-            {{attribute}}public class {{source.ModelName}}{{inherits}}
+            {{Obsolete(source.Obsolete)}}{{attribute}}public class {{source.ModelName}}{{inherits}}
             {
             """);
         foreach (var property in source.Properties)
         {
             var initializer = property.NeedsNullDefault ? " = null!;" : "";
+            builder.Append(Obsolete(property.Obsolete, indent: "    "));
             builder.AppendLine($"    public {property.TypeDisplay} {property.Name} {{ get; init; }}{initializer}");
         }
 
         builder.AppendLine("}");
         return builder.ToString();
+    }
+
+    /// <summary>
+    /// The <c>[Obsolete]</c> line a deprecated model type, member, or entry point is preceded by —
+    /// empty when the model did not deprecate it. Advisory only: the server still executes queries
+    /// against an obsolete member, so this warns rather than blocks, and it never reaches the schema
+    /// stamp, since deprecating something does not change the queryable surface.
+    /// </summary>
+    static string Obsolete(string? message, string indent = "")
+    {
+        if (message is null)
+        {
+            return "";
+        }
+
+        // An empty message is a bare [Obsolete] on the model, which has nothing to say beyond the fact.
+        var arguments = message.Length == 0 ? "" : $"({Literal(message)})";
+        return $"{indent}[global::System.ObsoleteAttribute{arguments}]{Environment.NewLine}";
     }
 
     // The scalar members a query written against this model projects when it writes no Select: the
@@ -162,7 +204,13 @@ public class ScryGenerator :
     }
 
     static string Arguments(string source, List<string> members) =>
-        string.Join(", ", new[] {source}.Concat(members).Select(_ => $"\"{_}\""));
+        string.Join(", ", new[] {source}.Concat(members).Select(Literal));
+
+    // Every string the model contributes reaches generated code as a literal — a source name, a member
+    // name, an [Obsolete] message. Only the last is free text, but none of them are escaped at the
+    // source, so they are all formatted rather than interpolated between bare quotes.
+    static string Literal(string value) =>
+        Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(value, quote: true);
 
     static string EmitEnums(EquatableArray<EnumInfo> enums)
     {
@@ -219,13 +267,16 @@ public class ScryGenerator :
             // The scalar members ride along so a query that writes no Select still projects them by
             // name. That keeps the response keyed by the names this client was generated with, rather
             // than whatever the server's current model calls them.
-            var members = string.Join(", ", ScalarMembers(source, extract).Select(_ => $"\"{_}\""));
+            var members = string.Join(", ", ScalarMembers(source, extract).Select(Literal));
 
             builder.AppendLine();
+            // The entry point is where a query against a deprecated source starts, so it carries the
+            // deprecation too — a client writing 'Query.Employee' sees it without traversing a member.
+            builder.Append(Obsolete(source.Obsolete, indent: "    "));
             builder.AppendLine(
                 $"""
                 public global::System.Linq.IQueryable<{source.ModelName}> {source.SourceName} =>
-                    client.Source<{source.ModelName}>("{source.SourceName}", [{members}]);
+                    client.Source<{source.ModelName}>({Literal(source.SourceName)}, [{members}]);
             """);
         }
 
@@ -235,6 +286,9 @@ public class ScryGenerator :
 
     // Mirrors Schema.ComputeStamp on the server: same canonical inputs into the shared SchemaStamp,
     // so a client generated from the same surface carries the same stamp the server computes.
+    // Deprecation is deliberately absent: marking something [Obsolete] leaves the queryable surface
+    // exactly as it was, and folding it in would report every deployed client as stale for what is
+    // only a note to whoever next rebuilds one.
     static string ComputeStamp(ModelExtract extract)
     {
         var sources = extract.Sources
@@ -253,10 +307,16 @@ public class ScryGenerator :
     static StringBuilder Header()
     {
         var builder = new StringBuilder();
+        // The obsolete warnings are suppressed inside generated code only. A deprecated model type is
+        // still referenced here — by every navigation to it and by its own entry point — and
+        // '<auto-generated/>' does not suppress CS0612/CS0618, so a consumer building with
+        // TreatWarningsAsErrors would fail on code it cannot edit. Uses in the consumer's own query
+        // code, which is where the deprecation is worth reporting, still warn.
         builder.AppendLine(
             $"""
             // <auto-generated/>
             #nullable enable
+            #pragma warning disable CS0612, CS0618
             namespace {generatedNamespace};
             """);
         builder.AppendLine();

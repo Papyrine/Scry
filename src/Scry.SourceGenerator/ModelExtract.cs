@@ -23,7 +23,8 @@ record struct SourceInfo(
     string ModelName,
     SourceKind Kind,
     EquatableArray<PropertyInfo> Properties,
-    string? BaseModelName = null);
+    string? BaseModelName = null,
+    string? Obsolete = null);
 
 /// <summary>An allow-listed property and the C# type the client DTO should expose.</summary>
 /// <param name="IsNavigation">
@@ -34,12 +35,18 @@ record struct SourceInfo(
 /// True for an aggregable collection navigation. Excluded from the default projection for the same
 /// reason as a navigation: it is not a scalar leaf, and its rows are never returned.
 /// </param>
+/// <param name="Obsolete">
+/// Null when the model member is not <c>[Obsolete]</c>; otherwise its deprecation message, or empty
+/// when the attribute carried none. Replicated onto the generated member so a client sees the
+/// deprecation it would otherwise never learn about — it never references the model assembly.
+/// </param>
 record struct PropertyInfo(
     string Name,
     string TypeDisplay,
     bool NeedsNullDefault,
     bool IsNavigation = false,
-    bool IsCollection = false);
+    bool IsCollection = false,
+    string? Obsolete = null);
 
 /// <summary>An enum referenced by a model, re-emitted so the client needs no server reference.</summary>
 record struct EnumInfo(string Name, EquatableArray<string> Members);

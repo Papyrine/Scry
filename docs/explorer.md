@@ -148,7 +148,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
     {
       Name: RegionSummary,
       Kind: View,
-      Model: RegionSummaryQueryModel
+      Model: RegionSummaryQueryModel,
+      Obsolete: 
     },
     {
       Name: Ticket,
@@ -260,7 +261,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           TypeDisplay: int,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          Obsolete: Counts open roles too; use the Region rollup.
         }
       ]
     },
@@ -516,7 +518,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false
         }
-      ]
+      ],
+      Obsolete: 
     },
     {
       Model: SalesRegionQueryModel,
@@ -591,7 +594,7 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
   SchemaStamp: PyMVU6yBhTV2qnT2
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L504' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L507' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names, member names with the exact C# type spelling the source generator would emit, and the re-emitted enums. It carries **no** policies, resolvers, connection details, or CLR internals.
