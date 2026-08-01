@@ -29,7 +29,7 @@ sealed record OtherDecoded :
 /// Decodes property type signatures into <see cref="DecodedType"/> using
 /// <see cref="System.Reflection.Metadata"/>, recognizing only the shapes Scry cares about. Also
 /// serves as the custom-attribute type provider, which is only ever asked to decode the
-/// <c>string Name</c> named argument on the queryable attributes.
+/// <c>string Name</c> named argument on the queryable attributes and the message on <c>[Obsolete]</c>.
 /// </summary>
 sealed class SignatureDecoder :
     ISignatureTypeProvider<DecodedType, object?>,
@@ -115,8 +115,8 @@ sealed class SignatureDecoder :
 
     public DecodedType GetTypeFromSpecification(MetadataReader r, object? genericContext, TypeSpecificationHandle handle, byte rawTypeKind) => other;
 
-    // ICustomAttributeTypeProvider. Scry only reads a string-valued named argument, so the members
-    // that exist for System.Type and enum-valued arguments never need to produce anything useful.
+    // ICustomAttributeTypeProvider. Scry only reads string and bool arguments, so the members that
+    // exist for System.Type and enum-valued arguments never need to produce anything useful.
 
     public DecodedType GetSystemType() => other;
 

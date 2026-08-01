@@ -15,7 +15,8 @@ public class RoslynLayerTests
             [
                 new("Name", "string", NeedsNullDefault: true, IsNavigation: false),
                 new("Active", "bool", NeedsNullDefault: false, IsNavigation: false),
-                new("Status", "Status", NeedsNullDefault: false, IsNavigation: false),
+                // Deprecated server-side: still queryable, so a snippet using it compiles and warns.
+                new("Status", "Status", NeedsNullDefault: false, IsNavigation: false) {Obsolete = "Use Active."},
                 new("Manager", "EmployeeQueryModel?", NeedsNullDefault: false, IsNavigation: true),
                 // A complex type is exposed exactly like a navigation member on the client model.
                 new("Address", "AddressQueryModel?", NeedsNullDefault: false, IsNavigation: true)
@@ -155,6 +156,26 @@ public class RoslynLayerTests
         }
     }
 
+    // A deprecated member stays fully queryable — the server validates and executes it either way — so
+    // the snippet must compile and warn rather than fail. The message is the model's own.
+    [Test]
+    public async Task WarnsWithoutErroringOnAnObsoleteMember()
+    {
+        var diagnostics = await workspace.DiagnoseAsync("Query.Employee.Select(_ => new { _.Status })");
+
+        Assert.That(diagnostics.Any(_ => !_.IsError && _.Message.Contains("Use Active.")), Is.True);
+        Assert.That(diagnostics.Any(_ => _.IsError), Is.False);
+    }
+
+    [Test]
+    public void TranslatesAnObsoleteMemberLikeAnyOther()
+    {
+        var request = executor.Translate("Query.Employee.Select(_ => new { _.Status })");
+
+        Assert.That(request.Root, Is.EqualTo("Employee"));
+        Assert.That(request.Pipeline.Any(_ => _ is SelectOp), Is.True, "select op");
+    }
+
     [Test]
     public void SynthesizesExecutableModel()
     {
@@ -164,6 +185,10 @@ public class RoslynLayerTests
         Assert.That(source, Does.Contain("public class EmployeeQueryModel"));
         Assert.That(source, Does.Contain("public string Name { get; init; } = null!;"));
         Assert.That(source, Does.Contain("IQueryable<EmployeeQueryModel> Employee"));
+        // Mirrors the generator, so a snippet warns exactly where compiled client code would. The
+        // pragma keeps the synthesized model's own uses of a deprecated type quiet.
+        Assert.That(source, Does.Contain("#pragma warning disable CS0612, CS0618"));
+        Assert.That(source, Does.Contain("[global::System.ObsoleteAttribute(\"Use Active.\")]"));
         // The scalar member list mirrors the generator's entry point, so a snippet without a Select
         // produces the same wire request a generated client would.
         Assert.That(source, Does.Contain("client.Source<EmployeeQueryModel>(\"Employee\", [\"Name\", \"Active\", \"Status\"])"));

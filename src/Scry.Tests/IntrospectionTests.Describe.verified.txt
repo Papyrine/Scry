@@ -60,7 +60,8 @@
     {
       Name: RegionSummary,
       Kind: View,
-      Model: RegionSummaryQueryModel
+      Model: RegionSummaryQueryModel,
+      Obsolete: 
     },
     {
       Name: Ticket,
@@ -172,7 +173,8 @@
           TypeDisplay: int,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          Obsolete: Counts open roles too; use the Region rollup.
         }
       ]
     },
@@ -428,7 +430,8 @@
           IsNavigation: false,
           IsCollection: false
         }
-      ]
+      ],
+      Obsolete: 
     },
     {
       Model: SalesRegionQueryModel,

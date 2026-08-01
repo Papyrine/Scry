@@ -186,15 +186,23 @@ public class SalesRegion
 public class DepartmentHeadcount
 {
     public string Department { get; set; } = "";
+
+    // begin-snippet: obsoleteMember
+    // Deprecated rather than removed: still queryable, still validated, still executed — clients are
+    // only warned, at their next rebuild. [QueryIgnore] is what takes it off the surface for good.
+    [Obsolete("Counts open roles too; use the Region rollup.")]
     public int Headcount { get; set; }
+    // end-snippet
 }
 
 /// <summary>
 /// Opted in with [Queryable] but marked EF [Keyless], which the schema treats as a view — the
-/// documented equivalent of [QueryableView]. Pins that classification path.
+/// documented equivalent of [QueryableView]. Pins that classification path. Deprecated with no
+/// message, which reaches the client as a bare [Obsolete] on both the model and its entry point.
 /// </summary>
 [Queryable]
 [Keyless]
+[Obsolete]
 public class RegionSummary
 {
     public string Region { get; set; } = "";

@@ -14,9 +14,13 @@ public static class ModelSynthesizer
     public static string Synthesize(ScryIntrospection introspection, bool executable = false)
     {
         var builder = new StringBuilder();
+        // Mirrors the generator's header: a deprecated model type is referenced by every navigation to
+        // it and by its own entry point, and those uses are synthesized code the snippet author cannot
+        // edit. Their own uses, in the snippet itself, still warn.
         builder.AppendLine(
             """
             #nullable enable
+            #pragma warning disable CS0612, CS0618
             namespace Scry.Generated;
             """);
         builder.AppendLine();
@@ -48,12 +52,13 @@ public static class ModelSynthesizer
 
             builder.AppendLine(
                 $$"""
-                {{attribute}}public class {{type.Model}}{{inherits}}
+                {{Obsolete(type.Obsolete)}}{{attribute}}public class {{type.Model}}{{inherits}}
                 {
                 """);
             foreach (var member in type.Members)
             {
                 var initializer = member.NeedsNullDefault ? " = null!;" : "";
+                builder.Append(Obsolete(member.Obsolete, indent: "    "));
                 builder.AppendLine($"    public {member.TypeDisplay} {member.Name} {{ get; init; }}{initializer}");
             }
 
@@ -90,8 +95,9 @@ public static class ModelSynthesizer
                 var members = string.Join(
                     ", ",
                     ScalarMembers(introspection.Types.Single(_ => _.Model == source.Model), introspection)
-                        .Select(_ => $"\"{_}\""));
-                builder.AppendLine($"    public global::System.Linq.IQueryable<{source.Model}> {source.Name} => client.Source<{source.Model}>(\"{source.Name}\", [{members}]);");
+                        .Select(Literal));
+                builder.Append(Obsolete(source.Obsolete, indent: "    "));
+                builder.AppendLine($"    public global::System.Linq.IQueryable<{source.Model}> {source.Name} => client.Source<{source.Model}>({Literal(source.Name)}, [{members}]);");
             }
         }
         else
@@ -99,6 +105,7 @@ public static class ModelSynthesizer
             // Completion only needs the shape — no Scry.Client dependency.
             foreach (var source in introspection.Sources)
             {
+                builder.Append(Obsolete(source.Obsolete, indent: "    "));
                 builder.AppendLine($"    public global::System.Linq.IQueryable<{source.Model}> {source.Name} => null!;");
             }
         }
@@ -129,6 +136,27 @@ public static class ModelSynthesizer
     static string Arguments(ScryTypeInfo type, ScryIntrospection introspection)
     {
         var source = introspection.Sources.First(_ => _.Model == type.Model).Name;
-        return string.Join(", ", new[] {source}.Concat(ScalarMembers(type, introspection)).Select(_ => $"\"{_}\""));
+        return string.Join(", ", new[] {source}.Concat(ScalarMembers(type, introspection)).Select(Literal));
     }
+
+    /// <summary>
+    /// Mirrors the generator's <c>[Obsolete]</c> emission, so a snippet written in the explorer warns
+    /// on a deprecated source or member exactly where compiled client code would. Null means the model
+    /// did not deprecate it; empty means it did, with nothing to add.
+    /// </summary>
+    static string Obsolete(string? message, string indent = "")
+    {
+        if (message is null)
+        {
+            return "";
+        }
+
+        var arguments = message.Length == 0 ? "" : $"({Literal(message)})";
+        return $"{indent}[global::System.ObsoleteAttribute{arguments}]{Environment.NewLine}";
+    }
+
+    // Introspection is fetched over HTTP and compiled in-browser, so every string it contributes is
+    // formatted into a literal rather than interpolated between bare quotes.
+    static string Literal(string value) =>
+        SymbolDisplay.FormatLiteral(value, quote: true);
 }
