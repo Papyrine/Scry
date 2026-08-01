@@ -19,6 +19,13 @@ public sealed record ScryIntrospection(
     public string QueryEndpoint { get; init; } = "/api/query";
 
     /// <summary>
+    /// Whether this host will show the SQL a request would run (set by the explorer host, from a guard
+    /// of its own). False here — a processor describing itself makes no such offer; only the explorer
+    /// endpoint does, and only where its own Development-only guard allows.
+    /// </summary>
+    public bool SqlPreview { get; init; }
+
+    /// <summary>
     /// A hash of the queryable surface. Equals the generated client's <c>ScryQuery.SchemaStamp</c>
     /// exactly when client and server were built from the same model surface.
     /// </summary>

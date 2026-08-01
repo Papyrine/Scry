@@ -538,5 +538,6 @@
     }
   ],
   QueryEndpoint: /api/query,
+  SqlPreview: false,
   SchemaStamp: mi7QhupBDNZpcBYb
 }

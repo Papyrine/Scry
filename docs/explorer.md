@@ -40,8 +40,16 @@ public string QueryEndpoint { get; set; } = "/api/query";
 /// opts in explicitly (e.g. behind an admin authorization check).
 /// </summary>
 public Func<HttpContext, bool> EnableGuard { get; set; } = DevelopmentOnly;
+
+/// <summary>
+/// Decides, per request, whether the explorer will show the SQL a query would run. Also
+/// Development-only by default, and deliberately separate from <see cref="EnableGuard"/>: SQL
+/// reveals more than the schema does — real table and column names, and the shape of any row
+/// policy that narrowed the query — so opening the explorer to someone does not open this too.
+/// </summary>
+public Func<HttpContext, bool> EnableSqlPreview { get; set; } = DevelopmentOnly;
 ```
-<sup><a href='/src/Scry.Server.Explorer/ScryExplorerOptions.cs#L10-L24' title='Snippet source file'>snippet source</a> | <a href='#snippet-explorerOptions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.Explorer/ScryExplorerOptions.cs#L10-L32' title='Snippet source file'>snippet source</a> | <a href='#snippet-explorerOptions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: mapExplorer -->
@@ -64,6 +72,7 @@ app.MapScryExplorer(
 | `Route` | `/scry` | Sub-path the UI is served under. |
 | `QueryEndpoint` | `/api/query` | The `MapScry` endpoint the explorer POSTs to. Must match the mapped route. |
 | `EnableGuard` | `DevelopmentOnly` | Decides, per request, whether the explorer is reachable. |
+| `EnableSqlPreview` | `DevelopmentOnly` | Decides, per request, whether the [SQL preview](#sql-preview) is available. Separate from `EnableGuard` on purpose. |
 
 To expose it outside Development, replace the guard with a custom check:
 
@@ -77,6 +86,52 @@ app.MapScryExplorer(options =>
 ```
 
 When the guard returns false every explorer route returns **404**, not 403 — a disabled explorer is indistinguishable from one that was never mapped.
+
+
+## Working with a query
+
+Three things the explorer does with the query in the editor, beyond running it.
+
+**Share a link.** *Share* puts the query in the URL and copies the link. It rides in the **fragment** (`/scry/#q=…`), which browsers never send to the server — so a shared query cannot land in an access log, a proxy trace, or a referrer header on the way. Opening the link loads the query into the editor; a fragment that does not decode is ignored, and the explorer opens on its sample query rather than on an error.
+
+**Export the results.** *Export CSV* saves the result table as it is displayed — same columns, same order, RFC 4180 quoting, with a UTF-8 BOM so Excel reads non-ASCII values correctly.
+
+**See the SQL.** Covered next.
+
+
+## SQL preview
+
+*Show SQL* asks the server what the current query would run, **without running it**:
+
+```sql
+SELECT [e].[Name], [e].[Status]
+FROM [Employees] AS [e]
+WHERE [e].[Active] = CAST(1 AS bit)
+```
+
+The request is the same wire request *Run* would send, and the server puts it through the same pipeline — validation, the allow-list, [row policies](policies.md), the rebind onto EF — then reads the SQL back instead of executing. So nothing is previewable that would not have been runnable, and what is shown is the SQL that *would* run, policy predicates included.
+
+Two consequences worth knowing:
+
+- **Only a row-returning query has SQL to show.** A terminal (`CountAsync`, `FirstAsync`, `ToPageAsync`, …) is answered by executing it, so the server refuses one rather than running it behind a button labelled *preview*. Drop the terminal to see the SQL underneath. A [`[QueryablePoco]`](annotations.md) source has no SQL at all — its rows are supplied in memory.
+- **It is guarded separately, and defaults to Development-only.** SQL reveals more than the schema does: real table and column names, and the *shape* of any row policy that narrowed the query — a tenant filter or soft-delete rule is right there in the `WHERE`. Opening the explorer to someone therefore does not open this to them; `EnableSqlPreview` is its own decision:
+
+```cs
+app.MapScryExplorer(options =>
+{
+    options.EnableGuard = _ => _.User.IsInRole("admin");
+    // Still off for those admins unless this says otherwise.
+    options.EnableSqlPreview = _ => _.User.IsInRole("dba");
+});
+```
+
+When it is off the endpoint 404s like every other disabled route, and the UI does not offer the button — the introspection contract advertises the capability, so the explorer only shows what would work.
+
+The same preview is available programmatically, on any host with a `ScryProcessor`:
+
+```cs
+var sql = processor.ToQueryString(request, services);
+```
 
 
 ## Introspection
@@ -626,10 +681,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
     }
   ],
   QueryEndpoint: /api/query,
+  SqlPreview: false,
   SchemaStamp: mi7QhupBDNZpcBYb
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L542' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L543' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names, member names with the exact C# type spelling the source generator would emit, and the re-emitted enums. It carries **no** policies, resolvers, connection details, or CLR internals.
@@ -690,7 +746,7 @@ Only validated requests reach the server. The explorer is a convenience over the
 
 The UI is published and embedded as manifest resources inside the `Scry.Server.Explorer` assembly, so the package is fully self-contained: no static web assets manifest, no extra files to deploy, and nothing to configure beyond the route.
 
-Because the explorer reveals the complete queryable schema, leaving it mapped in production means publishing that schema to anyone who passes the guard. The Development-only default is deliberate.
+Because the explorer reveals the complete queryable schema, leaving it mapped in production means publishing that schema to anyone who passes the guard. The Development-only default is deliberate — and the [SQL preview](#sql-preview), which discloses more than the schema does, keeps a Development-only default of its own even when the explorer itself is opened up.
 
 
 ## Regenerating the screenshots
@@ -705,9 +761,13 @@ dotnet test samples/Sample.Tests --filter "FullyQualifiedName~ExplorerWalkthroug
 
 It prints the output directory. `1-loaded.png`, `2-intellisense.png`, `3-run.png`, `3b-count.png`, `4-hover.png`, and `5-dark.png` are captured; the two used here are `2-intellisense` and `3-run`.
 
+The browser lays the page out at **800** wide, which is the width the committed images are — captured at the target width rather than scaled down to it, since resampling would soften every glyph of the small monospace text these are mostly made of. The run capture's query is kept short enough to fit that width unscrolled, so the LINQ reads in full.
+
 Two post-processing steps are applied to each before committing:
 
 1. Trailing whitespace trimmed (the captures are full-page, so most of the height is blank).
 2. The empty interior of the Monaco editor box spliced out — it renders a fixed height regardless of how little code it holds.
+
+Both are easiest to find structurally rather than by eye: a band of vertically unchanging content is a run of byte-identical consecutive rows, which is exactly what the editor's empty interior and the trailing margin are.
 
 The frame around each image comes from an `<img border="1">` in the markdown rather than from the pixels. Note that a `style` attribute would not work here: GitHub's markdown sanitizer strips `style`, while `border` is on its allowed-attribute list.

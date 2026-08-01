@@ -306,6 +306,110 @@ public class UiSnapshotTests
         Assert.That(items, Does.Contain("CountAsync"));
     }
 
+    // The SQL pane: the server builds the query and reads its SQL back without executing it. The
+    // sample server runs in Development, which is what the preview's own guard defaults to.
+    [Test]
+    public async Task ExplorerShowsSql()
+    {
+        var page = await browser.NewPageAsync();
+        await page.GotoAsync($"{baseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+
+        await page.SetEditorValueAsync("Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name })");
+        await page.Locator("[data-testid='sql-preview']").ClickAsync();
+        await page.WaitForSelectorAsync("[data-testid='sql']", 30);
+
+        var sql = await page.Locator("[data-testid='sql']").InnerTextAsync();
+
+        Assert.That(sql, Does.Contain("SELECT"));
+        Assert.That(sql, Does.Contain("[Employees]"));
+        // The client's Where reached the SQL, so what is shown is this query rather than the table.
+        Assert.That(sql, Does.Contain("WHERE"));
+    }
+
+    // A shared link carries the query in the fragment, so it survives a full reload — and a fragment
+    // is never sent to the server, which is why the query goes there rather than in the query string.
+    [Test]
+    public async Task ExplorerSharesAQueryByLink()
+    {
+        var page = await browser.NewPageAsync();
+        await page.GotoAsync($"{baseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+
+        const string query = "Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name })";
+        await page.SetEditorValueAsync(query);
+        await page.Locator("[data-testid='share']").ClickAsync();
+
+        var shared = await page.EvaluateAsync<string>("() => location.href");
+        Assert.That(shared, Does.Contain("#q="));
+
+        // A fresh load of the shared link, not a fragment change on the running app: a hash-only
+        // navigation would leave the editor as it is and prove nothing.
+        var opened = await browser.NewPageAsync();
+        await opened.GotoAsync(shared);
+        await opened.WaitForSelectorAsync(".monaco-editor", 30);
+        await opened.WaitForFunctionAsync(
+            "() => monaco.editor.getEditors().length > 0 && monaco.editor.getEditors()[0].getValue().length > 0",
+            null,
+            new() {Timeout = 30_000});
+
+        var restored = await opened.EvaluateAsync<string>("() => monaco.editor.getEditors()[0].getValue()");
+        Assert.That(restored, Is.EqualTo(query));
+    }
+
+    // A link whose fragment is not a query the explorer wrote is ignored rather than surfaced: a URL
+    // is untrusted input, and the explorer opens on its sample query instead of on an error.
+    [Test]
+    public async Task ExplorerIgnoresAMalformedShareLink()
+    {
+        var page = await browser.NewPageAsync();
+        await page.GotoAsync($"{baseUrl}/scry/#q=!!!not-base64!!!");
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForFunctionAsync(
+            "() => monaco.editor.getEditors().length > 0 && monaco.editor.getEditors()[0].getValue().length > 0",
+            null,
+            new() {Timeout = 30_000});
+
+        var value = await page.EvaluateAsync<string>("() => monaco.editor.getEditors()[0].getValue()");
+
+        Assert.That(value, Does.StartWith("Query.Employee.Where"));
+        Assert.That(await page.Locator("[data-testid='error']").CountAsync(), Is.Zero);
+    }
+
+    // The result table exports as CSV. The download itself is the browser's, so the test intercepts
+    // the interop call and asserts the payload the UI produced.
+    [Test]
+    public async Task ExplorerExportsResultsAsCsv()
+    {
+        var page = await browser.NewPageAsync();
+        await page.GotoAsync($"{baseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+
+        await page.SetEditorValueAsync("Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name, _.Status })");
+        await page.Locator("[data-testid='run']").ClickAsync();
+        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 30);
+
+        await page.EvaluateAsync(
+            """
+            () => {
+                window.__csv = null;
+                window.scry.download = (name, text, type) => window.__csv = { name, text, type };
+            }
+            """);
+        await page.Locator("[data-testid='csv']").ClickAsync();
+        await page.WaitForFunctionAsync("() => window.__csv !== null", null, new() {Timeout = 30_000});
+
+        var name = await page.EvaluateAsync<string>("() => window.__csv.name");
+        var text = await page.EvaluateAsync<string>("() => window.__csv.text");
+
+        Assert.That(name, Is.EqualTo("scry-result.csv"));
+        Assert.That(text, Does.StartWith("name,status"));
+        Assert.That(text, Does.Contain("Alice,FullTime"));
+    }
+
     // Proves the inline Monaco IntelliSense dropdown is wired to the Roslyn provider.
     [Test]
     public async Task ExplorerInlineSuggestions()
@@ -495,9 +599,12 @@ public class UiSnapshotTests
         var page = await browser.NewPageAsync(
             new()
             {
+                // 800 wide because that is the width the committed images are: laying the page out at
+                // the target width renders its text at native size, where scaling a wider capture down
+                // to fit would soften every glyph in it.
                 ViewportSize = new()
                 {
-                    Width = 1200,
+                    Width = 800,
                     Height = 1000
                 }
             });
@@ -543,9 +650,10 @@ public class UiSnapshotTests
         log.Add($"✓ IntelliSense dropdown: {string.Join(", ", suggest)}");
         await page.Keyboard.PressAsync("Escape");
 
-        // Run a complete query.
+        // Run a complete query. Kept short enough to fit the editor's width unscrolled, since this is
+        // the capture the docs use to show the LINQ a caller writes.
         await page.SetEditorValueAsync(
-            "Query.Employee.Where(_ => _.Active).OrderBy(_ => _.Name).Select(_ => new { _.Name, _.Status })");
+            "Query.Employee.Where(_ => _.Active).OrderBy(_ => _.Name).Select(_ => new { _.Name })");
         await page.Locator("[data-testid='run']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='result-table']", 60);
         await page.ScreenshotAsync(

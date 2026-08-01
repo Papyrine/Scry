@@ -21,6 +21,14 @@ public sealed class ScryExplorerOptions
     /// opts in explicitly (e.g. behind an admin authorization check).
     /// </summary>
     public Func<HttpContext, bool> EnableGuard { get; set; } = DevelopmentOnly;
+
+    /// <summary>
+    /// Decides, per request, whether the explorer will show the SQL a query would run. Also
+    /// Development-only by default, and deliberately separate from <see cref="EnableGuard"/>: SQL
+    /// reveals more than the schema does — real table and column names, and the shape of any row
+    /// policy that narrowed the query — so opening the explorer to someone does not open this too.
+    /// </summary>
+    public Func<HttpContext, bool> EnableSqlPreview { get; set; } = DevelopmentOnly;
     // end-snippet
 
     /// <summary>The default <see cref="EnableGuard"/>: enabled only in the Development environment.</summary>

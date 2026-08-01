@@ -30,12 +30,16 @@ public partial class App
     string themeMode = "system";
     bool resolvedDark;
     string? copied;
+    string? sqlText;
+    string? initialCode;
 
     const string HistoryKey = "scry-history";
+    const string SharePrefix = "#q=";
     List<string> history = [];
 
-    // Resolve the saved theme synchronously before the editor is created, so it is built with the
-    // correct Monaco theme (no light-flash). IJSInProcessRuntime is available on Blazor WASM.
+    // Resolve the saved theme and any shared query synchronously, before the editor is created: the
+    // theme has to be right at construction (no light-flash) and the editor takes its initial value
+    // from the same options object. IJSInProcessRuntime is available on Blazor WASM.
     protected override void OnInitialized()
     {
         if (JS is IJSInProcessRuntime js)
@@ -43,7 +47,130 @@ public partial class App
             themeMode = js.Invoke<string?>("localStorage.getItem", "scry-theme") ?? "system";
             resolvedDark = ResolveDark(js);
             js.InvokeVoid("scry.setDataTheme", themeMode);
+            initialCode = SharedQuery(js.Invoke<string?>("scry.hash"));
         }
+    }
+
+    /// <summary>
+    /// The query carried by a <c>#q=</c> fragment, or null. A shared link is untrusted input like any
+    /// other URL, so anything that does not decode is ignored rather than surfaced — the explorer opens
+    /// on its sample query instead of on an error.
+    /// </summary>
+    static string? SharedQuery(string? hash)
+    {
+        if (hash is null ||
+            !hash.StartsWith(SharePrefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        try
+        {
+            var encoded = Uri.UnescapeDataString(hash[SharePrefix.Length..]);
+            var padded = encoded.Replace('-', '+').Replace('_', '/');
+            // base64url drops the padding; Convert requires it.
+            padded = padded.PadRight(padded.Length + (3 - ((padded.Length + 3) % 4)), '=');
+            var code = Encoding.UTF8.GetString(Convert.FromBase64String(padded));
+            return code.Length == 0 ? null : code;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    // base64url of the UTF-8 text: URL-safe, unpadded, and stable across the round trip above.
+    static string Encode(string code) =>
+        Convert.ToBase64String(Encoding.UTF8.GetBytes(code))
+            .Replace('+', '-')
+            .Replace('/', '_')
+            .TrimEnd('=');
+
+    /// <summary>
+    /// Writes the current query into the URL fragment and copies the resulting link. The query rides in
+    /// the fragment rather than the query string so it is never sent to the server — a shared link
+    /// cannot land in an access log on the way.
+    /// </summary>
+    async Task Share()
+    {
+        var code = await editor.GetValue();
+        var url = await JS.InvokeAsync<string>("scry.setHash", SharePrefix + Encode(code));
+        await Copy(url, "share");
+    }
+
+    /// <summary>Downloads the result table as CSV — the rows as rendered, in their displayed order.</summary>
+    async Task DownloadCsv()
+    {
+        if (resultColumns is null ||
+            resultRows is null)
+        {
+            return;
+        }
+
+        var builder = new StringBuilder();
+        builder.AppendLine(string.Join(",", resultColumns.Select(Csv)));
+        foreach (var row in resultRows)
+        {
+            builder.AppendLine(string.Join(",", row.Select(Csv)));
+        }
+
+        await JS.InvokeVoidAsync("scry.download", "scry-result.csv", builder.ToString(), "text/csv;charset=utf-8");
+    }
+
+    // RFC 4180: a field containing a comma, a quote, or a newline is quoted, and quotes inside it are
+    // doubled. Everything else is written as-is.
+    static string Csv(string value)
+    {
+        if (value.IndexOfAny([',', '"', '\n', '\r']) < 0)
+        {
+            return value;
+        }
+
+        return $"\"{value.Replace("\"", "\"\"")}\"";
+    }
+
+    /// <summary>
+    /// Asks the server for the SQL the current query would run. The same translation Run uses produces
+    /// the request, so the SQL shown belongs to the query as written — and the server validates and
+    /// policy-filters it exactly as it would a real one before reading the SQL back.
+    /// </summary>
+    async Task ShowSql()
+    {
+        if (introspection is null || scryReferences is null)
+        {
+            return;
+        }
+
+        try
+        {
+            error = null;
+            sqlText = null;
+            var code = await editor.GetValue();
+            executor ??= SnippetExecutor.Create(introspection, scryReferences);
+            var json = ScryJson.Serialize(executor.Translate(code));
+
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+            using var response = await Http.PostAsync("sql", content);
+            var body = await response.Content.ReadAsStringAsync();
+
+            using var document = JsonDocument.Parse(body);
+            if (response.IsSuccessStatusCode)
+            {
+                sqlText = document.RootElement.GetProperty("sql").GetString();
+            }
+            else
+            {
+                error = document.RootElement.TryGetProperty("error", out var message)
+                    ? message.GetString()
+                    : body;
+            }
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+        }
+
+        StateHasChanged();
     }
 
     protected override async Task OnInitializedAsync()
@@ -76,6 +203,7 @@ public partial class App
             resultColumns = null;
             resultRows = null;
             scalarResult = null;
+            sqlText = null;
             var code = await editor.GetValue();
             executor ??= SnippetExecutor.Create(introspection, scryReferences);
             var request = executor.Translate(code);
@@ -120,7 +248,7 @@ public partial class App
     StandaloneEditorConstructionOptions EditorOptions(StandaloneCodeEditor _) => new()
     {
         Language = "csharp",
-        Value = Sample,
+        Value = initialCode ?? Sample,
         AutomaticLayout = true,
         Theme = resolvedDark ? "vs-dark" : "vs",
         Minimap = new EditorMinimapOptions { Enabled = false }

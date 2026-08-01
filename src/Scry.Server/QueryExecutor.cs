@@ -91,9 +91,25 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             ? Shape(ExpressionBuilder.ReadDistinctRow(row, set.Plan.Shape.Count), set.Plan)
             : Shape((object[])row, set.Plan);
 
+    /// <summary>
+    /// Builds a request into its EF query without executing it — for reading back the SQL it would
+    /// run. A terminal folds the rows to a value the database has to be asked for, so a request
+    /// carrying one is refused rather than run: a preview that executed would not be one.
+    /// </summary>
+    public RowSet Build(QueryRequest request, DbContext db, CallScope scope)
+    {
+        var (_, rows) = Run(request, db, scope, buildOnly: true);
+        if (rows is { } set)
+        {
+            return set;
+        }
+
+        throw new ScryValidationException("The query produced no rows to read SQL from.");
+    }
+
     // Walks the pipeline once and either produces a finished response — every terminal does — or the
     // unread rows of a list result, which the caller materializes or streams.
-    (QueryResponse? Response, RowSet? Rows) Run(QueryRequest request, DbContext db, CallScope scope)
+    (QueryResponse? Response, RowSet? Rows) Run(QueryRequest request, DbContext db, CallScope scope, bool buildOnly = false)
     {
         var source = validator.Validate(request);
         var elementType = source.ClrType;
@@ -229,6 +245,17 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                     terminal = op;
                     break;
             }
+        }
+
+        // Checked here, against the terminal the loop above already identified, rather than by
+        // re-deciding what a terminal is: this is the last point before one would be executed, and
+        // reading it off the executor's own classification is what keeps the two from drifting.
+        if (buildOnly &&
+            terminal is not null)
+        {
+            var name = terminal.GetType().Name.Replace("Op", "");
+            throw new ScryValidationException(
+                $"SQL can only be shown for a query that returns rows; this one ends in {name}, which the database answers rather than lists. Drop the terminal to see the SQL underneath it.");
         }
 
         // Every terminal predicate narrows the rows before anything else the terminal does, so they are

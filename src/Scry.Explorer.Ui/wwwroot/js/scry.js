@@ -19,5 +19,33 @@ window.scry = {
         } catch (e) {
             console.warn('scry: copy failed', e);
         }
+    },
+    // The URL fragment, which is where a shared query is carried. A fragment is never sent to the
+    // server, so sharing a link cannot log the query into an access log on the way.
+    hash: function () {
+        return window.location.hash;
+    },
+    // Rewrite the fragment without navigating and without pushing a history entry — sharing the
+    // current query should not put a back-button step between the user and their previous one.
+    setHash: function (value) {
+        history.replaceState(null, '', value);
+        return window.location.href;
+    },
+    // Save text as a file. The BOM is what makes Excel read the UTF-8 as UTF-8 rather than as the
+    // local codepage, which otherwise mangles any non-ASCII value in an exported column.
+    download: function (name, text, type) {
+        try {
+            const blob = new Blob(['\ufeff' + text], { type: type });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = name;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            console.warn('scry: download failed', e);
+        }
     }
 };

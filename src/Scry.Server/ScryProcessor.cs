@@ -113,6 +113,54 @@ public sealed class ScryProcessor
         }
     }
 
+    /// <summary>
+    /// The SQL a request would run, without running it. Resolves the <see cref="DbContext"/> from
+    /// <paramref name="services"/>.
+    /// </summary>
+    public string ToQueryString(QueryRequest request, IServiceProvider services) =>
+        ToQueryString(request, (DbContext)services.GetRequiredService(options.ContextType), services);
+
+    /// <summary>The SQL a request would run, without running it.</summary>
+    public string ToQueryString(QueryRequest request, DbContext data, IServiceProvider services) =>
+        ToQueryString(request, data, services, new HeaderDictionary(), new HeaderDictionary());
+
+    /// <summary>
+    /// Validates a request, applies its row policies, rebinds it onto EF — then reads back the SQL
+    /// instead of executing it. Everything a query is subject to has already happened, so the SQL shown
+    /// is the SQL that would run, policy predicates included, and no request survives here that would
+    /// have been rejected as a query.
+    /// </summary>
+    /// <remarks>
+    /// This is a debugging aid, and the SQL reveals more than a result does — real table and column
+    /// names, and the shape of any <see cref="IReturnablePolicy{T}"/> that narrowed the query. Treat it
+    /// as privileged: the explorer keeps it behind a Development-only guard of its own.
+    /// <para>
+    /// Only a row-returning query has SQL to show. A terminal that folds the rows to a value is
+    /// answered by executing it, so one is refused rather than run.
+    /// </para>
+    /// </remarks>
+    public string ToQueryString(
+        QueryRequest request,
+        DbContext data,
+        IServiceProvider services,
+        IHeaderDictionary requestHeaders,
+        IHeaderDictionary responseHeaders)
+    {
+        var rows = executor.Build(request, data, new(services, requestHeaders, responseHeaders));
+
+        // Checked before asking, not after: EF's ToQueryString decides by executing the query and
+        // inspecting what comes back, and for an in-memory source that means actually running it. It
+        // then reports the mismatch by *returning* an explanatory sentence rather than throwing, which
+        // would otherwise be handed back as though it were SQL.
+        if (rows.Rows.Provider is not IAsyncQueryProvider)
+        {
+            throw new ScryValidationException(
+                $"No SQL is available for source '{request.Root}': it is not backed by the database (a [QueryablePoco] source is supplied in memory).");
+        }
+
+        return rows.Rows.ToQueryString();
+    }
+
     /// <summary>Validates and executes a batch without a service provider (no DI-resolved policies).</summary>
     public QueryBatchResponse ExecuteBatch(QueryBatchRequest request, DbContext data) =>
         ExecuteBatch(request, data, EmptyServiceProvider.Instance);

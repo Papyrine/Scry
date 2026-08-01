@@ -36,8 +36,16 @@ public string QueryEndpoint { get; set; } = "/api/query";
 /// opts in explicitly (e.g. behind an admin authorization check).
 /// </summary>
 public Func<HttpContext, bool> EnableGuard { get; set; } = DevelopmentOnly;
+
+/// <summary>
+/// Decides, per request, whether the explorer will show the SQL a query would run. Also
+/// Development-only by default, and deliberately separate from <see cref="EnableGuard"/>: SQL
+/// reveals more than the schema does — real table and column names, and the shape of any row
+/// policy that narrowed the query — so opening the explorer to someone does not open this too.
+/// </summary>
+public Func<HttpContext, bool> EnableSqlPreview { get; set; } = DevelopmentOnly;
 ```
-<sup><a href='/src/Scry.Server.Explorer/ScryExplorerOptions.cs#L10-L24' title='Snippet source file'>snippet source</a> | <a href='#snippet-explorerOptions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.Explorer/ScryExplorerOptions.cs#L10-L32' title='Snippet source file'>snippet source</a> | <a href='#snippet-explorerOptions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Docs: [Query explorer](https://github.com/Papyrine/Scry/blob/main/docs/explorer.md)

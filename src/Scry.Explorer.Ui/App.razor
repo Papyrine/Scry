@@ -23,6 +23,13 @@
             title="Translate the query to a wire request and run it against the server (Ctrl+Enter).">Run</button>
     <button data-testid="complete" @onclick="Complete" disabled="@(workspace is null)"
             title="Lists every C# completion available at the end of the query text — the same Roslyn engine as the inline IntelliSense dropdown, shown here as a list. Ignores the cursor position.">Complete at end</button>
+    @if (introspection?.SqlPreview == true)
+    {
+        <button data-testid="sql-preview" @onclick="ShowSql"
+                title="Show the SQL this query would run, without running it. Validated and policy-filtered exactly as a real query is.">Show SQL</button>
+    }
+    <button data-testid="share" @onclick="Share"
+            title="Put this query in the URL and copy the link. The query rides in the fragment, so it is never sent to the server.">@(copied == "share" ? "✓ Link copied" : "Share")</button>
     @if (workspace is null && error is null)
     {
         <span class="muted">Loading schema…</span>
@@ -51,9 +58,22 @@
     <pre data-testid="wire">@wireJson</pre>
 }
 
+@if (sqlText is not null)
+{
+    <div class="pane-head">
+        <h3>SQL</h3>
+        <button class="icon-btn" @onclick='() => Copy(sqlText!, "sql")'>@(copied == "sql" ? "✓ Copied" : "Copy")</button>
+    </div>
+    <pre data-testid="sql">@sqlText</pre>
+}
+
 @if (resultColumns is not null)
 {
-    <h3>Result</h3>
+    <div class="pane-head">
+        <h3>Result</h3>
+        <button class="icon-btn" data-testid="csv" @onclick="DownloadCsv"
+                title="Download these rows as CSV.">Export CSV</button>
+    </div>
     <table data-testid="result-table">
         <thead>
             <tr>@foreach (var column in resultColumns) { <th>@column</th> }</tr>

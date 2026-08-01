@@ -387,4 +387,5 @@ app.MapScry("/api/query")
 - [ ] The query endpoint requires authentication/authorization.
 - [ ] `MaxPageSize` matches what the UI actually needs.
 - [ ] The [explorer](explorer.md) is either unmapped or behind a real guard in production.
+- [ ] If the explorer is exposed to anyone in production, its [SQL preview](explorer.md#sql-preview) is left off — the SQL discloses real table and column names and the shape of every row policy.
 - [ ] Rate limiting and a database command timeout are configured.
