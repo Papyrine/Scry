@@ -1,4 +1,6 @@
-﻿/// <summary>
+﻿using System.Collections.ObjectModel;
+
+/// <summary>
 /// Translates a captured LINQ expression tree into the wire AST. Supports the closed operator set;
 /// anything outside it throws a clear <see cref="NotSupportedException"/> at translation time.
 /// </summary>
@@ -988,7 +990,10 @@ sealed class QueryTranslator
         if (value is not ConstNode)
         {
             throw new NotSupportedException(
-                "Contains over a collection the row holds takes a constant. The test is evaluated against the collection's elements, and the row that owns them is not in scope there.");
+                """
+                Contains over a collection the row holds takes a constant.
+                The test is evaluated against the collection's elements, and the row that owns them is not in scope there.
+                """);
         }
 
         return new(
@@ -1054,10 +1059,15 @@ sealed class QueryTranslator
     }
 
     // The params overloads pass their arguments as a single constructed array.
-    static IReadOnlyList<Expression> ConcatArguments(MethodCallExpression call) =>
-        call.Arguments is [NewArrayExpression array]
-            ? array.Expressions
-            : [..call.Arguments];
+    static IReadOnlyList<Expression> ConcatArguments(MethodCallExpression call)
+    {
+        if (call.Arguments is [NewArrayExpression array])
+        {
+            return array.Expressions;
+        }
+
+        return (ReadOnlyCollection<Expression>) [.. call.Arguments];
+    }
 
     /// <summary>
     /// Splits a format string into its literal runs and holes. A hole carrying alignment or a format
@@ -1253,12 +1263,12 @@ sealed class QueryTranslator
 
     static IEnumerable<Node> SetConstants(Expression set)
     {
-        if (Evaluate(set) is not IEnumerable values)
+        if (Evaluate(set) is IEnumerable values)
         {
-            throw new NotSupportedException("The Contains set must be a collection of values.");
+            return values.Cast<object?>().Select(ConstantOf);
         }
 
-        return values.Cast<object?>().Select(ConstantOf);
+        throw new NotSupportedException("The Contains set must be a collection of values.");
     }
 
     static bool IsGrouping(Type type) =>

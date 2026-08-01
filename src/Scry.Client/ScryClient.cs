@@ -193,7 +193,11 @@ public sealed class ScryClient
             return stream(request, call, cancel);
         }
 
-        throw new NotSupportedException("This client's transport does not stream. Use ToListAsync, or construct the client with a stream transport (ScryClient.ForHttp does).");
+        throw new NotSupportedException(
+            """
+            This client's transport does not stream.
+            Use ToListAsync, or construct the client with a stream transport (ScryClient.ForHttp does).
+            """);
     }
 
     /// <summary>
