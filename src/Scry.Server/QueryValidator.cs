@@ -1061,6 +1061,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         }
     }
 
+    // ReSharper disable TailRecursiveCall
     // One level only. A membership test costs a subquery; nesting them multiplies that per row, and
     // the depth limit alone does not bound it meaningfully — the same reasoning as for subqueries.
     static void EnsureNoNestedSource(Node node)
@@ -1091,6 +1092,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 break;
         }
     }
+    // ReSharper restore TailRecursiveCall
 
     string? Collation(StringMatch match) =>
         match switch

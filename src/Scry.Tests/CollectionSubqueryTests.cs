@@ -21,7 +21,7 @@ public class CollectionSubqueryTests
         // Only the first order has a line priced at 25.
         var rows = await client.Source<Order>("Order")
             .Where(_ => _.Lines.Any(l => l.Price == 25m))
-            .Select(_ => new OrderRow(_.Region, _.Lines.Count()))
+            .Select(_ => new OrderRow(_.Region, _.Lines.Count))
             .ToListAsync();
 
         Assert.That(rows.Single().Lines, Is.EqualTo(2));
@@ -59,7 +59,7 @@ public class CollectionSubqueryTests
 
         var rows = await client.Source<Order>("Order")
             .OrderBy(_ => _.Id)
-            .Select(_ => new OrderRow(_.Region, _.Lines.Count()))
+            .Select(_ => new OrderRow(_.Region, _.Lines.Count))
             .ToListAsync();
 
         Assert.That(rows.Select(_ => _.Lines), Is.EqualTo([2, 1, 0]));
@@ -100,7 +100,7 @@ public class CollectionSubqueryTests
 
         var rows = await client.Source<Order>("Order")
             .OrderBy(_ => _.Id)
-            .Select(_ => new OrderRow(_.Region, _.Lines.Where(l => l.Quantity > 1).Count()))
+            .Select(_ => new OrderRow(_.Region, _.Lines.Count(l => l.Quantity > 1)))
             .ToListAsync();
 
         Assert.That(rows.Select(_ => _.Lines), Is.EqualTo([1, 1, 0]));
@@ -129,7 +129,7 @@ public class CollectionSubqueryTests
         // The South order has no lines; the selected value is made nullable so SQL's NULL survives.
         var rows = await client.Source<Order>("Order")
             .Where(_ => _.Region == "South")
-            .Select(_ => new OrderRow(_.Region, _.Lines.Count()))
+            .Select(_ => new OrderRow(_.Region, _.Lines.Count))
             .ToListAsync();
 
         Assert.That(rows.Single().Lines, Is.Zero);

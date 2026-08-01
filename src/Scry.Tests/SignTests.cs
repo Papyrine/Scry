@@ -83,7 +83,7 @@ public class SignTests
 
         var rows = await client.Source<Order>("Order")
             .Where(_ => _.Amount == 75m)
-            .Select(_ => new {Sign = Math.Sign((double)_.Quantity - 5d)})
+            .Select(_ => new {Sign = Math.Sign(_.Quantity - 5d)})
             .ToListAsync();
 
         Assert.That(rows.Single().Sign, Is.EqualTo(-1));

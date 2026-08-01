@@ -128,7 +128,7 @@ public class CollationTests
                 new(_.Department!.Name, _.Department!.Name.Contains("Eng", StringComparison.OrdinalIgnoreCase))))
             .ToScryRequest();
 
-        Assert.That(CollatedPathIn(request, "Matches"), Is.EqualTo(new[] {"Name"}));
+        Assert.That(CollatedPathIn(request, "Matches"), Is.EqualTo(["Name"]));
     }
 
     [Test]
@@ -147,8 +147,8 @@ public class CollationTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(Nested(request).Path, Is.EqualTo(new[] {"Department"}));
-            Assert.That(CollatedPathIn(request, "Matches"), Is.EqualTo(new[] {"Name"}));
+            Assert.That(Nested(request).Path, Is.EqualTo(["Department"]));
+            Assert.That(CollatedPathIn(request, "Matches"), Is.EqualTo(["Name"]));
         });
     }
 

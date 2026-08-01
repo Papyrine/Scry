@@ -436,7 +436,7 @@ public class ExpandedOperatorTests
         IQueryable<Order> Orders() => client.Source<Order>("Order");
 
         var bySqrt = await Orders().CountAsync(_ => Math.Sqrt((double)_.Amount) > 15d);
-        var byPow = await Orders().CountAsync(_ => Math.Pow((double)_.Quantity, 2d) == 49d);
+        var byPow = await Orders().CountAsync(_ => Math.Pow(_.Quantity, 2d) == 49d);
         var byTruncate = await Orders().CountAsync(_ => Math.Truncate(_.Amount / 3) == 33m);
 
         var byAbs = await Orders().CountAsync(_ => Math.Abs(_.Amount) == 75m);

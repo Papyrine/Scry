@@ -72,7 +72,7 @@ public class PrimitiveCollectionTests
 
         var rows = await client.Source<Order>("Order")
             .OrderBy(_ => _.Id)
-            .Select(_ => new TagRow(_.Region, _.Tags.Count()))
+            .Select(_ => new TagRow(_.Region, _.Tags.Count))
             .ToListAsync();
 
         Assert.That(rows.Select(_ => _.Tags), Is.EqualTo([2, 1, 0]));

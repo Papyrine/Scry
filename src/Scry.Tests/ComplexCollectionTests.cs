@@ -35,7 +35,7 @@ public class ComplexCollectionTests
 
         var rows = await client.Source<Employee>("Employee")
             .OrderBy(_ => _.Name)
-            .Select(_ => new EmployeeRow(_.Name, _.PreviousAddresses.Count()))
+            .Select(_ => new EmployeeRow(_.Name, _.PreviousAddresses.Count))
             .ToListAsync();
 
         // Aaron's array is empty, which counts as zero rather than faulting.
