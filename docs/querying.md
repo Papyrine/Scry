@@ -207,7 +207,7 @@ await foreach (var row in query.Employee
     names.Add(row.Name);
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L138-L148' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientStream' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L160-L170' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientStream' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Neither side holds the whole result: the server never buffers the rows and the client yields each as it is read. That makes it the right terminal for a result too large to sit in memory comfortably, and unnecessary for one that is not — a small result costs an extra round-trip's worth of framing for nothing.
@@ -760,6 +760,52 @@ var rows = await client.Source<Order>("Order")
 A `Where` may precede any of them — `_.Items.Where(i => i.Active).Count()` — and folds into the subquery's own filter.
 
 The result is always a **scalar**, so a subquery can appear anywhere a value can: a predicate, an ordering key, a projection leaf, an aggregate selector. What it cannot do is return rows. A collection is never projectable, never traversable in a member path (`_.Items.Name` is rejected), and a subquery may not appear inside another subquery — the cost is per-row and would compound. Inside the subquery, the predicate and selector read the collection's *element*, against that type's own allow-list.
+
+A collection of a [`[QueryableComplex]`](annotations.md#queryablecomplex) type — a **JSON array of value objects** — is asked the same questions in the same way:
+
+<!-- snippet: clientComplexCollectionSubquery -->
+<a id='snippet-clientComplexCollectionSubquery'></a>
+```cs
+var count = await client.Source<Employee>("Employee")
+    .CountAsync(_ => _.PreviousAddresses.Any(address => address.City == "Berlin"));
+```
+<sup><a href='/src/Scry.Tests/ComplexCollectionTests.cs#L21-L24' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientComplexCollectionSubquery' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Nothing about the storage reaches the wire: the request is a `subquery` node over a member path, identical to one over a collection navigation, and the server rebinds it onto EF, which answers it against the JSON column. The same holds for [flattening](#flattening-a-collection) one.
+
+#### Collections of values
+
+An [EF primitive collection](annotations.md#collections-of-values) — `List<string>`, `int[]`, a collection of an enum — holds **values rather than rows**. Its elements have no members, so a question reads the element itself:
+
+<!-- snippet: clientPrimitiveCollectionContains -->
+<a id='snippet-clientPrimitiveCollectionContains'></a>
+```cs
+var rows = await client.Source<Order>("Order")
+    .Where(_ => _.Tags.Contains("urgent"))
+    .Select(_ => new {_.Region})
+    .ToListAsync();
+```
+<sup><a href='/src/Scry.Tests/PrimitiveCollectionTests.cs#L22-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientPrimitiveCollectionContains' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+`Contains` is the common case and means what `Any(_ => _ == value)` does. Anything else that can be said about a scalar can be said about the element — `_.Tags.Any(tag => tag.StartsWith("ex"))`, `_.Tags.All(tag => tag != "urgent")` — and an aggregate with no selector folds the elements themselves:
+
+<!-- snippet: clientPrimitiveCollectionAggregate -->
+<a id='snippet-clientPrimitiveCollectionAggregate'></a>
+```cs
+var rows = await client.Source<Order>("Order")
+    .OrderBy(_ => _.Id)
+    .Select(_ => new ScoreRow(_.Region, _.Scores.Sum(), _.Scores.Max()))
+    .ToListAsync();
+```
+<sup><a href='/src/Scry.Tests/PrimitiveCollectionTests.cs#L87-L92' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientPrimitiveCollectionAggregate' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+On the wire the element is an [`element` node](wire-format.md#element), which is only valid inside a subquery over a collection of values. Two limits follow from a value not being a row:
+
+- **The owning row is not in scope inside the subquery.** `_.Tags.Contains(_.Region)` is refused where it is written — the test is evaluated against the elements, and correlating with the row that holds them is not expressible.
+- **It cannot be flattened.** `SelectMany` over it is rejected: the rows it would produce are bare values, and every operator after a flatten names members of the row it reads.
 
 #### Narrowing to a derived type
 

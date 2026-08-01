@@ -62,9 +62,15 @@ public class Order
     public int Id { get; set; }
     public string Region { get; set; } = "";
     public decimal Amount { get; set; }
+
+    // A collection of values, which EF stores as a JSON column. Present in the sample so the round-trip
+    // tests cover one end to end: the generator spells its element from the model DLL and the server
+    // spells it from reflection, and the two stamps only agree if they agree about this member.
+    [QueryableCollection]
+    public List<string> Tags { get; set; } = [];
 }
 ```
-<sup><a href='/samples/Sample.Model/Entities/Order.cs#L3-L11' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableOrder' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Model/Entities/Order.cs#L3-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableOrder' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: queryableView -->
@@ -308,12 +314,12 @@ fullTimers = await Query
   {
     RequestUri: http://localhost/api/query,
     RequestMethod: POST,
-    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"node","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"kvjmqYpUM4vid96H"},
+    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"node","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"SEJsUtm-XMA5VNZu"},
     ResponseStatus: OK 200,
     ResponseHeaders: {
-      Scry-Schema-Stamp: kvjmqYpUM4vid96H
+      Scry-Schema-Stamp: SEJsUtm-XMA5VNZu
     },
-    ResponseContent: {"version":1,"kind":"List","payload":[{"name":"Aaron","status":"FullTime","manager":"Alice","department":"Engineering"},{"name":"Alice","status":"FullTime","manager":null,"department":"Engineering"},{"name":"Carol","status":"Contractor","manager":null,"department":"Sales"}],"stamp":"kvjmqYpUM4vid96H"}
+    ResponseContent: {"version":1,"kind":"List","payload":[{"name":"Aaron","status":"FullTime","manager":"Alice","department":"Engineering"},{"name":"Alice","status":"FullTime","manager":null,"department":"Engineering"},{"name":"Carol","status":"Contractor","manager":null,"department":"Sales"}],"stamp":"SEJsUtm-XMA5VNZu"}
   }
 ]
 ```
@@ -357,5 +363,5 @@ public async Task DisallowedPropertyRejectedWith400()
     Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L210-L237' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L232-L259' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->

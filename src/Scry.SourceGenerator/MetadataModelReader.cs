@@ -193,6 +193,19 @@ static class MetadataModelReader
                     NeedsNullDefault: true,
                     IsCollection: true);
 
+            // A collection of values — an EF primitive collection. The element is classified as if it
+            // were a member's own type, which is what keeps its spelling (and any enum it reaches)
+            // identical to the scalar case, as Schema.ScalarShape does on the reflection side.
+            case CollectionDecoded collection
+                when collectionOptIn &&
+                     Classify(reader, collection.Element, modelByFullName, enums, collectionOptIn: false) is
+                         {IsNavigation: false, IsCollection: false} scalarElement:
+                return new(
+                    "",
+                    $"global::System.Collections.Generic.IReadOnlyList<{scalarElement.TypeDisplay}>",
+                    NeedsNullDefault: true,
+                    IsCollection: true);
+
             default:
                 return null;
         }

@@ -19,7 +19,7 @@ For usage detail on the supported surface (position rules, limits, examples), se
 | `Skip(n)` / `Take(n)` | `Take` capped by `MaxPageSize`. |
 | `Select(projection)` | At most one; must construct an object. |
 | `OfType<T>()` | Narrows to a derived type that is allow-listed in its own right; later operators read it. |
-| `SelectMany(collection)` | Flattens a `[QueryableCollection]`; one per query, and later operators read the element. |
+| `SelectMany(collection)` | Flattens a `[QueryableCollection]` of rows; one per query, and later operators read the element. A collection of values cannot be flattened. |
 | `GroupBy(key)` | One key, or up to eight members grouped at once; each a member or an expression computed from the row. Must be followed by a `Select`. |
 | `Distinct()` | Deduplicates the projected rows; can also be ordered, paged and counted over a flat projection of up to eight members. |
 | `Reverse()` | Inverts the ordering; requires a preceding `OrderBy`, as EF does. |
@@ -34,7 +34,9 @@ For usage detail on the supported surface (position rules, limits, examples), se
 
 ### Collection subqueries
 
-A collection navigation opted in with [`[QueryableCollection]`](annotations.md#collections) is **aggregable, not projectable**: `Any`, `All`, `Count`, `Sum`, `Average`, `Min`, `Max` over it, answered as a correlated subquery, in any position a value can appear. Its rows can never be enumerated, so a response never carries a nested collection. See [collection subqueries](querying.md#collection-subqueries).
+A collection opted in with [`[QueryableCollection]`](annotations.md#collections) is **aggregable, not projectable**: `Any`, `All`, `Count`, `Sum`, `Average`, `Min`, `Max` over it, answered as a correlated subquery, in any position a value can appear. Its rows can never be enumerated, so a response never carries a nested collection. See [collection subqueries](querying.md#collection-subqueries).
+
+A collection of **values** — an EF primitive collection, or a JSON array of `[QueryableComplex]` value objects — answers the same set. For a collection of values the element has no members, so the predicate and selector read the element itself, and `Contains` is available as the `Any(_ => _ == value)` it stands for. See [collections of values](querying.md#collections-of-values).
 
 ### Terminals
 

@@ -85,7 +85,7 @@ sealed class QueryTranslator
             case "SelectMany" when call.Arguments.Count == 2:
                 var flatten = Lambda(call.Arguments[1]);
                 if (flatten.Body is not MemberExpression collection ||
-                    !Rooted(collection, flatten.Parameters[0]))
+                    !IsRootedCollection(collection, flatten.Parameters[0]))
                 {
                     throw new NotSupportedException(
                         "SelectMany must name a collection on the row, as in '.SelectMany(_ => _.Lines)'.");
@@ -665,6 +665,13 @@ sealed class QueryTranslator
                 case ConstantExpression constant:
                     return ConstantOf(constant.Value);
 
+                // The lambda parameter read as a value rather than traversed: the element of a
+                // collection of values, which has no member to name. A parameter standing for a row is
+                // deliberately left out, so projecting or comparing a whole row still fails here rather
+                // than as a rejected request.
+                case ParameterExpression parameter when parameter == root && IsValue(parameter.Type):
+                    return new ElementNode();
+
                 case MethodCallExpression call:
                     return TranslateMethod(call, root);
 
@@ -870,6 +877,15 @@ sealed class QueryTranslator
     /// </summary>
     SubqueryNode? TrySubquery(MethodCallExpression call, ParameterExpression root)
     {
+        // Contains over a collection the row holds asks whether any element equals the value — the
+        // same question Any answers, and the only way to ask it of a collection of values, whose
+        // elements have no member to compare.
+        if (call.Method.Name == "Contains" &&
+            TryContainsOverCollection(call, root) is { } contains)
+        {
+            return contains;
+        }
+
         var function = call.Method.Name switch
         {
             "Any" => SubqueryFn.Any,
@@ -922,12 +938,92 @@ sealed class QueryTranslator
                 selector = TranslateExpr(argument.Body, argument.Parameters[0]);
             }
         }
+        else if (function is SubqueryFn.Sum or SubqueryFn.Average or SubqueryFn.Min or SubqueryFn.Max)
+        {
+            // Sum() and friends without a selector fold the elements themselves, which only a
+            // collection of values can be asked for — there is nothing else there to read.
+            selector = new ElementNode();
+        }
 
         return new(
             path,
             function.Value,
             predicate is null ? null : TranslateExpr(predicate.Body, predicate.Parameters[0]),
             selector);
+    }
+
+    /// <summary>
+    /// Translates <c>_.Tags.Contains("urgent")</c> — membership of a collection belonging to the row —
+    /// into an <c>Any</c> over its elements. Both the instance form (<c>List&lt;T&gt;.Contains</c>) and
+    /// the static form (<c>Enumerable.Contains</c>, which is what the generated model's
+    /// <c>IReadOnlyList&lt;T&gt;</c> binds to) arrive here. Returns null for the closure-set form,
+    /// <c>ids.Contains(_.Id)</c>, which is a different question and becomes a SQL <c>IN</c>.
+    /// </summary>
+    SubqueryNode? TryContainsOverCollection(MethodCallExpression call, ParameterExpression root)
+    {
+        Expression source;
+        Expression argument;
+        if (call.Object is null)
+        {
+            if (call.Arguments.Count != 2)
+            {
+                return null;
+            }
+
+            source = call.Arguments[0];
+            argument = call.Arguments[1];
+        }
+        else
+        {
+            if (call.Arguments.Count != 1)
+            {
+                return null;
+            }
+
+            source = call.Object;
+            argument = call.Arguments[0];
+        }
+
+        if (!IsRootedCollection(source, root))
+        {
+            return null;
+        }
+
+        var value = TranslateExpr(argument, root);
+        if (value is not ConstNode)
+        {
+            throw new NotSupportedException(
+                "Contains over a collection the row holds takes a constant. The test is evaluated against " +
+                "the collection's elements, and the row that owns them is not in scope there.");
+        }
+
+        return new(
+            MemberPath((MemberExpression) source),
+            SubqueryFn.Any,
+            new BinaryNode(BinaryOp.Equal, new ElementNode(), value),
+            null);
+    }
+
+    /// <summary>
+    /// Whether a type is one of the values a query reads directly, rather than a row whose members it
+    /// names. Mirrors the server's <c>Schema.IsScalar</c>: the two only have to agree about what makes
+    /// the lambda parameter itself readable, and a disagreement costs a rejected request rather than
+    /// anything worse.
+    /// </summary>
+    static bool IsValue(Type type)
+    {
+        var underlying = Nullable.GetUnderlyingType(type) ?? type;
+        return underlying.IsPrimitive ||
+               underlying.IsEnum ||
+               underlying == typeof(string) ||
+               underlying == typeof(decimal) ||
+               underlying == typeof(DateTime) ||
+               underlying == typeof(Date) ||
+               underlying == typeof(Time) ||
+               underlying == typeof(DateTimeOffset) ||
+               underlying == typeof(TimeSpan) ||
+               underlying == typeof(Guid) ||
+               underlying == typeof(byte[]);
     }
 
     // A member path rooted at the query parameter whose value is a collection — the shape the

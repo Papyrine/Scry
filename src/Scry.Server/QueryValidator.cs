@@ -615,7 +615,27 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     // navigations/complex types in the path are traversed by ResolvePath; only the leaf
                     // must be scalar. This rejects e.g. a bare navigation or complex member compared to
                     // a constant at validation, rather than letting it fault during execution.
+                    if (Schema.IsScalar(elementType))
+                    {
+                        // Reached inside a subquery over a collection of values, where the row is the
+                        // value itself. ResolvePath would report the element type as un-queryable,
+                        // which is true but says nothing about what to write instead.
+                        throw Reject(
+                            $"'{string.Join('.', member.Path)}' cannot be read here: the collection holds values, not rows, so its element has no members. Read the element itself.");
+                    }
+
                     ResolvePath(member.Path, elementType, requireScalar: true, "Member");
+                    break;
+
+                case ElementNode:
+                    // The row itself, which is only a value a query can read when it is a scalar —
+                    // inside a subquery over a collection of values. Anywhere else it would name a
+                    // whole entity.
+                    if (!Schema.IsScalar(elementType))
+                    {
+                        throw Reject("An element can only be read inside a subquery over a collection of values.");
+                    }
+
                     break;
 
                 case ConstNode:
@@ -823,8 +843,18 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             throw Reject($"'{string.Join('.', flatten.Path)}' is not a queryable collection.");
         }
 
-        return Schema.CollectionElement(member.Type) ??
-               throw Reject($"'{string.Join('.', flatten.Path)}' is not a collection.");
+        var element = Schema.CollectionElement(member.Type) ??
+                      throw Reject($"'{string.Join('.', flatten.Path)}' is not a collection.");
+
+        // A collection of values can be aggregated but not flattened: the rows it would produce are
+        // bare values, and every operator after the flatten — the projection above all — names members
+        // of the row it reads. Rejected here rather than left to fail as an un-queryable element type.
+        if (Schema.IsScalar(element))
+        {
+            throw Reject($"'{string.Join('.', flatten.Path)}' holds values rather than rows, so it cannot be flattened. Aggregate it instead.");
+        }
+
+        return element;
     }
 
     /// <summary>

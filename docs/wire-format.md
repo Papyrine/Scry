@@ -195,6 +195,7 @@ paging without an ordering would be slicing an order the deduplication never def
 ```cs
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(MemberNode), "member")]
+[JsonDerivedType(typeof(ElementNode), "element")]
 [JsonDerivedType(typeof(ConstNode), "const")]
 [JsonDerivedType(typeof(BinaryNode), "binary")]
 [JsonDerivedType(typeof(UnaryNode), "unary")]
@@ -207,7 +208,7 @@ paging without an ordering would be slicing an order the deduplication never def
 [JsonDerivedType(typeof(GroupKeyNode), "groupKey")]
 public abstract record Node;
 ```
-<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -218,6 +219,17 @@ public abstract record Node;
 ```
 
 A navigation path of allow-listed property names. Each segment is validated against the allow-list of the type reached so far; every non-final segment must be a reference navigation.
+
+
+### `element`
+
+```json
+{ "$type": "element" }
+```
+
+The element of the collection a `subquery` is reading — the counterpart of `member` for a [collection of **values**](querying.md#collection-subqueries) rather than of rows, whose elements have no member to name. `Tags.Any(_ => _ == "urgent")` is a `binary` over this and a `const`; `Scores.Sum()` is a `subquery` whose `selector` is this.
+
+Carries no payload, and is valid **only** where the row being read is a value. Anywhere else the server rejects it: it would otherwise name a whole row, which is not something a query may compare, order by, or project.
 
 
 ### `const`
@@ -754,12 +766,12 @@ Over HTTP, request and response look like this:
   {
     RequestUri: http://localhost/api/query,
     RequestMethod: POST,
-    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"node","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"kvjmqYpUM4vid96H"},
+    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"node","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"SEJsUtm-XMA5VNZu"},
     ResponseStatus: OK 200,
     ResponseHeaders: {
-      Scry-Schema-Stamp: kvjmqYpUM4vid96H
+      Scry-Schema-Stamp: SEJsUtm-XMA5VNZu
     },
-    ResponseContent: {"version":1,"kind":"List","payload":[{"name":"Aaron","status":"FullTime","manager":"Alice","department":"Engineering"},{"name":"Alice","status":"FullTime","manager":null,"department":"Engineering"},{"name":"Carol","status":"Contractor","manager":null,"department":"Sales"}],"stamp":"kvjmqYpUM4vid96H"}
+    ResponseContent: {"version":1,"kind":"List","payload":[{"name":"Aaron","status":"FullTime","manager":"Alice","department":"Engineering"},{"name":"Alice","status":"FullTime","manager":null,"department":"Engineering"},{"name":"Carol","status":"Contractor","manager":null,"department":"Sales"}],"stamp":"SEJsUtm-XMA5VNZu"}
   }
 ]
 ```

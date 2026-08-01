@@ -333,6 +333,13 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCollection: false
         },
         {
+          Name: PreviousAddresses,
+          TypeDisplay: global::System.Collections.Generic.IReadOnlyList<AddressQueryModel>,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: true
+        },
+        {
           Name: Status,
           TypeDisplay: Status,
           NeedsNullDefault: false,
@@ -406,6 +413,13 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCollection: false
         },
         {
+          Name: Priorities,
+          TypeDisplay: global::System.Collections.Generic.IReadOnlyList<Priority>,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: true
+        },
+        {
           Name: Quantity,
           TypeDisplay: uint,
           NeedsNullDefault: false,
@@ -420,11 +434,25 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCollection: false
         },
         {
+          Name: Scores,
+          TypeDisplay: global::System.Collections.Generic.IReadOnlyList<int>,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: true
+        },
+        {
           Name: Sku,
           TypeDisplay: ulong,
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false
+        },
+        {
+          Name: Tags,
+          TypeDisplay: global::System.Collections.Generic.IReadOnlyList<string>,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: true
         }
       ]
     },
@@ -582,6 +610,13 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
   ],
   Enums: [
     {
+      Name: Priority,
+      Values: [
+        Low,
+        High
+      ]
+    },
+    {
       Name: Status,
       Values: [
         FullTime,
@@ -591,10 +626,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
     }
   ],
   QueryEndpoint: /api/query,
-  SchemaStamp: PyMVU6yBhTV2qnT2
+  SchemaStamp: mi7QhupBDNZpcBYb
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L507' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L542' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names, member names with the exact C# type spelling the source generator would emit, and the re-emitted enums. It carries **no** policies, resolvers, connection details, or CLR internals.

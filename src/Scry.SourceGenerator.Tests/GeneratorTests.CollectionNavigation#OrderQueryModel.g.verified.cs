@@ -11,4 +11,7 @@ public class OrderQueryModel
     public int Id { get; init; }
     public string Region { get; init; } = null!;
     public global::System.Collections.Generic.IReadOnlyList<OrderLineQueryModel> Lines { get; init; } = null!;
+    public global::System.Collections.Generic.IReadOnlyList<string> Codes { get; init; } = null!;
+    public global::System.Collections.Generic.IReadOnlyList<int?> Scores { get; init; } = null!;
+    public global::System.Collections.Generic.IReadOnlyList<Grade> Grades { get; init; } = null!;
 }

@@ -38,6 +38,7 @@ public abstract record QueryOp;
 ```cs
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(MemberNode), "member")]
+[JsonDerivedType(typeof(ElementNode), "element")]
 [JsonDerivedType(typeof(ConstNode), "const")]
 [JsonDerivedType(typeof(BinaryNode), "binary")]
 [JsonDerivedType(typeof(UnaryNode), "unary")]
@@ -50,7 +51,7 @@ public abstract record QueryOp;
 [JsonDerivedType(typeof(GroupKeyNode), "groupKey")]
 public abstract record Node;
 ```
-<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Referenced by `Scry.Client` and `Scry.Server`; it is rarely used directly.

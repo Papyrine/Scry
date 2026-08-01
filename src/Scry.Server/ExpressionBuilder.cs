@@ -521,6 +521,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
             AggregateNode aggregate when IsGrouping(row.Type) =>
                 BuildAggregate(aggregate, (ParameterExpression)row, row.Type.GetGenericArguments()[1]),
             MemberNode member => BuildMemberAccess(row, member.Path),
+            ElementNode => BuildElement(row),
             ConstNode constant => BuildConstant(constant, expected),
             BinaryNode binary => BuildBinary(binary, row),
             UnaryNode unary => BuildUnary(unary, row),
@@ -531,6 +532,25 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
             InSourceNode inSource => BuildInSource(inSource, row),
             _ => throw new ScryValidationException($"Unsupported expression '{node.GetType().Name}'.")
         };
+
+    /// <summary>
+    /// Reads the row itself, which is what an element node names inside a subquery over a collection of
+    /// values. No CLR type is introduced — the expression is the parameter the caller already built.
+    /// </summary>
+    /// <remarks>
+    /// The validator has already refused an element node anywhere the row is not a value; the check is
+    /// repeated because this is the one node whose meaning depends entirely on what it is read against,
+    /// and reaching an entity here would silently name the whole row.
+    /// </remarks>
+    static Expression BuildElement(Expression row)
+    {
+        if (!Schema.IsScalar(row.Type))
+        {
+            throw new ScryValidationException("An element can only be read inside a subquery over a collection of values.");
+        }
+
+        return row;
+    }
 
     /// <summary>
     /// Rebinds a question about a collection navigation onto the <see cref="Enumerable"/> call EF

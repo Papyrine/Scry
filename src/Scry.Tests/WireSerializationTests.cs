@@ -230,6 +230,30 @@ public class WireSerializationTests
     }
 
     [Test]
+    public Task ValueCollectionSubqueryRoundTrips()
+    {
+        // The element node's discriminator is part of the wire contract like every other: a server that
+        // predates it fails the request at deserialization rather than reading it as something else.
+        var request = QueryRequest.Create(
+            "Orders",
+            [
+                new WhereOp(
+                    new SubqueryNode(
+                        ["Tags"],
+                        SubqueryFn.Any,
+                        new BinaryNode(BinaryOp.Equal, new ElementNode(), new ConstNode("urgent", ClrTypeTag.String)),
+                        null)),
+                new WhereOp(
+                    new BinaryNode(
+                        BinaryOp.GreaterThan,
+                        new SubqueryNode(["Scores"], SubqueryFn.Sum, null, new ElementNode()),
+                        new ConstNode("7", ClrTypeTag.Int32)))
+            ]);
+
+        return VerifyRoundTrip(request);
+    }
+
+    [Test]
     public Task ExpandedTerminalsRoundTrip()
     {
         // Each terminal is serialized on its own — a pipeline may only carry one — so this walks the

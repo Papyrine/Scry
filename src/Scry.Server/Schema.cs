@@ -159,9 +159,13 @@ sealed class Schema
         if (member.Kind == MemberKind.Collection)
         {
             var element = CollectionElement(member.Type)!;
+
+            // A collection of values (an EF primitive collection) spells its element as the scalar
+            // itself; one of rows spells it as that type's query model.
+            var argument = IsScalar(element) ? ScalarShape(element, enums) : $"{element.Name}QueryModel";
             return new(
                 member.Name,
-                $"global::System.Collections.Generic.IReadOnlyList<{element.Name}QueryModel>",
+                $"global::System.Collections.Generic.IReadOnlyList<{argument}>",
                 NeedsNullDefault: true,
                 IsNavigation: false,
                 IsCollection: true);
@@ -174,26 +178,37 @@ sealed class Schema
             return new(member.Name, $"{target.Name}QueryModel?", NeedsNullDefault: false, IsNavigation: true);
         }
 
-        var underlying = Nullable.GetUnderlyingType(member.Type);
+        var shape = ScalarShape(member.Type, enums);
+
+        // A non-nullable reference-type scalar needs ' = null!;' to satisfy nullable analysis, matching
+        // the generator.
+        return new(member.Name, shape, NeedsNullDefault: shape is "string" or "byte[]", IsNavigation: false);
+    }
+
+    /// <summary>
+    /// How a scalar is spelled in generated code — as a member's own type, or as the element of a
+    /// collection of values. Any enum it names is collected on the way past, since an enum is only
+    /// re-emitted to clients when something exposed reaches it.
+    /// </summary>
+    static string ScalarShape(Type type, Dictionary<string, ScryEnumInfo> enums)
+    {
+        var underlying = Nullable.GetUnderlyingType(type);
         var nullable = underlying is not null;
-        var actual = underlying ?? member.Type;
+        var actual = underlying ?? type;
 
         if (actual.IsEnum)
         {
             enums.TryAdd(actual.Name, new(actual.Name, Enum.GetNames(actual)));
-
-            return new(member.Name, nullable ? $"{actual.Name}?" : actual.Name, NeedsNullDefault: false, IsNavigation: false);
+            return nullable ? $"{actual.Name}?" : actual.Name;
         }
 
         var display = ScalarDisplay(actual);
         if (display is "string" or "byte[]")
         {
-            // A non-nullable reference-type scalar needs ' = null!;' to satisfy nullable analysis,
-            // matching the generator.
-            return new(member.Name, display, NeedsNullDefault: true, IsNavigation: false);
+            return display;
         }
 
-        return new(member.Name, nullable ? $"{display}?" : display, NeedsNullDefault: false, IsNavigation: false);
+        return nullable ? $"{display}?" : display;
     }
 
     /// <summary>
@@ -285,6 +300,16 @@ sealed class Schema
                 // metadata (below) but no source entry and no resolver.
                 schema.complexTypes.Add(type);
 
+                // A policy filters a source, and this type has none — so one attached here would never
+                // run, whether the type is reached by traversal or aggregated as a [QueryableCollection]
+                // of it. The equivalent mistake on a collection of entities is refused below; that check
+                // can never fire for a complex element, because a complex type is never in `discovered`.
+                if (type.GetCustomAttribute<ReturnableWithAttribute>(inherit: false) is not null ||
+                    options.Policies.ContainsKey(type))
+                {
+                    throw new($"'{type.Name}' is [QueryableComplex] and carries a row policy, which cannot apply: a policy filters a source, and a complex type is a member type with no source of its own. Filter on the type that owns it instead.");
+                }
+
                 // Only its members are ever named on the wire, so a previous name on the type itself
                 // has nothing to apply to.
                 if (PreviousNamesOf(type).Count > 0)
@@ -366,8 +391,16 @@ sealed class Schema
         // member are on the wire at all.
         foreach (var enumType in schema.types.Values
                      .SelectMany(_ => _.Members.Values)
-                     .Where(_ => _.Kind == MemberKind.Scalar)
-                     .Select(_ => Nullable.GetUnderlyingType(_.Type) ?? _.Type)
+                     // A collection of values reaches an enum through its element, which rides the wire
+                     // as a constant exactly as a scalar member's does.
+                     .Select(member => member.Kind switch
+                     {
+                         MemberKind.Scalar => member.Type,
+                         MemberKind.Collection => CollectionElement(member.Type),
+                         _ => null
+                     })
+                     .Where(_ => _ is not null)
+                     .Select(_ => Nullable.GetUnderlyingType(_!) ?? _!)
                      .Where(_ => _.IsEnum)
                      .Distinct())
         {
@@ -693,11 +726,13 @@ sealed class Schema
                 continue;
             }
 
-            // A collection navigation is exposed only when the member asks for it and its element type
-            // is itself opted in — default-deny applies to the member, not just to the type.
+            // A collection is exposed only when the member asks for it — default-deny applies to the
+            // member, not just to the type — and its element must be something a query can already
+            // read: an opted-in type, or a scalar (an EF primitive collection, whose elements are
+            // values with no allow-list of their own to consult).
             if (property.GetCustomAttribute<QueryableCollectionAttribute>() is not null &&
                 CollectionElement(property.PropertyType) is { } element &&
-                queryableTypes.Contains(element))
+                (queryableTypes.Contains(element) || IsScalar(element)))
             {
                 meta.Members[property.Name] = new(property.Name, property, MemberKind.Collection);
                 continue;
@@ -751,7 +786,11 @@ sealed class Schema
         }
     }
 
-    static bool IsScalar(Type type)
+    /// <summary>
+    /// Whether a type is one of the closed scalar set — the values a query may compare, order by,
+    /// project, and hold in a collection of values.
+    /// </summary>
+    public static bool IsScalar(Type type)
     {
         var underlying = Nullable.GetUnderlyingType(type) ?? type;
         if (underlying.IsEnum ||

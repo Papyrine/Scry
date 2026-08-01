@@ -85,6 +85,9 @@ public class GeneratorTests
     {
         // Lines opts in and is emitted as an aggregable list; Tags is a collection of a type that is
         // not opted in, and Notes is a collection that never asked to be exposed. Both stay invisible.
+        // Codes, Scores and Grades are collections of values (EF primitive collections), whose element
+        // is spelled exactly as a scalar member of the same type would be — including re-emitting the
+        // enum, which is only reachable through the collection.
         const string model = """
             using System.Collections.Generic;
             using Scry;
@@ -99,6 +102,16 @@ public class GeneratorTests
                 [QueryableCollection] public List<OrderLine> Lines { get; set; } = [];
                 [QueryableCollection] public List<Tag> Tags { get; set; } = [];
                 public List<OrderLine> Notes { get; set; } = [];
+                [QueryableCollection] public List<string> Codes { get; set; } = [];
+                [QueryableCollection] public List<int?> Scores { get; set; } = [];
+                [QueryableCollection] public List<Grade> Grades { get; set; } = [];
+                public List<string> Secrets { get; set; } = [];
+            }
+
+            public enum Grade
+            {
+                Low,
+                High
             }
 
             [Queryable]
@@ -159,6 +172,7 @@ public class GeneratorTests
     public Task ComplexType()
     {
         const string model = """
+            using System.Collections.Generic;
             using Scry;
 
             namespace Sample.Model;
@@ -171,6 +185,10 @@ public class GeneratorTests
                 // A required and an optional complex member: both resolve to the complex query model.
                 public Address Address { get; set; } = new();
                 public Address? SecondaryAddress { get; set; }
+                // A collection of the complex type — a JSON array. It opts in like any other
+                // collection and is emitted as an aggregable list of the same query model, which is
+                // what keeps the emission and the server's introspection (and so the stamp) identical.
+                [QueryableCollection] public List<Address> PreviousAddresses { get; set; } = [];
             }
 
             // A complex value type: gets its own query model and is a navigation target, but no entry

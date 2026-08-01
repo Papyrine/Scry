@@ -12,4 +12,5 @@ public class EmployeeQueryModel
     public string Name { get; init; } = null!;
     public AddressQueryModel? Address { get; init; }
     public AddressQueryModel? SecondaryAddress { get; init; }
+    public global::System.Collections.Generic.IReadOnlyList<AddressQueryModel> PreviousAddresses { get; init; } = null!;
 }

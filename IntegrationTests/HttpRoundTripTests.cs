@@ -29,6 +29,8 @@ public class HttpRoundTripTests
 
     record NameRow(string Name);
 
+    record TaggedRegionRow(string Region, int Tags);
+
     static readonly string[] activeEmployeeNames = ["Aaron", "Alice", "Carol"];
 
     static readonly string[] departmentNames = ["Engineering", "Sales"];
@@ -97,6 +99,26 @@ public class HttpRoundTripTests
 
         Assert.That(rows.Select(_ => _.Department), Is.EqualTo(departmentNames));
         Assert.That(rows.Sum(_ => _.Headcount), Is.EqualTo(4));
+    }
+
+    [Test]
+    public async Task ValueCollectionOverHttp()
+    {
+        // Order.Tags is a collection of values, which the generated model spells IReadOnlyList<string>.
+        // This is the whole path for one: the generator read the element from the model DLL, the client
+        // lowered Contains into a subquery over the element itself, and the server rebound it onto the
+        // JSON column — with the stamp agreeing throughout, which is what GeneratedSchemaStampMatchesServer
+        // then pins.
+        var rows = await query.Order
+            .Where(_ => _.Tags.Contains("urgent"))
+            .Select(_ => new TaggedRegionRow(_.Region, _.Tags.Count))
+            .ToListAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rows.Single().Region, Is.EqualTo("North"));
+            Assert.That(rows.Single().Tags, Is.EqualTo(2));
+        });
     }
 
     [Test]

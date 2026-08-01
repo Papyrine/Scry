@@ -120,12 +120,14 @@ public sealed class SampleContext(DbContextOptions<SampleContext> options) :
             new()
             {
                 Region = "North",
-                Amount = 100m
+                Amount = 100m,
+                Tags = ["urgent", "export"]
             },
             new()
             {
                 Region = "North",
-                Amount = 250m
+                Amount = 250m,
+                Tags = ["export"]
             },
             new()
             {

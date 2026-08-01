@@ -49,6 +49,14 @@ public class Employee
     // [QueryableComplex]; exercises Scry rebinding member access that EF translates into the JSON column.
     public Address Address { get; set; } = new();
 
+    // begin-snippet: queryableComplexCollection
+    // A JSON array of value objects: a complex-type collection mapped into one column. Aggregable and
+    // flattenable exactly like a collection of entities — the element type being [QueryableComplex]
+    // rather than a source changes nothing about how a client queries it.
+    [QueryableCollection]
+    public List<Address> PreviousAddresses { get; set; } = [];
+    // end-snippet
+
     [QueryIgnore]
     public decimal Salary { get; set; }
 }
@@ -103,6 +111,16 @@ public class Artwork : Asset
     public string Medium { get; set; } = "";
 }
 
+/// <summary>
+/// Exposed only through <see cref="Order.Priorities"/>, a collection of values — nothing else names
+/// it. The enum still has to reach the client, since its value names ride the wire as constants.
+/// </summary>
+public enum Priority
+{
+    Low,
+    High
+}
+
 [Queryable]
 public class Order
 {
@@ -130,6 +148,25 @@ public class Order
     [QueryableCollection]
     public List<OrderLine> Lines { get; set; } = [];
     // end-snippet
+
+    // begin-snippet: queryablePrimitiveCollection
+    // EF primitive collections — collections of values, which the provider stores as a JSON column.
+    // They opt in like any other collection; what differs is that their elements are values, so a
+    // question about them reads the element itself rather than a member of it.
+    [QueryableCollection]
+    public List<string> Tags { get; set; } = [];
+
+    [QueryableCollection]
+    public List<int> Scores { get; set; } = [];
+    // end-snippet
+
+    // Priority is reachable from nothing else, so this pins that an enum a collection of values reaches
+    // is re-emitted to clients exactly as one a scalar member reaches.
+    [QueryableCollection]
+    public List<Priority> Priorities { get; set; } = [];
+
+    // Never opted in, so it stays invisible exactly as an un-opted-in collection of rows does.
+    public List<string> Notes { get; set; } = [];
 }
 
 /// <summary>
@@ -266,6 +303,18 @@ public sealed class BulkLinesOnlyPolicy :
         source.Where(_ => _.Quantity > 1);
 }
 
+/// <summary>
+/// Never attached by default. Registering it proves the startup refusal to policy a complex type,
+/// which is a member type with no source for a policy to filter — <see cref="Address"/> is reachable
+/// only by traversing into it, or by aggregating <see cref="Employee.PreviousAddresses"/>.
+/// </summary>
+public sealed class UkAddressesOnlyPolicy :
+    IReturnablePolicy<Address>
+{
+    public IQueryable<Address> Filter(IQueryable<Address> source, ScryPolicyContext context) =>
+        source.Where(_ => _.Country == "UK");
+}
+
 /// <summary>The [ReturnableWith] policy on <see cref="Ticket"/>: scopes queries to open tickets.</summary>
 public sealed class OpenTicketsOnlyPolicy :
     IReturnablePolicy<Ticket>
@@ -347,6 +396,12 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
             .ToJson();
         // end-snippet
 
+        // begin-snippet: complexCollectionToJson
+        modelBuilder.Entity<Employee>()
+            .ComplexCollection(_ => _.PreviousAddresses)
+            .ToJson();
+        // end-snippet
+
         // Table-per-hierarchy: every derived type shares the base table and is told apart by a
         // discriminator, which is what OfType narrows on.
         modelBuilder.Entity<Vehicle>();
@@ -391,12 +446,42 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
         var sales = new Department { Name = "Sales" };
         context.Departments.AddRange(engineering, sales);
 
-        var alice = new Employee { Name = "Alice", Status = Status.FullTime, Active = true, Department = engineering, Salary = 200_000, Avatar = [0x01, 0x02, 0x03], Address = new() { City = "London", Country = "UK", Zip = "EC1" } };
+        // PreviousAddresses is the JSON array the complex-collection tests read. Aaron's is deliberately
+        // empty, so an aggregate over an empty array is covered the way the South order covers it for
+        // an entity collection.
+        var alice = new Employee
+        {
+            Name = "Alice", Status = Status.FullTime, Active = true, Department = engineering, Salary = 200_000, Avatar = [0x01, 0x02, 0x03],
+            Address = new() { City = "London", Country = "UK", Zip = "EC1" },
+            PreviousAddresses =
+            [
+                new() { City = "Berlin", Country = "DE", Zip = "10115" },
+                new() { City = "Paris", Country = "FR", Zip = "75001" }
+            ]
+        };
         context.Employees.Add(alice);
         context.Employees.AddRange(
-            new() { Name = "Aaron", Status = Status.FullTime, Active = true, Department = engineering, Manager = alice, Salary = 150_000, Avatar = [0x0A, 0x0B], Address = new() { City = "London", Country = "UK", Zip = "W1" } },
-            new() { Name = "Bob", Status = Status.PartTime, Active = false, Department = sales, Manager = alice, Salary = 90_000, Avatar = [0xFF], Address = new() { City = "Berlin", Country = "DE", Zip = "10115" } },
-            new() { Name = "Carol", Status = Status.Contractor, Active = true, Department = sales, Salary = 120_000, Avatar = [], Address = new() { City = "Paris", Country = "FR", Zip = "75001" } });
+            new()
+            {
+                Name = "Aaron", Status = Status.FullTime, Active = true, Department = engineering, Manager = alice, Salary = 150_000, Avatar = [0x0A, 0x0B],
+                Address = new() { City = "London", Country = "UK", Zip = "W1" }
+            },
+            new()
+            {
+                Name = "Bob", Status = Status.PartTime, Active = false, Department = sales, Manager = alice, Salary = 90_000, Avatar = [0xFF],
+                Address = new() { City = "Berlin", Country = "DE", Zip = "10115" },
+                PreviousAddresses = [new() { City = "London", Country = "UK", Zip = "EC2" }]
+            },
+            new()
+            {
+                Name = "Carol", Status = Status.Contractor, Active = true, Department = sales, Salary = 120_000, Avatar = [],
+                Address = new() { City = "Paris", Country = "FR", Zip = "75001" },
+                PreviousAddresses =
+                [
+                    new() { City = "London", Country = "UK", Zip = "SW1" },
+                    new() { City = "Berlin", Country = "DE", Zip = "10117" }
+                ]
+            });
 
         context.Orders.AddRange(
             new()
@@ -406,16 +491,24 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
                 [
                     new() { Sku = "A-1", Quantity = 2, Price = 25m },
                     new() { Sku = "A-2", Quantity = 1, Price = 50m }
-                ]
+                ],
+                Tags = ["urgent", "export"],
+                Scores = [3, 5],
+                Priorities = [Priority.High],
+                Notes = ["hidden"]
             },
             // Sku is deliberately above long.MaxValue to prove the value survives the String-tag path
             // (a numeric Int64 tag would overflow).
             new()
             {
                 Region = "North", Amount = 250m, Quantity = 7, Sku = ulong.MaxValue, Placed = new(2026, 7, 20, 14, 5, 0), Discount = null, Grade = 'B',
-                Lines = [new() { Sku = "B-1", Quantity = 5, Price = 50m }]
+                Lines = [new() { Sku = "B-1", Quantity = 5, Price = 50m }],
+                Tags = ["export"],
+                Scores = [8],
+                Priorities = [Priority.Low, Priority.High]
             },
-            // No lines at all, so an aggregate over an empty collection is covered.
+            // No lines, tags or scores at all, so an aggregate over an empty collection is covered for
+            // both a collection of rows and one of values.
             new() { Region = "South", Amount = 75m, Quantity = 1, Sku = 3000, Placed = new(2025, 12, 31, 23, 59, 59), Discount = 5m, Grade = 'A' });
 
         context.Assets.AddRange(

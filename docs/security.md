@@ -21,17 +21,19 @@ Not assumed:
 
 ### 1. Default-deny allow-list
 
-A type is invisible unless it carries `[Queryable]`, `[QueryableView]`, `[QueryablePoco]`, or `[QueryableComplex]`. A property is invisible if it carries `[QueryIgnore]`, has no public instance getter, or is not a scalar or a navigation to another opted-in type.
+A type is invisible unless it carries `[Queryable]`, `[QueryableView]`, `[QueryablePoco]`, or `[QueryableComplex]`. A property is invisible if it carries `[QueryIgnore]`, has no public instance getter, or is not a scalar, a navigation to another opted-in type, or an opted-in collection.
 
 Adding an entity to the `DbContext` does not expose it. Adding a property to an exposed entity does expose it — that is the one direction where the default is open, and it is why the surface should be reviewed alongside model changes.
 
 **Collection navigations are the exception to that**: they are invisible even on an exposed type until the *member itself* carries `[QueryableCollection]`, so adding one to a model never widens a surface by accident. An exposed collection is **aggregable, not projectable** — a client can ask `Any`, `All`, `Count`, `Sum`, `Average`, `Min`, or `Max` about it, evaluated as a correlated subquery, but can never enumerate its rows. Every answer is a scalar, so no request can return an unbounded nested collection and the page bounds are unchanged. Inside the subquery the element type's own allow-list applies, a `[QueryIgnore]`d member stays hidden, and a subquery may not appear inside another subquery.
 
-A collection whose element type carries a [row policy](policies.md) is **refused at startup**. A policy filters a source; a subquery has none, so aggregating a policied collection would count exactly the rows the policy exists to hide. The same caveat applies more narrowly to reference navigations, which are not policy-filtered when traversed — see [what Scry does not do](#what-scry-does-not-do).
+A collection whose element type carries a [row policy](policies.md) is **refused at startup**. A policy filters a source; a subquery has none, so aggregating a policied collection would count exactly the rows the policy exists to hide. The same caveat applies more narrowly to reference navigations, which are not policy-filtered when traversed — see [what Scry does not do](#what-scry-does-not-do). A `[QueryableComplex]` type carrying a policy is refused for the same reason and at the same point: it has no source of its own for one to filter, so the policy could never run.
+
+A collection of **values** — an EF primitive collection, typically a JSON column — is exposed by the same opt-in and answers the same aggregates, with two differences that follow from an element being a value rather than a row. Its element is read with the wire's `element` node, which the validator accepts **only** where the row being read is a scalar, so it can never be used to name a whole entity; and it cannot be flattened, since the rows a flatten would produce have no members for the operators after it to name.
 
 **Inheritance is not transitive either.** An opt-in attribute is read off the type it is written on and never inherited, so a subclass of an exposed type is invisible until it opts in itself. Adding one to a model exposes neither its rows nor the members it declares, and no query can narrow to it: [`OfType`](querying.md#narrowing-to-a-derived-type) names the target as a wire string, which is resolved through the allow-list and then checked to actually derive from the type being queried — so it can only ever narrow, never widen back to a base or across to an unrelated source. A [row policy](policies.md) is the deliberate exception: it *is* inherited, so a subclass cannot shed the one its base carries, and where both carry one, both apply.
 
-**Complex types and JSON columns** follow the same default-deny rule. A complex/value type — including one mapped into a JSON column — is invisible until it carries `[QueryableComplex]`, and even then only its allow-listed scalar leaves are reachable (`[QueryIgnore]` still hides members). Exposing a complex type does not transitively expose anything: a nested type it references is reachable only if it too is opted in, so a JSON column cannot smuggle in an entity or an unlisted field. Traversal into a complex member counts against `MaxNavigationDepth` exactly like a navigation, bounding how deeply a client can descend into nested JSON. How EF stores the type (JSON or columns) never changes what is reachable — the allow-list is built from the CLR/annotation surface, not the storage mapping.
+**Complex types and JSON columns** follow the same default-deny rule. A complex/value type — including one mapped into a JSON column — is invisible until it carries `[QueryableComplex]`, and even then only its allow-listed scalar leaves are reachable (`[QueryIgnore]` still hides members). A JSON *array* — a collection of such a type, or a collection of values — needs the member's own `[QueryableCollection]` on top of that, and is aggregable exactly like any other collection. Exposing a complex type does not transitively expose anything: a nested type it references is reachable only if it too is opted in, so a JSON column cannot smuggle in an entity or an unlisted field, and a `[QueryIgnore]`d member stays unreadable inside an array even though EF still writes it there. Traversal into a complex member counts against `MaxNavigationDepth` exactly like a navigation, bounding how deeply a client can descend into nested JSON. How EF stores the type (JSON or columns) never changes what is reachable — the allow-list is built from the CLR/annotation surface, not the storage mapping.
 
 
 ### 2. A closed AST
@@ -74,6 +76,7 @@ public abstract record QueryOp;
 ```cs
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(MemberNode), "member")]
+[JsonDerivedType(typeof(ElementNode), "element")]
 [JsonDerivedType(typeof(ConstNode), "const")]
 [JsonDerivedType(typeof(BinaryNode), "binary")]
 [JsonDerivedType(typeof(UnaryNode), "unary")]
@@ -86,7 +89,7 @@ public abstract record QueryOp;
 [JsonDerivedType(typeof(GroupKeyNode), "groupKey")]
 public abstract record Node;
 ```
-<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: wireFunctions -->
@@ -335,7 +338,7 @@ public async Task DisallowedPropertyRejectedWith400()
     Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L210-L237' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L232-L259' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 

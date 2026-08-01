@@ -7,6 +7,7 @@
 // begin-snippet: wireExpressions
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(MemberNode), "member")]
+[JsonDerivedType(typeof(ElementNode), "element")]
 [JsonDerivedType(typeof(ConstNode), "const")]
 [JsonDerivedType(typeof(BinaryNode), "binary")]
 [JsonDerivedType(typeof(UnaryNode), "unary")]
