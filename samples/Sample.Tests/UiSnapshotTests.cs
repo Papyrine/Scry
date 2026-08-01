@@ -1,92 +1,25 @@
-// Launches the real Sample.Server (the same DLL `dotnet run` would execute) and drives it with a
-// headless Chromium browser, snapshotting the live WebAssembly UI as HTML + a screenshot.
-// Categorised "Browser" so CI can opt out (screenshots are environment sensitive, and the browser
-// download / WASM boot is heavier than the in-process tests).
+// Drives the live WebAssembly UI in a headless browser, asserting behaviour and snapshotting the
+// rendered markup as text. The pixel snapshots live in UiScreenshotTests.
+// Categorised "Browser" so a run can opt out: the browser download and WASM boot are heavier than
+// the in-process tests.
 [TestFixture]
 [Category("Browser")]
-public class UiSnapshotTests
+public class UiSnapshotTests :
+    BrowserFixture
 {
-    Process server = null!;
-    IPlaywright playwright = null!;
-    IBrowser browser = null!;
-    string baseUrl = null!;
-    string workDir = null!;
-
-    [OneTimeSetUp]
-    public async Task StartServer()
-    {
-        var port = GetFreePort();
-        baseUrl = $"http://127.0.0.1:{port}";
-
-        // Run the server from a throwaway working directory so nothing it writes lands in the repo.
-        workDir = Directory.CreateTempSubdirectory("scry_ui_").FullName;
-
-        server = new()
-        {
-            StartInfo =
-            {
-                FileName = "dotnet",
-                WorkingDirectory = workDir,
-                UseShellExecute = false
-            }
-        };
-        server.StartInfo.ArgumentList.Add(LocateServerDll());
-        server.StartInfo.Environment["ASPNETCORE_URLS"] = baseUrl;
-        // Development so the (Development-only) Scry explorer is reachable; the server's explicit
-        // UseStaticWebAssets() call means the WASM client is served in this environment too.
-        server.StartInfo.Environment["DOTNET_ENVIRONMENT"] = "Development";
-        server.Start();
-
-        await WaitForServer(port);
-
-        playwright = await Playwright.CreateAsync();
-        browser = await playwright.Chromium.LaunchAsync();
-    }
-
-    [OneTimeTearDown]
-    public async Task Stop()
-    {
-        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
-        if (browser is not null)
-        {
-            await browser.DisposeAsync();
-        }
-
-        // ReSharper disable once ConditionalAccessQualifierIsNonNullableAccordingToAPIContract
-        playwright?.Dispose();
-
-        if (server is { HasExited: false })
-        {
-            server.Kill(entireProcessTree: true);
-            // Give the process a moment to exit before the working directory is removed.
-            server.WaitForExit(milliseconds: 5000);
-        }
-
-        // ReSharper disable once ConditionalAccessQualifierIsNonNullableAccordingToAPIContract
-        server?.Dispose();
-
-        try
-        {
-            Directory.Delete(workDir, recursive: true);
-        }
-        catch (Exception)
-        {
-            // Best-effort cleanup of a temp directory; a lingering file lock is not a test failure.
-        }
-    }
-
     [Test]
     public async Task HomePage()
     {
-        var page = await browser.NewPageAsync();
-        await page.GotoAsync(baseUrl);
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync(BaseUrl);
 
         // Wait until the WebAssembly app has run its queries and rendered the result tables.
         await page.WaitForSelectorAsync("table tbody tr");
         await Assertions.Expect(page.Locator("table")).ToHaveCountAsync(4);
 
-        // Snapshot the real WebAssembly-rendered DOM (not a screenshot): pixel screenshots differ
-        // across machines/OS font rendering and can't run in CI, but the rendered markup is stable.
+        // Just the app's own markup, and as text: this is the snapshot that stays readable in a diff
+        // and portable across machines. UiScreenshotTests.SampleHomePage captures the same page as a
+        // rendering, whole document and pixels included.
         var rendered = await page.Locator("#app").InnerHTMLAsync();
         await Verify(rendered);
     }
@@ -97,7 +30,7 @@ public class UiSnapshotTests
     public async Task ExplorerIntrospectionEndpoint()
     {
         using var http = new HttpClient();
-        var json = await http.GetStringAsync($"{baseUrl}/scry/introspect");
+        var json = await http.GetStringAsync($"{BaseUrl}/scry/introspect");
 
         await Verify(json);
     }
@@ -107,8 +40,8 @@ public class UiSnapshotTests
     [Test]
     public async Task ExplorerBoots()
     {
-        var page = await browser.NewPageAsync();
-        await page.GotoAsync($"{baseUrl}/scry");
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
 
         // Allow the WASM runtime to download and boot before asserting the app rendered.
         await page.WaitForSelectorAsync("[data-testid='explorer-title']", 30);
@@ -131,8 +64,8 @@ public class UiSnapshotTests
     [Test]
     public async Task ExplorerShellMarkup()
     {
-        var page = await browser.NewPageAsync();
-        await page.GotoAsync($"{baseUrl}/scry");
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         // Wait for the schema to load so the fully-initialised shell (enabled buttons, no "Loading
         // schema…") is what gets captured, then strip the volatile inner content.
@@ -177,8 +110,8 @@ public class UiSnapshotTests
     [Test]
     public async Task ExplorerEditorAcceptsTyping()
     {
-        var page = await browser.NewPageAsync();
-        await page.GotoAsync($"{baseUrl}/scry");
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
 
         var height = await page.EvaluateAsync<double>(
@@ -199,8 +132,8 @@ public class UiSnapshotTests
     [Test]
     public async Task ExplorerCompletion()
     {
-        var page = await browser.NewPageAsync();
-        await page.GotoAsync($"{baseUrl}/scry");
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
 
         // Roslyn init + first completion in the WASM interpreter is slow on a cold load.
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
@@ -223,7 +156,7 @@ public class UiSnapshotTests
     [Test]
     public async Task ExplorerCompletionDoesNotCrashWasmRuntime()
     {
-        var page = await browser.NewPageAsync();
+        var page = await Browser.NewPageAsync();
 
         // Blazor logs unhandled .NET exceptions to console.error; the mono runtime prints
         // "FATAL UNHANDLED EXCEPTION" for a stack overflow; a boot-time asset failure aborts with
@@ -252,7 +185,7 @@ public class UiSnapshotTests
         };
         page.PageError += (_, error) => Watch(error);
 
-        await page.GotoAsync($"{baseUrl}/scry");
+        await page.GotoAsync($"{BaseUrl}/scry");
 
         // Race the two outcomes so a crash is reported in seconds (with a descriptive message) instead of a
         // blind 90s wait: either the completion list renders (runtime healthy) or a fatal error is logged.
@@ -286,8 +219,8 @@ public class UiSnapshotTests
     [Test]
     public async Task ExplorerCompletesTerminals()
     {
-        var page = await browser.NewPageAsync();
-        await page.GotoAsync($"{baseUrl}/scry");
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
@@ -311,8 +244,8 @@ public class UiSnapshotTests
     [Test]
     public async Task ExplorerShowsSql()
     {
-        var page = await browser.NewPageAsync();
-        await page.GotoAsync($"{baseUrl}/scry");
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
@@ -333,8 +266,8 @@ public class UiSnapshotTests
     [Test]
     public async Task ExplorerSharesAQueryByLink()
     {
-        var page = await browser.NewPageAsync();
-        await page.GotoAsync($"{baseUrl}/scry");
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
@@ -347,7 +280,7 @@ public class UiSnapshotTests
 
         // A fresh load of the shared link, not a fragment change on the running app: a hash-only
         // navigation would leave the editor as it is and prove nothing.
-        var opened = await browser.NewPageAsync();
+        var opened = await Browser.NewPageAsync();
         await opened.GotoAsync(shared);
         await opened.WaitForSelectorAsync(".monaco-editor", 30);
         await opened.WaitForFunctionAsync(
@@ -364,8 +297,8 @@ public class UiSnapshotTests
     [Test]
     public async Task ExplorerIgnoresAMalformedShareLink()
     {
-        var page = await browser.NewPageAsync();
-        await page.GotoAsync($"{baseUrl}/scry/#q=!!!not-base64!!!");
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry/#q=!!!not-base64!!!");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForFunctionAsync(
             "() => monaco.editor.getEditors().length > 0 && monaco.editor.getEditors()[0].getValue().length > 0",
@@ -383,8 +316,8 @@ public class UiSnapshotTests
     [Test]
     public async Task ExplorerExportsResultsAsCsv()
     {
-        var page = await browser.NewPageAsync();
-        await page.GotoAsync($"{baseUrl}/scry");
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
@@ -414,8 +347,8 @@ public class UiSnapshotTests
     [Test]
     public async Task ExplorerInlineSuggestions()
     {
-        var page = await browser.NewPageAsync();
-        await page.GotoAsync($"{baseUrl}/scry");
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         // Wait for the schema to load (provider registered) — the auto-run completion list appears.
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
@@ -442,8 +375,8 @@ public class UiSnapshotTests
     [Test]
     public async Task ExplorerRun()
     {
-        var page = await browser.NewPageAsync();
-        await page.GotoAsync($"{baseUrl}/scry");
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
@@ -476,8 +409,8 @@ public class UiSnapshotTests
     [Test]
     public async Task ExplorerRunToList()
     {
-        var page = await browser.NewPageAsync();
-        await page.GotoAsync($"{baseUrl}/scry");
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
@@ -496,8 +429,8 @@ public class UiSnapshotTests
     [Test]
     public async Task ExplorerRunCount()
     {
-        var page = await browser.NewPageAsync();
-        await page.GotoAsync($"{baseUrl}/scry");
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
@@ -518,8 +451,8 @@ public class UiSnapshotTests
     [Test]
     public async Task ExplorerRunFirst()
     {
-        var page = await browser.NewPageAsync();
-        await page.GotoAsync($"{baseUrl}/scry");
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
@@ -541,8 +474,8 @@ public class UiSnapshotTests
     [Test]
     public async Task ExplorerDarkMode()
     {
-        var page = await browser.NewPageAsync();
-        await page.GotoAsync($"{baseUrl}/scry");
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
 
         // System → Light → Dark (deterministic regardless of the OS preference).
@@ -570,8 +503,8 @@ public class UiSnapshotTests
     [Test]
     public async Task ExplorerRunViaKeyboard()
     {
-        var page = await browser.NewPageAsync();
-        await page.GotoAsync($"{baseUrl}/scry");
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
@@ -596,7 +529,7 @@ public class UiSnapshotTests
     {
         var dir = Directory.CreateTempSubdirectory("scry_walk_").FullName;
         var log = new List<string>();
-        var page = await browser.NewPageAsync(
+        var page = await Browser.NewPageAsync(
             new()
             {
                 // 800 wide because that is the width the committed images are: laying the page out at
@@ -618,7 +551,7 @@ public class UiSnapshotTests
                 }
             };
 
-        await page.GotoAsync($"{baseUrl}/scry");
+        await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
         log.Add("✓ editor booted, schema loaded");
@@ -770,8 +703,8 @@ public class UiSnapshotTests
     [Test]
     public async Task ExplorerDiagnostics()
     {
-        var page = await browser.NewPageAsync();
-        await page.GotoAsync($"{baseUrl}/scry");
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
@@ -787,62 +720,5 @@ public class UiSnapshotTests
 
         var count = await page.EvaluateAsync<int>("() => monaco.editor.getModelMarkers({}).length");
         Assert.That(count, Is.GreaterThan(0));
-    }
-
-    static string LocateServerDll()
-    {
-        // .../samples/Sample.Tests/bin/<config>/<tfm>/ — mirror <config>/<tfm> onto the server output.
-        var baseDir = new DirectoryInfo(AppContext.BaseDirectory);
-        var tfm = baseDir.Name;
-        var config = baseDir.Parent!.Name;
-
-        var dir = baseDir;
-        while (dir is not null &&
-               !Directory.Exists(Path.Combine(dir.FullName, "Sample.Server")))
-        {
-            dir = dir.Parent;
-        }
-
-        if (dir is null)
-        {
-            throw new DirectoryNotFoundException(
-                "Could not locate the Sample.Server project from the test output directory.");
-        }
-
-        var dll = Path.Combine(dir.FullName, "Sample.Server", "bin", config, tfm, "Sample.Server.dll");
-        if (!File.Exists(dll))
-        {
-            throw new FileNotFoundException("Sample.Server build output not found; build the sample first.", dll);
-        }
-
-        return dll;
-    }
-
-    static int GetFreePort()
-    {
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
-    }
-
-    static async Task WaitForServer(int port)
-    {
-        for (var attempt = 0; attempt < 100; attempt++)
-        {
-            try
-            {
-                using var client = new TcpClient();
-                await client.ConnectAsync(IPAddress.Loopback, port);
-                return;
-            }
-            catch (SocketException)
-            {
-                await Task.Delay(100);
-            }
-        }
-
-        throw new TimeoutException($"Sample.Server did not start listening on port {port}.");
     }
 }
