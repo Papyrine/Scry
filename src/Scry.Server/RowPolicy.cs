@@ -29,7 +29,6 @@ static class RowPolicy
         }
 
         throw new(
-            $"Row policy '{policyType.Name}' implements IReturnablePolicy<T> for {string.Join(" and ", filtered.Select(_ => _.Name))}, " +
-            "so which rows it filters is ambiguous. Write one policy type per filtered type.");
+            $"Row policy '{policyType.Name}' implements IReturnablePolicy<T> for {string.Join(" and ", filtered.Select(_ => _.Name))}, so which rows it filters is ambiguous. Write one policy type per filtered type.");
     }
 }

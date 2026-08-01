@@ -77,10 +77,7 @@ sealed class QueryTranslator
 
             case "Cast":
                 throw new NotSupportedException(
-                    "Cast is not supported by Scry. Its check runs when a row is materialized into an entity, " +
-                    "and a Scry query always ends in a projection instead — so the assertion would be dropped " +
-                    "and the derived members read as null over rows of any other type. Use OfType, which " +
-                    "narrows by filtering and needs no check on the way back.");
+                    "Cast is not supported by Scry. Its check runs when a row is materialized into an entity, and a Scry query always ends in a projection instead — so the assertion would be dropped and the derived members read as null over rows of any other type. Use OfType, which narrows by filtering and needs no check on the way back.");
 
             case "SelectMany" when call.Arguments.Count == 2:
                 var flatten = Lambda(call.Arguments[1]);
@@ -702,9 +699,7 @@ sealed class QueryTranslator
         if (call is {Method.Name: "ToString", Arguments.Count: > 0})
         {
             throw new NotSupportedException(
-                "ToString with a format is not supported by Scry. No provider translates it, and the SQL " +
-                "function that would express it reads the server's language, so the same row would " +
-                "format differently per connection. Format the value after the query returns.");
+                "ToString with a format is not supported by Scry. No provider translates it, and the SQL function that would express it reads the server's language, so the same row would format differently per connection. Format the value after the query returns.");
         }
 
         if (declaring == typeof(string))
@@ -993,8 +988,7 @@ sealed class QueryTranslator
         if (value is not ConstNode)
         {
             throw new NotSupportedException(
-                "Contains over a collection the row holds takes a constant. The test is evaluated against " +
-                "the collection's elements, and the row that owns them is not in scope there.");
+                "Contains over a collection the row holds takes a constant. The test is evaluated against the collection's elements, and the row that owns them is not in scope there.");
         }
 
         return new(

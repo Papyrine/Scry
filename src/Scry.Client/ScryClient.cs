@@ -61,8 +61,10 @@ public sealed class ScryClient
         }
 
         throw new NotSupportedException(
-            "Per-query headers require the HTTP transport. Build the client with ScryClient.ForHttp, or drop " +
-            "WithHeader/WithHeaders/OnResponseHeaders from the query.");
+            """
+            Per-query headers require the HTTP transport.
+            Build the client with ScryClient.ForHttp, or drop WithHeader/WithHeaders/OnResponseHeaders from the query.
+            """);
     }
 
     // begin-snippet: scryClientApi
@@ -85,14 +87,16 @@ public sealed class ScryClient
     /// </summary>
     public ScryBatch Batch()
     {
-        if (batchTransport is null)
+        if (batchTransport is not null)
         {
-            throw new NotSupportedException(
-                "This client's transport does not batch. Send queries individually, or construct the client " +
-                "with a batch transport (ScryClient.ForHttp does).");
+            return new(this);
         }
 
-        return new(this);
+        throw new NotSupportedException(
+            """
+            This client's transport does not batch.
+            Send queries individually, or construct the client with a batch transport (ScryClient.ForHttp does).
+            """);
     }
     // end-snippet
 
@@ -184,14 +188,12 @@ public sealed class ScryClient
 
     internal IAsyncEnumerable<JsonElement> StreamAsync(QueryRequest request, ScryCall? call, Cancel cancel)
     {
-        if (streamTransport is not { } stream)
+        if (streamTransport is { } stream)
         {
-            throw new NotSupportedException(
-                "This client's transport does not stream. Use ToListAsync, or construct the client with a " +
-                "stream transport (ScryClient.ForHttp does).");
+            return stream(request, call, cancel);
         }
 
-        return stream(request, call, cancel);
+        throw new NotSupportedException("This client's transport does not stream. Use ToListAsync, or construct the client with a stream transport (ScryClient.ForHttp does).");
     }
 
     /// <summary>

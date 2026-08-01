@@ -1055,10 +1055,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         if (DateDiffDay(value.Type) is not { } dateDiffDay)
         {
             throw new ScryValidationException(
-                "DayOfWeek is only supported on SQL Server, whose provider supplies the deterministic " +
-                "date arithmetic it is built from. No other provider has been verified to answer it " +
-                "the same way, so it is refused here rather than translated into something that reads " +
-                "a session setting.");
+                "DayOfWeek is only supported on SQL Server, whose provider supplies the deterministic date arithmetic it is built from. No other provider has been verified to answer it the same way, so it is refused here rather than translated into something that reads a session setting.");
         }
 
         var epoch = Expression.Constant(Epoch(value.Type), value.Type);
@@ -1345,8 +1342,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         if (value.Type.IsEnum)
         {
             throw new ScryValidationException(
-                "ToString is not supported over an enum: its text is a member name the database does not " +
-                "hold, so the conversion would yield the underlying number instead.");
+                "ToString is not supported over an enum: its text is a member name the database does not hold, so the conversion would yield the underlying number instead.");
         }
 
         if (!convertibleToText.Contains(value.Type))

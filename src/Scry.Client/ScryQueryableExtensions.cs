@@ -89,8 +89,7 @@ public static class ScryQueryableExtensions
         if (provider.Batch is not null)
         {
             throw new NotSupportedException(
-                "A streamed query cannot be batched: a batch is answered as one response, so its entries " +
-                "cannot be read row by row. Drop InBatch from this query, or use ToListAsync.");
+                "A streamed query cannot be batched: a batch is answered as one response, so its entries cannot be read row by row. Drop InBatch from this query, or use ToListAsync.");
         }
 
         var client = provider.Client;
@@ -112,8 +111,7 @@ public static class ScryQueryableExtensions
             when (source.Provider is QueryProvider {Client.SchemaStale: true})
         {
             throw new ScryStaleClientException(
-                $"A streamed row could not be read into this client's generated model: {exception.Message} " +
-                "The server's queryable surface has changed — regenerate the client, or reload the deployed app.",
+                $"A streamed row could not be read into this client's generated model: {exception.Message} The server's queryable surface has changed — regenerate the client, or reload the deployed app.",
                 exception);
         }
     }
@@ -388,8 +386,7 @@ public static class ScryQueryableExtensions
             when (source.Provider is QueryProvider {Client.SchemaStale: true})
         {
             throw new ScryStaleClientException(
-                $"The query result could not be read into this client's generated model: {exception.Message} " +
-                "The server's queryable surface has changed — regenerate the client, or reload the deployed app.",
+                $"The query result could not be read into this client's generated model: {exception.Message} The server's queryable surface has changed — regenerate the client, or reload the deployed app.",
                 exception);
         }
     }

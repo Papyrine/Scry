@@ -65,8 +65,7 @@ sealed class TolerantEnumConverterFactory :
                 }
 
                 throw new ScryStaleClientException(
-                    $"'{name}' is not a value of enum '{typeToConvert.Name}' in this client's generated model. " +
-                    "The server's model has changed — regenerate the client, or reload the deployed app.");
+                    $"'{name}' is not a value of enum '{typeToConvert.Name}' in this client's generated model. The server's model has changed — regenerate the client, or reload the deployed app.");
             }
         }
 

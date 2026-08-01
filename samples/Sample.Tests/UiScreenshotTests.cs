@@ -30,7 +30,8 @@ public class UiScreenshotTests :
         await page.WaitForSelectorAsync("table tbody tr");
         await Assertions.Expect(page.Locator("table")).ToHaveCountAsync(4);
 
-        await Verify(page);
+        await Verify(page)
+            .PrettyPrintHtml();
     }
 
     // The employee table on its own: the projection, the em-dash for an absent manager, and the
@@ -42,7 +43,8 @@ public class UiScreenshotTests :
         await page.GotoAsync(BaseUrl);
         await page.WaitForSelectorAsync("table tbody tr");
 
-        await Verify(page.Locator("table").First);
+        await Verify(page.Locator("table").First)
+            .PrettyPrintHtml();
     }
 
     // Screenshot only. The explorer's markup is dominated by Monaco, whose DOM carries generated ids
@@ -98,7 +100,8 @@ public class UiScreenshotTests :
         await page.Locator("[data-testid='run']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);
 
-        await Verify(page.Locator("[data-testid='result-table']"));
+        await Verify(page.Locator("[data-testid='result-table']"))
+            .PrettyPrintHtml();
     }
 
     // The SQL pane. The server builds the query and reads its SQL back without executing it, so this

@@ -15,7 +15,7 @@ public class StringConcatTests
 
         // begin-snippet: clientStringConcat
         var rows = await client.Source<Order>("Order")
-            .Select(_ => new {Label = _.Region + "-" + _.Quantity})
+            .Select(_ => new {Label = $"{_.Region}-{_.Quantity}"})
             .ToListAsync();
         // end-snippet
 
@@ -30,7 +30,7 @@ public class StringConcatTests
 
         var rows = await client.Source<Order>("Order")
             .GroupBy(_ => _.Region)
-            .Select(_ => new {Label = _.Key + ":" + _.Count()})
+            .Select(_ => new {Label = $"{_.Key}:{_.Count()}"})
             .ToListAsync();
 
         Assert.That(rows.Select(_ => _.Label).Order(), Is.EqualTo(["North:2", "South:1"]));
@@ -46,7 +46,7 @@ public class StringConcatTests
         // have read as an attempt at arithmetic against a string constant.
         var rows = await client.Source<Order>("Order")
             .Where(_ => _.Region == "South")
-            .Select(_ => new {Label = "Qty " + _.Quantity})
+            .Select(_ => new {Label = $"Qty {_.Quantity}"})
             .ToListAsync();
 
         Assert.That(rows.Single().Label, Is.EqualTo("Qty 1"));

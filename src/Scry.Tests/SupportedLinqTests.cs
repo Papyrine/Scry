@@ -23,8 +23,7 @@ public class SupportedLinqTests
         Assert.That(
             missing,
             Is.Empty,
-            () => $"KnownFunction has values the analyzer's table does not spell, so a query using them " +
-                  $"would be reported as unsupported: {string.Join(", ", missing)}");
+            () => $"KnownFunction has values the analyzer's table does not spell, so a query using them would be reported as unsupported: {string.Join(", ", missing)}");
     }
 
     [Test]
@@ -65,8 +64,7 @@ public class SupportedLinqTests
                 Assert.That(
                     overloads,
                     Does.Contain(arity),
-                    () => $"Queryable.{name} has no {arity}-argument overload, so the analyzer would " +
-                          "report every call to it as an unsupported overload.");
+                    () => $"Queryable.{name} has no {arity}-argument overload, so the analyzer would report every call to it as an unsupported overload.");
             }
         }
     }

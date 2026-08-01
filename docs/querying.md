@@ -91,17 +91,19 @@ public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjec
 /// </summary>
 public ScryBatch Batch()
 {
-    if (batchTransport is null)
+    if (batchTransport is not null)
     {
-        throw new NotSupportedException(
-            "This client's transport does not batch. Send queries individually, or construct the client " +
-            "with a batch transport (ScryClient.ForHttp does).");
+        return new(this);
     }
 
-    return new(this);
+    throw new NotSupportedException(
+        """
+        This client's transport does not batch.
+        Send queries individually, or construct the client with a batch transport (ScryClient.ForHttp does).
+        """);
 }
 ```
-<sup><a href='/src/Scry.Client/ScryClient.cs#L68-L97' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Client/ScryClient.cs#L70-L101' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -393,7 +395,7 @@ An operand that is **not a string** is converted by the database:
 <a id='snippet-clientStringConcat'></a>
 ```cs
 var rows = await client.Source<Order>("Order")
-    .Select(_ => new {Label = _.Region + "-" + _.Quantity})
+    .Select(_ => new {Label = $"{_.Region}-{_.Quantity}"})
     .ToListAsync();
 ```
 <sup><a href='/src/Scry.Tests/StringConcatTests.cs#L16-L20' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientStringConcat' title='Start of snippet'>anchor</a></sup>

@@ -6,6 +6,7 @@
     <File Path="../.editorconfig" />
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
+    <File Path="mdsnippets.json" />
   </Folder>
   <Project Path="Scry.Annotations/Scry.Annotations.csproj" />
   <Project Path="Scry.Wire/Scry.Wire.csproj" />

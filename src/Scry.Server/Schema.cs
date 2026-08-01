@@ -380,9 +380,7 @@ sealed class Schema
             if (policied.Contains(element))
             {
                 throw new(
-                    $"'{owner.Name}.{member.Name}' is a [QueryableCollection] of '{element.Name}', which has a row policy. " +
-                    "Aggregating a collection cannot apply that policy — a policy filters a source, and a subquery has none — " +
-                    "so exposing it would count rows the policy hides. Remove the attribute, or drop the policy.");
+                    $"'{owner.Name}.{member.Name}' is a [QueryableCollection] of '{element.Name}', which has a row policy. Aggregating a collection cannot apply that policy — a policy filters a source, and a subquery has none — so exposing it would count rows the policy hides. Remove the attribute, or drop the policy.");
             }
         }
 
@@ -435,10 +433,7 @@ sealed class Schema
         }
 
         throw new(
-            $"Source name '{name}' on '{type.Name}' cannot be written as a C# property name. A source " +
-            "name is also the property the generated client and the explorer expose it as, so it has to " +
-            "be one C# can express. Set [Queryable(Name = \"...\")] to a plain identifier that is not a " +
-            "reserved keyword.");
+            $"Source name '{name}' on '{type.Name}' cannot be written as a C# property name. A source name is also the property the generated client and the explorer expose it as, so it has to be one C# can express. Set [Queryable(Name = \"...\")] to a plain identifier that is not a reserved keyword.");
     }
 
     static IReadOnlyList<string> PreviousNamesOf(MemberInfo member) =>
@@ -617,9 +612,7 @@ sealed class Schema
             !collation.All(_ => char.IsAsciiLetterOrDigit(_) || _ == '_'))
         {
             throw new(
-                $"ScryOptions.{option} must be a plain collation name — letters, digits and underscores only. " +
-                "It is emitted into SQL rather than parameterized, so it has to be trusted configuration, " +
-                "never a value taken from a request or from anywhere a caller can influence.");
+                $"ScryOptions.{option} must be a plain collation name — letters, digits and underscores only. It is emitted into SQL rather than parameterized, so it has to be trusted configuration, never a value taken from a request or from anywhere a caller can influence.");
         }
     }
 
@@ -654,9 +647,7 @@ sealed class Schema
             if (!entityType.IsAssignableFrom(type))
             {
                 throw new(
-                    $"Row policy '{policy.Name}' on '{candidate.Name}' filters '{entityType.Name}', which " +
-                    $"source '{name}' does not derive from. A policy has to be written against the type it " +
-                    "is attached to, or one of its bases.");
+                    $"Row policy '{policy.Name}' on '{candidate.Name}' filters '{entityType.Name}', which source '{name}' does not derive from. A policy has to be written against the type it is attached to, or one of its bases.");
             }
 
             policies.Add(policy);

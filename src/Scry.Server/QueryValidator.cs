@@ -764,8 +764,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             if (!string.Equals(projection.Members[i].Name, set.Projection.Members[i].Name, StringComparison.Ordinal))
             {
                 throw Reject(
-                    $"Both sides of a set operation must project the same members, but '{projection.Members[i].Name}' " +
-                    $"and '{set.Projection.Members[i].Name}' differ.");
+                    $"Both sides of a set operation must project the same members, but '{projection.Members[i].Name}' and '{set.Projection.Members[i].Name}' differ.");
             }
         }
 
@@ -791,15 +790,13 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         if (sawOuterFilter)
         {
             throw Reject(
-                "RightJoin cannot narrow its outer side — remove the Where, Skip, or Take before it, " +
-                "or swap the sides and use LeftJoin.");
+                "RightJoin cannot narrow its outer side — remove the Where, Skip, or Take before it, or swap the sides and use LeftJoin.");
         }
 
         if (root.Policies.Count > 0)
         {
             throw Reject(
-                $"Source '{root.Name}' carries a row policy, so it cannot be the outer side of a " +
-                "RightJoin — swap the sides and use LeftJoin.");
+                $"Source '{root.Name}' carries a row policy, so it cannot be the outer side of a RightJoin — swap the sides and use LeftJoin.");
         }
     }
 
@@ -902,8 +899,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     member.Side != JoinSide.Inner)
                 {
                     throw Reject(
-                        $"Join projection member '{member.Name}' aggregates, which only the inner side " +
-                        "of a GroupJoin may do.");
+                        $"Join projection member '{member.Name}' aggregates, which only the inner side of a GroupJoin may do.");
                 }
 
                 if (aggregate.Function != AggregateFn.Count)
@@ -931,8 +927,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 member.Side == JoinSide.Inner)
             {
                 throw Reject(
-                    $"Join projection member '{member.Name}' reads the inner side of a GroupJoin " +
-                    "directly. The inner side is a group — aggregate it, or use Join.");
+                    $"Join projection member '{member.Name}' reads the inner side of a GroupJoin directly. The inner side is a group — aggregate it, or use Join.");
             }
 
             ResolvePath(member.Path, side, requireScalar: true, "Join projection member");

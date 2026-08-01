@@ -49,13 +49,8 @@ public sealed class ScryBatch
 
         // A batch is one request carrying many queries, so a per-query header has no request of its own
         // to be written onto. Refused rather than dropped, exactly as a custom transport refuses them.
-        if (call is not null)
-        {
-            throw new NotSupportedException(
-                "Per-query headers cannot be used inside a batch: the batch is a single request, so its " +
-                "queries cannot carry headers of their own. Send the query on its own, or set the header " +
-                "on the HttpClient.");
-        }
+        if (call is null) return;
+        throw new NotSupportedException("Per-query headers cannot be used inside a batch: the batch is a single request, so its queries cannot carry headers of their own. Send the query on its own, or set the header on the HttpClient.");
     }
 
     internal Task<QueryResponse> Enqueue(QueryRequest request, ScryCall? call)

@@ -42,8 +42,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         if (rows is not { } set)
         {
             throw new ScryValidationException(
-                $"Only a query that returns rows can be streamed; this one returns {response!.Kind}. " +
-                "Drop the terminal operator, or use the non-streaming endpoint.");
+                $"Only a query that returns rows can be streamed; this one returns {response!.Kind}. Drop the terminal operator, or use the non-streaming endpoint.");
         }
 
         return set;
