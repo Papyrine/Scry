@@ -231,7 +231,7 @@ public sealed class ScryClient
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync(cancel);
-            if (TryParseError(body) is { StaleClient: true, Error.Length: > 0 } error)
+            if (ScryJson.TryDeserializeError(body) is { StaleClient: true, Error.Length: > 0 } error)
             {
                 throw new ScryStaleClientException(error.Error);
             }
@@ -257,7 +257,7 @@ public sealed class ScryClient
                 continue;
             }
 
-            var marker = element.Deserialize<ScryStreamMarker>(ScryJson.Options)!;
+            var marker = ScryJson.DeserializeMarker(element);
             switch (kind.GetString())
             {
                 case ScryStream.Begin:
@@ -329,7 +329,7 @@ public sealed class ScryClient
         // A failure the server attributed to this client's schema stamp surfaces as the same exception
         // the payload reader throws for an unknown enum value, so one catch covers every stale-client
         // failure and can prompt a reload. SchemaStaleDetected has already been raised above.
-        if (TryParseError(body) is { StaleClient: true, Error.Length: > 0 } error)
+        if (ScryJson.TryDeserializeError(body) is { StaleClient: true, Error.Length: > 0 } error)
         {
             throw new ScryStaleClientException(error.Error);
         }
@@ -363,25 +363,11 @@ public sealed class ScryClient
             return ScryJson.DeserializeBatchResponse(body);
         }
 
-        if (TryParseError(body) is {StaleClient: true, Error.Length: > 0} error)
+        if (ScryJson.TryDeserializeError(body) is {StaleClient: true, Error.Length: > 0} error)
         {
             throw new ScryStaleClientException(error.Error);
         }
 
         throw new ScryRequestException((int) response.StatusCode, body);
-    }
-
-    // A non-success body is usually the endpoint's ScryError, but may be anything once proxies or
-    // other middleware are involved — an unparseable body falls back to the raw-bodied exception.
-    static ScryError? TryParseError([StringSyntax(StringSyntaxAttribute.Json)] string body)
-    {
-        try
-        {
-            return JsonSerializer.Deserialize<ScryError>(body, ScryJson.Options);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
     }
 }

@@ -56,6 +56,7 @@ Key files to read at each stage:
 
 **Wire AST — `Scry.Wire` (shared by client and server, no EF).**
 - `QueryRequest` (version + root source name + pipeline), `QueryOp` (the closed operator set incl. terminals), `Node` (the closed expression set), `Enums.cs` (`KnownFunction` — the only callable functions), `QueryResponse`, `ScryIntrospection`, `ScryJson` (the shared `JsonSerializerOptions`). Polymorphism uses a `$type` discriminator; unknown discriminators **fail** deserialization rather than being ignored. Adding a wire node means editing the `[JsonDerivedType]` list here.
+- Wire (de)serialization is **source-generated**: `WireJsonContext` lists only the roots and the generator reaches the rest through properties and `[JsonDerivedType]`, so a new operator or node needs nothing added to it. `ScryJson.Options` resolves that context first and falls back to reflection only for **payload** types, which are the consumer's and unknowable here. A wire type that fell out of the generated set would still work — reflection produces identical bytes — so `WireMetadataTests` asserts the whole vocabulary resolves from the generated resolver.
 - The wire is a **hard compatibility contract**: enum *names*, `$type` discriminators, and `ScryJson.Options` are all part of it — changing any is a wire break. `QueryRequest.Version` is validated server-side.
 
 **Server validate/execute — `Scry.Server`.**

@@ -210,9 +210,17 @@ public static class ScryServiceExtensions
         }
     }
 
-    static async Task WriteLine<T>(HttpContext context, T value)
+    static Task WriteLine(HttpContext context, ScryStreamMarker marker) =>
+        WriteLine(context, ScryJson.Serialize(marker));
+
+    // A row's shape comes from the query rather than from a wire type — it is the projected members
+    // the client asked for — so there is nothing to generate metadata for ahead of time.
+    static Task WriteLine(HttpContext context, Dictionary<string, object?> row) =>
+        WriteLine(context, JsonSerializer.Serialize(row, ScryJson.Options));
+
+    static async Task WriteLine(HttpContext context, string json)
     {
-        await context.Response.WriteAsync(JsonSerializer.Serialize(value, ScryJson.Options), context.RequestAborted);
+        await context.Response.WriteAsync(json, context.RequestAborted);
         await context.Response.WriteAsync("\n", context.RequestAborted);
 
         // Flushed per line: a stream a client reads incrementally is the point, and a buffered response

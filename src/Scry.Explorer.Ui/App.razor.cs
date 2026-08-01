@@ -179,7 +179,7 @@ public partial class App
         try
         {
             var json = await Http.GetStringAsync("introspect");
-            introspection = JsonSerializer.Deserialize<ScryIntrospection>(json, ScryJson.Options)!;
+            introspection = ScryJson.DeserializeIntrospection(json);
             scryReferences = await SnippetExecutor.FetchReferencesAsync(Http);
             workspace = RoslynWorkspace.Create(ModelSynthesizer.Synthesize(introspection), scryReferences);
             await TryRegister();

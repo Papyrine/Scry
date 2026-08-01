@@ -17,6 +17,15 @@ All (de)serialization goes through `ScryJson`, whose options are part of the con
 - Deserialization is **fail-closed**: unknown discriminators and malformed JSON throw `ScryWireException`, they are not skipped.
 
 
+### The vocabulary is source-generated
+
+Because the vocabulary is closed, all of it can be emitted at compile time. `WireJsonContext` is a `System.Text.Json` `JsonSerializerContext` over the wire roots; the generator follows properties and `[JsonDerivedType]` from there, so every operator, node, and envelope is covered without being listed twice. Nothing on the wire is reflected over at run time — which matters most in the client's headline deployment, a trimmed Blazor WASM app that would otherwise pay to build that metadata on first query.
+
+One thing cannot be generated here: the **payload**. Its type is the consumer's — a generated query model, an anonymous projection, a DTO of theirs — and this assembly has never seen it. So a reflection resolver sits *behind* the generated set in the chain and only ever answers what the wire does not name. A consumer wanting the payload generated too supplies their own types; nothing about the AST reaches reflection either way.
+
+This is invisible on the wire. Reflection reads the same attributes and produces the same bytes, so a wire type that fell out of the generated set would keep working, silently — `WireMetadataTests` is what makes that drift loud.
+
+
 ### Why the options aren't configurable
 
 There is no API for supplying custom `JsonSerializerOptions`, and that is deliberate.
