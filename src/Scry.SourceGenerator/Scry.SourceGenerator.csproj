@@ -26,6 +26,10 @@
          generator refuses to emit one it cannot write, so the server has to refuse the same set. -->
     <Compile Include="..\Shared\SchemaStamp.cs" Link="SchemaStamp.cs" />
     <Compile Include="..\Shared\CSharpIdentifier.cs" Link="CSharpIdentifier.cs" />
+    <!-- The closed LINQ surface the analyzer reports against. Compiled into Scry.Tests as well,
+         where it is pinned against KnownFunction and against the translator that enforces it at
+         runtime — the analyzer would otherwise drift into rejecting queries the client can carry. -->
+    <Compile Include="..\Shared\SupportedLinq.cs" Link="SupportedLinq.cs" />
     <PackageReference Include="Polyfill" PrivateAssets="all" />
     <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />

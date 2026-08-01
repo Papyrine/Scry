@@ -1,0 +1,4 @@
+﻿SCRY101: Cast is not supported by Scry — use OfType<HandBuilt> to narrow by filtering
+    await client.Source<HandBuilt>("Order").Cast<HandBuilt>().ToListAsync();
+SCRY106: A Scry projection must construct an object — an anonymous type, a record, or an object initializer
+    await client.Source<HandBuilt>("Order").Select(_ => _.Name).ToListAsync();

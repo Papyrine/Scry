@@ -1,0 +1,10 @@
+﻿SCRY109: 'ToList' executes the query where it stands, which a Scry source cannot do — use ToListAsync instead
+    var rows = Query.Order.ToList();
+SCRY109: 'First' executes the query where it stands, which a Scry source cannot do — use FirstAsync instead
+    var one = Query.Order.First();
+SCRY109: 'Count' executes the query where it stands, which a Scry source cannot do — use CountAsync instead
+    var count = Query.Order.Count();
+SCRY109: 'Any' executes the query where it stands, which a Scry source cannot do — use AnyAsync instead
+    var any = Query.Order.Where(_ => _.Amount > 0).Any();
+SCRY109: 'AsEnumerable' executes the query where it stands, which a Scry source cannot do — and Scry has no async terminal for it
+    var loose = Query.Order.AsEnumerable();

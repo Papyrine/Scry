@@ -1,0 +1,2 @@
+﻿SCRY102: SelectMany with a result selector is not supported by Scry — flatten first, then Select
+    await Query.Order.SelectMany(_ => _.Lines, (order, line) => new {order.Id, line.Price}).ToListAsync();

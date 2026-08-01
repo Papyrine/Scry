@@ -2,9 +2,48 @@
 
 What Scry supports compared to the LINQ surface EF Core can translate server-side, and — for everything left out — why. This page began as a roadmap as well as a reference. Nothing is left on it that is blocked on Scry's own design: what remains unsupported is waiting on the framework, excluded on purpose, or not asked for.
 
-Scry's wire vocabulary is a **deliberately closed set**. Every operator, function, and expression node must be individually representable, validatable, and rebindable — see the [security model](security.md). So the goal is not parity with EF Core; it is covering the operations remote clients actually need, one auditable addition at a time. Anything outside the set throws `NotSupportedException` on the client at translation time, before a request is sent.
+Scry's wire vocabulary is a **deliberately closed set**. Every operator, function, and expression node must be individually representable, validatable, and rebindable — see the [security model](security.md). So the goal is not parity with EF Core; it is covering the operations remote clients actually need, one auditable addition at a time. Anything outside the set is refused twice over: the vocabulary itself by the client's translator, which throws `NotSupportedException` before a request is sent, and the composition rules — one `Select`, one join, `Reverse` only over an ordering — by the server, which answers 400. An [analyzer](#reported-at-compile-time) reports both at the call site first.
 
 For usage detail on the supported surface (position rules, limits, examples), see [Writing queries](querying.md).
+
+
+## Reported at compile time
+
+`Scry.Client` ships a Roslyn analyzer in the same assembly as the [source generator](source-generator.md), so it needs no second package reference and nothing to switch on. It reads LINQ written against a generated query model — or against a hand-built source opened through the client — and reports what the closed set cannot carry, where it was written, with the reasoning on this page linked from each diagnostic.
+
+| Rule | Reports |
+| --- | --- |
+| `SCRY100` | An operator outside the set, or an overload of one that is in it — `SkipWhile`, `Chunk`, `Select` with an index |
+| `SCRY101` | [`Cast<T>`](#deliberately-left-out), naming `OfType<T>` as the operator that narrows |
+| `SCRY102` | [`SelectMany` with a result selector](#deliberately-left-out) |
+| `SCRY103` | An `IComparer` or `IEqualityComparer` overload |
+| `SCRY104` | A second `Select`, `Distinct`, `GroupBy`, `SelectMany` or join |
+| `SCRY105` | An [ordering key that constructs an object](#anonymous-types) |
+| `SCRY106` | A projection that does not construct one |
+| `SCRY107` | A function outside [the closed set](querying.md#functions) |
+| `SCRY108` | [`ToString(format)`](#waiting-on-the-framework-or-the-provider), and the interpolated hole that means the same |
+| `SCRY109` | A synchronous terminal — `ToList`, `First`, `Count` — naming the async one that replaces it |
+| `SCRY110` | `Reverse` with no preceding `OrderBy` |
+| `SCRY111` | A `GroupJoin` that projects its group rather than folding it |
+
+All of them are warnings. A query the analyzer cannot read is still refused by the translator or the server exactly as before, so a rule that is allowed to be incomplete never breaks a build on its own. To make the set an error:
+
+```ini
+# .editorconfig
+[*.cs]
+dotnet_analyzer_diagnostic.category-Scry.severity = error
+```
+
+### What it deliberately does not check
+
+The analyzer reads the chain as written, and holds precision above recall — reporting working code is the worse failure, since everything it misses is caught twice downstream.
+
+- **Chains it cannot follow.** A query composed across statements is followed through the locals holding it; one assembled through a helper method, a conditional, or a reassigned local is not.
+- **Anything in a query lambda that is not a scalar.** `Select`, `Count` and `Contains` all mean something else inside one — a membership test against another source, a correlated subquery over a collection navigation, an aggregate over a group. Only members of a string, a date, or `Math`, read off the row, are checked; a value that comes from closure state is evaluated into a constant before it reaches the wire and is left alone.
+- **Values known only when the query runs.** `Take` against `MaxPageSize`, the size of a `Contains` set, and whether the other side of a join is a Scry source at all.
+- **Whether the provider can translate it.** Reaching the wire is necessary but not sufficient, [as above](#computed-projection-members).
+
+It is not a security boundary and cannot become one. The client is assumed hostile, the analyzer runs on the client's own build, and the server re-validates every request against its own allow-list regardless — see the [security model](security.md). This moves a mistake from a stack trace to a squiggle, and nowhere else.
 
 
 ## Supported

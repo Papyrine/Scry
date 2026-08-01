@@ -1,0 +1,4 @@
+﻿SCRY106: A Scry projection must construct an object — an anonymous type, a record, or an object initializer
+    await Query.Order.Select(_ => _.Region).ToListAsync();
+SCRY106: A Scry projection must construct an object — an anonymous type, a record, or an object initializer
+    await Query.Order.GroupBy(_ => _.Region).Select(_ => _.Key).ToListAsync();

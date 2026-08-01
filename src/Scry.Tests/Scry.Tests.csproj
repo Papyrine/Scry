@@ -4,6 +4,10 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <!-- The closed LINQ surface the analyzer reports against, compiled here as well so it can be
+         pinned against KnownFunction and against Queryable itself — neither of which the analyzer's
+         own assembly can see. -->
+    <Compile Include="..\Shared\SupportedLinq.cs" Link="SupportedLinq.cs" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="NUnit" />
     <PackageReference Include="NUnit3TestAdapter" />

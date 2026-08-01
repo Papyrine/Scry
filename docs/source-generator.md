@@ -260,10 +260,16 @@ builder.Services.AddScoped<ScryQuery>();
 | --- | --- | --- |
 | `SCRY001` | Error | Failed to read the Scry model assembly. The message carries the underlying reason. |
 | `SCRY002` | Error | Two queryable types resolve to the same source name. |
+| `SCRY003` | Error | A source name cannot be written as a C# property name. |
 
 `SCRY001` is reported when the DLL exists but cannot be parsed — corrupt, truncated, or not a managed assembly.
 
 `SCRY002` guards the source-name clash that would otherwise emit duplicate properties on `ScryQuery` and surface as a `CS0102` on generated code the user cannot see. Give one of the types a distinct [`Name`](annotations.md#naming-a-source). The server rejects the same clash at startup.
+
+`SCRY003` guards the same axis for names that are not identifiers at all: the entry point exposing the source is a property, and a name it cannot be written as would emit a `ScryQuery` that does not parse. The server refuses the same set at startup, so which side is built first does not change where the mistake surfaces.
+
+The `SCRY1xx` family is reported by the **LINQ analyzer**, which is packed in this same assembly and needs no separate reference. It reports queries the closed operator set cannot carry, at the call site rather than at translation time — see [LINQ coverage](linq-coverage.md#reported-at-compile-time).
+
 
 ## Troubleshooting
 

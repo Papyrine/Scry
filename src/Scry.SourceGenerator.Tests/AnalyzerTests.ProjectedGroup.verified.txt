@@ -1,0 +1,2 @@
+﻿SCRY111: A GroupJoin's group can only be folded to a scalar — 'orders' would put a nested collection in the response
+    .GroupJoin(Query.Order, _ => _.Id, _ => _.CustomerId, (customer, orders) => new {customer.Id, Orders = orders})

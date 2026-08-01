@@ -1,0 +1,16 @@
+﻿SCRY100: 'SkipWhile' is not part of the operator set Scry can carry, so this query fails when it is translated
+    await Query.Order.SkipWhile(_ => _.Amount > 0).ToListAsync();
+SCRY100: 'TakeWhile' is not part of the operator set Scry can carry, so this query fails when it is translated
+    await Query.Order.TakeWhile(_ => _.Amount > 0).ToListAsync();
+SCRY100: 'DefaultIfEmpty' is not part of the operator set Scry can carry, so this query fails when it is translated
+    await Query.Order.DefaultIfEmpty().ToListAsync();
+SCRY100: 'Append' is not part of the operator set Scry can carry, so this query fails when it is translated
+    await Query.Order.Append(null!).ToListAsync();
+SCRY100: 'Select with an index' is not part of the operator set Scry can carry, so this query fails when it is translated
+    await Query.Order.Select((_, index) => new {_.Id}).ToListAsync();
+SCRY100: 'Chunk' is not part of the operator set Scry can carry, so this query fails when it is translated
+    var chunked = Query.Order.Chunk(10);
+SCRY100: 'Zip' is not part of the operator set Scry can carry, so this query fails when it is translated
+    var zipped = Query.Order.Zip(Query.Order);
+SCRY109: 'Aggregate' executes the query where it stands, which a Scry source cannot do — and Scry has no async terminal for it
+    var folded = Query.Order.Aggregate((left, right) => left);
