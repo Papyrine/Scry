@@ -44,7 +44,7 @@ Failures surface at startup, not at first request:
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L43-L45' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L51-L53' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Two `POST` endpoints, from the one call:

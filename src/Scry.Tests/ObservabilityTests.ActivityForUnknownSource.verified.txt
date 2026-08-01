@@ -1,0 +1,10 @@
+﻿{
+  DisplayName: scry.query (unknown),
+  Status: Error,
+  StatusDescription: Unknown source 'Missing'.,
+  Tags: {
+    error.type: Scry.ScryValidationException,
+    scry.operators: 1,
+    scry.source: (unknown)
+  }
+}

@@ -361,7 +361,7 @@ app.MapScry("/api/query")
 
 **Trusting a request header.** A row policy can read the call's headers off `ScryPolicyContext.RequestHeaders`, and the client can attach them [per query](querying.md#headers). Every one of them is chosen by the client and therefore attacker-controlled — a policy that scopes rows by `X-Tenant` scopes nothing, because an attacker sends a different `X-Tenant`. They are hint data: correlation ids, trace ids, a client build. Identity and tenancy come from the authenticated principal, resolved through `context.Services`.
 
-**Auditing.** Nothing is logged by default. `ScryProcessor.Execute` is the single choke point for recording what was asked for.
+**Auditing, by default.** Nothing is recorded until something subscribes. The hooks exist — every query is reported to any registered [`IScryAuditor`](observability.md#the-audit-hook) with its full request AST and outcome, alongside [traces and metrics](observability.md) — but turning them on, and alerting on rejections, is deployment work.
 
 **CORS, CSRF, TLS.** Ordinary ASP.NET Core concerns, unchanged by Scry.
 

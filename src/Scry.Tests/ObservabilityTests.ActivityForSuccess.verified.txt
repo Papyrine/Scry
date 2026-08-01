@@ -1,0 +1,9 @@
+﻿{
+  DisplayName: scry.query Employee,
+  Tags: {
+    scry.operators: 3,
+    scry.result_kind: list,
+    scry.rows: 3,
+    scry.source: Employee
+  }
+}

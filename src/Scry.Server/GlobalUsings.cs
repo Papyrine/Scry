@@ -1,4 +1,6 @@
-﻿global using System.Globalization;
+﻿global using System.Diagnostics;
+global using System.Diagnostics.Metrics;
+global using System.Globalization;
 global using System.Linq.Expressions;
 global using System.Security.Cryptography;
 global using System.Text.Json;

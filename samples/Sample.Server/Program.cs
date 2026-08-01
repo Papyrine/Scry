@@ -35,6 +35,14 @@ class Program
             });
         // end-snippet
 
+        // Scry's telemetry is dormant until something subscribes; opting in is one AddSource and one
+        // AddMeter. See /docs/observability.md for the spans, instruments, and tags.
+        // begin-snippet: openTelemetry
+        builder.Services.AddOpenTelemetry()
+            .WithTracing(_ => _.AddSource(ScryInstrumentation.ActivitySourceName))
+            .WithMetrics(_ => _.AddMeter(ScryInstrumentation.MeterName));
+        // end-snippet
+
         var app = builder.Build();
 
         app.UseBlazorFrameworkFiles();

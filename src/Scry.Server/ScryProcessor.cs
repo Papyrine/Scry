@@ -66,6 +66,7 @@ public sealed class ScryProcessor
         IHeaderDictionary responseHeaders)
     {
         var drifted = request.Stamp is { } requestStamp && requestStamp != schema.Stamp;
+        var recorder = QueryRecorder.Start(schema, request, services);
         try
         {
             var response = executor.Execute(request, data, new(services, requestHeaders, responseHeaders)) with
@@ -85,6 +86,7 @@ public sealed class ScryProcessor
                 response = response with { EnumAliases = schema.EnumAliases };
             }
 
+            recorder.Succeeded(response);
             return response;
         }
         // A rejected query from a client that was generated against a different model surface is far
@@ -92,10 +94,22 @@ public sealed class ScryProcessor
         // matching stamp (or none) reports the plain validation message.
         catch (ScryValidationException exception) when (drifted)
         {
-            throw new ScryValidationException($"{exception.Message} The request's schema stamp does not match this server's model, so the client was generated against a different model surface — regenerate the client.")
+            var stale = new ScryValidationException($"{exception.Message} The request's schema stamp does not match this server's model, so the client was generated against a different model surface — regenerate the client.")
             {
                 StaleClient = true
             };
+            recorder.Rejected(stale);
+            throw stale;
+        }
+        catch (ScryValidationException exception)
+        {
+            recorder.Rejected(exception);
+            throw;
+        }
+        catch (Exception exception)
+        {
+            recorder.Failed(exception);
+            throw;
         }
     }
 
@@ -132,6 +146,7 @@ public sealed class ScryProcessor
         Cancel cancel = default)
     {
         var drifted = request.Stamp is { } requestStamp && requestStamp != schema.Stamp;
+        var recorder = QueryRecorder.Start(schema, request, services, streamed: true);
         QueryExecutor.RowSet rows;
         try
         {
@@ -139,10 +154,22 @@ public sealed class ScryProcessor
         }
         catch (ScryValidationException exception) when (drifted)
         {
-            throw new ScryValidationException($"{exception.Message} The request's schema stamp does not match this server's model, so the client was generated against a different model surface — regenerate the client.")
+            var stale = new ScryValidationException($"{exception.Message} The request's schema stamp does not match this server's model, so the client was generated against a different model surface — regenerate the client.")
             {
                 StaleClient = true
             };
+            recorder.Rejected(stale);
+            throw stale;
+        }
+        catch (ScryValidationException exception)
+        {
+            recorder.Rejected(exception);
+            throw;
+        }
+        catch (Exception exception)
+        {
+            recorder.Failed(exception);
+            throw;
         }
 
         var begin = new ScryStreamMarker
@@ -153,25 +180,62 @@ public sealed class ScryProcessor
             EnumAliases = drifted && schema.EnumAliases.Count > 0 ? schema.EnumAliases : null
         };
 
-        return (begin, Shape(rows, options.MaxStreamRows, cancel));
+        return (begin, Shape(rows, options.MaxStreamRows, recorder, cancel));
     }
 
     static async IAsyncEnumerable<Dictionary<string, object?>> Shape(
         QueryExecutor.RowSet rows,
         int? maxRows,
+        QueryRecorder recorder,
         [EnumeratorCancellation] Cancel cancel)
     {
         var count = 0;
-        await foreach (var row in QueryExecutor.Enumerate(rows, cancel))
+        var enumerator = QueryExecutor.Enumerate(rows, cancel).GetAsyncEnumerator(cancel);
+        try
         {
-            if (count++ == maxRows)
+            while (true)
             {
-                // Thrown rather than returned: the transport turns it into the stream's error marker,
-                // so the client sees a truncated result as a failure rather than as the end of the data.
-                throw new ScryValidationException($"The query returned more than the maximum of {maxRows} streamed rows.");
+                bool moved;
+                try
+                {
+                    moved = await enumerator.MoveNextAsync();
+                }
+                catch (OperationCanceledException)
+                {
+                    recorder.Canceled(count);
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    recorder.Failed(exception);
+                    throw;
+                }
+
+                if (!moved)
+                {
+                    break;
+                }
+
+                if (count++ == maxRows)
+                {
+                    // Thrown rather than returned: the transport turns it into the stream's error marker,
+                    // so the client sees a truncated result as a failure rather than as the end of the data.
+                    var truncated = new ScryValidationException($"The query returned more than the maximum of {maxRows} streamed rows.");
+                    recorder.Rejected(truncated);
+                    throw truncated;
+                }
+
+                yield return QueryExecutor.ShapeRow(enumerator.Current, rows);
             }
 
-            yield return QueryExecutor.ShapeRow(row, rows);
+            recorder.Succeeded(count);
+        }
+        finally
+        {
+            // A consumer that stops reading ends the stream here, with no completion of its own. The
+            // first completion wins inside the recorder, so on every fully-reported path this no-ops.
+            recorder.Canceled(count);
+            await enumerator.DisposeAsync();
         }
     }
 

@@ -72,6 +72,7 @@ public static class ScryServiceExtensions
 
         context.Response.Headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
 
+        var started = Stopwatch.GetTimestamp();
         string body;
         using (var reader = new StreamReader(context.Request.Body))
         {
@@ -85,6 +86,9 @@ public static class ScryServiceExtensions
         }
         catch (ScryWireException exception)
         {
+            // Never reaches the processor, so it is metered here — an unparseable payload is a signal
+            // the outcome tag exists for.
+            QueryRecorder.Malformed(Stopwatch.GetElapsedTime(started));
             await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, staleClient: false);
             return;
         }
@@ -169,6 +173,7 @@ public static class ScryServiceExtensions
         // write, since headers are fixed once the response has started.
         context.Response.Headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
 
+        var started = Stopwatch.GetTimestamp();
         string body;
         using (var reader = new StreamReader(context.Request.Body))
         {
@@ -183,6 +188,8 @@ public static class ScryServiceExtensions
         catch (ScryWireException exception)
         {
             // A malformed request carries no usable stamp, so it is never attributed to staleness.
+            // It also never reaches the processor, so it is metered here.
+            QueryRecorder.Malformed(Stopwatch.GetElapsedTime(started));
             await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, staleClient: false);
             return;
         }

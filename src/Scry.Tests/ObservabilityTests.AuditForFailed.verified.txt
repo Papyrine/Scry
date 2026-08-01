@@ -1,0 +1,43 @@
+﻿{
+  Request: {
+    Version: 1,
+    Root: Employee,
+    Pipeline: [
+      {
+        Predicate: {
+          Path: [
+            Active
+          ]
+        }
+      },
+      {
+        Key: {
+          Path: [
+            Name
+          ]
+        },
+        Descending: false
+      },
+      {
+        Projection: {
+          Members: [
+            {
+              Name: Name,
+              Value: {
+                Node: {
+                  Path: [
+                    Name
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  Outcome: Failed,
+  Streamed: false,
+  Error: The policy faulted.,
+  StaleClient: false
+}

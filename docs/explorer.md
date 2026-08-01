@@ -56,7 +56,7 @@ app.MapScryExplorer(
         _.EnableGuard = _ => true;
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L46-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L54-L63' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 | Option | Default | Meaning |

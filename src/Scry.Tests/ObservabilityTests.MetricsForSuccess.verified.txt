@@ -1,0 +1,19 @@
+﻿[
+  {
+    Instrument: scry.server.query.duration,
+    Value: {scrubbed},
+    Tags: {
+      scry.outcome: success,
+      scry.result_kind: list,
+      scry.source: Employee
+    }
+  },
+  {
+    Instrument: scry.server.query.rows,
+    Value: 3,
+    Tags: {
+      scry.result_kind: list,
+      scry.source: Employee
+    }
+  }
+]

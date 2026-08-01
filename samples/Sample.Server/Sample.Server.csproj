@@ -9,6 +9,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <PackageReference Include="EfLocalDb" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <ProjectReference Include="..\..\src\Scry.Server\Scry.Server.csproj" />
     <ProjectReference Include="..\..\src\Scry.Server.Explorer\Scry.Server.Explorer.csproj" />
     <ProjectReference Include="..\Sample.Model\Sample.Model.csproj" />

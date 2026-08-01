@@ -1,0 +1,44 @@
+﻿{
+  Request: {
+    Version: 1,
+    Root: Employee,
+    Pipeline: [
+      {
+        Predicate: {
+          Path: [
+            Active
+          ]
+        }
+      },
+      {
+        Key: {
+          Path: [
+            Name
+          ]
+        },
+        Descending: false
+      },
+      {
+        Projection: {
+          Members: [
+            {
+              Name: Name,
+              Value: {
+                Node: {
+                  Path: [
+                    Name
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  Outcome: Canceled,
+  Streamed: true,
+  Rows: 1,
+  Error: The stream ended before every row was read.,
+  StaleClient: false
+}

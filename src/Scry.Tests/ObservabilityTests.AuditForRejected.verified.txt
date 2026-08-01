@@ -1,0 +1,19 @@
+﻿{
+  Request: {
+    Version: 1,
+    Root: Employee,
+    Pipeline: [
+      {
+        Predicate: {
+          Path: [
+            Salary
+          ]
+        }
+      }
+    ]
+  },
+  Outcome: Rejected,
+  Streamed: false,
+  Error: Property 'Salary' is not allow-listed on 'Employee'.,
+  StaleClient: false
+}
