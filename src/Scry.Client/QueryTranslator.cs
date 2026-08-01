@@ -1404,8 +1404,15 @@ sealed class QueryTranslator
         throw new NotSupportedException("Cannot determine projection member names.");
     }
 
-    static string Capitalize(string name) =>
-        name.Length == 0 ? name : char.ToUpperInvariant(name[0]) + name[1..];
+    static string Capitalize(string name)
+    {
+        if (name.Length == 0)
+        {
+            return name;
+        }
+
+        return char.ToUpperInvariant(name[0]) + name[1..];
+    }
 
     static BinaryOp MapBinary(ExpressionType type) =>
         type switch
