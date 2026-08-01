@@ -208,6 +208,7 @@ It is off unless mapped, and Development-only by default. See [Query explorer](d
 - [Writing queries](docs/querying.md)
 - [Server](docs/server.md)
 - [Row policies](docs/policies.md)
+- [Batching](docs/batching.md)
 - [Observability](docs/observability.md)
 - [Security model](docs/security.md)
 - [Wire format](docs/wire-format.md)

@@ -35,6 +35,8 @@ One activity per query, named `scry.query {source}`, spanning validation through
 
 A rejection or failure additionally sets the activity's status to error, carrying the same message the outcome does.
 
+A [batch](batching.md) adds one `scry.batch` span, tagged `scry.batch.size`, with its entries' activities nested under it — so batched queries read as one unit of work rather than as unrelated siblings. The entries carry the metrics and audit entries; the batch itself carries neither.
+
 
 ## Metrics
 
@@ -119,6 +121,7 @@ Semantics:
 - **Auditors fail closed.** An auditor that throws fails the request — an audit trail that silently drops entries is worse than a failed query. An implementation that must not block should hand the entry to a queue and return.
 - **`Error` is the real message.** For a `Failed` outcome the client saw a generic 500; the entry carries the underlying exception's message. The audit trail is where execution failures are readable.
 - **Streams are recorded at completion**, with the rows actually delivered — including a `Canceled` entry when the read stopped partway.
+- **A batch is audited per entry, not per request.** The trail records what was asked, and a [batch](batching.md) asked more than once; there is no entry for the batch itself.
 - **Malformed bodies are not audited.** A payload that fails deserialization never becomes a request object, so it appears in metrics only.
 
 

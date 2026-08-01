@@ -203,6 +203,18 @@ sealed class QueryRecorder(QueryRequest request, IServiceProvider services, stri
         };
 
     /// <summary>
+    /// The span covering a whole batch. Each entry starts its own activity inside it, so a batch reads
+    /// as one parent with its queries nested rather than as unrelated siblings. Entries carry the
+    /// metrics and audit entries; the batch adds only the grouping and its size.
+    /// </summary>
+    public static Activity? StartBatch(int size)
+    {
+        var activity = activitySource.StartActivity("scry.batch");
+        activity?.SetTag("scry.batch.size", size);
+        return activity;
+    }
+
+    /// <summary>
     /// A deserialization failure at the transport, before a request object exists to run a recorder
     /// over. Metric only: there is no request to audit and nothing worth a span of its own — but a
     /// client sending unparseable payloads is exactly what the outcome tag exists to make visible.

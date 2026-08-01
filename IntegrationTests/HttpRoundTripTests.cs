@@ -509,6 +509,60 @@ public class HttpRoundTripTests
         Assert.ThrowsAsync<ScryRequestException>(() =>
             client.Source<EmployeeQueryModel>("Secret").ToListAsync());
 
+    // Several queries, one POST. What is being proved is that batching changes only how many requests
+    // carry the queries: each entry arrives, validates, and comes back in the shape it would have had
+    // on its own — including the result kinds differing between entries.
+    [Test]
+    public async Task BatchOverHttp()
+    {
+        var batch = client.Batch();
+
+        var employees = query.Employee
+            .Where(_ => _.Active)
+            .OrderBy(_ => _.Name)
+            .Select(_ => new NameRow(_.Name))
+            .InBatch(batch)
+            .ToListAsync();
+
+        var departments = query.Department
+            .InBatch(batch)
+            .CountAsync();
+
+        var first = query.Employee
+            .OrderBy(_ => _.Name)
+            .Select(_ => new NameRow(_.Name))
+            .InBatch(batch)
+            .FirstOrDefaultAsync();
+
+        await batch.SendAsync();
+
+        Assert.That((await employees).Select(_ => _.Name), Is.EqualTo(activeEmployeeNames));
+        Assert.That(await departments, Is.EqualTo(2));
+        Assert.That((await first)!.Name, Is.EqualTo("Aaron"));
+    }
+
+    // A batch is not all-or-nothing: an entry the server refuses faults its own task and leaves the
+    // rest of the batch answered, which is what makes it safe to put a page's queries in one.
+    [Test]
+    public async Task BatchEntryRejectedOverHttp()
+    {
+        var batch = client.Batch();
+
+        var rejected = client.Source<EmployeeQueryModel>("Secret")
+            .InBatch(batch)
+            .ToListAsync();
+
+        var accepted = query.Department
+            .InBatch(batch)
+            .CountAsync();
+
+        await batch.SendAsync();
+
+        var exception = Assert.ThrowsAsync<ScryRequestException>(async () => await rejected)!;
+        Assert.That(exception.StatusCode, Is.EqualTo(400));
+        Assert.That(await accepted, Is.EqualTo(2));
+    }
+
     // The whole header path over real HTTP: the client attaches one, the server's row policy reads it
     // off ScryPolicyContext and answers on the response, and the client reads that back.
     [Test]

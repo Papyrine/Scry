@@ -32,6 +32,16 @@ public sealed class ScryOptions(Type contextType)
     public int MaxInValues { get; set; } = 1000;
 
     /// <summary>
+    /// Maximum number of queries one batch request may carry. Default 20.
+    /// </summary>
+    /// <remarks>
+    /// A batch is the one place a single request costs more than one query, so this is the bound that
+    /// keeps it from being an amplifier: every other limit is per query and would otherwise apply to an
+    /// arbitrary number of them. A batch over the limit is rejected whole, before any entry runs.
+    /// </remarks>
+    public int MaxBatchSize { get; set; } = 20;
+
+    /// <summary>
     /// Maximum number of rows a streamed query may return, or null — the default — for no limit.
     /// </summary>
     /// <remarks>

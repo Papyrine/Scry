@@ -76,8 +76,30 @@ public static class ScryJson
     public static string Serialize(ScryIntrospection introspection) =>
         JsonSerializer.Serialize(introspection, Options);
 
+    public static string Serialize(QueryBatchRequest request) =>
+        JsonSerializer.Serialize(request, Options);
+
+    public static string Serialize(QueryBatchResponse response) =>
+        JsonSerializer.Serialize(response, Options);
+
     public static QueryRequest DeserializeRequest([StringSyntax(StringSyntaxAttribute.Json)] string json) =>
         Deserialize<QueryRequest>(json, "request");
+
+    public static QueryBatchRequest DeserializeBatchRequest([StringSyntax(StringSyntaxAttribute.Json)] string json) =>
+        Deserialize<QueryBatchRequest>(json, "batch request");
+
+    public static QueryBatchResponse DeserializeBatchResponse([StringSyntax(StringSyntaxAttribute.Json)] string json)
+    {
+        var response = Deserialize<QueryBatchResponse>(json, "batch response");
+        // The same gate DeserializeResponse applies: a batch shaped by a newer wire format than this
+        // client understands is refused rather than misread.
+        if (response.Version <= WireFormat.Version)
+        {
+            return response;
+        }
+
+        throw new ScryWireException($"Unsupported response wire version {response.Version}; this client supports up to {WireFormat.Version}. The server is newer than the client.");
+    }
 
     public static QueryResponse DeserializeResponse([StringSyntax(StringSyntaxAttribute.Json)] string json)
     {

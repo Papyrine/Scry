@@ -560,7 +560,7 @@ The payload itself always carries the **current** name — the aliases are a tra
 
 ### Streamed results
 
-A request sent to the [`…/stream` endpoint](server.md#endpoints) comes back as newline-delimited JSON (`application/x-ndjson`) instead: one JSON value per line, a marker line opening and closing the rows.
+A request sent to the [`…/stream` endpoint](server.md#mapping-the-endpoint) comes back as newline-delimited JSON (`application/x-ndjson`) instead: one JSON value per line, a marker line opening and closing the rows.
 
 ```
 {"$scry":"begin","version":1,"stamp":"WsQ9hxzDNvqFuufg"}
@@ -580,6 +580,43 @@ The rows between the markers are exactly the objects a `list` payload holds, so 
 ```
 
 carrying a validation message, which is the client's own doing, or a generic one — the same rule a non-streamed `500` follows, so nothing internal leaks either way.
+
+
+## Batched queries
+
+A request sent to the [`…/batch` endpoint](server.md#mapping-the-endpoint) carries several queries at once. It introduces no query vocabulary: an entry is an ordinary `QueryRequest`, unchanged and complete, so a batch is only an envelope around requests the format already defines.
+
+```json
+{
+  "version": 1,
+  "queries": [
+    { "version": 1, "root": "Employee", "pipeline": [ { "$type": "count" } ] },
+    { "version": 1, "root": "Department", "pipeline": [ { "$type": "count" } ] }
+  ]
+}
+```
+
+The response answers each entry positionally, and is likewise an envelope around ordinary `QueryResponse` values:
+
+```json
+{
+  "version": 1,
+  "stamp": "WsQ9hxzDNvqFuufg",
+  "results": [
+    { "response": { "version": 1, "kind": "Scalar", "payload": 4 } },
+    { "error": "Unknown source 'Secret'.", "status": 400 }
+  ]
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `response` | The entry's result, when it succeeded — exactly what it would have been sent alone. |
+| `error` | Why the entry was rejected or failed; the specific message for a validation failure, and the same fixed text a `500` carries for anything else. |
+| `status` | What the entry would have returned on its own: `400` rejected, `500` failed. Entries ride inside a successful envelope and so have no status to inherit, which is why it is carried. |
+| `staleClient` | As on a [single error](#response) — the rejection is attributed to a differing schema stamp. |
+
+**Entries are independent.** Each is validated, policy-filtered, and executed separately, so one being rejected leaves the rest answered — the envelope only fails for a fault of its own: an unreadable body, an unsupported version, or more entries than [`MaxBatchSize`](server.md#options). It is not a transaction, and the entries run sequentially. The schema stamp rides once on the envelope, since one server answered all of them.
 
 
 ## Versioning

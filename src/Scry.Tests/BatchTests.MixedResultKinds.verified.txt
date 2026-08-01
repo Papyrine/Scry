@@ -1,0 +1,63 @@
+﻿{
+  "version": 1,
+  "results": [
+    {
+      "response": {
+        "version": 1,
+        "kind": "List",
+        "payload": [
+          {
+            "name": "Aaron"
+          },
+          {
+            "name": "Alice"
+          },
+          {
+            "name": "Carol"
+          }
+        ],
+        "stamp": "{scrubbed stamp}"
+      }
+    },
+    {
+      "response": {
+        "version": 1,
+        "kind": "Scalar",
+        "payload": 3,
+        "stamp": "{scrubbed stamp}"
+      }
+    },
+    {
+      "response": {
+        "version": 1,
+        "kind": "Page",
+        "payload": {
+          "items": [
+            {
+              "id": 3,
+              "name": "Aaron",
+              "status": "FullTime",
+              "active": true,
+              "managerId": 1,
+              "departmentId": 1,
+              "avatar": "Cgs="
+            },
+            {
+              "id": 1,
+              "name": "Alice",
+              "status": "FullTime",
+              "active": true,
+              "managerId": null,
+              "departmentId": 1,
+              "avatar": "AQID"
+            }
+          ],
+          "hasMore": true,
+          "cursor": "{scrubbed cursor}"
+        },
+        "stamp": "{scrubbed stamp}"
+      }
+    }
+  ],
+  "stamp": "{scrubbed stamp}"
+}

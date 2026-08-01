@@ -14,6 +14,7 @@ Type-safe, serializable LINQ from a client to a server-side EF Core model.
 | [Writing queries](querying.md) | The supported LINQ surface: operators, expressions, functions, projections, grouping, terminals. |
 | [LINQ coverage](linq-coverage.md) | Scry vs the EF Core–translatable surface: what is supported, and why anything left out is left out. |
 | [Paging](paging.md) | The `ToPageAsync` page envelope and limits (offset paging); the keyset-cursor design (slices 2–3, pending). |
+| [Batching](batching.md) | Sending several queries as one request, and what stays per-entry. |
 | [Server](server.md) | `AddScry`, `MapScry`, `ScryOptions`, limits, POCO sources, hosting without HTTP, error handling. |
 | [Row policies](policies.md) | `IReturnablePolicy<T>` for tenant scoping, soft delete, and row-level security. |
 | [Observability](observability.md) | The traces, metrics, and per-query audit hook the server emits. |

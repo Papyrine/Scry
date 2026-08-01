@@ -113,6 +113,94 @@ public sealed class ScryProcessor
         }
     }
 
+    /// <summary>Validates and executes a batch without a service provider (no DI-resolved policies).</summary>
+    public QueryBatchResponse ExecuteBatch(QueryBatchRequest request, DbContext data) =>
+        ExecuteBatch(request, data, EmptyServiceProvider.Instance);
+
+    /// <summary>Validates and executes every entry of a batch, returning one result each.</summary>
+    public QueryBatchResponse ExecuteBatch(QueryBatchRequest request, DbContext data, IServiceProvider services) =>
+        ExecuteBatch(request, data, services, new HeaderDictionary(), new HeaderDictionary());
+
+    /// <summary>
+    /// Validates and executes every entry of a batch. Entries are independent: each goes through the
+    /// same validation, row policies, and telemetry a single query does, and one that is rejected or
+    /// fails is reported in its own result rather than failing the batch.
+    /// </summary>
+    /// <remarks>
+    /// Entries run sequentially against the one <see cref="DbContext"/> — which is not thread-safe, and
+    /// which a batch has no reason to work around: what a batch saves is round-trips, not database
+    /// time. It is not a transaction either, so an entry that fails leaves the entries before it
+    /// answered. Only the batch envelope can fail the call: an unsupported wire version, or more
+    /// entries than <see cref="ScryOptions.MaxBatchSize"/>, is rejected whole and before any entry runs.
+    /// </remarks>
+    public QueryBatchResponse ExecuteBatch(
+        QueryBatchRequest request,
+        DbContext data,
+        IServiceProvider services,
+        IHeaderDictionary requestHeaders,
+        IHeaderDictionary responseHeaders)
+    {
+        if (request.Version > WireFormat.Version)
+        {
+            throw new ScryValidationException($"Unsupported wire version {request.Version}.");
+        }
+
+        if (request.Queries.Count > options.MaxBatchSize)
+        {
+            throw new ScryValidationException(
+                $"The batch carries {request.Queries.Count} queries, more than the maximum of {options.MaxBatchSize}.");
+        }
+
+        using var activity = QueryRecorder.StartBatch(request.Queries.Count);
+
+        var results = new List<QueryBatchResult>(request.Queries.Count);
+        foreach (var query in request.Queries)
+        {
+            results.Add(ExecuteEntry(query, data, services, requestHeaders, responseHeaders));
+        }
+
+        return QueryBatchResponse.Create(results) with {Stamp = schema.Stamp};
+    }
+
+    // One entry, reported rather than thrown. The catches mirror the HTTP endpoint's: a validation
+    // message is the client's own doing and is safe to return, and anything else is the fixed text a
+    // 500 carries, so batching an entry never reveals more than sending it alone would.
+    QueryBatchResult ExecuteEntry(
+        QueryRequest query,
+        DbContext data,
+        IServiceProvider services,
+        IHeaderDictionary requestHeaders,
+        IHeaderDictionary responseHeaders)
+    {
+        try
+        {
+            return new()
+            {
+                Response = Execute(query, data, services, requestHeaders, responseHeaders)
+            };
+        }
+        catch (ScryValidationException exception)
+        {
+            return new()
+            {
+                Error = exception.Message,
+                Status = 400,
+                StaleClient = exception.StaleClient
+            };
+        }
+        catch (Exception)
+        {
+            return new()
+            {
+                Error = "Query execution failed.",
+                Status = 500,
+                // A drifted client faulting the server is far more likely stale than the server broken,
+                // the same attribution the single-query endpoint makes for an execution failure.
+                StaleClient = query.Stamp is { } stamp && stamp != schema.Stamp
+            };
+        }
+    }
+
     /// <summary>
     /// Validates a request and returns its rows as a stream rather than a materialized result, plus the
     /// opening marker a transport writes before them.

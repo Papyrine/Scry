@@ -29,13 +29,15 @@ public static class ScryServiceExtensions
             processor.ValidateAgainstModel(db);
         }
 
-        // Two endpoints, one call: the streaming one is the same query surface read a row at a time,
-        // so making callers opt in separately would only invite deployments where one is protected and
-        // the other is not. Conventions applied to the returned builder reach both.
+        // One call, every transport of the same query surface: streaming reads it a row at a time and
+        // batching carries several queries at once, but neither widens what can be asked. Mapping them
+        // separately would only invite deployments where one is protected and the others are not.
+        // Conventions applied to the returned builder reach all three.
         return new Endpoints(
         [
             endpoints.MapPost(pattern, Handle),
-            endpoints.MapPost($"{pattern.TrimEnd('/')}/stream", HandleStream)
+            endpoints.MapPost($"{pattern.TrimEnd('/')}/stream", HandleStream),
+            endpoints.MapPost($"{pattern.TrimEnd('/')}/batch", HandleBatch)
         ]);
     }
 
@@ -150,6 +152,62 @@ public static class ScryServiceExtensions
         }
 
         await WriteLine(context, new ScryStreamMarker {Kind = ScryStream.End});
+    }
+
+    /// <summary>
+    /// Executes a batch of queries as one request. Only an envelope failure — an unreadable body, an
+    /// unsupported wire version, or more entries than <c>MaxBatchSize</c> — is a non-success status;
+    /// a rejected or failed entry is reported in its own result alongside the entries that succeeded.
+    /// </summary>
+    static async Task HandleBatch(HttpContext context)
+    {
+        var services = context.RequestServices;
+        var options = services.GetRequiredService<ScryOptions>();
+        var processor = services.GetRequiredService<ScryProcessor>();
+
+        context.Response.Headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
+
+        var started = Stopwatch.GetTimestamp();
+        string body;
+        using (var reader = new StreamReader(context.Request.Body))
+        {
+            body = await reader.ReadToEndAsync(context.RequestAborted);
+        }
+
+        QueryBatchRequest request;
+        try
+        {
+            request = ScryJson.DeserializeBatchRequest(body);
+        }
+        catch (ScryWireException exception)
+        {
+            QueryRecorder.Malformed(Stopwatch.GetElapsedTime(started));
+            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, staleClient: false);
+            return;
+        }
+
+        try
+        {
+            var db = (DbContext)services.GetRequiredService(options.ContextType);
+            var response = processor.ExecuteBatch(
+                request,
+                db,
+                services,
+                context.Request.Headers,
+                context.Response.Headers);
+
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync(ScryJson.Serialize(response), context.RequestAborted);
+        }
+        catch (ScryValidationException exception)
+        {
+            // Envelope-level only: a per-entry rejection never reaches here.
+            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, exception.StaleClient);
+        }
+        catch (Exception)
+        {
+            await WriteError(context, StatusCodes.Status500InternalServerError, "Query execution failed.", staleClient: false);
+        }
     }
 
     static async Task WriteLine<T>(HttpContext context, T value)

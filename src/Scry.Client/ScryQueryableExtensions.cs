@@ -84,6 +84,15 @@ public static class ScryQueryableExtensions
             throw new("This IQueryable is not a Scry source.");
         }
 
+        // A batch is one request answered in full; a stream is a response read row by row. There is no
+        // shape that is both, so this refuses rather than quietly sending the query on its own.
+        if (provider.Batch is not null)
+        {
+            throw new NotSupportedException(
+                "A streamed query cannot be batched: a batch is answered as one response, so its entries " +
+                "cannot be read row by row. Drop InBatch from this query, or use ToListAsync.");
+        }
+
         var client = provider.Client;
         await foreach (var row in client.StreamAsync(source.ToScryRequest(), provider.Call, cancel).WithCancellation(cancel))
         {
@@ -451,7 +460,17 @@ public static class ScryQueryableExtensions
             throw new("This IQueryable is not a Scry source.");
         }
 
-        return provider.Client.SendAsync(source.ToScryRequest(terminal), provider.Call, cancel);
+        var request = source.ToScryRequest(terminal);
+
+        // A batched query is collected rather than sent, and its task completes when the batch does.
+        // Everything above this — translation, the default projection, materialization, the kind check
+        // — is the unbatched path untouched, which is what lets every terminal batch without knowing it.
+        if (provider.Batch is { } batch)
+        {
+            return batch.Enqueue(request, provider.Call);
+        }
+
+        return provider.Client.SendAsync(request, provider.Call, cancel);
     }
 
     static void EnsureKind(QueryResponse response, ResultKind expected)

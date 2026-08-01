@@ -278,6 +278,16 @@ public int MaxExpressionDepth { get; set; } = 32;
 public int MaxInValues { get; set; } = 1000;
 
 /// <summary>
+/// Maximum number of queries one batch request may carry. Default 20.
+/// </summary>
+/// <remarks>
+/// A batch is the one place a single request costs more than one query, so this is the bound that
+/// keeps it from being an amplifier: every other limit is per query and would otherwise apply to an
+/// arbitrary number of them. A batch over the limit is rejected whole, before any entry runs.
+/// </remarks>
+public int MaxBatchSize { get; set; } = 20;
+
+/// <summary>
 /// Maximum number of rows a streamed query may return, or null — the default — for no limit.
 /// </summary>
 /// <remarks>
@@ -290,10 +300,12 @@ public int MaxInValues { get; set; } = 1000;
 /// </remarks>
 public int? MaxStreamRows { get; set; }
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L56' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 These bound the work a single request can ask for: how many rows, how deep a join chain, how long a pipeline, how deeply nested an expression.
+
+All but one are **per query**, which is what makes `MaxBatchSize` load-bearing: a [batch](batching.md) is the only request that carries more than one query, so without it every other limit would apply to an arbitrary number of them at once. Each entry is otherwise validated, policy-filtered, and audited exactly as it would be sent alone — batching is a transport concern, and reaches nothing else on this page.
 
 
 ### 7. Contained errors

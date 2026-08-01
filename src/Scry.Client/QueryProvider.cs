@@ -6,7 +6,8 @@ sealed class QueryProvider(
     ScryClient client,
     string root,
     IReadOnlyList<string>? defaultProjection,
-    ScryCall? call = null) :
+    ScryCall? call = null,
+    ScryBatch? batch = null) :
     IQueryProvider
 {
     public ScryClient Client { get; } = client;
@@ -19,9 +20,20 @@ sealed class QueryProvider(
     /// </summary>
     public ScryCall? Call { get; } = call;
 
+    /// <summary>
+    /// The batch this query was deferred into, or null for one that sends on its own. Carried here for
+    /// the same reason the header hooks are: which request carries a query is a transport concern the
+    /// wire has no way — and no reason — to express.
+    /// </summary>
+    public ScryBatch? Batch { get; } = batch;
+
     /// <summary>The same source and client, with <paramref name="replacement"/> as its header hooks.</summary>
     public QueryProvider With(ScryCall replacement) =>
-        new(Client, Root, DefaultProjection, replacement);
+        new(Client, Root, DefaultProjection, replacement, Batch);
+
+    /// <summary>The same source and client, deferred into <paramref name="replacement"/>.</summary>
+    public QueryProvider With(ScryBatch replacement) =>
+        new(Client, Root, DefaultProjection, Call, replacement);
 
     /// <summary>
     /// The scalar members of this source's query model, supplied by the generated entry point. A query

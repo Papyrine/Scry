@@ -83,8 +83,25 @@ public static ScryClient ForHttp(HttpClient http, string endpoint) =>
 /// </summary>
 public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjection = null) =>
     new CaptureQueryable<T>(new(this, name, defaultProjection));
+
+/// <summary>
+/// Starts a batch: several queries collected on the client and sent as one request. Attach it to a
+/// query with <see cref="ScryBatchExtensions.InBatch{T}"/>, then
+/// <see cref="ScryBatch.SendAsync"/>. A batch is used once.
+/// </summary>
+public ScryBatch Batch()
+{
+    if (batchTransport is null)
+    {
+        throw new NotSupportedException(
+            "This client's transport does not batch. Send queries individually, or construct the client " +
+            "with a batch transport (ScryClient.ForHttp does).");
+    }
+
+    return new(this);
+}
 ```
-<sup><a href='/src/Scry.Client/ScryClient.cs#L62-L74' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Client/ScryClient.cs#L68-L97' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -192,7 +209,7 @@ The collection-shaping terminals (`ToArrayAsync`, `ToHashSetAsync`, `ToDictionar
 
 ### Streaming rows
 
-`ToAsyncEnumerable` sends the same request `ToListAsync` does, and reads the rows off a [streaming endpoint](server.md#endpoints) as they arrive rather than as one response:
+`ToAsyncEnumerable` sends the same request `ToListAsync` does, and reads the rows off a [streaming endpoint](server.md#mapping-the-endpoint) as they arrive rather than as one response:
 
 <!-- snippet: clientStream -->
 <a id='snippet-clientStream'></a>

@@ -47,14 +47,15 @@ app.MapScry("/api/query");
 <sup><a href='/samples/Sample.Server/Program.cs#L51-L53' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-Two `POST` endpoints, from the one call:
+Three `POST` endpoints, from the one call:
 
 | Route | Request | Response |
 | --- | --- | --- |
 | the pattern given | [`QueryRequest`](wire-format.md) | one `QueryResponse` |
 | `…/stream` | the same `QueryRequest` | [newline-delimited rows](wire-format.md#streamed-results), for [`ToAsyncEnumerable`](querying.md#streaming-rows) |
+| `…/batch` | [`QueryBatchRequest`](wire-format.md#batched-queries) | one result per entry, for [batching](batching.md) |
 
-They are mapped together deliberately. The streaming route is the same query surface read a row at a time, so opting into it separately would only invite deployments where one is protected and the other is not. `MapScry` returns an `IEndpointConventionBuilder` covering **both**, so the usual conventions apply once:
+They are mapped together deliberately. Streaming reads the same query surface a row at a time and batching carries several of its queries at once; neither widens what can be asked, so opting into them separately would only invite deployments where one is protected and the others are not. `MapScry` returns an `IEndpointConventionBuilder` covering **all three**, so the usual conventions apply once:
 
 ```cs
 app.MapScry("/api/query")
@@ -95,6 +96,16 @@ public int MaxExpressionDepth { get; set; } = 32;
 public int MaxInValues { get; set; } = 1000;
 
 /// <summary>
+/// Maximum number of queries one batch request may carry. Default 20.
+/// </summary>
+/// <remarks>
+/// A batch is the one place a single request costs more than one query, so this is the bound that
+/// keeps it from being an amplifier: every other limit is per query and would otherwise apply to an
+/// arbitrary number of them. A batch over the limit is rejected whole, before any entry runs.
+/// </remarks>
+public int MaxBatchSize { get; set; } = 20;
+
+/// <summary>
 /// Maximum number of rows a streamed query may return, or null — the default — for no limit.
 /// </summary>
 /// <remarks>
@@ -107,7 +118,7 @@ public int MaxInValues { get; set; } = 1000;
 /// </remarks>
 public int? MaxStreamRows { get; set; }
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L56' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Every limit is enforced during validation, before any expression is rebound or executed.
@@ -119,6 +130,7 @@ Every limit is enforced during validation, before any expression is rebound or e
 | `MaxPipelineLength` | 32 | Pipelines with more operators than the limit. |
 | `MaxExpressionDepth` | 32 | Predicate/expression trees nested deeper than the limit. |
 | `MaxInValues` | 1000 | `Contains` over a client-supplied set larger than the limit. Bounds the SQL `IN` list a single request can build. |
+| `MaxBatchSize` | 20 | A [batch](batching.md) carrying more queries than the limit — rejected whole, before any entry runs. Every other limit is per query, so this is what stops one request from costing an arbitrary number of them. |
 | `MaxStreamRows` | unset | Nothing by default. Set it to cap a [streamed](querying.md#streaming-rows) result; the stream then ends with an error marker rather than a short one. Like `MaxPageSize`, it does not implicitly bound an unbounded query — it bounds one that asked to stream. |
 
 `CaseSensitiveCollation` and `CaseInsensitiveCollation` are not limits but capabilities: both default to null, which rejects a request asking for that case sensitivity. Set them to collations the database has (`Latin1_General_CS_AS`, `Latin1_General_CI_AS` on SQL Server) to enable [case-sensitive matching](querying.md#operators-1). They are server settings because a collation is emitted into the SQL text rather than parameterized, so accepting one from a request would be the only place an attacker-supplied string reached SQL as anything but a parameter.

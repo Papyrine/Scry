@@ -1,0 +1,26 @@
+﻿{
+  "version": 1,
+  "results": [
+    {
+      "response": {
+        "version": 1,
+        "kind": "Scalar",
+        "payload": 3,
+        "stamp": "{scrubbed stamp}"
+      }
+    },
+    {
+      "error": "Property \u0027Salary\u0027 is not allow-listed on \u0027Employee\u0027.",
+      "status": 400
+    },
+    {
+      "response": {
+        "version": 1,
+        "kind": "Scalar",
+        "payload": 4,
+        "stamp": "{scrubbed stamp}"
+      }
+    }
+  ],
+  "stamp": "{scrubbed stamp}"
+}

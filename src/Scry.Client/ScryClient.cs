@@ -8,11 +8,13 @@ public sealed class ScryClient
 {
     readonly Func<QueryRequest, ScryCall?, Cancel, Task<QueryResponse>> transport;
     readonly Func<QueryRequest, ScryCall?, Cancel, IAsyncEnumerable<JsonElement>>? streamTransport;
+    readonly Func<QueryBatchRequest, Cancel, Task<QueryBatchResponse>>? batchTransport;
 
     /// <summary>
-    /// Creates a client over a custom transport. <paramref name="streamTransport"/> is optional: a
-    /// transport that cannot stream simply has no <c>ToAsyncEnumerable</c>, which says so rather than
-    /// quietly buffering the whole result and pretending to.
+    /// Creates a client over a custom transport. <paramref name="streamTransport"/> and
+    /// <paramref name="batchTransport"/> are optional: a transport that cannot stream simply has no
+    /// <c>ToAsyncEnumerable</c>, and one that cannot batch has no <see cref="Batch"/> — each says so
+    /// rather than quietly buffering the whole result, or sending a "batch" one query at a time.
     /// </summary>
     /// <remarks>
     /// Per-query headers are HTTP's, so a transport supplied here does not receive them and a query
@@ -20,8 +22,11 @@ public sealed class ScryClient
     /// </remarks>
     public ScryClient(
         Func<QueryRequest, Cancel, Task<QueryResponse>> transport,
-        Func<QueryRequest, Cancel, IAsyncEnumerable<JsonElement>>? streamTransport = null)
+        Func<QueryRequest, Cancel, IAsyncEnumerable<JsonElement>>? streamTransport = null,
+        Func<QueryBatchRequest, Cancel, Task<QueryBatchResponse>>? batchTransport = null)
     {
+        this.batchTransport = batchTransport;
+
         this.transport = (request, call, cancel) =>
         {
             RefuseHeaders(call);
@@ -43,6 +48,7 @@ public sealed class ScryClient
     {
         transport = (request, call, cancel) => PostAsync(http, endpoint, request, call, cancel);
         streamTransport = (request, call, cancel) => StreamAsync(http, $"{endpoint.TrimEnd('/')}/stream", request, call, cancel);
+        batchTransport = (request, cancel) => PostBatchAsync(http, $"{endpoint.TrimEnd('/')}/batch", request, cancel);
     }
 
     // A custom transport has nowhere to put a header, so a query that asked for one cannot be honoured.
@@ -71,6 +77,23 @@ public sealed class ScryClient
     /// </summary>
     public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjection = null) =>
         new CaptureQueryable<T>(new(this, name, defaultProjection));
+
+    /// <summary>
+    /// Starts a batch: several queries collected on the client and sent as one request. Attach it to a
+    /// query with <see cref="ScryBatchExtensions.InBatch{T}"/>, then
+    /// <see cref="ScryBatch.SendAsync"/>. A batch is used once.
+    /// </summary>
+    public ScryBatch Batch()
+    {
+        if (batchTransport is null)
+        {
+            throw new NotSupportedException(
+                "This client's transport does not batch. Send queries individually, or construct the client " +
+                "with a batch transport (ScryClient.ForHttp does).");
+        }
+
+        return new(this);
+    }
     // end-snippet
 
     /// <summary>
@@ -123,6 +146,19 @@ public sealed class ScryClient
         // the response header — which it keeps, since a header also rides on error responses, where
         // there is no body to read it from. A response without a stamp records nothing rather than
         // clearing what the header found.
+        if (response.Stamp is { } stamp)
+        {
+            RecordServerStamp(stamp);
+        }
+
+        return response;
+    }
+
+    internal async Task<QueryBatchResponse> SendBatchAsync(QueryBatchRequest request, Cancel cancel)
+    {
+        var response = await batchTransport!(request, cancel);
+
+        // Carried once for the whole batch rather than per entry: one server answered all of them.
         if (response.Stamp is { } stamp)
         {
             RecordServerStamp(stamp);
@@ -288,6 +324,40 @@ public sealed class ScryClient
         // the payload reader throws for an unknown enum value, so one catch covers every stale-client
         // failure and can prompt a reload. SchemaStaleDetected has already been raised above.
         if (TryParseError(body) is { StaleClient: true, Error.Length: > 0 } error)
+        {
+            throw new ScryStaleClientException(error.Error);
+        }
+
+        throw new ScryRequestException((int) response.StatusCode, body);
+    }
+
+    /// <summary>
+    /// Posts a batch. A non-success status here is a failure of the batch itself — an unreadable body,
+    /// or a rejection of the whole envelope; a rejected entry rides inside a successful response and is
+    /// raised on that entry's own task instead.
+    /// </summary>
+    async Task<QueryBatchResponse> PostBatchAsync(
+        HttpClient http,
+        string endpoint,
+        QueryBatchRequest request,
+        Cancel cancel)
+    {
+        var json = ScryJson.Serialize(request);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var response = await http.PostAsync(endpoint, content, cancel);
+
+        if (response.Headers.TryGetValues(WireFormat.SchemaStampHeader, out var values))
+        {
+            RecordServerStamp(values.FirstOrDefault());
+        }
+
+        var body = await response.Content.ReadAsStringAsync(cancel);
+        if (response.IsSuccessStatusCode)
+        {
+            return ScryJson.DeserializeBatchResponse(body);
+        }
+
+        if (TryParseError(body) is {StaleClient: true, Error.Length: > 0} error)
         {
             throw new ScryStaleClientException(error.Error);
         }
