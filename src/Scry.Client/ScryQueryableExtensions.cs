@@ -297,14 +297,14 @@ public static class ScryQueryableExtensions
     /// whether further rows exist. Advance to the next page with <c>Skip</c>.
     /// </summary>
     public static Task<ScryPage<T>> ToPageAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>
-        Page(source, new PageOp(Size: null), cancel);
+        Page(source, new(Size: null), cancel);
 
     /// <summary>
     /// Executes the query and returns a page of at most <paramref name="pageSize"/> rows (capped by the
     /// server's <c>MaxPageSize</c>), plus whether further rows exist. Advance with <c>Skip</c>.
     /// </summary>
     public static Task<ScryPage<T>> ToPageAsync<T>(this IQueryable<T> source, int pageSize, Cancel cancel = default) =>
-        Page(source, new PageOp(pageSize), cancel);
+        Page(source, new(pageSize), cancel);
 
     /// <summary>
     /// Executes the query and returns a page of at most <paramref name="pageSize"/> rows, resuming from
@@ -312,7 +312,7 @@ public static class ScryQueryableExtensions
     /// previous page; a null cursor starts from the beginning. The query must be ordered.
     /// </summary>
     public static Task<ScryPage<T>> ToPageAsync<T>(this IQueryable<T> source, int pageSize, string? cursor, Cancel cancel = default) =>
-        Page(source, new PageOp(pageSize, cursor), cancel);
+        Page(source, new(pageSize, cursor), cancel);
 
     static async Task<ScryPage<T>> Page<T>(IQueryable<T> source, PageOp terminal, Cancel cancel)
     {

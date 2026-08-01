@@ -70,7 +70,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         var row = DistinctRow.ByArity[values.Count - 1].MakeGenericType([..values.Select(_ => _.Type)]);
         var constructor = row.GetConstructors().Single();
         var members = constructor.GetParameters()
-            .Select(_ => (MemberInfo)row.GetProperty(_.Name!)!)
+            .Select(MemberInfo (_) => row.GetProperty(_.Name!)!)
             .ToArray();
 
         compositeKeys = keys;
@@ -259,7 +259,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
                 continue;
             }
 
-            var root = member.Side == JoinSide.Outer ? (Expression)outer : inner;
+            Expression root = member.Side == JoinSide.Outer ? outer : inner;
             var leaf = BuildMemberAccess(root, member.Path);
 
             // A side the join can leave unmatched yields SQL NULL, so a non-nullable value read from
@@ -340,7 +340,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         var row = DistinctRow.ByArity[leaves.Count - 1].MakeGenericType([..leaves.Select(_ => _.Type)]);
         var constructor = row.GetConstructors().Single();
         var members = constructor.GetParameters()
-            .Select(_ => (MemberInfo)row.GetProperty(_.Name!)!)
+            .Select(MemberInfo (_) => row.GetProperty(_.Name!)!)
             .ToArray();
 
         return (Expression.Lambda(Expression.New(constructor, leaves, members), parameter), shape);
