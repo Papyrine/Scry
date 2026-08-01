@@ -178,15 +178,91 @@ The generic `catch` stays: a failure without the stale marker is an ordinary err
 
 The table above is the set of changes a deployed client survives or is told about. This is its mirror — the changes that are **not** bridged, and why each is excluded by design rather than by omission. None is a bug to be fixed later; each is a place where the alternative was worse.
 
-**Direction** says where the change bites: filtering a query (the request), or materializing rows (the response). Several changes reach both, and the two halves do not always fare alike — a representation change is caught coming back and missed going out.
+Each entry below leads with the **direction** the change bites from: filtering a query (the request), or materializing rows (the response). Several changes reach both, and the two halves do not always fare alike — a representation change is caught coming back and missed going out.
 
-| Change | Direction | What a deployed client sees | Why it is not bridged |
-| --- | --- | --- | --- |
-| **Adding an enum value** that reaches results | Response | `ScryStaleClientException` on the row carrying it | The [alias table](annotations.md#the-response-side) maps a renamed value to a name the client already has. A genuinely new value has no old name to map from, so there is nothing to translate. Additive on the server, breaking for old clients — the one asymmetry in the additive story. |
-| **Changing a scalar's representation** — `int` to `string`, say | Request | *Nothing.* `Age > 30` keeps working, silently reinterpreted as a string comparison, so ordering changes meaning without an error anywhere. (The response half *is* caught — the old model cannot read the new payload — which is what disguises the request half.) | The only direction with no signal at all. Catching it would mean type-checking `ConstNode.Tag` against the member, but the tags are deliberately loose — `uint` and `ulong` ride the `String` tag — so a strict check would reject legitimate traffic. Treat a representation change as requiring a coordinated deploy, or rename the member alongside it (below). |
-| **Tightening a limit** — `MaxPageSize`, `MaxNavigationDepth`, … | Request | The plain `400` the limit produces, with no drift signal | Limits are [server options](server.md#options), not schema, so they are correctly absent from the stamp. A reload would not help: the client's own code asks for the page size, so the remedy is an app change. Flagging it as drift would tell the user to do something that cannot fix it. |
-| **Reusing a retired name** for something else | Both | Whatever now answers to that name — silently. A reused source or member misdirects a filter; a reused enum value materializes a row as the wrong member | Every other mistake here fails loudly. This one cannot: once an entry is pruned, nothing records that the name ever meant something else, so no startup check can catch it. See [pruning](annotations.md#renaming). |
-| **Removing a source, member, or enum value** | Both | `ScryStaleClientException` — the filter is rejected, or the row cannot be read | Not bridgeable *by definition* — the data is gone. It appears in the handled table because it is detected and attributed, not because the client keeps working. |
+
+### Adding an enum value that reaches results
+
+**Request:** unaffected. **Response:** `ScryStaleClientException` on the row carrying the new value.
+
+The [alias table](annotations.md#the-response-side) maps a renamed value to a name the client already has. A genuinely new value has no old name to map from, so there is nothing to translate. Additive on the server, breaking for old clients — the one asymmetry in the additive story.
+
+
+### Changing a scalar's representation
+
+**Both directions:** sometimes a clean failure, sometimes nothing at all — and which one arrives turns on the *value*, not on the change. This is the least reliable signal in the whole story, and the two halves fail by different rules, so they are worth taking separately.
+
+
+#### The request half
+
+A literal rides the wire as text plus a loose [`ClrTypeTag`](wire-format.md#const). At a comparison site the server **ignores the tag** and parses that text into whatever type its own schema now gives the member — CLR types come from the schema, never from the wire. So the question is never "did the type change", but "does this text still parse, and is this operator still defined for the result".
+
+*Loosening* to `string` — from a number, a `bool`, an enum, anything — always parses, because reading text as text cannot fail:
+
+| A client generated against `int Age` wrote | The server builds | Result |
+| --- | --- | --- |
+| `Age == 30` | `Age == "30"` | **Silent.** Executes and returns whatever matches the text. |
+| `Age != 30` | `Age != "30"` | **Silent.** |
+| `Age > 30` | — | Rejected — `>` is not defined for two strings. |
+
+Ordering is the accident that rescues this case: .NET defines no relational operator on `string`, so the expression cannot be built and the query is rejected before it runs. Equality *is* defined, so it goes straight through. **An equality filter against a member retyped to `string` is the one case with no signal on either half of the round trip.**
+
+*Tightening* away from `string` is caught only when the text does not parse in the new type, and reports itself two different ways:
+
+| A client generated against `string` wrote | The server does | Result |
+| --- | --- | --- |
+| `Id == "1"` | parses `1` | **Silent** — and, as it happens, correct. |
+| `Status == "FullTime"` | parses the enum value | **Silent** — and correct. |
+| `Status == "Alice"` | enum parse fails | Rejected — a validation failure (`400`). |
+| `Id == "Alice"` | `int.Parse` throws | Faults (`500`) — parsing happens while rebinding, after validation has already passed. |
+
+Enums and `char` report a rejected query; every other scalar surfaces as an execution fault. For a drifted client both are attributed to the stamp and reach the client as `ScryStaleClientException`, so one catch still covers them — but only the `400` carries a message naming the problem, which is why the `500` branch exists in the [handled table](#when-the-break-arrives) at all.
+
+
+#### The response half
+
+Materializing rows is governed by **JSON's token kinds**, not by CLR types. A change that crosses from one token kind to another cannot be read; one that stays inside a kind is invisible until a value stops fitting:
+
+| Retype | Token kinds | Result |
+| --- | --- | --- |
+| `int` → `string`, or `string` → `int` | number ↔ string | Caught |
+| `bool` → `string`, or `string` → `bool` | boolean ↔ string | Caught |
+| enum → `string`, or `string` → enum | string → string | **Silent** — enum values serialize as their names, which are strings either way |
+| `Guid` or `DateTime` → `string` | string → string | **Silent** |
+| `int` → `long` | number → number | **Silent** until a value exceeds `int` |
+
+So the response half is *not* the safety net it looks like. It catches a retype only when the new type serializes to a different JSON token — and the string family is wide enough that enum, `Guid` and `DateTime` all pass for text. When it does catch one, the failure is a bare `JsonException`, upgraded to `ScryStaleClientException` only [where the stamp already proves the client is behind](#when-the-break-arrives).
+
+
+#### Why it is not bridged
+
+Catching the request half would mean type-checking `ConstNode.Tag` against the member, but the tags are deliberately loose — `uint` and `ulong` have no tag of their own and ride the `String` tag, as do `char`, while `short` and `byte` ride `Int32` — so a strict check would reject legitimate traffic from a perfectly current client. Loosening it to "compatible" re-admits exactly the number-versus-text case worth catching, since `String` is the fallback bucket. There is no rule that separates the two.
+
+Treat a representation change as requiring a coordinated deploy, or rename the member alongside it ([below](#the-common-shape)).
+
+
+### Tightening a limit
+
+**Request:** the plain `400` the limit produces, with no drift signal.
+
+`MaxPageSize`, `MaxNavigationDepth` and the rest are [server options](server.md#options), not schema, so they are correctly absent from the stamp. A reload would not help: the client's own code asks for the page size, so the remedy is an app change. Flagging it as drift would tell the user to do something that cannot fix it.
+
+
+### Reusing a retired name for something else
+
+**Both directions:** whatever now answers to that name — silently. A reused source or member misdirects a filter; a reused enum value materializes a row as the wrong member.
+
+Every other mistake here fails loudly. This one cannot: once an entry is pruned, nothing records that the name ever meant something else, so no startup check can catch it. See [pruning](annotations.md#renaming).
+
+
+### Removing a source, member, or enum value
+
+**Both directions:** `ScryStaleClientException` — the filter is rejected, or the row cannot be read.
+
+Not bridgeable *by definition* — the data is gone. It appears among the [handled failures](#when-the-break-arrives) because it is detected and attributed, not because the client keeps working.
+
+
+### The common shape
 
 Most of these share a shape worth naming: the *meaning* moved while the *name* stayed. Scry's compatibility machinery is a name-mapping layer — it can say "this used to be called that", and nothing more. A change that keeps a name but alters what it denotes is outside what any such layer can express, in either direction, which is why the answer there is a coordinated deploy rather than a wider mechanism. Tightened limits are the odd one out: not a name problem at all, but a bound on what the surface will serve.
 
