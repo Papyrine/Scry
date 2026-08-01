@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using Microsoft.Extensions.DependencyInjection;
 
 [TestFixture]
 public class BatchTests
@@ -183,7 +182,7 @@ public class BatchTests
     }
 
     [Test]
-    public async Task TransportFailureFaultsEveryEntry()
+    public void TransportFailureFaultsEveryEntry()
     {
         // A batch that never arrives must fault the entries rather than leave them pending: a caller
         // awaiting one would otherwise wait on a response that is never coming.
@@ -198,7 +197,6 @@ public class BatchTests
         Assert.ThrowsAsync<InvalidOperationException>(() => batch.SendAsync());
         Assert.ThrowsAsync<InvalidOperationException>(async () => await first);
         Assert.ThrowsAsync<InvalidOperationException>(async () => await second);
-        await Task.CompletedTask;
     }
 
     [Test]

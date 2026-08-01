@@ -45,7 +45,7 @@ public Func<HttpContext, bool> EnableGuard { get; set; } = DevelopmentOnly;
 /// </summary>
 public Func<HttpContext, bool> EnableSqlPreview { get; set; } = DevelopmentOnly;
 ```
-<sup><a href='/src/Scry.Server.Explorer/ScryExplorerOptions.cs#L10-L32' title='Snippet source file'>snippet source</a> | <a href='#snippet-explorerOptions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.Explorer/ScryExplorerOptions.cs#L6-L28' title='Snippet source file'>snippet source</a> | <a href='#snippet-explorerOptions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Docs: [Query explorer](https://github.com/Papyrine/Scry/blob/main/docs/explorer.md)

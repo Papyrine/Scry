@@ -1,8 +1,3 @@
-using System.Diagnostics;
-using System.Diagnostics.Metrics;
-using System.Reflection;
-using Microsoft.Extensions.DependencyInjection;
-
 [TestFixture]
 public class ObservabilityTests
 {

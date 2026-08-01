@@ -1,8 +1,3 @@
-using System.Text.Json;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Routing;
-
 namespace Scry;
 
 /// <summary>Opt-in mapping for the Scry query explorer (a self-contained Blazor WASM debugging UI).</summary>
@@ -113,7 +108,8 @@ public static class ScryExplorerExtensions
                 JsonSerializer.Serialize(new SqlPreview(sql), ScryJson.Options),
                 "application/json");
         }
-        catch (Exception exception) when (exception is ScryValidationException or ScryWireException)
+        catch (Exception exception)
+            when (exception is ScryValidationException or ScryWireException)
         {
             return Results.Json(new ScryError(exception.Message), ScryJson.Options, statusCode: 400);
         }
@@ -125,6 +121,7 @@ public static class ScryExplorerExtensions
     }
 
     /// <summary>The SQL preview response body. Explorer-only — not part of the wire contract.</summary>
+    // ReSharper disable once NotAccessedPositionalProperty.Local
     sealed record SqlPreview(string Sql);
 
     static IResult Index(string basePath, ExplorerAssets assets)

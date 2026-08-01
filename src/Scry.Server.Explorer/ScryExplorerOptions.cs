@@ -1,7 +1,3 @@
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-
 namespace Scry;
 
 /// <summary>Configures the opt-in Scry query explorer mapped by <see cref="ScryExplorerExtensions.MapScryExplorer(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder, System.Action{ScryExplorerOptions})"/>.</summary>

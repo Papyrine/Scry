@@ -1,6 +1,9 @@
+global using System.Diagnostics.Metrics;
+global using System.Globalization;
 global using System.Text.Json;
 global using System.Text.RegularExpressions;
 global using System.Threading.Tasks;
+global using Microsoft.Extensions.DependencyInjection;
 global using NUnit.Framework;
 global using Scry;
 global using VerifyTests.DiffPlex;

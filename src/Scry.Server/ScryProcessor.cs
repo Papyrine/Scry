@@ -65,11 +65,13 @@ public sealed class ScryProcessor
         IHeaderDictionary requestHeaders,
         IHeaderDictionary responseHeaders)
     {
-        var drifted = request.Stamp is { } requestStamp && requestStamp != schema.Stamp;
+        var drifted = request.Stamp is { } requestStamp &&
+                      requestStamp != schema.Stamp;
         var recorder = QueryRecorder.Start(schema, request, services);
         try
         {
-            var response = executor.Execute(request, data, new(services, requestHeaders, responseHeaders)) with
+            var scope = new CallScope(services, requestHeaders, responseHeaders);
+            var response = executor.Execute(request, data, scope) with
             {
                 // Carried on every response, not only a drifted one: this is the signal a client uses
                 // to notice drift in the first place, and it is the only such channel for a transport
@@ -83,7 +85,10 @@ public sealed class ScryProcessor
             // rides along in the common case.
             if (drifted && schema.EnumAliases.Count > 0)
             {
-                response = response with { EnumAliases = schema.EnumAliases };
+                response = response with
+                {
+                    EnumAliases = schema.EnumAliases
+                };
             }
 
             recorder.Succeeded(response);
