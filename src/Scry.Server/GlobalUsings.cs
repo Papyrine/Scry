@@ -1,4 +1,5 @@
-﻿global using System.Diagnostics;
+﻿global using System.Buffers;
+global using System.Diagnostics;
 global using System.Diagnostics.Metrics;
 global using System.Globalization;
 global using System.Linq.Expressions;

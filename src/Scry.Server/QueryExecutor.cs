@@ -31,6 +31,32 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     }
 
     /// <summary>
+    /// Executes like <see cref="Execute"/>, but a list result is written straight into
+    /// <paramref name="output"/> as the complete response envelope — rows never pass through
+    /// dictionaries or a <see cref="JsonElement"/>. A terminal-shaped result comes back as the
+    /// ordinary <see cref="QueryResponse"/> instead (with <paramref name="rows"/> = -1), for the
+    /// caller to serialize the general way.
+    /// </summary>
+    public QueryResponse? ExecuteBuffered(
+        QueryRequest request,
+        DbContext db,
+        CallScope scope,
+        string stamp,
+        IBufferWriter<byte> output,
+        out int rows)
+    {
+        var (response, set) = Run(request, db, scope);
+        if (response is { } complete)
+        {
+            rows = -1;
+            return complete;
+        }
+
+        rows = ResponseWriter.WriteList(output, set!.Value, stamp);
+        return null;
+    }
+
+    /// <summary>
     /// Prepares a list-shaped query for streaming. Everything a request can be rejected for has already
     /// happened by the time this returns — validation runs to completion before anything is rebound —
     /// so a caller that has a <see cref="RowSet"/> in hand can commit to a success status before
@@ -627,9 +653,11 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 Expression.Quote(keySelector)));
     }
 
+    // The count is bound rather than inlined so every offset and limit shares one statement — and so
+    // one compiled plan serves every page a client walks.
     static IQueryable ApplyPaging(IQueryable query, string method, int count) =>
         query.Provider.CreateQuery(
-            CallQueryable(method, [query.ElementType], query.Expression, Expression.Constant(count)));
+            CallQueryable(method, [query.ElementType], query.Expression, Parameterization.Parameterize(count, typeof(int))));
 
     static IQueryable ApplyGroupBy(IQueryable query, LambdaExpression keySelector, Type elementType, Type keyType) =>
         query.Provider.CreateQuery(
@@ -797,8 +825,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         var projected = ApplySelect(query, selector);
         var plan = new ProjectionPlan(selector, shape);
 
-        // Fetch one extra row to detect a further page without issuing a second COUNT query.
-        var rows = projected.Take(size + 1).ToList();
+        // Fetch one extra row to detect a further page without issuing a second COUNT query. Composed
+        // through ApplyPaging rather than Queryable.Take so the count is bound, not inlined.
+        var rows = ((IQueryable<object[]>)ApplyPaging(projected, "Take", size + 1)).ToList();
         var hasMore = rows.Count > size;
         if (hasMore)
         {

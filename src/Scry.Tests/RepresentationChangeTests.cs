@@ -75,8 +75,8 @@ public class RepresentationChangeTests
             () => RowCount("Employee", "Name", BinaryOp.LessThanOrEqual, new("30", ClrTypeTag.Int32)));
     }
 
-    // Tightening away from string is caught only when the text does not parse in the new type, and the
-    // two failures arrive by different routes. An enum or char reports a rejected query...
+    // Tightening away from string is caught only when the text does not parse in the new type. Every
+    // such failure is a rejected query; an enum or char names what the text failed to be...
     [Test]
     public void TighteningRejectsTextThatIsNotAValueOfTheNewType()
     {
@@ -92,22 +92,30 @@ public class RepresentationChangeTests
         });
     }
 
-    // ...while every other scalar faults during execution instead, since parsing happens while the
-    // expression is being rebound, after validation has already passed. The HTTP endpoint turns this
-    // into a 500 and attributes it to the stamp, which is why the 500 branch is part of the documented
-    // stale-client contract rather than an unexplained server error.
+    // ...while every other scalar is parsed later, while the expression is being rebound, after
+    // validation has already passed — but a value that does not parse is still reported as a rejected
+    // query, so the client sees a 400 naming the value rather than an unexplained server fault. For a
+    // drifted client the rejection carries the stale-client marker like any other.
     [Test]
-    public void TighteningFaultsOnTextThatDoesNotParse() =>
+    public void TighteningRejectsTextThatDoesNotParseAtRebind() =>
         Assert.Multiple(() =>
         {
-            Assert.Throws<FormatException>(
-                () => RowCount("Employee", "Id", BinaryOp.Equal, new("Alice", ClrTypeTag.String)));
-            Assert.Throws<FormatException>(
-                () => RowCount("Employee", "Active", BinaryOp.Equal, new("Alice", ClrTypeTag.String)));
-            Assert.Throws<FormatException>(
-                () => RowCount("Order", "Amount", BinaryOp.Equal, new("Alice", ClrTypeTag.String)));
-            Assert.Throws<FormatException>(
-                () => RowCount("Order", "Placed", BinaryOp.Equal, new("Alice", ClrTypeTag.String)));
+            Assert.That(
+                Assert.Throws<ScryValidationException>(
+                    () => RowCount("Employee", "Id", BinaryOp.Equal, new("Alice", ClrTypeTag.String)))!.Message,
+                Does.Contain("is not a valid Int32 value"));
+            Assert.That(
+                Assert.Throws<ScryValidationException>(
+                    () => RowCount("Employee", "Active", BinaryOp.Equal, new("Alice", ClrTypeTag.String)))!.Message,
+                Does.Contain("is not a valid Boolean value"));
+            Assert.That(
+                Assert.Throws<ScryValidationException>(
+                    () => RowCount("Order", "Amount", BinaryOp.Equal, new("Alice", ClrTypeTag.String)))!.Message,
+                Does.Contain("is not a valid Decimal value"));
+            Assert.That(
+                Assert.Throws<ScryValidationException>(
+                    () => RowCount("Order", "Placed", BinaryOp.Equal, new("Alice", ClrTypeTag.String)))!.Message,
+                Does.Contain("is not a valid DateTime value"));
         });
 
     // The catch: whether tightening is caught depends on the value, not on the change. Text that still
@@ -124,10 +132,11 @@ public class RepresentationChangeTests
 
     // Narrowing a numeric is caught the same way, and equally only for values that no longer fit.
     [Test]
-    public void NarrowingFaultsOnAValueThatNoLongerFits()
+    public void NarrowingRejectsAValueThatNoLongerFits()
     {
-        Assert.Throws<OverflowException>(
-            () => RowCount("Employee", "Id", BinaryOp.Equal, new("99999999999", ClrTypeTag.Int64)));
+        var exception = Assert.Throws<ScryValidationException>(
+            () => RowCount("Employee", "Id", BinaryOp.Equal, new("99999999999", ClrTypeTag.Int64)))!;
+        Assert.That(exception.Message, Does.Contain("is not a valid Int32 value"));
 
         Assert.That(RowCount("Employee", "Id", BinaryOp.Equal, new("1", ClrTypeTag.Int64)), Is.EqualTo(1));
     }

@@ -310,7 +310,7 @@ All but one are **per query**, which is what makes `MaxBatchSize` load-bearing: 
 
 ### 7. Contained errors
 
-Validation and wire failures return `400` with a specific message — the message names the rejected property or rule, which is not a disclosure beyond what the allow-list already implies. Everything else returns `500`.
+Validation and wire failures return `400` with a specific message — the message names the rejected property or rule, which is not a disclosure beyond what the allow-list already implies. A constant that fails to parse into its member's type is a validation failure too: parsing happens while the expression is rebound, after validation has passed, but the request is still rejected with a message naming the value rather than surfacing as a server fault. Everything else returns `500`.
 
 The `500` message is fixed — `Query execution failed.` — and stack traces, SQL, and EF Core<!-- include: error-500-body. path: /docs/includes/error-500-body.include.md -->
 messages are never returned to the client. The only variable part is the `staleClient` marker.<!-- endInclude -->
@@ -362,8 +362,6 @@ public async Task DisallowedPropertyRejectedWith400()
 app.MapScry("/api/query")
     .RequireAuthorization("Reader");
 ```
-
-**Plan-cache pressure from set membership.** Scalar constants are bound as parameters, but the values of a `Contains` set are still emitted into the statement, so a client varying the *size* of that set produces a distinct statement each time. `MaxInValues` bounds how large one gets; if plan-cache pressure matters for a deployment, lower it.
 
 **Rate limiting and cost control.** The limits bound the *shape* of a query, not its cost. An allow-listed query over a large unindexed table is still expensive, and `MaxPageSize` caps an explicit `Take` rather than implicitly paging an unbounded query. Apply ASP.NET Core rate limiting, a command timeout, and the usual database-side controls.
 

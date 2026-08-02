@@ -119,6 +119,77 @@ public sealed class ScryProcessor
     }
 
     /// <summary>
+    /// Executes like <see cref="Execute(QueryRequest, DbContext, IServiceProvider, IHeaderDictionary, IHeaderDictionary)"/>,
+    /// but a list result is written into <paramref name="output"/> as complete response bytes (true).
+    /// Any other result — a terminal's response, or the rare drifted-client envelope that carries the
+    /// enum alias table — comes back as <paramref name="fallback"/> (false) for the caller to
+    /// serialize the general way. Rejections and failures throw exactly as <c>Execute</c> does.
+    /// </summary>
+    internal bool TryExecuteBuffered(
+        QueryRequest request,
+        DbContext data,
+        IServiceProvider services,
+        IHeaderDictionary requestHeaders,
+        IHeaderDictionary responseHeaders,
+        IBufferWriter<byte> output,
+        out QueryResponse? fallback)
+    {
+        var drifted = request.Stamp is { } requestStamp &&
+                      requestStamp != schema.Stamp;
+        var recorder = QueryRecorder.Start(schema, request, services);
+        try
+        {
+            var scope = new CallScope(services, requestHeaders, responseHeaders);
+
+            // The alias table rides the envelope only for a drifted client; that rare envelope keeps
+            // the fully-general path rather than teaching the writer a second shape.
+            if (drifted && schema.EnumAliases.Count > 0)
+            {
+                fallback = executor.Execute(request, data, scope) with
+                {
+                    Stamp = schema.Stamp,
+                    EnumAliases = schema.EnumAliases
+                };
+                recorder.Succeeded(fallback);
+                return false;
+            }
+
+            if (executor.ExecuteBuffered(request, data, scope, schema.Stamp, output, out var rows) is { } complete)
+            {
+                fallback = complete with
+                {
+                    Stamp = schema.Stamp
+                };
+                recorder.Succeeded(fallback);
+                return false;
+            }
+
+            recorder.Succeeded(ResultKind.List, rows);
+            fallback = null;
+            return true;
+        }
+        catch (ScryValidationException exception) when (drifted)
+        {
+            var stale = new ScryValidationException($"{exception.Message} The request's schema stamp does not match this server's model, so the client was generated against a different model surface — regenerate the client.")
+            {
+                StaleClient = true
+            };
+            recorder.Rejected(stale);
+            throw stale;
+        }
+        catch (ScryValidationException exception)
+        {
+            recorder.Rejected(exception);
+            throw;
+        }
+        catch (Exception exception)
+        {
+            recorder.Failed(exception);
+            throw;
+        }
+    }
+
+    /// <summary>
     /// The SQL a request would run, without running it. Resolves the <see cref="DbContext"/> from
     /// <paramref name="services"/>.
     /// </summary>
@@ -286,6 +357,34 @@ public sealed class ScryProcessor
         IHeaderDictionary responseHeaders,
         Cancel cancel = default)
     {
+        var (begin, rows, recorder) = StreamCore(request, data, services, requestHeaders, responseHeaders);
+        return (begin, Shape(rows, options.MaxStreamRows, recorder, cancel));
+    }
+
+    /// <summary>
+    /// Streams like <see cref="Stream(QueryRequest, DbContext, IServiceProvider, IHeaderDictionary, IHeaderDictionary, Cancel)"/>,
+    /// but each row arrives as its finished JSON bytes, written by the plan's shape writer — the
+    /// buffer is valid until the next row is pulled.
+    /// </summary>
+    internal (ScryStreamMarker Begin, IAsyncEnumerable<ReadOnlyMemory<byte>> Rows) StreamBuffered(
+        QueryRequest request,
+        DbContext data,
+        IServiceProvider services,
+        IHeaderDictionary requestHeaders,
+        IHeaderDictionary responseHeaders,
+        Cancel cancel = default)
+    {
+        var (begin, rows, recorder) = StreamCore(request, data, services, requestHeaders, responseHeaders);
+        return (begin, Lines(rows, options.MaxStreamRows, recorder, cancel));
+    }
+
+    (ScryStreamMarker Begin, QueryExecutor.RowSet Rows, QueryRecorder Recorder) StreamCore(
+        QueryRequest request,
+        DbContext data,
+        IServiceProvider services,
+        IHeaderDictionary requestHeaders,
+        IHeaderDictionary responseHeaders)
+    {
         var drifted = request.Stamp is { } requestStamp && requestStamp != schema.Stamp;
         var recorder = QueryRecorder.Start(schema, request, services, streamed: true);
         QueryExecutor.RowSet rows;
@@ -321,10 +420,58 @@ public sealed class ScryProcessor
             EnumAliases = drifted && schema.EnumAliases.Count > 0 ? schema.EnumAliases : null
         };
 
-        return (begin, Shape(rows, options.MaxStreamRows, recorder, cancel));
+        return (begin, rows, recorder);
     }
 
     static async IAsyncEnumerable<Dictionary<string, object?>> Shape(
+        QueryExecutor.RowSet rows,
+        int? maxRows,
+        QueryRecorder recorder,
+        [EnumeratorCancellation] Cancel cancel)
+    {
+        await foreach (var row in Raw(rows, maxRows, recorder, cancel))
+        {
+            yield return QueryExecutor.ShapeRow(row, rows);
+        }
+    }
+
+    // One writer and one buffer serve the whole stream: each row overwrites the last, which is why
+    // the yielded memory is only valid until the next pull — exactly how the transport consumes it.
+    static async IAsyncEnumerable<ReadOnlyMemory<byte>> Lines(
+        QueryExecutor.RowSet rows,
+        int? maxRows,
+        QueryRecorder recorder,
+        [EnumeratorCancellation] Cancel cancel)
+    {
+        var writer = rows.Plan.Writer;
+        var buffer = new ArrayBufferWriter<byte>();
+        Utf8JsonWriter? json = null;
+        try
+        {
+            await foreach (var row in Raw(rows, maxRows, recorder, cancel))
+            {
+                buffer.ResetWrittenCount();
+                if (json is null)
+                {
+                    json = new(buffer);
+                }
+                else
+                {
+                    json.Reset(buffer);
+                }
+
+                writer.WriteRow(json, ResponseWriter.Row(row, rows));
+                json.Flush();
+                yield return buffer.WrittenMemory;
+            }
+        }
+        finally
+        {
+            json?.Dispose();
+        }
+    }
+
+    static async IAsyncEnumerable<object> Raw(
         QueryExecutor.RowSet rows,
         int? maxRows,
         QueryRecorder recorder,
@@ -366,7 +513,7 @@ public sealed class ScryProcessor
                     throw truncated;
                 }
 
-                yield return QueryExecutor.ShapeRow(enumerator.Current, rows);
+                yield return enumerator.Current;
             }
 
             recorder.Succeeded(count);

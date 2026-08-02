@@ -346,17 +346,35 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         return (Expression.Lambda(Expression.New(constructor, leaves, members), parameter), shape);
     }
 
-    /// <summary>Reads a <see cref="DistinctRow"/>'s values back out, in projection order.</summary>
-    public static object[] ReadDistinctRow(object row, int count)
+    /// <summary>
+    /// Reads a <see cref="DistinctRow"/>'s values back out, in projection order. This runs per row,
+    /// so the property reads are compiled once per closed row type — bounded by the
+    /// <see cref="DistinctRow"/> arities the schema can produce — rather than reflected per value.
+    /// </summary>
+    public static object[] ReadDistinctRow(object row, int count) =>
+        distinctReaders.GetOrAdd(row.GetType(), DistinctReader)(row);
+
+    static readonly ConcurrentDictionary<Type, Func<object, object[]>> distinctReaders = new();
+
+    static Func<object, object[]> DistinctReader(Type type)
     {
-        var type = row.GetType();
-        var values = new object[count];
-        for (var i = 0; i < count; i++)
+        var row = Expression.Parameter(typeof(object), "row");
+        var typed = Expression.Convert(row, type);
+
+        var arity = 0;
+        while (type.GetProperty($"Value{arity + 1}") is not null)
         {
-            values[i] = type.GetProperty($"Value{i + 1}")!.GetValue(row)!;
+            arity++;
         }
 
-        return values;
+        var values = new Expression[arity];
+        for (var i = 0; i < arity; i++)
+        {
+            values[i] = Expression.Convert(Expression.Property(typed, $"Value{i + 1}"), typeof(object));
+        }
+
+        return Expression.Lambda<Func<object, object[]>>(Expression.NewArrayInit(typeof(object), values), row)
+            .Compile();
     }
 
     /// <summary>Builds a key selector over a <see cref="DistinctRow"/> for the leaf at <paramref name="index"/>.</summary>
@@ -1234,7 +1252,9 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
     /// Rebinds set membership onto <c>Enumerable.Contains</c> over a typed array of the client's
     /// values, which EF translates to a SQL <c>IN</c>. The array's element type comes from the member
     /// being tested, so every value is parsed into the server's own type — the wire's type tags never
-    /// decide it.
+    /// decide it. The array reaches the provider the same way a scalar constant does — as a bound
+    /// collection parameter, not statement text — so one cached plan serves every list a client
+    /// sends, whatever its values.
     /// </summary>
     Expression BuildIn(CallNode call, Expression target)
     {
@@ -1254,7 +1274,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
 
         return Expression.Call(
             enumerableContains.MakeGenericMethod(elementType),
-            Expression.Constant(values, typeof(IEnumerable<>).MakeGenericType(elementType)),
+            Parameterization.Parameterize(values, typeof(IEnumerable<>).MakeGenericType(elementType)),
             target);
     }
 
@@ -1424,48 +1444,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         }
 
         var parsed = ParseValue(constant.Value, underlying);
-        return Parameterize(parsed, underlying);
-    }
-
-    /// <summary>
-    /// Emits a value the way a captured variable reaches a query, so the provider binds it as a
-    /// parameter rather than writing it into the statement.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// A bare <see cref="Expression.Constant(object?)"/> is inlined into the SQL text — correctly
-    /// escaped by the provider's type mapping, but text nonetheless. A member read off a captured
-    /// object is what the compiler produces for a closure, and what the provider's funcletizer lifts
-    /// into a parameter. Client values take that shape so a value is bound rather than escaped.
-    /// </para>
-    /// <para>
-    /// The reason is as much about cost as about escaping: an inlined value makes the statement text
-    /// differ per value, so every distinct value a client sends compiles and caches its own plan.
-    /// Bound values let one plan serve them all. Null is left as a constant — there is one of it, so
-    /// nothing is gained, and a literal null keeps the provider's <c>IS NULL</c> rewriting simple.
-    /// </para>
-    /// </remarks>
-    static Expression Parameterize(object value, Type type)
-    {
-        var holder = holders.GetOrAdd(
-            type,
-            _ =>
-            {
-                var closed = typeof(ValueHolder<>).MakeGenericType(_);
-                return (closed.GetConstructors().Single(), closed.GetField("Value")!);
-            });
-
-        return Expression.Field(
-            Expression.Constant(holder.Constructor.Invoke([value]), holder.Field.DeclaringType!),
-            holder.Field);
-    }
-
-    static readonly ConcurrentDictionary<Type, (ConstructorInfo Constructor, FieldInfo Field)> holders = new();
-
-    /// <summary>Stands in for the closure a captured variable would live on.</summary>
-    sealed class ValueHolder<T>(T value)
-    {
-        public readonly T Value = value;
+        return Parameterization.Parameterize(parsed, underlying);
     }
 
     MethodCallExpression BuildAggregate(AggregateNode aggregate, ParameterExpression group, Type element)
@@ -1718,6 +1697,10 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
             _ => typeof(string)
         };
 
+    /// <summary>
+    /// Parses a wire constant into <paramref name="underlying"/> — the member's own type, resolved
+    /// from the schema, never from the wire's tag.
+    /// </summary>
     object ParseValue(string value, Type underlying)
     {
         if (underlying.IsEnum)
@@ -1736,6 +1719,22 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
             }
         }
 
+        try
+        {
+            return ParseScalar(value, underlying);
+        }
+        // A value that does not parse as the member's type is a malformed request — most often a
+        // client generated before the member's representation changed server-side — so it is reported
+        // as a rejected query rather than surfacing as a server fault.
+        catch (Exception exception) when (
+            exception is FormatException or OverflowException or InvalidCastException or ArgumentException)
+        {
+            throw new ScryValidationException($"'{value}' is not a valid {underlying.Name} value.");
+        }
+    }
+
+    static object ParseScalar(string value, Type underlying)
+    {
         var culture = CultureInfo.InvariantCulture;
         if (underlying == typeof(string))
         {

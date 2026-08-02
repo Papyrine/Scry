@@ -430,15 +430,16 @@ public class HttpRoundTripTests
         Assert.That(body, Does.Not.Contain("staleClient"));
     }
 
-    // An execution failure (500) from a drifted client is also attributed: validation cannot catch
-    // e.g. a constant parsed against a member whose type has since changed, so the failure surfaces
-    // at execution — far more likely a stale client than a broken server. The body stays the fixed
-    // generic message; only the marker is added.
+    // A constant that fails to parse at rebind is also attributed: validation cannot catch a constant
+    // aimed at a member whose type has since changed (constants are target-typed at rebind, not
+    // type-checked by the validator), so the failure surfaces while the expression is being rebound —
+    // far more likely a stale client than a hostile one. It is still a rejection: a 400 naming the
+    // value, with the stale marker added.
     [Test]
-    public async Task DriftedExecutionFailureIsAttributedToStaleClient()
+    public async Task DriftedRebindFailureIsAttributedToStaleClient()
     {
-        // Amount is decimal; "abc" passes validation (constants are target-typed at rebind, not
-        // type-checked by the validator) and then faults ParseValue -> the generic 500 path.
+        // Amount is decimal; "abc" passes validation and is rejected when ParseValue reconciles it
+        // against the member's type.
         using var content = new StringContent(
             """
             {
@@ -464,8 +465,9 @@ public class HttpRoundTripTests
         using var response = await http.PostAsync("/api/query", content);
         var body = await response.Content.ReadAsStringAsync();
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
-        Assert.That(body, Does.Contain("Query execution failed."));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(body, Does.Contain("is not a valid Decimal value"));
+        Assert.That(body, Does.Contain("regenerate the client"));
         Assert.That(body, Does.Contain("\"staleClient\":true"));
     }
 

@@ -98,7 +98,7 @@ public static class ScryServiceExtensions
         var drifted = request.Stamp is { } stamp && stamp != processor.SchemaStamp;
 
         ScryStreamMarker begin;
-        IAsyncEnumerable<Dictionary<string, object?>> rows;
+        IAsyncEnumerable<ReadOnlyMemory<byte>> rows;
         try
         {
             var db = (DbContext)services.GetRequiredService(options.ContextType);
@@ -106,8 +106,9 @@ public static class ScryServiceExtensions
             // The live response dictionary, so a policy's writes are already on the response rather
             // than needing a copy step that could run after the stream has started and headers are
             // fixed. Validation and policies both complete before Stream returns, so anything written
-            // is in place before the begin marker below.
-            (begin, rows) = processor.Stream(
+            // is in place before the begin marker below. Rows arrive as finished JSON bytes, written
+            // by the projection's shape writer rather than through per-row dictionaries.
+            (begin, rows) = processor.StreamBuffered(
                 request,
                 db,
                 services,
@@ -213,10 +214,15 @@ public static class ScryServiceExtensions
     static Task WriteLine(HttpContext context, ScryStreamMarker marker) =>
         WriteLine(context, ScryJson.Serialize(marker));
 
-    // A row's shape comes from the query rather than from a wire type — it is the projected members
-    // the client asked for — so there is nothing to generate metadata for ahead of time.
-    static Task WriteLine(HttpContext context, Dictionary<string, object?> row) =>
-        WriteLine(context, JsonSerializer.Serialize(row, ScryJson.Options));
+    static async Task WriteLine(HttpContext context, ReadOnlyMemory<byte> json)
+    {
+        await context.Response.Body.WriteAsync(json, context.RequestAborted);
+        await context.Response.WriteAsync("\n", context.RequestAborted);
+
+        // Flushed per line: a stream a client reads incrementally is the point, and a buffered response
+        // would deliver it as one block anyway.
+        await context.Response.Body.FlushAsync(context.RequestAborted);
+    }
 
     static async Task WriteLine(HttpContext context, string json)
     {
@@ -263,23 +269,36 @@ public static class ScryServiceExtensions
         // A stamp that disagrees marks the client as generated against a different model surface.
         // Validation failures carry their own attribution (ScryValidationException.StaleClient); for
         // an execution failure this is the only attribution available — a drifted client faulting the
-        // server (e.g. a constant parsed against a member whose type has since changed) is far more
-        // likely stale than the server broken, and marking it lets the client prompt a reload instead
-        // of presenting an unexplained server error.
+        // server is far more likely stale than the server broken, and marking it lets the client
+        // prompt a reload instead of presenting an unexplained server error.
         var drifted = request.Stamp is { } stamp && stamp != processor.SchemaStamp;
 
         try
         {
             var db = (DbContext)services.GetRequiredService(options.ContextType);
-            var response = processor.Execute(
+
+            // A list result is written straight from the projected rows — no dictionaries, no
+            // JsonElement round trip. Everything else comes back as a QueryResponse and is
+            // serialized the general way; the two produce identical bytes.
+            var buffer = new ArrayBufferWriter<byte>();
+            var buffered = processor.TryExecuteBuffered(
                 request,
                 db,
                 services,
                 context.Request.Headers,
-                context.Response.Headers);
+                context.Response.Headers,
+                buffer,
+                out var response);
 
             context.Response.ContentType = "application/json";
-            await context.Response.WriteAsync(ScryJson.Serialize(response), context.RequestAborted);
+            if (buffered)
+            {
+                await context.Response.Body.WriteAsync(buffer.WrittenMemory, context.RequestAborted);
+            }
+            else
+            {
+                await context.Response.WriteAsync(ScryJson.Serialize(response!), context.RequestAborted);
+            }
         }
         catch (ScryValidationException exception)
         {
