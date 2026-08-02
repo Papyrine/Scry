@@ -17,7 +17,7 @@ Add or extend a query by writing LINQ in the client — no new endpoint, no new 
 
 Scry is designed for a **WebAssembly front end** — typically Blazor WASM — talking to its own back end. The client has no EF dependency, so it stays small under a trimmed WASM publish, while remaining strongly typed against the server's EF Core model.
 
-It also assumes the front end and the back end are built by the **same team** and deployed together. A generated client is bound to the model surface it was generated against, and the two are expected to move in lockstep. Scry is deliberately *not* a general-purpose web API: it is not intended as a stable public contract for multiple external consumers, third-party apps, or clients on release cycles the team does not control. See [docs/schema-versioning.md](docs/schema-versioning.md) for how drift between the two is detected.
+It also assumes the front end and the back end are built by the **same team** and deployed together. A generated client is bound to the model surface it was generated against, and the two are expected to move in lockstep. Scry is deliberately *not* a general-purpose web API: it is not intended as a stable public contract for multiple external consumers, third-party apps, or clients on release cycles the team does not control. See [docs/schema-versioning.md](docs/schema-versioning.md) for how drift between the two is detected and mitigated.
 
 "Same team" is about coupling, not trust. The client is still treated as hostile — the generated code, the LINQ, and the wire request are all attacker-controlled — and every guarantee is re-enforced server-side at runtime. See [docs/security.md](docs/security.md).
 
@@ -29,12 +29,12 @@ The build-time and runtime flows are deliberately independent. Nothing is refere
 
 ### Build time — generating the client
 
-The source generator reads the model assembly *by path* and emits strongly-typed client query types from the allow-listed surface only. The assembly is never referenced, loaded, or executed.
+The source generator reads the EF model assembly *by path* and emits strongly-typed client query types from the allow-listed surface only. The assembly is never referenced, loaded, or executed.
 
 ```mermaid
 flowchart TB
     subgraph model["Server model"]
-        EF["EF Core model<br/>+ Scry.Annotations<br/>([Queryable], [QueryIgnore], …)"]
+        EF["EF model<br/>+ Scry.Annotations<br/>([Queryable], [QueryIgnore], …)"]
         DLL["Model dll"]
         EF --> DLL
     end
@@ -51,7 +51,7 @@ flowchart TB
 
 ### Run time — a query round-trip
 
-The client's LINQ is captured (never executed client-side) and serialized to a restricted AST. The server re-validates that AST against the allow-list — to completion, before anything is rebound — then rebinds to the real EF types, executes, and returns only the projected rows.
+The client's LINQ is captured (never executed client-side) and serialized to a restricted AST. The server re-validates that AST against the allow-list — to completion, before anything is respond — then rebinds to the real EF types, executes, and returns only the projected rows.
 
 ```mermaid
 flowchart TB
@@ -71,7 +71,7 @@ flowchart TB
         VALID["QueryValidator<br/>authoritative gate<br/>(runs to completion first)"]
         BUILD["ExpressionBuilder<br/>rebind to real EF types"]
         EXEC["QueryExecutor + ProjectionPlan<br/>execute + shape rows"]
-        DB[("EF Core → DB")]
+        DB[("EF → DB")]
         RESP["QueryResponse"]
         SCHEMA -. "allow-list" .-> VALID
         VALID --> BUILD --> EXEC --> DB
