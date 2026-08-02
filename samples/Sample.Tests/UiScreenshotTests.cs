@@ -98,7 +98,12 @@ public class UiScreenshotTests :
         await GoToExplorer(page);
 
         await page.SetEditorValueAsync(
-            "Query.Employee.Where(_ => _.Active).OrderBy(_ => _.Name).Select(_ => new { _.Name, _.Status })");
+            """
+            Query.Employee
+                .Where(_ => _.Active)
+                .OrderBy(_ => _.Name)
+                .Select(_ => new { _.Name, _.Status })
+            """);
         await page.Locator("[data-testid='run']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);
 
@@ -114,7 +119,12 @@ public class UiScreenshotTests :
         var page = await NewPageAsync();
         await GoToExplorer(page);
 
-        await page.SetEditorValueAsync("Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name })");
+        await page.SetEditorValueAsync(
+            """
+            Query.Employee
+                .Where(_ => _.Active)
+                .Select(_ => new { _.Name })
+            """);
         await page.Locator("[data-testid='sql-preview']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='sql']", 30);
 
