@@ -19,7 +19,7 @@ public sealed record QueryBatchResult
 
     /// <summary>
     /// The status this entry would have returned had it been sent on its own — 400 for a rejection,
-    /// 500 for an execution failure. Entries ride inside a successful envelope and so have no status of
+    /// 500 for an execution failure. Entries are returned inside a successful envelope and so have no status of
     /// their own to inherit; carrying it here is what lets a client raise the same exception it would
     /// have for an unbatched query. 0 when the entry succeeded.
     /// </summary>

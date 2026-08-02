@@ -92,7 +92,7 @@ When the guard returns false every explorer route returns **404**, not 403 — a
 
 Three things the explorer does with the query in the editor, beyond running it.
 
-**Share a link.** *Share* puts the query in the URL and copies the link. It rides in the **fragment** (`/scry/#q=…`), which browsers never send to the server — so a shared query cannot land in an access log, a proxy trace, or a referrer header on the way. Opening the link loads the query into the editor; a fragment that does not decode is ignored, and the explorer opens on its sample query rather than on an error.
+**Share a link.** *Share* puts the query in the URL and copies the link. It is placed in the **fragment** (`/scry/#q=…`), which browsers never send to the server — so a shared query cannot land in an access log, a proxy trace, or a referrer header on the way. Opening the link loads the query into the editor; a fragment that does not decode is ignored, and the explorer opens on its sample query rather than on an error.
 
 **Export the results.** *Export CSV* saves the result table as it is displayed — same columns, same order, RFC 4180 quoting, with a UTF-8 BOM so Excel reads non-ASCII values correctly.
 

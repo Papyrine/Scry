@@ -94,7 +94,7 @@ public class ClientRoundTripTests
     {
         await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
-        // uint/ulong literals have no dedicated ClrTypeTag; they ride the String tag and the server
+        // uint/ulong literals have no dedicated ClrTypeTag; they use the String tag and the server
         // reconciles them to the member's real type via Convert.ChangeType. This pins the round-trip
         // through EF/LocalDB, including a Sku above long.MaxValue that a numeric Int64 tag would break.
         var quantity = 7u;

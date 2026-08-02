@@ -29,7 +29,7 @@
                 title="Show the SQL this query would run, without running it. Validated and policy-filtered exactly as a real query is.">Show SQL</button>
     }
     <button data-testid="share" @onclick="Share"
-            title="Put this query in the URL and copy the link. The query rides in the fragment, so it is never sent to the server.">@(copied == "share" ? "✓ Link copied" : "Share")</button>
+            title="Put this query in the URL and copy the link. The query is placed in the fragment, so it is never sent to the server.">@(copied == "share" ? "✓ Link copied" : "Share")</button>
     @if (workspace is null && error is null)
     {
         <span class="muted">Loading schema…</span>

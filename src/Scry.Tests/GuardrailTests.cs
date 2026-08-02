@@ -9,8 +9,8 @@ public class GuardrailTests
     sealed class AddressAsEntityContext(DbContextOptions<AddressAsEntityContext> options) :
         DbContext(options)
     {
-        protected override void OnModelCreating(ModelBuilder modelBuilder) =>
-            modelBuilder.Entity<Address>().HasNoKey();
+        protected override void OnModelCreating(ModelBuilder builder) =>
+            builder.Entity<Address>().HasNoKey();
     }
 
     [Test]

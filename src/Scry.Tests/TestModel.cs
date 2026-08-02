@@ -6,8 +6,8 @@ public enum Status
     FullTime,
     PartTime,
 
-    // Renamed from 'Freelancer'; enum value names ride the wire as constants, so clients generated
-    // before the rename keep resolving.
+    // Renamed from 'Freelancer'; enum value names are sent on the wire as constants, so clients
+    // generated before the rename keep resolving.
     [PreviousNames("Freelancer")]
     Contractor
 }
@@ -113,7 +113,7 @@ public class Artwork : Asset
 
 /// <summary>
 /// Exposed only through <see cref="Order.Priorities"/>, a collection of values — nothing else names
-/// it. The enum still has to reach the client, since its value names ride the wire as constants.
+/// it. The enum still has to reach the client, since its value names are sent on the wire as constants.
 /// </summary>
 public enum Priority
 {
@@ -129,7 +129,7 @@ public class Order
     public decimal Amount { get; set; }
 
     // Unsigned members: EF maps uint -> bigint and ulong -> decimal(20,0) on SQL Server. Neither has a
-    // dedicated ClrTypeTag; their literals ride the String tag and are reconciled server-side.
+    // dedicated ClrTypeTag; their literals use the String tag and are reconciled server-side.
     public uint Quantity { get; set; }
     public ulong Sku { get; set; }
 
@@ -139,7 +139,7 @@ public class Order
     public decimal? Discount { get; set; }
 
     // A char member: primitive, so already a scalar on both sides. Present to pin that a char constant
-    // survives the wire, where it rides the String tag.
+    // survives the wire, where it uses the String tag.
     public char Grade { get; set; }
 
     // begin-snippet: queryableCollection
@@ -384,30 +384,30 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
     public DbSet<Asset> Assets => Set<Asset>();
     public DbSet<Post> Posts => Set<Post>();
 
-    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
-        configurationBuilder.Properties<decimal>().HavePrecision(18, 2);
+    protected override void ConfigureConventions(ModelConfigurationBuilder builder) =>
+        builder.Properties<decimal>().HavePrecision(18, 2);
 
     // Map the Address complex type into a JSON column, the scenario complex-type support targets.
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    protected override void OnModelCreating(ModelBuilder builder)
     {
         // begin-snippet: complexToJson
-        modelBuilder.Entity<Employee>()
+        builder.Entity<Employee>()
             .ComplexProperty(_ => _.Address)
             .ToJson();
         // end-snippet
 
         // begin-snippet: complexCollectionToJson
-        modelBuilder.Entity<Employee>()
+        builder.Entity<Employee>()
             .ComplexCollection(_ => _.PreviousAddresses)
             .ToJson();
         // end-snippet
 
         // Table-per-hierarchy: every derived type shares the base table and is told apart by a
         // discriminator, which is what OfType narrows on.
-        modelBuilder.Entity<Vehicle>();
-        modelBuilder.Entity<Building>();
-        modelBuilder.Entity<Artwork>();
-        modelBuilder.Entity<Announcement>();
+        builder.Entity<Vehicle>();
+        builder.Entity<Building>();
+        builder.Entity<Artwork>();
+        builder.Entity<Announcement>();
     }
 
     static SqlInstance<TestContext> sqlInstance = null!;

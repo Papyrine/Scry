@@ -1520,7 +1520,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
     /// <remarks>
     /// Reading it at the other operand's type is what makes a bare literal take the member's type
     /// rather than its own, and it is the only way a value whose CLR type the wire has no tag for — an
-    /// unsigned or narrow integer, which rides as a string — can be parsed at all. But it must not
+    /// unsigned or narrow integer, which is sent as a string — can be parsed at all. But it must not
     /// narrow a constant that was written wider than the member, which is what silently turns a
     /// floating-point expression into an integer one.
     /// </remarks>

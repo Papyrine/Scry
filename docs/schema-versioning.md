@@ -56,7 +56,7 @@ Renamed **enum values in results** take one extra step: the payload serializes t
 A Scry deployment has two independent version axes, both documented in [Wire format](wire-format.md):
 
 - The **[wire version](wire-format.md#versioning)** covers the *format* — the shape of the request and response. The server rejects a request whose version is newer than its own.
-- The **[schema stamp](wire-format.md#schema-stamp)** covers the *model* — the allow-listed surface a client was generated against. It rides on every request and every response.
+- The **[schema stamp](wire-format.md#schema-stamp)** covers the *model* — the allow-listed surface a client was generated against. It is carried on every request and every response.
 
 The wire version is a hard compatibility gate. The schema stamp is softer: a mismatch is not an error, but it is a signal a deployed client can use to notice it has drifted from the server. This page covers the client-side API for that.
 
@@ -137,7 +137,7 @@ The server keeps the plain 400/500 shape for a client that is plain wrong, and t
 
 One catch therefore covers every failure whose remedy is a newer client. The original exception is preserved as `InnerException` where there was one.
 
-This channel and the soft signal above are complementary, and both fire on the same failed query — the stamp header rides on rejections too, and is recorded before the payload is read. So `SchemaStaleDetected` has always been raised by the time the exception surfaces (which is also what lets the client classify an unreadable payload in the first place). An app with the banner above therefore needs no extra handling: the failed query throws, and the reload prompt is already on screen explaining why. Handle the exception where a better experience is possible — retrying the interrupted operation after the reload, say — not because the signal would otherwise be lost.
+This channel and the soft signal above are complementary, and both fire on the same failed query — the stamp header is present on rejections too, and is recorded before the payload is read. So `SchemaStaleDetected` has always been raised by the time the exception surfaces (which is also what lets the client classify an unreadable payload in the first place). An app with the banner above therefore needs no extra handling: the failed query throws, and the reload prompt is already on screen explaining why. Handle the exception where a better experience is possible — retrying the interrupted operation after the reload, say — not because the signal would otherwise be lost.
 
 The [sample](sample.md)'s Index page distinguishes the stale failure from an application error where its queries run:
 
@@ -195,7 +195,7 @@ The [alias table](annotations.md#the-response-side) maps a renamed value to a na
 
 #### The request half
 
-A literal rides the wire as text plus a loose [`ClrTypeTag`](wire-format.md#const). At a comparison site the server **ignores the tag** and parses that text into whatever type its own schema now gives the member — CLR types come from the schema, never from the wire. So the question is never "did the type change", but "does this text still parse, and is this operator still defined for the result".
+A literal is sent on the wire as text plus a loose [`ClrTypeTag`](wire-format.md#const). At a comparison site the server **ignores the tag** and parses that text into whatever type its own schema now gives the member — CLR types come from the schema, never from the wire. So the question is never "did the type change", but "does this text still parse, and is this operator still defined for the result".
 
 *Loosening* to `string` — from a number, a `bool`, an enum, anything — always parses, because reading text as text cannot fail:
 
@@ -236,7 +236,7 @@ So the response half is *not* the safety net it looks like. It catches a retype 
 
 #### Why it is not bridged
 
-Catching the request half would mean type-checking `ConstNode.Tag` against the member, but the tags are deliberately loose — `uint` and `ulong` have no tag of their own and ride the `String` tag, as do `char`, while `short` and `byte` ride `Int32` — so a strict check would reject legitimate traffic from a perfectly current client. Loosening it to "compatible" re-admits exactly the number-versus-text case worth catching, since `String` is the fallback bucket. There is no rule that separates the two.
+Catching the request half would mean type-checking `ConstNode.Tag` against the member, but the tags are deliberately loose — `uint` and `ulong` have no tag of their own and use the `String` tag, as do `char`, while `short` and `byte` use `Int32` — so a strict check would reject legitimate traffic from a perfectly current client. Loosening it to "compatible" re-admits exactly the number-versus-text case worth catching, since `String` is the fallback bucket. There is no rule that separates the two.
 
 Treat a representation change as requiring a coordinated deploy, or rename the member alongside it ([below](#the-common-shape)).
 

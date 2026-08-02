@@ -111,7 +111,7 @@ static class CursorCodec
 
     /// <summary>
     /// Converts a runtime ordering-key value into the invariant-string + tag form the wire uses for
-    /// constants. Unmapped types ride the <see cref="ClrTypeTag.String"/> tag — the seek side rebinds
+    /// constants. Unmapped types use the <see cref="ClrTypeTag.String"/> tag — the seek side rebinds
     /// each value against the ordering member's real CLR type, so the tag is only a hint (matching the
     /// client's constant encoding).
     /// </summary>

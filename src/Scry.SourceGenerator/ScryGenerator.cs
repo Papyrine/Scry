@@ -264,7 +264,7 @@ public class ScryGenerator :
                 continue;
             }
 
-            // The scalar members ride along so a query that writes no Select still projects them by
+            // The scalar members are passed along so a query that writes no Select still projects them by
             // name. That keeps the response keyed by the names this client was generated with, rather
             // than whatever the server's current model calls them.
             var members = string.Join(", ", ScalarMembers(source, extract).Select(Literal));

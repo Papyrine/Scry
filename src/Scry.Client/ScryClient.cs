@@ -147,7 +147,7 @@ public sealed class ScryClient
 
         // Every successful response carries the server's stamp, so drift detection works over any
         // transport rather than only HTTP. The HTTP transport has already recorded the same value from
-        // the response header — which it keeps, since a header also rides on error responses, where
+        // the response header — which it keeps, since a header is also present on error responses, where
         // there is no body to read it from. A response without a stamp records nothing rather than
         // clearing what the header found.
         if (response.Stamp is { } stamp)
@@ -339,7 +339,7 @@ public sealed class ScryClient
 
     /// <summary>
     /// Posts a batch. A non-success status here is a failure of the batch itself — an unreadable body,
-    /// or a rejection of the whole envelope; a rejected entry rides inside a successful response and is
+    /// or a rejection of the whole envelope; a rejected entry is returned inside a successful response and is
     /// raised on that entry's own task instead.
     /// </summary>
     async Task<QueryBatchResponse> PostBatchAsync(

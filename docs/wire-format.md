@@ -551,7 +551,7 @@ public sealed record QueryResponse(int Version, ResultKind Kind, JsonElement Pay
 
 The client checks that `kind` matches the terminal it sent and throws `ScryWireException` if it does not.
 
-`stamp` is the server's [schema stamp](#schema-stamp), carried on **every** successful response — this is what a client compares against its own to notice a drifted model. Over HTTP the same value also rides as the `Scry-Schema-Stamp` header, which additionally covers *error* responses, where there is no body to read it from. Every other transport (SignalR, gRPC, in-process) uses the body, so [drift detection](schema-versioning.md#detecting-a-stale-client) is not HTTP-specific.
+`stamp` is the server's [schema stamp](#schema-stamp), carried on **every** successful response — this is what a client compares against its own to notice a drifted model. Over HTTP the same value is also sent as the `Scry-Schema-Stamp` header, which additionally covers *error* responses, where there is no body to read it from. Every other transport (SignalR, gRPC, in-process) uses the body, so [drift detection](schema-versioning.md#detecting-a-stale-client) is not HTTP-specific.
 
 `enumAliases` is optional and **additive**: it appears only when the request's schema stamp differs from the server's and the model declares enum value renames via `[PreviousNames]` ([Annotations](annotations.md#renaming)). Each entry maps the name the payload serializes a value under to the previous names it was exposed as:
 
@@ -622,10 +622,10 @@ The response answers each entry positionally, and is likewise an envelope around
 | --- | --- |
 | `response` | The entry's result, when it succeeded — exactly what it would have been sent alone. |
 | `error` | Why the entry was rejected or failed; the specific message for a validation failure, and the same fixed text a `500` carries for anything else. |
-| `status` | What the entry would have returned on its own: `400` rejected, `500` failed. Entries ride inside a successful envelope and so have no status to inherit, which is why it is carried. |
+| `status` | What the entry would have returned on its own: `400` rejected, `500` failed. Entries are returned inside a successful envelope and so have no status to inherit, which is why it is carried. |
 | `staleClient` | As on a [single error](#response) — the rejection is attributed to a differing schema stamp. |
 
-**Entries are independent.** Each is validated, policy-filtered, and executed separately, so one being rejected leaves the rest answered — the envelope only fails for a fault of its own: an unreadable body, an unsupported version, or more entries than [`MaxBatchSize`](server.md#options). It is not a transaction, and the entries run sequentially. The schema stamp rides once on the envelope, since one server answered all of them.
+**Entries are independent.** Each is validated, policy-filtered, and executed separately, so one being rejected leaves the rest answered — the envelope only fails for a fault of its own: an unreadable body, an unsupported version, or more entries than [`MaxBatchSize`](server.md#options). It is not a transaction, and the entries run sequentially. The schema stamp is carried once on the envelope, since one server answered all of them.
 
 
 ## Versioning

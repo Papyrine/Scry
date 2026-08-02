@@ -41,7 +41,7 @@ public class EnumAliasTests
     }
 
     // Value names are hashed into the stamp, so a matching (or absent) stamp proves the client
-    // already knows the current names — nothing rides along in the common case.
+    // already knows the current names — nothing is sent in the common case.
     [Test]
     public void ResponseOmitsAliasesWhenStampMatchesOrIsAbsent()
     {

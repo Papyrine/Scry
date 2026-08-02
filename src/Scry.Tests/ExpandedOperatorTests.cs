@@ -820,7 +820,7 @@ public class ExpandedOperatorTests
         var wanted = 'A';
 
         // char is primitive, so it is already a scalar on both sides. Its constant has no tag of its
-        // own and rides the String tag, reconciled to the member's type server-side.
+        // own and uses the String tag, reconciled to the member's type server-side.
         var byLiteral = await client.Source<Order>("Order").CountAsync(_ => _.Grade == 'B');
         var byCaptured = await client.Source<Order>("Order").CountAsync(_ => _.Grade == wanted);
 

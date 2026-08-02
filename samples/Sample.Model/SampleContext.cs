@@ -10,21 +10,21 @@ public sealed class SampleContext(DbContextOptions<SampleContext> options) :
     public DbSet<EmployeeSummary> EmployeeSummaries => Set<EmployeeSummary>();
     public DbSet<Asset> Assets => Set<Asset>();
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    protected override void OnModelCreating(ModelBuilder builder)
     {
-        modelBuilder.Entity<EmployeeSummary>()
+        builder.Entity<EmployeeSummary>()
             .HasNoKey()
             .ToView("EmployeeSummary");
 
         // Table-per-hierarchy: the derived types share the base table and are told apart by a
         // discriminator, which is what OfType narrows on.
-        modelBuilder.Entity<Vehicle>();
-        modelBuilder.Entity<Building>();
+        builder.Entity<Vehicle>();
+        builder.Entity<Building>();
     }
     // end-snippet
 
-    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
-        configurationBuilder.Properties<decimal>().HavePrecision(18, 2);
+    protected override void ConfigureConventions(ModelConfigurationBuilder builder) =>
+        builder.Properties<decimal>().HavePrecision(18, 2);
 
     public static void Initialize(SampleContext context)
     {

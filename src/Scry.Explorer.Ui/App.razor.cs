@@ -87,7 +87,7 @@ public partial class App
             .TrimEnd('=');
 
     /// <summary>
-    /// Writes the current query into the URL fragment and copies the resulting link. The query rides in
+    /// Writes the current query into the URL fragment and copies the resulting link. The query is placed in
     /// the fragment rather than the query string so it is never sent to the server — a shared link
     /// cannot land in an access log on the way.
     /// </summary>

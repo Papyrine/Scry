@@ -76,7 +76,7 @@ public class IntrospectionTests
             .Members.Single(_ => _.Name == "Headcount");
         Assert.That(headcount.Obsolete, Is.EqualTo("Counts open roles too; use the Region rollup."));
 
-        // A bare [Obsolete] is empty rather than null — deprecated, with nothing to add. It rides on
+        // A bare [Obsolete] is empty rather than null — deprecated, with nothing to add. It is reported on
         // the source as well as the type, so the entry point a query starts from warns too.
         Assert.That(introspection.Types.Single(_ => _.Model == "RegionSummaryQueryModel").Obsolete, Is.Empty);
         Assert.That(introspection.Sources.Single(_ => _.Name == "RegionSummary").Obsolete, Is.Empty);

@@ -389,8 +389,8 @@ sealed class Schema
         // member are on the wire at all.
         foreach (var enumType in schema.types.Values
                      .SelectMany(_ => _.Members.Values)
-                     // A collection of values reaches an enum through its element, which rides the wire
-                     // as a constant exactly as a scalar member's does.
+                     // A collection of values reaches an enum through its element, which is sent on the
+                     // wire as a constant exactly as a scalar member's is.
                      .Select(member => member.Kind switch
                      {
                          MemberKind.Scalar => member.Type,

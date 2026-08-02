@@ -222,4 +222,4 @@ None of these is an error without the stamp — each produces a plausible page w
 
 **The ordering, not the whole pipeline.** Every way a cursor can produce a wrong page is a change to the order it resumes. A changed *filter* is not one of those: seeking to "the rows of this set ordered after this key" stays well defined when the set narrows, so a client may filter further between pages and keep paging. Hashing the entire pipeline would have caught the same corruption while also refusing that, which is why the stamp covers only the source and the ordering.
 
-The stamp is a fingerprint rather than a security control. It rides inside the HMAC-signed payload and is only ever compared against another stamp from the same server, so it exists to catch a client changing its own sort — not to withstand one forging a cursor, which the signature already handles.
+The stamp is a fingerprint rather than a security control. It is stored inside the HMAC-signed payload and is only ever compared against another stamp from the same server, so it exists to catch a client changing its own sort — not to withstand one forging a cursor, which the signature already handles.

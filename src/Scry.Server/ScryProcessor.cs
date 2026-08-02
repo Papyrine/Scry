@@ -82,7 +82,7 @@ public sealed class ScryProcessor
             // A drifted client may have been generated before an enum value rename, in which case the
             // payload carries names it does not know. The aliases let its reader resolve them; a
             // matching (or absent) stamp proves the client already has the current names, so nothing
-            // rides along in the common case.
+            // is sent in the common case.
             if (drifted && schema.EnumAliases.Count > 0)
             {
                 response = response with
@@ -141,7 +141,7 @@ public sealed class ScryProcessor
         {
             var scope = new CallScope(services, requestHeaders, responseHeaders);
 
-            // The alias table rides the envelope only for a drifted client; that rare envelope keeps
+            // The alias table is carried on the envelope only for a drifted client; that rare envelope keeps
             // the fully-general path rather than teaching the writer a second shape.
             if (drifted && schema.EnumAliases.Count > 0)
             {

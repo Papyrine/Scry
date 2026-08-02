@@ -8,7 +8,7 @@ namespace Scry;
 /// server is never told a header hook existed. They are the per-query counterpart to
 /// <c>HttpClient.DefaultRequestHeaders</c>, which applies to every call a client makes.
 /// <para>
-/// Headers ride on the HTTP transport, so a query carrying them must come from a client built by
+/// Headers are carried by the HTTP transport, so a query carrying them must come from a client built by
 /// <see cref="ScryClient.ForHttp"/>; a custom transport delegate has nowhere to put them and says so
 /// rather than dropping them. A header attached to the inner side of a join or a set operator is
 /// likewise ignored — those are folded into the one request the outer query sends.

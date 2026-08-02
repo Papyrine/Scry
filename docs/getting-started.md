@@ -52,16 +52,16 @@ public DbSet<Order> Orders => Set<Order>();
 public DbSet<EmployeeSummary> EmployeeSummaries => Set<EmployeeSummary>();
 public DbSet<Asset> Assets => Set<Asset>();
 
-protected override void OnModelCreating(ModelBuilder modelBuilder)
+protected override void OnModelCreating(ModelBuilder builder)
 {
-    modelBuilder.Entity<EmployeeSummary>()
+    builder.Entity<EmployeeSummary>()
         .HasNoKey()
         .ToView("EmployeeSummary");
 
     // Table-per-hierarchy: the derived types share the base table and are told apart by a
     // discriminator, which is what OfType narrows on.
-    modelBuilder.Entity<Vehicle>();
-    modelBuilder.Entity<Building>();
+    builder.Entity<Vehicle>();
+    builder.Entity<Building>();
 }
 ```
 <sup><a href='/samples/Sample.Model/SampleContext.cs#L6-L24' title='Snippet source file'>snippet source</a> | <a href='#snippet-dbContext' title='Start of snippet'>anchor</a></sup>

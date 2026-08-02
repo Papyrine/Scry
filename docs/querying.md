@@ -306,7 +306,7 @@ Position in the chain does not matter — the operator swaps the provider that c
 
 `OnResponseHeaders` runs on **failed** responses too, which is where a trace or correlation header is most worth having; it runs before the failure becomes an exception. On a streamed query it runs once the response headers are read, before the first row.
 
-Headers ride the HTTP transport, so a query carrying them needs a client built by `ScryClient.ForHttp`. A [custom transport delegate](server.md#hosting-without-the-http-endpoint) has nowhere to put them and refuses the query rather than sending it silently stripped. A header attached to the inner side of a join or a set operator is likewise ignored: those fold into the single request the outer query sends.
+Headers are carried by the HTTP transport, so a query carrying them needs a client built by `ScryClient.ForHttp`. A [custom transport delegate](server.md#hosting-without-the-http-endpoint) has nowhere to put them and refuses the query rather than sending it silently stripped. A header attached to the inner side of a join or a set operator is likewise ignored: those fold into the single request the outer query sends.
 
 > [!WARNING]
 > Whatever the client sends is attacker-controlled by the time the server reads it. Treat these as hint data — a correlation id, a trace id, a client build — and never as an authorization input. See [row policies](policies.md#reading-and-writing-headers).
@@ -897,7 +897,7 @@ var rows = await client.Source<Order>("Order")
 <sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L35-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientSetMembership' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-The collection must be closure state — it is evaluated on the client and its values ride the wire as constants — and the tested value must come from the row. The number of values is capped by [`MaxInValues`](server.md#limits) (default 1000). An empty collection matches nothing.
+The collection must be closure state — it is evaluated on the client and its values are sent on the wire as constants — and the tested value must come from the row. The number of values is capped by [`MaxInValues`](server.md#limits) (default 1000). An empty collection matches nothing.
 
 
 ### Constants and captured values

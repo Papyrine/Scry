@@ -80,9 +80,9 @@ public class Building : Asset
 
 That is default-deny applied to the hierarchy: adding a subclass to the model exposes nothing until it is annotated. A type left out is unreachable — it has no wire name, its members are not readable, and no query can narrow to it — while its own descendants stay reachable if they opted in, since the base link skips over types that did not.
 
-An opted-in derived type is a source in its own right (`Query.Vehicle`), *and* something a query rooted at the base can narrow to with [`OfType`](querying.md#narrowing-to-a-derived-type). The generated model inherits the base's, declaring only the members the CLR type declares, so the base's members are readable before and after the narrowing and the derived ones only after.
+An opted-in derived type is itself a source (`Query.Vehicle`), *and* something a query rooted at the base can narrow to with [`OfType`](querying.md#narrowing-to-a-derived-type). The generated model inherits the base's, declaring only the members the CLR type declares, so the base's members are readable before and after the narrowing and the derived ones only after.
 
-A [`[ReturnableWith]`](#returnablewith) policy *is* inherited, deliberately: a subclass cannot shed the policy its base carries. When both carry one, both apply, base-most first. A policy registered in code with `AddPolicy` inherits the same way — being a source in its own right is what makes that matter, since a derived source is reachable without naming the base at all.
+A [`[ReturnableWith]`](#returnablewith) policy *is* inherited, deliberately: a subclass cannot shed the policy its base carries. When both carry one, both apply, base-most first. A policy registered in code with `AddPolicy` inherits the same way — being a source itself is what makes that matter, since a derived source is reachable without naming the base at all.
 
 
 ## Naming a source
@@ -226,8 +226,8 @@ public enum Status
     FullTime,
     PartTime,
 
-    // Renamed from 'Freelancer'; enum value names ride the wire as constants, so clients generated
-    // before the rename keep resolving.
+    // Renamed from 'Freelancer'; enum value names are sent on the wire as constants, so clients
+    // generated before the rename keep resolving.
     [PreviousNames("Freelancer")]
     Contractor
 }
@@ -240,19 +240,19 @@ It is deliberately **server-side only**. Generated clients never emit a previous
 
 ### The response side
 
-Accepting an old name is only half of it — the response has to come back in keys the old client can read. Response keys always come from the **request's** projection, and a generated client always sends one: the entry point passes its scalar member names to `Source` (visible in the [generated entry point above](#naming-a-source)), so a query that writes no `Select` still projects them explicitly.
+Accepting an old name is not enough on its own — the response has to come back in keys the old client can read. Response keys always come from the **request's** projection, and a generated client always sends one: the entry point passes its scalar member names to `Source` (visible in the [generated entry point above](#naming-a-source)), so a query that writes no `Select` still projects them explicitly.
 
-The client therefore names its own columns on every request, and the server echoes those names back verbatim — it never substitutes its own. A member rename round-trips without the server having to work out which vintage of client it is talking to.
+The client therefore names its own columns on every request, and the server echoes those names back verbatim — it never substitutes its own. A member rename round-trips without the server having to work out which version of the client sent the request.
 
-The server's own default projection remains for a request that names no members — a hand-built one, or any non-generated caller. Those have no fixed model to disappoint, so they get the current names.
+The server's own default projection remains for a request that names no members — a hand-built one, or any non-generated caller. Those have no fixed model to satisfy, so they get the current names.
 
-**Enum values travel differently.** A renamed value in a *result* is serialized under its current name — unlike a key, a value cannot be written under two names. Instead the translation rides out of band: when the request's stamp differs from the server's, the response carries [`enumAliases`](wire-format.md#response) (current name → previous names, straight from `[PreviousNames]`), and the client's enum reader resolves a name it does not know to a previous name it does. The payload stays canonical, and nothing is sent when the stamps agree.
+**Enum values travel differently.** A renamed value in a *result* is serialized under its current name — unlike a key, a value cannot be written under two names. Instead the translation is carried out of band: when the request's stamp differs from the server's, the response carries [`enumAliases`](wire-format.md#response) (current name → previous names, straight from `[PreviousNames]`), and the client's enum reader resolves a name it does not know to a previous name it does. The payload stays canonical, and nothing is sent when the stamps agree.
 
 If a name still cannot be resolved — the value was renamed without a `[PreviousNames]` entry, or removed — the client throws `ScryStaleClientException` rather than a bare `JsonException`, so the failure names its cause: regenerate the client, or reload the deployed app.
 
 Entries are meant to be **pruned** once deployed clients have refreshed. Keeping them indefinitely accumulates exactly the compatibility debt the one-surface-at-a-time design avoids.
 
-Once pruned, treat a retired name as **retired for good** — do not reuse it for something else. Every other mistake here fails loudly: an unknown name is a rejected query or a `ScryStaleClientException`. Reuse is the one that fails *quietly*. A client old enough to still send the retired name gets whatever now answers to it, and a retired enum value name resolves an ancient client's row to the wrong member with no error anywhere. The startup checks cannot catch this, because by then nothing records that the name ever meant something else.
+Once pruned, treat a retired name as **retired for good** — do not reuse it for something else. Every other mistake here surfaces as an error: an unknown name is a rejected query or a `ScryStaleClientException`. Reuse is the one that produces *no error at all*. A client old enough to still send the retired name gets whatever now answers to it, and a retired enum value name resolves an ancient client's row to the wrong member with no error anywhere. The startup checks cannot catch this, because by then nothing records that the name ever meant something else.
 
 Details:
 
@@ -291,16 +291,16 @@ public DbSet<Order> Orders => Set<Order>();
 public DbSet<EmployeeSummary> EmployeeSummaries => Set<EmployeeSummary>();
 public DbSet<Asset> Assets => Set<Asset>();
 
-protected override void OnModelCreating(ModelBuilder modelBuilder)
+protected override void OnModelCreating(ModelBuilder builder)
 {
-    modelBuilder.Entity<EmployeeSummary>()
+    builder.Entity<EmployeeSummary>()
         .HasNoKey()
         .ToView("EmployeeSummary");
 
     // Table-per-hierarchy: the derived types share the base table and are told apart by a
     // discriminator, which is what OfType narrows on.
-    modelBuilder.Entity<Vehicle>();
-    modelBuilder.Entity<Building>();
+    builder.Entity<Vehicle>();
+    builder.Entity<Building>();
 }
 ```
 <sup><a href='/samples/Sample.Model/SampleContext.cs#L6-L24' title='Snippet source file'>snippet source</a> | <a href='#snippet-dbContext' title='Start of snippet'>anchor</a></sup>
@@ -401,7 +401,7 @@ paired with the usual EF mapping on the owning entity:
 <!-- snippet: complexToJson -->
 <a id='snippet-complexToJson'></a>
 ```cs
-modelBuilder.Entity<Employee>()
+builder.Entity<Employee>()
     .ComplexProperty(_ => _.Address)
     .ToJson();
 ```
@@ -429,7 +429,7 @@ public List<Address> PreviousAddresses { get; set; } = [];
 <!-- snippet: complexCollectionToJson -->
 <a id='snippet-complexCollectionToJson'></a>
 ```cs
-modelBuilder.Entity<Employee>()
+builder.Entity<Employee>()
     .ComplexCollection(_ => _.PreviousAddresses)
     .ToJson();
 ```
@@ -492,7 +492,7 @@ This is the deprecation window that `[QueryIgnore]` has no room for. The two are
 
 Three things follow from it being advisory:
 
-- **The `error: true` flag is deliberately dropped.** `[Obsolete("...", error: true)]` on the model still reaches the client as a plain warning. Making it a client build break would be a lie: the server executes the query either way, and the client author could not unblock themselves except by suppressing it. `[QueryIgnore]` is the honest hard stop.
+- **The `error: true` flag is deliberately dropped.** `[Obsolete("...", error: true)]` on the model still reaches the client as a plain warning. Making it a client build break would misrepresent the server: the server executes the query either way, and the client author could not unblock themselves except by suppressing it. `[QueryIgnore]` is the hard stop, and it is enforced server-side.
 - **It stays out of the [schema stamp](schema-versioning.md).** Deprecating something leaves the queryable surface exactly as it was, so the stamp does not move and no deployed client is reported as stale. Clients learn about it at their next rebuild, which is what a deprecation window is.
 - **Generated files suppress `CS0612`/`CS0618` internally.** A deprecated model type is still named by every navigation to it and by its own entry point, and that is generated code the consumer cannot edit — without the suppression, `TreatWarningsAsErrors` would fail on it. Uses in the consumer's own query code are outside those files and still warn.
 
@@ -572,7 +572,7 @@ An exposed collection is **aggregable, not projectable**. A client can ask a que
 
 The element type must itself be opted in, and must **not carry a [row policy](policies.md)** — a policy filters a source, and a subquery has none, so aggregating a policied collection would count exactly the rows the policy hides. The server refuses to start in that case, naming the member.
 
-The element may be a source type or a [`[QueryableComplex]`](#queryablecomplex) type. The latter is a **JSON array of value objects**, and behaves identically — the storage is EF's business, and nothing about it reaches the wire.
+The element may be a source type or a [`[QueryableComplex]`](#queryablecomplex) type. The latter is a **JSON array of value objects**, and behaves identically — how it is stored is EF's concern, and nothing about it reaches the wire.
 
 
 ### Collections of values

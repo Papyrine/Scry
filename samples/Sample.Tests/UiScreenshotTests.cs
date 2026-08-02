@@ -177,7 +177,7 @@ public class UiScreenshotTests :
             }
             """);
         await page.WaitForSelectorAsync(".suggest-widget .monaco-list-row", 30);
-        await WaitForScrollbarsAsync(page);
+        await SettleScrollbarsAsync(page);
 
         await Verify(page)
             .PageScreenshotOptions(new(), screenshotOnly: true);
@@ -202,7 +202,7 @@ public class UiScreenshotTests :
             """);
         await page.Locator("[data-testid='run']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);
-        await WaitForScrollbarsAsync(page);
+        await SettleScrollbarsAsync(page);
 
         await Verify(page)
             .PageScreenshotOptions(
@@ -213,28 +213,25 @@ public class UiScreenshotTests :
                 screenshotOnly: true);
     }
 
-    // Monaco fades a scrollbar out over ~800ms once whatever it belongs to stops being touched — the
-    // editor's after the query is set, the suggest widget's after the list opens. A capture taken
-    // mid-fade differs from the last one by a column of part-transparent pixels, which is the whole of
-    // the difference between two otherwise identical runs. Waits until every scrollbar's opacity stops
-    // moving, sampling far enough apart that a fade in progress cannot read the same twice.
-    static Task WaitForScrollbarsAsync(IPage page) =>
-        page.WaitForFunctionAsync(
-            """
-            () => {
-                const opacities = [...document.querySelectorAll('.monaco-scrollable-element > .scrollbar')]
-                    .map(scrollbar => getComputedStyle(scrollbar).opacity)
-                    .join(',');
-                const settled = window.scryScrollbars === opacities;
-                window.scryScrollbars = opacities;
-                return settled;
-            }
-            """,
-            null,
+    // Monaco fades a scrollbar out once whatever it belongs to stops being touched — the editor's after
+    // the query is set, the suggest widget's after the list opens. A capture taken mid-fade differs from
+    // the last one by a column of part-transparent pixels, which is the whole of the difference between
+    // two otherwise identical runs. The fade is not waited out but removed: Chromium runs an opacity
+    // transition on the compositor, so polling getComputedStyle reads it as finished while the painted
+    // pixels are still moving — three runs of the same capture read that column as three different
+    // greys. Dropping the transition snaps every scrollbar straight to the state it was heading for, so
+    // the capture is of the settled UI whenever the shutter falls.
+    static Task SettleScrollbarsAsync(IPage page) =>
+        page.AddStyleTagAsync(
             new()
             {
-                PollingInterval = 200,
-                Timeout = 10_000
+                Content =
+                    """
+                    .monaco-scrollable-element > .scrollbar,
+                    .monaco-scrollable-element > .scrollbar > .slider {
+                        transition: none !important;
+                    }
+                    """
             });
 
     Task<IPage> NewPageAsync(ViewportSize? size = null) =>

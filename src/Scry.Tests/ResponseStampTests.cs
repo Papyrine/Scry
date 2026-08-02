@@ -1,5 +1,5 @@
 /// <summary>
-/// The server's schema stamp rides on every successful response, so drift detection works over any
+/// The server's schema stamp is carried on every successful response, so drift detection works over any
 /// transport. These use an in-process transport — no HTTP, no headers — which is exactly the case the
 /// body-carried stamp exists to cover.
 /// </summary>
@@ -54,7 +54,7 @@ public class ResponseStampTests
         SchemaDrift? drift = null;
         client.SchemaStaleDetected += _ => drift = _;
 
-        // The query succeeds — drift rides alongside a working result, as with the HTTP header.
+        // The query succeeds — drift is reported alongside a working result, as with the HTTP header.
         var count = await client.Source<PreNullableEmployee>("Employee", ["Name"]).CountAsync();
 
         Assert.That(count, Is.EqualTo(4));
