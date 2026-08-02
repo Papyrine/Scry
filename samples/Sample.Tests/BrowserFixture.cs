@@ -47,7 +47,17 @@ public abstract class BrowserFixture
         await WaitForServer(port);
 
         playwright = await Playwright.CreateAsync();
-        Browser = await playwright.Chromium.LaunchAsync();
+        Browser = await playwright.Chromium.LaunchAsync(
+            new()
+            {
+                // Grayscale text rather than Chromium's default LCD subpixel antialiasing. The colour
+                // fringing it produces is not stable between browser sessions — the same page, on the
+                // same machine, rasterises one element with different fringing from one run of the
+                // suite to another — which is invisible to a reader and fatal to a screenshot
+                // comparison. Turning it off costs these captures nothing: nobody reads them for
+                // subpixel fidelity, and it is what makes a committed baseline reproducible.
+                Args = ["--disable-lcd-text"]
+            });
     }
 
     [OneTimeTearDown]

@@ -4,8 +4,10 @@
 // behavioural assertions live in UiSnapshotTests.
 //
 // Every page is opened at a fixed viewport: layout is what the screenshot is of, and a viewport that
-// followed the machine would make every capture a different one. Pixels still depend on the platform's
-// font rasterisation, so a first run on a new OS or CI image is expected to need reseeding.
+// followed the machine would make every capture a different one. Subpixel text antialiasing is off
+// (see BrowserFixture) because it did not reproduce between browser sessions even on one machine; what
+// remains is the platform's own font stack, so a first run on a new OS or CI image is still expected to
+// need reseeding.
 [TestFixture]
 [Category("Browser")]
 public class UiScreenshotTests :
