@@ -31,7 +31,7 @@ public class PagingPageTests
         Assert.That(page.FindAll("button")[1].HasAttribute("disabled"), Is.False, "Next enabled on page 1");
         Assert.That(page.FindAll("button")[0].HasAttribute("disabled"), Is.True, "Previous disabled on page 1");
 
-        page.FindAll("button")[1].Click();
+        await page.FindAll("button")[1].ClickAsync();
         await page.WaitForStateAsync(
             () => names().FirstOrDefault() == "Bob",
             TimeSpan.FromSeconds(10));

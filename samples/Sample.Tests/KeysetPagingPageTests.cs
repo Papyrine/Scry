@@ -29,7 +29,7 @@ public class KeysetPagingPageTests
         Assert.That(names(), Is.EqualTo(firstPage));
         Assert.That(page.FindAll("button")[0].HasAttribute("disabled"), Is.False, "Next enabled on page 1");
 
-        page.FindAll("button")[0].Click();
+        await page.FindAll("button")[0].ClickAsync();
         await page.WaitForStateAsync(
             () => names().FirstOrDefault() == "Bob",
             TimeSpan.FromSeconds(10));

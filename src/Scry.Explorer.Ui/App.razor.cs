@@ -420,7 +420,8 @@ public partial class App
         await TryRegister();
     }
 
-    string ThemeLabel => themeMode switch { "light" => "☀ Light", "dark" => "🌙 Dark", _ => "🌓 System" };
+    // Text only — the glyph beside it is the inline svg in App.razor.
+    string ThemeLabel => themeMode switch { "light" => "Light", "dark" => "Dark", _ => "System" };
 
     bool ResolveDark(IJSInProcessRuntime js) =>
         themeMode == "dark" || (themeMode != "light" && js.Invoke<bool>("scry.systemDark"));

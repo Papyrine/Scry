@@ -15,6 +15,7 @@ public static class ModuleInitializer
         // Downloads the Chromium build on first run so the UI tests work on a clean machine / CI.
         VerifyPlaywright.Initialize(installPlaywright: true);
         VerifyDiffPlex.Initialize(OutputType.Compact);
+        VerifierSettings.UseSsimForPng();
         VerifierSettings.AddScrubber("html", Scrub);
         VerifierSettings.InitializePlugins();
     }

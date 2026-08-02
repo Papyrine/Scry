@@ -34,8 +34,33 @@
     {
         <span class="muted">Loading schema…</span>
     }
+    @*
+        The icon is drawn rather than written. A moon emoji resolves out of whatever emoji font the OS
+        ships, so the same button painted a different glyph on Windows 11 than on a Windows Server CI
+        image — and none at all on a box carrying no emoji font. An inline path has no such dependency,
+        which is what lets a screenshot baseline hold on a machine other than the one that seeded it.
+    *@
     <button class="theme-toggle icon-btn" data-testid="theme-toggle" @onclick="CycleTheme"
-            title="Cycle theme: System → Light → Dark">@ThemeLabel</button>
+            title="Cycle theme: System → Light → Dark">
+        <svg class="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            @if (themeMode == "light")
+            {
+                <circle cx="12" cy="12" r="5" />
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+            }
+            else if (themeMode == "dark")
+            {
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+            }
+            else
+            {
+                @* Half the dial filled: the theme is half this page's choice and half the OS's. *@
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none" />
+            }
+        </svg>@ThemeLabel
+    </button>
 </div>
 
 @if (history.Count > 0)

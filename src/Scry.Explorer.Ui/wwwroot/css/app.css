@@ -49,6 +49,15 @@ a {
 
 .theme-toggle {
     margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+}
+
+/* Sized in em so the icon tracks the button's font-size rather than a pixel box beside it. */
+.theme-icon {
+    width: 1em;
+    height: 1em;
 }
 
 /* A small, unobtrusive secondary button (copy, theme). Inherits color-scheme for light/dark. */
