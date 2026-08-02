@@ -468,7 +468,7 @@ To warn clients before taking a member away, deprecate it first with [`[Obsolete
 
 ## `[Obsolete]`
 
-Not a Scry attribute — the BCL's `System.ObsoleteAttribute`, on a model type or an exposed member:
+`ObsoleteAttribute` on a model type or an exposed member:
 
 <!-- snippet: obsoleteMember -->
 <a id='snippet-obsoleteMember'></a>
