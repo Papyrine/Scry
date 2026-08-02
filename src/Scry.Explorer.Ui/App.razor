@@ -71,9 +71,23 @@
 {
     <div class="pane-head">
         <h3>Result</h3>
-        <button class="icon-btn" data-testid="csv" @onclick="DownloadCsv"
-                title="Download these rows as CSV.">Export CSV</button>
     </div>
+    @if (CanExport)
+    {
+        @* csv is the only conditional format, and it comes first, so the separators need no loop. *@
+        <p class="exports">
+            Export:
+            @if (resultFlat)
+            {
+                <a href="#" data-testid="csv" @onclick:preventDefault @onclick="DownloadCsv"
+                   title="Download these rows as CSV — same columns, same order, RFC 4180 quoted.">csv</a><text>, </text>
+            }
+            <a href="#" data-testid="xml" @onclick:preventDefault @onclick="DownloadXml"
+               title="Download these rows as XML — a row element each, nesting and all.">xml</a><text>, </text>
+            <a href="#" data-testid="json" @onclick:preventDefault @onclick="DownloadJson"
+               title="Download these rows as JSON, exactly as the server sent them.">json</a>
+        </p>
+    }
     <table data-testid="result-table">
         <thead>
             <tr>@foreach (var column in resultColumns) { <th>@column</th> }</tr>

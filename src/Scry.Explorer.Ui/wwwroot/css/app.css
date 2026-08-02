@@ -63,6 +63,12 @@ a {
     gap: 0.5rem;
 }
 
+/* The export formats: their own line under the Result heading, as one compact list. */
+.exports {
+    margin: 0 0 0.4rem 0;
+    font-size: 0.8rem;
+}
+
 .pane-head h3 {
     margin: 0.8rem 0 0.4rem 0;
 }

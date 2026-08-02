@@ -94,7 +94,9 @@ Three things the explorer does with the query in the editor, beyond running it.
 
 **Share a link.** *Share* puts the query in the URL and copies the link. It is placed in the **fragment** (`/scry/#q=…`), which browsers never send to the server — so a shared query cannot land in an access log, a proxy trace, or a referrer header on the way. Opening the link loads the query into the editor; a fragment that does not decode is ignored, and the explorer opens on its sample query rather than on an error.
 
-**Export the results.** *Export CSV* saves the result table as it is displayed — same columns, same order, RFC 4180 quoting, with a UTF-8 BOM so Excel reads non-ASCII values correctly.
+**Export the results.** The *Export:* line under the result table saves the rows it is showing — same rows, same order — as `csv`, `xml`, or `json`.
+
+`csv` writes them as displayed, with RFC 4180 quoting and a UTF-8 BOM so Excel reads non-ASCII values correctly. It is offered only for a **flat** result: [projecting into a navigation](wire-format.md) nests an object inside each row, and a grid cannot hold that without flattening the shape away. `xml` (a `row` element each, a child element per member) and `json` (the rows exactly as the server sent them) keep the nesting, so they are offered for every result the table can render.
 
 **See the SQL.** Covered next.
 

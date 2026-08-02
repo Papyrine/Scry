@@ -22,6 +22,12 @@ public partial class App
     string? resultJson;
     List<string>? resultColumns;
     List<List<string>>? resultRows;
+    // The same rows unflattened, as the server sent them — what the exports that keep a nested
+    // projection nested are written from.
+    List<JsonElement>? payloadRows;
+    // Whether the result is a flat grid: every cell a scalar. Projecting into a navigation nests an
+    // object inside the row instead, and a tree has no faithful CSV.
+    bool resultFlat;
     string? scalarResult;
     string? error;
     bool editorReady;
@@ -98,6 +104,12 @@ public partial class App
         await Copy(url, "share");
     }
 
+    /// <summary>
+    /// Whether there is anything to export. The exports are of the rows the result table is showing,
+    /// so an empty result offers none of them — and CSV additionally needs <see cref="resultFlat"/>.
+    /// </summary>
+    bool CanExport => resultRows is { Count: > 0 };
+
     /// <summary>Downloads the result table as CSV — the rows as rendered, in their displayed order.</summary>
     async Task DownloadCsv()
     {
@@ -114,8 +126,51 @@ public partial class App
             builder.AppendLine(string.Join(",", row.Select(Csv)));
         }
 
-        await JS.InvokeVoidAsync("scry.download", "scry-result.csv", builder.ToString(), "text/csv;charset=utf-8");
+        // The BOM is what makes Excel read the UTF-8 as UTF-8 rather than as the local codepage, which
+        // otherwise mangles any non-ASCII value in an exported column.
+        await Download("csv", "text/csv;charset=utf-8", builder.ToString(), bom: true);
     }
+
+    /// <summary>
+    /// Downloads the rows as JSON, exactly as the server sent them. Unlike CSV this keeps a nested
+    /// projection nested, so it is offered for every result the table can render.
+    /// </summary>
+    async Task DownloadJson()
+    {
+        if (payloadRows is null)
+        {
+            return;
+        }
+
+        // No BOM: a leading U+FEFF is not valid JSON, and strict parsers reject it.
+        await Download("json", "application/json", JsonSerializer.Serialize(payloadRows, indented), bom: false);
+    }
+
+    /// <summary>
+    /// Downloads the rows as XML — a <c>row</c> element each, with a child element per member. Like
+    /// JSON, and unlike CSV, a nested projection stays nested.
+    /// </summary>
+    async Task DownloadXml()
+    {
+        if (payloadRows is null)
+        {
+            return;
+        }
+
+        var builder = new StringBuilder();
+        builder.AppendLine("""<?xml version="1.0" encoding="utf-8"?>""");
+        builder.AppendLine("<results>");
+        foreach (var row in payloadRows)
+        {
+            WriteXml(builder, "row", row, depth: 1);
+        }
+
+        builder.Append("</results>");
+        await Download("xml", "application/xml", builder.ToString(), bom: false);
+    }
+
+    Task Download(string extension, string type, string text, bool bom) =>
+        JS.InvokeVoidAsync("scry.download", $"scry-result.{extension}", text, type, bom).AsTask();
 
     // RFC 4180: a field containing a comma, a quote, or a newline is quoted, and quotes inside it are
     // doubled. Everything else is written as-is.
@@ -127,6 +182,98 @@ public partial class App
         }
 
         return $"\"{value.Replace("\"", "\"\"")}\"";
+    }
+
+    static void WriteXml(StringBuilder builder, string name, JsonElement value, int depth)
+    {
+        var indent = new string(' ', depth * 2);
+
+        // An absent value stays an empty element rather than being dropped, so every row keeps the
+        // same shape.
+        if (value.ValueKind == JsonValueKind.Null)
+        {
+            builder.Append(indent).Append('<').Append(name).AppendLine(" />");
+            return;
+        }
+
+        if (value.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array))
+        {
+            builder.Append(indent).Append('<').Append(name).Append('>')
+                .Append(Xml(value.ToString()))
+                .Append("</").Append(name).AppendLine(">");
+            return;
+        }
+
+        builder.Append(indent).Append('<').Append(name).AppendLine(">");
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in value.EnumerateObject())
+            {
+                WriteXml(builder, XmlName(property.Name), property.Value, depth + 1);
+            }
+        }
+        else
+        {
+            foreach (var item in value.EnumerateArray())
+            {
+                WriteXml(builder, "item", item, depth + 1);
+            }
+        }
+
+        builder.Append(indent).Append("</").Append(name).AppendLine(">");
+    }
+
+    // Text content: the three characters that cannot appear literally are escaped, and the control
+    // characters XML 1.0 forbids outright are dropped — a value that came out of a column should not
+    // be able to produce a document no parser will open.
+    static string Xml(string value)
+    {
+        var builder = new StringBuilder(value.Length);
+        foreach (var character in value)
+        {
+            switch (character)
+            {
+                case '&':
+                    builder.Append("&amp;");
+                    break;
+                case '<':
+                    builder.Append("&lt;");
+                    break;
+                case '>':
+                    builder.Append("&gt;");
+                    break;
+                default:
+                    if (character is '\t' or '\n' or '\r' ||
+                        character >= ' ')
+                    {
+                        builder.Append(character);
+                    }
+
+                    break;
+            }
+        }
+
+        return builder.ToString();
+    }
+
+    // Member names come from the caller's own C# identifiers, so they already are valid XML names —
+    // but the rows are the server's response, and an export should never be able to emit a name that
+    // does not parse. Anything outside a name character becomes '_'.
+    static string XmlName(string name)
+    {
+        if (name.Length == 0)
+        {
+            return "_";
+        }
+
+        var builder = new StringBuilder(name.Length);
+        builder.Append(char.IsLetter(name[0]) || name[0] == '_' ? name[0] : '_');
+        foreach (var character in name.AsSpan(1))
+        {
+            builder.Append(char.IsLetterOrDigit(character) || character is '_' or '-' or '.' ? character : '_');
+        }
+
+        return builder.ToString();
     }
 
     /// <summary>
@@ -202,6 +349,8 @@ public partial class App
             error = null;
             resultColumns = null;
             resultRows = null;
+            payloadRows = null;
+            resultFlat = false;
             scalarResult = null;
             sqlText = null;
             var code = await editor.GetValue();
@@ -514,7 +663,7 @@ public partial class App
         }
 
         var columns = new List<string>();
-        var rows = new List<List<string>>();
+        var payloads = new List<JsonElement>();
         foreach (var row in payload.EnumerateArray())
         {
             if (row.ValueKind != JsonValueKind.Object)
@@ -527,11 +676,10 @@ public partial class App
                 columns.AddRange(row.EnumerateObject().Select(_ => _.Name));
             }
 
-            rows.Add(row.EnumerateObject().Select(_ => _.Value.ToString()).ToList());
+            payloads.Add(row);
         }
 
-        resultColumns = columns;
-        resultRows = rows;
+        Publish(columns, payloads);
     }
 
     // A Single result is one projected object (or null) — render it as a one-row table, reusing the
@@ -550,8 +698,21 @@ public partial class App
             return;
         }
 
-        resultColumns = payload.EnumerateObject().Select(_ => _.Name).ToList();
-        resultRows = [payload.EnumerateObject().Select(_ => _.Value.ToString()).ToList()];
+        Publish(payload.EnumerateObject().Select(_ => _.Name).ToList(), [payload]);
+    }
+
+    // Renders the rows for display and classifies them. A cell that is itself an object or an array
+    // came from a projection into a navigation: the result is a tree rather than a grid, which is
+    // what decides whether CSV is on offer.
+    void Publish(List<string> columns, List<JsonElement> rows)
+    {
+        resultColumns = columns;
+        payloadRows = rows;
+        resultRows = rows
+            .Select(_ => _.EnumerateObject().Select(property => property.Value.ToString()).ToList())
+            .ToList();
+        resultFlat = rows.All(row => row.EnumerateObject()
+            .All(_ => _.Value.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array)));
     }
 
     static int ToOffset(string text, int line, int column)

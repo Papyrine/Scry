@@ -31,11 +31,12 @@ window.scry = {
         history.replaceState(null, '', value);
         return window.location.href;
     },
-    // Save text as a file. The BOM is what makes Excel read the UTF-8 as UTF-8 rather than as the
-    // local codepage, which otherwise mangles any non-ASCII value in an exported column.
-    download: function (name, text, type) {
+    // Save text as a file. The BOM is per-format rather than always on: CSV wants it, because it is
+    // what makes Excel read the UTF-8 as UTF-8 rather than as the local codepage (which otherwise
+    // mangles any non-ASCII value in an exported column), while a leading U+FEFF is not valid JSON.
+    download: function (name, text, type, bom) {
         try {
-            const blob = new Blob(['\ufeff' + text], { type: type });
+            const blob = new Blob([bom ? '\ufeff' + text : text], { type: type });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;

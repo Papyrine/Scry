@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Xml.Linq;
+
 // Drives the live WebAssembly UI in a headless browser, asserting behaviour and snapshotting the
 // rendered markup as text. The pixel snapshots live in UiScreenshotTests.
 // Categorised "Browser" so a run can opt out: the browser download and WASM boot are heavier than
@@ -321,10 +324,11 @@ public class UiSnapshotTests :
         Assert.That(await page.Locator("[data-testid='error']").CountAsync(), Is.Zero);
     }
 
-    // The result table exports as CSV. The download itself is the browser's, so the test intercepts
-    // the interop call and asserts the payload the UI produced.
+    // A flat result exports in all three formats. The download itself is the browser's, so the test
+    // intercepts the interop call and asserts the payload the UI produced — all from one run, because
+    // a cold WASM+Roslyn boot costs far more than the three clicks it is set up for.
     [Test]
-    public async Task ExplorerExportsResultsAsCsv()
+    public async Task ExplorerExportsResults()
     {
         var page = await Browser.NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
@@ -339,23 +343,89 @@ public class UiSnapshotTests :
             """);
         await page.Locator("[data-testid='run']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 30);
+        await InterceptDownloadsAsync(page);
 
-        await page.EvaluateAsync(
+        var csv = await ExportAsync(page, "csv");
+        Assert.That(csv.Name, Is.EqualTo("scry-result.csv"));
+        Assert.That(csv.Text, Does.StartWith("name,status"));
+        Assert.That(csv.Text, Does.Contain("Alice,FullTime"));
+        // Excel reads a BOM-less UTF-8 CSV as the local codepage; the other two formats do not want one.
+        Assert.That(csv.Bom, Is.True);
+
+        var json = await ExportAsync(page, "json");
+        Assert.That(json.Name, Is.EqualTo("scry-result.json"));
+        Assert.That(json.Bom, Is.False, "a leading U+FEFF is not valid JSON");
+        using var document = JsonDocument.Parse(json.Text);
+        var rows = document.RootElement.EnumerateArray().ToList();
+        Assert.That(rows, Is.Not.Empty);
+        Assert.That(
+            rows.Select(_ => _.GetProperty("name").GetString()),
+            Does.Contain("Alice"));
+
+        var xml = await ExportAsync(page, "xml");
+        Assert.That(xml.Name, Is.EqualTo("scry-result.xml"));
+        Assert.That(xml.Bom, Is.False);
+        var results = XDocument.Parse(xml.Text).Root!;
+        Assert.That(results.Name.LocalName, Is.EqualTo("results"));
+        Assert.That(
+            results.Elements("row").Select(_ => _.Element("name")!.Value),
+            Does.Contain("Alice"));
+    }
+
+    // CSV is a grid, so it is offered only for a result that is one. Projecting into a navigation
+    // nests an object inside every row: the CSV button goes away, and JSON and XML — which can carry
+    // the nesting — stay.
+    [Test]
+    public async Task ExplorerOffersCsvOnlyForAFlatResult()
+    {
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+
+        await page.SetEditorValueAsync(
+            """
+            Query.Employee
+                .Where(_ => _.Active)
+                .Select(_ => new { _.Name, Department = new { _.Department!.Name } })
+            """);
+        await page.Locator("[data-testid='run']").ClickAsync();
+        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 30);
+
+        Assert.That(await page.Locator("[data-testid='csv']").CountAsync(), Is.Zero, "nested rows are not a grid");
+        Assert.That(await page.Locator("[data-testid='json']").CountAsync(), Is.EqualTo(1));
+        Assert.That(await page.Locator("[data-testid='xml']").CountAsync(), Is.EqualTo(1));
+
+        await InterceptDownloadsAsync(page);
+        var xml = await ExportAsync(page, "xml");
+
+        // The navigation is a child element rather than a flattened column.
+        var department = XDocument.Parse(xml.Text).Root!.Elements("row").First().Element("department");
+        Assert.That(department, Is.Not.Null);
+        Assert.That(department!.Element("name")!.Value, Is.Not.Empty);
+    }
+
+    // Replaces the real file-saving interop with a recorder, so an export can be asserted rather than
+    // landing in the browser's downloads directory.
+    static Task InterceptDownloadsAsync(IPage page) =>
+        page.EvaluateAsync(
             """
             () => {
-                window.__csv = null;
-                window.scry.download = (name, text, type) => window.__csv = { name, text, type };
+                window.__file = null;
+                window.scry.download = (name, text, type, bom) => window.__file = { name, text, type, bom };
             }
             """);
-        await page.Locator("[data-testid='csv']").ClickAsync();
-        await page.WaitForFunctionAsync("() => window.__csv !== null", null, new() {Timeout = 30_000});
 
-        var name = await page.EvaluateAsync<string>("() => window.__csv.name");
-        var text = await page.EvaluateAsync<string>("() => window.__csv.text");
+    static async Task<(string Name, string Text, bool Bom)> ExportAsync(IPage page, string format)
+    {
+        await page.EvaluateAsync("() => window.__file = null");
+        await page.Locator($"[data-testid='{format}']").ClickAsync();
+        await page.WaitForFunctionAsync("() => window.__file !== null", null, new() {Timeout = 30_000});
 
-        Assert.That(name, Is.EqualTo("scry-result.csv"));
-        Assert.That(text, Does.StartWith("name,status"));
-        Assert.That(text, Does.Contain("Alice,FullTime"));
+        return (
+            await page.EvaluateAsync<string>("() => window.__file.name"),
+            await page.EvaluateAsync<string>("() => window.__file.text"),
+            await page.EvaluateAsync<bool>("() => !!window.__file.bom"));
     }
 
     // Proves the inline Monaco IntelliSense dropdown is wired to the Roslyn provider.
