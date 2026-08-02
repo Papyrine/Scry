@@ -759,6 +759,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 "Cursor paging requires an ordered query over an entity with non-nullable ordering keys.");
         }
 
+        // Stamped once the tiebreaker is known, so it describes the order actually seeked rather than
+        // only what the client wrote.
+        string? order = null;
         if (seekSafe)
         {
             // Append the primary key as a trailing ascending tiebreaker so the order — and the cursor
@@ -768,12 +771,21 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 query = ApplyOrder(query, builder.BuildKeySelector(key, elementType), descending: false, then: true);
             }
 
+            order = CursorCodec.OrderStamp(source.Name, keys);
+
             if (page.Cursor is not null)
             {
-                var values = CursorCodec.Decode(page.Cursor, SigningKey());
-                if (values.Count != keys.Count)
+                var (values, cursorOrder) = CursorCodec.Decode(page.Cursor, SigningKey());
+
+                // The whole guard: a cursor resumes the ordering it was issued for, or nothing. Without
+                // this, an ordering of the same shape — a flipped direction, another column of the same
+                // type — seeks happily against values that describe a different sequence and answers
+                // with a plausible, silently wrong page. It also subsumes the key-count check, since a
+                // different number of keys stamps differently.
+                if (cursorOrder != order)
                 {
-                    throw new ScryValidationException("Paging cursor does not match the query ordering.");
+                    throw new ScryValidationException(
+                        "Paging cursor does not match the query's ordering. A cursor resumes the ordering it was issued for; re-request the first page after changing the sort.");
                 }
 
                 query = Apply(query, "Where", builder.BuildSeekPredicate(keys, values, elementType));
@@ -809,7 +821,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 keyValues[i] = CursorCodec.TagValue(last[shape.Count + i]);
             }
 
-            cursor = CursorCodec.Encode(keyValues, SigningKey());
+            cursor = CursorCodec.Encode(keyValues, order!, SigningKey());
         }
 
         var envelope = new ScryPage<Dictionary<string, object?>>(items, hasMore, cursor);

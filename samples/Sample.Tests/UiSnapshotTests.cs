@@ -249,7 +249,12 @@ public class UiSnapshotTests :
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
-        await page.SetEditorValueAsync("Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name })");
+        await page.SetEditorValueAsync(
+            """
+            Query.Employee
+                .Where(_ => _.Active)
+                .Select(_ => new { _.Name })
+            """);
         await page.Locator("[data-testid='sql-preview']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='sql']", 30);
 
@@ -271,7 +276,12 @@ public class UiSnapshotTests :
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
-        const string query = "Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name })";
+        const string query =
+            """
+            Query.Employee
+                .Where(_ => _.Active)
+                .Select(_ => new { _.Name })
+            """;
         await page.SetEditorValueAsync(query);
         await page.Locator("[data-testid='share']").ClickAsync();
 
@@ -321,7 +331,12 @@ public class UiSnapshotTests :
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
-        await page.SetEditorValueAsync("Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name, _.Status })");
+        await page.SetEditorValueAsync(
+            """
+            Query.Employee
+                .Where(_ => _.Active)
+                .Select(_ => new { _.Name, _.Status })
+            """);
         await page.Locator("[data-testid='run']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 30);
 
@@ -382,7 +397,12 @@ public class UiSnapshotTests :
 
         // Set a complete query, then run it.
         await page.SetEditorValueAsync(
-            "Query.Employee.Where(_ => _.Active).OrderBy(_ => _.Name).Select(_ => new { _.Name, _.Status })");
+            """
+            Query.Employee
+            .Where(_ => _.Active)
+            .OrderBy(_ => _.Name)
+            .Select(_ => new { _.Name, _.Status })
+            """);
         await page.Locator("[data-testid='run']").ClickAsync();
 
         await page.WaitForSelectorAsync("[data-testid='result-table']", 60);
@@ -398,10 +418,12 @@ public class UiSnapshotTests :
         Assert.That(table, Does.Contain("Aaron"));
         Assert.That(table, Does.Contain("FullTime"));
 
-        // Stage 3: the executed query is recorded in history.
+        // Stage 3: the executed query is recorded in history. The list renders the multi-line
+        // query whitespace-collapsed, so match fragments rather than the contiguous text.
         await page.WaitForSelectorAsync("[data-testid='history'] li", 10);
         var historyText = await page.Locator("[data-testid='history']").InnerTextAsync();
-        Assert.That(historyText, Does.Contain("Query.Employee.Where"));
+        Assert.That(historyText, Does.Contain("Query.Employee"));
+        Assert.That(historyText, Does.Contain(".Where(_ => _.Active)"));
     }
 
     // Terminal support: a plain LINQ '.ToList()' (the habitual way to ask for all rows) is folded into
@@ -434,7 +456,12 @@ public class UiSnapshotTests :
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
-        await page.SetEditorValueAsync("Query.Employee.Where(_ => _.Active).CountAsync()");
+        await page.SetEditorValueAsync(
+            """
+            Query.Employee
+                .Where(_ => _.Active)
+                .CountAsync()
+            """);
         await page.Locator("[data-testid='run']").ClickAsync();
 
         await page.WaitForSelectorAsync("[data-testid='result-scalar']", 60);
@@ -457,7 +484,13 @@ public class UiSnapshotTests :
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
 
         await page.SetEditorValueAsync(
-            "Query.Employee.Where(_ => _.Active).OrderBy(_ => _.Name).Select(_ => new { _.Name, _.Status }).FirstAsync()");
+            """
+            Query.Employee
+                .Where(_ => _.Active)
+                .OrderBy(_ => _.Name)
+                .Select(_ => new { _.Name, _.Status })
+                .FirstAsync()
+            """);
         await page.Locator("[data-testid='run']").ClickAsync();
 
         await page.WaitForSelectorAsync("[data-testid='result-table']", 60);
@@ -586,7 +619,12 @@ public class UiSnapshotTests :
         // Run a complete query. Kept short enough to fit the editor's width unscrolled, since this is
         // the capture the docs use to show the LINQ a caller writes.
         await page.SetEditorValueAsync(
-            "Query.Employee.Where(_ => _.Active).OrderBy(_ => _.Name).Select(_ => new { _.Name })");
+            """
+            Query.Employee
+                .Where(_ => _.Active)
+                .OrderBy(_ => _.Name)
+                .Select(_ => new { _.Name })
+            """);
         await page.Locator("[data-testid='run']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='result-table']", 60);
         await page.ScreenshotAsync(
@@ -600,7 +638,12 @@ public class UiSnapshotTests :
         log.Add($"✓ run: wireHasEmployee={wire.Contains("Employee")}, table=[{table.Replace("\n", " ").Trim()}]");
 
         // Run a terminal query (scalar count) and capture the scalar rendering.
-        await page.SetEditorValueAsync("Query.Employee.Where(_ => _.Active).CountAsync()");
+        await page.SetEditorValueAsync(
+            """
+            Query.Employee
+                .Where(_ => _.Active)
+                .CountAsync()
+            """);
         await page.Locator("[data-testid='run']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='result-scalar']", 60);
         await page.ScreenshotAsync(
@@ -627,7 +670,11 @@ public class UiSnapshotTests :
         log.Add($"✓ dark mode: dataTheme={dataTheme}");
 
         // Diagnostics.
-        await page.SetEditorValueAsync("Query.Employee.Where(_ => _.Nope)");
+        await page.SetEditorValueAsync(
+            """
+            Query.Employee
+                .Where(_ => _.Nope)
+            """);
         await page.WaitForFunctionAsync(
             "() => monaco.editor.getModelMarkers({}).length > 0",
             null,

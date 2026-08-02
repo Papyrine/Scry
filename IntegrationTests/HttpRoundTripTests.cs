@@ -1,6 +1,7 @@
 ﻿// UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
 // Core's own ToListAsync/CountAsync IQueryable extensions and collide with the Scry client terminals.
 using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
+// ReSharper disable NotAccessedPositionalProperty.Local
 
 [TestFixture]
 public class HttpRoundTripTests
@@ -176,7 +177,10 @@ public class HttpRoundTripTests
     public async Task StreamedRowsMatchTheListedOnesOverHttp()
     {
         var streamed = new List<string>();
-        await foreach (var row in query.Employee.Select(_ => new NameRow(_.Name)).ToAsyncEnumerable())
+        await foreach (var row in query
+                           .Employee
+                           .Select(_ => new NameRow(_.Name))
+                           .ToAsyncEnumerable())
         {
             streamed.Add(row.Name);
         }

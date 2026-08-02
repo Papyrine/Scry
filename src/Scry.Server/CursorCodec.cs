@@ -7,20 +7,61 @@
 /// </summary>
 static class CursorCodec
 {
-    // The signed payload: the tagged ordering-key values of a page's last row.
-    sealed record Payload(IReadOnlyList<CursorValue> Keys);
+    // The signed payload: the tagged ordering-key values of a page's last row, plus a stamp of the
+    // ordering they were read in — see OrderStamp.
+    sealed record Payload(IReadOnlyList<CursorValue> Keys, string Order);
 
     sealed record CursorValue(string? Value, ClrTypeTag Tag);
 
-    public static string Encode(IReadOnlyList<(string? Value, ClrTypeTag Tag)> keys, byte[] signingKey)
+    public static string Encode(IReadOnlyList<(string? Value, ClrTypeTag Tag)> keys, string order, byte[] signingKey)
     {
-        var payload = new Payload([.. keys.Select(_ => new CursorValue(_.Value, _.Tag))]);
+        var payload = new Payload([.. keys.Select(_ => new CursorValue(_.Value, _.Tag))], order);
         var json = JsonSerializer.SerializeToUtf8Bytes(payload, ScryJson.Options);
         var mac = HMACSHA256.HashData(signingKey, json);
         return $"{Base64Url(json)}.{Base64Url(mac)}";
     }
 
-    public static IReadOnlyList<ConstNode> Decode(string cursor, byte[] signingKey)
+    /// <summary>
+    /// Identifies the ordering a cursor belongs to: the source it read, and every ordering key's path
+    /// and direction — including the primary key appended as the tiebreaker, since that is part of the
+    /// order actually seeked. Compared on resume so a cursor cannot be applied to an ordering it was
+    /// not issued for.
+    /// </summary>
+    /// <remarks>
+    /// The <b>ordering</b> rather than the whole pipeline, deliberately. Every way a cursor can produce
+    /// a wrong page is a change to the order it resumes: a different key, a different direction, a
+    /// different source. A changed filter is not one of those — seeking to "the rows of this set
+    /// ordered after this key" stays well defined when the set narrows, so a client may filter further
+    /// between pages, which forcing an identical pipeline would have refused.
+    /// <para>
+    /// Only ever compared against another stamp from this same server, and inside an HMAC-signed
+    /// payload, so it is a fingerprint rather than a security boundary: it exists to catch a client
+    /// changing its ordering, not to withstand one forging a cursor.
+    /// </para>
+    /// </remarks>
+    public static string OrderStamp(string source, IReadOnlyList<(Node Key, bool Descending)> keys)
+    {
+        var builder = new StringBuilder();
+        // Versions the canonical form, so a future change to what is stamped cannot silently match a
+        // cursor minted under the old form.
+        builder.Append("scry-order-v1\n");
+        builder.Append(source).Append('\n');
+        foreach (var (key, descending) in keys)
+        {
+            // Every seek key is a single-segment member (PlanSeek admits nothing else); anything that
+            // is not stamps as its node kind, which differs from any member path and so still parts
+            // two orderings that are not the same.
+            builder.Append(key is MemberNode member ? string.Join(".", member.Path) : key.GetType().Name);
+            builder.Append(descending ? " desc\n" : " asc\n");
+        }
+
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(builder.ToString()));
+        // 96 bits, matching the schema stamp's reasoning: compared pairwise rather than searched, so
+        // the birthday bound does not apply, and 12 divides by 3 so the base64 needs no padding.
+        return Base64Url(hash[..12]);
+    }
+
+    public static (IReadOnlyList<ConstNode> Values, string Order) Decode(string cursor, byte[] signingKey)
     {
         var dot = cursor.IndexOf('.');
         if (dot <= 0 ||
@@ -57,12 +98,15 @@ static class CursorCodec
             throw Reject();
         }
 
-        if (payload is not { Keys.Count: > 0 })
+        // A cursor minted before the ordering stamp existed carries no Order and cannot be shown to
+        // belong to this query, so it is refused rather than trusted — the same "resume point lost"
+        // a restart under the ephemeral signing key already produces, and the safe direction.
+        if (payload is not { Keys.Count: > 0, Order.Length: > 0 })
         {
             throw Reject();
         }
 
-        return [.. payload.Keys.Select(_ => new ConstNode(_.Value, _.Tag))];
+        return ([.. payload.Keys.Select(_ => new ConstNode(_.Value, _.Tag))], payload.Order);
     }
 
     /// <summary>

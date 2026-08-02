@@ -157,13 +157,13 @@ A `page` terminal returns the `Page` result kind, whose payload is a `ScryPage` 
 
 ### Cursor format
 
-The cursor's shape is internal to the server and **not** part of the wire contract — clients must not depend on it. The encoding (`CursorCodec`) is `base64url(json) "." base64url(hmac)`, where the JSON is the tagged ordering-key values of the last row:
+The cursor's shape is internal to the server and **not** part of the wire contract — clients must not depend on it. The encoding (`CursorCodec`) is `base64url(json) "." base64url(hmac)`, where the JSON is the tagged ordering-key values of the last row plus a stamp of the ordering they were read in:
 
 ```
-{ "keys": [ { "value": "Alice", "tag": "String" }, { "value": "42", "tag": "Int32" } ] }
+{ "keys": [ { "value": "Alice", "tag": "String" }, { "value": "42", "tag": "Int32" } ], "order": "k3nQ8yF2pXsA9vLm" }
 ```
 
-Values use the same invariant-culture string + `ClrTypeTag` form the wire uses for constants, so decoding a cursor produces exactly the `ConstNode`s the seek predicate rebinds against each key's real type. The HMAC (`HMACSHA256` over the JSON, keyed by `CursorSigningKey`) is checked in constant time on decode; a bad signature or malformed token is a `400`.
+Values use the same invariant-culture string + `ClrTypeTag` form the wire uses for constants, so decoding a cursor produces exactly the `ConstNode`s the seek predicate rebinds against each key's real type. `order` is a truncated SHA-256 over the source name and every ordering key's path and direction — see [Cursor invalidation](#cursor-invalidation). The HMAC (`HMACSHA256` over the JSON, keyed by `CursorSigningKey`) is checked in constant time on decode; a bad signature or malformed token is a `400`.
 
 
 ## Security
@@ -194,6 +194,8 @@ An `Invalid paging cursor.` `400` is not always the client's fault. Beyond a gen
 
 If the same redeploy also changed the model, the rejection additionally carries the [stale-client marker](schema-versioning.md#when-the-break-arrives) and reaches the client as `ScryStaleClientException`, so an app already handling that gets the reload prompt instead — no paging-specific work needed. The plain-`400` case is the one worth a retry-from-the-start path.
 
+The one rejection that *is* the client's own doing reads differently — `does not match the query's ordering` means the sort changed between pages ([above](#cursor-invalidation)). Re-requesting the first page is still the fix, but the cause is in the caller rather than the deployment. A cursor minted before ordering stamps existed reports as `Invalid paging cursor.` and is handled by the same retry.
+
 
 ## Scope
 
@@ -206,4 +208,18 @@ The `page` terminal targets a **non-grouped** query. Out of scope:
 
 ## Cursor invalidation
 
-A cursor encodes a specific ordering; changing the `OrderBy` between pages makes the seek meaningless. A cursor whose length does not match the query's ordering is rejected with a `400`, which catches gross mismatches. Subtler mismatches — the same key count over different columns — are not detected; binding the cursor to a full hash of the pipeline would catch them, at the cost of forcing an identical query between pages.
+A cursor encodes a specific ordering, so changing the sort between pages makes the seek meaningless. A cursor therefore **carries a stamp of the ordering it was issued for** — the source name, and every ordering key's path and direction, including the primary key appended as the tiebreaker — and resuming with an ordering that stamps differently is a `400`.
+
+The stamp exists because the failure it prevents is silent. Comparing key *counts* only catches gross mismatches; the dangerous cases have the same shape:
+
+| Page 1 | Page 2 | Without the stamp |
+| --- | --- | --- |
+| `OrderBy(_ => _.Name)` | `OrderByDescending(_ => _.Name)` | Same key count, same types. The seek takes its direction from the new request, so it returns the rows *before* the cursor, labelled as the page after it. |
+| `Employee.OrderBy(_ => _.Name)` | `Order.OrderBy(_ => _.Region)` | Both seek `(string, int)` once the key is appended. The cursor's values are applied to a different source's columns. |
+| `OrderBy(_ => _.Created)` | `OrderBy(_ => _.Modified)` | Two columns of one type. The seek runs against values describing a different sequence. |
+
+None of these is an error without the stamp — each produces a plausible page with rows arbitrarily skipped or repeated.
+
+**The ordering, not the whole pipeline.** Every way a cursor can produce a wrong page is a change to the order it resumes. A changed *filter* is not one of those: seeking to "the rows of this set ordered after this key" stays well defined when the set narrows, so a client may filter further between pages and keep paging. Hashing the entire pipeline would have caught the same corruption while also refusing that, which is why the stamp covers only the source and the ordering.
+
+The stamp is a fingerprint rather than a security control. It rides inside the HMAC-signed payload and is only ever compared against another stamp from the same server, so it exists to catch a client changing its own sort — not to withstand one forging a cursor, which the signature already handles.
