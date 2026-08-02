@@ -116,7 +116,7 @@ The prompt itself is ordinary markup — the banner renders only once drift has 
     </div>
 }
 ```
-<sup><a href='/samples/Sample.Client/StaleBanner.razor#L5-L13' title='Snippet source file'>snippet source</a> | <a href='#snippet-staleBannerMarkup' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/StaleBanner.razor#L4-L12' title='Snippet source file'>snippet source</a> | <a href='#snippet-staleBannerMarkup' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Prefer prompting over reloading automatically. A forced reload discards whatever the user was in the middle of, and their current client still works — there is no reason to interrupt them mid-task for a change that has not broken anything yet.

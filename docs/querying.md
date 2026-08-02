@@ -226,7 +226,7 @@ await foreach (var row in query.Employee
     names.Add(row.Name);
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L160-L170' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientStream' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L161-L171' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientStream' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Neither side holds the whole result: the server never buffers the rows and the client yields each as it is read. That makes it the right terminal for a result too large to sit in memory comfortably, and unnecessary for one that is not — a small result costs an extra round-trip's worth of framing for nothing.

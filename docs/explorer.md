@@ -4,7 +4,7 @@
 
 It is off unless mapped, and Development-only by default.
 
-<img src="images/explorer-run.png" border="1" alt="The explorer after running a query: the LINQ, the serialized wire request, the result table, and the raw response">
+<img src="../samples/Sample.Tests/UiScreenshotTests.ExplorerRun.verified.png" border="1" alt="The explorer after running a query: the LINQ, the serialized wire request, the result table, and the raw response">
 
 
 One screen shows the whole pipeline: the LINQ as written, the wire request it translated to, the rows the server returned, and the raw response envelope.
@@ -692,7 +692,7 @@ The contract carries only what tooling needs: source names and kinds, the genera
 
 Because `TypeDisplay` matches the generator's emission exactly, the explorer can synthesize an identical set of query models in the browser, compile them with Roslyn, and offer completion against the real allow-listed surface — which is what makes this real IntelliSense rather than a word list:
 
-<img src="images/explorer-intellisense.png" border="1" alt="Monaco's completion dropdown listing the allow-listed Employee members">
+<img src="../samples/Sample.Tests/UiScreenshotTests.ExplorerIntelliSense.verified.png" border="1" alt="Monaco's completion dropdown listing the allow-listed Employee members">
 
 
 Note what is offered and what is not: `Active`, `Department`, `Manager`, `Name`, `Status` — but no `Salary`, because it is `[QueryIgnore]`d and therefore never reaches the introspection contract.
@@ -749,25 +749,18 @@ The UI is published and embedded as manifest resources inside the `Scry.Server.E
 Because the explorer reveals the complete queryable schema, leaving it mapped in production means publishing that schema to anyone who passes the guard. The Development-only default is deliberate — and the [SQL preview](#sql-preview), which discloses more than the schema does, keeps a Development-only default of its own even when the explorer itself is opened up.
 
 
-## Regenerating the screenshots
+## The screenshots
 
-Unlike every other code block in these docs, the two images above are **not** merged from source at build time — they are captured from a real browser and committed under `docs/images/`. They will therefore drift silently when the explorer UI changes; refresh them when it does.
-
-`ExplorerWalkthrough` in `samples/Sample.Tests/UiSnapshotTests.cs` drives the live explorer with Playwright and writes the raw captures to a temp directory (it is `[Explicit]`, so it does not run in a normal test pass, and the fixture is `[Category("Browser")]` so CI can opt out — pixel output is environment sensitive):
+The two images above are not files kept beside the docs: they are **Verify baselines**, and the markdown points its `<img>` straight at them. `ExplorerIntelliSense` and `ExplorerRun` in `samples/Sample.Tests/UiScreenshotTests.cs` drive the live explorer with Playwright and capture them, so a change to the UI fails a test rather than leaving a stale picture in the docs:
 
 ```bash
-dotnet test samples/Sample.Tests --filter "FullyQualifiedName~ExplorerWalkthrough"
+dotnet test samples/Scry.Samples.slnx --filter "FullyQualifiedName~UiScreenshotTests"
 ```
 
-It prints the output directory. `1-loaded.png`, `2-intellisense.png`, `3-run.png`, `3b-count.png`, `4-hover.png`, and `5-dark.png` are captured; the two used here are `2-intellisense` and `3-run`.
+Accepting the received file — move `*.received.png` over `*.verified.png`, or accept it from the Verify diff tool — is what republishes the image. The fixture is `[Category("Browser")]` so a run can opt out, and pixel output is environment sensitive: a first run on a new OS or CI image is expected to need reseeding.
 
-The browser lays the page out at **800** wide, which is the width the committed images are — captured at the target width rather than scaled down to it, since resampling would soften every glyph of the small monospace text these are mostly made of. The run capture's query is kept short enough to fit that width unscrolled, so the LINQ reads in full.
+These two are laid out at **800** wide rather than at the width the fixture's other captures use, because a doc renderer shows them at native size and resampling a wider capture would soften every glyph of the small monospace text they are mostly made of. The run capture's query is broken across lines to fit that width unscrolled, so the LINQ reads in full.
 
-Two post-processing steps are applied to each before committing:
-
-1. Trailing whitespace trimmed (the captures are full-page, so most of the height is blank).
-2. The empty interior of the Monaco editor box spliced out — it renders a fixed height regardless of how little code it holds.
-
-Both are easiest to find structurally rather than by eye: a band of vertically unchanging content is a run of byte-identical consecutive rows, which is exactly what the editor's empty interior and the trailing margin are.
+Two things in Monaco move on their own and would otherwise put a column of different pixels between two identical runs, so both are settled before the shutter falls: the caret is pinned solid, and the scrollbar fade-out is waited for.
 
 The frame around each image comes from an `<img border="1">` in the markdown rather than from the pixels. Note that a `style` attribute would not work here: GitHub's markdown sanitizer strips `style`, while `border` is on its allowed-attribute list.

@@ -1,7 +1,9 @@
 // Verify.Playwright snapshots of the two UIs the sample ships: the Blazor WASM client on /, and the
 // Scry explorer on /scry. Verifying an IPage or an ILocator captures the rendered markup *and* a
 // screenshot, so these guard what the UI looks like rather than only what it contains — the
-// behavioural assertions live in UiSnapshotTests.
+// behavioural assertions live in UiSnapshotTests. Two of them are also the images readme.md and
+// docs/explorer.md embed, which is why they are laid out at their own width — see the bottom of the
+// file.
 //
 // Every page is opened at a fixed viewport: layout is what the screenshot is of, and a viewport that
 // followed the machine would make every capture a different one. Subpixel text antialiasing is off
@@ -19,6 +21,24 @@ public class UiScreenshotTests :
     {
         Width = 1000,
         Height = 1200
+    };
+
+    // The two captures at the bottom of this file are the images the docs embed, and they are laid out
+    // at 800 rather than the width above: a doc renderer shows them at native size, and scaling a wider
+    // capture down to fit softens every glyph in it.
+    static ViewportSize docsViewport = new()
+    {
+        Width = 800,
+        Height = 1000
+    };
+
+    // The IntelliSense capture is of the viewport rather than of the full page, so this height is its
+    // crop — sized to the shell, because a screen of empty space under the completion list is not what
+    // the doc is showing.
+    static ViewportSize intelliSenseViewport = new()
+    {
+        Width = 800,
+        Height = 660
     };
 
     [Test]
@@ -131,11 +151,97 @@ public class UiScreenshotTests :
         await Verify(page.Locator("[data-testid='sql']"));
     }
 
-    Task<IPage> NewPageAsync() =>
+    // The captures the docs embed. readme.md and docs/explorer.md point their <img> straight at these
+    // verified files, so a published screenshot cannot drift from the UI: a change to the explorer
+    // fails the snapshot, and accepting the new baseline is what republishes the image.
+
+    // Monaco's completion dropdown, listing exactly the allow-listed Employee members Roslyn resolved
+    // from the introspected schema — and not the [QueryIgnore]d Salary.
+    [Test]
+    public async Task ExplorerIntelliSense()
+    {
+        var page = await NewPageAsync(intelliSenseViewport);
+        await GoToExplorer(page);
+
+        // The caret goes to the end of the sample query ("…Where(_ => _."), which is where the member
+        // list is worth showing, and is pinned solid first: a blinking caret is two different images
+        // depending on when the shutter falls.
+        await page.EvaluateAsync(
+            """
+            () => {
+                const editor = monaco.editor.getEditors()[0];
+                editor.updateOptions({ cursorBlinking: 'solid' });
+                editor.focus();
+                editor.setPosition({ lineNumber: 1, column: editor.getModel().getLineMaxColumn(1) });
+                editor.trigger('docs', 'editor.action.triggerSuggest', {});
+            }
+            """);
+        await page.WaitForSelectorAsync(".suggest-widget .monaco-list-row", 30);
+        await WaitForScrollbarsAsync(page);
+
+        await Verify(page)
+            .PageScreenshotOptions(new(), screenshotOnly: true);
+    }
+
+    // The whole pipeline on one screen: the LINQ as written, the wire request it translated to, the
+    // rows the server returned, and the raw response envelope.
+    [Test]
+    public async Task ExplorerRun()
+    {
+        var page = await NewPageAsync(docsViewport);
+        await GoToExplorer(page);
+
+        // Broken across lines so it sits inside the editor's width unwrapped: this is the capture that
+        // shows the LINQ a caller writes, and a horizontal scrollbar over it shows nothing.
+        await page.SetEditorValueAsync(
+            """
+            Query.Employee
+                .Where(_ => _.Active)
+                .OrderBy(_ => _.Name)
+                .Select(_ => new { _.Name })
+            """);
+        await page.Locator("[data-testid='run']").ClickAsync();
+        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);
+        await WaitForScrollbarsAsync(page);
+
+        await Verify(page)
+            .PageScreenshotOptions(
+                new()
+                {
+                    FullPage = true
+                },
+                screenshotOnly: true);
+    }
+
+    // Monaco fades a scrollbar out over ~800ms once whatever it belongs to stops being touched — the
+    // editor's after the query is set, the suggest widget's after the list opens. A capture taken
+    // mid-fade differs from the last one by a column of part-transparent pixels, which is the whole of
+    // the difference between two otherwise identical runs. Waits until every scrollbar's opacity stops
+    // moving, sampling far enough apart that a fade in progress cannot read the same twice.
+    static Task WaitForScrollbarsAsync(IPage page) =>
+        page.WaitForFunctionAsync(
+            """
+            () => {
+                const opacities = [...document.querySelectorAll('.monaco-scrollable-element > .scrollbar')]
+                    .map(scrollbar => getComputedStyle(scrollbar).opacity)
+                    .join(',');
+                const settled = window.scryScrollbars === opacities;
+                window.scryScrollbars = opacities;
+                return settled;
+            }
+            """,
+            null,
+            new()
+            {
+                PollingInterval = 200,
+                Timeout = 10_000
+            });
+
+    Task<IPage> NewPageAsync(ViewportSize? size = null) =>
         Browser.NewPageAsync(
             new()
             {
-                ViewportSize = viewport
+                ViewportSize = size ?? viewport
             });
 
     // Boots the explorer far enough to be worth capturing: Monaco mounted, and the schema loaded —

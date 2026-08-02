@@ -43,6 +43,8 @@ dotnet test src/Scry.slnx --filter "FullyQualifiedName~SecurityTests.RejectsIgno
 
 `readme.md` and `docs/*.md` contain `<!-- snippet -->` regions produced by **MarkdownSnippets** (wired into `Scry.Tests`). Building `Scry.Tests` regenerates them from the real source files. Never hand-edit text inside a `snippet`/`endSnippet` region — change the referenced source and rebuild.
 
+The explorer screenshots the docs embed are the same deal: they `<img>` straight at `samples/Sample.Tests/UiScreenshotTests.*.verified.png`, so the image a reader sees is a Verify baseline. Do not replace one by hand — change the UI, let `UiScreenshotTests` fail, and accept the received file.
+
 ## Architecture / data flow
 
 The pipeline crosses four projects. Every shipped project puts its public types in the single **`Scry`** namespace regardless of assembly name — `Scry.Client`, `Scry.Wire`, `Scry.Server`, `Scry.Annotations`, and the explorer assemblies all contribute to it, and each sets `<RootNamespace>Scry</RootNamespace>`. The one exception is `Scry.Generated`, which the source generator emits into: those names come from the *consumer's* model, so they are kept out of `Scry` to avoid colliding with the API surface.
