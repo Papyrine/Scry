@@ -16,12 +16,17 @@ There is **no root solution**. Three separate `.slnx` files, each with its own `
 - `samples/Scry.Samples.slnx` — Blazor WASM client, server, annotated model, and UI/explorer tests.
 - `IntegrationTests/IntegrationTests.slnx` — full HTTP round-trip tests; pulls `Scry.Server`, `Scry.Client`, and `Sample.Model` from the *other two* trees so a real generated query round-trips through server validation/execution (`HttpRoundTripTests.cs`).
 
+Plus `Benchmarks/Benchmarks.csproj` — BenchmarkDotNet (measures the response writer), deliberately **not** in a solution. ProjectDefaults packs the `src` projects on any Release build and resolves their icon through `$(SolutionDir)`, which MSBuild sets as a *global* property no `Directory.Build.props` can override; a solution here would therefore look for `Benchmarks/icon.png` and fail. Driving the project directly leaves `SolutionDir` unset, so each project falls back to its own tree. Run it with `dotnet run -c Release --project Benchmarks` (Release is mandatory — BenchmarkDotNet refuses Debug).
+
 ```bash
 dotnet build src/Scry.slnx
 dotnet test src/Scry.slnx
 dotnet test samples/Scry.Samples.slnx
 dotnet test IntegrationTests/IntegrationTests.slnx
+dotnet run -c Release --project Benchmarks -- --filter '*'
 ```
+
+⚠️ **Never build or test two trees concurrently.** They share the `src/*/obj` directories, and the global usings that most files rely on (`System.Reflection`, `System.Runtime.CompilerServices`, `System.Text`, …) are materialized there by the ProjectDefaults package's `contentFiles`. A concurrent — or cross-tree `-t:Rebuild` — build deletes that `Usings.cs` without regenerating it, and the src projects then fail with a storm of CS0246s for BCL types. Recovery is `dotnet build src/Scry.slnx`, not adding usings.
 
 Run one test (NUnit + `dotnet test`):
 
@@ -64,7 +69,7 @@ Key files to read at each stage:
 **Server validate/execute — `Scry.Server`.**
 - `Schema.Build(options)` builds the allow-list at startup from the **real** model assembly, independent of what the client was generated against.
 - `ScryProcessor.Execute` is the single choke point (validation → allow-list → policies → shaping); use it for auditing/other transports. `QueryValidator` is the authoritative gate and runs to completion **before** anything is rebound — a rejected query never reaches EF Core. `ExpressionBuilder` is the only place CLR types are introduced, and always from the schema, never from the wire; `QueryExecutor` / `ProjectionPlan` rebind onto EF and shape the result.
-- `ScryServiceExtensions`: `AddScry<TContext>` (DI + `AddPocoSource`) and `MapScry(pattern)` (the HTTP endpoint; wire/validation failures → 400 with a specific message, everything else → generic 500). `IReturnablePolicy<T>` / `ScryPolicyContext` implement per-source row policies applied **before** any client operator, so client filters can only narrow an authorized set.
+- `ScryServiceExtensions`: `AddScry<TContext>` (DI + `AddPocoSource`) and `MapScry(pattern)` (the HTTP endpoint; wire/validation failures → 400 with a specific message — including constants that fail to parse into the member's type — everything else → generic 500). `IReturnablePolicy<T>` / `ScryPolicyContext` implement per-source row policies applied **before** any client operator, so client filters can only narrow an authorized set.
 
 **Annotations — `Scry.Annotations`.** Default-deny allow-list: `[Queryable]`, `[QueryableView]`, `[QueryablePoco]` opt a type in (optional `Name` override); `[QueryIgnore]` hides a member; `[ReturnableWith(policyType)]` attaches a row policy. A `[QueryablePoco]` has no table, so its rows must be supplied via `AddPocoSource` (server throws at startup otherwise). This package is the single source of truth that both the generator and the server read; the generator matches the attributes by hardcoded full-name strings (e.g. `"Scry.QueryableAttribute"`).
 
@@ -75,6 +80,7 @@ Not published standalone — it is packed **inside** `Scry.Client` as an analyze
 MSBuild wiring (see `src/Scry.Client/buildTransitive/Scry.Client.props` — a `.props` only, no `.targets` — and `docs/source-generator.md`): a consumer sets `<ScryModelDll>` to the model DLL path and adds a `ProjectReference … ReferenceOutputAssembly="false"` to the model project **for build ordering only**. Because Roslyn can't see an out-of-band file, `ComputeScryStamp` hashes the DLL into a second compiler-visible property (`ScryModelStamp`) so the generator re-runs exactly when the model's *contents* change. `EquatableArray<T>` value-equality then skips downstream regen when the change left the queryable surface untouched. Referencing the projects directly (samples, integration tests) writes this wiring out explicitly instead of importing the props file.
 
 ⚠️ **Two parallel classifiers must stay in lockstep:** `MetadataModelReader.TryClassify` + its keyword maps (metadata side, drives generated code) and `Schema.TryClassify` + `ScalarDisplay` (reflection side, drives runtime introspection). Change type-display or classification logic in one and you must change the other, or generated client code and the server's introspection contract diverge.
+
 
 ## Query explorer (`Scry.Explorer.Core`, `Scry.Explorer.Ui`, `Scry.Server.Explorer`)
 

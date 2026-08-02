@@ -52,6 +52,10 @@ sealed class QueryRecorder(QueryRequest request, IServiceProvider services, stri
     public void Succeeded(int rows) =>
         Complete(ScryQueryOutcome.Success, ResultKind.List, rows, error: null, staleClient: false);
 
+    /// <summary>A buffered result written straight to the transport — kind and count arrive explicitly rather than being read off a payload.</summary>
+    public void Succeeded(ResultKind kind, int rows) =>
+        Complete(ScryQueryOutcome.Success, kind, rows, error: null, staleClient: false);
+
     public void Rejected(ScryValidationException exception) =>
         Complete(ScryQueryOutcome.Rejected, kind: null, rows: null, exception.Message, exception.StaleClient, exception);
 

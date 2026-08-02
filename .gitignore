@@ -10,3 +10,4 @@ _ReSharper*/
 nugets/
 *.received.*
 *.trx
+BenchmarkDotNet.Artifacts/

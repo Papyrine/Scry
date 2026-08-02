@@ -129,7 +129,7 @@ Eventually a drifted client's query does fail — a member it still references w
 | Failure | Attributed by |
 | --- | --- |
 | The server rejects the query (`400`) | `"staleClient": true` on the [error body](server.md#error-handling) |
-| The query faults during execution (`500`) | the same marker — validation cannot catch every model change, e.g. a constant parsed against a member whose type has since changed |
+| The query faults during execution (`500`) | the same marker — a drifted client's query can still fault in ways neither validation nor rebinding can name |
 | A result carries an enum value name the generated model lacks | the client's reader, after the [alias table](annotations.md#the-response-side) fails to resolve it |
 | A result cannot be read at all — a widened numeric that now overflows, a member that became nullable | the client, when the stamp already shows it drifted |
 
@@ -207,16 +207,16 @@ A literal rides the wire as text plus a loose [`ClrTypeTag`](wire-format.md#cons
 
 Ordering is the accident that rescues this case: .NET defines no relational operator on `string`, so the expression cannot be built and the query is rejected before it runs. Equality *is* defined, so it goes straight through. **An equality filter against a member retyped to `string` is the one case with no signal on either half of the round trip.**
 
-*Tightening* away from `string` is caught only when the text does not parse in the new type, and reports itself two different ways:
+*Tightening* away from `string` is caught only when the text does not parse in the new type:
 
 | A client generated against `string` wrote | The server does | Result |
 | --- | --- | --- |
 | `Id == "1"` | parses `1` | **Silent** — and, as it happens, correct. |
 | `Status == "FullTime"` | parses the enum value | **Silent** — and correct. |
-| `Status == "Alice"` | enum parse fails | Rejected — a validation failure (`400`). |
-| `Id == "Alice"` | `int.Parse` throws | Faults (`500`) — parsing happens while rebinding, after validation has already passed. |
+| `Status == "Alice"` | enum parse fails | Rejected (`400`) — `'Alice' is not a value of enum 'Status'.` |
+| `Id == "Alice"` | `int.Parse` fails | Rejected (`400`) — `'Alice' is not a valid Int32 value.` |
 
-Enums and `char` report a rejected query; every other scalar surfaces as an execution fault. For a drifted client both are attributed to the stamp and reach the client as `ScryStaleClientException`, so one catch still covers them — but only the `400` carries a message naming the problem, which is why the `500` branch exists in the [handled table](#when-the-break-arrives) at all.
+Parsing happens while the expression is being rebound, after validation has already passed — but a value that does not parse is still reported as a rejected query, never as a server fault. An enum or `char` names what the text failed to be; every other scalar names the member's type. For a drifted client the rejection is attributed to the stamp and reaches the client as `ScryStaleClientException`, so one catch covers it.
 
 
 #### The response half
