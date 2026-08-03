@@ -4,36 +4,22 @@
 
 <PageTitle>Scry Explorer</PageTitle>
 
-<h1 data-testid="explorer-title">Scry Explorer</h1>
-<p>
-    Write LINQ against the allow-listed sources, run it, and inspect the wire request. Completion is
-    powered by Roslyn running in the browser against the server's introspected schema.
-</p>
-
-@if (error is not null)
-{
-    <p class="error" role="alert" data-testid="error">@error</p>
-}
-
-<StandaloneCodeEditor @ref="editor" Id="scry-editor" CssClass="scry-editor" ConstructionOptions="EditorOptions"
-                      OnDidInit="OnEditorInit" OnDidChangeModelContent="OnContentChanged" />
-
-<div class="actions">
-    <button data-testid="run" @onclick="Run" disabled="@(introspection is null)"
-            title="Translate the query to a wire request and run it against the server (Ctrl+Enter).">Run</button>
-    <button data-testid="complete" @onclick="Complete" disabled="@(workspace is null)"
-            title="Lists every C# completion available at the end of the query text — the same Roslyn engine as the inline IntelliSense dropdown, shown here as a list. Ignores the cursor position.">Complete at end</button>
-    @if (introspection?.SqlPreview == true)
-    {
-        <button data-testid="sql-preview" @onclick="ShowSql"
-                title="Show the SQL this query would run, without running it. Validated and policy-filtered exactly as a real query is.">Show SQL</button>
-    }
-    <button data-testid="share" @onclick="Share"
-            title="Put this query in the URL and copy the link. The query is placed in the fragment, so it is never sent to the server.">@(copied == "share" ? "✓ Link copied" : "Share")</button>
-    @if (workspace is null && error is null)
-    {
-        <span class="muted">Loading schema…</span>
-    }
+<header class="app-header">
+    <div class="brand">
+        @*
+            Drawn rather than written, for the same reason as the theme icon below: an inline path has
+            no font dependency, so it renders identically on every machine a baseline is compared on.
+        *@
+        <svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="10" r="6.5" />
+            <path d="M8 20h8" />
+            @* The sparkle the crystal ball is scried through. *@
+            <path d="M9.3 6.6c.35.9.55 1.1 1.45 1.45-.9.35-1.1.55-1.45 1.45-.35-.9-.55-1.1-1.45-1.45.9-.35 1.1-.55 1.45-1.45z"
+                  fill="currentColor" stroke="none" />
+        </svg>
+        <h1 data-testid="explorer-title"><span class="brand-accent">Scry</span> Explorer</h1>
+    </div>
     @*
         The icon is drawn rather than written. A moon emoji resolves out of whatever emoji font the OS
         ships, so the same button painted a different glyph on Windows 11 than on a Windows Server CI
@@ -61,6 +47,44 @@
             }
         </svg>@ThemeLabel
     </button>
+</header>
+
+<main class="shell">
+
+<p class="tagline">
+    Write LINQ against the allow-listed sources, run it, and inspect the wire request. Completion is
+    powered by Roslyn running in the browser against the server's introspected schema.
+</p>
+
+@if (error is not null)
+{
+    <p class="error" role="alert" data-testid="error">@error</p>
+}
+
+<div class="editor-card">
+    <StandaloneCodeEditor @ref="editor" Id="scry-editor" CssClass="scry-editor" ConstructionOptions="EditorOptions"
+                          OnDidInit="OnEditorInit" OnDidChangeModelContent="OnContentChanged" />
+    <div class="actions">
+        <button class="btn btn-primary" data-testid="run" @onclick="Run" disabled="@(introspection is null)"
+                title="Translate the query to a wire request and run it against the server (Ctrl+Enter).">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                <path d="M8 5v14l11-7z" />
+            </svg>Run
+        </button>
+        <button class="btn" data-testid="complete" @onclick="Complete" disabled="@(workspace is null)"
+                title="Lists every C# completion available at the end of the query text — the same Roslyn engine as the inline IntelliSense dropdown, shown here as a list. Ignores the cursor position.">Complete at end</button>
+        @if (introspection?.SqlPreview == true)
+        {
+            <button class="btn" data-testid="sql-preview" @onclick="ShowSql"
+                    title="Show the SQL this query would run, without running it. Validated and policy-filtered exactly as a real query is.">Show SQL</button>
+        }
+        <button class="btn" data-testid="share" @onclick="Share"
+                title="Put this query in the URL and copy the link. The query is placed in the fragment, so it is never sent to the server.">@(copied == "share" ? "✓ Link copied" : "Share")</button>
+        @if (workspace is null && error is null)
+        {
+            <span class="muted loading-hint">Loading schema…</span>
+        }
+    </div>
 </div>
 
 @if (history.Count > 0)
@@ -80,7 +104,7 @@
         <h3>Wire request</h3>
         <button class="icon-btn" @onclick='() => Copy(wireJson!, "wire")'>@(copied == "wire" ? "✓ Copied" : "Copy")</button>
     </div>
-    <pre data-testid="wire">@wireJson</pre>
+    <pre data-testid="wire">@Highlight.Json(wireJson)</pre>
 }
 
 @if (sqlText is not null)
@@ -89,30 +113,30 @@
         <h3>SQL</h3>
         <button class="icon-btn" @onclick='() => Copy(sqlText!, "sql")'>@(copied == "sql" ? "✓ Copied" : "Copy")</button>
     </div>
-    <pre data-testid="sql">@sqlText</pre>
+    <pre data-testid="sql">@Highlight.Sql(sqlText)</pre>
 }
 
 @if (resultColumns is not null)
 {
     <div class="pane-head">
         <h3>Result</h3>
+        @if (CanExport)
+        {
+            @* csv is the only conditional format, and it comes first, so the separators need no loop. *@
+            <p class="exports">
+                Export:
+                @if (resultFlat)
+                {
+                    <a href="#" data-testid="csv" @onclick:preventDefault @onclick="DownloadCsv"
+                       title="Download these rows as CSV — same columns, same order, RFC 4180 quoted.">csv</a><text>, </text>
+                }
+                <a href="#" data-testid="xml" @onclick:preventDefault @onclick="DownloadXml"
+                   title="Download these rows as XML — a row element each, nesting and all.">xml</a><text>, </text>
+                <a href="#" data-testid="json" @onclick:preventDefault @onclick="DownloadJson"
+                   title="Download these rows as JSON, exactly as the server sent them.">json</a>
+            </p>
+        }
     </div>
-    @if (CanExport)
-    {
-        @* csv is the only conditional format, and it comes first, so the separators need no loop. *@
-        <p class="exports">
-            Export:
-            @if (resultFlat)
-            {
-                <a href="#" data-testid="csv" @onclick:preventDefault @onclick="DownloadCsv"
-                   title="Download these rows as CSV — same columns, same order, RFC 4180 quoted.">csv</a><text>, </text>
-            }
-            <a href="#" data-testid="xml" @onclick:preventDefault @onclick="DownloadXml"
-               title="Download these rows as XML — a row element each, nesting and all.">xml</a><text>, </text>
-            <a href="#" data-testid="json" @onclick:preventDefault @onclick="DownloadJson"
-               title="Download these rows as JSON, exactly as the server sent them.">json</a>
-        </p>
-    }
     <table data-testid="result-table">
         <thead>
             <tr>@foreach (var column in resultColumns) { <th>@column</th> }</tr>
@@ -129,7 +153,7 @@
 @if (scalarResult is not null)
 {
     <h3>Result</h3>
-    <p data-testid="result-scalar">@scalarResult</p>
+    <p class="scalar" data-testid="result-scalar">@scalarResult</p>
 }
 
 @if (resultJson is not null)
@@ -138,11 +162,12 @@
         <h3>Response</h3>
         <button class="icon-btn" @onclick='() => Copy(resultJson!, "response")'>@(copied == "response" ? "✓ Copied" : "Copy")</button>
     </div>
-    <pre data-testid="result">@resultJson</pre>
+    <pre data-testid="result">@Highlight.Json(resultJson)</pre>
 }
 
 @if (completions is not null)
 {
+    <h3>Completions</h3>
     <ul data-testid="completions">
         @foreach (var item in completions)
         {
@@ -150,3 +175,5 @@
         }
     </ul>
 }
+
+</main>

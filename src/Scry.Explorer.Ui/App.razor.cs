@@ -400,7 +400,13 @@ public partial class App
         Value = initialCode ?? Sample,
         AutomaticLayout = true,
         Theme = resolvedDark ? "vs-dark" : "vs",
-        Minimap = new EditorMinimapOptions { Enabled = false }
+        Minimap = new EditorMinimapOptions { Enabled = false },
+        ScrollBeyondLastLine = false,
+        Padding = new EditorPaddingOptions
+        {
+            Top = 14,
+            Bottom = 14
+        }
     };
 
     async Task OnEditorInit()

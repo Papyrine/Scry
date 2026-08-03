@@ -1,11 +1,17 @@
 ﻿<!--!--><!--!--><!--!-->
 
-<!--!--><h1 data-testid="explorer-title">Scry Explorer</h1>
-<!--!--><p>
+<header class="app-header"><!--!--><div class="brand"><svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="10" r="6.5"></circle>
+            <path d="M8 20h8"></path>
+            <path d="M9.3 6.6c.35.9.55 1.1 1.45 1.45-.9.35-1.1.55-1.45 1.45-.35-.9-.55-1.1-1.45-1.45.9-.35 1.1-.55 1.45-1.45z" fill="currentColor" stroke="none"></path></svg>
+        <h1 data-testid="explorer-title"><span class="brand-accent">Scry</span> Explorer</h1></div>
+    <button class="theme-toggle icon-btn" data-testid="theme-toggle" title="Cycle theme: System → Light → Dark"><svg class="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><!--!--><circle cx="12" cy="12" r="9"></circle>
+                <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"></path></svg>System</button></header><!--!-->
+
+<main class="shell"><!--!--><p class="tagline">
     Write LINQ against the allow-listed sources, run it, and inspect the wire request. Completion is
     powered by Roslyn running in the browser against the server's introspected schema.
-</p><!--!--><div id="scry-editor" class="scry-editor"></div><!--!-->
-
-<div class="actions"><button data-testid="run" title="Translate the query to a wire request and run it against the server (Ctrl+Enter).">Run</button><!--!-->
-    <button data-testid="complete" title="Lists every C# completion available at the end of the query text — the same Roslyn engine as the inline IntelliSense dropdown, shown here as a list. Ignores the cursor position.">Complete at end</button><button data-testid="sql-preview" title="Show the SQL this query would run, without running it. Validated and policy-filtered exactly as a real query is.">Show SQL</button><button data-testid="share" title="Put this query in the URL and copy the link. The query is placed in the fragment, so it is never sent to the server.">Share</button><button class="theme-toggle icon-btn" data-testid="theme-toggle" title="Cycle theme: System → Light → Dark"><svg class="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><!--!--><circle cx="12" cy="12" r="9"></circle>
-                <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"></path></svg>System</button></div><ul data-testid="completions"></ul>
+</p><div class="editor-card"><!--!--><div id="scry-editor" class="scry-editor"></div><!--!-->
+    <div class="actions"><button class="btn btn-primary" data-testid="run" title="Translate the query to a wire request and run it against the server (Ctrl+Enter)."><!--!--><svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M8 5v14l11-7z"></path></svg>Run
+        </button><!--!-->
+        <button class="btn" data-testid="complete" title="Lists every C# completion available at the end of the query text — the same Roslyn engine as the inline IntelliSense dropdown, shown here as a list. Ignores the cursor position.">Complete at end</button><button class="btn" data-testid="sql-preview" title="Show the SQL this query would run, without running it. Validated and policy-filtered exactly as a real query is.">Show SQL</button><button class="btn" data-testid="share" title="Put this query in the URL and copy the link. The query is placed in the fragment, so it is never sent to the server.">Share</button></div></div><!--!--><h3>Completions</h3>
+    <ul data-testid="completions"></ul></main>

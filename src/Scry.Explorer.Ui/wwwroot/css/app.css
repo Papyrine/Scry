@@ -2,33 +2,134 @@
   Theming: color-scheme drives both the browser's built-in widgets (buttons, scrollbars, the Monaco
   chrome) and the CSS light-dark() function below. The <html data-theme> attribute is set before first
   paint (inline script in index.html) and updated by the theme toggle; "system" follows the OS.
+
+  The palette lives in the custom properties here. light-dark() resolves where a property is *used*,
+  so every rule below stays theme-agnostic. The panel color deliberately matches Monaco's own editor
+  background (#ffffff in vs, #1e1e1e in vs-dark) so the editor card reads as one surface.
 */
-:root { color-scheme: light dark; }
+:root {
+    color-scheme: light dark;
+
+    --bg: light-dark(#f6f7f9, #131316);
+    --panel: light-dark(#ffffff, #1e1e1e);
+    --panel-2: light-dark(#f1f3f6, #26262c);
+    --border: light-dark(#dbdfe5, #35353c);
+    --border-strong: light-dark(#c9cfd8, #45454e);
+    --text: light-dark(#1e2329, #d4d4d4);
+    --muted: light-dark(#67707c, #969ca6);
+    --accent: light-dark(#6d28d9, #a78bfa);
+    --accent-strong: #7c3aed;
+    --accent-strong-hover: light-dark(#6d28d9, #8b5cf6);
+    --mono: ui-monospace, "Cascadia Code", "Cascadia Mono", Consolas, monospace;
+}
+
 html[data-theme="light"] { color-scheme: light; }
 html[data-theme="dark"] { color-scheme: dark; }
 
 html, body {
+    margin: 0;
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    margin: 1rem;
-    background: light-dark(#ffffff, #1e1e1e);
-    color: light-dark(#1a1a1a, #d4d4d4);
+    font-size: 15px;
+    line-height: 1.5;
+    background: var(--bg);
+    color: var(--text);
 }
 
 a {
-    color: light-dark(#0366d6, #4ea1ff);
+    color: var(--accent);
 }
 
+/* The pre-Blazor boot screen (index.html): centered, with the same spinner as the schema hint. */
 .loading {
-    color: light-dark(#666, #9a9a9a);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    min-height: 60vh;
+    color: var(--muted);
+}
+
+.loading::before {
+    content: "";
+    width: 26px;
+    height: 26px;
+    border: 3px solid var(--border-strong);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(1turn); }
 }
 
 .error {
-    color: light-dark(#b00020, #f48771);
+    margin: 0 0 1rem;
+    padding: 0.65rem 0.95rem;
+    font-size: 0.9rem;
+    color: light-dark(#8f2026, #f4a9a9);
+    background: light-dark(#fdf3f4, #382225);
+    border: 1px solid light-dark(#f2c6c9, #62363a);
+    border-left: 3px solid light-dark(#d03a42, #e07777);
+    border-radius: 8px;
 }
 
 .muted {
-    color: light-dark(#666, #9a9a9a);
+    color: var(--muted);
 }
+
+/* Header */
+
+.app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.6rem 1.4rem;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.brand-mark {
+    width: 25px;
+    height: 25px;
+    color: var(--accent);
+}
+
+.app-header h1 {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+}
+
+.brand-accent {
+    color: var(--accent);
+}
+
+/* Content column */
+
+.shell {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 1.2rem 1.4rem 3.5rem;
+}
+
+.tagline {
+    margin: 0 0 1.1rem;
+    color: var(--muted);
+    font-size: 0.92rem;
+    max-width: 78ch;
+}
+
+/* Editor card */
 
 /*
   Monaco does not size itself — its host element must have an explicit height or it lays out into a
@@ -37,24 +138,76 @@ a {
 */
 .scry-editor {
     height: 360px;
-    border: 1px solid light-dark(#cccccc, #3c3c3c);
+}
+
+.editor-card {
+    background: var(--panel);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px light-dark(rgb(24 30 41 / 0.06), rgb(0 0 0 / 0.4));
+}
+
+.editor-card:focus-within {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-strong) 15%, transparent);
 }
 
 .actions {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
-    margin: 0.5rem 0;
+    padding: 0.6rem 0.7rem;
+    background: var(--panel-2);
+    border-top: 1px solid var(--border);
 }
 
-.theme-toggle {
-    margin-left: auto;
+/* Buttons */
+
+.btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.35em;
+    gap: 0.45em;
+    padding: 0.42rem 0.9rem;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--border-strong);
+    border-radius: 7px;
+    cursor: pointer;
 }
 
-/* Sized in em so the icon tracks the button's font-size rather than a pixel box beside it. */
+.btn:enabled:hover {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border-strong));
+    background: color-mix(in srgb, var(--accent) 5%, var(--panel));
+}
+
+.btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.btn-primary {
+    color: #ffffff;
+    background: var(--accent-strong);
+    border-color: transparent;
+}
+
+.btn-primary:enabled:hover {
+    background: var(--accent-strong-hover);
+    border-color: transparent;
+}
+
+/* Sized in em so an icon tracks its button's font-size rather than a pixel box beside it. */
+.btn-icon {
+    width: 0.75em;
+    height: 0.75em;
+}
+
 .theme-icon {
     width: 1em;
     height: 1em;
@@ -62,54 +215,227 @@ a {
 
 /* A small, unobtrusive secondary button (copy, theme). Inherits color-scheme for light/dark. */
 .icon-btn {
-    font-size: 0.8rem;
-    padding: 0.1rem 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    padding: 0.25rem 0.6rem;
+    font-family: inherit;
+    font-size: 0.78rem;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.icon-btn:hover {
+    color: var(--text);
+    background: var(--panel-2);
+    border-color: var(--border);
+}
+
+.theme-toggle {
+    padding: 0.3rem 0.75rem;
+    color: var(--text);
+    background: var(--panel);
+    border-color: var(--border-strong);
+    border-radius: 999px;
+}
+
+.btn:focus-visible,
+.icon-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+.loading-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+    font-size: 0.85rem;
+}
+
+.loading-hint::before {
+    content: "";
+    width: 0.85em;
+    height: 0.85em;
+    border: 2px solid var(--border-strong);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+/* Output panes */
+
+h3 {
+    margin: 1.7rem 0 0.55rem;
+    font-size: 0.73rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
 }
 
 .pane-head {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-}
-
-/* The export formats: their own line under the Result heading, as one compact list. */
-.exports {
-    margin: 0 0 0.4rem 0;
-    font-size: 0.8rem;
+    gap: 0.75rem;
+    margin: 1.7rem 0 0.55rem;
 }
 
 .pane-head h3 {
-    margin: 0.8rem 0 0.4rem 0;
+    margin: 0;
+}
+
+.pane-head .icon-btn {
+    margin-left: auto;
+}
+
+/* The export formats: right-aligned in the Result heading row, as one compact list. */
+.exports {
+    margin: 0 0 0 auto;
+    font-size: 0.8rem;
+    color: var(--muted);
+}
+
+.exports a {
+    text-decoration: none;
+}
+
+.exports a:hover {
+    text-decoration: underline;
 }
 
 pre {
-    background: light-dark(#f6f6f6, #252526);
-    color: light-dark(#1a1a1a, #d4d4d4);
-    padding: 0.6rem 0.8rem;
-    border-radius: 4px;
-    border: 1px solid light-dark(#e2e2e2, #333333);
+    margin: 0;
+    padding: 0.85rem 1.05rem;
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    line-height: 1.6;
     overflow: auto;
 }
 
+/*
+  The editor renders => as two characters (Monaco ships with ligatures off); the panes and pills that
+  echo the same query must agree, and a ligature font in the mono stack would fuse it into an arrow.
+*/
+pre,
+.scalar,
+ul[data-testid="history"] a,
+ul[data-testid="completions"] li {
+    font-variant-ligatures: none;
+}
+
+/* Token colors for the highlighted panes, matching Monaco's vs / vs-dark palettes. */
+.tok-key { color: light-dark(#0451a5, #9cdcfe); }
+.tok-str { color: light-dark(#a31515, #ce9178); }
+.tok-num { color: light-dark(#098658, #b5cea8); }
+.tok-kw { color: light-dark(#0000ff, #569cd6); }
+
+/* Result */
+
 table[data-testid="result-table"] {
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    font-size: 0.86rem;
 }
 
 table[data-testid="result-table"] th,
 table[data-testid="result-table"] td {
-    border: 1px solid light-dark(#dddddd, #3c3c3c);
-    padding: 0.2rem 0.6rem;
+    padding: 0.45rem 0.95rem;
     text-align: left;
+    border-bottom: 1px solid var(--border);
 }
 
 table[data-testid="result-table"] th {
-    background: light-dark(#f4f4f4, #2a2a2a);
+    background: var(--panel-2);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+table[data-testid="result-table"] tr:last-child td {
+    border-bottom: none;
+}
+
+table[data-testid="result-table"] tbody tr:hover td {
+    background: color-mix(in srgb, var(--panel-2) 55%, transparent);
+}
+
+.scalar {
+    display: inline-block;
+    margin: 0;
+    padding: 0.5rem 1rem;
+    font-family: var(--mono);
+    font-size: 1rem;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+/* History and completions */
+
+ul[data-testid="history"] {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+ul[data-testid="history"] li {
+    display: flex;
+    min-width: 0;
+}
+
+ul[data-testid="history"] a {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0.32rem 0.75rem;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--text);
+    text-decoration: none;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+}
+
+ul[data-testid="history"] a:hover {
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 
 ul[data-testid="completions"] {
-    columns: 4;
-    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-    font-size: 0.85rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+ul[data-testid="completions"] li {
+    padding: 0.18rem 0.62rem;
+    font-family: var(--mono);
+    font-size: 0.76rem;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 999px;
 }
 
 /*
