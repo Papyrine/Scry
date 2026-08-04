@@ -1041,6 +1041,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
 
                 KnownFunction.MathMax => BuildMinMax(call, target, row, max: true),
                 KnownFunction.MathMin => BuildMinMax(call, target, row, max: false),
+                KnownFunction.CompareTo => BuildCompareTo(call, target, row),
 
                 // With no argument this is the natural logarithm; with one it is the logarithm to that
                 // base, which is a second double operand exactly like Pow's exponent.
@@ -1235,11 +1236,17 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         var right = Build(call.Arguments[0], row, Nullable.GetUnderlyingType(target.Type) ?? target.Type);
         Promote(ref left, ref right);
 
-        if (Rank(Nullable.GetUnderlyingType(left.Type) ?? left.Type) is null ||
-            Rank(Nullable.GetUnderlyingType(right.Type) ?? right.Type) is null)
+        // Enums are excluded by hand: their type code reports the underlying number's, and the
+        // comparison below would fault over them rather than reject.
+        var leftValue = Nullable.GetUnderlyingType(left.Type) ?? left.Type;
+        var rightValue = Nullable.GetUnderlyingType(right.Type) ?? right.Type;
+        if (leftValue.IsEnum ||
+            rightValue.IsEnum ||
+            Rank(leftValue) is null ||
+            Rank(rightValue) is null)
         {
             throw new ScryValidationException(
-                $"Math.{(max ? "Max" : "Min")} is not supported over '{(Nullable.GetUnderlyingType(left.Type) ?? left.Type).Name}'.");
+                $"Math.{(max ? "Max" : "Min")} is not supported over '{leftValue.Name}'.");
         }
 
         // Promote unifies differing value types but leaves matching ones alone, so two operands can
@@ -1271,6 +1278,68 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
             Expression.Constant(null, left.Type),
             pick);
     }
+
+    /// <summary>
+    /// Three-way comparison: -1, 0, or 1. Emitted as the CLR <c>CompareTo</c> call, whose translation
+    /// EF owns — a CASE over the two operands, on any relational provider — and which runs as itself
+    /// over an in-memory source. Text compares under the server's collation, exactly as ordering does.
+    /// </summary>
+    /// <remarks>
+    /// A null operand keeps the answer null: a comparison against a value that is not there has no
+    /// direction. EF's CASE says the same by falling through, but the guard also spares the in-memory
+    /// path a call on a null receiver.
+    /// </remarks>
+    Expression BuildCompareTo(CallNode call, Expression target, Expression row)
+    {
+        var argument = Build(call.Arguments[0], row, Nullable.GetUnderlyingType(target.Type) ?? target.Type);
+        var left = NonNullable(target);
+        var right = NonNullable(argument);
+        Promote(ref left, ref right);
+
+        if (!ThreeWayComparable(left.Type) ||
+            left.Type != right.Type)
+        {
+            throw new ScryValidationException($"CompareTo is not supported over '{left.Type.Name}'.");
+        }
+
+        var method = left.Type.GetMethod("CompareTo", [left.Type])!;
+        Expression compared = Expression.Call(left, method, right);
+
+        // The operands that can be null: an optional member, or text, whose null no static type
+        // records.
+        var guards = new List<Expression>();
+        if (Nullable.GetUnderlyingType(target.Type) is not null ||
+            target.Type == typeof(string))
+        {
+            guards.Add(Expression.Equal(target, Expression.Constant(null, target.Type)));
+        }
+
+        if (Nullable.GetUnderlyingType(argument.Type) is not null ||
+            argument.Type == typeof(string))
+        {
+            guards.Add(Expression.Equal(argument, Expression.Constant(null, argument.Type)));
+        }
+
+        if (guards.Count == 0)
+        {
+            return compared;
+        }
+
+        return Expression.Condition(
+            guards.Aggregate(Expression.OrElse),
+            Expression.Constant(null, typeof(int?)),
+            Expression.Convert(compared, typeof(int?)));
+    }
+
+    // The types the three-way comparison is defined over: numbers, text, and dates. Enums are
+    // excluded by hand — their type code reports the underlying number's.
+    static bool ThreeWayComparable(Type type) =>
+        type == typeof(string) ||
+        type == typeof(DateTime) ||
+        type == typeof(Date) ||
+        type == typeof(Time) ||
+        type == typeof(DateTimeOffset) ||
+        (!type.IsEnum && Rank(type) is not null);
 
     // A Math method defined over double alone: the target is widened to reach it.
     static Expression Double1(string name, Expression target) =>

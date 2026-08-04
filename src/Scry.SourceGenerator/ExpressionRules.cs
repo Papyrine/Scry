@@ -228,18 +228,22 @@ static class ExpressionRules
             return SupportedLinq.NullableOwner;
         }
 
-        // The numeric owners exist for their Parse statics; any other member of theirs is then
-        // reported against the callable set rather than as opaque client-side code.
+        // The numeric owners exist for their Parse statics and their CompareTo; any other member of
+        // theirs is then reported against the callable set rather than as opaque client-side code.
         switch (type.SpecialType)
         {
+            case SpecialType.System_Byte:
+            case SpecialType.System_SByte:
+            case SpecialType.System_Int16:
+            case SpecialType.System_UInt16:
             case SpecialType.System_Int32:
-                return "System.Int32";
+            case SpecialType.System_UInt32:
             case SpecialType.System_Int64:
-                return "System.Int64";
-            case SpecialType.System_Decimal:
-                return "System.Decimal";
+            case SpecialType.System_UInt64:
+            case SpecialType.System_Single:
             case SpecialType.System_Double:
-                return "System.Double";
+            case SpecialType.System_Decimal:
+                return "System." + type.MetadataName;
         }
 
         var name = type.ToDisplayString();

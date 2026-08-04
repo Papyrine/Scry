@@ -1149,7 +1149,8 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 KnownFunction.DateAddMinutes or
                 KnownFunction.DateAddSeconds or
                 KnownFunction.DateAddMilliseconds or
-                KnownFunction.EnumHasFlag => (1, 1),
+                KnownFunction.EnumHasFlag or
+                KnownFunction.CompareTo => (1, 1),
 
             KnownFunction.StringReplace => (2, 2),
             KnownFunction.StringConcat => (1, 1),

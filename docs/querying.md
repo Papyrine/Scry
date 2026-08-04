@@ -552,10 +552,18 @@ public enum KnownFunction
     Int32From,
     Int64From,
     DecimalFrom,
-    DoubleFrom
+    DoubleFrom,
+
+    /// <summary>
+    /// Three-way comparison (<c>a.CompareTo(b)</c>, <c>string.Compare(a, b)</c>): -1, 0, or 1, or
+    /// null when either operand is — a comparison against a value that is not there has no direction.
+    /// Numbers, text and dates compare; text compares under the server's collation, exactly as its
+    /// ordering does.
+    /// </summary>
+    CompareTo
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L119' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L127' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Mapped from:
@@ -592,6 +600,7 @@ Mapped from:
 | `Math.Asin(value)` / `Math.Acos(value)` / `Math.Atan(value)` | `MathAsin` / `MathAcos` / `MathAtan` |
 | `Math.Atan2(y, x)` | `MathAtan2` |
 | `Math.Max(a, b)` / `Math.Min(a, b)` | `MathMax` / `MathMin` |
+| `a.CompareTo(b)` / `string.Compare(a, b)` | `CompareTo` |
 | `flags.HasFlag(flag)` | `EnumHasFlag` |
 | `int.Parse(text)` / `Convert.ToInt32(text)` | `Int32From` |
 | `long.Parse(text)` / `Convert.ToInt64(text)` | `Int64From` |
@@ -631,6 +640,8 @@ var rows = await client.Source<Order>("Order")
 It is another function the server composes rather than hands straight to the provider. The provider does translate it, but SQL's `SIGN` returns its argument's type while the CLR method returns an `int`, so its result cannot be read back — the query succeeds in a predicate, where nothing is materialized, and faults in a projection. Two comparisons and a conditional say the same thing, translate anywhere, and yield an int because that is what they are built from. A null value keeps its sign null rather than being called zero, which is what an unguarded comparison chain would answer.
 
 `Math.Max` and `Math.Min` are composed the same way. SQL's own `GREATEST` and `LEAST` exist only from SQL Server 2022, and a conditional says the same thing on any provider — with one deliberate difference: a null operand keeps the answer null, where `GREATEST` would skip it and answer with the other operand, the greater of one value rather than of two. The operands promote like any arithmetic pair, and `Math.Max(Math.Max(a, b), c)` composes into a three-way greatest.
+
+`CompareTo` — and `string.Compare(a, b)`, its static spelling — answers -1, 0, or 1 over numbers, text, and dates. Text compares under the server's collation, exactly as its ordering does, and a null operand keeps the answer null: a comparison against a value that is not there has no direction.
 
 There is no free-form method call node in the wire format, so this list is the complete set of behaviour a client can ask the database to perform. **Provider support is still the outer bound**: a function only reaches SQL if the EF provider translates it, and translating is not enough on its own — the result has to materialize too. That is what keeps [`ToString(format)`](#reading-a-value-as-text) out: the provider does not translate it at all, and the SQL function that would express it reads the server's language.
 

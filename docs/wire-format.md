@@ -449,10 +449,18 @@ public enum KnownFunction
     Int32From,
     Int64From,
     DecimalFrom,
-    DoubleFrom
+    DoubleFrom,
+
+    /// <summary>
+    /// Three-way comparison (<c>a.CompareTo(b)</c>, <c>string.Compare(a, b)</c>): -1, 0, or 1, or
+    /// null when either operand is — a comparison against a value that is not there has no direction.
+    /// Numbers, text and dates compare; text compares under the server's collation, exactly as its
+    /// ordering does.
+    /// </summary>
+    CompareTo
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L119' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L127' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 There is no free-form method name anywhere in the format. This enum is the complete set of behaviour a client can request.

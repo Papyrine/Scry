@@ -747,6 +747,17 @@ sealed class QueryTranslator
                 "ToString with a format is not supported by Scry. No provider translates it, and the SQL function that would express it reads the server's language, so the same row would format differently per connection. Format the value after the query returns.");
         }
 
+        // The three-way comparison, over the types the server compares. Only the IComparable<T> shape:
+        // the object overload would hide the operand type the server reconciles the constant against.
+        if (call is {Method.Name: "CompareTo", Object: { } compared, Arguments.Count: 1} &&
+            declaring is not null &&
+            call.Method.GetParameters()[0].ParameterType == declaring &&
+            IsThreeWayComparable(declaring) &&
+            ReferencesParameter(call, root))
+        {
+            return new CallNode(KnownFunction.CompareTo, TranslateExpr(compared, root), [TranslateExpr(call.Arguments[0], root)]);
+        }
+
         if (declaring == typeof(string))
         {
             return TranslateStringMethod(call, root);
@@ -927,6 +938,10 @@ sealed class QueryTranslator
                 return new CallNode(KnownFunction.StringToLower, Target(), []);
             case "ToUpper" when call.Arguments.Count == 0:
                 return new CallNode(KnownFunction.StringToUpper, Target(), []);
+            // The static spelling of the instance CompareTo handled before this switch.
+            case "Compare" when call.Arguments.Count == 2:
+                return new CallNode(KnownFunction.CompareTo, Argument(0), [Argument(1)]);
+
             case "IsNullOrEmpty":
                 return new CallNode(KnownFunction.StringIsNullOrEmpty, Argument(0), []);
             case "IsNullOrWhiteSpace":
@@ -1402,6 +1417,19 @@ sealed class QueryTranslator
         type == typeof(Date) ||
         type == typeof(DateTimeOffset) ||
         type == typeof(Time);
+
+    // The types the server compares three ways: numbers, text, and dates. Mirrors the server's own
+    // allow-list, so an unsupported target refuses at translation rather than as a rejected request.
+    // Enums are excluded by hand: their type code reports the underlying number's.
+    static bool IsThreeWayComparable(Type type) =>
+        type == typeof(string) ||
+        IsTemporal(type) ||
+        (!type.IsEnum &&
+         Type.GetTypeCode(type) is TypeCode.Byte or TypeCode.SByte
+             or TypeCode.Int16 or TypeCode.UInt16
+             or TypeCode.Int32 or TypeCode.UInt32
+             or TypeCode.Int64 or TypeCode.UInt64
+             or TypeCode.Single or TypeCode.Double or TypeCode.Decimal);
 
     // A property that reads as a function rather than a member path: a date part, or string length.
     static bool IsKnownProperty(MemberExpression member, out KnownFunction function)
