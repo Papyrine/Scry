@@ -80,6 +80,12 @@ static class LinqDiagnostics
         "A GroupJoin's group can only be folded to a scalar — '{0}' would put a nested collection in the response",
         "Projecting the group is what keeps collections aggregable and not projectable: a response never carries a nested collection. Aggregate the group instead.");
 
+    public static readonly DiagnosticDescriptor ClientSideCode = Rule(
+        "SCRY112",
+        "Client-side code cannot be carried by Scry",
+        "'{0}' is client-side code, which a Scry query cannot carry — evaluate it before the query, or apply it to the rows after they return",
+        "The callable surface is a closed set of functions the server can rebind onto SQL. A call that reads nothing from the row is closure state, evaluated into a constant before the request is sent; one that does read the row would have to run in the database, where client-side code cannot.");
+
     public static readonly ImmutableArray<DiagnosticDescriptor> All =
     [
         UnsupportedOperator,
@@ -93,7 +99,8 @@ static class LinqDiagnostics
         FormattedToString,
         SynchronousExecution,
         UnorderedReverse,
-        ProjectedGroup
+        ProjectedGroup,
+        ClientSideCode
     ];
 
     // Warning rather than error throughout. The analyzer sees only what is written literally in the

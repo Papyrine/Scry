@@ -1,0 +1,10 @@
+﻿SCRY112: 'Queries.Munge' is client-side code, which a Scry query cannot carry — evaluate it before the query, or apply it to the rows after they return
+    await Query.Order.Where(_ => Munge(_.Region) == "x").ToListAsync();
+SCRY112: 'ClientSideHelpers.Slugify' is client-side code, which a Scry query cannot carry — evaluate it before the query, or apply it to the rows after they return
+    await Query.Order.Where(_ => _.Region.Slugify().Length > 0).ToListAsync();
+SCRY112: 'Int32.Parse' is client-side code, which a Scry query cannot carry — evaluate it before the query, or apply it to the rows after they return
+    await Query.Order.Where(_ => int.Parse(_.Region) > 0).ToListAsync();
+SCRY112: 'Func.Invoke' is client-side code, which a Scry query cannot carry — evaluate it before the query, or apply it to the rows after they return
+    await Query.Order.Where(_ => tax(_.Amount) > 10).ToListAsync();
+SCRY112: 'Convert.ToInt32' is client-side code, which a Scry query cannot carry — evaluate it before the query, or apply it to the rows after they return
+    await Query.Order.Select(_ => new {_.Id, Code = Convert.ToInt32(_.Amount)}).ToListAsync();

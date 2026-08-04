@@ -120,6 +120,22 @@ public class AnalyzerTests
                     .ToListAsync();
                 """));
 
+    // A call outside the callable surface that still reads the row is not an unsupported overload of
+    // something carried — it is code that only exists client-side, with nothing on the wire to carry
+    // it. Helpers, Parse, extension methods and delegates all land here.
+    [Test]
+    public Task ClientSideCode() =>
+        Verify(
+            Analyze(
+                """
+                Func<decimal, decimal> tax = _ => _;
+                await Query.Order.Where(_ => Munge(_.Region) == "x").ToListAsync();
+                await Query.Order.Where(_ => _.Region.Slugify().Length > 0).ToListAsync();
+                await Query.Order.Where(_ => int.Parse(_.Region) > 0).ToListAsync();
+                await Query.Order.Where(_ => tax(_.Amount) > 10).ToListAsync();
+                await Query.Order.Select(_ => new {_.Id, Code = Convert.ToInt32(_.Amount)}).ToListAsync();
+                """));
+
     // Every operator, function and shape the closed set does carry. A false positive here is worse
     // than a missed rule: it reports code that works, in a build the consumer cannot see past.
     [Test]
@@ -164,6 +180,11 @@ public class AnalyzerTests
                 .ToListAsync();
 
             await Query.Order.Select(_ => new {_.Id}).Union(Query.Order.Select(_ => new {_.Id})).ToListAsync();
+
+            var ids = new List<int> {1, 2};
+            var regions = new[] {"north", "south"};
+            await Query.Order.Where(_ => ids.Contains(_.Id) && regions.Contains(_.Region)).ToListAsync();
+
             await Query.Order.Where(_ => _.Amount > 0).SumAsync(_ => _.Amount);
             await Query.Order.FirstAsync(_ => _.Region == "N");
             await Query.Order.CountAsync();
@@ -385,10 +406,18 @@ public class AnalyzerTests
             public string Name { get; init; } = "";
         }
 
+        // Client-side code a query might mistakenly reach for.
+        public static class ClientSideHelpers
+        {
+            public static string Slugify(this string value) => value;
+        }
+
         public class Queries
         {
             readonly ScryQuery Query = null!;
             readonly ScryClient client = null!;
+
+            static string Munge(string value) => value;
 
             public async Task Run()
             {

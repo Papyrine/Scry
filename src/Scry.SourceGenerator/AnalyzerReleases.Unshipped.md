@@ -20,3 +20,4 @@ SCRY108 | Scry | Warning | ToString with a format is not supported by Scry
 SCRY109 | Scry | Warning | Scry query cannot be executed synchronously
 SCRY110 | Scry | Warning | Reverse requires an ordered query
 SCRY111 | Scry | Warning | GroupJoin may not project its group
+SCRY112 | Scry | Warning | Client-side code cannot be carried by Scry

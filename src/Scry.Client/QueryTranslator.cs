@@ -785,7 +785,14 @@ sealed class QueryTranslator
             return ConstantOf(Evaluate(call));
         }
 
-        throw Unsupported(call);
+        // The call reads the row, so it cannot be evaluated into a constant — and it is not on the
+        // callable surface, so there is nothing on the wire to carry it. Named in full: this is the
+        // only reporter for a query the analyzer could not see into.
+        var name = declaring is null
+            ? call.Method.Name
+            : $"{declaring.Name}.{call.Method.Name}";
+        throw new NotSupportedException(
+            $"'{name}' is client-side code, which cannot be carried on the wire — the callable set is closed. Evaluate it before the query, or apply it to the rows after they return.");
     }
 
     Node TranslateStringMethod(MethodCallExpression call, ParameterExpression root)

@@ -6,11 +6,13 @@
 /// <c>ToDictionaryAsync</c>, say — runs on the client against rows already returned, so nothing it
 /// calls has to be translatable.
 ///
-/// Only members of a scalar are checked, and only where the value comes off the row. The same name
-/// over a collection, a group, or another source means something else entirely — <c>Count</c> is a
-/// correlated subquery on a navigation, an aggregate over a group, and a client-side terminal
-/// elsewhere — and the same name over closure state is evaluated into a constant before it reaches
-/// the wire. Guessing which would cost the precision an analyzer has to keep.
+/// Only calls that read the row are checked. A member of a scalar is held against the callable set;
+/// a call outside any scalar — a helper, a <c>Parse</c>, an extension method, a delegate — has no
+/// wire representation at all and is reported as client-side code. Sequence-shaped owners are left to
+/// the translator: the same name over a collection, a group, or another source means something else
+/// entirely — <c>Count</c> is a correlated subquery on a navigation, an aggregate over a group, and a
+/// client-side terminal elsewhere — and any name over closure state is evaluated into a constant
+/// before it reaches the wire. Guessing at those would cost the precision an analyzer has to keep.
 /// </summary>
 static class ExpressionRules
 {
@@ -92,23 +94,82 @@ static class ExpressionRules
             return;
         }
 
-        if (Owner(method.ContainingType) is not { } owner ||
-            !Reads(call, lambda) ||
-            SupportedLinq.IsFunction(owner, method.Name, method.Parameters.Length))
+        if (!Reads(call, lambda))
         {
             return;
         }
 
-        // The function is carried, but not in this shape — Trim() translates and Trim(params char[])
-        // has no SQL equivalent. Saying so beats naming the function as though none of it were
-        // available.
-        var name = SupportedLinq.IsFunctionName(owner, method.Name)
-            ? $"this overload of {method.ContainingType.Name}.{method.Name}"
-            : $"{method.ContainingType.Name}.{method.Name}";
+        if (Owner(method.ContainingType) is { } owner)
+        {
+            if (SupportedLinq.IsFunction(owner, method.Name, method.Parameters.Length))
+            {
+                return;
+            }
 
+            // The function is carried, but not in this shape — Trim() translates and Trim(params char[])
+            // has no SQL equivalent. Saying so beats naming the function as though none of it were
+            // available.
+            var name = SupportedLinq.IsFunctionName(owner, method.Name)
+                ? $"this overload of {method.ContainingType.Name}.{method.Name}"
+                : $"{method.ContainingType.Name}.{method.Name}";
+
+            context.ReportDiagnostic(
+                Diagnostic.Create(LinqDiagnostics.UnsupportedFunction, QueryChain.Where(call), name));
+            return;
+        }
+
+        // A sequence speaks the translator's rule set — a subquery over a navigation, an aggregate
+        // over a group, a membership test against a closure set — and is left to it.
+        if (IsSequence(method.ContainingType))
+        {
+            return;
+        }
+
+        // The call reads the row, so it cannot be evaluated into a constant here — and it is not on
+        // the callable surface, so it has no wire representation either. That leaves it nowhere to
+        // run: the translator refuses exactly this shape.
         context.ReportDiagnostic(
-            Diagnostic.Create(LinqDiagnostics.UnsupportedFunction, QueryChain.Where(call), name));
+            Diagnostic.Create(
+                LinqDiagnostics.ClientSideCode,
+                QueryChain.Where(call),
+                $"{method.ContainingType.Name}.{method.Name}"));
     }
+
+    // The owners whose members mean sequences rather than scalars: the LINQ operator surface, the
+    // span extensions an array's Contains binds to, and anything that is itself a sequence — a
+    // collection navigation, a group, a closure set. What may be called on those is the translator's
+    // business, per the rules above.
+    static bool IsSequence(INamedTypeSymbol? type)
+    {
+        if (type is null)
+        {
+            return true;
+        }
+
+        var name = type.ToDisplayString();
+        if (name is SupportedLinq.Enumerable or SupportedLinq.Queryable or "System.MemoryExtensions")
+        {
+            return true;
+        }
+
+        if (IsEnumerable(type))
+        {
+            return true;
+        }
+
+        foreach (var implemented in type.AllInterfaces)
+        {
+            if (IsEnumerable(implemented))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    static bool IsEnumerable(INamedTypeSymbol type) =>
+        type.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T;
 
     static void Property(OperationAnalysisContext context, IPropertyReferenceOperation property, IAnonymousFunctionOperation lambda)
     {

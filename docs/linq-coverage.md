@@ -25,6 +25,7 @@ For usage detail on the supported surface (position rules, limits, examples), se
 | `SCRY109` | A synchronous terminal — `ToList`, `First`, `Count` — naming the async one that replaces it |
 | `SCRY110` | `Reverse` with no preceding `OrderBy` |
 | `SCRY111` | A `GroupJoin` that projects its group rather than folding it |
+| `SCRY112` | Client-side code reading the row — a helper, a `Parse`, an extension method, a delegate — which has no wire representation at all |
 
 All of them are warnings. A query the analyzer cannot read is still refused by the translator or the server exactly as before, so a rule that is allowed to be incomplete never breaks a build on its own. To make the set an error:
 
@@ -39,7 +40,7 @@ dotnet_analyzer_diagnostic.category-Scry.severity = error
 The analyzer reads the chain as written, and holds precision above recall — reporting working code is the worse failure, since everything it misses is caught twice downstream.
 
 - **Chains it cannot follow.** A query composed across statements is followed through the locals holding it; one assembled through a helper method, a conditional, or a reassigned local is not.
-- **Anything in a query lambda that is not a scalar.** `Select`, `Count` and `Contains` all mean something else inside one — a membership test against another source, a correlated subquery over a collection navigation, an aggregate over a group. Only members of a string, a date, or `Math`, read off the row, are checked; a value that comes from closure state is evaluated into a constant before it reaches the wire and is left alone.
+- **Sequences in a query lambda.** `Select`, `Count` and `Contains` all mean something else inside one — a membership test against another source, a correlated subquery over a collection navigation, an aggregate over a group — so anything called on a sequence is left to the translator. What is checked is calls that read the row itself: members of a string, a date, or `Math` against the callable set, and everything else as client-side code. A value that comes from closure state is evaluated into a constant before it reaches the wire and is left alone.
 - **Values known only when the query runs.** `Take` against `MaxPageSize`, the size of a `Contains` set, and whether the other side of a join is a Scry source at all.
 - **Whether the provider can translate it.** Reaching the wire is necessary but not sufficient, [as above](#computed-projection-members).
 

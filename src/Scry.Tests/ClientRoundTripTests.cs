@@ -365,6 +365,26 @@ public class ClientRoundTripTests
                 .ToListAsync());
     }
 
+    // A method outside the callable set that reads the row has nowhere to run. The refusal names it,
+    // since the translator is the only reporter for a query the analyzer could not see into.
+    [Test]
+    public void ClientSideCallIsNamedInTheRefusal()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var exception = Assert.ThrowsAsync<NotSupportedException>(() =>
+            client.Source<Employee>("Employee")
+                .Where(_ => Munge(_.Name) == "x")
+                .Select(_ => new {_.Name})
+                .ToListAsync());
+
+        Assert.That(exception!.Message, Does.Contain("ClientRoundTripTests.Munge"));
+        Assert.That(exception.Message, Does.Contain("client-side"));
+    }
+
+    static string Munge(string value) => value;
+
     // begin-snippet: inProcessClient
     static ScryClient ClientFor(TestContext context) =>
         new((request, _) => Task.FromResult(SharedProcessor.Instance.Execute(request, context)));
