@@ -390,6 +390,13 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCollection: false
         },
         {
+          Name: Perks,
+          TypeDisplay: Perks,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false
+        },
+        {
           Name: PreviousAddresses,
           TypeDisplay: global::System.Collections.Generic.IReadOnlyList<AddressQueryModel>,
           NeedsNullDefault: true,
@@ -667,6 +674,15 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
   ],
   Enums: [
     {
+      Name: Perks,
+      Values: [
+        None,
+        Parking,
+        Gym,
+        Remote
+      ]
+    },
+    {
       Name: Priority,
       Values: [
         Low,
@@ -684,10 +700,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
   ],
   QueryEndpoint: /api/query,
   SqlPreview: false,
-  SchemaStamp: mi7QhupBDNZpcBYb
+  SchemaStamp: Fv8x_R2e1jENJ-t9
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L543' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L559' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names, member names with the exact C# type spelling the source generator would emit, and the re-emitted enums. It carries **no** policies, resolvers, connection details, or CLR internals.

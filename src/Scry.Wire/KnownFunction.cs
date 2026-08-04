@@ -39,6 +39,7 @@ public enum KnownFunction
     DateAddHours,
     DateAddMinutes,
     DateAddSeconds,
+    DateAddMilliseconds,
     /// <summary>
     /// Joins the target and the argument into one string, converting either if it is not one already.
     /// C# writes this as <c>+</c>, but the operator alone does not say it: an Add of a string and a
@@ -87,6 +88,24 @@ public enum KnownFunction
     /// Membership of a client-supplied set (SQL <c>IN</c>). The target is the value being tested and
     /// every argument is a <see cref="ConstNode"/>; the server caps the number of values.
     /// </summary>
-    In
+    In,
+
+    /// <summary>
+    /// Whether the target — a [Flags] enum member — carries the argument's bits
+    /// (<c>Enum.HasFlag</c>). A combined flag travels by name exactly as <c>Enum.ToString</c> spells
+    /// it: <c>"Parking, Gym"</c>.
+    /// </summary>
+    EnumHasFlag,
+
+    /// <summary>
+    /// Reads text as a value — <c>int.Parse</c> / <c>Convert.ToInt32</c> and their siblings; the
+    /// inverse of <see cref="StringFrom"/>. Only that direction exists: a numeric member is already a
+    /// value, and SQL's numeric-to-numeric conversions truncate where the CLR's round, so those are
+    /// not carried. Text that does not parse faults at execution, exactly as it would in memory.
+    /// </summary>
+    Int32From,
+    Int64From,
+    DecimalFrom,
+    DoubleFrom
 }
 // end-snippet

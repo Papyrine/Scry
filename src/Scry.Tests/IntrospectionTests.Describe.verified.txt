@@ -245,6 +245,13 @@
           IsCollection: false
         },
         {
+          Name: Perks,
+          TypeDisplay: Perks,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false
+        },
+        {
           Name: PreviousAddresses,
           TypeDisplay: global::System.Collections.Generic.IReadOnlyList<AddressQueryModel>,
           NeedsNullDefault: true,
@@ -286,6 +293,13 @@
           Name: Amount,
           TypeDisplay: decimal,
           NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false
+        },
+        {
+          Name: Code,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false
         },
@@ -522,6 +536,15 @@
   ],
   Enums: [
     {
+      Name: Perks,
+      Values: [
+        None,
+        Parking,
+        Gym,
+        Remote
+      ]
+    },
+    {
       Name: Priority,
       Values: [
         Low,
@@ -539,5 +562,5 @@
   ],
   QueryEndpoint: /api/query,
   SqlPreview: false,
-  SchemaStamp: mi7QhupBDNZpcBYb
+  SchemaStamp: qYeNkPLXm7msDhn5
 }

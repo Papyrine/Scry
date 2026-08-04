@@ -60,7 +60,7 @@ It is not a security boundary and cannot become one. The client is assumed hosti
 | `Select(projection)` | At most one; must construct an object. |
 | `OfType<T>()` | Narrows to a derived type that is allow-listed in its own right; later operators read it. |
 | `SelectMany(collection)` | Flattens a `[QueryableCollection]` of rows; one per query, and later operators read the element. A collection of values cannot be flattened. |
-| `GroupBy(key)` | One key, or up to eight members grouped at once; each a member or an expression computed from the row. Must be followed by a `Select`. |
+| `GroupBy(key)` | One key, or up to eight members grouped at once; each a member or an expression computed from the row. Must be followed by a `Select`. A result selector — `GroupBy(key, (key, group) => …)` — unfolds into that `GroupBy` + `Select`, and counts as the query's one `Select`. |
 | `Distinct()` | Deduplicates the projected rows; can also be ordered, paged and counted over a flat projection of up to eight members. |
 | `Reverse()` | Inverts the ordering; requires a preceding `OrderBy`, as EF does. |
 | `Where(predicate)` after `GroupBy` | SQL `HAVING` — reads the group key and aggregates. |
@@ -133,7 +133,7 @@ The other two positions EF Core allows an aggregate in are both reachable as wel
 
 ### Functions
 
-See [the full table](querying.md#functions). In summary — string: `Contains`, `StartsWith`, `EndsWith`, `ToLower`, `ToUpper`, `Length`, `Trim`/`TrimStart`/`TrimEnd`, `Substring`, `IndexOf`, `Replace`, `IsNullOrEmpty`, `IsNullOrWhiteSpace`, and `ToString()` for reading any other scalar as text. Date: `Year`, `Month`, `Day`, `Hour`, `Minute`, `Second`, `Millisecond`, `DayOfYear`, `DayOfWeek`, `Date`, and the `Add*` methods. Math: `Abs`, `Ceiling`, `Floor`, `Round`, `Truncate`, `Sqrt`, `Pow`, `Sign`, `Exp`, `Log`, `Log10`, and the trigonometric functions (`Sin`, `Cos`, `Tan`, `Asin`, `Acos`, `Atan`, `Atan2`). Plus `Contains` over a client-supplied set, which becomes a SQL `IN`.
+See [the full table](querying.md#functions). In summary — string: `Contains`, `StartsWith`, `EndsWith`, `ToLower`, `ToUpper`, `Length`, `Trim`/`TrimStart`/`TrimEnd`, `Substring`, `IndexOf`, `Replace`, `IsNullOrEmpty`, `IsNullOrWhiteSpace`, and `ToString()` for reading any other scalar as text. Date: `Year`, `Month`, `Day`, `Hour`, `Minute`, `Second`, `Millisecond`, `DayOfYear`, `DayOfWeek`, `Date`, and the `Add*` methods. Math: `Abs`, `Ceiling`, `Floor`, `Round`, `Truncate`, `Sqrt`, `Pow`, `Sign`, `Exp`, `Log`, `Log10`, and the trigonometric functions (`Sin`, `Cos`, `Tan`, `Asin`, `Acos`, `Atan`, `Atan2`). Plus `Contains` over a client-supplied set, which becomes a SQL `IN`, and `HasFlag` over a `[Flags]` enum member.
 
 Functions are expression-level: they read a row in a predicate, an ordering or group key, a terminal predicate, an aggregate selector, or a projection member.
 
@@ -220,11 +220,9 @@ The subset relation runs the other way in a few places. Each is an instance of t
 
 ### Normalizable into the existing vocabulary
 
-Sugar EF unfolds into operators the wire already carries. Each could be adopted as a client-side rewrite with no wire change — the precedent is `ElementAtAsync`, which is already `Skip` + `First` under the covers:
+Sugar EF unfolds into operators the wire already carries, adoptable as a client-side rewrite with no wire change. `GroupBy(key, resultSelector)` and `Nullable<T>.GetValueOrDefault()` were adopted exactly this way and are now part of the supported surface, alongside the older precedent of `ElementAtAsync`, which is `Skip` + `First` under the covers. What remains:
 
-- `MaxBy` / `MinBy` → `OrderBy[Descending](key)` + `First` — the exact rewrite EF 11 itself adopts.
-- `GroupBy(key, resultSelector)` → `GroupBy(key)` + the `Select` the selector abbreviates.
-- `Nullable<T>.GetValueOrDefault()` → the `??` coalesce it abbreviates.
+- `MaxBy` / `MinBy` → `OrderBy[Descending](key)` + `First` — the exact rewrite EF 11 itself adopts. The terminal returns a whole row, which a Scry query never does, so the useful form is over an already-projected query rather than a bare source.
 
 ### Room to grow
 
@@ -241,11 +239,10 @@ Functions with an EF translation ready to rebind onto:
 
 | Group | Candidates |
 | --- | --- |
-| String | `char` overloads of `Contains` / `StartsWith` / `EndsWith`, `Replace(char, char)`, `IndexOf(value, start)`, `Compare` / `CompareTo` (a three-way `CASE`), `TrimStart` / `TrimEnd` with explicit characters (SQL Server 2022+), `string.Join` over row values (`CONCAT_WS`) |
+| String | `IndexOf(value, start)`, `Compare` / `CompareTo` (a three-way `CASE`), `TrimStart` / `TrimEnd` with explicit characters (SQL Server 2022+), `string.Join` over row values (`CONCAT_WS`). The `char` overloads of the single-argument functions are already carried — a char constant travels as text. |
 | Numeric | `Math.Max` / `Math.Min` (`GREATEST` / `LEAST`, SQL Server 2022+), `DegreesToRadians` / `RadiansToDegrees` |
-| Parsing | Single-argument `Parse` and `Convert.To*` over the numeric types and `bool` — a `CAST`. Today [`SCRY112`](#reported-at-compile-time) reports these as client-side code; adopting one means teaching the analyzer alongside the wire. |
-| Temporal | `AddMilliseconds`, `Microsecond` / `Nanosecond`, `TimeOfDay`, `DayNumber`, `TimeOnly.IsBetween`, and date difference — EF blocks `d1 - d2` arithmetic outright, so the translatable spelling is a dedicated function the server would rebind to `EF.Functions.DateDiff*` without exposing `EF.Functions` itself |
-| Enum | `HasFlag` — `(x & flag) = flag` |
+| Parsing | The remaining `Parse` / `Convert.To*` targets — `bool`, `byte`, `short`, `float`. The `int` / `long` / `decimal` / `double` forms are carried as `Int32From` and its siblings, reading text only. |
+| Temporal | `Microsecond` / `Nanosecond`, `TimeOfDay`, `DayNumber`, `TimeOnly.IsBetween`, and date difference — EF blocks `d1 - d2` arithmetic outright, so the translatable spelling is a dedicated function the server would rebind to `EF.Functions.DateDiff*` without exposing `EF.Functions` itself |
 | Binary | `byte[].Length` (`DATALENGTH`), `byte[].Contains` (`CHARINDEX`) |
 
 Environmental values — `DateTime.Now`, `Guid.NewGuid()`, `EF.Functions.Random()` — are representable but unmotivated: a closure's `DateTime.Now` already travels as the constant it evaluates to, so the only thing a wire function would add is the *database's* clock.

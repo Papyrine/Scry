@@ -223,8 +223,27 @@ static class ExpressionRules
             return "System.String";
         }
 
+        if (type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+        {
+            return SupportedLinq.NullableOwner;
+        }
+
+        // The numeric owners exist for their Parse statics; any other member of theirs is then
+        // reported against the callable set rather than as opaque client-side code.
+        switch (type.SpecialType)
+        {
+            case SpecialType.System_Int32:
+                return "System.Int32";
+            case SpecialType.System_Int64:
+                return "System.Int64";
+            case SpecialType.System_Decimal:
+                return "System.Decimal";
+            case SpecialType.System_Double:
+                return "System.Double";
+        }
+
         var name = type.ToDisplayString();
-        if (name == "System.Math")
+        if (name is "System.Math" or "System.Enum" or "System.Convert")
         {
             return name;
         }

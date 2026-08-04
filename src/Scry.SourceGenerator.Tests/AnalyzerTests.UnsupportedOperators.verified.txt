@@ -1,4 +1,6 @@
-﻿SCRY100: 'SkipWhile' is not part of the operator set Scry can carry, so this query fails when it is translated
+﻿SCRY100: 'GroupBy with an element selector' is not part of the operator set Scry can carry, so this query fails when it is translated
+    await Query.Order.GroupBy(_ => _.Region, _ => _.Amount).Select(_ => new {Total = _.Sum(v => v)}).ToListAsync();
+SCRY100: 'SkipWhile' is not part of the operator set Scry can carry, so this query fails when it is translated
     await Query.Order.SkipWhile(_ => _.Amount > 0).ToListAsync();
 SCRY100: 'TakeWhile' is not part of the operator set Scry can carry, so this query fails when it is translated
     await Query.Order.TakeWhile(_ => _.Amount > 0).ToListAsync();

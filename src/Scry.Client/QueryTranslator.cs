@@ -43,7 +43,34 @@ sealed class QueryTranslator
         }
 
         Visit(call.Arguments[0], ops);
+
+        // GroupBy with a result selector abbreviates the GroupBy + Select it stands for, and unfolds
+        // into the same two operators on the wire.
+        if (call is {Method.Name: "GroupBy", Arguments.Count: 3} &&
+            Lambda(call.Arguments[2]) is {Parameters.Count: 2} result)
+        {
+            ops.Add(TranslateGroupBy(Lambda(call.Arguments[1])));
+            ops.Add(new SelectOp(TranslateProjection(RebindGroupResult(result))));
+            return;
+        }
+
         ops.Add(TranslateCall(call));
+    }
+
+    /// <summary>
+    /// Rewrites a GroupBy result selector onto the grouping the following Select would have read: the
+    /// key parameter becomes <c>g.Key</c>, the group parameter the grouping itself, and the body then
+    /// translates as the grouped projection it already is.
+    /// </summary>
+    static LambdaExpression RebindGroupResult(LambdaExpression result)
+    {
+        var key = result.Parameters[0];
+        var group = result.Parameters[1];
+        var grouping = Expression.Parameter(
+            typeof(IGrouping<,>).MakeGenericType(key.Type, group.Type.GetGenericArguments()[0]),
+            group.Name);
+        var body = new GroupResultRebinder(key, group, grouping).Visit(result.Body);
+        return Expression.Lambda(body, grouping);
     }
 
     QueryOp TranslateCall(MethodCallExpression call)
@@ -68,8 +95,15 @@ sealed class QueryTranslator
             case "Take":
                 return new TakeOp(IntArgument(call.Arguments[1]));
 
-            case "GroupBy":
+            case "GroupBy" when call.Arguments.Count == 2:
                 return TranslateGroupBy(Lambda(call.Arguments[1]));
+
+            // The result-selector form was unfolded before this switch, so what arrives here is an
+            // element selector or a comparer — and silently grouping without one would answer with
+            // aggregates over the wrong elements.
+            case "GroupBy":
+                throw new NotSupportedException(
+                    "This overload of GroupBy is not supported by Scry — group by the key alone, and compose the elements inside the aggregates that read the group.");
 
             case "Select":
                 return new SelectOp(TranslateProjection(Lambda(call.Arguments[1])));
@@ -698,6 +732,15 @@ sealed class QueryTranslator
             return new CallNode(KnownFunction.StringFrom, TranslateExpr(instance, root), []);
         }
 
+        // Convert.ToString is the same read spelled statically — checked before the format refusal
+        // below, whose pattern its one argument would otherwise match.
+        if (call is {Method.Name: "ToString", Object: null, Arguments: [var toText]} &&
+            declaring == typeof(Convert) &&
+            ReferencesParameter(call, root))
+        {
+            return new CallNode(KnownFunction.StringFrom, TranslateExpr(toText, root), []);
+        }
+
         if (call is {Method.Name: "ToString", Arguments.Count: > 0})
         {
             throw new NotSupportedException(
@@ -707,6 +750,52 @@ sealed class QueryTranslator
         if (declaring == typeof(string))
         {
             return TranslateStringMethod(call, root);
+        }
+
+        // GetValueOrDefault abbreviates the coalesce it stands for: the value, or — with no
+        // argument — the type's default, which travels as an ordinary constant.
+        if (call is {Method.Name: "GetValueOrDefault", Object: { } optional} &&
+            Nullable.GetUnderlyingType(optional.Type) is { } underlying &&
+            ReferencesParameter(call, root))
+        {
+            var fallback = call.Arguments.Count == 1
+                ? TranslateExpr(call.Arguments[0], root)
+                : ConstantOf(Activator.CreateInstance(underlying));
+            return new BinaryNode(BinaryOp.Coalesce, TranslateExpr(optional, root), fallback);
+        }
+
+        // HasFlag reads the row's enum member; the flag travels as an ordinary enum constant, a
+        // combined value spelled the way Enum.ToString spells it.
+        if (call is {Method.Name: "HasFlag", Object: { } flagged} &&
+            declaring == typeof(Enum) &&
+            ReferencesParameter(call, root))
+        {
+            return new CallNode(KnownFunction.EnumHasFlag, TranslateExpr(flagged, root), [TranslateExpr(call.Arguments[0], root)]);
+        }
+
+        // Parse, and Convert's To* forms, read text as a value — the inverse of StringFrom. Only that
+        // direction is carried: a numeric member is already a value, which arithmetic and comparison
+        // promote without a cast, and SQL's numeric conversions truncate where the CLR's round.
+        if (call is {Object: null, Arguments: [var text]} &&
+            declaring is not null &&
+            ReferencesParameter(call, root))
+        {
+            var conversion = call.Method.Name == "Parse" && parseTargets.TryGetValue(declaring, out var byType)
+                ? byType
+                : declaring == typeof(Convert) && convertTargets.TryGetValue(call.Method.Name, out var byName)
+                    ? byName
+                    : (KnownFunction?)null;
+
+            if (conversion is { } function)
+            {
+                if (text.Type != typeof(string))
+                {
+                    throw new NotSupportedException(
+                        $"'{declaring.Name}.{call.Method.Name}' reads text as a value, and '{text.Type.Name}' is already one — arithmetic and comparison promote a numeric member without a cast.");
+                }
+
+                return new CallNode(function, TranslateExpr(text, root), []);
+            }
         }
 
         if (IsTemporal(declaring))
@@ -719,6 +808,7 @@ sealed class QueryTranslator
                 "AddHours" => KnownFunction.DateAddHours,
                 "AddMinutes" => KnownFunction.DateAddMinutes,
                 "AddSeconds" => KnownFunction.DateAddSeconds,
+                "AddMilliseconds" => KnownFunction.DateAddMilliseconds,
                 _ => throw Unsupported(call)
             };
             return new CallNode(added, TranslateExpr(call.Object!, root), [TranslateExpr(call.Arguments[0], root)]);
@@ -1278,6 +1368,23 @@ sealed class QueryTranslator
         throw new NotSupportedException("The Contains set must be a collection of values.");
     }
 
+    // The Parse owners and Convert members the text-reading functions answer for, by target type.
+    static readonly Dictionary<Type, KnownFunction> parseTargets = new()
+    {
+        [typeof(int)] = KnownFunction.Int32From,
+        [typeof(long)] = KnownFunction.Int64From,
+        [typeof(decimal)] = KnownFunction.DecimalFrom,
+        [typeof(double)] = KnownFunction.DoubleFrom
+    };
+
+    static readonly Dictionary<string, KnownFunction> convertTargets = new(StringComparer.Ordinal)
+    {
+        ["ToInt32"] = KnownFunction.Int32From,
+        ["ToInt64"] = KnownFunction.Int64From,
+        ["ToDecimal"] = KnownFunction.DecimalFrom,
+        ["ToDouble"] = KnownFunction.DoubleFrom
+    };
+
     static bool IsGrouping(Type type) =>
         type.IsGenericType &&
         type.GetGenericTypeDefinition() == typeof(IGrouping<,>);
@@ -1474,6 +1581,25 @@ sealed class QueryTranslator
 
     static NotSupportedException Unsupported(Expression expression) =>
         new($"Expression '{expression.NodeType}' is not supported by Scry.");
+
+    sealed class GroupResultRebinder(ParameterExpression key, ParameterExpression group, ParameterExpression grouping) :
+        ExpressionVisitor
+    {
+        protected override Expression VisitParameter(ParameterExpression node)
+        {
+            if (node == group)
+            {
+                return grouping;
+            }
+
+            if (node == key)
+            {
+                return Expression.Property(grouping, "Key");
+            }
+
+            return base.VisitParameter(node);
+        }
+    }
 
     sealed class ParameterFinder(ParameterExpression target) :
         ExpressionVisitor

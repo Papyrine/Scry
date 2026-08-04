@@ -108,6 +108,12 @@ public class SupportedLinqTests
             return SupportedLinq.Temporal.Select(_ => Type.GetType(_)!);
         }
 
+        // Any closed Nullable<T> declares the shared members; which T is beside the point.
+        if (owner == SupportedLinq.NullableOwner)
+        {
+            return [typeof(int?)];
+        }
+
         return [Type.GetType(owner)!];
     }
 

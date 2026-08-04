@@ -39,7 +39,9 @@ static class SupportedLinq
         ["ThenByDescending"] = [2],
         ["Skip"] = [2],
         ["Take"] = [2],
-        ["GroupBy"] = [2],
+        // The 3-argument form is the result selector, which unfolds into GroupBy + Select; the
+        // element-selector spelling of the same arity is told apart by its lambda and reported.
+        ["GroupBy"] = [2, 3],
         ["OfType"] = [1],
         ["SelectMany"] = [2],
         ["Distinct"] = [1],
@@ -160,6 +162,21 @@ static class SupportedLinq
         ("$temporal.AddHours/1", "DateAddHours"),
         ("$temporal.AddMinutes/1", "DateAddMinutes"),
         ("$temporal.AddSeconds/1", "DateAddSeconds"),
+        ("$temporal.AddMilliseconds/1", "DateAddMilliseconds"),
+        ("System.Enum.HasFlag/1", "EnumHasFlag"),
+        ("System.Int32.Parse/1", "Int32From"),
+        ("System.Int64.Parse/1", "Int64From"),
+        ("System.Decimal.Parse/1", "DecimalFrom"),
+        ("System.Double.Parse/1", "DoubleFrom"),
+        ("System.Convert.ToInt32/1", "Int32From"),
+        ("System.Convert.ToInt64/1", "Int64From"),
+        ("System.Convert.ToDecimal/1", "DecimalFrom"),
+        ("System.Convert.ToDouble/1", "DoubleFrom"),
+        ("System.Convert.ToString/1", "StringFrom"),
+        // Not calls of a wire function: GetValueOrDefault is the coalesce it abbreviates, carried as
+        // the ordinary binary operator.
+        ("$nullable.GetValueOrDefault/0", ""),
+        ("$nullable.GetValueOrDefault/1", ""),
         // Not written as a call. A client-supplied set reaches the wire as In through Contains over a
         // closure collection, which is an Enumerable call rather than a member of a scalar.
         ("$set.Contains/1", "In")
@@ -170,6 +187,9 @@ static class SupportedLinq
     /// scalar is looked up under the type's own name, falling back to this for a temporal one.
     /// </summary>
     public const string TemporalOwner = "$temporal";
+
+    /// <summary>The signature <c>Nullable&lt;T&gt;</c>'s members are looked up under, whatever the T.</summary>
+    public const string NullableOwner = "$nullable";
 
     static readonly HashSet<string> signatures = Build();
 

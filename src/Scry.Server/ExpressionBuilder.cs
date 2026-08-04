@@ -1006,9 +1006,16 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
                 KnownFunction.DateAddHours => TemporalAdd(call, target, "AddHours", row),
                 KnownFunction.DateAddMinutes => TemporalAdd(call, target, "AddMinutes", row),
                 KnownFunction.DateAddSeconds => TemporalAdd(call, target, "AddSeconds", row),
+                KnownFunction.DateAddMilliseconds => TemporalAdd(call, target, "AddMilliseconds", row),
 
                 KnownFunction.StringConcat => BuildConcat(target, Build(call.Arguments[0], row, null)),
                 KnownFunction.StringFrom => BuildStringFrom(target),
+                KnownFunction.EnumHasFlag => BuildHasFlag(call, target, row),
+
+                KnownFunction.Int32From => BuildFromText(call.Function, target, convertToInt32),
+                KnownFunction.Int64From => BuildFromText(call.Function, target, convertToInt64),
+                KnownFunction.DecimalFrom => BuildFromText(call.Function, target, convertToDecimal),
+                KnownFunction.DoubleFrom => BuildFromText(call.Function, target, convertToDouble),
 
                 KnownFunction.MathAbs => MathCall("Abs", target),
                 KnownFunction.MathCeiling => MathCall("Ceiling", target),
@@ -1162,6 +1169,24 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
     /// projection. Two comparisons and a conditional say the same thing, are translated by any
     /// relational provider, and yield an int because that is what they are built from.
     /// </remarks>
+    /// <summary>
+    /// Builds <c>target.HasFlag(flag)</c> over a [Flags] enum member. The CLR call is handed to the
+    /// provider as written — EF owns its translation, <c>(x &amp; flag) = flag</c> in SQL — and runs
+    /// as itself over an in-memory source. The flag constant is parsed at the member's own enum type,
+    /// so a name outside it is a rejected query.
+    /// </summary>
+    Expression BuildHasFlag(CallNode call, Expression target, Expression row)
+    {
+        var value = NonNullable(target);
+        if (!value.Type.IsEnum)
+        {
+            throw new ScryValidationException($"HasFlag is not supported over '{value.Type.Name}'.");
+        }
+
+        var flag = Build(call.Arguments[0], row, value.Type);
+        return Expression.Call(value, enumHasFlag, Expression.Convert(flag, typeof(Enum)));
+    }
+
     static Expression BuildSign(Expression target)
     {
         var value = NonNullable(target);
@@ -1351,6 +1376,24 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
     /// rather than in the database — the column holds the underlying value — so converting one in SQL
     /// would yield a number where the client expects a name.
     /// </remarks>
+    /// <summary>
+    /// Reads text as a value — the inverse of <see cref="BuildStringFrom"/>. Only a string target is
+    /// accepted: a numeric member is already a value, and SQL's numeric-to-numeric conversions
+    /// truncate where the CLR's round, so carrying those would answer differently per source. Emitted
+    /// as the Convert call EF translates to CONVERT; text that does not parse faults at execution,
+    /// exactly as it would in memory.
+    /// </summary>
+    static Expression BuildFromText(KnownFunction function, Expression target, MethodInfo method)
+    {
+        var value = NonNullable(target);
+        if (value.Type != typeof(string))
+        {
+            throw new ScryValidationException($"'{function}' reads text as a value, and '{value.Type.Name}' is already one.");
+        }
+
+        return Expression.Call(method, value);
+    }
+
     static Expression BuildStringFrom(Expression target)
     {
         var value = NonNullable(target);
@@ -1631,6 +1674,13 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
     static readonly MethodInfo stringReplace = StringMethod("Replace", typeof(string), typeof(string));
     static readonly MethodInfo stringConcat = StringMethod("Concat", typeof(string), typeof(string));
     static readonly MethodInfo stringConcatObjects = StringMethod("Concat", typeof(object), typeof(object));
+
+    static readonly MethodInfo enumHasFlag = typeof(Enum).GetMethod("HasFlag")!;
+
+    static readonly MethodInfo convertToInt32 = typeof(Convert).GetMethod("ToInt32", [typeof(string)])!;
+    static readonly MethodInfo convertToInt64 = typeof(Convert).GetMethod("ToInt64", [typeof(string)])!;
+    static readonly MethodInfo convertToDecimal = typeof(Convert).GetMethod("ToDecimal", [typeof(string)])!;
+    static readonly MethodInfo convertToDouble = typeof(Convert).GetMethod("ToDouble", [typeof(string)])!;
 
 
     // The generic Contains<TSource>(source, value) definition, closed per member type by BuildIn.

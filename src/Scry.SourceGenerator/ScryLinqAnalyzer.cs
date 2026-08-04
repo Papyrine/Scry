@@ -135,6 +135,39 @@ public sealed class ScryLinqAnalyzer :
                 continue;
             }
 
+            // The 3-argument GroupBy is three spellings with one arity. A result selector unfolds
+            // into the GroupBy + Select it abbreviates; an element selector and a comparer have no
+            // wire form. The third argument's own shape tells them apart.
+            if (name == "GroupBy" &&
+                method.Parameters.Length == 3)
+            {
+                if (known.IsComparer(method.Parameters[2].Type))
+                {
+                    Report(context, LinqDiagnostics.Comparer, link, name);
+                    continue;
+                }
+
+                if (QueryChain.Lambda(link, 2) is not {Symbol.Parameters.Length: 2} selector)
+                {
+                    Report(context, LinqDiagnostics.UnsupportedOperator, link, "GroupBy with an element selector");
+                    continue;
+                }
+
+                // The result selector is the query's one Select, so a later explicit Select is a
+                // second — and it must construct an object like any other projection.
+                if (!seen.Add("Select"))
+                {
+                    Report(context, LinqDiagnostics.SingleUse, link, "Select");
+                    continue;
+                }
+
+                if (ExpressionRules.Body(selector) is { } constructed &&
+                    !ExpressionRules.Constructs(constructed))
+                {
+                    Report(context, LinqDiagnostics.Projection, link);
+                }
+            }
+
             if (SupportedLinq.SingleUse.TryGetValue(name, out var group) &&
                 !seen.Add(group))
             {

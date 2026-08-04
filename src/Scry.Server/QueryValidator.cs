@@ -1123,6 +1123,10 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 KnownFunction.MathFloor or
                 KnownFunction.MathTruncate or
                 KnownFunction.StringFrom or
+                KnownFunction.Int32From or
+                KnownFunction.Int64From or
+                KnownFunction.DecimalFrom or
+                KnownFunction.DoubleFrom or
                 KnownFunction.MathSign or
                 KnownFunction.MathSqrt or
                 KnownFunction.MathExp or
@@ -1143,7 +1147,9 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 KnownFunction.DateAddDays or
                 KnownFunction.DateAddHours or
                 KnownFunction.DateAddMinutes or
-                KnownFunction.DateAddSeconds => (1, 1),
+                KnownFunction.DateAddSeconds or
+                KnownFunction.DateAddMilliseconds or
+                KnownFunction.EnumHasFlag => (1, 1),
 
             KnownFunction.StringReplace => (2, 2),
             KnownFunction.StringConcat => (1, 1),

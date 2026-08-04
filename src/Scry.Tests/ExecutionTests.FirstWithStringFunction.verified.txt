@@ -5,6 +5,7 @@
     "id": 4,
     "name": "Bob",
     "status": "PartTime",
+    "perks": "None",
     "active": false,
     "managerId": 1,
     "departmentId": 2,

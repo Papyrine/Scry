@@ -6,6 +6,7 @@ public class AnalyzerTests
         Verify(
             Analyze(
                 """
+                await Query.Order.GroupBy(_ => _.Region, _ => _.Amount).Select(_ => new {Total = _.Sum(v => v)}).ToListAsync();
                 await Query.Order.SkipWhile(_ => _.Amount > 0).ToListAsync();
                 await Query.Order.TakeWhile(_ => _.Amount > 0).ToListAsync();
                 await Query.Order.DefaultIfEmpty().ToListAsync();
@@ -46,6 +47,7 @@ public class AnalyzerTests
                 await Query.Order.Select(_ => new {_.Id, _.Region}).Select(_ => new {_.Region}).ToListAsync();
                 await Query.Order.Select(_ => new {_.Id}).Distinct().Distinct().ToListAsync();
                 await Query.Order.SelectMany(_ => _.Lines).SelectMany(_ => _.Parts).ToListAsync();
+                await Query.Order.GroupBy(_ => _.Region, (region, orders) => new {Region = region}).Select(_ => new {_.Region}).ToListAsync();
                 """));
 
     [Test]
@@ -131,9 +133,8 @@ public class AnalyzerTests
                 Func<decimal, decimal> tax = _ => _;
                 await Query.Order.Where(_ => Munge(_.Region) == "x").ToListAsync();
                 await Query.Order.Where(_ => _.Region.Slugify().Length > 0).ToListAsync();
-                await Query.Order.Where(_ => int.Parse(_.Region) > 0).ToListAsync();
+                await Query.Order.Where(_ => char.IsDigit(_.Region, 0)).ToListAsync();
                 await Query.Order.Where(_ => tax(_.Amount) > 10).ToListAsync();
-                await Query.Order.Select(_ => new {_.Id, Code = Convert.ToInt32(_.Amount)}).ToListAsync();
                 """));
 
     // Every operator, function and shape the closed set does carry. A false positive here is worse
@@ -184,6 +185,14 @@ public class AnalyzerTests
             var ids = new List<int> {1, 2};
             var regions = new[] {"north", "south"};
             await Query.Order.Where(_ => ids.Contains(_.Id) && regions.Contains(_.Region)).ToListAsync();
+
+            await Query.Order.GroupBy(_ => _.Region, (region, orders) => new {Region = region, Total = orders.Sum(_ => _.Amount)}).ToListAsync();
+            await Query.Order.Where(_ => _.Rebate.GetValueOrDefault() > 0 && _.Rebate.GetValueOrDefault(5m) < 9).ToListAsync();
+            await Query.Order.Where(_ => _.Region.StartsWith('N') && _.Region.Replace('o', '0').Length > 0).ToListAsync();
+            await Query.Order.Where(_ => _.Placed.AddMilliseconds(250).Year == 2026).ToListAsync();
+            await Query.Order.Where(_ => _.Options.HasFlag(OrderFlags.Rush | OrderFlags.Gift)).ToListAsync();
+            await Query.Order.Where(_ => int.Parse(_.Region) > 0 && decimal.Parse(_.Region) < 100).ToListAsync();
+            await Query.Order.Select(_ => new {_.Id, Value = Convert.ToInt64(_.Region), Text = Convert.ToString(_.Amount)}).ToListAsync();
 
             await Query.Order.Where(_ => _.Amount > 0).SumAsync(_ => _.Amount);
             await Query.Order.FirstAsync(_ => _.Region == "N");
@@ -349,6 +358,14 @@ public class AnalyzerTests
 
         namespace Scry.Generated
         {
+            [Flags]
+            public enum OrderFlags
+            {
+                None = 0,
+                Rush = 1,
+                Gift = 2
+            }
+
             [ScryModel("Order", "Id", "Region", "Amount")]
             public class OrderQueryModel
             {
@@ -358,6 +375,8 @@ public class AnalyzerTests
                 public string Grade { get; init; } = "";
                 public decimal Amount { get; init; }
                 public decimal Discount { get; init; }
+                public decimal? Rebate { get; init; }
+                public OrderFlags Options { get; init; }
                 public double Rate { get; init; }
                 public DateTime Placed { get; init; }
                 public List<OrderLineQueryModel> Lines { get; init; } = [];

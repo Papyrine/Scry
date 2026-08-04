@@ -477,6 +477,7 @@ public enum KnownFunction
     DateAddHours,
     DateAddMinutes,
     DateAddSeconds,
+    DateAddMilliseconds,
     /// <summary>
     /// Joins the target and the argument into one string, converting either if it is not one already.
     /// C# writes this as <c>+</c>, but the operator alone does not say it: an Add of a string and a
@@ -525,10 +526,28 @@ public enum KnownFunction
     /// Membership of a client-supplied set (SQL <c>IN</c>). The target is the value being tested and
     /// every argument is a <see cref="ConstNode"/>; the server caps the number of values.
     /// </summary>
-    In
+    In,
+
+    /// <summary>
+    /// Whether the target — a [Flags] enum member — carries the argument's bits
+    /// (<c>Enum.HasFlag</c>). A combined flag travels by name exactly as <c>Enum.ToString</c> spells
+    /// it: <c>"Parking, Gym"</c>.
+    /// </summary>
+    EnumHasFlag,
+
+    /// <summary>
+    /// Reads text as a value — <c>int.Parse</c> / <c>Convert.ToInt32</c> and their siblings; the
+    /// inverse of <see cref="StringFrom"/>. Only that direction exists: a numeric member is already a
+    /// value, and SQL's numeric-to-numeric conversions truncate where the CLR's round, so those are
+    /// not carried. Text that does not parse faults at execution, exactly as it would in memory.
+    /// </summary>
+    Int32From,
+    Int64From,
+    DecimalFrom,
+    DoubleFrom
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L92' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L111' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Mapped from:
@@ -552,7 +571,7 @@ Mapped from:
 | `date.DayOfWeek` | `DateDayOfWeek` |
 | `date.Date` | `DateDate` |
 | `date.AddYears(n)` / `.AddMonths(n)` / `.AddDays(n)` | `DateAddYears` / `DateAddMonths` / `DateAddDays` |
-| `date.AddHours(n)` / `.AddMinutes(n)` / `.AddSeconds(n)` | `DateAddHours` / `DateAddMinutes` / `DateAddSeconds` |
+| `date.AddHours(n)` / `.AddMinutes(n)` / `.AddSeconds(n)` / `.AddMilliseconds(n)` | `DateAddHours` / `DateAddMinutes` / `DateAddSeconds` / `DateAddMilliseconds` |
 | `Math.Abs(value)` | `MathAbs` |
 | `Math.Ceiling(value)` / `Math.Floor(value)` | `MathCeiling` / `MathFloor` |
 | `Math.Round(value[, digits])` | `MathRound` |
@@ -564,6 +583,12 @@ Mapped from:
 | `Math.Sin(value)` / `Math.Cos(value)` / `Math.Tan(value)` | `MathSin` / `MathCos` / `MathTan` |
 | `Math.Asin(value)` / `Math.Acos(value)` / `Math.Atan(value)` | `MathAsin` / `MathAcos` / `MathAtan` |
 | `Math.Atan2(y, x)` | `MathAtan2` |
+| `flags.HasFlag(flag)` | `EnumHasFlag` |
+| `int.Parse(text)` / `Convert.ToInt32(text)` | `Int32From` |
+| `long.Parse(text)` / `Convert.ToInt64(text)` | `Int64From` |
+| `decimal.Parse(text)` / `Convert.ToDecimal(text)` | `DecimalFrom` |
+| `double.Parse(text)` / `Convert.ToDouble(text)` | `DoubleFrom` |
+| `Convert.ToString(value)` | `StringFrom` |
 | `a + b` where either is a string | `StringConcat` |
 | `value.ToString()` | `StringFrom` |
 | `set.Contains(_.Member)` | `In` |
@@ -571,6 +596,12 @@ Mapped from:
 `DayOfWeek` is the one function whose SQL the server composes rather than handing the provider a CLR expression to translate. SQL Server has no deterministic day-of-week function — `DATEPART(weekday, …)` reads `@@DATEFIRST`, a session setting, so the same row can answer differently on two connections — which is why EF refuses to translate `DateTime.DayOfWeek` at all. Scry carries the intent on the wire and builds the arithmetic server-side: whole days from a fixed Monday, modulo seven, numbered exactly as `System.DayOfWeek` is. It depends on nothing but the date, and is refused on a provider whose deterministic date arithmetic has not been verified rather than answered approximately.
 
 The date functions apply to `DateTime`, `DateOnly`, `DateTimeOffset`, and `TimeOnly`, and an optional member is unwrapped before the part is read. Only the parts a type actually has are available: asking for the `Hour` of a `DateOnly` is rejected. The trim functions map only the whitespace-trimming overloads — the `params char[]` forms have no SQL equivalent.
+
+The string functions take a `char` argument as readily as a string one — `Contains('x')`, `Replace('o', '0')` — since the constant travels as text either way. And two abbreviations are carried as what they abbreviate rather than as functions: `GetValueOrDefault([fallback])` is the `??` coalesce it stands for, and `GroupBy(key, resultSelector)` unfolds into the `GroupBy` + `Select` it spells in one call.
+
+`HasFlag` reads a `[Flags]` enum member; a combined flag — `_.Perks.HasFlag(Perks.Parking | Perks.Gym)` — folds into one constant and travels by name, exactly as `Enum.ToString` spells it.
+
+The parsing functions read **text only** — the inverse of `ToString`. A numeric member is already a value, which arithmetic and comparison promote without a cast, and SQL's numeric-to-numeric conversions truncate where the CLR's round — so that direction is refused rather than answered differently per source. Text that does not parse faults the query at execution, exactly as it would in memory.
 
 Every function past `Math.Sqrt` is defined over `double` alone, so an integer or decimal member is widened to reach it — which is also the type the provider computes it in. `Math.Log` is the natural logarithm with no second argument and a logarithm to that base with one.
 
