@@ -146,6 +146,8 @@ static class SupportedLinq
         ("System.Math.Acos/1", "MathAcos"),
         ("System.Math.Atan/1", "MathAtan"),
         ("System.Math.Atan2/2", "MathAtan2"),
+        ("System.Math.Max/2", "MathMax"),
+        ("System.Math.Min/2", "MathMin"),
         ("$temporal.Year/0", "DateYear"),
         ("$temporal.Month/0", "DateMonth"),
         ("$temporal.Day/0", "DateDay"),

@@ -1154,7 +1154,9 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             KnownFunction.StringReplace => (2, 2),
             KnownFunction.StringConcat => (1, 1),
             KnownFunction.MathPow or
-                KnownFunction.MathAtan2 => (1, 1),
+                KnownFunction.MathAtan2 or
+                KnownFunction.MathMax or
+                KnownFunction.MathMin => (1, 1),
 
             // Math.Log is the natural logarithm with no argument and a logarithm to a base with one.
             KnownFunction.MathLog => (0, 1),

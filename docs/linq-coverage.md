@@ -240,7 +240,7 @@ Functions with an EF translation ready to rebind onto:
 | Group | Candidates |
 | --- | --- |
 | String | `IndexOf(value, start)`, `Compare` / `CompareTo` (a three-way `CASE`), `TrimStart` / `TrimEnd` with explicit characters (SQL Server 2022+), `string.Join` over row values (`CONCAT_WS`). The `char` overloads of the single-argument functions are already carried — a char constant travels as text. |
-| Numeric | `Math.Max` / `Math.Min` (`GREATEST` / `LEAST`, SQL Server 2022+), `DegreesToRadians` / `RadiansToDegrees` |
+| Numeric | `DegreesToRadians` / `RadiansToDegrees`. `Math.Max` / `Math.Min` are carried — composed from a comparison, so they need no SQL Server 2022 `GREATEST` / `LEAST`. |
 | Parsing | The remaining `Parse` / `Convert.To*` targets — `bool`, `byte`, `short`, `float`. The `int` / `long` / `decimal` / `double` forms are carried as `Int32From` and its siblings, reading text only. |
 | Temporal | `Microsecond` / `Nanosecond`, `TimeOfDay`, `DayNumber`, `TimeOnly.IsBetween`, and date difference — EF blocks `d1 - d2` arithmetic outright, so the translatable spelling is a dedicated function the server would rebind to `EF.Functions.DateDiff*` without exposing `EF.Functions` itself |
 | Binary | `byte[].Length` (`DATALENGTH`), `byte[].Contains` (`CHARINDEX`) |

@@ -836,6 +836,8 @@ sealed class QueryTranslator
                 "Acos" => KnownFunction.MathAcos,
                 "Atan" => KnownFunction.MathAtan,
                 "Atan2" => KnownFunction.MathAtan2,
+                "Max" => KnownFunction.MathMax,
+                "Min" => KnownFunction.MathMin,
                 _ => throw Unsupported(call)
             };
 

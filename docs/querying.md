@@ -523,6 +523,14 @@ public enum KnownFunction
     MathAtan2,
 
     /// <summary>
+    /// The greater / lesser of the target and the argument (<c>Math.Max</c> / <c>Math.Min</c>). The
+    /// server composes each from a comparison rather than using SQL's GREATEST and LEAST, which exist
+    /// only from SQL Server 2022; a null operand keeps the answer null.
+    /// </summary>
+    MathMax,
+    MathMin,
+
+    /// <summary>
     /// Membership of a client-supplied set (SQL <c>IN</c>). The target is the value being tested and
     /// every argument is a <see cref="ConstNode"/>; the server caps the number of values.
     /// </summary>
@@ -547,7 +555,7 @@ public enum KnownFunction
     DoubleFrom
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L111' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L119' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Mapped from:
@@ -583,6 +591,7 @@ Mapped from:
 | `Math.Sin(value)` / `Math.Cos(value)` / `Math.Tan(value)` | `MathSin` / `MathCos` / `MathTan` |
 | `Math.Asin(value)` / `Math.Acos(value)` / `Math.Atan(value)` | `MathAsin` / `MathAcos` / `MathAtan` |
 | `Math.Atan2(y, x)` | `MathAtan2` |
+| `Math.Max(a, b)` / `Math.Min(a, b)` | `MathMax` / `MathMin` |
 | `flags.HasFlag(flag)` | `EnumHasFlag` |
 | `int.Parse(text)` / `Convert.ToInt32(text)` | `Int32From` |
 | `long.Parse(text)` / `Convert.ToInt64(text)` | `Int64From` |
@@ -593,7 +602,7 @@ Mapped from:
 | `value.ToString()` | `StringFrom` |
 | `set.Contains(_.Member)` | `In` |
 
-`DayOfWeek` is the one function whose SQL the server composes rather than handing the provider a CLR expression to translate. SQL Server has no deterministic day-of-week function — `DATEPART(weekday, …)` reads `@@DATEFIRST`, a session setting, so the same row can answer differently on two connections — which is why EF refuses to translate `DateTime.DayOfWeek` at all. Scry carries the intent on the wire and builds the arithmetic server-side: whole days from a fixed Monday, modulo seven, numbered exactly as `System.DayOfWeek` is. It depends on nothing but the date, and is refused on a provider whose deterministic date arithmetic has not been verified rather than answered approximately.
+`DayOfWeek` is one of the functions whose SQL the server composes itself rather than handing the provider a CLR expression to translate. SQL Server has no deterministic day-of-week function — `DATEPART(weekday, …)` reads `@@DATEFIRST`, a session setting, so the same row can answer differently on two connections — which is why EF refuses to translate `DateTime.DayOfWeek` at all. Scry carries the intent on the wire and builds the arithmetic server-side: whole days from a fixed Monday, modulo seven, numbered exactly as `System.DayOfWeek` is. It depends on nothing but the date, and is refused on a provider whose deterministic date arithmetic has not been verified rather than answered approximately.
 
 The date functions apply to `DateTime`, `DateOnly`, `DateTimeOffset`, and `TimeOnly`, and an optional member is unwrapped before the part is read. Only the parts a type actually has are available: asking for the `Hour` of a `DateOnly` is rejected. The trim functions map only the whitespace-trimming overloads — the `params char[]` forms have no SQL equivalent.
 
@@ -619,7 +628,9 @@ var rows = await client.Source<Order>("Order")
 <sup><a href='/src/Scry.Tests/SignTests.cs#L18-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientSign' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-It is the second function the server composes rather than handing straight to the provider. The provider does translate it, but SQL's `SIGN` returns its argument's type while the CLR method returns an `int`, so its result cannot be read back — the query succeeds in a predicate, where nothing is materialized, and faults in a projection. Two comparisons and a conditional say the same thing, translate anywhere, and yield an int because that is what they are built from. A null value keeps its sign null rather than being called zero, which is what an unguarded comparison chain would answer.
+It is another function the server composes rather than hands straight to the provider. The provider does translate it, but SQL's `SIGN` returns its argument's type while the CLR method returns an `int`, so its result cannot be read back — the query succeeds in a predicate, where nothing is materialized, and faults in a projection. Two comparisons and a conditional say the same thing, translate anywhere, and yield an int because that is what they are built from. A null value keeps its sign null rather than being called zero, which is what an unguarded comparison chain would answer.
+
+`Math.Max` and `Math.Min` are composed the same way. SQL's own `GREATEST` and `LEAST` exist only from SQL Server 2022, and a conditional says the same thing on any provider — with one deliberate difference: a null operand keeps the answer null, where `GREATEST` would skip it and answer with the other operand, the greater of one value rather than of two. The operands promote like any arithmetic pair, and `Math.Max(Math.Max(a, b), c)` composes into a three-way greatest.
 
 There is no free-form method call node in the wire format, so this list is the complete set of behaviour a client can ask the database to perform. **Provider support is still the outer bound**: a function only reaches SQL if the EF provider translates it, and translating is not enough on its own — the result has to materialize too. That is what keeps [`ToString(format)`](#reading-a-value-as-text) out: the provider does not translate it at all, and the SQL function that would express it reads the server's language.
 

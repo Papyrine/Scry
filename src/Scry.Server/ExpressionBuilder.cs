@@ -1039,6 +1039,9 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
                 KnownFunction.MathPow => Double2("Pow", target, call, row),
                 KnownFunction.MathAtan2 => Double2("Atan2", target, call, row),
 
+                KnownFunction.MathMax => BuildMinMax(call, target, row, max: true),
+                KnownFunction.MathMin => BuildMinMax(call, target, row, max: false),
+
                 // With no argument this is the natural logarithm; with one it is the logarithm to that
                 // base, which is a second double operand exactly like Pow's exponent.
                 KnownFunction.MathLog => call.Arguments.Count == 0
@@ -1215,6 +1218,58 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
             Expression.Equal(target, Expression.Constant(null, target.Type)),
             Expression.Constant(null, typeof(int?)),
             Expression.Convert(sign, typeof(int?)));
+    }
+
+    /// <summary>
+    /// The greater or lesser of the target and the argument (<c>Math.Max</c> / <c>Math.Min</c>).
+    /// </summary>
+    /// <remarks>
+    /// Composed from a comparison rather than handed to the provider: SQL's GREATEST and LEAST exist
+    /// only from SQL Server 2022, and a conditional says the same thing anywhere EF translates at
+    /// all. A null operand keeps the answer null — GREATEST would skip it and answer with the other
+    /// operand, which is the greater of one value rather than of two.
+    /// </remarks>
+    Expression BuildMinMax(CallNode call, Expression target, Expression row, bool max)
+    {
+        var left = target;
+        var right = Build(call.Arguments[0], row, Nullable.GetUnderlyingType(target.Type) ?? target.Type);
+        Promote(ref left, ref right);
+
+        if (Rank(Nullable.GetUnderlyingType(left.Type) ?? left.Type) is null ||
+            Rank(Nullable.GetUnderlyingType(right.Type) ?? right.Type) is null)
+        {
+            throw new ScryValidationException(
+                $"Math.{(max ? "Max" : "Min")} is not supported over '{(Nullable.GetUnderlyingType(left.Type) ?? left.Type).Name}'.");
+        }
+
+        // Promote unifies differing value types but leaves matching ones alone, so two operands can
+        // still disagree only in optionality — and the comparison and the answer both need one shape,
+        // which has to be the optional one.
+        if (left.Type != right.Type)
+        {
+            var lifted = Nullable.GetUnderlyingType(left.Type) is null ? right.Type : left.Type;
+            left = ConvertTo(left, lifted);
+            right = ConvertTo(right, lifted);
+        }
+
+        var pick = Expression.Condition(
+            max ? Expression.GreaterThanOrEqual(left, right) : Expression.LessThanOrEqual(left, right),
+            left,
+            right);
+
+        if (Nullable.GetUnderlyingType(left.Type) is null)
+        {
+            return pick;
+        }
+
+        // A lifted comparison against null is simply false, so an unguarded conditional would answer
+        // the other operand — the greater of one value, not of two. Null in, null out instead.
+        return Expression.Condition(
+            Expression.OrElse(
+                Expression.Equal(left, Expression.Constant(null, left.Type)),
+                Expression.Equal(right, Expression.Constant(null, right.Type))),
+            Expression.Constant(null, left.Type),
+            pick);
     }
 
     // A Math method defined over double alone: the target is widened to reach it.

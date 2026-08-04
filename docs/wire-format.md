@@ -420,6 +420,14 @@ public enum KnownFunction
     MathAtan2,
 
     /// <summary>
+    /// The greater / lesser of the target and the argument (<c>Math.Max</c> / <c>Math.Min</c>). The
+    /// server composes each from a comparison rather than using SQL's GREATEST and LEAST, which exist
+    /// only from SQL Server 2022; a null operand keeps the answer null.
+    /// </summary>
+    MathMax,
+    MathMin,
+
+    /// <summary>
     /// Membership of a client-supplied set (SQL <c>IN</c>). The target is the value being tested and
     /// every argument is a <see cref="ConstNode"/>; the server caps the number of values.
     /// </summary>
@@ -444,7 +452,7 @@ public enum KnownFunction
     DoubleFrom
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L111' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L119' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 There is no free-form method name anywhere in the format. This enum is the complete set of behaviour a client can request.
