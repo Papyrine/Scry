@@ -195,7 +195,7 @@ Considered and rejected, for reasons that have not changed.
 
 Listed in EF's `QueryableMethods`, and on `Queryable` rather than only `Enumerable` — so they reach EF rather than quietly enumerating client-side — but rejected by its relational translation. Each throws *could not be translated* against a real database, so Scry not carrying them loses nothing:
 
-`Aggregate`, `Zip`, `SequenceEqual`, `SkipWhile` / `TakeWhile`, `MaxBy` / `MinBy`, and every overload taking an `IEqualityComparer` / `IComparer`.
+`Aggregate`, `Zip`, `SequenceEqual`, `SkipWhile` / `TakeWhile`, `MaxBy` / `MinBy` (until EF 11, which rewrites them into the `OrderBy` + `First` they abbreviate — see [normalizable](#normalizable-into-the-existing-vocabulary)), and every overload taking an `IEqualityComparer` / `IComparer`.
 
 ### Out of scope
 
@@ -204,3 +204,56 @@ Server-side EF surface that intentionally has no client-facing equivalent:
 - **Write operations** (`ExecuteUpdate`, `ExecuteDelete`, `SaveChanges`) — Scry is read-only.
 - **Tracking and shaping** (`Include`, `AsNoTracking`, `AsSplitQuery`, …) — server execution details; clients shape results with `Select`.
 - **Raw SQL** (`FromSql`, `EF.Functions.*`) — free-form SQL or provider functions from a hostile client is exactly what the closed vocabulary exists to prevent.
+
+
+## Measured against EF Core
+
+The closed set is a subset of what EF Core can translate — necessarily, since the server rebinds every query onto EF to execute it. This section itemizes the rest of EF's surface, from its own source (the relational query pipeline and the SQL Server provider's translators, surveyed against the EF 11 previews), sorted by what each item's absence means. Together with the sections above, it accounts for the whole distance between the two.
+
+### Carried here, refused there
+
+The subset relation runs the other way in a few places. Each is an instance of the wire carrying *intent* where EF is handed a CLR construct it will not guess about:
+
+- **`DayOfWeek`.** EF refuses it outright: `DATEPART(weekday, …)` reads `@@DATEFIRST`, a session setting, so the same row would answer differently on two connections. Scry counts whole days from a fixed Monday and takes the remainder, which depends on nothing but the date — see [functions](querying.md#functions).
+- **The `StringComparison` overloads.** EF fails them with a dedicated error. Scry reads the one thing they can mean on a database — a case sensitivity — and maps it to a [collation](querying.md#operators-1) the server configured.
+- **Interpolated strings.** In an expression tree an interpolation lowers to `string.Format`, which EF does not translate. Scry rewrites the plain-hole form into the concatenation it means.
+
+### Normalizable into the existing vocabulary
+
+Sugar EF unfolds into operators the wire already carries. Each could be adopted as a client-side rewrite with no wire change — the precedent is `ElementAtAsync`, which is already `Skip` + `First` under the covers:
+
+- `MaxBy` / `MinBy` → `OrderBy[Descending](key)` + `First` — the exact rewrite EF 11 itself adopts.
+- `GroupBy(key, resultSelector)` → `GroupBy(key)` + the `Select` the selector abbreviates.
+- `Nullable<T>.GetValueOrDefault()` → the `??` coalesce it abbreviates.
+
+### Room to grow
+
+Translatable by EF, compatible with the wire model, and absent only because nothing has asked for it yet. Operators and shapes:
+
+| Surface | What adopting it would mean |
+| --- | --- |
+| Composite join keys — `Join(…, _ => new {_.A, _.B}, …)` | Per-part equality ANDed together; the wire carries a key list where it now carries one node. |
+| Richer join inner sides and set operands | Today an inner side carries only `Where`, and a set operand `Where` + `Select`. EF allows an arbitrary query on either side. |
+| Aggregates over a filtered or deduplicated group — `g.Where(…).Select(…).Distinct().Sum()` | EF composes these inside the aggregate; the wire's aggregate node carries only a selector. |
+| `string.Join` / `string.Concat` as a grouped aggregate | `STRING_AGG(…) WITHIN GROUP` — the one aggregate that folds text rather than numbers. |
+
+Functions with an EF translation ready to rebind onto:
+
+| Group | Candidates |
+| --- | --- |
+| String | `char` overloads of `Contains` / `StartsWith` / `EndsWith`, `Replace(char, char)`, `IndexOf(value, start)`, `Compare` / `CompareTo` (a three-way `CASE`), `TrimStart` / `TrimEnd` with explicit characters (SQL Server 2022+), `string.Join` over row values (`CONCAT_WS`) |
+| Numeric | `Math.Max` / `Math.Min` (`GREATEST` / `LEAST`, SQL Server 2022+), `DegreesToRadians` / `RadiansToDegrees` |
+| Parsing | Single-argument `Parse` and `Convert.To*` over the numeric types and `bool` — a `CAST`. Today [`SCRY112`](#reported-at-compile-time) reports these as client-side code; adopting one means teaching the analyzer alongside the wire. |
+| Temporal | `AddMilliseconds`, `Microsecond` / `Nanosecond`, `TimeOfDay`, `DayNumber`, `TimeOnly.IsBetween`, and date difference — EF blocks `d1 - d2` arithmetic outright, so the translatable spelling is a dedicated function the server would rebind to `EF.Functions.DateDiff*` without exposing `EF.Functions` itself |
+| Enum | `HasFlag` — `(x & flag) = flag` |
+| Binary | `byte[].Length` (`DATALENGTH`), `byte[].Contains` (`CHARINDEX`) |
+
+Environmental values — `DateTime.Now`, `Guid.NewGuid()`, `EF.Functions.Random()` — are representable but unmotivated: a closure's `DateTime.Now` already travels as the constant it evaluates to, so the only thing a wire function would add is the *database's* clock.
+
+### The rest, by bucket
+
+- **Bare-scalar and whole-entity projections.** A response is keyed by member name, so a projection [must construct an object](#anonymous-types); a whole-entity projection would return rows unshaped, which the projection contract exists to prevent.
+- **Collection-valued projections** — `Select(_ => new { _.Posts })`, materialized `IGrouping`s, `CROSS APPLY` collections in the result, arbitrary nesting depth. All put a nested collection in a response, which is exactly what keeps collections [aggregable and not projectable](annotations.md#collections).
+- **`Cast`, `DefaultIfEmpty`, `SelectMany` result selectors, projected `GroupJoin` groups** — [deliberately left out](#deliberately-left-out).
+- **`SkipWhile`, `TakeWhile`, `Zip`, `Aggregate`, `SequenceEqual`, comparer overloads** — [not gaps](#not-gaps): EF recognizes them and then fails their relational translation.
+- **`Include`, tracking, split queries, `ExecuteUpdate` / `ExecuteDelete`, `FromSql`, table-valued functions, temporal tables, and the `EF.Functions` catalogue** (`Like`, `PatIndex`, full-text, JSON, `DataLength`, vector search, statistical aggregates) — [out of scope](#out-of-scope): server-side surface, and a hostile client is exactly the wrong party to hand it to.
