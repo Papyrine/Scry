@@ -125,6 +125,9 @@ static class SupportedLinq
         ("System.String.Concat/2", "StringConcat"),
         ("System.String.Concat/3", "StringConcat"),
         ("System.String.Concat/4", "StringConcat"),
+        // Carried as the text aggregate rather than a function: string.Join over a group becomes
+        // AggregateFn.Join on the wire.
+        ("System.String.Join/2", ""),
         ("System.Object.ToString/0", "StringFrom"),
         ("System.Math.Abs/1", "MathAbs"),
         ("System.Math.Ceiling/1", "MathCeiling"),

@@ -1631,6 +1631,37 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         var selector = Expression.Lambda(selectorBody, selectorParameter);
         var returnType = selectorBody.Type;
 
+        // The text aggregate. SQL leaves STRING_AGG's concatenation order unspecified, so the joined
+        // values are ordered by themselves — WITHIN GROUP on SQL Server, the same OrderBy in memory —
+        // and null values are filtered first, which is what STRING_AGG does on its own and string.Join
+        // does not. The answer then reads identically from either source.
+        if (aggregate.Function == AggregateFn.Join)
+        {
+            if (returnType != typeof(string))
+            {
+                throw new ScryValidationException($"Join aggregates text; '{string.Join('.', member.Path)}' is not text.");
+            }
+
+            if (aggregate.Separator is not { } separator)
+            {
+                throw new ScryValidationException("Join requires a separator.");
+            }
+
+            var notNull = Expression.Lambda(
+                Expression.NotEqual(selectorBody, Expression.Constant(null, typeof(string))),
+                selectorParameter);
+            var present = Expression.Call(enumerableWhere.MakeGenericMethod(element), group, notNull);
+            var values = Expression.Call(enumerableSelect.MakeGenericMethod(element, typeof(string)), present, selector);
+
+            var value = Expression.Parameter(typeof(string), "v");
+            var ordered = Expression.Call(
+                enumerableOrderBy.MakeGenericMethod(typeof(string), typeof(string)),
+                values,
+                Expression.Lambda(value, value));
+
+            return Expression.Call(stringJoinValues, Expression.Constant(separator, typeof(string)), ordered);
+        }
+
         return aggregate.Function switch
         {
             AggregateFn.Sum => Expression.Call(SumOrAverage("Sum", element, returnType), group, selector),
@@ -1800,6 +1831,14 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
     static readonly MethodInfo stringConcatObjects = StringMethod("Concat", typeof(object), typeof(object));
 
     static readonly MethodInfo enumHasFlag = typeof(Enum).GetMethod("HasFlag")!;
+
+    static readonly MethodInfo enumerableSelect = typeof(Enumerable).GetMethods()
+        .Single(_ => _.Name == "Select" && _.GetParameters()[1].ParameterType.GetGenericArguments().Length == 2);
+
+    static readonly MethodInfo enumerableOrderBy = typeof(Enumerable).GetMethods()
+        .Single(_ => _.Name == "OrderBy" && _.GetParameters().Length == 2);
+
+    static readonly MethodInfo stringJoinValues = typeof(string).GetMethod("Join", [typeof(string), typeof(IEnumerable<string>)])!;
 
     static readonly MethodInfo convertToInt32 = typeof(Convert).GetMethod("ToInt32", [typeof(string)])!;
     static readonly MethodInfo convertToInt64 = typeof(Convert).GetMethod("ToInt64", [typeof(string)])!;

@@ -615,7 +615,7 @@ sealed class QueryTranslator
             // Reached for any other call written in a grouped projection, where only the group key and
             // an aggregate are expressible — so the arity below is safe to assume.
             _ => throw new NotSupportedException(
-                $"'{call.Method.Name}' is not an aggregate. A grouped projection may only use the group key and Count/Sum/Average/Min/Max.")
+                $"'{call.Method.Name}' is not an aggregate. A grouped projection may only use the group key, Count/Sum/Average/Min/Max, and string.Join over the group's values.")
         };
 
         if (call.Arguments.Count != 2)
@@ -625,6 +625,54 @@ sealed class QueryTranslator
 
         var selector = Lambda(call.Arguments[1]);
         return new(function, TranslateExpr(selector.Body, selector.Parameters[0]));
+    }
+
+    /// <summary>
+    /// Translates <c>string.Join(separator, g.Select(x =&gt; x.Member))</c> — the text aggregate,
+    /// SQL's <c>STRING_AGG</c>. The separator is a constant; the values are the group's rows read
+    /// through the selector. Returns null when the call is not string.Join at all, so the caller can
+    /// keep trying.
+    /// </summary>
+    AggregateNode? TryJoinText(MethodCallExpression call, ParameterExpression root)
+    {
+        if (call.Method.Name != "Join" ||
+            call.Method.DeclaringType != typeof(string) ||
+            call.Arguments.Count != 2 ||
+            !ReferencesParameter(call, root))
+        {
+            return null;
+        }
+
+        // The generic overload is what a non-string selector binds to.
+        if (call.Method.IsGenericMethod)
+        {
+            throw new NotSupportedException("string.Join over a group joins text — select a string member.");
+        }
+
+        if (ReferencesParameter(call.Arguments[0], root) ||
+            Evaluate(call.Arguments[0]) is not string separator)
+        {
+            throw new NotSupportedException("string.Join over a group takes a constant separator.");
+        }
+
+        if (call.Arguments[1] is not MethodCallExpression {Method.Name: "Select", Arguments: [var source, var projection]} ||
+            source != root)
+        {
+            throw new NotSupportedException(
+                """
+                string.Join over a group joins the values its selector reads — string.Join(", ", _.Select(x => x.Name)).
+                """);
+        }
+
+        // An aggregate selector is a member path, as every aggregate's is.
+        var selector = Lambda(projection);
+        if (TranslateExpr(selector.Body, selector.Parameters[0]) is not MemberNode path)
+        {
+            throw new NotSupportedException(
+                "string.Join over a group joins a text member the rows carry, not a computed value.");
+        }
+
+        return new(AggregateFn.Join, path, separator);
     }
 
     Node TranslateExpr(Expression expression, ParameterExpression root)
@@ -680,6 +728,10 @@ sealed class QueryTranslator
                 case MethodCallExpression aggregate
                     when IsGrouping(root.Type) && IsCallOver(aggregate, root):
                     return TranslateAggregate(aggregate);
+
+                case MethodCallExpression joined
+                    when IsGrouping(root.Type) && TryJoinText(joined, root) is { } text:
+                    return text;
 
                 // The Count property a collection carries means the same as calling Count().
                 case MemberExpression {Member.Name: "Count", Expression: { } owner}

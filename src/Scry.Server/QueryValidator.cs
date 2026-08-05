@@ -313,6 +313,11 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                         throw Reject("Use the Count terminal to count rows.");
                     }
 
+                    if (aggregate.Function == AggregateFn.Join)
+                    {
+                        throw Reject("Join folds a group's text and has no terminal form.");
+                    }
+
                     if (sawGroupBy || sawSelect)
                     {
                         throw Reject("An aggregate terminal must precede GroupBy and Select.");
@@ -408,6 +413,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                         throw Reject("Aggregates are only allowed in a Select following GroupBy.");
                     }
 
+                    ValidateAggregateShape(aggregate);
                     if (aggregate.Selector is { } selector)
                     {
                         ValidateScalar(selector, rootType, "Aggregate selector");
@@ -517,6 +523,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     break;
 
                 case AggregateNode aggregate:
+                    ValidateAggregateShape(aggregate);
                     if (aggregate.Selector is { } selector)
                     {
                         ValidateScalar(selector, elementType, "Aggregate selector");
@@ -902,6 +909,13 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                         $"Join projection member '{member.Name}' aggregates, which only the inner side of a GroupJoin may do.");
                 }
 
+                // The text aggregate folds a grouped query's rows; over a joined group it is untried
+                // territory for the provider, so it is refused rather than shipped as a fault.
+                if (aggregate.Function == AggregateFn.Join)
+                {
+                    throw Reject("Join is not supported over a joined group — aggregate it to a number instead.");
+                }
+
                 if (aggregate.Function != AggregateFn.Count)
                 {
                     if (aggregate.Selector is not { } selector)
@@ -1096,6 +1110,28 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             StringMatch.CaseInsensitive => options.CaseInsensitiveCollation,
             _ => null
         };
+
+    // The shape rules an aggregate's own fields carry, wherever it appears: Join is the one that
+    // needs a separator, and the only one allowed to carry it.
+    static void ValidateAggregateShape(AggregateNode aggregate)
+    {
+        if (aggregate.Function == AggregateFn.Join)
+        {
+            if (aggregate.Selector is null)
+            {
+                throw Reject("Join requires a selector.");
+            }
+
+            if (aggregate.Separator is null)
+            {
+                throw Reject("Join requires a separator.");
+            }
+        }
+        else if (aggregate.Separator is not null)
+        {
+            throw Reject($"Aggregate '{aggregate.Function}' does not take a separator.");
+        }
+    }
 
     static (int Min, int Max) Arity(KnownFunction function) =>
         function switch

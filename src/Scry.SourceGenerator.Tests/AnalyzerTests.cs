@@ -187,6 +187,7 @@ public class AnalyzerTests
             await Query.Order.Where(_ => ids.Contains(_.Id) && regions.Contains(_.Region)).ToListAsync();
 
             await Query.Order.GroupBy(_ => _.Region, (region, orders) => new {Region = region, Total = orders.Sum(_ => _.Amount)}).ToListAsync();
+            await Query.Order.GroupBy(_ => _.Grade).Select(_ => new {Grade = _.Key, Regions = string.Join(",", _.Select(x => x.Region))}).ToListAsync();
             await Query.Order.Where(_ => _.Rebate.GetValueOrDefault() > 0 && _.Rebate.GetValueOrDefault(5m) < 9).ToListAsync();
             await Query.Order.Where(_ => _.Region.StartsWith('N') && _.Region.Replace('o', '0').Length > 0).ToListAsync();
             await Query.Order.Where(_ => _.Placed.AddMilliseconds(250).Year == 2026).ToListAsync();
