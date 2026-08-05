@@ -156,6 +156,8 @@ Terminals are `async` extension methods on `IQueryable<T>` from `Scry.Client`. A
 | `LastOrDefaultAsync([predicate])` | `Task<T?>` | single |
 | `ElementAtAsync(index)` | `Task<T?>` | single |
 | `ElementAtOrDefaultAsync(index)` | `Task<T?>` | single |
+| `MaxByAsync(key)` / `MaxByOrDefaultAsync(key)` | `Task<T?>` | single |
+| `MinByAsync(key)` / `MinByOrDefaultAsync(key)` | `Task<T?>` | single |
 | `CountAsync([predicate])` | `Task<int>` | scalar |
 | `LongCountAsync([predicate])` | `Task<long>` | scalar |
 | `AnyAsync([predicate])` | `Task<bool>` | scalar |
@@ -169,6 +171,8 @@ Terminals are `async` extension methods on `IQueryable<T>` from `Scry.Client`. A
 A terminal predicate narrows the rows before the terminal does anything else — `CountAsync(_ => _.Active)` is `Where(_ => _.Active).CountAsync()`. It cannot be combined with a `Select`, since it reads the row rather than the projection.
 
 `LastAsync` requires an ordered query: "last" is resolved by reversing the ordering, so an unordered query has no defined last row and is rejected. `ElementAtAsync` is `Skip` plus `First`, so an index past the end yields no row rather than an error.
+
+`MaxByAsync` and `MinByAsync` are `OrderBy` plus `First` — the same unfolding EF applies to `Queryable.MaxBy` / `MinBy`. The ordering precedes any projection, so the key is a single value read off the row, and the answer is the row itself, default-projected. Rows tying on the key come back in no particular order, exactly as they would from EF.
 
 The aggregate terminals fold the whole sequence. `SumAsync` and `AverageAsync` carry one overload per numeric type, mirroring `System.Linq` — the value the server computes has a type of its own, so an average over integers returns a `double`. `MinAsync`/`MaxAsync` return the selected type, and give the default when there are no rows (select a nullable — `MinAsync(_ => (decimal?)_.Amount)` — to tell "no rows" apart from a real zero).
 

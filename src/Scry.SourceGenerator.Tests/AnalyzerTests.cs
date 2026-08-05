@@ -101,6 +101,7 @@ public class AnalyzerTests
                 var count = Query.Order.Count();
                 var any = Query.Order.Where(_ => _.Amount > 0).Any();
                 var loose = Query.Order.AsEnumerable();
+                var top = Query.Order.MaxBy(_ => _.Amount);
                 """));
 
     [Test]
@@ -356,6 +357,8 @@ public class AnalyzerTests
                 public static Task<int> CountAsync<T>(this IQueryable<T> source) => null!;
                 public static Task<decimal> SumAsync<T>(this IQueryable<T> source, Expression<Func<T, decimal>> selector) => null!;
                 public static Task<Dictionary<TKey, T>> ToDictionaryAsync<T, TKey>(this IQueryable<T> source, Func<T, TKey> keySelector) => null!;
+                public static Task<T> MaxByAsync<T, TKey>(this IQueryable<T> source, Expression<Func<T, TKey>> keySelector) => null!;
+                public static Task<T> MinByAsync<T, TKey>(this IQueryable<T> source, Expression<Func<T, TKey>> keySelector) => null!;
             }
 
             public static class ScryBatchExtensions

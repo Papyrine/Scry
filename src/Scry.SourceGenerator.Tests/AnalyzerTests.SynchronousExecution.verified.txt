@@ -8,3 +8,5 @@ SCRY109: 'Any' executes the query where it stands, which a Scry source cannot do
     var any = Query.Order.Where(_ => _.Amount > 0).Any();
 SCRY109: 'AsEnumerable' executes the query where it stands, which a Scry source cannot do — and Scry has no async terminal for it
     var loose = Query.Order.AsEnumerable();
+SCRY109: 'MaxBy' executes the query where it stands, which a Scry source cannot do — use MaxByAsync instead
+    var top = Query.Order.MaxBy(_ => _.Amount);

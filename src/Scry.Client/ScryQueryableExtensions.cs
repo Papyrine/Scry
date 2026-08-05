@@ -167,6 +167,26 @@ public static class ScryQueryableExtensions
     public static Task<T?> LastOrDefaultAsync<T>(this IQueryable<T> source, Expression<Func<T, bool>> predicate, Cancel cancel = default) =>
         Single(source, new LastOp(OrDefault: true, Predicate(predicate)), cancel);
 
+    // MaxBy and MinBy are OrderBy + First rather than their own wire operators — the same unfolding
+    // EF applies to Queryable's forms. The ordering precedes any projection, so the key reads the
+    // row; rows tying on the key come back in no particular order, exactly as they would from EF.
+
+    /// <summary>Executes the query and returns the row carrying the greatest <paramref name="keySelector"/> value.</summary>
+    public static Task<T?> MaxByAsync<T, TKey>(this IQueryable<T> source, Expression<Func<T, TKey>> keySelector, Cancel cancel = default) =>
+        Single(source.OrderByDescending(keySelector), new FirstOp(OrDefault: false, Predicate: null), cancel);
+
+    /// <summary>Executes the query and returns the row carrying the greatest <paramref name="keySelector"/> value, or default if empty.</summary>
+    public static Task<T?> MaxByOrDefaultAsync<T, TKey>(this IQueryable<T> source, Expression<Func<T, TKey>> keySelector, Cancel cancel = default) =>
+        Single(source.OrderByDescending(keySelector), new FirstOp(OrDefault: true, Predicate: null), cancel);
+
+    /// <summary>Executes the query and returns the row carrying the least <paramref name="keySelector"/> value.</summary>
+    public static Task<T?> MinByAsync<T, TKey>(this IQueryable<T> source, Expression<Func<T, TKey>> keySelector, Cancel cancel = default) =>
+        Single(source.OrderBy(keySelector), new FirstOp(OrDefault: false, Predicate: null), cancel);
+
+    /// <summary>Executes the query and returns the row carrying the least <paramref name="keySelector"/> value, or default if empty.</summary>
+    public static Task<T?> MinByOrDefaultAsync<T, TKey>(this IQueryable<T> source, Expression<Func<T, TKey>> keySelector, Cancel cancel = default) =>
+        Single(source.OrderBy(keySelector), new FirstOp(OrDefault: true, Predicate: null), cancel);
+
     // ElementAt is Skip + First rather than its own wire operator: the pipeline already expresses it
     // exactly, and skipping past the end yields no row — the same empty case First already handles.
 

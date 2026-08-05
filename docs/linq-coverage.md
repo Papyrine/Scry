@@ -87,6 +87,7 @@ A collection of **values** — an EF primitive collection, or a JSON array of `[
 | `SingleAsync` / `SingleOrDefaultAsync` | Optional predicate. |
 | `LastAsync` / `LastOrDefaultAsync` | Optional predicate. Requires an ordered query, as EF does. |
 | `ElementAtAsync` / `ElementAtOrDefaultAsync` | `Skip` + `First`; no wire operator of its own. |
+| `MaxByAsync` / `MinByAsync` (+ `OrDefault` forms) | `OrderBy` + `First`; no wire operator of its own. The key is a single value read off the row, before any projection. |
 | `CountAsync` / `LongCountAsync` | Optional predicate. |
 | `AnyAsync` | Optional predicate. |
 | `AllAsync(predicate)` | |
@@ -195,7 +196,7 @@ Considered and rejected, for reasons that have not changed.
 
 Listed in EF's `QueryableMethods`, and on `Queryable` rather than only `Enumerable` — so they reach EF rather than quietly enumerating client-side — but rejected by its relational translation. Each throws *could not be translated* against a real database, so Scry not carrying them loses nothing:
 
-`Aggregate`, `Zip`, `SequenceEqual`, `SkipWhile` / `TakeWhile`, `MaxBy` / `MinBy` (until EF 11, which rewrites them into the `OrderBy` + `First` they abbreviate — see [normalizable](#normalizable-into-the-existing-vocabulary)), and every overload taking an `IEqualityComparer` / `IComparer`.
+`Aggregate`, `Zip`, `SequenceEqual`, `SkipWhile` / `TakeWhile`, `MaxBy` / `MinBy` (carried instead as the [`MaxByAsync` / `MinByAsync` terminals](#terminals) — the same `OrderBy` + `First` rewrite EF 11 adopts for the `Queryable` forms), and every overload taking an `IEqualityComparer` / `IComparer`.
 
 ### Out of scope
 
@@ -220,9 +221,7 @@ The subset relation runs the other way in a few places. Each is an instance of t
 
 ### Normalizable into the existing vocabulary
 
-Sugar EF unfolds into operators the wire already carries, adoptable as a client-side rewrite with no wire change. `GroupBy(key, resultSelector)` and `Nullable<T>.GetValueOrDefault()` were adopted exactly this way and are now part of the supported surface, alongside the older precedent of `ElementAtAsync`, which is `Skip` + `First` under the covers. What remains:
-
-- `MaxBy` / `MinBy` → `OrderBy[Descending](key)` + `First` — the exact rewrite EF 11 itself adopts. The terminal returns a whole row, which a Scry query never does, so the useful form is over an already-projected query rather than a bare source.
+Sugar EF unfolds into operators the wire already carries, adopted as client-side rewrites with no wire change: `GroupBy(key, resultSelector)`, `Nullable<T>.GetValueOrDefault()`, and the `MaxByAsync` / `MinByAsync` terminals — the `OrderBy` + `First` unfolding EF 11 itself applies to `MaxBy` / `MinBy` — alongside the older precedent of `ElementAtAsync`, which is `Skip` + `First` under the covers. Nothing remains in this category.
 
 ### Room to grow
 
