@@ -1208,6 +1208,10 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 KnownFunction.Int64From or
                 KnownFunction.DecimalFrom or
                 KnownFunction.DoubleFrom or
+                KnownFunction.BooleanFrom or
+                KnownFunction.ByteFrom or
+                KnownFunction.Int16From or
+                KnownFunction.SingleFrom or
                 KnownFunction.MathSign or
                 KnownFunction.MathSqrt or
                 KnownFunction.MathExp or

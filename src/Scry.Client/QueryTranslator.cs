@@ -1464,15 +1464,25 @@ sealed class QueryTranslator
         [typeof(int)] = KnownFunction.Int32From,
         [typeof(long)] = KnownFunction.Int64From,
         [typeof(decimal)] = KnownFunction.DecimalFrom,
-        [typeof(double)] = KnownFunction.DoubleFrom
+        [typeof(double)] = KnownFunction.DoubleFrom,
+        [typeof(bool)] = KnownFunction.BooleanFrom,
+        [typeof(byte)] = KnownFunction.ByteFrom,
+        [typeof(short)] = KnownFunction.Int16From,
+        [typeof(float)] = KnownFunction.SingleFrom
     };
 
+    // ToSingle is deliberately absent: the provider translates float.Parse but has no ToSingle
+    // conversion, so carrying the spelling would trade a translation-time refusal for an execution
+    // fault.
     static readonly Dictionary<string, KnownFunction> convertTargets = new(StringComparer.Ordinal)
     {
         ["ToInt32"] = KnownFunction.Int32From,
         ["ToInt64"] = KnownFunction.Int64From,
         ["ToDecimal"] = KnownFunction.DecimalFrom,
-        ["ToDouble"] = KnownFunction.DoubleFrom
+        ["ToDouble"] = KnownFunction.DoubleFrom,
+        ["ToBoolean"] = KnownFunction.BooleanFrom,
+        ["ToByte"] = KnownFunction.ByteFrom,
+        ["ToInt16"] = KnownFunction.Int16From
     };
 
     static bool IsGrouping(Type type) =>

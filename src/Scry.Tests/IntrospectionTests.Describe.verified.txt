@@ -297,6 +297,13 @@
           IsCollection: false
         },
         {
+          Name: Audited,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false
+        },
+        {
           Name: Code,
           TypeDisplay: string,
           NeedsNullDefault: true,
@@ -562,5 +569,5 @@
   ],
   QueryEndpoint: /api/query,
   SqlPreview: false,
-  SchemaStamp: qYeNkPLXm7msDhn5
+  SchemaStamp: EsEci_FpUXbUWNkZ
 }

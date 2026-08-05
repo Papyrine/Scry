@@ -557,6 +557,10 @@ public enum KnownFunction
     Int64From,
     DecimalFrom,
     DoubleFrom,
+    BooleanFrom,
+    ByteFrom,
+    Int16From,
+    SingleFrom,
 
     /// <summary>
     /// Three-way comparison (<c>a.CompareTo(b)</c>, <c>string.Compare(a, b)</c>): -1, 0, or 1, or
@@ -567,7 +571,7 @@ public enum KnownFunction
     CompareTo
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L127' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L131' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Mapped from:
@@ -610,6 +614,10 @@ Mapped from:
 | `long.Parse(text)` / `Convert.ToInt64(text)` | `Int64From` |
 | `decimal.Parse(text)` / `Convert.ToDecimal(text)` | `DecimalFrom` |
 | `double.Parse(text)` / `Convert.ToDouble(text)` | `DoubleFrom` |
+| `bool.Parse(text)` / `Convert.ToBoolean(text)` | `BooleanFrom` |
+| `byte.Parse(text)` / `Convert.ToByte(text)` | `ByteFrom` |
+| `short.Parse(text)` / `Convert.ToInt16(text)` | `Int16From` |
+| `float.Parse(text)` | `SingleFrom` |
 | `Convert.ToString(value)` | `StringFrom` |
 | `a + b` where either is a string | `StringConcat` |
 | `value.ToString()` | `StringFrom` |
@@ -623,7 +631,7 @@ The string functions take a `char` argument as readily as a string one — `Cont
 
 `HasFlag` reads a `[Flags]` enum member; a combined flag — `_.Perks.HasFlag(Perks.Parking | Perks.Gym)` — folds into one constant and travels by name, exactly as `Enum.ToString` spells it.
 
-The parsing functions read **text only** — the inverse of `ToString`. A numeric member is already a value, which arithmetic and comparison promote without a cast, and SQL's numeric-to-numeric conversions truncate where the CLR's round — so that direction is refused rather than answered differently per source. Text that does not parse faults the query at execution, exactly as it would in memory.
+The parsing functions read **text only** — the inverse of `ToString`. A numeric member is already a value, which arithmetic and comparison promote without a cast, and SQL's numeric-to-numeric conversions truncate where the CLR's round — so that direction is refused rather than answered differently per source. Text that does not parse faults the query at execution, exactly as it would in memory. `Convert.ToSingle` is the one spelling left out: the provider translates `float.Parse` but carries no `ToSingle` conversion.
 
 Every function past `Math.Sqrt` is defined over `double` alone, so an integer or decimal member is widened to reach it — which is also the type the provider computes it in. `Math.Log` is the natural logarithm with no second argument and a logarithm to that base with one.
 

@@ -82,6 +82,68 @@ public class TextConversionTests
     }
 
     [Test]
+    public async Task ParsesTheRemainingNumericTargets()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var rows = await client.Source<Order>("Order")
+            .Where(_ => _.Code == "40")
+            .Select(_ => new
+            {
+                Byte = byte.Parse(_.Code),
+                Short = short.Parse(_.Code),
+                Float = float.Parse(_.Code),
+                ByteAgain = Convert.ToByte(_.Code),
+                ShortAgain = Convert.ToInt16(_.Code)
+            })
+            .ToListAsync();
+
+        var row = rows.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(row.Byte, Is.EqualTo((byte)40));
+            Assert.That(row.Short, Is.EqualTo((short)40));
+            Assert.That(row.Float, Is.EqualTo(40f));
+            Assert.That(row.ByteAgain, Is.EqualTo((byte)40));
+            Assert.That(row.ShortAgain, Is.EqualTo((short)40));
+        });
+    }
+
+    [Test]
+    public async Task ParsesBooleanText()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var parsed = await client.Source<Order>("Order").CountAsync(_ => bool.Parse(_.Audited));
+        var converted = await client.Source<Order>("Order").CountAsync(_ => Convert.ToBoolean(_.Audited));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(parsed, Is.EqualTo(2));
+            Assert.That(converted, Is.EqualTo(2));
+        });
+    }
+
+    // ToSingle is the one Convert spelling deliberately left out: the provider translates float.Parse
+    // but carries no ToSingle conversion, so the spelling would trade a translation-time refusal for
+    // an execution fault.
+    [Test]
+    public void ConvertToSingleStaysClientSide()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var exception = Assert.ThrowsAsync<NotSupportedException>(() =>
+            client.Source<Order>("Order")
+                .Select(_ => new {Value = Convert.ToSingle(_.Code)})
+                .ToListAsync());
+
+        Assert.That(exception!.Message, Does.Contain("client-side"));
+    }
+
+    [Test]
     public void ANumericMemberIsRefusedAtTranslation()
     {
         using var context = TestContext.CreateSeeded();

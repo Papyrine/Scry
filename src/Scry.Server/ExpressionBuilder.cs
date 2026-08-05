@@ -1051,6 +1051,10 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
                 KnownFunction.Int64From => BuildFromText(call.Function, target, convertToInt64),
                 KnownFunction.DecimalFrom => BuildFromText(call.Function, target, convertToDecimal),
                 KnownFunction.DoubleFrom => BuildFromText(call.Function, target, convertToDouble),
+                KnownFunction.BooleanFrom => BuildFromText(call.Function, target, convertToBoolean),
+                KnownFunction.ByteFrom => BuildFromText(call.Function, target, convertToByte),
+                KnownFunction.Int16From => BuildFromText(call.Function, target, convertToInt16),
+                KnownFunction.SingleFrom => BuildFromText(call.Function, target, singleParse),
 
                 KnownFunction.MathAbs => MathCall("Abs", target),
                 KnownFunction.MathCeiling => MathCall("Ceiling", target),
@@ -1879,6 +1883,13 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
     static readonly MethodInfo convertToInt64 = typeof(Convert).GetMethod("ToInt64", [typeof(string)])!;
     static readonly MethodInfo convertToDecimal = typeof(Convert).GetMethod("ToDecimal", [typeof(string)])!;
     static readonly MethodInfo convertToDouble = typeof(Convert).GetMethod("ToDouble", [typeof(string)])!;
+    static readonly MethodInfo convertToBoolean = typeof(Convert).GetMethod("ToBoolean", [typeof(string)])!;
+    static readonly MethodInfo convertToByte = typeof(Convert).GetMethod("ToByte", [typeof(string)])!;
+    static readonly MethodInfo convertToInt16 = typeof(Convert).GetMethod("ToInt16", [typeof(string)])!;
+
+    // float.Parse rather than Convert.ToSingle: the provider translates Parse for every numeric type
+    // but carries no ToSingle conversion.
+    static readonly MethodInfo singleParse = typeof(float).GetMethod("Parse", [typeof(string)])!;
 
 
     // The generic Contains<TSource>(source, value) definition, closed per member type by BuildIn.

@@ -198,6 +198,8 @@ public class AnalyzerTests
             await Query.Order.Where(_ => _.Placed.AddMilliseconds(250).Year == 2026).ToListAsync();
             await Query.Order.Where(_ => _.Options.HasFlag(OrderFlags.Rush | OrderFlags.Gift)).ToListAsync();
             await Query.Order.Where(_ => int.Parse(_.Region) > 0 && decimal.Parse(_.Region) < 100).ToListAsync();
+            await Query.Order.Where(_ => bool.Parse(_.Region) && byte.Parse(_.Region) > 0 && short.Parse(_.Region) > 0 && float.Parse(_.Region) > 1f).ToListAsync();
+            await Query.Order.Where(_ => Convert.ToBoolean(_.Region) && Convert.ToByte(_.Region) > 0 && Convert.ToInt16(_.Region) < 9).ToListAsync();
             await Query.Order.Where(_ => Math.Max(_.Amount, _.Discount) > 5 && Math.Min(_.Rate, 1d) < 2).ToListAsync();
             await Query.Order.Where(_ => _.Amount.CompareTo(5m) > 0 && _.Region.CompareTo("x") < 0).ToListAsync();
             await Query.Order.Select(_ => new {_.Id, Cmp = string.Compare(_.Region, "x"), When = _.Placed.CompareTo(DateTime.MinValue)}).ToListAsync();

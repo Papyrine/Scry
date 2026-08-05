@@ -115,6 +115,10 @@ public enum KnownFunction
     Int64From,
     DecimalFrom,
     DoubleFrom,
+    BooleanFrom,
+    ByteFrom,
+    Int16From,
+    SingleFrom,
 
     /// <summary>
     /// Three-way comparison (<c>a.CompareTo(b)</c>, <c>string.Compare(a, b)</c>): -1, 0, or 1, or

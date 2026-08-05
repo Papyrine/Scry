@@ -159,6 +159,9 @@ public class Order
     // order disagree — "8" sorts after "40" as text and before it as a number.
     public string Code { get; set; } = "";
 
+    // Boolean text, which is what BooleanFrom reads.
+    public string Audited { get; set; } = "";
+
     // begin-snippet: queryableCollection
     // Opted in for aggregation: a client can ask how many lines an order has, or what they total, but
     // can never enumerate them into a result.
@@ -503,7 +506,7 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
         context.Orders.AddRange(
             new()
             {
-                Region = "North", Amount = 100m, Quantity = 3, Sku = 1000, Placed = new(2026, 3, 4, 9, 30, 15), Discount = 10m, Grade = 'A', Code = "40",
+                Region = "North", Amount = 100m, Quantity = 3, Sku = 1000, Placed = new(2026, 3, 4, 9, 30, 15), Discount = 10m, Grade = 'A', Code = "40", Audited = "true",
                 Lines =
                 [
                     new() { Sku = "A-1", Quantity = 2, Price = 25m },
@@ -518,7 +521,7 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
             // (a numeric Int64 tag would overflow).
             new()
             {
-                Region = "North", Amount = 250m, Quantity = 7, Sku = ulong.MaxValue, Placed = new(2026, 7, 20, 14, 5, 0), Discount = null, Grade = 'B', Code = "8",
+                Region = "North", Amount = 250m, Quantity = 7, Sku = ulong.MaxValue, Placed = new(2026, 7, 20, 14, 5, 0), Discount = null, Grade = 'B', Code = "8", Audited = "false",
                 Lines = [new() { Sku = "B-1", Quantity = 5, Price = 50m }],
                 Tags = ["export"],
                 Scores = [8],
@@ -526,7 +529,7 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
             },
             // No lines, tags or scores at all, so an aggregate over an empty collection is covered for
             // both a collection of rows and one of values.
-            new() { Region = "South", Amount = 75m, Quantity = 1, Sku = 3000, Placed = new(2025, 12, 31, 23, 59, 59), Discount = 5m, Grade = 'A', Code = "17" });
+            new() { Region = "South", Amount = 75m, Quantity = 1, Sku = 3000, Placed = new(2025, 12, 31, 23, 59, 59), Discount = 5m, Grade = 'A', Code = "17", Audited = "true" });
 
         context.Assets.AddRange(
             new Vehicle {Name = "Van", Wheels = 4},
