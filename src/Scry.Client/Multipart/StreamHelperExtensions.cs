@@ -15,18 +15,18 @@ static class StreamHelperExtensions
     /// Reads the specified <paramref name="stream"/> to the end, throwing if it is larger than
     /// <paramref name="limit"/>.
     /// </summary>
-    public static async Task DrainAsync(this Stream stream, long? limit, Cancel cancellationToken)
+    public static async Task DrainAsync(this Stream stream, long? limit, Cancel cancel)
     {
-        cancellationToken.ThrowIfCancellationRequested();
+        cancel.ThrowIfCancellationRequested();
         var buffer = ArrayPool<byte>.Shared.Rent(maxReadBufferSize);
         long total = 0;
         try
         {
-            var read = await stream.ReadAsync(buffer.AsMemory(), cancellationToken);
+            var read = await stream.ReadAsync(buffer.AsMemory(), cancel);
             while (read > 0)
             {
                 // Not all streams support cancellation directly.
-                cancellationToken.ThrowIfCancellationRequested();
+                cancel.ThrowIfCancellationRequested();
                 if (limit.HasValue &&
                     limit.GetValueOrDefault() - total < read)
                 {
@@ -34,7 +34,7 @@ static class StreamHelperExtensions
                 }
 
                 total += read;
-                read = await stream.ReadAsync(buffer.AsMemory(), cancellationToken);
+                read = await stream.ReadAsync(buffer.AsMemory(), cancel);
             }
         }
         finally

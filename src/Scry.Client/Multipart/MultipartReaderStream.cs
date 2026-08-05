@@ -88,10 +88,10 @@ sealed class MultipartReaderStream :
     public override void Write(byte[] buffer, int offset, int count) =>
         throw new NotSupportedException();
 
-    public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, Cancel cancellationToken = default) =>
+    public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, Cancel cancel = default) =>
         throw new NotSupportedException();
 
-    public override Task WriteAsync(byte[] buffer, int offset, int count, Cancel cancellationToken) =>
+    public override Task WriteAsync(byte[] buffer, int offset, int count, Cancel cancel) =>
         throw new NotSupportedException();
 
     public override void Flush() =>

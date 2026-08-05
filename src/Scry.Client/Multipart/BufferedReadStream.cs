@@ -20,15 +20,9 @@ sealed class BufferedReadStream :
 
     /// <summary>Creates a new stream.</summary>
     public BufferedReadStream(Stream inner, int bufferSize)
-        : this(inner, bufferSize, ArrayPool<byte>.Shared)
-    {
-    }
-
-    /// <summary>Creates a new stream.</summary>
-    private BufferedReadStream(Stream inner, int bufferSize, ArrayPool<byte> bytePool)
     {
         this.inner = inner;
-        this.bytePool = bytePool;
+        bytePool = ArrayPool<byte>.Shared;
         buffer = bytePool.Rent(bufferSize);
     }
 
@@ -128,17 +122,17 @@ sealed class BufferedReadStream :
     public override void Flush() =>
         inner.Flush();
 
-    public override Task FlushAsync(Cancel cancellationToken) =>
-        inner.FlushAsync(cancellationToken);
+    public override Task FlushAsync(Cancel cancel) =>
+        inner.FlushAsync(cancel);
 
     public override void Write(byte[] buffer, int offset, int count) =>
         inner.Write(buffer, offset, count);
 
-    public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, Cancel cancellationToken) =>
-        inner.WriteAsync(buffer, cancellationToken);
+    public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, Cancel cancel) =>
+        inner.WriteAsync(buffer, cancel);
 
-    public override Task WriteAsync(byte[] buffer, int offset, int count, Cancel cancellationToken) =>
-        inner.WriteAsync(buffer, offset, count, cancellationToken);
+    public override Task WriteAsync(byte[] buffer, int offset, int count, Cancel cancel) =>
+        inner.WriteAsync(buffer, offset, count, cancel);
 
     public override int Read(byte[] buffer, int offset, int count)
     {
@@ -157,10 +151,10 @@ sealed class BufferedReadStream :
         return inner.Read(buffer, offset, count);
     }
 
-    public override Task<int> ReadAsync(byte[] buffer, int offset, int count, Cancel cancellationToken) =>
-        ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+    public override Task<int> ReadAsync(byte[] buffer, int offset, int count, Cancel cancel) =>
+        ReadAsync(buffer.AsMemory(offset, count), cancel).AsTask();
 
-    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, Cancel cancellationToken)
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, Cancel cancel)
     {
         // Drain buffer.
         if (bufferCount > 0)
@@ -172,7 +166,7 @@ sealed class BufferedReadStream :
             return toCopy;
         }
 
-        return await inner.ReadAsync(buffer, cancellationToken);
+        return await inner.ReadAsync(buffer, cancel);
     }
 
     /// <summary>Ensures that the buffer is not empty.</summary>
@@ -190,7 +184,7 @@ sealed class BufferedReadStream :
     }
 
     /// <summary>Ensures that the buffer is not empty.</summary>
-    public async Task<bool> EnsureBufferedAsync(Cancel cancellationToken)
+    public async Task<bool> EnsureBufferedAsync(Cancel cancel)
     {
         if (bufferCount > 0)
         {
@@ -199,7 +193,7 @@ sealed class BufferedReadStream :
 
         // Downshift to make room.
         bufferOffset = 0;
-        bufferCount = await inner.ReadAsync(buffer.AsMemory(), cancellationToken);
+        bufferCount = await inner.ReadAsync(buffer.AsMemory(), cancel);
         return bufferCount > 0;
     }
 
@@ -236,7 +230,7 @@ sealed class BufferedReadStream :
     }
 
     /// <summary>Ensures that a minimum amount of buffered data is available.</summary>
-    public async Task<bool> EnsureBufferedAsync(int minCount, Cancel cancellationToken)
+    public async Task<bool> EnsureBufferedAsync(int minCount, Cancel cancel)
     {
         if (minCount > buffer.Length)
         {
@@ -256,7 +250,7 @@ sealed class BufferedReadStream :
                 bufferOffset = 0;
             }
 
-            var read = await inner.ReadAsync(buffer.AsMemory(bufferOffset + bufferCount, buffer.Length - bufferCount - bufferOffset), cancellationToken);
+            var read = await inner.ReadAsync(buffer.AsMemory(bufferOffset + bufferCount, buffer.Length - bufferCount - bufferOffset), cancel);
             bufferCount += read;
             if (read == 0)
             {
@@ -292,14 +286,14 @@ sealed class BufferedReadStream :
     /// immediately followed by a line feed. The resulting string does not contain the terminating
     /// carriage return and line feed.
     /// </summary>
-    public async Task<string> ReadLineAsync(int lengthLimit, Cancel cancellationToken)
+    public async Task<string> ReadLineAsync(int lengthLimit, Cancel cancel)
     {
         CheckDisposed();
         using var builder = new MemoryStream(200);
         bool foundCr = false, foundCrlf = false;
         var lineLength = 0;
 
-        while (!foundCrlf && await EnsureBufferedAsync(cancellationToken))
+        while (!foundCrlf && await EnsureBufferedAsync(cancel))
         {
             ProcessLineChar(builder, ref lineLength, lengthLimit, ref foundCr, ref foundCrlf);
         }
