@@ -535,6 +535,14 @@ public enum KnownFunction
     MathMin,
 
     /// <summary>
+    /// Degrees to radians and back (<c>double.DegreesToRadians</c> / <c>RadiansToDegrees</c> —
+    /// statics on the floating types rather than on <c>Math</c>). Defined over double alone, so the
+    /// target is widened to reach them.
+    /// </summary>
+    MathDegreesToRadians,
+    MathRadiansToDegrees,
+
+    /// <summary>
     /// Membership of a client-supplied set (SQL <c>IN</c>). The target is the value being tested and
     /// every argument is a <see cref="ConstNode"/>; the server caps the number of values.
     /// </summary>
@@ -571,7 +579,7 @@ public enum KnownFunction
     CompareTo
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L131' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L139' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Mapped from:
@@ -608,6 +616,7 @@ Mapped from:
 | `Math.Asin(value)` / `Math.Acos(value)` / `Math.Atan(value)` | `MathAsin` / `MathAcos` / `MathAtan` |
 | `Math.Atan2(y, x)` | `MathAtan2` |
 | `Math.Max(a, b)` / `Math.Min(a, b)` | `MathMax` / `MathMin` |
+| `double.DegreesToRadians(value)` / `double.RadiansToDegrees(value)` | `MathDegreesToRadians` / `MathRadiansToDegrees` |
 | `a.CompareTo(b)` / `string.Compare(a, b)` | `CompareTo` |
 | `flags.HasFlag(flag)` | `EnumHasFlag` |
 | `int.Parse(text)` / `Convert.ToInt32(text)` | `Int32From` |
@@ -633,7 +642,7 @@ The string functions take a `char` argument as readily as a string one — `Cont
 
 The parsing functions read **text only** — the inverse of `ToString`. A numeric member is already a value, which arithmetic and comparison promote without a cast, and SQL's numeric-to-numeric conversions truncate where the CLR's round — so that direction is refused rather than answered differently per source. Text that does not parse faults the query at execution, exactly as it would in memory. `Convert.ToSingle` is the one spelling left out: the provider translates `float.Parse` but carries no `ToSingle` conversion.
 
-Every function past `Math.Sqrt` is defined over `double` alone, so an integer or decimal member is widened to reach it — which is also the type the provider computes it in. `Math.Log` is the natural logarithm with no second argument and a logarithm to that base with one.
+Every function past `Math.Sqrt` is defined over `double` alone, so an integer or decimal member is widened to reach it — which is also the type the provider computes it in. `Math.Log` is the natural logarithm with no second argument and a logarithm to that base with one. The angle conversions are statics on the floating types rather than on `Math` — the `float` spellings mean the same functions — and translate to SQL's `RADIANS` / `DEGREES`.
 
 An arithmetic expression promotes its operands the way C# does, to the widest of their types, so `(double)_.Quantity / 2d` over an integer member is computed in floating point rather than as integer division. A comparison instead reads its constant at the member's type, which is what lets `_.Amount > 80` compare decimals.
 

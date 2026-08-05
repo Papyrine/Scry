@@ -1215,6 +1215,8 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 KnownFunction.MathSign or
                 KnownFunction.MathSqrt or
                 KnownFunction.MathExp or
+                KnownFunction.MathDegreesToRadians or
+                KnownFunction.MathRadiansToDegrees or
                 KnownFunction.MathLog10 or
                 KnownFunction.MathSin or
                 KnownFunction.MathCos or

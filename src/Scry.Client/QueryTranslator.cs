@@ -898,6 +898,19 @@ sealed class QueryTranslator
             return new CallNode(added, TranslateExpr(call.Object!, root), [TranslateExpr(call.Arguments[0], root)]);
         }
 
+        // The angle conversions are statics on the floating types rather than on Math, but they are
+        // math functions all the same.
+        if ((declaring == typeof(double) || declaring == typeof(float)) &&
+            call is {Object: null, Arguments.Count: 1} &&
+            call.Method.Name is "DegreesToRadians" or "RadiansToDegrees" &&
+            ReferencesParameter(call, root))
+        {
+            var angle = call.Method.Name == "DegreesToRadians"
+                ? KnownFunction.MathDegreesToRadians
+                : KnownFunction.MathRadiansToDegrees;
+            return new CallNode(angle, TranslateExpr(call.Arguments[0], root), []);
+        }
+
         if (declaring == typeof(Math))
         {
             var math = call.Method.Name switch

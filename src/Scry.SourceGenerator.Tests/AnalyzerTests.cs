@@ -202,6 +202,7 @@ public class AnalyzerTests
             await Query.Order.Where(_ => Convert.ToBoolean(_.Region) && Convert.ToByte(_.Region) > 0 && Convert.ToInt16(_.Region) < 9).ToListAsync();
             await Query.Order.Where(_ => Math.Max(_.Amount, _.Discount) > 5 && Math.Min(_.Rate, 1d) < 2).ToListAsync();
             await Query.Order.Where(_ => _.Amount.CompareTo(5m) > 0 && _.Region.CompareTo("x") < 0).ToListAsync();
+            await Query.Order.Where(_ => double.DegreesToRadians(_.Rate) > 1 && float.RadiansToDegrees((float)_.Rate) < 90).ToListAsync();
             await Query.Order.Select(_ => new {_.Id, Cmp = string.Compare(_.Region, "x"), When = _.Placed.CompareTo(DateTime.MinValue)}).ToListAsync();
             await Query.Order.Select(_ => new {_.Id, Value = Convert.ToInt64(_.Region), Text = Convert.ToString(_.Amount)}).ToListAsync();
 

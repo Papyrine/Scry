@@ -1080,6 +1080,8 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
 
                 KnownFunction.MathMax => BuildMinMax(call, target, row, max: true),
                 KnownFunction.MathMin => BuildMinMax(call, target, row, max: false),
+                KnownFunction.MathDegreesToRadians => AngleCall(degreesToRadians, target),
+                KnownFunction.MathRadiansToDegrees => AngleCall(radiansToDegrees, target),
                 KnownFunction.CompareTo => BuildCompareTo(call, target, row),
 
                 // With no argument this is the natural logarithm; with one it is the logarithm to that
@@ -1379,6 +1381,24 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         type == typeof(Time) ||
         type == typeof(DateTimeOffset) ||
         (!type.IsEnum && Rank(type) is not null);
+
+    // The angle conversions — statics on the floating types rather than on Math, defined over double
+    // alone like the trigonometry they accompany. The target is checked before it is widened: a
+    // conversion from something that is not a number has no Convert to widen through.
+    static Expression AngleCall(MethodInfo method, Expression target)
+    {
+        var value = NonNullable(target);
+        if (value.Type.IsEnum ||
+            Rank(value.Type) is null)
+        {
+            throw new ScryValidationException($"{method.Name} is not supported over '{value.Type.Name}'.");
+        }
+
+        return Expression.Call(method, ConvertTo(value, typeof(double)));
+    }
+
+    static readonly MethodInfo degreesToRadians = typeof(double).GetMethod("DegreesToRadians", [typeof(double)])!;
+    static readonly MethodInfo radiansToDegrees = typeof(double).GetMethod("RadiansToDegrees", [typeof(double)])!;
 
     // A Math method defined over double alone: the target is widened to reach it.
     static Expression Double1(string name, Expression target) =>

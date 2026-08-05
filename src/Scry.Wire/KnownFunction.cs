@@ -93,6 +93,14 @@ public enum KnownFunction
     MathMin,
 
     /// <summary>
+    /// Degrees to radians and back (<c>double.DegreesToRadians</c> / <c>RadiansToDegrees</c> —
+    /// statics on the floating types rather than on <c>Math</c>). Defined over double alone, so the
+    /// target is widened to reach them.
+    /// </summary>
+    MathDegreesToRadians,
+    MathRadiansToDegrees,
+
+    /// <summary>
     /// Membership of a client-supplied set (SQL <c>IN</c>). The target is the value being tested and
     /// every argument is a <see cref="ConstNode"/>; the server caps the number of values.
     /// </summary>

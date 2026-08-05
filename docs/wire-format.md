@@ -429,6 +429,14 @@ public enum KnownFunction
     MathMin,
 
     /// <summary>
+    /// Degrees to radians and back (<c>double.DegreesToRadians</c> / <c>RadiansToDegrees</c> —
+    /// statics on the floating types rather than on <c>Math</c>). Defined over double alone, so the
+    /// target is widened to reach them.
+    /// </summary>
+    MathDegreesToRadians,
+    MathRadiansToDegrees,
+
+    /// <summary>
     /// Membership of a client-supplied set (SQL <c>IN</c>). The target is the value being tested and
     /// every argument is a <see cref="ConstNode"/>; the server caps the number of values.
     /// </summary>
@@ -465,7 +473,7 @@ public enum KnownFunction
     CompareTo
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L131' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L139' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 There is no free-form method name anywhere in the format. This enum is the complete set of behaviour a client can request.
