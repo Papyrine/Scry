@@ -215,9 +215,10 @@ paging without an ordering would be slicing an order the deduplication never def
 [JsonDerivedType(typeof(InSourceNode), "inSource")]
 [JsonDerivedType(typeof(AggregateNode), "aggregate")]
 [JsonDerivedType(typeof(GroupKeyNode), "groupKey")]
+[JsonDerivedType(typeof(CompositeKeyNode), "compositeKey")]
 public abstract record Node;
 ```
-<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Expressions/Node.cs#L7-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireExpressions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 

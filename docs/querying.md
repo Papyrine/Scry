@@ -755,6 +755,8 @@ Three rules follow from the joined row having two roots:
 
 Each side is validated against its own allow-list: a `[QueryIgnore]`d member stays hidden on both, and naming an outer member on the inner side is rejected. The two key selectors must produce the same type.
 
+A key can be **composite** — `new {_.Region, _.Grade}` on both sides — joining on every part at once, compared position by position. C# already guarantees the two sides construct the same shape, since `Join` takes one key type; the wire carries the parts as one composite key, and a server predating them rejects the request outright rather than joining on less than the whole key. Up to eight parts, matching a composite `GroupBy` key.
+
 #### Aggregating the matches
 
 `GroupJoin` pairs each outer row with the matching inner rows as a group, and the projection folds that group to a scalar:

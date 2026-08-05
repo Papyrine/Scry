@@ -18,5 +18,6 @@
 [JsonDerivedType(typeof(InSourceNode), "inSource")]
 [JsonDerivedType(typeof(AggregateNode), "aggregate")]
 [JsonDerivedType(typeof(GroupKeyNode), "groupKey")]
+[JsonDerivedType(typeof(CompositeKeyNode), "compositeKey")]
 public abstract record Node;
 // end-snippet

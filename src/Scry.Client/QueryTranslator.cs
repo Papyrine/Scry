@@ -233,10 +233,31 @@ sealed class QueryTranslator
         return new(
             root,
             kind,
-            TranslateExpr(outerKey.Body, outerKey.Parameters[0]),
-            TranslateExpr(innerKey.Body, innerKey.Parameters[0]),
+            TranslateJoinKey(outerKey),
+            TranslateJoinKey(innerKey),
             innerPredicate,
             JoinMembers(result, kind));
+    }
+
+    // A key constructed from several members joins on all of them at once, position by position.
+    // C# already guarantees the two sides construct the same shape, since Join takes one key type.
+    Node TranslateJoinKey(LambdaExpression key)
+    {
+        if (key.Body is not (NewExpression or MemberInitExpression))
+        {
+            return TranslateExpr(key.Body, key.Parameters[0]);
+        }
+
+        var parts = NestedMembers(key.Body)
+            .Select(_ => TranslateExpr(_.Value, key.Parameters[0]))
+            .ToList();
+
+        return parts.Count switch
+        {
+            0 => throw new NotSupportedException("A composite join key must have at least one member."),
+            1 => parts[0],
+            _ => new CompositeKeyNode(parts)
+        };
     }
 
     // The joined source is a captured queryable of its own. Only Where survives the crossing: every

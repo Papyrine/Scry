@@ -294,6 +294,41 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
     {
         var outerParameter = Expression.Parameter(outerType, "o");
         var innerParameter = Expression.Parameter(innerType, "i");
+
+        // A composite key builds one DistinctRow per side — the typed row a composite GroupBy key
+        // already uses — whose member-wise equality is what the provider decomposes into per-part
+        // comparisons. Each pair of parts is reconciled exactly as a single key would be.
+        if (outerKey is CompositeKeyNode outerParts &&
+            innerKey is CompositeKeyNode innerParts)
+        {
+            var outerValues = new List<Expression>(outerParts.Parts.Count);
+            var innerValues = new List<Expression>(innerParts.Parts.Count);
+            for (var index = 0; index < outerParts.Parts.Count; index++)
+            {
+                var outerValue = Build(outerParts.Parts[index], outerParameter, null);
+                var innerValue = Build(innerParts.Parts[index], innerParameter, null);
+                Coerce(ref outerValue, ref innerValue);
+                if (outerValue.Type != innerValue.Type)
+                {
+                    throw new ScryValidationException(
+                        $"Join keys must have the same type, but part {index + 1} was '{outerValue.Type.Name}' and '{innerValue.Type.Name}'.");
+                }
+
+                outerValues.Add(outerValue);
+                innerValues.Add(innerValue);
+            }
+
+            var row = DistinctRow.ByArity[outerValues.Count - 1].MakeGenericType([..outerValues.Select(_ => _.Type)]);
+            var constructor = row.GetConstructors().Single();
+            var members = constructor.GetParameters()
+                .Select(MemberInfo (_) => row.GetProperty(_.Name!)!)
+                .ToArray();
+
+            return (
+                Expression.Lambda(Expression.New(constructor, outerValues, members), outerParameter),
+                Expression.Lambda(Expression.New(constructor, innerValues, members), innerParameter));
+        }
+
         var outerBody = Build(outerKey, outerParameter, null);
         var innerBody = Build(innerKey, innerParameter, null);
 

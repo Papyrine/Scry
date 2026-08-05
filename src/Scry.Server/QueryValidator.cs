@@ -875,8 +875,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
         var innerType = inner.ClrType;
 
-        ValidateScalar(join.OuterKey, outerType, "Join key");
-        ValidateScalar(join.InnerKey, innerType, "Join key");
+        ValidateJoinKeys(join, outerType, innerType);
 
         if (join.InnerPredicate is { } predicate)
         {
@@ -1110,6 +1109,52 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             StringMatch.CaseInsensitive => options.CaseInsensitiveCollation,
             _ => null
         };
+
+    // A composite key is both sides' business at once: the parts pair positionally, so the sides
+    // must agree on how many there are, and each part is then an ordinary scalar against its own
+    // side. A part that is itself composite falls to ValidateScalar's default case and is rejected.
+    void ValidateJoinKeys(JoinOp join, Type outerType, Type innerType)
+    {
+        if (join.OuterKey is not CompositeKeyNode &&
+            join.InnerKey is not CompositeKeyNode)
+        {
+            ValidateScalar(join.OuterKey, outerType, "Join key");
+            ValidateScalar(join.InnerKey, innerType, "Join key");
+            return;
+        }
+
+        if (join.OuterKey is not CompositeKeyNode outer ||
+            join.InnerKey is not CompositeKeyNode inner)
+        {
+            throw Reject("A composite join key must be composite on both sides.");
+        }
+
+        if (outer.Parts.Count != inner.Parts.Count)
+        {
+            throw Reject(
+                $"A composite join key pairs its parts, but the sides carry {outer.Parts.Count} and {inner.Parts.Count}.");
+        }
+
+        if (outer.Parts.Count < 2)
+        {
+            throw Reject("A composite join key carries at least two parts — a single key needs no composite.");
+        }
+
+        if (outer.Parts.Count > DistinctRow.ByArity.Length)
+        {
+            throw Reject($"A composite join key carries at most {DistinctRow.ByArity.Length} parts.");
+        }
+
+        foreach (var part in outer.Parts)
+        {
+            ValidateScalar(part, outerType, "Join key");
+        }
+
+        foreach (var part in inner.Parts)
+        {
+            ValidateScalar(part, innerType, "Join key");
+        }
+    }
 
     // The shape rules an aggregate's own fields carry, wherever it appears: Join is the one that
     // needs a separator, and the only one allowed to carry it.

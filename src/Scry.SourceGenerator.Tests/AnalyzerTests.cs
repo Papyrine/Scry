@@ -177,6 +177,10 @@ public class AnalyzerTests
                 .ToListAsync();
 
             await Query.Customer
+                .Join(Query.Order, _ => new {Key = _.Id, _.Name}, _ => new {Key = _.CustomerId, Name = _.Region}, (customer, order) => new {customer.Name, order.Amount})
+                .ToListAsync();
+
+            await Query.Customer
                 .GroupJoin(Query.Order, _ => _.Id, _ => _.CustomerId, (customer, orders) => new {customer.Name, Total = orders.Sum(_ => _.Amount)})
                 .ToListAsync();
 
