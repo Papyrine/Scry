@@ -110,15 +110,16 @@ public sealed class ScryBatch
 
         for (var i = 0; i < entries.Count; i++)
         {
-            Complete(entries[i].Completion, response.Results[i]);
+            Complete(entries[i].Completion, response.Results[i], response.BinaryParts);
         }
     }
 
-    static void Complete(TaskCompletionSource<QueryResponse> completion, QueryBatchResult result)
+    static void Complete(TaskCompletionSource<QueryResponse> completion, QueryBatchResult result, IReadOnlyList<byte[]>? parts)
     {
         if (result.Response is { } response)
         {
-            completion.SetResult(response);
+            // A batch's parts are numbered globally, so every entry resolves against the whole list.
+            completion.SetResult(response with {BinaryParts = parts});
             return;
         }
 

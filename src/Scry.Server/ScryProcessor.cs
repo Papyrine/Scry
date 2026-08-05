@@ -63,14 +63,25 @@ public sealed class ScryProcessor
         DbContext data,
         IServiceProvider services,
         IHeaderDictionary requestHeaders,
-        IHeaderDictionary responseHeaders)
+        IHeaderDictionary responseHeaders) =>
+        Execute(request, data, services, requestHeaders, responseHeaders, binary: null);
+
+    // The HTTP endpoints pass a collector so [BinaryTransfer] values leave as multipart parts; the
+    // public overloads leave it null, so every non-HTTP consumer keeps today's inline base64.
+    internal QueryResponse Execute(
+        QueryRequest request,
+        DbContext data,
+        IServiceProvider services,
+        IHeaderDictionary requestHeaders,
+        IHeaderDictionary responseHeaders,
+        BinaryPartCollector? binary)
     {
         var drifted = request.Stamp is { } requestStamp &&
                       requestStamp != schema.Stamp;
         var recorder = QueryRecorder.Start(schema, request, services);
         try
         {
-            var scope = new CallScope(services, requestHeaders, responseHeaders);
+            var scope = new CallScope(services, requestHeaders, responseHeaders) {Binary = binary};
             var response = executor.Execute(request, data, scope) with
             {
                 // Carried on every response, not only a drifted one: this is the signal a client uses
@@ -132,14 +143,15 @@ public sealed class ScryProcessor
         IHeaderDictionary requestHeaders,
         IHeaderDictionary responseHeaders,
         IBufferWriter<byte> output,
-        out QueryResponse? fallback)
+        out QueryResponse? fallback,
+        BinaryPartCollector? binary = null)
     {
         var drifted = request.Stamp is { } requestStamp &&
                       requestStamp != schema.Stamp;
         var recorder = QueryRecorder.Start(schema, request, services);
         try
         {
-            var scope = new CallScope(services, requestHeaders, responseHeaders);
+            var scope = new CallScope(services, requestHeaders, responseHeaders) {Binary = binary};
 
             // The alias table is carried on the envelope only for a drifted client; that rare envelope keeps
             // the fully-general path rather than teaching the writer a second shape.
@@ -262,7 +274,17 @@ public sealed class ScryProcessor
         DbContext data,
         IServiceProvider services,
         IHeaderDictionary requestHeaders,
-        IHeaderDictionary responseHeaders)
+        IHeaderDictionary responseHeaders) =>
+        ExecuteBatch(request, data, services, requestHeaders, responseHeaders, binary: null);
+
+    // One collector threads through every entry, which is what numbers a batch's parts globally.
+    internal QueryBatchResponse ExecuteBatch(
+        QueryBatchRequest request,
+        DbContext data,
+        IServiceProvider services,
+        IHeaderDictionary requestHeaders,
+        IHeaderDictionary responseHeaders,
+        BinaryPartCollector? binary)
     {
         if (request.Version > WireFormat.Version)
         {
@@ -280,7 +302,7 @@ public sealed class ScryProcessor
         var results = new List<QueryBatchResult>(request.Queries.Count);
         foreach (var query in request.Queries)
         {
-            results.Add(ExecuteEntry(query, data, services, requestHeaders, responseHeaders));
+            results.Add(ExecuteEntry(query, data, services, requestHeaders, responseHeaders, binary));
         }
 
         return QueryBatchResponse.Create(results) with {Stamp = schema.Stamp};
@@ -294,13 +316,14 @@ public sealed class ScryProcessor
         DbContext data,
         IServiceProvider services,
         IHeaderDictionary requestHeaders,
-        IHeaderDictionary responseHeaders)
+        IHeaderDictionary responseHeaders,
+        BinaryPartCollector? binary)
     {
         try
         {
             return new()
             {
-                Response = Execute(query, data, services, requestHeaders, responseHeaders)
+                Response = Execute(query, data, services, requestHeaders, responseHeaders, binary)
             };
         }
         catch (ScryValidationException exception)
@@ -366,16 +389,20 @@ public sealed class ScryProcessor
     /// but each row arrives as its finished JSON bytes, written by the plan's shape writer — the
     /// buffer is valid until the next row is pulled.
     /// </summary>
-    internal (ScryStreamMarker Begin, IAsyncEnumerable<ReadOnlyMemory<byte>> Rows) StreamBuffered(
+    internal (ScryStreamMarker Begin, bool Binary, IAsyncEnumerable<ReadOnlyMemory<byte>> Rows) StreamBuffered(
         QueryRequest request,
         DbContext data,
         IServiceProvider services,
         IHeaderDictionary requestHeaders,
         IHeaderDictionary responseHeaders,
-        Cancel cancel = default)
+        Cancel cancel = default,
+        BinaryPartCollector? binary = null)
     {
-        var (begin, rows, recorder) = StreamCore(request, data, services, requestHeaders, responseHeaders);
-        return (begin, Lines(rows, options.MaxStreamRows, recorder, cancel));
+        var (begin, rows, recorder) = StreamCore(request, data, services, requestHeaders, responseHeaders, binary);
+        // Whether any row can divert — known from the plan before the first byte, which is what lets
+        // the transport commit to a multipart content type up front, data-independently.
+        var diverting = binary is not null && rows.Plan.BinarySlots is not null;
+        return (begin, diverting, Lines(rows, options.MaxStreamRows, recorder, cancel));
     }
 
     (ScryStreamMarker Begin, QueryExecutor.RowSet Rows, QueryRecorder Recorder) StreamCore(
@@ -383,14 +410,15 @@ public sealed class ScryProcessor
         DbContext data,
         IServiceProvider services,
         IHeaderDictionary requestHeaders,
-        IHeaderDictionary responseHeaders)
+        IHeaderDictionary responseHeaders,
+        BinaryPartCollector? binary = null)
     {
         var drifted = request.Stamp is { } requestStamp && requestStamp != schema.Stamp;
         var recorder = QueryRecorder.Start(schema, request, services, streamed: true);
         QueryExecutor.RowSet rows;
         try
         {
-            rows = executor.Stream(request, data, new(services, requestHeaders, responseHeaders));
+            rows = executor.Stream(request, data, new(services, requestHeaders, responseHeaders) {Binary = binary});
         }
         catch (ScryValidationException exception) when (drifted)
         {
@@ -460,7 +488,7 @@ public sealed class ScryProcessor
                     json.Reset(buffer);
                 }
 
-                writer.WriteRow(json, ResponseWriter.Row(row, rows));
+                writer.WriteRow(json, ResponseWriter.Row(row, rows), rows.Binary);
                 json.Flush();
                 yield return buffer.WrittenMemory;
             }

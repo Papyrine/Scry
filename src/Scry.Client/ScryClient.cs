@@ -239,43 +239,65 @@ public sealed class ScryClient
             throw new ScryRequestException((int) response.StatusCode, body);
         }
 
-        await using var lines = await response.Content.ReadAsStreamAsync(cancel);
-        using var reader = new StreamReader(lines);
+        await using var responseStream = await response.Content.ReadAsStreamAsync(cancel);
 
         var ended = false;
-        while (await reader.ReadLineAsync(cancel) is { } line)
+
+        // A multipart stream alternates ndjson-line sections with sections carrying the next row's
+        // binary parts; a plain stream is one run of lines. The parts accumulated since the last row
+        // line belong to the next one, and to it only — so the reader holds at most one row's parts.
+        if (TryGetBoundary(response, out var boundary))
         {
-            if (line.Length == 0)
+            var multipart = new MultipartReader(boundary, responseStream);
+            var pending = new List<byte[]>();
+            while (await multipart.ReadNextSectionAsync(cancel) is { } section)
             {
-                continue;
-            }
+                if (string.Equals(section.ContentType, ScryBinary.PartContentType, StringComparison.OrdinalIgnoreCase))
+                {
+                    pending.Add(await ReadPartBytes(section, cancel));
+                    continue;
+                }
 
-            var element = JsonSerializer.Deserialize<JsonElement>(line, ScryJson.Options);
-            if (!element.TryGetProperty(ScryStream.MarkerProperty, out var kind))
-            {
-                yield return element;
-                continue;
-            }
-
-            var marker = ScryJson.DeserializeMarker(element);
-            switch (kind.GetString())
-            {
-                case ScryStream.Begin:
-                    if (marker.Stamp is { } stamp)
+                using var lines = new StreamReader(section.Body);
+                while (await lines.ReadLineAsync(cancel) is { } line)
+                {
+                    if (line.Length == 0)
                     {
-                        RecordServerStamp(stamp);
+                        continue;
                     }
 
-                    StreamAliases = marker.EnumAliases;
-                    break;
+                    var element = JsonSerializer.Deserialize<JsonElement>(line, ScryJson.Options);
+                    if (!element.TryGetProperty(ScryStream.MarkerProperty, out var kind))
+                    {
+                        StreamParts = pending.Count > 0 ? pending.ToArray() : null;
+                        yield return element;
+                        pending.Clear();
+                        StreamParts = null;
+                        continue;
+                    }
 
-                case ScryStream.End:
-                    ended = true;
-                    break;
+                    ended |= HandleMarker(element, kind);
+                }
+            }
+        }
+        else
+        {
+            using var reader = new StreamReader(responseStream);
+            while (await reader.ReadLineAsync(cancel) is { } line)
+            {
+                if (line.Length == 0)
+                {
+                    continue;
+                }
 
-                case ScryStream.Error:
-                    throw new ScryWireException(
-                        $"The server ended the stream early: {marker.Error ?? "no reason given"}");
+                var element = JsonSerializer.Deserialize<JsonElement>(line, ScryJson.Options);
+                if (!element.TryGetProperty(ScryStream.MarkerProperty, out var kind))
+                {
+                    yield return element;
+                    continue;
+                }
+
+                ended |= HandleMarker(element, kind);
             }
         }
 
@@ -288,11 +310,45 @@ public sealed class ScryClient
         }
     }
 
+    // The stream's own markers are consumed rather than surfaced: the opening one records the server's
+    // stamp and its enum aliases, and the closing one decides whether the rows are the whole result.
+    // Returns true when the marker closes the stream.
+    bool HandleMarker(JsonElement element, JsonElement kind)
+    {
+        var marker = ScryJson.DeserializeMarker(element);
+        switch (kind.GetString())
+        {
+            case ScryStream.Begin:
+                if (marker.Stamp is { } stamp)
+                {
+                    RecordServerStamp(stamp);
+                }
+
+                StreamAliases = marker.EnumAliases;
+                return false;
+
+            case ScryStream.End:
+                return true;
+
+            case ScryStream.Error:
+                throw new ScryWireException(
+                    $"The server ended the stream early: {marker.Error ?? "no reason given"}");
+        }
+
+        return false;
+    }
+
     /// <summary>
     /// The enum aliases the current stream opened with, so a row read mid-stream resolves a renamed
     /// value the same way a single response's payload does.
     /// </summary>
     internal IReadOnlyList<EnumAlias>? StreamAliases { get; private set; }
+
+    /// <summary>
+    /// The binary parts belonging to the streamed row about to be materialized — set just before the
+    /// row is yielded and cleared after, mirroring how the row's own indices reset per line.
+    /// </summary>
+    internal IReadOnlyList<byte[]>? StreamParts { get; private set; }
 
     async Task<QueryResponse> PostAsync(
         HttpClient http,
@@ -320,6 +376,15 @@ public sealed class ScryClient
         // Read before the body is inspected, so the hook still runs on the paths below that throw.
         call?.Read(response.Headers);
 
+        // A multipart response carries [BinaryTransfer] values as raw parts before its JSON envelope;
+        // the parts ride the response object for the payload reader to resolve placeholders against.
+        if (response.IsSuccessStatusCode &&
+            TryGetBoundary(response, out var boundary))
+        {
+            var (envelope, parts) = await ReadMultipart(response, boundary, cancel);
+            return ScryJson.DeserializeResponse(envelope) with {BinaryParts = parts};
+        }
+
         var body = await response.Content.ReadAsStringAsync(cancel);
         if (response.IsSuccessStatusCode)
         {
@@ -335,6 +400,69 @@ public sealed class ScryClient
         }
 
         throw new ScryRequestException((int) response.StatusCode, body);
+    }
+
+    // Whether the response is the multipart format a binary-carrying result travels in, and its
+    // boundary if so. The reader strips a quoted boundary itself, so the raw parameter is passed on.
+    static bool TryGetBoundary(HttpResponseMessage response, [NotNullWhen(true)] out string? boundary)
+    {
+        boundary = null;
+        var contentType = response.Content.Headers.ContentType;
+        if (!string.Equals(contentType?.MediaType, ScryBinary.ContentType, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        boundary = contentType!.Parameters
+            .FirstOrDefault(_ => string.Equals(_.Name, "boundary", StringComparison.OrdinalIgnoreCase))
+            ?.Value;
+        if (string.IsNullOrEmpty(boundary))
+        {
+            throw new ScryWireException("A multipart response arrived without a boundary.");
+        }
+
+        return true;
+    }
+
+    // Reads a single/batch multipart body: binary parts in wire order, then the JSON envelope as the
+    // final section. Sections must be consumed in order — the reader is forward-only.
+    static async Task<(string Envelope, IReadOnlyList<byte[]> Parts)> ReadMultipart(
+        HttpResponseMessage response,
+        string boundary,
+        Cancel cancel)
+    {
+        await using var body = await response.Content.ReadAsStreamAsync(cancel);
+        var reader = new MultipartReader(boundary, body);
+        var parts = new List<byte[]>();
+        string? envelope = null;
+        while (await reader.ReadNextSectionAsync(cancel) is { } section)
+        {
+            if (string.Equals(section.ContentType, ScryBinary.PartContentType, StringComparison.OrdinalIgnoreCase))
+            {
+                parts.Add(await ReadPartBytes(section, cancel));
+                continue;
+            }
+
+            using var text = new StreamReader(section.Body);
+            envelope = await text.ReadToEndAsync(cancel);
+        }
+
+        if (envelope is null)
+        {
+            throw new ScryWireException("A multipart response arrived without a JSON part.");
+        }
+
+        return (envelope, parts);
+    }
+
+    static async Task<byte[]> ReadPartBytes(MultipartSection section, Cancel cancel)
+    {
+        // Content-Length is advisory — used to size the buffer, never trusted for the read itself.
+        using var memory = section.ContentLength is { } length
+            ? new MemoryStream(length)
+            : new MemoryStream();
+        await section.Body.CopyToAsync(memory, cancel);
+        return memory.ToArray();
     }
 
     /// <summary>
@@ -355,6 +483,14 @@ public sealed class ScryClient
         if (response.Headers.TryGetValues(WireFormat.SchemaStampHeader, out var values))
         {
             RecordServerStamp(values.FirstOrDefault());
+        }
+
+        // A batch's parts are numbered globally across entries, so the one list serves every result.
+        if (response.IsSuccessStatusCode &&
+            TryGetBoundary(response, out var boundary))
+        {
+            var (envelope, parts) = await ReadMultipart(response, boundary, cancel);
+            return ScryJson.DeserializeBatchResponse(envelope) with {BinaryParts = parts};
         }
 
         var body = await response.Content.ReadAsStringAsync(cancel);

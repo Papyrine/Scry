@@ -51,7 +51,7 @@ flowchart TB
 
 ### Run time — a query round-trip
 
-The client's LINQ is captured (never executed client-side) and serialized to a restricted AST. The server re-validates that AST against the allow-list — to completion, before anything is respond — then rebinds to the real EF types, executes, and returns only the projected rows.
+The client's LINQ is captured (never executed client-side) and serialized to a restricted AST. The server re-validates that AST against the allow-list — to completion, before anything is respond — then rebinds to the real EF types, executes, and returns only the projected rows. A `byte[]` member marked `[BinaryTransfer]` skips base64 and travels as a raw multipart part beside the JSON ([binary transfer](docs/wire-format.md#binary-transfer)).
 
 ```mermaid
 flowchart TB

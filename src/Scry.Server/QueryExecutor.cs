@@ -11,7 +11,11 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// the rows arrive as <see cref="DistinctRow"/> records rather than shaped arrays. Materializing it
     /// and streaming it differ only in how the rows are pulled, so both go through one pipeline walk.
     /// </summary>
-    internal readonly record struct RowSet(IQueryable Rows, ProjectionPlan Plan, bool Deduplicated);
+    internal readonly record struct RowSet(
+        IQueryable Rows,
+        ProjectionPlan Plan,
+        bool Deduplicated,
+        BinaryPartCollector? Binary = null);
 
     public QueryResponse Execute(QueryRequest request, DbContext db, CallScope scope)
     {
@@ -113,8 +117,8 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// <summary>Shapes one row of a <see cref="RowSet"/> into its response object.</summary>
     internal static Dictionary<string, object?> ShapeRow(object row, RowSet set) =>
         set.Deduplicated
-            ? Shape(ExpressionBuilder.ReadDistinctRow(row, set.Plan.Shape.Count), set.Plan)
-            : Shape((object[])row, set.Plan);
+            ? Shape(ExpressionBuilder.ReadDistinctRow(row, set.Plan.Shape.Count), set.Plan, set.Binary)
+            : Shape((object[])row, set.Plan, set.Binary);
 
     /// <summary>
     /// Builds a request into its EF query without executing it — for reading back the SQL it would
@@ -292,7 +296,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
         if (terminal is PageOp page)
         {
-            return (Page(builder, query, elementType, select, orderings, tailIsOrdered && !sawSkipOrTake, page, source, db), null);
+            return (Page(builder, query, elementType, select, orderings, tailIsOrdered && !sawSkipOrTake, page, source, db, scope.Binary), null);
         }
 
         // A join projects straight to the shaped row, so it replaces the projection step entirely and
@@ -306,9 +310,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 CountOp => (Scalar(Execute<int>(joined, "Count")), null),
                 LongCountOp => (Scalar(Execute<long>(joined, "LongCount")), null),
                 AnyOp => (Scalar(Execute<bool>(joined, "Any")), null),
-                FirstOp firstRow => (Single(ExecuteRow(joined, firstRow.OrDefault ? "FirstOrDefault" : "First"), joinPlan), null),
-                SingleOp singleRow => (Single(ExecuteRow(joined, singleRow.OrDefault ? "SingleOrDefault" : "Single"), joinPlan), null),
-                _ => (null, new RowSet(joined, joinPlan, Deduplicated: false))
+                FirstOp firstRow => (Single(ExecuteRow(joined, firstRow.OrDefault ? "FirstOrDefault" : "First"), joinPlan, scope.Binary), null),
+                SingleOp singleRow => (Single(ExecuteRow(joined, singleRow.OrDefault ? "SingleOrDefault" : "Single"), joinPlan, scope.Binary), null),
+                _ => (null, new RowSet(joined, joinPlan, Deduplicated: false, scope.Binary))
             };
         }
 
@@ -316,7 +320,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         // provider compare them — and, for every kind but Concat, deduplicate across them.
         if (set is not null)
         {
-            if (builder.BuildDistinctRow(select!.Projection, elementType) is not var (leftSelector, shape))
+            if (builder.BuildDistinctRow(select!.Projection, elementType) is not var (leftSelector, shape, binarySlots))
             {
                 throw new ScryValidationException(
                     $"A set operation is limited to {DistinctRow.ByArity.Length} projected members.");
@@ -333,7 +337,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 otherSource = Apply(otherSource, "Where", builder.BuildPredicate(otherPredicate, otherType));
             }
 
-            if (builder.BuildDistinctRow(set.Projection, otherType) is not var (rightSelector, _) ||
+            if (builder.BuildDistinctRow(set.Projection, otherType) is not var (rightSelector, _, _) ||
                 rightSelector.ReturnType != leftSelector.ReturnType)
             {
                 throw new ScryValidationException(
@@ -358,7 +362,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                     return (Scalar(Execute<bool>(combined, "Any")), null);
             }
 
-            return (null, new RowSet(combined, new(leftSelector, shape), Deduplicated: true));
+            return (null, new RowSet(combined, new(leftSelector, shape, binarySlots), Deduplicated: true, scope.Binary));
         }
 
         // Ordering, paging and folding all need the deduplicated rows to have equality and ordering of
@@ -367,7 +371,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         if (distinct &&
             (terminal is CountOp or LongCountOp or AnyOp || afterDistinct.Count > 0))
         {
-            if (builder.BuildDistinctRow(select!.Projection, elementType) is not var (selector, shape))
+            if (builder.BuildDistinctRow(select!.Projection, elementType) is not var (selector, shape, binarySlots))
             {
                 throw new ScryValidationException(
                     $"A Distinct query of more than {DistinctRow.ByArity.Length} projected members can only be enumerated.");
@@ -402,7 +406,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                     return (Scalar(Execute<bool>(deduped, "Any")), null);
             }
 
-            return (null, new RowSet(deduped, new(selector, shape), Deduplicated: true));
+            return (null, new RowSet(deduped, new(selector, shape, binarySlots), Deduplicated: true, scope.Binary));
         }
 
         // Every other folding terminal reads the rows themselves and projects nothing. None of them can
@@ -432,22 +436,22 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         if (terminal is FirstOp first)
         {
             var row = ExecuteRow(projected, first.OrDefault ? "FirstOrDefault" : "First");
-            return (Single(row, plan), null);
+            return (Single(row, plan, scope.Binary), null);
         }
 
         if (terminal is SingleOp single)
         {
             var row = ExecuteRow(projected, single.OrDefault ? "SingleOrDefault" : "Single");
-            return (Single(row, plan), null);
+            return (Single(row, plan, scope.Binary), null);
         }
 
         if (terminal is LastOp last)
         {
             var row = ExecuteRow(projected, last.OrDefault ? "LastOrDefault" : "Last");
-            return (Single(row, plan), null);
+            return (Single(row, plan, scope.Binary), null);
         }
 
-        return (null, new RowSet(projected, plan, Deduplicated: false));
+        return (null, new RowSet(projected, plan, Deduplicated: false, scope.Binary));
     }
 
     /// <summary>
@@ -481,7 +485,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         }
 
         var (outerKey, innerKey) = builder.BuildJoinKeys(join.OuterKey, outerType, join.InnerKey, innerType);
-        var (selector, shape) = builder.BuildJoinProjection(join.Result, outerType, innerType, join.Kind);
+        var (selector, shape, binarySlots) = builder.BuildJoinProjection(join.Result, outerType, innerType, join.Kind);
 
         var joined = (IQueryable<object[]>)outer.Provider.CreateQuery(
             CallQueryable(
@@ -493,7 +497,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 Expression.Quote(innerKey),
                 Expression.Quote(selector)));
 
-        return (joined, new(selector, shape));
+        return (joined, new(selector, shape, binarySlots));
     }
 
     /// <summary>
@@ -807,7 +811,8 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         bool seekEligible,
         PageOp page,
         ScrySource source,
-        DbContext db)
+        DbContext db,
+        BinaryPartCollector? binary)
     {
         var size = Math.Min(page.Size ?? options.DefaultPageSize, options.MaxPageSize);
 
@@ -852,9 +857,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         }
 
         var effectiveKeys = seekSafe ? keys : Array.Empty<(Node Key, bool Descending)>();
-        var (selector, shape, keyCount) = builder.BuildPageProjection(select?.Projection, effectiveKeys, elementType);
+        var (selector, shape, binarySlots, keyCount) = builder.BuildPageProjection(select?.Projection, effectiveKeys, elementType);
         var projected = ApplySelect(query, selector);
-        var plan = new ProjectionPlan(selector, shape);
+        var plan = new ProjectionPlan(selector, shape, binarySlots);
 
         // Fetch one extra row to detect a further page without issuing a second COUNT query. Composed
         // through ApplyPaging rather than Queryable.Take so the count is bound, not inlined.
@@ -865,7 +870,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             rows.RemoveRange(size, rows.Count - size);
         }
 
-        var items = rows.Select(_ => Shape(_, plan)).ToArray();
+        var items = rows.Select(_ => Shape(_, plan, binary)).ToArray();
 
         // The next cursor is the ordering-key tuple of the last returned row — omitted on the last page
         // (nothing more to resume) and when the query is not seek-safe (offset paging only).
@@ -955,15 +960,15 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     static QueryResponse Scalar<T>(T value) =>
         QueryResponse.Create(ResultKind.Scalar, JsonSerializer.SerializeToElement(value, ScryJson.Options));
 
-    static QueryResponse Single(object[]? row, ProjectionPlan plan)
+    static QueryResponse Single(object[]? row, ProjectionPlan plan, BinaryPartCollector? binary)
     {
         var payload = row is null
             ? JsonSerializer.SerializeToElement<object?>(null)
-            : JsonSerializer.SerializeToElement(Shape(row, plan), ScryJson.Options);
+            : JsonSerializer.SerializeToElement(Shape(row, plan, binary), ScryJson.Options);
         return QueryResponse.Create(ResultKind.Single, payload);
     }
 
-    static Dictionary<string, object?> Shape(object[] row, ProjectionPlan plan)
+    static Dictionary<string, object?> Shape(object[] row, ProjectionPlan plan, BinaryPartCollector? binary)
     {
         var root = new Dictionary<string, object?>(StringComparer.Ordinal);
         for (var i = 0; i < plan.Shape.Count; i++)
@@ -985,7 +990,13 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 }
             }
 
-            node[path[^1]] = row[i];
+            // A binary slot's value leaves as a part and a placeholder holds its position; serialized
+            // through ScryJson the placeholder's bytes match the fast writer's hand-written form.
+            node[path[^1]] = binary is not null &&
+                             plan.BinarySlots?[i] == true &&
+                             row[i] is byte[] bytes
+                ? new BinaryPlaceholder(binary.Add(bytes))
+                : row[i];
         }
 
         return root;

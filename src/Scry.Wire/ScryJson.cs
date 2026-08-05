@@ -24,6 +24,9 @@ public static class ScryJson
         // tolerant wrapper is byte-identical to JsonStringEnumConverter except when a payload read
         // hits a value name this side does not know — see DeserializePayload.
         options.Converters.Add(new TolerantEnumConverterFactory());
+        // Same shape of addition for binary: byte-identical to the built-in base64 handling except
+        // when a payload read hits a multipart placeholder — see DeserializePayload.
+        options.Converters.Add(new BinaryConverter());
 
         // The wire vocabulary is closed, so all of it is generated at compile time and answered here
         // without reflecting over a type. A payload's type is the one thing this assembly cannot know
@@ -60,6 +63,8 @@ public static class ScryJson
         // Non-null marks "inside a payload" even when the response carried no aliases, so an unknown
         // enum name still reports a stale client instead of an unexplained parse failure.
         EnumAliasScope.Current = response.EnumAliases ?? [];
+        // Null when the response was not multipart: a placeholder can then only fail closed.
+        BinaryPartScope.Current = response.BinaryParts;
         try
         {
             return response.Payload.Deserialize<T>(Options);
@@ -67,6 +72,7 @@ public static class ScryJson
         finally
         {
             EnumAliasScope.Current = null;
+            BinaryPartScope.Current = null;
         }
     }
 
@@ -75,9 +81,11 @@ public static class ScryJson
     /// <see cref="DeserializePayload{T}"/>: a stream carries its enum aliases once, on the opening
     /// marker, so they are passed per row instead of read off a response.
     /// </summary>
-    public static T? DeserializeRow<T>(JsonElement row, IReadOnlyList<EnumAlias>? aliases)
+    public static T? DeserializeRow<T>(JsonElement row, IReadOnlyList<EnumAlias>? aliases, IReadOnlyList<byte[]>? parts = null)
     {
         EnumAliasScope.Current = aliases ?? [];
+        // A stream carries binary parts per row, so they are passed per row like the aliases.
+        BinaryPartScope.Current = parts;
         try
         {
             return row.Deserialize<T>(Options);
@@ -85,6 +93,7 @@ public static class ScryJson
         finally
         {
             EnumAliasScope.Current = null;
+            BinaryPartScope.Current = null;
         }
     }
 

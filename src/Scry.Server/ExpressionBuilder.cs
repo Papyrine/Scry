@@ -86,9 +86,10 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         var parameter = Expression.Parameter(type, "e");
         var leaves = new List<Expression>();
         var shape = new List<IReadOnlyList<string>>();
-        Flatten(projection, parameter, [], leaves, shape);
+        var binary = new List<bool>();
+        Flatten(projection, parameter, [], leaves, shape, binary);
         var selector = Expression.Lambda(ToObjectArray(leaves), parameter);
-        return new(selector, shape);
+        return new(selector, shape, Normalize(binary));
     }
 
     /// <summary>
@@ -97,7 +98,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
     /// One materialization then yields both the shaped rows and the last row's key values (for the next
     /// cursor). <c>Shape</c> describes only the leading projection slots.
     /// </summary>
-    public (LambdaExpression Selector, IReadOnlyList<IReadOnlyList<string>> Shape, int KeyCount) BuildPageProjection(
+    public (LambdaExpression Selector, IReadOnlyList<IReadOnlyList<string>> Shape, IReadOnlyList<bool>? BinarySlots, int KeyCount) BuildPageProjection(
         Projection? projection,
         IReadOnlyList<(Node Key, bool Descending)> keys,
         Type type)
@@ -105,6 +106,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         var parameter = Expression.Parameter(type, "e");
         var leaves = new List<Expression>();
         var shape = new List<IReadOnlyList<string>>();
+        var binary = new List<bool>();
 
         if (projection is null)
         {
@@ -117,11 +119,12 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
             {
                 leaves.Add(Expression.Property(parameter, member.Property));
                 shape.Add([member.Name]);
+                binary.Add(member.BinaryTransfer);
             }
         }
         else
         {
-            Flatten(projection, parameter, [], leaves, shape);
+            Flatten(projection, parameter, [], leaves, shape, binary);
         }
 
         // Trailing slots: the ordering-key values, used only to build the next page's cursor.
@@ -131,7 +134,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         }
 
         var selector = Expression.Lambda(ToObjectArray(leaves), parameter);
-        return (selector, shape, keys.Count);
+        return (selector, shape, Normalize(binary), keys.Count);
     }
 
     /// <summary>
@@ -214,14 +217,16 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         var parameter = Expression.Parameter(type, "e");
         var leaves = new List<Expression>();
         var shape = new List<IReadOnlyList<string>>();
+        var binary = new List<bool>();
         foreach (var member in meta.Members.Values.Where(_ => _.Kind == MemberKind.Scalar))
         {
             leaves.Add(Expression.Property(parameter, member.Property));
             shape.Add([member.Name]);
+            binary.Add(member.BinaryTransfer);
         }
 
         var selector = Expression.Lambda(ToObjectArray(leaves), parameter);
-        return new(selector, shape);
+        return new(selector, shape, Normalize(binary));
     }
 
     /// <summary>
@@ -233,7 +238,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
     /// Under a left join the inner row can be absent, so a non-nullable value read from that side is
     /// widened to its nullable form; without that the shaper would fault materializing a SQL NULL.
     /// </remarks>
-    public (LambdaExpression Selector, IReadOnlyList<IReadOnlyList<string>> Shape) BuildJoinProjection(
+    public (LambdaExpression Selector, IReadOnlyList<IReadOnlyList<string>> Shape, IReadOnlyList<bool>? BinarySlots) BuildJoinProjection(
         IReadOnlyList<JoinMember> members,
         Type outerType,
         Type innerType,
@@ -249,6 +254,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
             "i");
         var leaves = new List<Expression>(members.Count);
         var shape = new List<IReadOnlyList<string>>(members.Count);
+        var binary = new List<bool>(members.Count);
 
         foreach (var member in members)
         {
@@ -256,11 +262,13 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
             {
                 leaves.Add(BuildAggregate(aggregate, inner, innerType));
                 shape.Add([member.Name]);
+                binary.Add(false);
                 continue;
             }
 
             Expression root = member.Side == JoinSide.Outer ? outer : inner;
             var leaf = BuildMemberAccess(root, member.Path);
+            binary.Add(IsBinaryPath(member.Path, member.Side == JoinSide.Outer ? outerType : innerType));
 
             // A side the join can leave unmatched yields SQL NULL, so a non-nullable value read from
             // it is widened; without that the shaper faults materializing the null.
@@ -279,7 +287,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
             shape.Add([member.Name]);
         }
 
-        return (Expression.Lambda(ToObjectArray(leaves), outer, inner), shape);
+        return (Expression.Lambda(ToObjectArray(leaves), outer, inner), shape, Normalize(binary));
     }
 
     /// <summary>
@@ -357,14 +365,15 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
     /// it nor order by one of its members — which is exactly how a plain record behaves, and why one
     /// is not enough on its own.
     /// </remarks>
-    public (LambdaExpression Selector, IReadOnlyList<IReadOnlyList<string>> Shape)? BuildDistinctRow(
+    public (LambdaExpression Selector, IReadOnlyList<IReadOnlyList<string>> Shape, IReadOnlyList<bool>? BinarySlots)? BuildDistinctRow(
         Projection projection,
         Type type)
     {
         var parameter = Expression.Parameter(type, "e");
         var leaves = new List<Expression>();
         var shape = new List<IReadOnlyList<string>>();
-        Flatten(projection, parameter, [], leaves, shape);
+        var binary = new List<bool>();
+        Flatten(projection, parameter, [], leaves, shape, binary);
 
         if (leaves.Count == 0 ||
             leaves.Count > DistinctRow.ByArity.Length)
@@ -378,7 +387,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
             .Select(MemberInfo (_) => row.GetProperty(_.Name!)!)
             .ToArray();
 
-        return (Expression.Lambda(Expression.New(constructor, leaves, members), parameter), shape);
+        return (Expression.Lambda(Expression.New(constructor, leaves, members), parameter), shape, Normalize(binary));
     }
 
     /// <summary>
@@ -469,7 +478,8 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         Expression root,
         IReadOnlyList<string> jsonPrefix,
         List<Expression> leaves,
-        List<IReadOnlyList<string>> shape)
+        List<IReadOnlyList<string>> shape,
+        List<bool>? binary = null)
     {
         foreach (var member in projection.Members)
         {
@@ -482,11 +492,12 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
                 case NodeValue value:
                     leaves.Add(Build(value.Node, root, null));
                     shape.Add(jsonPath);
+                    binary?.Add(value.Node is MemberNode memberNode && IsBinaryPath(memberNode.Path, root.Type));
                     break;
 
                 case NestedValue nested:
                     var navTarget = BuildMemberAccess(root, nested.Path);
-                    Flatten(nested.Projection, navTarget, jsonPath, leaves, shape);
+                    Flatten(nested.Projection, navTarget, jsonPath, leaves, shape, binary);
                     break;
 
                 default:
@@ -494,6 +505,34 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
             }
         }
     }
+
+    /// <summary>
+    /// Whether a projection leaf's path terminates at a <c>[BinaryTransfer]</c> member. Only such
+    /// leaves divert to a binary part: a computed value (a conditional, a coalesce) has no owning
+    /// member to consult, so it stays base64 and slot classification is static per plan.
+    /// </summary>
+    bool IsBinaryPath(IReadOnlyList<string> path, Type root)
+    {
+        var type = root;
+        Member? member = null;
+        foreach (var segment in path)
+        {
+            var owner = Nullable.GetUnderlyingType(type) ?? type;
+            if (!schema.TryGetType(owner, out var meta) ||
+                !meta.TryGetMember(segment, out member))
+            {
+                return false;
+            }
+
+            type = member.Type;
+        }
+
+        return member is {BinaryTransfer: true};
+    }
+
+    // Plans without a binary slot — the common case — carry null, the one check the writers branch on.
+    static IReadOnlyList<bool>? Normalize(List<bool> binary) =>
+        binary.Contains(true) ? binary : null;
 
     /// <summary>
     /// Builds the selector for a whole-sequence aggregate, typed so the aggregate is one the provider

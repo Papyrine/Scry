@@ -56,7 +56,11 @@ public class Employee
     public int DepartmentId { get; set; }
     public Department? Department { get; set; }
 
+    // begin-snippet: binaryTransferMember
+    // Travels as a raw multipart part in HTTP responses instead of base64 in the JSON payload.
+    [BinaryTransfer]
     public byte[] Avatar { get; set; } = [];
+    // end-snippet
 
     // A complex type mapped to a JSON column (see TestContext.OnModelCreating). Traversable via
     // [QueryableComplex]; exercises Scry rebinding member access that EF translates into the JSON column.

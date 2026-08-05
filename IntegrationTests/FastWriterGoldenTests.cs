@@ -6,7 +6,9 @@ using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 /// The fast response writer's whole contract is byte identity: what the HTTP endpoint streams from
 /// projected rows must equal serializing the <see cref="QueryResponse"/> the general path produces —
 /// for every result kind, on the plan-cache miss and on the hit, and for strings that stress every
-/// escaping path. A mismatch here is a wire break, not a style difference.
+/// escaping path. A mismatch here is a wire break, not a style difference. The sample model has no
+/// binary member, so this corpus never diverts; the multipart counterpart of this identity is
+/// <c>BinaryTransferTests.FastAndGeneralPathsEmitIdenticalPayloads</c>.
 /// </summary>
 [TestFixture]
 public class FastWriterGoldenTests

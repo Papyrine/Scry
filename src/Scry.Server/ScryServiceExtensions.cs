@@ -98,7 +98,9 @@ public static class ScryServiceExtensions
         var drifted = request.Stamp is { } stamp && stamp != processor.SchemaStamp;
 
         ScryStreamMarker begin;
+        bool diverting;
         IAsyncEnumerable<ReadOnlyMemory<byte>> rows;
+        var collector = new BinaryPartCollector();
         try
         {
             var db = (DbContext)services.GetRequiredService(options.ContextType);
@@ -108,13 +110,14 @@ public static class ScryServiceExtensions
             // fixed. Validation and policies both complete before Stream returns, so anything written
             // is in place before the begin marker below. Rows arrive as finished JSON bytes, written
             // by the projection's shape writer rather than through per-row dictionaries.
-            (begin, rows) = processor.StreamBuffered(
+            (begin, diverting, rows) = processor.StreamBuffered(
                 request,
                 db,
                 services,
                 context.Request.Headers,
                 context.Response.Headers,
-                context.RequestAborted);
+                context.RequestAborted,
+                collector);
         }
         catch (ScryValidationException exception)
         {
@@ -127,13 +130,37 @@ public static class ScryServiceExtensions
             return;
         }
 
-        context.Response.ContentType = ScryStream.ContentType;
+        // A plan with a [BinaryTransfer] slot commits to multipart before the first byte — the
+        // decision is the plan's, not the data's, so an all-null result still wraps. Sections of
+        // ndjson lines alternate with each row's binary parts, and every part precedes the line that
+        // references it; a reader therefore holds at most one row's parts. Markers are ordinary lines.
+        var multipart = diverting ? MultipartWriter.Create(context.Response.Body) : null;
+        context.Response.ContentType = multipart?.ContentType ?? ScryStream.ContentType;
+        if (multipart is not null)
+        {
+            await multipart.OpenPart(ScryStream.ContentType, context.RequestAborted);
+        }
+
         await WriteLine(context, begin);
 
         try
         {
             await foreach (var row in rows)
             {
+                // The row's bytes are written (and its binary values collected) before it is yielded,
+                // so the parts drained here are exactly this row's. Draining is what resets the
+                // placeholder indices per line.
+                if (multipart is not null &&
+                    collector.Count > 0)
+                {
+                    foreach (var part in collector.Drain())
+                    {
+                        await multipart.WriteBinary(part, context.RequestAborted);
+                    }
+
+                    await multipart.OpenPart(ScryStream.ContentType, context.RequestAborted);
+                }
+
                 await WriteLine(context, row);
             }
         }
@@ -149,10 +176,19 @@ public static class ScryServiceExtensions
                     Kind = ScryStream.Error,
                     Error = exception is ScryValidationException ? exception.Message : "Query execution failed."
                 });
+            if (multipart is not null)
+            {
+                await multipart.Terminate(context.RequestAborted);
+            }
+
             return;
         }
 
         await WriteLine(context, new ScryStreamMarker {Kind = ScryStream.End});
+        if (multipart is not null)
+        {
+            await multipart.Terminate(context.RequestAborted);
+        }
     }
 
     /// <summary>
@@ -190,12 +226,31 @@ public static class ScryServiceExtensions
         try
         {
             var db = (DbContext)services.GetRequiredService(options.ContextType);
+            var collector = new BinaryPartCollector();
             var response = processor.ExecuteBatch(
                 request,
                 db,
                 services,
                 context.Request.Headers,
-                context.Response.Headers);
+                context.Response.Headers,
+                collector);
+
+            // One flat multipart for the whole batch: the collector threads through every entry, so
+            // the parts are numbered globally and the batch envelope arrives last, referencing them.
+            if (collector.Count > 0)
+            {
+                var multipart = MultipartWriter.Create(context.Response.Body);
+                context.Response.ContentType = multipart.ContentType;
+                foreach (var part in collector.Parts)
+                {
+                    await multipart.WriteBinary(part, context.RequestAborted);
+                }
+
+                await multipart.OpenPart("application/json", context.RequestAborted);
+                await context.Response.WriteAsync(ScryJson.Serialize(response), context.RequestAborted);
+                await multipart.Terminate(context.RequestAborted);
+                return;
+            }
 
             context.Response.ContentType = "application/json";
             await context.Response.WriteAsync(ScryJson.Serialize(response), context.RequestAborted);
@@ -281,6 +336,7 @@ public static class ScryServiceExtensions
             // JsonElement round trip. Everything else comes back as a QueryResponse and is
             // serialized the general way; the two produce identical bytes.
             var buffer = new ArrayBufferWriter<byte>();
+            var collector = new BinaryPartCollector();
             var buffered = processor.TryExecuteBuffered(
                 request,
                 db,
@@ -288,7 +344,34 @@ public static class ScryServiceExtensions
                 context.Request.Headers,
                 context.Response.Headers,
                 buffer,
-                out var response);
+                out var response,
+                collector);
+
+            // A result that diverted [BinaryTransfer] values travels as multipart: the raw parts
+            // first, then the JSON envelope that references them. The envelope is buffered either way,
+            // so parts-first is free. Anything else is today's plain JSON, byte for byte.
+            if (collector.Count > 0)
+            {
+                var multipart = MultipartWriter.Create(context.Response.Body);
+                context.Response.ContentType = multipart.ContentType;
+                foreach (var part in collector.Parts)
+                {
+                    await multipart.WriteBinary(part, context.RequestAborted);
+                }
+
+                await multipart.OpenPart("application/json", context.RequestAborted);
+                if (buffered)
+                {
+                    await context.Response.Body.WriteAsync(buffer.WrittenMemory, context.RequestAborted);
+                }
+                else
+                {
+                    await context.Response.WriteAsync(ScryJson.Serialize(response!), context.RequestAborted);
+                }
+
+                await multipart.Terminate(context.RequestAborted);
+                return;
+            }
 
             context.Response.ContentType = "application/json";
             if (buffered)

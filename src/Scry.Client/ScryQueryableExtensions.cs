@@ -105,7 +105,7 @@ public static class ScryQueryableExtensions
     {
         try
         {
-            return ScryJson.DeserializeRow<T>(row, client.StreamAliases)!;
+            return ScryJson.DeserializeRow<T>(row, client.StreamAliases, client.StreamParts)!;
         }
         catch (JsonException exception)
             when (source.Provider is QueryProvider {Client.SchemaStale: true})

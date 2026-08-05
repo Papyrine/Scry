@@ -17,5 +17,13 @@ public sealed record QueryBatchResponse(int Version, IReadOnlyList<QueryBatchRes
     /// same model. Serves the same drift detection <see cref="QueryResponse.Stamp"/> does.
     /// </summary>
     public string? Stamp { get; init; }
+
+    /// <summary>
+    /// The raw binary parts a <see cref="ScryBinary.ContentType"/> response arrived with. A batch
+    /// numbers its parts globally across entries, so the one list serves every result. Never
+    /// serialized — the parts travel beside the JSON, not inside it.
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyList<byte[]>? BinaryParts { get; init; }
 }
 // end-snippet

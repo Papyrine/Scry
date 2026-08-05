@@ -11,4 +11,12 @@
 readonly record struct CallScope(
     IServiceProvider Services,
     IHeaderDictionary RequestHeaders,
-    IHeaderDictionary ResponseHeaders);
+    IHeaderDictionary ResponseHeaders)
+{
+    /// <summary>
+    /// Where the shapers divert <c>[BinaryTransfer]</c> values, when the transport supplied one. Only
+    /// the HTTP endpoints do — multipart is a transport concern, so the public processor surface
+    /// leaves this null and stays bit-identical.
+    /// </summary>
+    public BinaryPartCollector? Binary { get; init; }
+}

@@ -27,5 +27,13 @@ public sealed record QueryResponse(int Version, ResultKind Kind, JsonElement Pay
     /// it does not know to one it does. Null otherwise, and omitted from the JSON.
     /// </summary>
     public IReadOnlyList<EnumAlias>? EnumAliases { get; init; }
+
+    /// <summary>
+    /// The raw binary parts a <see cref="ScryBinary.ContentType"/> response arrived with, in wire
+    /// order, set by the transport for <c>ScryJson.DeserializePayload</c> to resolve placeholders
+    /// against. Never serialized — the parts travel beside the JSON, not inside it.
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyList<byte[]>? BinaryParts { get; init; }
 }
 // end-snippet

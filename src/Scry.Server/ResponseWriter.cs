@@ -27,7 +27,7 @@ static class ResponseWriter
         var rows = 0;
         foreach (var row in set.Rows)
         {
-            writer.WriteRow(json, Row(row!, set));
+            writer.WriteRow(json, Row(row!, set), set.Binary);
             rows++;
         }
 
@@ -60,16 +60,21 @@ sealed class PlanShapeWriter
     {
         public JsonEncodedText Encoded = JsonEncodedText.Encode(JsonNamingPolicy.CamelCase.ConvertName(name));
         public int Slot = -1;
+        public bool Binary;
         public List<Node>? Children;
         public Dictionary<string, int>? Index;
     }
+
+    static readonly JsonEncodedText bin = JsonEncodedText.Encode(ScryBinary.PartProperty);
 
     readonly Node root;
 
     PlanShapeWriter(Node root) =>
         this.root = root;
 
-    public static PlanShapeWriter Create(IReadOnlyList<IReadOnlyList<string>> shape)
+    public static PlanShapeWriter Create(
+        IReadOnlyList<IReadOnlyList<string>> shape,
+        IReadOnlyList<bool>? binarySlots = null)
     {
         var root = Branch(new(""));
         for (var slot = 0; slot < shape.Count; slot++)
@@ -95,6 +100,7 @@ sealed class PlanShapeWriter
             leaf.Children = null;
             leaf.Index = null;
             leaf.Slot = slot;
+            leaf.Binary = binarySlots?[slot] == true;
         }
 
         return new(root);
@@ -120,10 +126,10 @@ sealed class PlanShapeWriter
         return child;
     }
 
-    public void WriteRow(Utf8JsonWriter json, object[] row) =>
-        WriteObject(json, root, row);
+    public void WriteRow(Utf8JsonWriter json, object[] row, BinaryPartCollector? binary = null) =>
+        WriteObject(json, root, row, binary);
 
-    static void WriteObject(Utf8JsonWriter json, Node node, object[] row)
+    static void WriteObject(Utf8JsonWriter json, Node node, object[] row, BinaryPartCollector? binary)
     {
         json.WriteStartObject();
         foreach (var child in node.Children!)
@@ -131,11 +137,25 @@ sealed class PlanShapeWriter
             json.WritePropertyName(child.Encoded);
             if (child.Children is null)
             {
-                WriteValue(json, row[child.Slot]);
+                // A binary slot's value leaves as a part and {"$bin":n} holds its position — the same
+                // bytes serializing a BinaryPlaceholder produces on the general path. Null stays
+                // inline and produces no part.
+                if (child.Binary &&
+                    binary is not null &&
+                    row[child.Slot] is byte[] bytes)
+                {
+                    json.WriteStartObject();
+                    json.WriteNumber(bin, binary.Add(bytes));
+                    json.WriteEndObject();
+                }
+                else
+                {
+                    WriteValue(json, row[child.Slot]);
+                }
             }
             else
             {
-                WriteObject(json, child, row);
+                WriteObject(json, child, row, binary);
             }
         }
 

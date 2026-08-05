@@ -587,9 +587,17 @@ public sealed record QueryResponse(int Version, ResultKind Kind, JsonElement Pay
     /// it does not know to one it does. Null otherwise, and omitted from the JSON.
     /// </summary>
     public IReadOnlyList<EnumAlias>? EnumAliases { get; init; }
+
+    /// <summary>
+    /// The raw binary parts a <see cref="ScryBinary.ContentType"/> response arrived with, in wire
+    /// order, set by the transport for <c>ScryJson.DeserializePayload</c> to resolve placeholders
+    /// against. Never serialized — the parts travel beside the JSON, not inside it.
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyList<byte[]>? BinaryParts { get; init; }
 }
 ```
-<sup><a href='/src/Scry.Wire/QueryResponse.cs#L9-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireResponse' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/QueryResponse.cs#L9-L39' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireResponse' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ```json
@@ -685,6 +693,56 @@ The response answers each entry positionally, and is likewise an envelope around
 | `staleClient` | As on a [single error](#response) — the rejection is attributed to a differing schema stamp. |
 
 **Entries are independent.** Each is validated, policy-filtered, and executed separately, so one being rejected leaves the rest answered — the envelope only fails for a fault of its own: an unreadable body, an unsupported version, or more entries than [`MaxBatchSize`](server.md#options). It is not a transaction, and the entries run sequentially. The schema stamp is carried once on the envelope, since one server answered all of them.
+
+
+## Binary transfer
+
+A `byte[]` value normally travels as a base64 string — +33% size and an encode/decode on both ends. A member marked `[BinaryTransfer]` ([Annotations](annotations.md)) opts out: over HTTP its values leave the JSON payload entirely and travel as **raw multipart parts** beside it. This is a transfer encoding, not a shape change — the member's generated code, validation surface, introspection, and schema stamp are exactly what they would be without the attribute, and every non-HTTP transport (`ScryProcessor` hosted directly) keeps inline base64.
+
+<!-- snippet: wireBinary -->
+<a id='snippet-wireBinary'></a>
+```cs
+public static class ScryBinary
+{
+    /// <summary>The media type a binary-carrying response is served as.</summary>
+    public const string ContentType = "multipart/mixed";
+
+    /// <summary>The media type of each raw binary part.</summary>
+    public const string PartContentType = "application/octet-stream";
+
+    /// <summary>
+    /// The property a diverted binary value is replaced with in JSON. Projected member names come from
+    /// the client's own C# identifiers, and <c>$</c> cannot start one, so no row can collide with it.
+    /// </summary>
+    public const string PartProperty = "$bin";
+
+    /// <summary>
+    /// The prefix of the multipart boundary. The rest is random per response, so part content is never
+    /// scanned for collisions.
+    /// </summary>
+    public const string BoundaryPrefix = "scry";
+}
+```
+<sup><a href='/src/Scry.Wire/ScryBinary.cs#L17-L38' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireBinary' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+The server decides per response: a result that projects at least one non-null decorated value is served as `multipart/mixed; boundary=scry<32 hex>`; anything else is plain JSON, byte for byte as before. The boundary is random per response and part content is never scanned — an accidental delimiter sequence inside a part is cryptographically negligible, the same bet the BCL's own multipart writers make.
+
+Where a diverted value would have been, the JSON carries a **placeholder**:
+
+```json
+{ "name": "alpha", "avatar": { "$bin": 0 } }
+```
+
+`$bin` follows the same collision argument as `$type` and `$scry`: projected member names are C# identifiers, and `$` cannot start one. A `null` value stays inline as JSON `null` and produces no part — a placeholder never exists without its part. Only a projection leaf that is a direct member path resolves to a decorated member; a computed value (a conditional, a coalesce) has no owning member and stays base64, which a reader must continue to accept.
+
+**Every part precedes the JSON document that references it**, and `n` indexes that document's parts, 0-based in emission order. A reader resolving placeholders while parsing JSON therefore always has the parts in hand. Concretely, per endpoint:
+
+* **Single** — sections are the binary parts in encounter order, then one `application/json` section holding the ordinary response envelope. Indices span the whole response.
+* **Batch** — one flat multipart for the whole batch: parts numbered globally across entries in encounter order, then the batch envelope last. No nested multipart.
+* **Stream** — the referencing document is each row line, and indices reset after every one. Sections of `application/x-ndjson` lines (markers and rows, exactly the [streamed format](#streamed-results)) alternate with each row's parts, every part arriving in the section run immediately before its row's line — so a reader holds at most one row's parts at a time. Whether the stream wraps at all is decided by the projection plan before the first byte, so an all-null result still arrives as multipart.
+
+Binary parts carry `Content-Type: application/octet-stream` and an advisory `Content-Length` (readers may preallocate from it but must not trust it); part identity is positional, so there is no `Content-Disposition`. A placeholder a reader cannot resolve — an index with no part, or a placeholder in a response that carried none — must fail the read rather than yield a guess.
 
 
 ## Versioning

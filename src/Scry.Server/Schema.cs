@@ -699,14 +699,22 @@ sealed class Schema
                 property.GetCustomAttribute<QueryIgnoreAttribute>() is not null)
             {
                 EnsureNoPreviousNames(type, property);
+                EnsureNoBinaryTransfer(type, property, "which is not exposed to clients. Remove it, or remove whatever excludes the member.");
                 continue;
             }
 
             if (IsScalar(property.PropertyType))
             {
+                if (property.PropertyType != typeof(byte[]))
+                {
+                    EnsureNoBinaryTransfer(type, property, $"which is a '{ScalarDisplay(property.PropertyType)}'. Only byte[] members can travel as binary parts.");
+                }
+
                 meta.Members[property.Name] = new(property.Name, property, MemberKind.Scalar);
                 continue;
             }
+
+            EnsureNoBinaryTransfer(type, property, "which is not a scalar member. Only byte[] members can travel as binary parts.");
 
             // A reference navigation or a complex value type: traversable when the target is opted in.
             // Unwrap Nullable<T> so an optional struct complex member (Address?) resolves to Address.
@@ -774,6 +782,14 @@ sealed class Schema
         if (PreviousNamesOf(property).Count > 0)
         {
             throw new($"[PreviousNames] on '{type.Name}.{property.Name}', which is not exposed to clients. Remove it, or remove whatever excludes the member.");
+        }
+    }
+
+    static void EnsureNoBinaryTransfer(Type type, PropertyInfo property, string reason)
+    {
+        if (property.GetCustomAttribute<BinaryTransferAttribute>() is not null)
+        {
+            throw new($"[BinaryTransfer] on '{type.Name}.{property.Name}', {reason}");
         }
     }
 
