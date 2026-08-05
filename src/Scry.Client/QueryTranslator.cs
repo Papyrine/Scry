@@ -716,6 +716,32 @@ sealed class QueryTranslator
             source = inner.Arguments[0];
         }
 
+        // string.Concat over the group's values is the text fold with nothing between them —
+        // string.Join's empty-separator spelling, and like Join it folds the whole group.
+        if (call is {Method.Name: "Concat", Arguments.Count: 1} &&
+            call.Method.DeclaringType == typeof(string))
+        {
+            // The generic overload is what a non-string selector binds to.
+            if (call.Method.IsGenericMethod)
+            {
+                throw new NotSupportedException("string.Concat over a group joins text — select a string member.");
+            }
+
+            if (predicate is not null ||
+                distinct)
+            {
+                throw new NotSupportedException("string.Concat folds the whole group — filter the rows before grouping.");
+            }
+
+            if (selector is not MemberNode path)
+            {
+                throw new NotSupportedException(
+                    "string.Concat over a group joins a text member the rows carry — string.Concat(_.Select(x => x.Code)).");
+            }
+
+            return new(AggregateFn.Join, path, "");
+        }
+
         if (call is {Method.Name: "Count", Arguments.Count: 1})
         {
             // Without a Distinct there is nothing for selected values to change about a count, so the
@@ -755,7 +781,7 @@ sealed class QueryTranslator
             // Reached for any other call written in a grouped projection, where only the group key and
             // an aggregate are expressible — so the arity below is safe to assume.
             _ => throw new NotSupportedException(
-                $"'{call.Method.Name}' is not an aggregate. A grouped projection may only use the group key, Count/Sum/Average/Min/Max, and string.Join over the group's values.")
+                $"'{call.Method.Name}' is not an aggregate. A grouped projection may only use the group key, Count/Sum/Average/Min/Max, and string.Join or string.Concat over the group's values.")
         };
 
         if (call.Arguments.Count == 2)

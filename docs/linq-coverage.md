@@ -97,7 +97,7 @@ A collection of **values** — an EF primitive collection, or a JSON array of `[
 
 ### Aggregates
 
-`Count`, `Sum`, `Average`, `Min`, `Max` are supported in two positions, and `string.Join` over the group's values — SQL's `STRING_AGG` — in the grouped one alone. The joined values are ordered by themselves, since SQL leaves the concatenation order unspecified, so the same answer reads from any source. As a projection value in the `Select` that follows a `GroupBy`, aggregating over the rows of each group — see [grouping](querying.md#grouping-and-aggregates):
+`Count`, `Sum`, `Average`, `Min`, `Max` are supported in two positions, and `string.Join` over the group's values — SQL's `STRING_AGG`, with `string.Concat` as its empty-separator spelling — in the grouped one alone. The joined values are ordered by themselves, since SQL leaves the concatenation order unspecified, so the same answer reads from any source. As a projection value in the `Select` that follows a `GroupBy`, aggregating over the rows of each group — see [grouping](querying.md#grouping-and-aggregates):
 
 <!-- snippet: clientGroupBy -->
 <a id='snippet-clientGroupBy'></a>
@@ -229,7 +229,6 @@ Translatable by EF, compatible with the wire model, and absent only because noth
 
 | Surface | What adopting it would mean |
 | --- | --- |
-| `string.Concat` as a grouped aggregate | The empty-separator spelling of `string.Join`, whose separator-carrying form is already carried as the `Join` aggregate. |
 
 Functions with an EF translation ready to rebind onto:
 

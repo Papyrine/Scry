@@ -1222,8 +1222,10 @@ public enum AggregateFn
 | `_.Average(_ => _.Amount)` | `Average` |
 | `_.Min(_ => _.Amount)` | `Min` |
 | `_.Max(_ => _.Amount)` | `Max` |
+| `string.Join(", ", _.Select(x => x.Code))` | `Join` |
+| `string.Concat(_.Select(x => x.Code))` | `Join`, with an empty separator |
 
-An aggregate can **compose** over the group before it folds: `_.Where(x => x.Amount > 90).Count()` filters the rows the fold reads — `_.Count(x => x.Amount > 90)` abbreviates it — and `_.Select(x => x.Grade).Distinct().Count()` folds only the distinct selected values, SQL's `COUNT(DISTINCT …)`. The grammar is `g [.Where(pred)] [.Select(sel) [.Distinct()]] .Fold(…)`, written in that order because each stage reads what the previous one produced. The provider folds the filter into the aggregate itself — `SUM(CASE WHEN … END)` — and a distinct fold over an optional member skips absent values on every source, as SQL's distinct aggregates do. The composed forms travel under **wire version 2**, so a server predating them rejects the request rather than folding unfiltered; `string.Join` stays whole — filter the rows before grouping. These forms work in a [group filter](#filtering-groups) too.
+An aggregate can **compose** over the group before it folds: `_.Where(x => x.Amount > 90).Count()` filters the rows the fold reads — `_.Count(x => x.Amount > 90)` abbreviates it — and `_.Select(x => x.Grade).Distinct().Count()` folds only the distinct selected values, SQL's `COUNT(DISTINCT …)`. The grammar is `g [.Where(pred)] [.Select(sel) [.Distinct()]] .Fold(…)`, written in that order because each stage reads what the previous one produced. The provider folds the filter into the aggregate itself — `SUM(CASE WHEN … END)` — and a distinct fold over an optional member skips absent values on every source, as SQL's distinct aggregates do. The composed forms travel under **wire version 2**, so a server predating them rejects the request rather than folding unfiltered; the text aggregate — `string.Join`, and `string.Concat`, its empty-separator spelling — stays whole: filter the rows before grouping. These forms work in a [group filter](#filtering-groups) too.
 
 Constraints:
 

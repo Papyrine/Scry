@@ -163,7 +163,7 @@ public class AnalyzerTests
             await Query.Order
                 .GroupBy(_ => _.Region)
                 .Where(_ => _.Where(x => x.Amount > 5).Count() > 1)
-                .Select(_ => new {_.Key, Big = _.Count(x => x.Amount > 9), Grades = _.Select(x => x.Grade).Distinct().Count()})
+                .Select(_ => new {_.Key, Big = _.Count(x => x.Amount > 9), Grades = _.Select(x => x.Grade).Distinct().Count(), Codes = string.Concat(_.Select(x => x.Grade))})
                 .ToListAsync();
 
             await Query.Order

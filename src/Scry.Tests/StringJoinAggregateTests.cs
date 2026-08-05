@@ -26,6 +26,56 @@ public class StringJoinAggregateTests
         });
     }
 
+    // string.Concat is string.Join's empty-separator spelling, and reaches the wire as exactly that.
+    [Test]
+    public async Task ConcatJoinsWithNothingBetween()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var regions = await client.Source<Order>("Order")
+            .GroupBy(_ => _.Region)
+            .Select(_ => new {Region = _.Key, Codes = string.Concat(_.Select(x => x.Code))})
+            .ToListAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(regions.Single(_ => _.Region == "North").Codes, Is.EqualTo("408"));
+            Assert.That(regions.Single(_ => _.Region == "South").Codes, Is.EqualTo("17"));
+        });
+    }
+
+    // Like Join, Concat folds the whole group: the composed forms stay off the text aggregate.
+    [Test]
+    public void AFilteredConcatIsRefusedAtTranslation()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var exception = Assert.ThrowsAsync<NotSupportedException>(() =>
+            client.Source<Order>("Order")
+                .GroupBy(_ => _.Region)
+                .Select(_ => new {Codes = string.Concat(_.Where(x => x.Amount > 90).Select(x => x.Code))})
+                .ToListAsync());
+
+        Assert.That(exception!.Message, Does.Contain("folds the whole group"));
+    }
+
+    [Test]
+    public void AConcatOverSomethingNotTextIsRefusedAtTranslation()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var exception = Assert.ThrowsAsync<NotSupportedException>(() =>
+            client.Source<Order>("Order")
+                .GroupBy(_ => _.Region)
+                .Select(_ => new {Codes = string.Concat(_.Select(x => x.Amount))})
+                .ToListAsync());
+
+        Assert.That(exception!.Message, Does.Contain("select a string member"));
+    }
+
     // The result-selector spelling unfolds into the same GroupBy + Select, so the aggregate reads
     // identically through it.
     [Test]
