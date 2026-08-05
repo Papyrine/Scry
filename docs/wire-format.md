@@ -55,9 +55,12 @@ What is usually wanted instead already exists, in a narrower place:
 ```cs
 public sealed record QueryRequest(int Version, string Root, IReadOnlyList<QueryOp> Pipeline)
 {
-    /// <summary>Creates a request stamped with the current <see cref="WireFormat.Version"/>.</summary>
+    /// <summary>
+    /// Creates a request stamped with the lowest <see cref="WireFormat"/> version that can carry its
+    /// pipeline whole — see <see cref="WireFormat.RequiredVersion"/>.
+    /// </summary>
     public static QueryRequest Create(string root, IReadOnlyList<QueryOp> pipeline, string? stamp = null) =>
-        new(WireFormat.Version, root, pipeline)
+        new(WireFormat.RequiredVersion(pipeline), root, pipeline)
         {
             Stamp = stamp
         };
@@ -71,7 +74,7 @@ public sealed record QueryRequest(int Version, string Root, IReadOnlyList<QueryO
     public string? Stamp { get; init; }
 }
 ```
-<sup><a href='/src/Scry.Wire/QueryRequest.cs#L7-L25' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireRequest' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/QueryRequest.cs#L7-L28' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireRequest' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ```json
@@ -693,7 +696,26 @@ The response answers each entry positionally, and is likewise an envelope around
 public static class WireFormat
 {
     /// <summary>The current wire format version.</summary>
-    public const int Version = 1;
+    public const int Version = 2;
+
+    /// <summary>
+    /// The version a pipeline actually needs. A request is stamped with the lowest version that can
+    /// carry it whole, so a query using nothing new keeps working against an older server — while one
+    /// carrying a shape that server would misread by ignoring, a side pipeline on a join or set
+    /// operation, is rejected outright rather than answered partially.
+    /// </summary>
+    public static int RequiredVersion(IReadOnlyList<QueryOp> pipeline)
+    {
+        foreach (var op in pipeline)
+        {
+            if (op is JoinOp {InnerOps: not null} or SetOp {OperandOps: not null})
+            {
+                return 2;
+            }
+        }
+
+        return 1;
+    }
 
     /// <summary>
     /// The HTTP response header carrying the server's schema stamp. A successful response also carries
@@ -704,7 +726,7 @@ public static class WireFormat
     public const string SchemaStampHeader = "Scry-Schema-Stamp";
 }
 ```
-<sup><a href='/src/Scry.Wire/WireFormat.cs#L3-L18' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireVersion' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/WireFormat.cs#L3-L37' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireVersion' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `QueryRequest.Create` and `QueryResponse.Create` stamp the current version. The server rejects a request whose `version` is **greater** than its own — a newer client against an older server fails closed rather than being partially understood. Older requests continue to be accepted.

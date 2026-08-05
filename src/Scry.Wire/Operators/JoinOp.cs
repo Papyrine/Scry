@@ -18,7 +18,16 @@ public sealed record JoinOp(
     Node InnerKey,
     Node? InnerPredicate,
     IReadOnlyList<JoinMember> Result) :
-    QueryOp;
+    QueryOp
+{
+    /// <summary>
+    /// The inner side's own pipeline, present when it carries more than a predicate: filters, then an
+    /// ordering bounded by Skip/Take. Replaces <see cref="InnerPredicate"/> — a request carries one
+    /// spelling or the other, never both — and travels under wire version 2, so a server predating it
+    /// rejects the request whole rather than reading the inner side partially.
+    /// </summary>
+    public IReadOnlyList<QueryOp>? InnerOps { get; init; }
+}
 
 /// <summary>
 /// One projected member of a join, naming the side it reads from. <see cref="Path"/> is the member

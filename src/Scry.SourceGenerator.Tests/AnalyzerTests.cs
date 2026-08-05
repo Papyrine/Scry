@@ -186,6 +186,10 @@ public class AnalyzerTests
                 .ToListAsync();
 
             await Query.Order.Select(_ => new {_.Id}).Union(Query.Order.Select(_ => new {_.Id})).ToListAsync();
+            await Query.Order.Select(_ => new {_.Id}).Union(Query.Order.OrderBy(_ => _.Amount).Take(2).Select(_ => new {_.Id})).ToListAsync();
+            await Query.Customer
+                .Join(Query.Order.OrderByDescending(_ => _.Amount).Take(5), _ => _.Id, _ => _.CustomerId, (customer, order) => new {customer.Name, order.Amount})
+                .ToListAsync();
 
             var ids = new List<int> {1, 2};
             var regions = new[] {"north", "south"};

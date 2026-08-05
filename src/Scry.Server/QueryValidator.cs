@@ -775,9 +775,84 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             }
         }
 
-        if (set.Predicate is { } predicate)
+        if (set.OperandOps is { } operandOps)
+        {
+            if (set.Predicate is not null)
+            {
+                throw Reject("A set operand carries its filter as a predicate or as operand ops, never both.");
+            }
+
+            ValidateSideOps(operandOps, other.ClrType, "a set operand");
+        }
+        else if (set.Predicate is { } predicate)
         {
             ValidatePredicate(predicate, other.ClrType);
+        }
+    }
+
+    /// <summary>
+    /// The pipeline a join's inner side or a set operand may carry — filters first, then an ordering
+    /// that exists only to bound the paging after it: <c>Where* [OrderBy ThenBy* (Skip [Take] |
+    /// Take)]</c>. An unbounded ordering would be discarded inside a subquery, and unordered paging
+    /// would slice rows in no defined order, so each requires the other.
+    /// </summary>
+    void ValidateSideOps(IReadOnlyList<QueryOp> ops, Type elementType, string side)
+    {
+        if (ops.Count == 0)
+        {
+            throw Reject($"Empty ops on {side} — omit them instead.");
+        }
+
+        var stage = 0;
+        foreach (var op in ops)
+        {
+            switch (op)
+            {
+                case WhereOp where when stage == 0:
+                    ValidatePredicate(where.Predicate, elementType);
+                    break;
+
+                case OrderByOp orderBy when stage == 0:
+                    ValidateScalar(orderBy.Key, elementType, "OrderBy key");
+                    stage = 1;
+                    break;
+
+                case ThenByOp thenBy when stage == 1:
+                    ValidateScalar(thenBy.Key, elementType, "ThenBy key");
+                    break;
+
+                case SkipOp skip when stage == 1:
+                    if (skip.Count < 0)
+                    {
+                        throw Reject("Skip cannot be negative.");
+                    }
+
+                    stage = 2;
+                    break;
+
+                case TakeOp take when stage is 1 or 2:
+                    if (take.Count < 1)
+                    {
+                        throw Reject("Take must be at least one.");
+                    }
+
+                    if (take.Count > options.MaxPageSize)
+                    {
+                        throw Reject($"Take of {take.Count} on {side} exceeds the maximum page size of {options.MaxPageSize}.");
+                    }
+
+                    stage = 3;
+                    break;
+
+                default:
+                    throw Reject(
+                        $"'{op.GetType().Name}' is not allowed on {side} — only filters, and an ordering bounded by Skip or Take, in that order.");
+            }
+        }
+
+        if (stage == 1)
+        {
+            throw Reject($"An ordering on {side} must be bounded by Skip or Take — unbounded, a subquery discards it.");
         }
     }
 
@@ -877,7 +952,16 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
         ValidateJoinKeys(join, outerType, innerType);
 
-        if (join.InnerPredicate is { } predicate)
+        if (join.InnerOps is { } innerOps)
+        {
+            if (join.InnerPredicate is not null)
+            {
+                throw Reject("A join carries its inner filter as a predicate or as inner ops, never both.");
+            }
+
+            ValidateSideOps(innerOps, innerType, "a join's inner side");
+        }
+        else if (join.InnerPredicate is { } predicate)
         {
             ValidatePredicate(predicate, innerType);
         }

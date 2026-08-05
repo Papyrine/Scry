@@ -64,9 +64,9 @@ It is not a security boundary and cannot become one. The client is assumed hosti
 | `Distinct()` | Deduplicates the projected rows; can also be ordered, paged and counted over a flat projection of up to eight members. |
 | `Reverse()` | Inverts the ordering; requires a preceding `OrderBy`, as EF does. |
 | `Where(predicate)` after `GroupBy` | SQL `HAVING` — reads the group key and aggregates. |
-| `Join(…)` / `LeftJoin(…)` / `RightJoin(…)` | Each side policy-filtered independently first; carries its own projection. Keys may be composite — `new {_.A, _.B}` on both sides, compared part by part. A right join may not narrow its outer side. |
+| `Join(…)` / `LeftJoin(…)` / `RightJoin(…)` | Each side policy-filtered independently first; carries its own projection. Keys may be composite — `new {_.A, _.B}` on both sides, compared part by part. The inner side may filter, and order bounded by `Skip`/`Take`. A right join may not narrow its outer side. |
 | `GroupJoin(…)` | Aggregating form only — the group is folded to a scalar, never projected, so the response stays flat. |
-| `Union` / `Concat` / `Intersect` / `Except` | Each side policy-filtered first; both project the same shape. |
+| `Union` / `Concat` / `Intersect` / `Except` | Each side policy-filtered first; both project the same shape. An operand may filter, and order bounded by `Skip`/`Take`, before its `Select`. |
 
 ### Membership of another source
 
@@ -229,7 +229,6 @@ Translatable by EF, compatible with the wire model, and absent only because noth
 
 | Surface | What adopting it would mean |
 | --- | --- |
-| Richer join inner sides and set operands | Today an inner side carries only `Where`, and a set operand `Where` + `Select`. EF allows an arbitrary query on either side. |
 | Aggregates over a filtered or deduplicated group — `g.Where(…).Select(…).Distinct().Sum()` | EF composes these inside the aggregate; the wire's aggregate node carries only a selector. |
 | `string.Concat` as a grouped aggregate | The empty-separator spelling of `string.Join`, whose separator-carrying form is already carried as the `Join` aggregate. |
 

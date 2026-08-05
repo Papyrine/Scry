@@ -179,33 +179,35 @@ sealed class QueryTranslator
             throw new NotSupportedException($"The other side of '{call.Method.Name}' must be a Scry source.");
         }
 
-        Node? predicate = null;
+        var ops = Translate(queryable.Expression).ToList();
+
+        // The operand's projection has its own slot on the wire, and nothing may follow it — the
+        // shape both sides share is the last thing an operand says.
         Projection? projection = null;
-        foreach (var op in Translate(queryable.Expression))
+        if (ops.Count > 0 &&
+            ops[^1] is SelectOp select)
         {
-            switch (op)
-            {
-                case WhereOp where:
-                    predicate = predicate is null
-                        ? where.Predicate
-                        : new BinaryNode(BinaryOp.AndAlso, predicate, where.Predicate);
-                    break;
-                case SelectOp select when projection is null:
-                    projection = select.Projection;
-                    break;
-                default:
-                    throw new NotSupportedException(
-                        $"The other side of '{call.Method.Name}' may only carry a Where and a Select.");
-            }
+            projection = select.Projection;
+            ops.RemoveAt(ops.Count - 1);
         }
 
-        if (projection is null)
+        if (projection is null ||
+            ops.Any(_ => _ is SelectOp))
         {
             throw new NotSupportedException(
-                $"The other side of '{call.Method.Name}' must Select the shape both sides share.");
+                $"The other side of '{call.Method.Name}' must Select the shape both sides share, last.");
         }
 
-        return new(kind, provider.Root, predicate, projection);
+        if (ops.All(_ => _ is WhereOp))
+        {
+            return new(kind, provider.Root, FoldPredicates(ops), projection);
+        }
+
+        ValidateSideOps(ops, $"the other side of '{call.Method.Name}'");
+        return new(kind, provider.Root, null, projection)
+        {
+            OperandOps = ops
+        };
     }
 
     /// <summary>
@@ -220,7 +222,7 @@ sealed class QueryTranslator
             throw new NotSupportedException("A join must supply an inner source, both key selectors, and a result selector.");
         }
 
-        var (root, innerPredicate) = InnerSource(call.Arguments[1]);
+        var (root, innerPredicate, innerOps) = InnerSource(call.Arguments[1]);
         var outerKey = Lambda(call.Arguments[2]);
         var innerKey = Lambda(call.Arguments[3]);
         var result = Lambda(call.Arguments[4]);
@@ -236,7 +238,10 @@ sealed class QueryTranslator
             TranslateJoinKey(outerKey),
             TranslateJoinKey(innerKey),
             innerPredicate,
-            JoinMembers(result, kind));
+            JoinMembers(result, kind))
+        {
+            InnerOps = innerOps
+        };
     }
 
     // A key constructed from several members joins on all of them at once, position by position.
@@ -260,9 +265,11 @@ sealed class QueryTranslator
         };
     }
 
-    // The joined source is a captured queryable of its own. Only Where survives the crossing: every
-    // other operator would describe rows the join has already consumed.
-    static (string Root, Node? Predicate) InnerSource(Expression expression)
+    // The joined source is a captured queryable of its own. A plain filter crosses as the predicate
+    // every server reads; an ordering bounded by paging crosses as the inner side's own pipeline,
+    // under the wire version that introduced it. Every other operator would describe rows the join
+    // has already consumed.
+    static (string Root, Node? Predicate, IReadOnlyList<QueryOp>? Ops) InnerSource(Expression expression)
     {
         var value = Evaluate(expression);
         if (value is not IQueryable {Provider: QueryProvider provider} queryable)
@@ -270,21 +277,67 @@ sealed class QueryTranslator
             throw new NotSupportedException("The inner side of a join must be a Scry source.");
         }
 
-        Node? predicate = null;
-        foreach (var op in Translate(queryable.Expression))
+        var ops = Translate(queryable.Expression);
+        if (ops.All(_ => _ is WhereOp))
         {
-            if (op is not WhereOp where)
-            {
-                throw new NotSupportedException(
-                    $"'{op.GetType().Name.Replace("Op", "")}' is not supported on the inner side of a join — only Where is.");
-            }
+            return (provider.Root, FoldPredicates(ops), null);
+        }
 
+        ValidateSideOps(ops, "the inner side of a join");
+        return (provider.Root, null, ops);
+    }
+
+    static Node? FoldPredicates(IReadOnlyList<QueryOp> ops)
+    {
+        Node? predicate = null;
+        foreach (var op in ops)
+        {
+            var where = (WhereOp)op;
             predicate = predicate is null
                 ? where.Predicate
                 : new BinaryNode(BinaryOp.AndAlso, predicate, where.Predicate);
         }
 
-        return (provider.Root, predicate);
+        return predicate;
+    }
+
+    /// <summary>
+    /// The grammar a side pipeline obeys — filters first, then an ordering that exists only to bound
+    /// the paging after it: <c>Where* [OrderBy ThenBy* (Skip [Take] | Take)]</c>. An unbounded
+    /// ordering would be discarded inside a subquery, and unordered paging would slice rows in no
+    /// defined order, so each requires the other.
+    /// </summary>
+    static void ValidateSideOps(IReadOnlyList<QueryOp> ops, string side)
+    {
+        var stage = 0;
+        foreach (var op in ops)
+        {
+            switch (op)
+            {
+                case WhereOp when stage == 0:
+                    break;
+                case OrderByOp when stage == 0:
+                    stage = 1;
+                    break;
+                case ThenByOp when stage == 1:
+                    break;
+                case SkipOp when stage == 1:
+                    stage = 2;
+                    break;
+                case TakeOp when stage is 1 or 2:
+                    stage = 3;
+                    break;
+                default:
+                    throw new NotSupportedException(
+                        $"'{op.GetType().Name.Replace("Op", "")}' is not supported on {side} — only filters, and an ordering bounded by Skip or Take, cross over, in that order.");
+            }
+        }
+
+        if (stage == 1)
+        {
+            throw new NotSupportedException(
+                $"An ordering on {side} must be bounded by Skip or Take — unbounded, a subquery discards it.");
+        }
     }
 
     // A key built from several members groups on all of them at once. Each part keeps the name the key

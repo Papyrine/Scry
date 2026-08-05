@@ -1,9 +1,9 @@
 ﻿{
-  "version": 1,
+  "version": 2,
   "results": [
     {
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": "List",
         "payload": [
           {
@@ -21,7 +21,7 @@
     },
     {
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": "Scalar",
         "payload": 3,
         "stamp": "{scrubbed stamp}"
@@ -29,7 +29,7 @@
     },
     {
       "response": {
-        "version": 1,
+        "version": 2,
         "kind": "Page",
         "payload": {
           "items": [

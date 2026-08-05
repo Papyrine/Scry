@@ -324,7 +324,11 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
             var otherSource = ResolveSource(set.Root, db, scope);
             var otherType = otherSource.ElementType;
-            if (set.Predicate is { } otherPredicate)
+            if (set.OperandOps is { } operandOps)
+            {
+                otherSource = ApplySideOps(builder, otherSource, operandOps, otherType);
+            }
+            else if (set.Predicate is { } otherPredicate)
             {
                 otherSource = Apply(otherSource, "Where", builder.BuildPredicate(otherPredicate, otherType));
             }
@@ -467,7 +471,11 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         var innerType = innerSource.ClrType;
         var inner = ApplyPolicy(innerSource.Resolve(db, scope.Services), innerSource, db, scope);
 
-        if (join.InnerPredicate is { } predicate)
+        if (join.InnerOps is { } innerOps)
+        {
+            inner = ApplySideOps(builder, inner, innerOps, innerType);
+        }
+        else if (join.InnerPredicate is { } predicate)
         {
             inner = Apply(inner, "Where", builder.BuildPredicate(predicate, innerType));
         }
@@ -486,6 +494,29 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 Expression.Quote(selector)));
 
         return (joined, new(selector, shape));
+    }
+
+    /// <summary>
+    /// Applies the pipeline a join's inner side or a set operand carries — filters, then an ordering
+    /// bounded by paging — to that side's own query, before the two sides meet. The validator has
+    /// already pinned the grammar, so anything else arriving here is a defect rather than a request.
+    /// </summary>
+    static IQueryable ApplySideOps(ExpressionBuilder builder, IQueryable side, IReadOnlyList<QueryOp> ops, Type elementType)
+    {
+        foreach (var op in ops)
+        {
+            side = op switch
+            {
+                WhereOp where => Apply(side, "Where", builder.BuildPredicate(where.Predicate, elementType)),
+                OrderByOp orderBy => ApplyOrder(side, builder.BuildKeySelector(orderBy.Key, elementType), orderBy.Descending, then: false),
+                ThenByOp thenBy => ApplyOrder(side, builder.BuildKeySelector(thenBy.Key, elementType), thenBy.Descending, then: true),
+                SkipOp skip => ApplyPaging(side, "Skip", skip.Count),
+                TakeOp take => ApplyPaging(side, "Take", take.Count),
+                _ => throw new ScryValidationException($"'{op.GetType().Name}' is not allowed on the side of a join or set operation.")
+            };
+        }
+
+        return side;
     }
 
     static string JoinMethod(JoinKind kind) =>

@@ -719,7 +719,9 @@ The second source is resolved and [policy-filtered](policies.md) before the two 
 
 Both sides carry **their own projection**, and the two must agree: same member names, in the same order, of the same types. That is what makes one shape out of two sources, and a combined row carries no record of which side produced it — which is also why only `Count`, `LongCount`, and `Any` may follow. Ordering or filtering the result would need a root the combined rows no longer have.
 
-The combined rows are materialized as a row with one property per projected member, so the same flat, at-most-eight-member shape a [deduplicated query](#deduplicating) needs applies here. Only a `Where` and the `Select` cross into the other source.
+The combined rows are materialized as a row with one property per projected member, so the same flat, at-most-eight-member shape a [deduplicated query](#deduplicating) needs applies here.
+
+The other source carries a small pipeline of its own: filters, then an ordering bounded by `Skip`/`Take`, then the `Select` — last, since the shape both sides share is the final thing an operand says. An ordering must be bounded and paging must be ordered: unbounded, a subquery discards its ordering, and unordered, a slice has no defined rows. A bounded operand travels under **wire version 2**; the request is stamped with the lowest version that carries it whole, so a server predating the shape rejects it outright rather than ignoring the bound and answering with more rows than the query asked for.
 
 
 ### Joins
@@ -772,7 +774,7 @@ Three rules follow from the joined row having two roots:
 
 - The join **carries its own projection**, rather than being followed by a `Select`. A projected member has to say which side it reads, and an ordinary member path has no room to.
 - Only `Count`, `LongCount`, `Any`, `First`, and `Single` may follow a join. Every other operator is single-rooted and could not name a side.
-- Only `Where` crosses into the inner side. Ordering, paging, and grouping there would describe rows the join has already consumed, so filter each side first and join last.
+- The inner side carries a small pipeline of its own: filters, then an ordering bounded by `Skip`/`Take` — joining against the top-N of something. Grouping or projecting there would describe rows the join has already consumed. An ordering must be bounded and paging must be ordered — unbounded, a subquery discards its ordering, and unordered, a slice has no defined rows — and a bounded inner side travels under **wire version 2**, so a server predating the shape rejects the request whole rather than ignoring the bound.
 
 Each side is validated against its own allow-list: a `[QueryIgnore]`d member stays hidden on both, and naming an outer member on the inner side is rejected. The two key selectors must produce the same type.
 

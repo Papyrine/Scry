@@ -7,9 +7,12 @@ namespace Scry;
 // begin-snippet: wireRequest
 public sealed record QueryRequest(int Version, string Root, IReadOnlyList<QueryOp> Pipeline)
 {
-    /// <summary>Creates a request stamped with the current <see cref="WireFormat.Version"/>.</summary>
+    /// <summary>
+    /// Creates a request stamped with the lowest <see cref="WireFormat"/> version that can carry its
+    /// pipeline whole — see <see cref="WireFormat.RequiredVersion"/>.
+    /// </summary>
     public static QueryRequest Create(string root, IReadOnlyList<QueryOp> pipeline, string? stamp = null) =>
-        new(WireFormat.Version, root, pipeline)
+        new(WireFormat.RequiredVersion(pipeline), root, pipeline)
         {
             Stamp = stamp
         };
