@@ -1110,7 +1110,7 @@ The client factors the shared navigation (`_.Department`) out of the nested memb
 <a id='snippet-ExecutionTests.WhereOrderByNestedProjection.verified.txt'></a>
 ```txt
 {
-  "version": 1,
+  "version": 2,
   "kind": "List",
   "payload": [
     {
@@ -1222,6 +1222,8 @@ public enum AggregateFn
 | `_.Average(_ => _.Amount)` | `Average` |
 | `_.Min(_ => _.Amount)` | `Min` |
 | `_.Max(_ => _.Amount)` | `Max` |
+
+An aggregate can **compose** over the group before it folds: `_.Where(x => x.Amount > 90).Count()` filters the rows the fold reads — `_.Count(x => x.Amount > 90)` abbreviates it — and `_.Select(x => x.Grade).Distinct().Count()` folds only the distinct selected values, SQL's `COUNT(DISTINCT …)`. The grammar is `g [.Where(pred)] [.Select(sel) [.Distinct()]] .Fold(…)`, written in that order because each stage reads what the previous one produced. The provider folds the filter into the aggregate itself — `SUM(CASE WHEN … END)` — and a distinct fold over an optional member skips absent values on every source, as SQL's distinct aggregates do. The composed forms travel under **wire version 2**, so a server predating them rejects the request rather than folding unfiltered; `string.Join` stays whole — filter the rows before grouping. These forms work in a [group filter](#filtering-groups) too.
 
 Constraints:
 

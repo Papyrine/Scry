@@ -161,6 +161,12 @@ public class AnalyzerTests
                 .ToListAsync();
 
             await Query.Order
+                .GroupBy(_ => _.Region)
+                .Where(_ => _.Where(x => x.Amount > 5).Count() > 1)
+                .Select(_ => new {_.Key, Big = _.Count(x => x.Amount > 9), Grades = _.Select(x => x.Grade).Distinct().Count()})
+                .ToListAsync();
+
+            await Query.Order
                 .Where(_ => _.Placed.Year == 2026 && _.Placed.AddDays(3).Month < 4)
                 .Where(_ => Math.Abs(_.Rate) > 1 && Math.Round(_.Rate, 2) < 9)
                 .Where(_ => _.Region.Trim().Substring(0, 2).Contains("N"))

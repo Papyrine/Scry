@@ -419,6 +419,11 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                         ValidateScalar(selector, rootType, "Aggregate selector");
                     }
 
+                    if (aggregate.Predicate is { } filtered)
+                    {
+                        ValidatePredicate(filtered, rootType);
+                    }
+
                     break;
 
                 case NodeValue {Node: MemberNode memberNode}:
@@ -531,6 +536,11 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     else if (aggregate.Function != AggregateFn.Count)
                     {
                         throw Reject($"Aggregate '{aggregate.Function}' requires a selector.");
+                    }
+
+                    if (aggregate.Predicate is { } filtered)
+                    {
+                        ValidatePredicate(filtered, elementType);
                     }
 
                     break;
@@ -1255,10 +1265,29 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             {
                 throw Reject("Join requires a separator.");
             }
+
+            // Join folds every present value, ordered by itself — a filtered or deduplicated variant
+            // has no verified translation, so the composed fields stay off it.
+            if (aggregate.Predicate is not null ||
+                aggregate.Distinct)
+            {
+                throw Reject("Join folds the whole group — filter the rows before grouping.");
+            }
         }
         else if (aggregate.Separator is not null)
         {
             throw Reject($"Aggregate '{aggregate.Function}' does not take a separator.");
+        }
+
+        if (aggregate.Distinct &&
+            aggregate.Selector is null)
+        {
+            throw Reject("A distinct aggregate folds selected values, so it requires a selector.");
+        }
+
+        if (aggregate is {Function: AggregateFn.Count, Selector: not null, Distinct: false})
+        {
+            throw Reject("Count takes a selector only under Distinct — without one, selected values change nothing about a count.");
         }
     }
 

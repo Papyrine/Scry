@@ -1675,9 +1675,62 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
 
     MethodCallExpression BuildAggregate(AggregateNode aggregate, ParameterExpression group, Type element)
     {
+        // A filtered aggregate folds the rows its predicate keeps — g.Where(pred).Sum(…) — which the
+        // provider folds into the aggregate itself: SUM(CASE WHEN pred THEN … END).
+        Expression source = group;
+        if (aggregate.Predicate is { } filtered)
+        {
+            source = Expression.Call(
+                enumerableWhere.MakeGenericMethod(element),
+                source,
+                BuildPredicate(filtered, element));
+        }
+
+        // A distinct aggregate folds the distinct selected values — g.Select(sel).Distinct().Fold() —
+        // so the fold runs bare over the values rather than through a selector.
+        if (aggregate.Distinct)
+        {
+            if (aggregate.Selector is not MemberNode distinctMember)
+            {
+                throw new ScryValidationException("A distinct aggregate requires a member selector.");
+            }
+
+            var valueParameter = Expression.Parameter(element, "x");
+            var valueBody = BuildMemberAccess(valueParameter, distinctMember.Path);
+
+            // SQL's distinct aggregates skip nulls where Distinct() keeps one, so a row whose value
+            // is absent is filtered first — the same normalization the text aggregate applies, in the
+            // same rows-before-values shape the provider composes — and the answer then reads
+            // identically from either source.
+            if (Nullable.GetUnderlyingType(valueBody.Type) is not null ||
+                !valueBody.Type.IsValueType)
+            {
+                var notNull = Expression.Lambda(
+                    Expression.NotEqual(valueBody, Expression.Constant(null, valueBody.Type)),
+                    valueParameter);
+                source = Expression.Call(enumerableWhere.MakeGenericMethod(element), source, notNull);
+            }
+
+            var values = Expression.Call(
+                enumerableSelect.MakeGenericMethod(element, valueBody.Type),
+                source,
+                Expression.Lambda(valueBody, valueParameter));
+            var distinct = Expression.Call(enumerableDistinct.MakeGenericMethod(valueBody.Type), values);
+
+            return aggregate.Function switch
+            {
+                AggregateFn.Count => Expression.Call(enumerableCount.MakeGenericMethod(valueBody.Type), distinct),
+                AggregateFn.Sum => Expression.Call(BareFold("Sum", valueBody.Type), distinct),
+                AggregateFn.Average => Expression.Call(BareFold("Average", valueBody.Type), distinct),
+                AggregateFn.Min => Expression.Call(bareMinMax.GetOrAdd(("Min", valueBody.Type), BareMinOrMax), distinct),
+                AggregateFn.Max => Expression.Call(bareMinMax.GetOrAdd(("Max", valueBody.Type), BareMinOrMax), distinct),
+                _ => throw new ScryValidationException($"Unsupported aggregate '{aggregate.Function}'.")
+            };
+        }
+
         if (aggregate.Function == AggregateFn.Count)
         {
-            return Expression.Call(enumerableCount.MakeGenericMethod(element), group);
+            return Expression.Call(enumerableCount.MakeGenericMethod(element), source);
         }
 
         if (aggregate.Selector is not MemberNode member)
@@ -1709,7 +1762,7 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
             var notNull = Expression.Lambda(
                 Expression.NotEqual(selectorBody, Expression.Constant(null, typeof(string))),
                 selectorParameter);
-            var present = Expression.Call(enumerableWhere.MakeGenericMethod(element), group, notNull);
+            var present = Expression.Call(enumerableWhere.MakeGenericMethod(element), source, notNull);
             var values = Expression.Call(enumerableSelect.MakeGenericMethod(element, typeof(string)), present, selector);
 
             var value = Expression.Parameter(typeof(string), "v");
@@ -1723,13 +1776,40 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
 
         return aggregate.Function switch
         {
-            AggregateFn.Sum => Expression.Call(SumOrAverage("Sum", element, returnType), group, selector),
-            AggregateFn.Average => Expression.Call(SumOrAverage("Average", element, returnType), group, selector),
-            AggregateFn.Min => Expression.Call(MinOrMax("Min", element, returnType), group, selector),
-            AggregateFn.Max => Expression.Call(MinOrMax("Max", element, returnType), group, selector),
+            AggregateFn.Sum => Expression.Call(SumOrAverage("Sum", element, returnType), source, selector),
+            AggregateFn.Average => Expression.Call(SumOrAverage("Average", element, returnType), source, selector),
+            AggregateFn.Min => Expression.Call(MinOrMax("Min", element, returnType), source, selector),
+            AggregateFn.Max => Expression.Call(MinOrMax("Max", element, returnType), source, selector),
             _ => throw new ScryValidationException($"Unsupported aggregate '{aggregate.Function}'.")
         };
     }
+
+    // The selector-less folds a distinct aggregate runs over its values. Sum and Average have one
+    // non-generic overload per numeric type; Min and Max use the generic single-argument form.
+    static MethodInfo BareFold(string name, Type valueType) =>
+        bareFolds.GetOrAdd(
+            (name, valueType),
+            key => typeof(Enumerable).GetMethods()
+                .Single(_ =>
+                    _.Name == key.Item1 &&
+                    !_.IsGenericMethodDefinition &&
+                    _.GetParameters().Length == 1 &&
+                    _.GetParameters()[0].ParameterType == typeof(IEnumerable<>).MakeGenericType(key.Item2)));
+
+    static MethodInfo BareMinOrMax((string Name, Type Value) key) =>
+        typeof(Enumerable).GetMethods()
+            .Single(_ =>
+                _.Name == key.Name &&
+                _.IsGenericMethodDefinition &&
+                _.GetGenericArguments().Length == 1 &&
+                _.GetParameters().Length == 1)
+            .MakeGenericMethod(key.Value);
+
+    static readonly ConcurrentDictionary<(string, Type), MethodInfo> bareFolds = new();
+    static readonly ConcurrentDictionary<(string, Type), MethodInfo> bareMinMax = new();
+
+    static readonly MethodInfo enumerableDistinct = typeof(Enumerable).GetMethods()
+        .Single(_ => _.Name == "Distinct" && _.GetParameters().Length == 1);
 
     static MethodInfo SumOrAverage(string name, Type element, Type selectorReturnType) =>
         aggregateMethods.GetOrAdd(

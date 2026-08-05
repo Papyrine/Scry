@@ -150,7 +150,7 @@ This test demonstrates it: the request carries no filter on `Active`, yet the in
 <a id='snippet-ExecutionTests.PolicyScopesRowsBeforeClientFilter.verified.txt'></a>
 ```txt
 {
-  "version": 1,
+  "version": 2,
   "kind": "List",
   "payload": [
     {

@@ -229,7 +229,6 @@ Translatable by EF, compatible with the wire model, and absent only because noth
 
 | Surface | What adopting it would mean |
 | --- | --- |
-| Aggregates over a filtered or deduplicated group — `g.Where(…).Select(…).Distinct().Sum()` | EF composes these inside the aggregate; the wire's aggregate node carries only a selector. |
 | `string.Concat` as a grouped aggregate | The empty-separator spelling of `string.Join`, whose separator-carrying form is already carried as the `Join` aggregate. |
 
 Functions with an EF translation ready to rebind onto:

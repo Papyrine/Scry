@@ -673,11 +673,77 @@ sealed class QueryTranslator
         return prefix;
     }
 
+    /// <summary>
+    /// Translates an aggregate folding the group, including the composed forms: a <c>Where</c> before
+    /// the fold filters the rows — <c>Count(predicate)</c> abbreviates it — and <c>Select</c> +
+    /// <c>Distinct</c> folds only the distinct selected values. The grammar over the group is
+    /// <c>g [.Where(pred)] [.Select(sel) [.Distinct()]] .Fold(…)</c>, written in that order because
+    /// each stage reads what the previous one produced.
+    /// </summary>
     AggregateNode TranslateAggregate(MethodCallExpression call)
     {
+        Node? predicate = null;
+        Node? selector = null;
+        var distinct = false;
+
+        // The fold's source, unwrapped from the outside in — so a Select is seen before the Where
+        // written ahead of it, and a filter captured before any Select was seen must have been
+        // written over the selected values, which the wire's predicate does not read.
+        var source = call.Arguments[0];
+        while (source is MethodCallExpression inner)
+        {
+            switch (inner.Method.Name)
+            {
+                case "Distinct" when inner.Arguments.Count == 1 && !distinct && selector is null:
+                    distinct = true;
+                    break;
+
+                case "Select" when inner.Arguments.Count == 2 && selector is null && predicate is null:
+                    var projected = Lambda(inner.Arguments[1]);
+                    selector = TranslateExpr(projected.Body, projected.Parameters[0]);
+                    break;
+
+                case "Where" when inner.Arguments.Count == 2 && predicate is null:
+                    var filter = Lambda(inner.Arguments[1]);
+                    predicate = TranslateExpr(filter.Body, filter.Parameters[0]);
+                    break;
+
+                default:
+                    throw new NotSupportedException(
+                        $"'{inner.Method.Name}' cannot compose into an aggregate over a group this way — filter the rows, then select the values, then Distinct, then fold.");
+            }
+
+            source = inner.Arguments[0];
+        }
+
         if (call is {Method.Name: "Count", Arguments.Count: 1})
         {
-            return new(AggregateFn.Count, Selector: null);
+            // Without a Distinct there is nothing for selected values to change about a count, so the
+            // selector is dropped rather than carried as noise.
+            return new(AggregateFn.Count, distinct ? selector : null)
+            {
+                Predicate = predicate,
+                Distinct = distinct
+            };
+        }
+
+        if (call is {Method.Name: "Count", Arguments.Count: 2})
+        {
+            if (predicate is not null)
+            {
+                throw new NotSupportedException("Count over a group cannot combine a Where with its own predicate.");
+            }
+
+            if (distinct || selector is not null)
+            {
+                throw new NotSupportedException("Count over selected values takes no predicate — filter the rows before selecting.");
+            }
+
+            var counted = Lambda(call.Arguments[1]);
+            return new(AggregateFn.Count, Selector: null)
+            {
+                Predicate = TranslateExpr(counted.Body, counted.Parameters[0])
+            };
         }
 
         var function = call.Method.Name switch
@@ -692,13 +758,28 @@ sealed class QueryTranslator
                 $"'{call.Method.Name}' is not an aggregate. A grouped projection may only use the group key, Count/Sum/Average/Min/Max, and string.Join over the group's values.")
         };
 
-        if (call.Arguments.Count != 2)
+        if (call.Arguments.Count == 2)
+        {
+            if (selector is not null)
+            {
+                throw new NotSupportedException(
+                    $"Aggregate '{call.Method.Name}' already reads selected values — fold them bare, without a second selector.");
+            }
+
+            var folded = Lambda(call.Arguments[1]);
+            selector = TranslateExpr(folded.Body, folded.Parameters[0]);
+        }
+
+        if (selector is null)
         {
             throw new NotSupportedException($"Aggregate '{call.Method.Name}' requires a selector.");
         }
 
-        var selector = Lambda(call.Arguments[1]);
-        return new(function, TranslateExpr(selector.Body, selector.Parameters[0]));
+        return new(function, selector)
+        {
+            Predicate = predicate,
+            Distinct = distinct
+        };
     }
 
     /// <summary>
@@ -800,7 +881,7 @@ sealed class QueryTranslator
                     return groupKeyNode ?? throw new NotSupportedException("No group key in scope.");
 
                 case MethodCallExpression aggregate
-                    when IsGrouping(root.Type) && IsCallOver(aggregate, root):
+                    when IsGrouping(root.Type) && IsChainOver(aggregate, root):
                     return TranslateAggregate(aggregate);
 
                 case MethodCallExpression joined
@@ -1560,6 +1641,20 @@ sealed class QueryTranslator
     static bool IsCallOver(MethodCallExpression call, ParameterExpression target) =>
         call.Object == target ||
         (call.Arguments.Count > 0 && call.Arguments[0] == target);
+
+    // The same question through the Where/Select/Distinct chain a composed aggregate may put between
+    // the fold and the group. A chain bottoming at anything else — g.Key, a closure — is not the
+    // group being folded.
+    static bool IsChainOver(MethodCallExpression call, ParameterExpression target)
+    {
+        Expression? current = call;
+        while (current is MethodCallExpression inner)
+        {
+            current = inner.Object ?? (inner.Arguments.Count > 0 ? inner.Arguments[0] : null);
+        }
+
+        return current == target;
+    }
 
     static bool IsTemporal(Type? type) =>
         type == typeof(DateTime) ||

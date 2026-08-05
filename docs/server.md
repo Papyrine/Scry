@@ -265,7 +265,7 @@ Responses are JSON with camelCased keys and enums as names:
 <a id='snippet-ExecutionTests.GroupByWithAggregates.verified.txt'></a>
 ```txt
 {
-  "version": 1,
+  "version": 2,
   "kind": "List",
   "payload": [
     {
