@@ -1279,8 +1279,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             throw Reject($"Aggregate '{aggregate.Function}' does not take a separator.");
         }
 
-        if (aggregate.Distinct &&
-            aggregate.Selector is null)
+        if (aggregate is {Distinct: true, Selector: null})
         {
             throw Reject("A distinct aggregate folds selected values, so it requires a selector.");
         }

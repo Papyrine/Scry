@@ -13,14 +13,14 @@ sealed class MultipartReader
     /// <summary>The default value for <see cref="HeadersLengthLimit"/> — approximately 16KB.</summary>
     public const int DefaultHeadersLengthLimit = 1024 * 16;
 
-    const int DefaultBufferSize = 1024 * 4;
+    const int defaultBufferSize = 1024 * 4;
 
     readonly BufferedReadStream stream;
     readonly MultipartBoundary boundary;
     MultipartReaderStream? currentStream;
 
     public MultipartReader(string boundary, Stream stream)
-        : this(boundary, stream, DefaultBufferSize)
+        : this(boundary, stream, defaultBufferSize)
     {
     }
 
@@ -67,7 +67,10 @@ sealed class MultipartReader
 
         var headers = await ReadHeaders(cancel);
         boundary.ExpectLeadingCrlf();
-        currentStream = new(stream, boundary) {LengthLimit = BodyLengthLimit};
+        currentStream = new(stream, boundary)
+        {
+            LengthLimit = BodyLengthLimit
+        };
         return new()
         {
             Headers = headers,
@@ -110,10 +113,15 @@ sealed class MultipartReader
     }
 
     // The one member of Microsoft.Net.Http.Headers.HeaderUtilities the reader needed, inlined.
-    static string RemoveQuotes(string value) =>
-        value.Length > 1 &&
-        value[0] == '"' &&
-        value[^1] == '"'
-            ? value[1..^1]
-            : value;
+    static string RemoveQuotes(string value)
+    {
+        if (value.Length > 1 &&
+            value[0] == '"' &&
+            value[^1] == '"')
+        {
+            return value[1..^1];
+        }
+
+        return value;
+    }
 }

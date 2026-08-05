@@ -2,9 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // Vendored from dotnet/aspnetcore, src/Http/WebUtilities, and adapted to this project's conventions.
 
-using System.Buffers;
-using System.Text;
-
 /// <summary>
 /// A Stream that wraps another stream and allows reading lines. The data is buffered in memory.
 /// </summary>
@@ -28,7 +25,7 @@ sealed class BufferedReadStream :
     }
 
     /// <summary>Creates a new stream.</summary>
-    public BufferedReadStream(Stream inner, int bufferSize, ArrayPool<byte> bytePool)
+    private BufferedReadStream(Stream inner, int bufferSize, ArrayPool<byte> bytePool)
     {
         this.inner = inner;
         this.bytePool = bytePool;

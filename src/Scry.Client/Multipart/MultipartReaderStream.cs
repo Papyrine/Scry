@@ -2,9 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // Vendored from dotnet/aspnetcore, src/Http/WebUtilities, and adapted to this project's conventions.
 
-using System.Buffers;
-using System.Diagnostics;
-
 sealed class MultipartReaderStream :
     Stream
 {
@@ -250,7 +247,7 @@ sealed class MultipartReaderStream :
 
         // Scan for a boundary match, full or partial.
         int read;
-        if (SubMatch(bufferedData, boundary.BoundaryBytes, out var matchOffset, out var matchCount))
+        if (SubMatch(bufferedData, boundary.BoundaryBytes, out var matchOffset, out _))
         {
             // We found a possible match, return any data before it.
             if (matchOffset > bufferedData.Offset)
@@ -261,8 +258,6 @@ sealed class MultipartReaderStream :
                 read = innerStream.Read(slice.Span);
                 return UpdatePosition(read);
             }
-
-            Debug.Assert(matchCount == boundary.BoundaryBytes.Length);
 
             return await ReadBoundaryAsync(this, boundary.BoundaryBytes.Length, cancellationToken);
         }
@@ -276,7 +271,7 @@ sealed class MultipartReaderStream :
             // "The boundary may be followed by zero or more characters of linear whitespace. It is
             // then terminated by either another CRLF" or -- for the final boundary.
             var boundary = stream.bytePool.Rent(length);
-            var read = stream.innerStream.Read(boundary, 0, length);
+            var read = await stream.innerStream.ReadAsync(boundary, 0, length, cancellationToken);
             stream.bytePool.Return(boundary);
             // It should have all been buffered.
             Debug.Assert(read == length);

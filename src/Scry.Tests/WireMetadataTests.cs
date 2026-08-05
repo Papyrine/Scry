@@ -1,7 +1,3 @@
-using System.Reflection;
-using System.Text.Json.Serialization;
-using System.Text.Json.Serialization.Metadata;
-
 /// <summary>
 /// Guards the claim <c>WireJsonContext</c> makes: that the whole wire vocabulary is source-generated
 /// and none of it reaches the reflection resolver. Nothing breaks if one does — the fallback reads the

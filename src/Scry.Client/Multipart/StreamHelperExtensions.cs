@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // Vendored from dotnet/aspnetcore, src/Http/WebUtilities, and adapted to this project's conventions.
 
-using System.Buffers;
-
 /// <summary>HTTP extension methods for <see cref="Stream"/>.</summary>
 static class StreamHelperExtensions
 {

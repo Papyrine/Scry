@@ -1,6 +1,8 @@
 global using System.Diagnostics.Metrics;
 global using System.Globalization;
 global using System.Text.Json;
+global using System.Text.Json.Serialization;
+global using System.Text.Json.Serialization.Metadata;
 global using System.Text.RegularExpressions;
 global using System.Threading.Tasks;
 global using Microsoft.Extensions.DependencyInjection;

@@ -1061,8 +1061,10 @@ sealed class QueryTranslator
         // The angle conversions are statics on the floating types rather than on Math, but they are
         // math functions all the same.
         if ((declaring == typeof(double) || declaring == typeof(float)) &&
-            call is {Object: null, Arguments.Count: 1} &&
-            call.Method.Name is "DegreesToRadians" or "RadiansToDegrees" &&
+            call is {
+                Object: null,
+                Arguments.Count: 1,
+                Method.Name: "DegreesToRadians" or "RadiansToDegrees"} &&
             ReferencesParameter(call, root))
         {
             var angle = call.Method.Name == "DegreesToRadians"

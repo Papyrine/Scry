@@ -12,7 +12,16 @@ public class GroupByResultSelectorTests
         var client = ClientFor(context);
 
         var regions = await client.Source<Order>("Order")
-            .GroupBy(_ => _.Region, (region, orders) => new {Region = region, Total = orders.Sum(_ => _.Amount), Rows = orders.Count()})
+            .GroupBy(
+                _ => _.Region,
+                (region, orders) => new
+                {
+                    Region = region,
+                    // ReSharper disable PossibleMultipleEnumeration
+                    Total = orders.Sum(_ => _.Amount),
+                    Rows = orders.Count()
+                    // ReSharper restore PossibleMultipleEnumeration
+                })
             .ToListAsync();
 
         Assert.Multiple(() =>

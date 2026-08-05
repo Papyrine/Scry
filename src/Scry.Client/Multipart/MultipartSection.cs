@@ -6,21 +6,37 @@
 sealed class MultipartSection
 {
     /// <summary>The value of the <c>Content-Type</c> header, or null.</summary>
-    public string? ContentType =>
-        Headers is not null && Headers.TryGetValue("Content-Type", out var value)
-            ? value
-            : null;
+    public string? ContentType
+    {
+        get
+        {
+            if (Headers is not null && Headers.TryGetValue("Content-Type", out var value))
+            {
+                return value;
+            }
+
+            return null;
+        }
+    }
 
     /// <summary>The value of the <c>Content-Length</c> header, or null. Advisory — used to preallocate.</summary>
-    public int? ContentLength =>
-        Headers is not null &&
-        Headers.TryGetValue("Content-Length", out var value) &&
-        int.TryParse(value, out var length) &&
-        length >= 0
-            ? length
-            : null;
+    public int? ContentLength
+    {
+        get
+        {
+            if (Headers is not null &&
+                Headers.TryGetValue("Content-Length", out var value) &&
+                int.TryParse(value, out var length) &&
+                length >= 0)
+            {
+                return length;
+            }
+
+            return null;
+        }
+    }
 
     public Dictionary<string, string>? Headers { get; set; }
 
-    public Stream Body { get; set; } = default!;
+    public Stream Body { get; set; } = null!;
 }

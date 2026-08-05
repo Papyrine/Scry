@@ -489,13 +489,16 @@ public sealed class ScryProcessor
                 }
 
                 writer.WriteRow(json, ResponseWriter.Row(row, rows), rows.Binary);
-                json.Flush();
+                await json.FlushAsync(cancel);
                 yield return buffer.WrittenMemory;
             }
         }
         finally
         {
-            json?.Dispose();
+            if (json != null)
+            {
+                await json.DisposeAsync();
+            }
         }
     }
 
