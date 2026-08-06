@@ -125,6 +125,28 @@ public class AnalyzerTests
                 }
                 """));
 
+    // The streaming idiom, and the one enumeration that is not a mistake: an await foreach reads what a
+    // ToAsyncEnumerable terminal returned rather than the provider. A captured query has no
+    // GetAsyncEnumerator of its own, so nothing else can be written this way — and reporting it would
+    // advise buffering the whole result, which is what streaming exists to avoid.
+    [Test]
+    public void AsynchronousEnumerationIsClean()
+    {
+        const string queries =
+            """
+            await foreach (var order in Query.Order.Where(_ => _.Amount > 0).ToAsyncEnumerable())
+            {
+            }
+
+            var streamed = Query.Order.Select(_ => new {_.Id}).ToAsyncEnumerable();
+            await foreach (var order in streamed)
+            {
+            }
+            """;
+
+        Assert.That(Analyze(queries), Is.Empty);
+    }
+
     [Test]
     public Task UnorderedReverse() =>
         Verify(
@@ -388,6 +410,7 @@ public class AnalyzerTests
             public static class ScryQueryableExtensions
             {
                 public static Task<List<T>> ToListAsync<T>(this IQueryable<T> source) => null!;
+                public static IAsyncEnumerable<T> ToAsyncEnumerable<T>(this IQueryable<T> source) => null!;
                 public static Task<T[]> ToArrayAsync<T>(this IQueryable<T> source) => null!;
                 public static Task<T> FirstAsync<T>(this IQueryable<T> source, Expression<Func<T, bool>> predicate) => null!;
                 public static Task<bool> AnyAsync<T>(this IQueryable<T> source) => null!;

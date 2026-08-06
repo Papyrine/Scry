@@ -42,9 +42,14 @@ public sealed class ScryLinqAnalyzer :
 
     // foreach is the one way to run a query that is not a call, so no chain walk sees it: it reaches
     // the provider through GetEnumerator rather than through a terminal, and lands on the same throw.
+    //
+    // An await foreach is the opposite and is left alone. A captured query has no GetAsyncEnumerator,
+    // so the only way one compiles is over the IAsyncEnumerable a ToAsyncEnumerable terminal returned —
+    // which is the streaming idiom itself, and the advice this rule carries (buffer it with
+    // ToListAsync) is the one thing streaming exists to avoid.
     static void Loop(OperationAnalysisContext context, KnownTypes known)
     {
-        if (context.Operation is not IForEachLoopOperation loop ||
+        if (context.Operation is not IForEachLoopOperation {IsAsynchronous: false} loop ||
             !QueryChain.IsQuery(loop.Collection, known))
         {
             return;
