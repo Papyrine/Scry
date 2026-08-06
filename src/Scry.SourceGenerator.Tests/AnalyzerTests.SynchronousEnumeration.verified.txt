@@ -1,0 +1,6 @@
+﻿SCRY109: 'foreach' executes the query where it stands, which a Scry source cannot do — await ToListAsync and iterate what it returns
+    foreach (var order in Query.Order)
+SCRY109: 'foreach' executes the query where it stands, which a Scry source cannot do — await ToListAsync and iterate what it returns
+    foreach (var order in Query.Order.Where(_ => _.Amount > 0))
+SCRY109: 'foreach' executes the query where it stands, which a Scry source cannot do — await ToListAsync and iterate what it returns
+    foreach (var order in projected)

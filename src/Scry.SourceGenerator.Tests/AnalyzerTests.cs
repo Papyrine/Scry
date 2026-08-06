@@ -104,6 +104,27 @@ public class AnalyzerTests
                 var top = Query.Order.MaxBy(_ => _.Amount);
                 """));
 
+    // foreach runs the query without calling a terminal, so it is caught by what it enumerates rather
+    // than by a chain walk — a bare source, a composed one, and one held in a local alike.
+    [Test]
+    public Task SynchronousEnumeration() =>
+        Verify(
+            Analyze(
+                """
+                foreach (var order in Query.Order)
+                {
+                }
+
+                foreach (var order in Query.Order.Where(_ => _.Amount > 0))
+                {
+                }
+
+                var projected = Query.Order.Select(_ => new {_.Id});
+                foreach (var order in projected)
+                {
+                }
+                """));
+
     [Test]
     public Task UnorderedReverse() =>
         Verify(
@@ -292,6 +313,9 @@ public class AnalyzerTests
             var numbers = new[] {1, 2, 3}.AsQueryable();
             var taken = numbers.Cast<object>().SkipWhile(_ => true).ToList();
             var text = numbers.Select(_ => _.ToString("N2")).Reverse().ToList();
+            foreach (var number in numbers)
+            {
+            }
             """;
 
         Assert.That(Analyze(queries), Is.Empty);

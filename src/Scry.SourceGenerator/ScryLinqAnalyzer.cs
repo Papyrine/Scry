@@ -37,6 +37,25 @@ public sealed class ScryLinqAnalyzer :
         }
 
         context.RegisterOperationAction(_ => Analyze(_, known), OperationKind.Invocation);
+        context.RegisterOperationAction(_ => Loop(_, known), OperationKind.Loop);
+    }
+
+    // foreach is the one way to run a query that is not a call, so no chain walk sees it: it reaches
+    // the provider through GetEnumerator rather than through a terminal, and lands on the same throw.
+    static void Loop(OperationAnalysisContext context, KnownTypes known)
+    {
+        if (context.Operation is not IForEachLoopOperation loop ||
+            !QueryChain.IsQuery(loop.Collection, known))
+        {
+            return;
+        }
+
+        context.ReportDiagnostic(
+            Diagnostic.Create(
+                LinqDiagnostics.SynchronousExecution,
+                loop.Collection.Syntax.GetLocation(),
+                "foreach",
+                "await ToListAsync and iterate what it returns"));
     }
 
     static void Analyze(OperationAnalysisContext context, KnownTypes known)

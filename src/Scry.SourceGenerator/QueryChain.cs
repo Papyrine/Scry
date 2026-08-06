@@ -100,6 +100,39 @@ static class QueryChain
     }
 
     /// <summary>
+    /// Whether an expression stands for a Scry query, however it was written — a bare source, a chain
+    /// over one, or a local either was held in. Asked where a query is consumed rather than composed,
+    /// which is the one place a bare source is as much of a mistake as a chain is.
+    /// </summary>
+    public static bool IsQuery(IOperation? operation, KnownTypes known)
+    {
+        var current = Unwrap(operation);
+        while (current is not null)
+        {
+            if (IsSource(current, known))
+            {
+                return true;
+            }
+
+            if (current is IInvocationOperation call)
+            {
+                return Of(call, known, out _) is not null;
+            }
+
+            // The chain was composed in an earlier statement and this only names it. Followed for the
+            // same reason the walk above follows one: a query held in a local is still a query.
+            if (current is not ILocalReferenceOperation reference)
+            {
+                return false;
+            }
+
+            current = Unwrap(Initializer(reference));
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Whether some enclosing call carries this one as its source, in which case that call is the one
     /// to analyse — a chain is walked once, from its outermost link.
     /// </summary>

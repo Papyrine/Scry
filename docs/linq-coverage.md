@@ -22,7 +22,7 @@ For usage detail on the supported surface (position rules, limits, examples), se
 | `SCRY106` | A projection that does not construct one |
 | `SCRY107` | A function outside [the closed set](querying.md#functions) |
 | `SCRY108` | [`ToString(format)`](#waiting-on-the-framework-or-the-provider), and the interpolated hole that means the same |
-| `SCRY109` | A synchronous terminal — `ToList`, `First`, `Count` — naming the async one that replaces it |
+| `SCRY109` | A synchronous terminal — `ToList`, `First`, `Count` — naming the async one that replaces it, or a `foreach` over the query itself |
 | `SCRY110` | `Reverse` with no preceding `OrderBy` |
 | `SCRY111` | A `GroupJoin` that projects its group rather than folding it |
 | `SCRY112` | Client-side code reading the row — a helper, a `Parse`, an extension method, a delegate — which has no wire representation at all |
