@@ -12,5 +12,12 @@ enum MemberKind
     /// traversable nor projectable: it is the target of a subquery, never a step in a member path or a
     /// projection leaf.
     /// </summary>
-    Collection
+    Collection,
+
+    /// <summary>
+    /// A <c>byte[]</c> marked <c>[Attachment]</c>. Not addressable by a query at all — not comparable,
+    /// orderable, traversable, or projectable — because no query ever reads its value: it is fetched
+    /// by its row's key through the attachment endpoint instead.
+    /// </summary>
+    Attachment
 }

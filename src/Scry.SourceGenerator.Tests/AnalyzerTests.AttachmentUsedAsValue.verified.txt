@@ -1,0 +1,8 @@
+﻿SCRY114: Attachment 'Document' is not a value, so it cannot be filtered, ordered, grouped, or computed on
+    await Query.Contract.Where(_ => _.Document != null).ToListAsync();
+SCRY114: Attachment 'Document' is not a value, so it cannot be filtered, ordered, grouped, or computed on
+    await Query.Contract.OrderBy(_ => _.Document).ToListAsync();
+SCRY115: An attachment cannot be carried through 'GroupBy' — the result's rows no longer correspond to single rows of the source it is fetched from
+    await Query.Contract.GroupBy(_ => _.Document).Select(_ => new {Rows = _.Count()}).ToListAsync();
+SCRY114: Attachment 'Document' is not a value, so it cannot be filtered, ordered, grouped, or computed on
+    await Query.Contract.GroupBy(_ => _.Document).Select(_ => new {Rows = _.Count()}).ToListAsync();

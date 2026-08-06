@@ -84,10 +84,20 @@ Every registered auditor is called once per query with a `ScryAuditEntry`:
 <a id='snippet-auditEntry'></a>
 ```cs
 public sealed record ScryAuditEntry(
-    QueryRequest Request,
+    QueryRequest? Request,
     ScryQueryOutcome Outcome,
     TimeSpan Duration)
 {
+    /// <summary>
+    /// The attachment fetched, when the entry describes one rather than a query: which member of which
+    /// source, and the row key it was asked for. Null for a query.
+    /// </summary>
+    /// <remarks>
+    /// Worth watching on its own. An attachment is reached by row key through an endpoint of its own,
+    /// so a run of rejected or not-found fetches is what key-guessing looks like.
+    /// </remarks>
+    public AttachmentRequest? Attachment { get; init; }
+
     /// <summary>The result shape, when the query succeeded; null when it never produced one.</summary>
     public ResultKind? Kind { get; init; }
 
@@ -112,7 +122,7 @@ public sealed record ScryAuditEntry(
     public bool StaleClient { get; init; }
 }
 ```
-<sup><a href='/src/Scry.Server/ScryAuditEntry.cs#L14-L43' title='Snippet source file'>snippet source</a> | <a href='#snippet-auditEntry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryAuditEntry.cs#L18-L57' title='Snippet source file'>snippet source</a> | <a href='#snippet-auditEntry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Semantics:

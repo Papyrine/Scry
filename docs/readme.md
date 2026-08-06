@@ -17,6 +17,7 @@ Type-safe, serializable LINQ from a client to a server-side EF Core model.
 | [Batching](batching.md) | Sending several queries as one request, and what stays per-entry. |
 | [Server](server.md) | `AddScry`, `MapScry`, `ScryOptions`, limits, POCO sources, hosting without HTTP, error handling. |
 | [Row policies](policies.md) | `IReturnablePolicy<T>` for tenant scoping, soft delete, and row-level security. |
+| [Attachments](attachments.md) | `[Attachment]`: a binary member fetched on demand by row key, not carried by the query. |
 | [Observability](observability.md) | The traces, metrics, and per-query audit hook the server emits. |
 | [Security model](security.md) | The threat model, every enforcement layer, and what Scry does *not* protect. |
 | [Wire format](wire-format.md) | The JSON query AST: request, response, every node type, versioning. |

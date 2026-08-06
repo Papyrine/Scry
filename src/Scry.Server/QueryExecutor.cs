@@ -580,6 +580,97 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         return ApplyPolicy(source.Resolve(db, scope.Services), source, db, scope);
     }
 
+    /// <summary>
+    /// Fetches one attachment's bytes by its row's key. Shaped like a query and validated like one —
+    /// the source and member are resolved through the allow-list, the key values are parsed into the
+    /// key members' own types and bound as parameters — but it reads a single column of a single row
+    /// rather than running a pipeline, since none arrives.
+    /// </summary>
+    public ScryAttachmentResult FetchAttachment(AttachmentRequest request, DbContext db, CallScope scope)
+    {
+        if (request.Version > AttachmentRequest.CurrentVersion)
+        {
+            throw new ScryValidationException($"Unsupported attachment request version {request.Version}; this server supports up to {AttachmentRequest.CurrentVersion}.");
+        }
+
+        if (!schema.TryGetSource(request.Root, out var source))
+        {
+            throw new ScryValidationException($"Unknown source '{request.Root}'.");
+        }
+
+        if (!schema.TryGetType(source.ClrType, out var meta) ||
+            !meta.TryGetMember(request.Member, out var member) ||
+            member.Kind != MemberKind.Attachment)
+        {
+            throw new ScryValidationException($"'{request.Member}' is not an attachment member of '{request.Root}'.");
+        }
+
+        // Non-null because the member above is an attachment, which is what makes the schema derive one.
+        var keys = meta.AttachmentKeys!;
+        if (keys.Count != request.Keys.Count)
+        {
+            throw new ScryValidationException($"'{request.Root}' is keyed by {keys.Count} value(s); the request carried {request.Keys.Count}.");
+        }
+
+        var builder = new ExpressionBuilder(schema, options);
+        var values = new List<object>(keys.Count);
+        for (var i = 0; i < keys.Count; i++)
+        {
+            // A primary key is never null, so a null key value cannot match a row. Answered as
+            // not-found rather than rejected: it is a key that identifies nothing, not a malformed one.
+            if (request.Keys[i].Value is not { } value)
+            {
+                return ScryAttachmentResult.NotFound;
+            }
+
+            values.Add(builder.ParseKey(value, keys[i].Type));
+        }
+
+        // Before the database is touched: an unauthorized caller learns nothing, not even how long a
+        // lookup took.
+        var policy = source.AttachmentPolicy ??
+                     throw new($"Source '{request.Root}' exposes an attachment with no policy to authorize it.");
+        var context = new ScryAttachmentContext(scope.Services, db, member.Name, values, scope.RequestHeaders, scope.ResponseHeaders);
+        if (!AttachmentPolicy.Authorize(policy, scope.Services, context))
+        {
+            return ScryAttachmentResult.NotFound;
+        }
+
+        // Resolved through the same path a query's root takes, so the source's row policies apply and
+        // a row a query could not have returned is not one an attachment can be pulled from.
+        var query = ResolveSource(request.Root, db, scope);
+        var parameter = Expression.Parameter(source.ClrType, "_");
+        Expression? predicate = null;
+        for (var i = 0; i < keys.Count; i++)
+        {
+            var comparison = Expression.Equal(
+                Expression.Property(parameter, keys[i].Property),
+                Expression.Convert(Parameterization.Parameterize(values[i], values[i].GetType()), keys[i].Type));
+            predicate = predicate is null ? comparison : Expression.AndAlso(predicate, comparison);
+        }
+
+        query = Apply(query, "Where", Expression.Lambda(predicate!, parameter));
+
+        // Only the one column is selected: the row may be wide, and nothing else about it is being
+        // asked for. Projected into object[] — the shape the rest of the executor reads — so a row
+        // holding a null value stays distinguishable from no row at all.
+        var selector = Expression.Lambda(
+            Expression.NewArrayInit(typeof(object), Expression.Convert(Expression.Property(parameter, member.Property), typeof(object))),
+            parameter);
+        var rows = ApplySelect(query, selector);
+
+        if (rows.Provider.Execute<object[]?>(CallQueryable("SingleOrDefault", [typeof(object[])], rows.Expression)) is not { } row)
+        {
+            return ScryAttachmentResult.NotFound;
+        }
+
+        return new()
+        {
+            Found = true,
+            Value = (byte[]?) row[0]
+        };
+    }
+
     static (IQueryable<object[]> Query, ProjectionPlan Plan) BuildProjected(
         ExpressionBuilder builder,
         IQueryable query,

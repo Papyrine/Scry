@@ -93,8 +93,28 @@ sealed class Schema
         var (sourceInfos, typeInfos, enumInfos) = DescribeSurface();
         return SchemaStamp.Compute(
             sourceInfos.Select(_ => (_.Name, _.Kind, _.Model)).ToList(),
-            typeInfos.Select(_ => (_.Model, _.Base, _.Members.Select(member => (member.Name, member.TypeDisplay)).ToList())).ToList(),
+            typeInfos.Select(_ => (_.Model, _.Base, StampMembers(_))).ToList(),
             enumInfos.Select(_ => (_.Name, _.Values.ToList())).ToList());
+    }
+
+    /// <summary>
+    /// The members a type contributes to the stamp: its own, plus — for one carrying an attachment —
+    /// a synthetic member naming the key that attachment is fetched by. Mirrors
+    /// <c>ScryGenerator.StampMembers</c>; <c>~</c> cannot begin an identifier, so the synthetic name
+    /// can never collide with a real member's, and a type without an attachment hashes exactly as it
+    /// did before attachments existed.
+    /// </summary>
+    static List<(string, string)> StampMembers(ScryTypeInfo type)
+    {
+        var members = type.Members
+            .Select(_ => (_.Name, _.TypeDisplay))
+            .ToList();
+        if (type.Keys is { } keys)
+        {
+            members.Add(("~keys", string.Join(" ", keys)));
+        }
+
+        return members;
     }
 
     (List<ScrySourceInfo> Sources, List<ScryTypeInfo> Types, List<ScryEnumInfo> Enums) DescribeSurface()
@@ -114,7 +134,10 @@ sealed class Schema
                     .ToList())
             {
                 Base = meta.Base is { } clrBase ? $"{clrBase.Name}QueryModel" : null,
-                Obsolete = ObsoleteOf(meta.ClrType)
+                Obsolete = ObsoleteOf(meta.ClrType),
+                // Carried only where something fetches by it, which keeps every other type's
+                // description — and so its stamp — exactly what it was.
+                Keys = meta.AttachmentKeys?.Select(_ => _.Name).ToList()
             })
             .ToList();
 
@@ -176,6 +199,16 @@ sealed class Schema
             // Unwrap Nullable<T> so an optional struct complex member displays as its model, not Nullable`1.
             var target = Nullable.GetUnderlyingType(member.Type) ?? member.Type;
             return new(member.Name, $"{target.Name}QueryModel?", NeedsNullDefault: false, IsNavigation: true);
+        }
+
+        // An attachment is emitted as the handle rather than as the byte[] it is declared as, which is
+        // exactly why — unlike [BinaryTransfer] — it moves the schema stamp. Mirrors ScryGenerator.Display.
+        if (member.Kind == MemberKind.Attachment)
+        {
+            return new(member.Name, "global::Scry.ScryAttachment", NeedsNullDefault: true, IsNavigation: false)
+            {
+                IsAttachment = true
+            };
         }
 
         var shape = ScalarShape(member.Type, enums);
@@ -355,7 +388,32 @@ sealed class Schema
                 throw new($"Duplicate queryable source name '{name}'.");
             }
 
-            schema.sources[name] = new(name, type, kind, policies, BuildResolver(type, kind, options));
+            schema.sources[name] = new(name, type, kind, policies, BuildResolver(type, kind, options))
+            {
+                AttachmentPolicy = ResolveAttachmentPolicy(schema, type, name, kind, options)
+            };
+        }
+
+        // Pass 2b: derive the key every attachment is fetched by. Deferred until the member metadata
+        // and base links exist, since a key declared on a base is still the derived row's.
+        foreach (var meta in schema.types.Values)
+        {
+            if (Attachments(meta).Any())
+            {
+                meta.AttachmentKeys = DeriveKeys(schema, meta);
+            }
+        }
+
+        // An attachment on a complex type has no row to be fetched from — nothing keys it, and it is
+        // never a source. Caught here rather than in BuildTypeMeta, which cannot yet tell a complex
+        // type from an entity.
+        foreach (var complex in schema.complexTypes)
+        {
+            if (schema.types[complex].Members.Values.FirstOrDefault(_ => _.Kind == MemberKind.Attachment) is { } member)
+            {
+                throw new(
+                    $"'{complex.Name}.{member.Name}' is an [Attachment] on a [QueryableComplex] type, which has no row of its own to fetch it from. Move it to the entity that owns the complex member.");
+            }
         }
 
         // Pass 3: register the previous names sources still answer to. Deferred until every current
@@ -533,6 +591,44 @@ sealed class Schema
                 throw new($"'{type.Name}' is marked [QueryableComplex] but is a mapped entity in {contextType.Name}. Use [Queryable] (or [QueryableView] for a keyless view).");
             }
         }
+
+        ValidateAttachmentKeys(model, contextType);
+    }
+
+    /// <summary>
+    /// Confirms the key each attachment-bearing type was derived to have is the key EF really gives
+    /// it. The derivation reads annotations and naming conventions alone, because the generator has to
+    /// reach the same answer from metadata and never sees <c>OnModelCreating</c> — so a key configured
+    /// fluently would leave the client fetching by one key and the server keyed on another. Comparing
+    /// here turns that into a startup failure naming the fix.
+    /// </summary>
+    /// <remarks>
+    /// Compared as a set: the derived order is ordinal by name and EF's is the declared one, and the
+    /// wire order is the derived one on both sides, so only membership has to agree. A type absent
+    /// from the model is skipped, matching how the checks above treat one.
+    /// </remarks>
+    void ValidateAttachmentKeys(IModel model, Type contextType)
+    {
+        foreach (var meta in types.Values)
+        {
+            if (meta.AttachmentKeys is not { } derived ||
+                model.FindEntityType(meta.ClrType) is not { } entity)
+            {
+                continue;
+            }
+
+            var actual = entity.FindPrimaryKey()?.Properties.Select(_ => _.Name).ToList() ?? [];
+            var expected = derived.Select(_ => _.Name).ToList();
+            if (actual.ToHashSet(StringComparer.Ordinal).SetEquals(expected))
+            {
+                continue;
+            }
+
+            var attachment = Attachments(meta).First().Name;
+            var describe = actual.Count == 0 ? "no primary key" : $"a primary key of ({string.Join(", ", actual)})";
+            throw new(
+                $"'{meta.ClrType.Name}.{attachment}' is an [Attachment], fetched by a key derived as ({string.Join(", ", expected)}), but {contextType.Name} gives '{meta.ClrType.Name}' {describe}. The derivation reads [Key] and the 'Id'/'{meta.ClrType.Name}Id' conventions, because a client is generated from the model's metadata and never sees OnModelCreating — so a fluently configured key cannot be found there. Mark the key member(s) with [Key] to state it where both sides can read it.");
+        }
     }
 
     static bool TryClassify(Type type, out SourceKind kind, out string name)
@@ -659,6 +755,96 @@ sealed class Schema
         return policies;
     }
 
+    /// <summary>The attachment members a type exposes, its inherited ones included.</summary>
+    static IEnumerable<Member> Attachments(TypeMeta meta) =>
+        meta.Members.Values.Where(_ => _.Kind == MemberKind.Attachment);
+
+    /// <summary>
+    /// The members forming a row's primary key, derived from the annotations and EF's own naming
+    /// conventions: <c>[Key]</c> where written, else a member named <c>Id</c>, else one named
+    /// <c>{TypeName}Id</c>. Ordinal by name, which is the order attachment keys travel in.
+    /// </summary>
+    /// <remarks>
+    /// Must stay in lockstep with <c>MetadataModelReader.Keys</c>, which repeats this over metadata to
+    /// generate the client. Deriving rather than reading the EF key is what keeps the two able to
+    /// agree at all — the generator never runs the model, so fluent configuration is invisible to it —
+    /// and <see cref="ValidateAgainstModel"/> verifies the answer against the real key at startup.
+    /// </remarks>
+    static IReadOnlyList<Member> DeriveKeys(Schema schema, TypeMeta meta)
+    {
+        // An attachment is not a value and a navigation is not one either, so neither can be a key.
+        var candidates = meta.Members.Values
+            .Where(_ => _.Kind == MemberKind.Scalar)
+            .ToList();
+
+        var declared = candidates
+            .Where(_ => _.Property.GetCustomAttribute<System.ComponentModel.DataAnnotations.KeyAttribute>() is not null)
+            .OrderBy(_ => _.Name, StringComparer.Ordinal)
+            .ToList();
+        if (declared.Count > 0)
+        {
+            return declared;
+        }
+
+        foreach (var convention in new[] {"Id", $"{meta.ClrType.Name}Id"})
+        {
+            if (candidates.FirstOrDefault(_ => string.Equals(_.Name, convention, StringComparison.Ordinal)) is { } match)
+            {
+                return [match];
+            }
+        }
+
+        var attachment = Attachments(meta).First().Name;
+        throw new(
+            $"'{meta.ClrType.Name}.{attachment}' is an [Attachment], but no primary key could be derived for '{meta.ClrType.Name}'. An attachment is fetched by its row's key, so one has to be nameable by a client: mark the key member(s) with [Key], or name a member 'Id' or '{meta.ClrType.Name}Id'. The member must also be exposed — a key a client cannot read is one it cannot send back.");
+    }
+
+    /// <summary>
+    /// The attachment check a source carries, or null where it exposes no attachment. Refuses a source
+    /// exposing one with no check: the fetch endpoint is reached by key, so leaving it unauthorized
+    /// would serve any row whose key can be guessed.
+    /// </summary>
+    static Type? ResolveAttachmentPolicy(Schema schema, Type type, string name, SourceKind kind, ScryOptions options)
+    {
+        var meta = schema.types[type];
+        if (Attachments(meta).FirstOrDefault() is not { } attachment)
+        {
+            return null;
+        }
+
+        // A view and a POCO have no key: a keyless view is not addressable by row, and a POCO has no
+        // table to read one back from. The same reasoning already disables cursor paging for both.
+        if (kind != SourceKind.Entity)
+        {
+            throw new(
+                $"'{type.Name}.{attachment.Name}' is an [Attachment], but source '{name}' is a {kind.ToString().ToLowerInvariant()} and has no primary key to fetch the value by. Only a [Queryable] entity can carry an attachment.");
+        }
+
+        // Walked like a row policy's chain, and for the same reason: a subclass must not be able to
+        // shed the check its base declared by opting itself in.
+        for (var candidate = type; candidate is not null; candidate = candidate.BaseType)
+        {
+            var policy = options.AttachmentPolicies.GetValueOrDefault(candidate) ??
+                         candidate.GetCustomAttribute<AttachmentWithAttribute>(inherit: false)?.Policy;
+            if (policy is null)
+            {
+                continue;
+            }
+
+            var entityType = AttachmentPolicy.EntityType(policy);
+            if (!entityType.IsAssignableFrom(type))
+            {
+                throw new(
+                    $"Attachment policy '{policy.Name}' on '{candidate.Name}' authorizes '{entityType.Name}', which source '{name}' does not derive from. A policy has to be written against the type it is attached to, or one of its bases.");
+            }
+
+            return policy;
+        }
+
+        throw new(
+            $"'{type.Name}.{attachment.Name}' is an [Attachment], but '{type.Name}' has no attachment policy. An attachment is fetched by row key through an endpoint of its own, so it stays unreadable until something authorizes it: add [AttachmentWith(typeof(...))] or ScryOptions.AddAttachmentPolicy, implementing IAttachmentPolicy<{type.Name}>.");
+    }
+
     /// <summary>
     /// The element type of a collection member, or null when the type is not a collection. A string is
     /// excluded deliberately — it is <c>IEnumerable&lt;char&gt;</c> and is always a scalar here.
@@ -700,6 +886,7 @@ sealed class Schema
             {
                 EnsureNoPreviousNames(type, property);
                 EnsureNoBinaryTransfer(type, property, "which is not exposed to clients. Remove it, or remove whatever excludes the member.");
+                EnsureNoAttachment(type, property, "which is not exposed to clients. Remove it, or remove whatever excludes the member.");
                 continue;
             }
 
@@ -708,6 +895,20 @@ sealed class Schema
                 if (property.PropertyType != typeof(byte[]))
                 {
                     EnsureNoBinaryTransfer(type, property, $"which is a '{ScalarDisplay(property.PropertyType)}'. Only byte[] members can travel as binary parts.");
+                    EnsureNoAttachment(type, property, $"which is a '{ScalarDisplay(property.PropertyType)}'. Only byte[] members can be attachments.");
+                }
+
+                if (property.GetCustomAttribute<AttachmentAttribute>() is not null)
+                {
+                    // The two describe opposite fates for the same value: one encodes what the query
+                    // read, the other means the query never read it.
+                    if (property.GetCustomAttribute<BinaryTransferAttribute>() is not null)
+                    {
+                        throw new($"'{type.Name}.{property.Name}' carries both [Attachment] and [BinaryTransfer]. [BinaryTransfer] changes how a value the query read is encoded; [Attachment] means the query never reads it. Keep one.");
+                    }
+
+                    meta.Members[property.Name] = new(property.Name, property, MemberKind.Attachment);
+                    continue;
                 }
 
                 meta.Members[property.Name] = new(property.Name, property, MemberKind.Scalar);
@@ -715,6 +916,7 @@ sealed class Schema
             }
 
             EnsureNoBinaryTransfer(type, property, "which is not a scalar member. Only byte[] members can travel as binary parts.");
+            EnsureNoAttachment(type, property, "which is not a scalar member. Only byte[] members can be attachments.");
 
             // A reference navigation or a complex value type: traversable when the target is opted in.
             // Unwrap Nullable<T> so an optional struct complex member (Address?) resolves to Address.
@@ -790,6 +992,14 @@ sealed class Schema
         if (property.GetCustomAttribute<BinaryTransferAttribute>() is not null)
         {
             throw new($"[BinaryTransfer] on '{type.Name}.{property.Name}', {reason}");
+        }
+    }
+
+    static void EnsureNoAttachment(Type type, PropertyInfo property, string reason)
+    {
+        if (property.GetCustomAttribute<AttachmentAttribute>() is not null)
+        {
+            throw new($"[Attachment] on '{type.Name}.{property.Name}', {reason}");
         }
     }
 

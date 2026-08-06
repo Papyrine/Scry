@@ -49,6 +49,62 @@ public sealed class ScryProcessor
     public QueryResponse Execute(QueryRequest request, DbContext data, IServiceProvider services) =>
         Execute(request, data, services, new HeaderDictionary(), new HeaderDictionary());
 
+    /// <summary>Fetches one attachment's bytes, authorized by the source's attachment policy.</summary>
+    public ScryAttachmentResult FetchAttachment(AttachmentRequest request, DbContext data, IServiceProvider services) =>
+        FetchAttachment(request, data, services, new HeaderDictionary(), new HeaderDictionary());
+
+    /// <summary>
+    /// Fetches one attachment's bytes, exposing <paramref name="requestHeaders"/> to the attachment
+    /// policy and letting it write to <paramref name="responseHeaders"/>.
+    /// </summary>
+    /// <remarks>
+    /// The choke point for the attachment endpoint, as <see cref="Execute(QueryRequest, DbContext, IServiceProvider)"/>
+    /// is for queries: the policy runs here, the row is read through its source's row policies, and the
+    /// fetch is audited — so another transport gets all three by calling this rather than reaching for
+    /// the database itself. A refusal is not distinguished from a missing row; see
+    /// <see cref="ScryAttachmentResult"/>.
+    /// </remarks>
+    public ScryAttachmentResult FetchAttachment(
+        AttachmentRequest request,
+        DbContext data,
+        IServiceProvider services,
+        IHeaderDictionary requestHeaders,
+        IHeaderDictionary responseHeaders)
+    {
+        var drifted = request.Stamp is { } requestStamp &&
+                      requestStamp != schema.Stamp;
+        var recorder = QueryRecorder.StartAttachment(schema, request, services);
+        try
+        {
+            var scope = new CallScope(services, requestHeaders, responseHeaders);
+            var result = executor.FetchAttachment(request, data, scope);
+
+            // Rows are 1 for a value handed over and 0 for everything withheld, which keeps a run of
+            // refusals visible in the metrics without saying which kind of refusal it was.
+            recorder.Succeeded(ResultKind.Single, result.Found ? 1 : 0);
+            return result;
+        }
+        catch (ScryValidationException exception) when (drifted)
+        {
+            var stale = new ScryValidationException($"{exception.Message} The request's schema stamp does not match this server's model, so the client was generated against a different model surface — regenerate the client.")
+            {
+                StaleClient = true
+            };
+            recorder.Rejected(stale);
+            throw stale;
+        }
+        catch (ScryValidationException exception)
+        {
+            recorder.Rejected(exception);
+            throw;
+        }
+        catch (Exception exception)
+        {
+            recorder.Failed(exception);
+            throw;
+        }
+    }
+
     /// <summary>
     /// Validates and executes a request, exposing <paramref name="requestHeaders"/> to row policies and
     /// letting them write to <paramref name="responseHeaders"/>.
@@ -577,4 +633,11 @@ public sealed class ScryProcessor
     /// <summary>Executes a request without a service provider (no DI-resolved policies).</summary>
     public QueryResponse Execute(QueryRequest request, DbContext data) =>
         Execute(request, data, EmptyServiceProvider.Instance);
+
+    /// <summary>
+    /// Fetches an attachment without a service provider. The attachment policy still runs — it is
+    /// constructed directly when DI has no answer — so this is unauthorized only if the policy is.
+    /// </summary>
+    public ScryAttachmentResult FetchAttachment(AttachmentRequest request, DbContext data) =>
+        FetchAttachment(request, data, EmptyServiceProvider.Instance);
 }

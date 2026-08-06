@@ -86,6 +86,24 @@ static class LinqDiagnostics
         "'{0}' is client-side code, which a Scry query cannot carry — evaluate it before the query, or apply it to the rows after they return",
         "The callable surface is a closed set of functions the server can rebind onto SQL. A call that reads nothing from the row is closure state, evaluated into a constant before the request is sent; one that does read the row would have to run in the database, where client-side code cannot.");
 
+    public static readonly DiagnosticDescriptor AttachmentKeys = Error(
+        "SCRY113",
+        "Attachment requires the row's key projected beside it",
+        "Attachment '{0}' needs '_.{1}' projected beside it — an attachment is fetched by its row's key, so the key has to come back with the row",
+        "The value is never in the response: what comes back is a handle that fetches it, and the only thing a handle can be built from is the key the query projected. Without it there is nothing to fetch by.");
+
+    public static readonly DiagnosticDescriptor AttachmentAsValue = Error(
+        "SCRY114",
+        "Attachment is not a value",
+        "Attachment '{0}' is not a value, so it cannot be filtered, ordered, grouped, or computed on",
+        "No query reads an attachment's value — that is what the annotation means. Fetch it from the returned row with OpenAsync instead.");
+
+    public static readonly DiagnosticDescriptor AttachmentOperator = Error(
+        "SCRY115",
+        "Attachment cannot be carried through this operator",
+        "An attachment cannot be carried through '{0}' — the result's rows no longer correspond to single rows of the source it is fetched from",
+        "Deduplicating, flattening, joining, or combining rewrites what a row is, so a key projected beside an attachment stops identifying one row of one source. Fetch the attachments from a query that returns the rows themselves.");
+
     public static readonly ImmutableArray<DiagnosticDescriptor> All =
     [
         UnsupportedOperator,
@@ -100,7 +118,10 @@ static class LinqDiagnostics
         SynchronousExecution,
         UnorderedReverse,
         ProjectedGroup,
-        ClientSideCode
+        ClientSideCode,
+        AttachmentKeys,
+        AttachmentAsValue,
+        AttachmentOperator
     ];
 
     // Warning rather than error throughout. The analyzer sees only what is written literally in the
@@ -108,12 +129,24 @@ static class LinqDiagnostics
     // not here — and a rule that can be incomplete should not be able to break a build on its own.
     // Escalate the lot with 'dotnet_diagnostic.SCRY1XX.severity = error' in .editorconfig.
     static DiagnosticDescriptor Rule(string id, string title, string message, string description) =>
+        Rule(id, title, message, description, DiagnosticSeverity.Warning);
+
+    /// <summary>
+    /// The attachment rules, which are errors rather than warnings. Every other rule reports LINQ that
+    /// would fail at translation with a clear message anyway, so a warning is enough; these report a
+    /// query whose result could not be built at all — a handle with no key to fetch by — and the
+    /// derivation is a compile-time fact rather than a partial reading of the chain.
+    /// </summary>
+    static DiagnosticDescriptor Error(string id, string title, string message, string description) =>
+        Rule(id, title, message, description, DiagnosticSeverity.Error);
+
+    static DiagnosticDescriptor Rule(string id, string title, string message, string description, DiagnosticSeverity severity) =>
         new(
             id,
             title,
             message,
             category,
-            DiagnosticSeverity.Warning,
+            severity,
             true,
             description,
             SupportedLinq.Docs);

@@ -20,6 +20,14 @@ sealed class TypeMeta(Type clrType)
     /// </summary>
     public Dictionary<string, Member> PreviousNames { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The members forming the row's primary key, ordinal by name — the order attachment keys travel
+    /// in. Null unless the type carries an <c>[Attachment]</c>, which is the only thing that fetches
+    /// by key. Derived from the annotations and the naming conventions at build, then verified against
+    /// the real EF key at startup, where a model exists to compare with.
+    /// </summary>
+    public IReadOnlyList<Member>? AttachmentKeys { get; set; }
+
     public bool TryGetMember(string name, [MaybeNullWhen(false)] out Member member) =>
         Members.TryGetValue(name, out member) ||
         PreviousNames.TryGetValue(name, out member);

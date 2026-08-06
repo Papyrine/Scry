@@ -27,7 +27,7 @@ public sealed class ActiveOnlyPolicy :
         source.Where(_ => _.Active);
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L309-L317' title='Snippet source file'>snippet source</a> | <a href='#snippet-returnablePolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L346-L354' title='Snippet source file'>snippet source</a> | <a href='#snippet-returnablePolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The `context` carries the request-scoped service provider, the active `DbContext`, and the call's HTTP headers:
@@ -190,6 +190,104 @@ When executing through `ScryProcessor.Execute(request, db)` — the overload wit
 ## Applies to every source kind
 
 Policies work on entities, views, and POCO sources alike; each is an `IQueryable<T>` by the time the policy sees it. For a POCO source the filter runs in memory, for the others it is translated to SQL.
+
+
+## Attachment policies
+
+An [`[Attachment]`](attachments.md) is the one thing a row policy cannot reach: its value is fetched by row key through an endpoint of its own rather than returned by a query. It has a check of its own, and unlike a row policy it is **mandatory** — a source exposing an attachment without one refuses to start.
+
+<!-- snippet: attachmentPolicyInterface -->
+<a id='snippet-attachmentPolicyInterface'></a>
+```cs
+public interface IAttachmentPolicy<T>
+{
+    bool Authorize(ScryAttachmentContext context);
+}
+```
+<sup><a href='/src/Scry.Server/IAttachmentPolicy.cs#L14-L19' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentPolicyInterface' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+<!-- snippet: attachmentContext -->
+<a id='snippet-attachmentContext'></a>
+```cs
+public sealed class ScryAttachmentContext(
+    IServiceProvider services,
+    DbContext db,
+    string member,
+    IReadOnlyList<object> keyValues,
+    IHeaderDictionary requestHeaders,
+    IHeaderDictionary responseHeaders)
+{
+    /// <summary>Context for a processor hosted outside the HTTP endpoint, which has no headers.</summary>
+    public ScryAttachmentContext(IServiceProvider services, DbContext db, string member, IReadOnlyList<object> keyValues) :
+        this(services, db, member, keyValues, new HeaderDictionary(), new HeaderDictionary())
+    {
+    }
+
+    /// <summary>The request-scoped service provider (e.g. for the current user/tenant).</summary>
+    public IServiceProvider Services { get; } = services;
+
+    /// <summary>The active <see cref="DbContext"/>.</summary>
+    public DbContext Db { get; } = db;
+
+    /// <summary>The attachment member being fetched, as the schema names it.</summary>
+    public string Member { get; } = member;
+
+    /// <summary>
+    /// The primary key of the row the value hangs off, parsed into the key members' own CLR types and
+    /// ordered by member name — the order the schema derives, not the order EF declares.
+    /// </summary>
+    /// <remarks>
+    /// The row has not been read at this point, and may not exist: these are the key a caller asked
+    /// for, not one taken from a row. Authorizing on them alone is the fast path; a decision needing
+    /// the row itself can read it through <see cref="Db"/>.
+    /// </remarks>
+    public IReadOnlyList<object> KeyValues { get; } = keyValues;
+
+    /// <summary>
+    /// The headers the caller sent. Client-supplied and therefore untrusted — hint data, never an
+    /// authorization input.
+    /// </summary>
+    public IHeaderDictionary RequestHeaders { get; } = requestHeaders;
+
+    /// <summary>The headers of the response being built. Writes here reach the client.</summary>
+    public IHeaderDictionary ResponseHeaders { get; } = responseHeaders;
+}
+```
+<sup><a href='/src/Scry.Server/ScryAttachmentContext.cs#L7-L51' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentContext' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+<!-- snippet: attachmentPolicy -->
+<a id='snippet-attachmentPolicy'></a>
+```cs
+public sealed class UnsealedContractsPolicy :
+    IAttachmentPolicy<Contract>
+{
+    /// <summary>The seeded row this refuses, so a denial is exercised without needing a header.</summary>
+    public const int SealedId = 3;
+
+    public bool Authorize(ScryAttachmentContext context) =>
+        context.KeyValues is not [int id] || id != SealedId;
+}
+```
+<sup><a href='/src/Scry.Tests/TestModel.cs#L334-L344' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentPolicy' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Attached with `[AttachmentWith(typeof(...))]` or `ScryOptions.AddAttachmentPolicy<TEntity, TPolicy>()`, and inherited down the base chain exactly as a row policy is, so a subclass cannot shed the check its base carries.
+
+It differs from a row policy in three ways worth knowing:
+
+| | Row policy | Attachment policy |
+| --- | --- | --- |
+| Shape | Narrows an `IQueryable<T>` | Answers yes or no |
+| How many apply | Every one in the chain, all narrowing | Exactly one — the nearest declaration |
+| Optional | Yes | No |
+
+There is one rather than a chain because the check is a decision, not a filter: composing several would only raise the question of what a disagreement means.
+
+**Both still apply.** The fetch resolves its row through the policy-filtered source, so a row a query could not have returned is not one an attachment can be pulled from — the attachment check narrows what is already authorized, exactly as a client filter does. A refusal by either is the same `404` as a row that was never there; see [Security](attachments.md#security).
+
+The check runs **before the database is touched**, so an unauthorized caller learns nothing, not even how long a lookup took. `KeyValues` holds the key it asked for, parsed into the key members' own types — a key, not a row, since the row has not been read and may not exist. A decision needing the row itself can read it through `Db`.
 
 
 ## What a policy is not

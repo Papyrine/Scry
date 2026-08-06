@@ -6,10 +6,16 @@ public static class ScryQueryableExtensions
     /// <summary>Executes the query and returns all rows.</summary>
     public static async Task<List<T>> ToListAsync<T>(this IQueryable<T> source, Cancel cancel = default)
     {
+        var plan = PlanFor(source);
         var response = await Send(source, terminal: null, cancel);
         EnsureKind(response, ResultKind.List);
-        return Materialize<List<T>>(source, response) ?? [];
+        return AttachmentBinder.Bind(Materialize<List<T>>(source, response), plan, Client(source)) ?? [];
     }
+
+    // The client a query was opened against, which a handle closes over so it knows where to fetch
+    // from. Every path reaching this has already established the provider is a Scry one.
+    static ScryClient Client<T>(IQueryable<T> source) =>
+        ((QueryProvider) source.Provider).Client;
 
     // The collection-shaping terminals below all send the same "enumerate to a list" request as
     // ToListAsync and reshape the materialised rows in memory — Scry has no streaming wire, so there
@@ -92,10 +98,11 @@ public static class ScryQueryableExtensions
                 "A streamed query cannot be batched: a batch is answered as one response, so its entries cannot be read row by row. Drop InBatch from this query, or use ToListAsync.");
         }
 
+        var plan = PlanFor(source);
         var client = provider.Client;
         await foreach (var row in client.StreamAsync(source.ToScryRequest(), provider.Call, cancel).WithCancellation(cancel))
         {
-            yield return MaterializeRow<T>(source, row, client);
+            yield return AttachmentBinder.BindRow(MaterializeRow<T>(source, row, client), plan, client)!;
         }
     }
 
@@ -343,10 +350,15 @@ public static class ScryQueryableExtensions
 
     static async Task<ScryPage<T>> Page<T>(IQueryable<T> source, PageOp terminal, Cancel cancel)
     {
+        var plan = PlanFor(source);
         var response = await Send(source, terminal, cancel);
         EnsureKind(response, ResultKind.Page);
-        return Materialize<ScryPage<T>>(source, response) ??
-               throw new ScryWireException("Page result deserialized to null.");
+        var page = Materialize<ScryPage<T>>(source, response) ??
+                   throw new ScryWireException("Page result deserialized to null.");
+
+        // The page envelope is the client's own shape; the handles hang off the items inside it.
+        AttachmentBinder.Bind(page.Items, plan, Client(source));
+        return page;
     }
 
     static Node Predicate<T>(Expression<Func<T, bool>> predicate) =>
@@ -373,6 +385,7 @@ public static class ScryQueryableExtensions
 
     static async Task<T?> Single<T>(IQueryable<T> source, QueryOp terminal, Cancel cancel)
     {
+        var plan = PlanFor(source);
         var response = await Send(source, terminal, cancel);
         EnsureKind(response, ResultKind.Single);
         if (response.Payload.ValueKind == JsonValueKind.Null)
@@ -380,7 +393,7 @@ public static class ScryQueryableExtensions
             return default;
         }
 
-        return Materialize<T>(source, response);
+        return AttachmentBinder.BindRow(Materialize<T>(source, response), plan, Client(source));
     }
 
     /// <summary>
@@ -468,6 +481,61 @@ public static class ScryQueryableExtensions
         pipeline.Add(
             new SelectOp(
                 new([..members.Select(_ => new ProjectionMember(_, new NodeValue(new MemberNode([_]))))])));
+    }
+
+    /// <summary>
+    /// The attachment handles this query's rows will carry, or null where they carry none. Guarded by
+    /// a cached look at the row type first, so a query with no attachment anywhere in its shape pays
+    /// one dictionary lookup and never translates twice.
+    /// </summary>
+    static AttachmentPlan? PlanFor<T>(IQueryable<T> source)
+    {
+        if (!AttachmentShape.Carries(typeof(T)))
+        {
+            return null;
+        }
+
+        var pipeline = QueryTranslator.Translate(source.Expression, out var bindings);
+        if (bindings.Count > 0)
+        {
+            return new(bindings);
+        }
+
+        // No bindings and a projection means the query wrote a Select that left the attachments out,
+        // which is an ordinary result with nothing to fill.
+        if (pipeline.Any(_ => _ is SelectOp or GroupByOp or JoinOp or SetOp))
+        {
+            return null;
+        }
+
+        // Whole-model: every member the model declares comes back, so the keys are already there and
+        // the handles hang off the row itself.
+        if (AttachmentModel.Of(typeof(T)) is not {Attachments.Length: > 0} model)
+        {
+            return null;
+        }
+
+        if (pipeline.FirstOrDefault(_ => _ is DistinctOp or SelectManyOp) is { } refused)
+        {
+            throw new NotSupportedException(
+                $"An attachment cannot be carried through {refused.GetType().Name.Replace("Op", "")}. The result's rows no longer correspond to single rows of the source the attachment is fetched from.");
+        }
+
+        if (model.Keys.Length == 0)
+        {
+            throw new NotSupportedException(
+                $"'{typeof(T).Name}' declares attachments but no keys on its [ScryModel]. An attachment is fetched by its row's key, so the key members have to be named there.");
+        }
+
+        return new(
+        [
+            ..model.Attachments.Select(
+                attachment => new AttachmentBinding(
+                    [attachment],
+                    model.Source,
+                    attachment,
+                    [..model.Keys.Select(IReadOnlyList<string> (key) => [key])]))
+        ]);
     }
 
     static Task<QueryResponse> Send<T>(IQueryable<T> source, QueryOp? terminal, Cancel cancel)

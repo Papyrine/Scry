@@ -14,6 +14,9 @@ The model is **default-deny**: a type that carries none of the opt-in attributes
 | `[QueryIgnore]` | property, field | Excludes a member from an opted-in type. |
 | `[PreviousNames("...")]` | class, struct, property, field | Keeps accepting the names a source, member, or enum value used to be exposed under. |
 | `[ReturnableWith(typeof(TPolicy))]` | class, struct | Attaches a server-side row policy. |
+| `[BinaryTransfer]` | property, field | Sends a `byte[]` as a raw multipart part instead of base64. |
+| `[Attachment]` | property, field | Makes a `byte[]` a claim check: never carried by a query, fetched on demand by row key. |
+| `[AttachmentWith(typeof(TPolicy))]` | class, struct | Attaches the check authorizing this type's attachments. Required where one is exposed. |
 
 
 ## `[Queryable]`
@@ -405,7 +408,7 @@ builder.Entity<Employee>()
     .ComplexProperty(_ => _.Address)
     .ToJson();
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L417-L421' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L455-L459' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A complex type is **not a root source**: it produces no property on the generated `ScryQuery` and no server resolver. It is reachable only by traversing into it from an opted-in entity/view/POCO — for example `Employee.Address.City`. Its members follow the same exposure rules as any other type (`[QueryIgnore]` still hides `Zip`), and the traversal is bounded by `MaxNavigationDepth` like any navigation. How EF stores the type — a JSON column or separate columns — is transparent to Scry; the server rebinds the member path onto EF, which translates it either way.
@@ -433,7 +436,7 @@ builder.Entity<Employee>()
     .ComplexCollection(_ => _.PreviousAddresses)
     .ToJson();
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L423-L427' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexCollectionToJson' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L461-L465' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexCollectionToJson' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The element type being a complex type rather than a source changes nothing a client can see: the array is aggregable and flattenable exactly like a collection of entities, and the wire request is indistinguishable from one over a collection navigation. Because a complex type is never a source, it can carry no [row policy](policies.md) — attaching one is refused at startup rather than silently ignored, since a policy that cannot run reads as protection it is not providing:
@@ -487,6 +490,62 @@ It is a transfer encoding, not a shape change:
 - The client reads both forms regardless, so the server model can adopt the attribute freely.
 
 Only a `byte[]` member exposed to clients can carry it — anything else fails at server startup, the same way a misplaced `[PreviousNames]` does.
+
+
+## `[Attachment]`
+
+<!-- snippet: attachmentMember -->
+<a id='snippet-attachmentMember'></a>
+```cs
+[Queryable]
+[AttachmentWith(typeof(UnsealedContractsPolicy))]
+public class Contract
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+
+    // Never read by a query. A client sees a handle and fetches the bytes by this row's key.
+    [Attachment]
+    public byte[]? Document { get; set; }
+}
+```
+<sup><a href='/src/Scry.Tests/TestModel.cs#L316-L328' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentMember' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+The other way to expose a `byte[]`, and the opposite trade from `[BinaryTransfer]`: the query never reads the value at all. What the client gets instead is a handle carrying the row's key, exchanged for the bytes by a second request whenever — or if ever — they are wanted. See [Attachments](attachments.md).
+
+It **is** a shape change, which is the whole difference between the two:
+
+| | `[BinaryTransfer]` | `[Attachment]` |
+| --- | --- | --- |
+| Client member type | `byte[]`, unchanged | `ScryAttachment` |
+| Read by the query | Yes | Never |
+| Transferred | With every row that projects it | Only when the handle is opened |
+| Schema stamp | Unmoved | Moves — the surface really did change |
+| Filterable, orderable, projectable as a value | Yes | No |
+| Authorization | The source's row policy | That, **and** a mandatory `IAttachmentPolicy<T>` |
+
+Reach for `[BinaryTransfer]` when the bytes are wanted with the row and only the encoding is worth improving — a thumbnail on every row of a list. Reach for `[Attachment]` when they usually are not: a document, a full-size image, anything large enough that fetching it per row is the cost worth avoiding.
+
+The constraints are checked twice, at the build that writes the model and again at server startup:
+
+- Only a `byte[]` member (`SCRY004`).
+- Only on a `[Queryable]` entity — a view or a POCO has no primary key to fetch by (`SCRY005`).
+- Never alongside `[BinaryTransfer]`, which asks for the value to be both fetched and not fetched (`SCRY006`).
+- The row's key must be derivable: `[Key]` where written, else a member named `Id`, else `{TypeName}Id` (`SCRY007`).
+- The type must have an [attachment policy](policies.md#attachment-policies), or the server refuses to start.
+
+
+## `[AttachmentWith]`
+
+```cs
+[AttachmentWith(typeof(EmployeePhotoPolicy))]
+public class Employee { ... }
+```
+
+Names the `IAttachmentPolicy<T>` authorizing this type's `[Attachment]` members. Server-only, like `[ReturnableWith]`, and inherited the same way — a subclass cannot shed the check its base carries. `ScryOptions.AddAttachmentPolicy<TEntity, TPolicy>()` is the programmatic equivalent and takes precedence on the same type.
+
+Unlike a row policy there is exactly one: the check is a yes/no decision rather than a filter, so the nearest declaration answers and composing several would only raise the question of what a disagreement means. Row policies still apply on top — see [Attachments](attachments.md#security).
 
 
 ## `[Obsolete]`

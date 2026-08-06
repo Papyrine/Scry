@@ -32,12 +32,17 @@ public static class ScryServiceExtensions
         // One call, every transport of the same query surface: streaming reads it a row at a time and
         // batching carries several queries at once, but neither widens what can be asked. Mapping them
         // separately would only invite deployments where one is protected and the others are not.
-        // Conventions applied to the returned builder reach all three.
+        // Conventions applied to the returned builder reach all four.
+        //
+        // The attachment endpoint belongs here for that reason above all: it answers about a row of the
+        // same model, so a deployment that authorizes queries and leaves it open would be handing out
+        // by key exactly what the guard on the others exists to protect.
         return new Endpoints(
         [
             endpoints.MapPost(pattern, Handle),
             endpoints.MapPost($"{pattern.TrimEnd('/')}/stream", HandleStream),
-            endpoints.MapPost($"{pattern.TrimEnd('/')}/batch", HandleBatch)
+            endpoints.MapPost($"{pattern.TrimEnd('/')}/batch", HandleBatch),
+            endpoints.MapPost($"{pattern.TrimEnd('/')}/attachment", HandleAttachment)
         ]);
     }
 
@@ -391,6 +396,72 @@ public static class ScryServiceExtensions
         {
             // Never leak internals (stack traces, SQL) to the client.
             await WriteError(context, StatusCodes.Status500InternalServerError, "Query execution failed.", drifted);
+        }
+    }
+
+    static async Task HandleAttachment(HttpContext context)
+    {
+        var services = context.RequestServices;
+        var options = services.GetRequiredService<ScryOptions>();
+        var processor = services.GetRequiredService<ScryProcessor>();
+
+        // Advertised here for the same reason as on a query, and on a 404 too: a client whose fetch
+        // stopped working wants to know whether its model drifted.
+        context.Response.Headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
+
+        var started = Stopwatch.GetTimestamp();
+        string body;
+        using (var reader = new StreamReader(context.Request.Body))
+        {
+            body = await reader.ReadToEndAsync(context.RequestAborted);
+        }
+
+        AttachmentRequest request;
+        try
+        {
+            request = ScryJson.DeserializeAttachmentRequest(body);
+        }
+        catch (ScryWireException exception)
+        {
+            QueryRecorder.Malformed(Stopwatch.GetElapsedTime(started));
+            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, staleClient: false);
+            return;
+        }
+
+        var drifted = request.Stamp is { } stamp && stamp != processor.SchemaStamp;
+
+        try
+        {
+            var db = (DbContext) services.GetRequiredService(options.ContextType);
+            var result = processor.FetchAttachment(request, db, services, context.Request.Headers, context.Response.Headers);
+
+            // Refused, absent, and policy-filtered arrive here as one answer and leave as one status.
+            // A body would only give a caller holding a guessed key something to tell them apart by.
+            if (!result.Found)
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                return;
+            }
+
+            // The row was readable and its column holds nothing. Distinct from the 404 above: this
+            // says the value is absent, not that the caller may not have it.
+            if (result.Value is not { } value)
+            {
+                context.Response.StatusCode = StatusCodes.Status204NoContent;
+                return;
+            }
+
+            context.Response.ContentType = ScryBinary.PartContentType;
+            context.Response.ContentLength = value.Length;
+            await context.Response.Body.WriteAsync(value, context.RequestAborted);
+        }
+        catch (ScryValidationException exception)
+        {
+            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, exception.StaleClient);
+        }
+        catch (Exception)
+        {
+            await WriteError(context, StatusCodes.Status500InternalServerError, "Attachment fetch failed.", drifted);
         }
     }
 

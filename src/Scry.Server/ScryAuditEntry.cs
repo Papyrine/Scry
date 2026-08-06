@@ -6,17 +6,31 @@ namespace Scry;
 /// outcomes the HTTP endpoint reports to the client as a generic 500 — so the audit trail is where
 /// execution failures are readable.
 /// </summary>
-/// <param name="Request">The deserialized request, exactly as validated — the full query AST.</param>
+/// <param name="Request">
+/// The deserialized request, exactly as validated — the full query AST. Null for an attachment fetch,
+/// which carries no query; <see cref="Attachment"/> describes that instead, and exactly one of the two
+/// is ever set.
+/// </param>
 /// <param name="Outcome">How the query ended.</param>
 /// <param name="Duration">
 /// Validation through completion. For a stream this spans the whole read, not just query start-up.
 /// </param>
 // begin-snippet: auditEntry
 public sealed record ScryAuditEntry(
-    QueryRequest Request,
+    QueryRequest? Request,
     ScryQueryOutcome Outcome,
     TimeSpan Duration)
 {
+    /// <summary>
+    /// The attachment fetched, when the entry describes one rather than a query: which member of which
+    /// source, and the row key it was asked for. Null for a query.
+    /// </summary>
+    /// <remarks>
+    /// Worth watching on its own. An attachment is reached by row key through an endpoint of its own,
+    /// so a run of rejected or not-found fetches is what key-guessing looks like.
+    /// </remarks>
+    public AttachmentRequest? Attachment { get; init; }
+
     /// <summary>The result shape, when the query succeeded; null when it never produced one.</summary>
     public ResultKind? Kind { get; init; }
 

@@ -163,6 +163,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Model: BuildingQueryModel
     },
     {
+      Name: Contract,
+      Kind: Entity,
+      Model: ContractQueryModel
+    },
+    {
       Name: Department,
       Kind: Entity,
       Model: DepartmentQueryModel
@@ -228,14 +233,16 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           TypeDisplay: string,
           NeedsNullDefault: true,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Country,
           TypeDisplay: string,
           NeedsNullDefault: true,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         }
       ]
     },
@@ -247,7 +254,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           TypeDisplay: bool,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         }
       ],
       Base: PostQueryModel
@@ -260,14 +268,16 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           TypeDisplay: int,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Name,
           TypeDisplay: string,
           NeedsNullDefault: true,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         }
       ]
     },
@@ -279,10 +289,43 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           TypeDisplay: int,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         }
       ],
       Base: AssetQueryModel
+    },
+    {
+      Model: ContractQueryModel,
+      Members: [
+        {
+          Name: Document,
+          TypeDisplay: global::Scry.ScryAttachment,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: true
+        },
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false
+        }
+      ],
+      Keys: [
+        Id
+      ]
     },
     {
       Model: DepartmentQueryModel,
@@ -292,14 +335,16 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           TypeDisplay: int,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Name,
           TypeDisplay: string,
           NeedsNullDefault: true,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         }
       ]
     },
@@ -311,7 +356,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           TypeDisplay: string,
           NeedsNullDefault: true,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Headcount,
@@ -319,7 +365,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          Obsolete: Counts open roles too; use the Region rollup.
+          Obsolete: Counts open roles too; use the Region rollup.,
+          IsAttachment: false
         }
       ]
     },
@@ -331,84 +378,96 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           TypeDisplay: bool,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Address,
           TypeDisplay: AddressQueryModel?,
           NeedsNullDefault: false,
           IsNavigation: true,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Avatar,
           TypeDisplay: byte[],
           NeedsNullDefault: true,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Department,
           TypeDisplay: DepartmentQueryModel?,
           NeedsNullDefault: false,
           IsNavigation: true,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: DepartmentId,
           TypeDisplay: int,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Id,
           TypeDisplay: int,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Manager,
           TypeDisplay: EmployeeQueryModel?,
           NeedsNullDefault: false,
           IsNavigation: true,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: ManagerId,
           TypeDisplay: int?,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Name,
           TypeDisplay: string,
           NeedsNullDefault: true,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Perks,
           TypeDisplay: Perks,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: PreviousAddresses,
           TypeDisplay: global::System.Collections.Generic.IReadOnlyList<AddressQueryModel>,
           NeedsNullDefault: true,
           IsNavigation: false,
-          IsCollection: true
+          IsCollection: true,
+          IsAttachment: false
         },
         {
           Name: Status,
           TypeDisplay: Status,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         }
       ]
     },
@@ -420,14 +479,16 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           TypeDisplay: global::System.DateOnly,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Name,
           TypeDisplay: string,
           NeedsNullDefault: true,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         }
       ]
     },
@@ -439,98 +500,112 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           TypeDisplay: decimal,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Audited,
           TypeDisplay: string,
           NeedsNullDefault: true,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Code,
           TypeDisplay: string,
           NeedsNullDefault: true,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Discount,
           TypeDisplay: decimal?,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Grade,
           TypeDisplay: char,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Id,
           TypeDisplay: int,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Lines,
           TypeDisplay: global::System.Collections.Generic.IReadOnlyList<OrderLineQueryModel>,
           NeedsNullDefault: true,
           IsNavigation: false,
-          IsCollection: true
+          IsCollection: true,
+          IsAttachment: false
         },
         {
           Name: Placed,
           TypeDisplay: global::System.DateTime,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Priorities,
           TypeDisplay: global::System.Collections.Generic.IReadOnlyList<Priority>,
           NeedsNullDefault: true,
           IsNavigation: false,
-          IsCollection: true
+          IsCollection: true,
+          IsAttachment: false
         },
         {
           Name: Quantity,
           TypeDisplay: uint,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Region,
           TypeDisplay: string,
           NeedsNullDefault: true,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Scores,
           TypeDisplay: global::System.Collections.Generic.IReadOnlyList<int>,
           NeedsNullDefault: true,
           IsNavigation: false,
-          IsCollection: true
+          IsCollection: true,
+          IsAttachment: false
         },
         {
           Name: Sku,
           TypeDisplay: ulong,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Tags,
           TypeDisplay: global::System.Collections.Generic.IReadOnlyList<string>,
           NeedsNullDefault: true,
           IsNavigation: false,
-          IsCollection: true
+          IsCollection: true,
+          IsAttachment: false
         }
       ]
     },
@@ -542,42 +617,48 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           TypeDisplay: int,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Order,
           TypeDisplay: OrderQueryModel?,
           NeedsNullDefault: false,
           IsNavigation: true,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: OrderId,
           TypeDisplay: int,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Price,
           TypeDisplay: decimal,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Quantity,
           TypeDisplay: int,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Sku,
           TypeDisplay: string,
           NeedsNullDefault: true,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         }
       ]
     },
@@ -589,21 +670,24 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           TypeDisplay: int,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Name,
           TypeDisplay: string,
           NeedsNullDefault: true,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Published,
           TypeDisplay: bool,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         }
       ]
     },
@@ -615,14 +699,16 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           TypeDisplay: string,
           NeedsNullDefault: true,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Total,
           TypeDisplay: decimal,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         }
       ],
       Obsolete: 
@@ -635,14 +721,16 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           TypeDisplay: int,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Name,
           TypeDisplay: string,
           NeedsNullDefault: true,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         }
       ]
     },
@@ -654,21 +742,24 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           TypeDisplay: int,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: IsOpen,
           TypeDisplay: bool,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         },
         {
           Name: Name,
           TypeDisplay: string,
           NeedsNullDefault: true,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         }
       ]
     },
@@ -680,7 +771,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           TypeDisplay: int,
           NeedsNullDefault: false,
           IsNavigation: false,
-          IsCollection: false
+          IsCollection: false,
+          IsAttachment: false
         }
       ],
       Base: AssetQueryModel
@@ -714,10 +806,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
   ],
   QueryEndpoint: /api/query,
   SqlPreview: false,
-  SchemaStamp: EsEci_FpUXbUWNkZ
+  SchemaStamp: bRwTlw_MuknEYcRj
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L573' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L665' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names, member names with the exact C# type spelling the source generator would emit, and the re-emitted enums. It carries **no** policies, resolvers, connection details, or CLR internals.

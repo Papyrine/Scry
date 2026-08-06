@@ -42,6 +42,7 @@ public static class ScryJson
     // Declared after Options because static field initializers run in textual order.
     static readonly JsonTypeInfo<QueryRequest> requestInfo = Info<QueryRequest>();
     static readonly JsonTypeInfo<QueryResponse> responseInfo = Info<QueryResponse>();
+    static readonly JsonTypeInfo<AttachmentRequest> attachmentRequestInfo = Info<AttachmentRequest>();
     static readonly JsonTypeInfo<QueryBatchRequest> batchRequestInfo = Info<QueryBatchRequest>();
     static readonly JsonTypeInfo<QueryBatchResponse> batchResponseInfo = Info<QueryBatchResponse>();
     static readonly JsonTypeInfo<ScryIntrospection> introspectionInfo = Info<ScryIntrospection>();
@@ -103,6 +104,9 @@ public static class ScryJson
     public static string Serialize(QueryResponse response) =>
         JsonSerializer.Serialize(response, responseInfo);
 
+    public static string Serialize(AttachmentRequest request) =>
+        JsonSerializer.Serialize(request, attachmentRequestInfo);
+
     public static string Serialize(ScryIntrospection introspection) =>
         JsonSerializer.Serialize(introspection, introspectionInfo);
 
@@ -121,6 +125,13 @@ public static class ScryJson
 
     public static QueryBatchRequest DeserializeBatchRequest([StringSyntax(StringSyntaxAttribute.Json)] string json) =>
         Deserialize(json, batchRequestInfo, "batch request");
+
+    /// <summary>
+    /// Reads a request for an attachment's bytes. The version it carries is checked by the server as
+    /// it is for a query: this only refuses what is not readable as the shape at all.
+    /// </summary>
+    public static AttachmentRequest DeserializeAttachmentRequest([StringSyntax(StringSyntaxAttribute.Json)] string json) =>
+        Deserialize(json, attachmentRequestInfo, "attachment request");
 
     /// <summary>Reads a server's introspection document.</summary>
     public static ScryIntrospection DeserializeIntrospection([StringSyntax(StringSyntaxAttribute.Json)] string json) =>

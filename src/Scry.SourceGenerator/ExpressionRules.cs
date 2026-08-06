@@ -53,7 +53,7 @@ static class ExpressionRules
 
     // The lambdas a call hands to the wire, told from the client-side ones by the parameter that
     // takes them: an Expression is carried, a Func is run here.
-    static IEnumerable<IAnonymousFunctionOperation> Wired(IInvocationOperation link)
+    public static IEnumerable<IAnonymousFunctionOperation> Wired(IInvocationOperation link)
     {
         var method = QueryChain.Unreduced(link);
         for (var index = 0; index < link.Arguments.Length; index++)

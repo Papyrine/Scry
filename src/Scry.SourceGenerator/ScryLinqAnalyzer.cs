@@ -94,6 +94,10 @@ public sealed class ScryLinqAnalyzer :
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var ordered = false;
 
+        // Whether an operator has already rewritten what a row is. Once one has, an attachment can no
+        // longer be fetched: the key beside it stops identifying one row of one source.
+        var rewritten = false;
+
         for (var index = 0; index < chain.Count; index++)
         {
             var link = chain[index];
@@ -136,6 +140,21 @@ public sealed class ScryLinqAnalyzer :
                 Report(context, LinqDiagnostics.Cast, link, target);
                 continue;
             }
+
+            // Read before the operator's own rules, so a query carrying an attachment is reported for
+            // the operator that would strand it rather than only for what else is wrong with it.
+            if (AttachmentRules.Rewrites(name))
+            {
+                if (!rewritten &&
+                    AttachmentRules.Carries(ElementOf(link), known))
+                {
+                    AttachmentRules.Operator(context, link, name);
+                }
+
+                rewritten = true;
+            }
+
+            AttachmentRules.Check(context, link, name, known, rewritten);
 
             if (!SupportedLinq.Operators.TryGetValue(name, out var arities))
             {
@@ -319,6 +338,14 @@ public sealed class ScryLinqAnalyzer :
     // provider throws on synchronous enumeration rather than blocking an HTTP request out of it.
     static bool ReturnsQuery(IMethodSymbol method) =>
         method.ReturnType is INamedTypeSymbol {IsGenericType: true, Name: "IQueryable" or "IOrderedQueryable"};
+
+    // The row type a link reads — the source's element, before the operator reshapes it. What says
+    // whether a whole-model query would have carried attachments into the operator.
+    static ITypeSymbol? ElementOf(IInvocationOperation link) =>
+        link.Arguments.Length > 0 &&
+        link.Arguments[0].Value.Type is INamedTypeSymbol {IsGenericType: true} source
+            ? source.TypeArguments[0]
+            : null;
 
     static void Report(OperationAnalysisContext context, DiagnosticDescriptor rule, IInvocationOperation link, params object?[] arguments) =>
         context.ReportDiagnostic(Diagnostic.Create(rule, QueryChain.Where(link), arguments));

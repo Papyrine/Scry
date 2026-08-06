@@ -108,4 +108,15 @@ public sealed class ScryOptions(Type contextType)
     public void AddPolicy<TEntity, TPolicy>()
         where TPolicy : IReturnablePolicy<TEntity> =>
         Policies[typeof(TEntity)] = typeof(TPolicy);
+
+    internal Dictionary<Type, Type> AttachmentPolicies { get; } = [];
+
+    /// <summary>
+    /// Attaches the authorization check for an entity's <c>[Attachment]</c> members, replacing any
+    /// <c>[AttachmentWith]</c> on that same type. A type exposing an attachment must have one, here or
+    /// as the attribute, or the server refuses to start.
+    /// </summary>
+    public void AddAttachmentPolicy<TEntity, TPolicy>()
+        where TPolicy : IAttachmentPolicy<TEntity> =>
+        AttachmentPolicies[typeof(TEntity)] = typeof(TPolicy);
 }

@@ -1407,6 +1407,14 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 throw Reject($"Property '{path[i]}' is not allow-listed on '{currentType.Name}'.");
             }
 
+            // Rejected explicitly rather than left to the scalar check below, which several callers
+            // skip: no query reads an attachment's value, wherever it is named. The generated client
+            // cannot express one either — this is what a hand-built request meets.
+            if (member.Kind == MemberKind.Attachment)
+            {
+                throw Reject($"'{path[i]}' on '{currentType.Name}' is an attachment. Its value is fetched through the attachment endpoint, not read by a query.");
+            }
+
             var isLast = i == path.Count - 1;
             if (!isLast)
             {

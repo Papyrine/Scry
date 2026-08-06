@@ -183,6 +183,36 @@ public class AnalyzerTests
 
     // Every operator, function and shape the closed set does carry. A false positive here is worse
     // than a missed rule: it reports code that works, in a build the consumer cannot see past.
+    // An attachment is fetched by its row's key, so a projection carrying one has to carry the key
+    // too. Reported as an error rather than a warning: the handle could not be built at all.
+    [Test]
+    public Task AttachmentWithoutItsKey() =>
+        Verify(
+            Analyze(
+                """
+                await Query.Contract.Select(_ => new {_.Name, _.Document}).ToListAsync();
+                await Query.Contract.Select(_ => new {_.Name, Parent = new {_.Parent!.Name, _.Parent!.Document}}).ToListAsync();
+                """));
+
+    [Test]
+    public Task AttachmentUsedAsValue() =>
+        Verify(
+            Analyze(
+                """
+                await Query.Contract.Where(_ => _.Document != null).ToListAsync();
+                await Query.Contract.OrderBy(_ => _.Document).ToListAsync();
+                await Query.Contract.GroupBy(_ => _.Document).Select(_ => new {Rows = _.Count()}).ToListAsync();
+                """));
+
+    [Test]
+    public Task AttachmentUnderRewritingOperator() =>
+        Verify(
+            Analyze(
+                """
+                await Query.Contract.Distinct().ToListAsync();
+                await Query.Contract.Select(_ => new {_.Id, _.Document}).Distinct().ToListAsync();
+                """));
+
     [Test]
     public void SupportedQueriesAreClean()
     {
@@ -263,6 +293,11 @@ public class AnalyzerTests
             await Query.Order.FirstAsync(_ => _.Region == "N");
             await Query.Order.CountAsync();
             await Query.Order.Select(_ => new {_.Id, _.Region}).ToDictionaryAsync(_ => _.Id);
+
+            await Query.Contract.ToListAsync();
+            await Query.Contract.Where(_ => _.Name == "x").OrderBy(_ => _.Id).ToListAsync();
+            await Query.Contract.Select(_ => new {_.Id, _.Document}).ToListAsync();
+            await Query.Contract.Select(_ => new {_.Name, Parent = new {_.Parent!.Id, _.Parent!.Document}}).ToListAsync();
             """;
 
         Assert.That(Analyze(queries), Is.Empty);
@@ -400,6 +435,13 @@ public class AnalyzerTests
             {
                 public string Source { get; } = source;
                 public IReadOnlyList<string> Members { get; } = members;
+                public string[] Keys { get; set; } = [];
+                public string[] Attachments { get; set; } = [];
+            }
+
+            public sealed class ScryAttachment
+            {
+                public Task<System.IO.Stream?> OpenAsync() => null!;
             }
 
             public class ScryClient
@@ -468,6 +510,15 @@ public class AnalyzerTests
                 public string Name { get; init; } = "";
             }
 
+            [ScryModel("Contract", "Id", "Name", Keys = new[] {"Id"}, Attachments = new[] {"Document"})]
+            public class ContractQueryModel
+            {
+                public int Id { get; init; }
+                public string Name { get; init; } = "";
+                public ScryAttachment Document { get; init; } = null!;
+                public ContractQueryModel? Parent { get; init; }
+            }
+
             [ScryModel("Asset", "Id")]
             public class AssetQueryModel
             {
@@ -485,6 +536,7 @@ public class AnalyzerTests
                 public IQueryable<OrderQueryModel> Order => null!;
                 public IQueryable<CustomerQueryModel> Customer => null!;
                 public IQueryable<AssetQueryModel> Asset => null!;
+                public IQueryable<ContractQueryModel> Contract => null!;
             }
         }
 

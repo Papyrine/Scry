@@ -20,4 +20,17 @@ public sealed class ScryModelAttribute(string source, params string[] members) :
 
     /// <summary>The model's scalar members, inherited ones included, in generated order.</summary>
     public IReadOnlyList<string> Members { get; } = members;
+
+    /// <summary>
+    /// The members forming the row's primary key, ordinal by name. Set only on a model carrying an
+    /// <see cref="Attachments"/> member, which is the only thing that reads a key: an attachment is
+    /// fetched by it, so a query projecting one has to project these beside it.
+    /// </summary>
+    public string[] Keys { get; set; } = [];
+
+    /// <summary>
+    /// The model's attachment members — those typed as <see cref="ScryAttachment"/> rather than
+    /// carrying a value. Absent from <see cref="Members"/>, since no query reads one.
+    /// </summary>
+    public string[] Attachments { get; set; } = [];
 }
