@@ -78,6 +78,75 @@ public class BinaryConverterTests
         Assert.Throws<JsonException>(() => ScryJson.DeserializePayload<List<Row>>(response));
     }
 
+    // Everything that is neither a base64 string nor an object cannot be a byte[] at all.
+    [TestCase("0")]
+    [TestCase("true")]
+    [TestCase("[1,2,3]")]
+    public void NonBinaryTokenFailsClosed(string avatar)
+    {
+        var response = Response($$"""[{"name":"Alice","avatar":{{avatar}}}]""");
+        var exception = Assert.Throws<JsonException>(() => ScryJson.DeserializePayload<List<Row>>(response));
+        Assert.That(exception!.Message, Does.Contain("Expected a base64 string"));
+    }
+
+    [Test]
+    public void EmptyPlaceholderFailsClosed()
+    {
+        var response = Response("""[{"name":"Alice","avatar":{}}]""");
+        var exception = Assert.Throws<JsonException>(() => ScryJson.DeserializePayload<List<Row>>(response));
+        Assert.That(exception!.Message, Does.Contain("Expected a single $bin property"));
+    }
+
+    // The index is read as a number, so a part cannot be named by a string that merely looks like one.
+    [Test]
+    public void NonNumericPartIndexFailsClosed()
+    {
+        var response = Response("""[{"name":"Alice","avatar":{"$bin":"0"}}]""") with
+        {
+            BinaryParts = [[0x01]]
+        };
+        var exception = Assert.Throws<JsonException>(() => ScryJson.DeserializePayload<List<Row>>(response));
+        Assert.That(exception!.Message, Does.Contain("Expected a part index"));
+    }
+
+    // A number that is not an Int32 is not an index either — and it fails as a wire fault rather than
+    // as whatever the reader would have raised on its own.
+    [TestCase("1.5")]
+    [TestCase("99999999999")]
+    public void NonIntegerPartIndexFailsClosed(string index)
+    {
+        var response = Response($$$"""[{"name":"Alice","avatar":{"$bin":{{{index}}}}}]""") with
+        {
+            BinaryParts = [[0x01]]
+        };
+        var exception = Assert.Throws<JsonException>(() => ScryJson.DeserializePayload<List<Row>>(response));
+        Assert.That(exception!.Message, Does.Contain("Expected a part index"));
+    }
+
+    [Test]
+    public void NegativePartIndexFailsClosed()
+    {
+        var response = Response("""[{"name":"Alice","avatar":{"$bin":-1}}]""") with
+        {
+            BinaryParts = [[0x01]]
+        };
+        var exception = Assert.Throws<JsonException>(() => ScryJson.DeserializePayload<List<Row>>(response));
+        Assert.That(exception!.Message, Does.Contain("references part -1"));
+    }
+
+    // A placeholder names one part and nothing else: a second property would be a shape the writer
+    // never emits, and reading past it would leave the reader mid-object.
+    [Test]
+    public void PlaceholderWithExtraPropertiesFailsClosed()
+    {
+        var response = Response("""[{"name":"Alice","avatar":{"$bin":0,"other":1}}]""") with
+        {
+            BinaryParts = [[0x01]]
+        };
+        var exception = Assert.Throws<JsonException>(() => ScryJson.DeserializePayload<List<Row>>(response));
+        Assert.That(exception!.Message, Does.Contain("carry only"));
+    }
+
     [Test]
     public void ScopeDoesNotLeakAcrossDeserializations()
     {
