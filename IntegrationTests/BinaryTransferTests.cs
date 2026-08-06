@@ -8,8 +8,10 @@ using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 /// The [BinaryTransfer] contract over HTTP, end to end: a byte[] member's values travel as raw
 /// multipart parts on all three endpoints, parts precede the JSON that references them, indices are
 /// per-document (per row line on the stream, global across a batch), null stays inline, and a
-/// binary-free result is plain JSON exactly as before. The fixture is self-contained — the sample
-/// model has no binary member — with its own context, schema, and server.
+/// binary-free result is plain JSON exactly as before. On a stream the framing is the plan's decision
+/// rather than the data's, and a failure part-way through still ends in the stream's error marker with
+/// the parts already sent left intact. The fixture is self-contained — the sample model has no binary
+/// member — with its own context, schema, and server.
 /// </summary>
 [TestFixture]
 public class BinaryTransferTests
@@ -96,14 +98,38 @@ public class BinaryTransferTests
         Assert.That(rows.Select(_ => (_.Name, _.Payload)), Is.EqualTo(seeded));
     }
 
-    const string listRequest =
+    // The projection the framing tests share: a select with a [BinaryTransfer] slot in it, which is
+    // what commits a response to multipart.
+    const string selectNameAndPayload =
         """
-        {"version":1,"root":"Document","pipeline":[
-          {"$type":"orderBy","key":{"$type":"member","path":["Id"]},"descending":false},
-          {"$type":"select","projection":{"members":[
-            {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},
-            {"name":"Payload","value":{"$type":"node","node":{"$type":"member","path":["Payload"]}}}]}}]}
+        {"$type":"select","projection":{"members":[
+          {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},
+          {"name":"Payload","value":{"$type":"node","node":{"$type":"member","path":["Payload"]}}}]}}
         """;
+
+    const string orderById =
+        """{"$type":"orderBy","key":{"$type":"member","path":["Id"]},"descending":false}""";
+
+    const string listRequest =
+        $$"""{"version":1,"root":"Document","pipeline":[{{orderById}},{{selectNameAndPayload}}]}""";
+
+    // The stamp a client generated against a different model surface sends.
+    const string driftStamp = "not-the-server's-stamp";
+
+    const string driftedRequest =
+        $$"""{"version":1,"stamp":"{{driftStamp}}","root":"Document","pipeline":[{{orderById}},{{selectNameAndPayload}}]}""";
+
+    // The same projection narrowed to one name, so a stream can be pointed at a row that carries no
+    // bytes — or at no rows at all. Four '$' because the predicate closes three braces in a row, which
+    // fewer would read as an interpolation.
+    static string NamedRequest(string name) =>
+        $$$$"""
+            {"version":1,"root":"Document","pipeline":[
+              {"$type":"where","predicate":{"$type":"binary","op":"Equal",
+                "left":{"$type":"member","path":["Name"]},
+                "right":{"$type":"const","value":"{{{{name}}}}","tag":"String"}}},
+              {{{{selectNameAndPayload}}}}]}
+            """;
 
     [Test]
     public async Task ResponseCarriesPartsBeforeTheEnvelope()
@@ -177,7 +203,7 @@ public class BinaryTransferTests
         // A mismatched stamp with enum aliases in the schema (DocumentKind carries a renamed value)
         // pushes the server onto the fully-general fallback path — which must divert identically.
         var drifted = ScryClient.ForHttp(http, "/api/query");
-        drifted.SchemaStamp = "not-the-server's-stamp";
+        drifted.SchemaStamp = driftStamp;
 
         var rows = await drifted.Source<Doc>("Document", docMembers)
             .OrderBy(_ => _.Id)
@@ -236,6 +262,134 @@ public class BinaryTransferTests
         Assert.That(lines[3], Does.Contain("""{"name":"missing","payload":null}"""));
         Assert.That(lines[4], Does.Contain("""{"name":"full","payload":{"$bin":0}}"""));
         Assert.That(lines[4], Does.Contain(ScryStream.End));
+    }
+
+    [Test]
+    public async Task StreamCommitsToMultipartBeforeTheFirstRow()
+    {
+        // The framing is the plan's decision, not the data's: the content type is fixed before a row
+        // is pulled, so a projection with a binary slot wraps even when nothing ends up diverting.
+        // A single null-valued row, and no rows at all, are the two ways that can happen.
+        var (nullType, nullBody) = await PostRaw("/api/query/stream", NamedRequest("missing"));
+        var nullSections = ParseMultipart(nullBody, BoundaryOf(nullType));
+
+        Assert.That(nullSections.Select(_ => _.Headers["Content-Type"]), Is.EqualTo(new[] {ScryStream.ContentType}));
+        var nullLines = LinesOf(nullSections[0]);
+        Assert.That(nullLines, Has.Length.EqualTo(3));
+        Assert.That(nullLines[1], Does.Contain("""{"name":"missing","payload":null}"""));
+
+        var (emptyType, emptyBody) = await PostRaw("/api/query/stream", NamedRequest("nothing is named this"));
+        var emptySections = ParseMultipart(emptyBody, BoundaryOf(emptyType));
+
+        Assert.That(emptySections.Select(_ => _.Headers["Content-Type"]), Is.EqualTo(new[] {ScryStream.ContentType}));
+        // Nothing between the markers: an empty result is still a multipart response, just an empty one.
+        var emptyLines = LinesOf(emptySections[0]);
+        Assert.That(emptyLines, Has.Length.EqualTo(2));
+        Assert.That(emptyLines[0], Does.Contain(ScryStream.Begin));
+        Assert.That(emptyLines[1], Does.Contain(ScryStream.End));
+    }
+
+    [Test]
+    public async Task DriftedClientStillStreamsBinary()
+    {
+        var drifted = ScryClient.ForHttp(http, "/api/query");
+        drifted.SchemaStamp = driftStamp;
+        var documents = drifted.Source<Doc>("Document", docMembers);
+
+        var rows = new List<Doc>();
+        await foreach (var row in documents.OrderBy(_ => _.Id).ToAsyncEnumerable())
+        {
+            rows.Add(row);
+        }
+
+        Assert.That(rows.Select(_ => (_.Name, _.Payload)), Is.EqualTo(seeded));
+    }
+
+    [Test]
+    public async Task DriftedStreamCarriesTheAliasesAndKeepsItsParts()
+    {
+        var (contentType, body) = await PostRaw("/api/query/stream", driftedRequest);
+        var sections = ParseMultipart(body, BoundaryOf(contentType));
+
+        // A mismatched stamp adds the enum alias table to the begin marker, which is the one thing on
+        // this path that differs. Everything around it is the framing a matching client gets: the same
+        // alternating sections, the same bytes.
+        Assert.That(sections, Has.Count.EqualTo(9));
+        Assert.That(LinesOf(sections[0])[0], Does.Contain("DocumentKind").And.Contain("Sketch"));
+        Assert.That(sections[1].Content, Is.EqualTo(alphaPayload));
+        Assert.That(sections[3].Content, Is.EqualTo(boundaryPayload));
+        Assert.That(sections[5].Content, Is.Empty);
+        Assert.That(sections[7].Content, Is.EqualTo(fullPayload));
+    }
+
+    [Test]
+    public async Task StreamOverTheRowLimitFailsAfterThePartsAlreadySent()
+    {
+        await using var limited = await StartLimited(maxStreamRows: 2);
+        using var limitedHttp = limited.GetTestClient();
+
+        var (contentType, body) = await PostRaw(limitedHttp, "/api/query/stream", listRequest);
+        var sections = ParseMultipart(body, BoundaryOf(contentType));
+
+        // Two rows and their parts are on the wire by the time the limit trips, and the status is long
+        // since sent — so the failure rides the stream's error marker, in the section the last row was
+        // written into, and the closing marker never comes.
+        Assert.That(
+            sections.Select(_ => _.Headers["Content-Type"]),
+            Is.EqualTo(new[]
+            {
+                ScryStream.ContentType, ScryBinary.PartContentType,
+                ScryStream.ContentType, ScryBinary.PartContentType,
+                ScryStream.ContentType
+            }));
+        Assert.That(sections[1].Content, Is.EqualTo(alphaPayload));
+        Assert.That(sections[3].Content, Is.EqualTo(boundaryPayload));
+
+        var last = LinesOf(sections[4]);
+        Assert.That(last[0], Does.Contain("""{"name":"boundary","payload":{"$bin":0}}"""));
+        Assert.That(last[1], Does.Contain($"\"{ScryStream.MarkerProperty}\":\"{ScryStream.Error}\""));
+        Assert.That(last[1], Does.Contain("more than the maximum of 2 streamed rows"));
+        Assert.That(
+            Encoding.UTF8.GetString(body),
+            Does.Not.Contain($"\"{ScryStream.MarkerProperty}\":\"{ScryStream.End}\""));
+    }
+
+    [Test]
+    public async Task StreamOverTheRowLimitSurfacesTheFailureToTheReader()
+    {
+        await using var limited = await StartLimited(maxStreamRows: 2);
+        using var limitedHttp = limited.GetTestClient();
+        var limitedClient = ScryClient.ForHttp(limitedHttp, "/api/query");
+        var documents = limitedClient.Source<Doc>("Document", docMembers);
+
+        var rows = new List<Doc>();
+        var exception = Assert.ThrowsAsync<ScryWireException>(
+            async () =>
+            {
+                await foreach (var row in documents.OrderBy(_ => _.Id).ToAsyncEnumerable())
+                {
+                    rows.Add(row);
+                }
+            });
+
+        Assert.That(exception!.Message, Does.Contain("more than the maximum of 2 streamed rows"));
+        // The rows that did arrive are whole — their parts were read and resolved before the failure,
+        // so a truncated stream is an error rather than a short answer with mangled bytes.
+        Assert.That(rows.Select(_ => (_.Name, _.Payload)), Is.EqualTo(seeded[..2]));
+    }
+
+    // A second server, because the row limit is fixed at startup and the fixture's own server has none.
+    async Task<WebApplication> StartLimited(int maxStreamRows)
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddDbContext<BinaryContext>(_ => _.UseSqlServer(database.ConnectionString));
+        builder.Services.AddScry<BinaryContext>(_ => _.MaxStreamRows = maxStreamRows);
+
+        var app = builder.Build();
+        app.MapScry("/api/query");
+        await app.StartAsync();
+        return app;
     }
 
     [Test]
@@ -312,14 +466,23 @@ public class BinaryTransferTests
         Assert.That(singlePayload, Is.EqualTo(batchPayload));
     }
 
-    async Task<(string ContentType, byte[] Body)> PostRaw(string endpoint, string request)
+    Task<(string ContentType, byte[] Body)> PostRaw(string endpoint, string request) =>
+        PostRaw(http, endpoint, request);
+
+    static async Task<(string ContentType, byte[] Body)> PostRaw(HttpClient transport, string endpoint, string request)
     {
         using var content = new StringContent(request, Encoding.UTF8, "application/json");
-        using var response = await http.PostAsync(endpoint, content);
+        using var response = await transport.PostAsync(endpoint, content);
         var body = await response.Content.ReadAsByteArrayAsync();
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), Encoding.UTF8.GetString(body));
         return (response.Content.Headers.ContentType!.ToString(), body);
     }
+
+    // The ndjson lines a section carries. A line always ends in \n, so the trailing empty entry the
+    // split leaves is dropped rather than counted as a line.
+    static string[] LinesOf((Dictionary<string, string> Headers, byte[] Content) section) =>
+        Encoding.UTF8.GetString(section.Content)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
     static string BoundaryOf(string contentType)
     {
