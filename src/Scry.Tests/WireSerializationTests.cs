@@ -124,7 +124,12 @@ public class WireSerializationTests
     public void PageEnvelopeResponseRoundTrips()
     {
         var page = new ScryPage<Dictionary<string, object?>>(
-            [new(StringComparer.Ordinal) { ["name"] = "Alice" }],
+            [
+                new(StringComparer.Ordinal)
+                {
+                    ["name"] = "Alice"
+                }
+            ],
             HasMore: true,
             Cursor: null);
         var json = ScryJson.Serialize(
@@ -174,12 +179,12 @@ public class WireSerializationTests
     {
         var json =
             $$"""
-            {
-              "version": {{WireFormat.Version + 1}},
-              "kind": "Scalar",
-              "payload": 1
-            }
-            """;
+              {
+                "version": {{WireFormat.Version + 1}},
+                "kind": "Scalar",
+                "payload": 1
+              }
+              """;
 
         var exception = Assert.Throws<ScryWireException>(() => ScryJson.DeserializeResponse(json));
         Assert.That(exception!.Message, Does.Contain($"wire version {WireFormat.Version + 1}"));
@@ -278,7 +283,7 @@ public class WireSerializationTests
             Assert.That(ScryJson.Serialize(roundTripped), Is.EqualTo(serialized), $"terminal {index}");
         }
 
-        return Verify(string.Join("\n", json));
+        return Verify(json);
     }
 
     static Task VerifyRoundTrip(QueryRequest request)

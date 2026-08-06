@@ -466,8 +466,14 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
 
     static void Seed(TestContext context)
     {
-        var engineering = new Department { Name = "Engineering" };
-        var sales = new Department { Name = "Sales" };
+        var engineering = new Department
+        {
+            Name = "Engineering"
+        };
+        var sales = new Department
+        {
+            Name = "Sales"
+        };
         context.Departments.AddRange(engineering, sales);
 
         // PreviousAddresses is the JSON array the complex-collection tests read. Aaron's is deliberately
@@ -475,46 +481,137 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
         // an entity collection.
         var alice = new Employee
         {
-            Name = "Alice", Status = Status.FullTime, Perks = Perks.Parking | Perks.Gym, Active = true, Department = engineering, Salary = 200_000, Avatar = [0x01, 0x02, 0x03],
-            Address = new() { City = "London", Country = "UK", Zip = "EC1" },
+            Name = "Alice",
+            Status = Status.FullTime,
+            Perks = Perks.Parking | Perks.Gym,
+            Active = true,
+            Department = engineering,
+            Salary = 200_000,
+            Avatar = [0x01, 0x02, 0x03],
+            Address = new()
+            {
+                City = "London",
+                Country = "UK",
+                Zip = "EC1"
+            },
             PreviousAddresses =
             [
-                new() { City = "Berlin", Country = "DE", Zip = "10115" },
-                new() { City = "Paris", Country = "FR", Zip = "75001" }
+                new()
+                {
+                    City = "Berlin",
+                    Country = "DE",
+                    Zip = "10115"
+                },
+                new()
+                {
+                    City = "Paris",
+                    Country = "FR",
+                    Zip = "75001"
+                }
             ]
         };
         context.Employees.Add(alice);
         context.Employees.AddRange(
             new()
             {
-                Name = "Aaron", Status = Status.FullTime, Perks = Perks.Gym, Active = true, Department = engineering, Manager = alice, Salary = 150_000, Avatar = [0x0A, 0x0B],
-                Address = new() { City = "London", Country = "UK", Zip = "W1" }
+                Name = "Aaron",
+                Status = Status.FullTime,
+                Perks = Perks.Gym,
+                Active = true,
+                Department = engineering,
+                Manager = alice,
+                Salary = 150_000,
+                Avatar = [0x0A, 0x0B],
+                Address = new()
+                {
+                    City = "London",
+                    Country = "UK",
+                    Zip = "W1"
+                }
             },
             new()
             {
-                Name = "Bob", Status = Status.PartTime, Active = false, Department = sales, Manager = alice, Salary = 90_000, Avatar = [0xFF],
-                Address = new() { City = "Berlin", Country = "DE", Zip = "10115" },
-                PreviousAddresses = [new() { City = "London", Country = "UK", Zip = "EC2" }]
-            },
-            new()
-            {
-                Name = "Carol", Status = Status.Contractor, Perks = Perks.Remote | Perks.Gym, Active = true, Department = sales, Salary = 120_000, Avatar = [],
-                Address = new() { City = "Paris", Country = "FR", Zip = "75001" },
+                Name = "Bob",
+                Status = Status.PartTime,
+                Active = false,
+                Department = sales,
+                Manager = alice,
+                Salary = 90_000,
+                Avatar = [0xFF],
+                Address = new()
+                {
+                    City = "Berlin",
+                    Country = "DE",
+                    Zip = "10115"
+                },
                 PreviousAddresses =
                 [
-                    new() { City = "London", Country = "UK", Zip = "SW1" },
-                    new() { City = "Berlin", Country = "DE", Zip = "10117" }
+                    new()
+                    {
+                        City = "London",
+                        Country = "UK",
+                        Zip = "EC2"
+                    }
+                ]
+            },
+            new()
+            {
+                Name = "Carol",
+                Status = Status.Contractor,
+                Perks = Perks.Remote | Perks.Gym,
+                Active = true,
+                Department = sales,
+                Salary = 120_000,
+                Avatar = [],
+                Address = new()
+                {
+                    City = "Paris",
+                    Country = "FR",
+                    Zip = "75001"
+                },
+                PreviousAddresses =
+                [
+                    new()
+                    {
+                        City = "London",
+                        Country = "UK",
+                        Zip = "SW1"
+                    },
+                    new()
+                    {
+                        City = "Berlin",
+                        Country = "DE",
+                        Zip = "10117"
+                    }
                 ]
             });
 
         context.Orders.AddRange(
             new()
             {
-                Region = "North", Amount = 100m, Quantity = 3, Sku = 1000, Placed = new(2026, 3, 4, 9, 30, 15), Discount = 10m, Grade = 'A', Code = "40", Audited = "true",
+                Region = "North",
+                Amount = 100m,
+                Quantity = 3,
+                Sku = 1000,
+                Placed = new(2026, 3, 4, 9, 30, 15),
+                Discount = 10m,
+                Grade = 'A',
+                Code = "40",
+                Audited = "true",
                 Lines =
                 [
-                    new() { Sku = "A-1", Quantity = 2, Price = 25m },
-                    new() { Sku = "A-2", Quantity = 1, Price = 50m }
+                    new()
+                    {
+                        Sku = "A-1",
+                        Quantity = 2,
+                        Price = 25m
+                    },
+                    new()
+                    {
+                        Sku = "A-2",
+                        Quantity = 1,
+                        Price = 50m
+                    }
                 ],
                 Tags = ["urgent", "export"],
                 Scores = [3, 5],
@@ -525,35 +622,113 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
             // (a numeric Int64 tag would overflow).
             new()
             {
-                Region = "North", Amount = 250m, Quantity = 7, Sku = ulong.MaxValue, Placed = new(2026, 7, 20, 14, 5, 0), Discount = null, Grade = 'B', Code = "8", Audited = "false",
-                Lines = [new() { Sku = "B-1", Quantity = 5, Price = 50m }],
+                Region = "North",
+                Amount = 250m,
+                Quantity = 7,
+                Sku = ulong.MaxValue,
+                Placed = new(2026, 7, 20, 14, 5, 0),
+                Discount = null,
+                Grade = 'B',
+                Code = "8",
+                Audited = "false",
+                Lines =
+                [
+                    new()
+                    {
+                        Sku = "B-1",
+                        Quantity = 5,
+                        Price = 50m
+                    }
+                ],
                 Tags = ["export"],
                 Scores = [8],
                 Priorities = [Priority.Low, Priority.High]
             },
             // No lines, tags or scores at all, so an aggregate over an empty collection is covered for
             // both a collection of rows and one of values.
-            new() { Region = "South", Amount = 75m, Quantity = 1, Sku = 3000, Placed = new(2025, 12, 31, 23, 59, 59), Discount = 5m, Grade = 'A', Code = "17", Audited = "true" });
+            new()
+            {
+                Region = "South",
+                Amount = 75m,
+                Quantity = 1,
+                Sku = 3000,
+                Placed = new(2025, 12, 31, 23, 59, 59),
+                Discount = 5m,
+                Grade = 'A',
+                Code = "17",
+                Audited = "true"
+            });
 
         context.Assets.AddRange(
-            new Vehicle {Name = "Van", Wheels = 4},
-            new Vehicle {Name = "Trailer", Wheels = 2},
-            new Building {Name = "Depot", Floors = 3},
-            new Artwork {Name = "Mural", Medium = "Paint"});
+            new Vehicle
+            {
+                Name = "Van",
+                Wheels = 4
+            },
+            new Vehicle
+            {
+                Name = "Trailer",
+                Wheels = 2
+            },
+            new Building
+            {
+                Name = "Depot",
+                Floors = 3
+            },
+            new Artwork
+            {
+                Name = "Mural",
+                Medium = "Paint"
+            });
 
         context.Tickets.AddRange(
-            new() { Name = "Login bug", IsOpen = true },
-            new() { Name = "Signup crash", IsOpen = true },
-            new() { Name = "Old typo", IsOpen = false });
+            new()
+            {
+                Name = "Login bug",
+                IsOpen = true
+            },
+            new()
+            {
+                Name = "Signup crash",
+                IsOpen = true
+            },
+            new()
+            {
+                Name = "Old typo",
+                IsOpen = false
+            });
 
         // Each announcement fails a different one of the two policies, so which of them ran shows in
         // which rows come back. "Unpublished notice" is the row the base's policy exists to hide.
         context.Posts.AddRange(
-            new Post { Name = "Draft post", Published = false },
-            new Post { Name = "Live post", Published = true },
-            new Announcement { Name = "Unpublished notice", Published = false, Pinned = true },
-            new Announcement { Name = "Unpinned notice", Published = true, Pinned = false },
-            new Announcement { Name = "Live notice", Published = true, Pinned = true });
+            new Post
+            {
+                Name = "Draft post",
+                Published = false
+            },
+            new Post
+            {
+                Name = "Live post",
+                Published = true
+            },
+            new Announcement
+            {
+                Name = "Unpublished notice",
+                Published = false,
+                Pinned = true
+            },
+            new Announcement
+            {
+                Name = "Unpinned notice",
+                Published = true,
+                Pinned = false
+            },
+            new Announcement
+            {
+                Name = "Live notice",
+                Published = true,
+                Pinned = true
+            });
 
         context.SaveChanges();
     }

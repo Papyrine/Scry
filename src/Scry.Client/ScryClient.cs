@@ -214,7 +214,10 @@ public sealed class ScryClient
     {
         var json = ScryJson.Serialize(request);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
-        using var message = new HttpRequestMessage(HttpMethod.Post, endpoint) {Content = content};
+        using var message = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        {
+            Content = content
+        };
         call?.Configure(message.Headers);
 
         using var response = await http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancel);
@@ -362,7 +365,10 @@ public sealed class ScryClient
 
         // Built explicitly rather than posted through HttpClient.PostAsync: a per-query header needs a
         // request message of its own to be written onto.
-        using var message = new HttpRequestMessage(HttpMethod.Post, endpoint) {Content = content};
+        using var message = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        {
+            Content = content
+        };
         call?.Configure(message.Headers);
 
         using var response = await http.SendAsync(message, cancel);

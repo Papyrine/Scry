@@ -81,7 +81,10 @@ public sealed class ScryProcessor
         var recorder = QueryRecorder.Start(schema, request, services);
         try
         {
-            var scope = new CallScope(services, requestHeaders, responseHeaders) {Binary = binary};
+            var scope = new CallScope(services, requestHeaders, responseHeaders)
+            {
+                Binary = binary
+            };
             var response = executor.Execute(request, data, scope) with
             {
                 // Carried on every response, not only a drifted one: this is the signal a client uses
@@ -151,7 +154,10 @@ public sealed class ScryProcessor
         var recorder = QueryRecorder.Start(schema, request, services);
         try
         {
-            var scope = new CallScope(services, requestHeaders, responseHeaders) {Binary = binary};
+            var scope = new CallScope(services, requestHeaders, responseHeaders)
+            {
+                Binary = binary
+            };
 
             // The alias table is carried on the envelope only for a drifted client; that rare envelope keeps
             // the fully-general path rather than teaching the writer a second shape.
@@ -418,7 +424,10 @@ public sealed class ScryProcessor
         QueryExecutor.RowSet rows;
         try
         {
-            rows = executor.Stream(request, data, new(services, requestHeaders, responseHeaders) {Binary = binary});
+            rows = executor.Stream(request, data, new(services, requestHeaders, responseHeaders)
+            {
+                Binary = binary
+            });
         }
         catch (ScryValidationException exception) when (drifted)
         {

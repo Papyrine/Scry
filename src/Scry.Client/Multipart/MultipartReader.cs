@@ -53,7 +53,10 @@ sealed class MultipartReader
     {
         // Only occurs on first call. This stream will drain any preamble data and remove the first
         // boundary marker.
-        currentStream ??= new(stream, boundary) {LengthLimit = HeadersLengthLimit};
+        currentStream ??= new(stream, boundary)
+        {
+            LengthLimit = HeadersLengthLimit
+        };
 
         // Drain the prior section.
         await currentStream.DrainAsync(cancel);

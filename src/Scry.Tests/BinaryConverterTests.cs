@@ -4,7 +4,10 @@ public class BinaryConverterTests
     record Row(string Name, byte[]? Avatar);
 
     // The built-in byte[] handling, for proving the shared options do not diverge from it.
-    static readonly JsonSerializerOptions builtIn = new() {PropertyNamingPolicy = JsonNamingPolicy.CamelCase};
+    static readonly JsonSerializerOptions builtIn = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
 
     [Test]
     public void WritesBase64IdenticalToBuiltIn()

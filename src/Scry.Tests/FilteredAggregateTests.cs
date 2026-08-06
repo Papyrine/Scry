@@ -157,11 +157,19 @@ public class FilteredAggregateTests
             "Order",
             [
                 new GroupByOp([new MemberNode(["Region"])]),
-                new SelectOp(new([new("Rows", new NodeValue(new AggregateNode(AggregateFn.Count, null) {Distinct = true}))]))
+                new SelectOp(
+                    new(
+                    [
+                        new("Rows",
+                            new NodeValue(
+                                new AggregateNode(AggregateFn.Count, null)
+                                {
+                                    Distinct = true
+                                }))
+                    ]))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
-            () => SharedProcessor.Instance.Execute(request, context));
+        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
         Assert.That(exception!.Message, Does.Contain("requires a selector"));
     }

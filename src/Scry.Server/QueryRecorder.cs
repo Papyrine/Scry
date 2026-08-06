@@ -18,13 +18,19 @@ sealed class QueryRecorder(QueryRequest request, IServiceProvider services, stri
         "scry.server.query.duration",
         unit: "s",
         description: "Duration of handling one query: validation, policies, execution, and shaping — for a stream, the whole read.",
-        advice: new() { HistogramBucketBoundaries = [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10] });
+        advice: new()
+        {
+            HistogramBucketBoundaries = [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10]
+        });
 
     static readonly Histogram<long> queryRows = meter.CreateHistogram<long>(
         "scry.server.query.rows",
         unit: "{row}",
         description: "Rows returned per successful query.",
-        advice: new() { HistogramBucketBoundaries = [1, 10, 100, 1_000, 10_000, 100_000] });
+        advice: new()
+        {
+            HistogramBucketBoundaries = [1, 10, 100, 1_000, 10_000, 100_000]
+        });
 
     long started = Stopwatch.GetTimestamp();
     Activity? activity = StartActivity(source, request);

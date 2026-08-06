@@ -94,7 +94,16 @@ public class DayOfWeekTests
         var sku = 4000ul;
         foreach (var date in early)
         {
-            context.Orders.Add(new() {Region = "Old", Amount = 1m, Quantity = 1, Sku = sku++, Placed = date, Grade = 'A'});
+            context.Orders.Add(
+                new()
+                {
+                    Region = "Old",
+                    Amount = 1m,
+                    Quantity = 1,
+                    Sku = sku++,
+                    Placed = date,
+                    Grade = 'A'
+                });
         }
 
         await context.SaveChangesAsync();

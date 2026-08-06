@@ -16,7 +16,10 @@ public class RoslynLayerTests
                 new("Name", "string", NeedsNullDefault: true, IsNavigation: false),
                 new("Active", "bool", NeedsNullDefault: false, IsNavigation: false),
                 // Deprecated server-side: still queryable, so a snippet using it compiles and warns.
-                new("Status", "Status", NeedsNullDefault: false, IsNavigation: false) {Obsolete = "Use Active."},
+                new("Status", "Status", NeedsNullDefault: false, IsNavigation: false)
+                {
+                    Obsolete = "Use Active."
+                },
                 new("Manager", "EmployeeQueryModel?", NeedsNullDefault: false, IsNavigation: true),
                 // A complex type is exposed exactly like a navigation member on the client model.
                 new("Address", "AddressQueryModel?", NeedsNullDefault: false, IsNavigation: true)
