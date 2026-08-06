@@ -30,13 +30,16 @@ sealed class BinaryConverter :
             throw new JsonException($"Expected a single {ScryBinary.PartProperty} property in a binary placeholder.");
         }
 
+        // Read as an Int32 rather than asked for one: a number the index cannot be — fractional, or
+        // past int range — would otherwise leave the reader to raise a FormatException that reaches the
+        // caller as a JsonException with none of this said in it.
         if (!reader.Read() ||
-            reader.TokenType != JsonTokenType.Number)
+            reader.TokenType != JsonTokenType.Number ||
+            !reader.TryGetInt32(out var index))
         {
             throw new JsonException($"Expected a part index as the value of {ScryBinary.PartProperty}.");
         }
 
-        var index = reader.GetInt32();
         if (!reader.Read() ||
             reader.TokenType != JsonTokenType.EndObject)
         {
