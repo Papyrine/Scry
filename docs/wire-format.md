@@ -717,8 +717,8 @@ public static class ScryBinary
     public const string PartProperty = "$bin";
 
     /// <summary>
-    /// The prefix of the multipart boundary. The rest is random per response, so part content is never
-    /// scanned for collisions.
+    /// The prefix of the multipart boundary. The rest is random per
+    /// response, so part content is never scanned for collisions.
     /// </summary>
     public const string BoundaryPrefix = "scry";
 }
