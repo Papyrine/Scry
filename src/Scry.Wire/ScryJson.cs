@@ -183,8 +183,13 @@ public static class ScryJson
     {
         try
         {
-            return JsonSerializer.Deserialize(json, info) ??
-                   throw new ScryWireException($"Query {what} deserialized to null.");
+            var deserialize = JsonSerializer.Deserialize(json, info);
+            if (deserialize == null)
+            {
+                throw new ScryWireException($"Query {what} deserialized to null.");
+            }
+
+            return deserialize;
         }
         catch (JsonException exception)
         {
