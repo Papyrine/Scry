@@ -5,6 +5,12 @@
     <PackageReadmeFile>nuget-readme.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
+    <!-- The explorer reads the same multipart responses this client does, and reading the format two
+         ways is how the two would come to disagree about it. Nothing public is added for it: the
+         vendored reader stays internal and the explorer is in-tree, not shipped. The key is this
+         tree's own src/key.snk, which Scry.Explorer.Core is signed with — a friend of a strong-named
+         assembly has to be named by key, not by name alone. -->
+    <InternalsVisibleTo Include="Scry.Explorer.Core" Key="$(ScryPublicKey)" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Polyfill" PrivateAssets="all" />
     <PackageReference Include="ProjectDefaults" PrivateAssets="all" />

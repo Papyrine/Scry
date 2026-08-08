@@ -50,7 +50,11 @@ public sealed class SampleContext(DbContextOptions<SampleContext> options) :
     {
         var engineering = new Department
         {
-            Name = "Engineering"
+            Name = "Engineering",
+            // A PNG signature stands in for a real logo — enough bytes to travel as its own multipart
+            // part. Sales keeps a null one, so a query over both carries a diverted value and an
+            // inline null side by side.
+            Logo = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
         };
         var sales = new Department
         {

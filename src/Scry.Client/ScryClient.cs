@@ -251,15 +251,15 @@ public sealed class ScryClient
         // A multipart stream alternates ndjson-line sections with sections carrying the next row's
         // binary parts; a plain stream is one run of lines. The parts accumulated since the last row
         // line belong to the next one, and to it only — so the reader holds at most one row's parts.
-        if (TryGetBoundary(response, out var boundary))
+        if (MultipartResponse.TryGetBoundary(response, out var boundary))
         {
             var multipart = new MultipartReader(boundary, responseStream);
             var pending = new List<byte[]>();
             while (await multipart.ReadNextSectionAsync(cancel) is { } section)
             {
-                if (string.Equals(section.ContentType, ScryBinary.PartContentType, StringComparison.OrdinalIgnoreCase))
+                if (MultipartResponse.IsBinary(section))
                 {
-                    pending.Add(await ReadPartBytes(section, cancel));
+                    pending.Add(await MultipartResponse.ReadPartBytes(section, cancel));
                     continue;
                 }
 
@@ -387,9 +387,9 @@ public sealed class ScryClient
         // A multipart response carries [BinaryTransfer] values as raw parts before its JSON envelope;
         // the parts ride the response object for the payload reader to resolve placeholders against.
         if (response.IsSuccessStatusCode &&
-            TryGetBoundary(response, out var boundary))
+            MultipartResponse.TryGetBoundary(response, out var boundary))
         {
-            var (envelope, parts) = await ReadMultipart(response, boundary, cancel);
+            var (envelope, parts) = await MultipartResponse.ReadAsync(response, boundary, cancel);
             return ScryJson.DeserializeResponse(envelope) with {BinaryParts = parts};
         }
 
@@ -485,69 +485,6 @@ public sealed class ScryClient
         }
     }
 
-    // Whether the response is the multipart format a binary-carrying result travels in, and its
-    // boundary if so. The reader strips a quoted boundary itself, so the raw parameter is passed on.
-    static bool TryGetBoundary(HttpResponseMessage response, [NotNullWhen(true)] out string? boundary)
-    {
-        boundary = null;
-        var contentType = response.Content.Headers.ContentType;
-        if (!string.Equals(contentType?.MediaType, ScryBinary.ContentType, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        boundary = contentType!.Parameters
-            .FirstOrDefault(_ => string.Equals(_.Name, "boundary", StringComparison.OrdinalIgnoreCase))
-            ?.Value;
-        if (string.IsNullOrEmpty(boundary))
-        {
-            throw new ScryWireException("A multipart response arrived without a boundary.");
-        }
-
-        return true;
-    }
-
-    // Reads a single/batch multipart body: binary parts in wire order, then the JSON envelope as the
-    // final section. Sections must be consumed in order — the reader is forward-only.
-    static async Task<(string Envelope, IReadOnlyList<byte[]> Parts)> ReadMultipart(
-        HttpResponseMessage response,
-        string boundary,
-        Cancel cancel)
-    {
-        await using var body = await response.Content.ReadAsStreamAsync(cancel);
-        var reader = new MultipartReader(boundary, body);
-        var parts = new List<byte[]>();
-        string? envelope = null;
-        while (await reader.ReadNextSectionAsync(cancel) is { } section)
-        {
-            if (string.Equals(section.ContentType, ScryBinary.PartContentType, StringComparison.OrdinalIgnoreCase))
-            {
-                parts.Add(await ReadPartBytes(section, cancel));
-                continue;
-            }
-
-            using var text = new StreamReader(section.Body);
-            envelope = await text.ReadToEndAsync(cancel);
-        }
-
-        if (envelope is null)
-        {
-            throw new ScryWireException("A multipart response arrived without a JSON part.");
-        }
-
-        return (envelope, parts);
-    }
-
-    static async Task<byte[]> ReadPartBytes(MultipartSection section, Cancel cancel)
-    {
-        // Content-Length is advisory — used to size the buffer, never trusted for the read itself.
-        using var memory = section.ContentLength is { } length
-            ? new MemoryStream(length)
-            : new MemoryStream();
-        await section.Body.CopyToAsync(memory, cancel);
-        return memory.ToArray();
-    }
-
     /// <summary>
     /// Posts a batch. A non-success status here is a failure of the batch itself — an unreadable body,
     /// or a rejection of the whole envelope; a rejected entry is returned inside a successful response and is
@@ -570,9 +507,9 @@ public sealed class ScryClient
 
         // A batch's parts are numbered globally across entries, so the one list serves every result.
         if (response.IsSuccessStatusCode &&
-            TryGetBoundary(response, out var boundary))
+            MultipartResponse.TryGetBoundary(response, out var boundary))
         {
-            var (envelope, parts) = await ReadMultipart(response, boundary, cancel);
+            var (envelope, parts) = await MultipartResponse.ReadAsync(response, boundary, cancel);
             return ScryJson.DeserializeBatchResponse(envelope) with {BinaryParts = parts};
         }
 

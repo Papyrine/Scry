@@ -98,6 +98,8 @@ Three things the explorer does with the query in the editor, beyond running it.
 
 `csv` writes them as displayed, with RFC 4180 quoting and a UTF-8 BOM so Excel reads non-ASCII values correctly. It is offered only for a **flat** result: [projecting into a navigation](wire-format.md) nests an object inside each row, and a grid cannot hold that without flattening the shape away. `xml` (a `row` element each, a child element per member) and `json` (the rows exactly as the server sent them) keep the nesting, so they are offered for every result the table can render.
 
+**Read a binary member.** A [`[BinaryTransfer]`](annotations.md) `byte[]` does not travel inside the JSON payload — the server sends it as a raw multipart part and leaves a `{"$bin":n}` placeholder where the value was ([Binary transfer](wire-format.md#binary-transfer)). The explorer reassembles that response and folds the parts back in as base64, so a diverted member tables, exports, and copies exactly as the same `byte[]` would without the attribute — which is the whole of what the attribute claims. The *Response* pane shows the reassembled envelope rather than the multipart body it arrived as.
+
 **See the SQL.** Covered next.
 
 

@@ -496,6 +496,44 @@ public class UiSnapshotTests :
         Assert.That(historyText, Does.Contain(".Where(_ => _.Active)"));
     }
 
+    // A [BinaryTransfer] member never travels inside the JSON payload: the server diverts it to a raw
+    // multipart part and leaves {"$bin":n} behind, which is a response the explorer cannot parse as
+    // JSON at all. It reassembles one instead, so a diverted member reads as the base64 the same
+    // byte[] would have arrived as without the attribute — the point of the attribute being that the
+    // queryable surface does not change.
+    [Test]
+    public async Task ExplorerRunCarryingBinary()
+    {
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+
+        await page.SetEditorValueAsync(
+            """
+            Query.Department
+                .OrderBy(_ => _.Name)
+                .Select(_ => new { _.Name, _.Logo })
+            """);
+        await page.Locator("[data-testid='run']").ClickAsync();
+
+        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);
+        var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
+        var result = await page.Locator("[data-testid='result']").InnerTextAsync();
+
+        // Engineering's seeded PNG signature, base64 — the encoding an undiverted byte[] arrives in.
+        Assert.That(table, Does.Contain("iVBORw0KGgo="));
+        Assert.That(result, Does.Contain("iVBORw0KGgo="));
+        // Sales has no logo: a null stays inline in the JSON and produces no part at all.
+        Assert.That(result, Does.Contain("null"));
+        // The response pane shows the reassembled envelope rather than the placeholder or the raw
+        // multipart body it arrived as.
+        Assert.That(result, Does.Not.Contain("$bin"));
+        Assert.That(result, Does.Not.Contain("Content-Type"));
+        // A base64 cell is a scalar, so the result is still a grid and CSV stays on offer.
+        Assert.That(await page.Locator("[data-testid='csv']").CountAsync(), Is.EqualTo(1));
+    }
+
     // Terminal support: a plain LINQ '.ToList()' (the habitual way to ask for all rows) is folded into
     // an enumerate-all list request rather than enumerating synchronously (which would deadlock WASM).
     [Test]
