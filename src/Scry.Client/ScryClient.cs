@@ -9,6 +9,7 @@ public sealed class ScryClient
     readonly Func<QueryRequest, ScryCall?, Cancel, Task<QueryResponse>> transport;
     readonly Func<QueryRequest, ScryCall?, Cancel, IAsyncEnumerable<JsonElement>>? streamTransport;
     readonly Func<QueryBatchRequest, Cancel, Task<QueryBatchResponse>>? batchTransport;
+    readonly Func<AttachmentRequest, Cancel, Task<Stream?>>? attachmentTransport;
 
     /// <summary>
     /// Creates a client over a custom transport. <paramref name="streamTransport"/> and
@@ -49,6 +50,7 @@ public sealed class ScryClient
         transport = (request, call, cancel) => PostAsync(http, endpoint, request, call, cancel);
         streamTransport = (request, call, cancel) => StreamAsync(http, $"{endpoint.TrimEnd('/')}/stream", request, call, cancel);
         batchTransport = (request, cancel) => PostBatchAsync(http, $"{endpoint.TrimEnd('/')}/batch", request, cancel);
+        attachmentTransport = (request, cancel) => PostAttachmentAsync(http, $"{endpoint.TrimEnd('/')}/attachment", request, cancel);
     }
 
     // A custom transport has nowhere to put a header, so a query that asked for one cannot be honoured.
@@ -406,6 +408,81 @@ public sealed class ScryClient
         }
 
         throw new ScryRequestException((int) response.StatusCode, body);
+    }
+
+    // Reached from ScryAttachment.OpenAsync, which a materialized row hands out; the transport is the
+    // client's, so a handle cannot outlive knowing where to fetch from.
+    internal Task<Stream?> OpenAttachmentAsync(AttachmentRequest request, Cancel cancel)
+    {
+        if (attachmentTransport is not null)
+        {
+            return attachmentTransport(request, cancel);
+        }
+
+        throw new NotSupportedException(
+            """
+            This client's transport does not fetch attachments.
+            Construct the client with ScryClient.ForHttp, which maps the attachment endpoint alongside the query one.
+            """);
+    }
+
+    /// <summary>
+    /// Fetches one attachment's bytes. The response is read headers-first and handed back unbuffered,
+    /// so a large value streams rather than materializing; the returned stream owns the response and
+    /// releases it when disposed.
+    /// </summary>
+    async Task<Stream?> PostAttachmentAsync(
+        HttpClient http,
+        string endpoint,
+        AttachmentRequest request,
+        Cancel cancel)
+    {
+        var json = ScryJson.Serialize(request);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var message = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        {
+            Content = content
+        };
+
+        var response = await http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancel);
+        var disposeResponse = true;
+        try
+        {
+            // Recorded from failures too, exactly as a query response is: a 404 caused by drift is
+            // where a stale client most wants to know.
+            if (response.Headers.TryGetValues(WireFormat.SchemaStampHeader, out var values))
+            {
+                RecordServerStamp(values.FirstOrDefault());
+            }
+
+            // A null value produces no body — the row was readable, the column simply holds nothing.
+            if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
+            {
+                return null;
+            }
+
+            if (response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStreamAsync(cancel);
+                disposeResponse = false;
+                return new AttachmentStream(body, response);
+            }
+
+            var error = await response.Content.ReadAsStringAsync(cancel);
+            if (ScryJson.TryDeserializeError(error) is {StaleClient: true, Error.Length: > 0} stale)
+            {
+                throw new ScryStaleClientException(stale.Error);
+            }
+
+            throw new ScryRequestException((int) response.StatusCode, error);
+        }
+        finally
+        {
+            if (disposeResponse)
+            {
+                response.Dispose();
+            }
+        }
     }
 
     /// <summary>

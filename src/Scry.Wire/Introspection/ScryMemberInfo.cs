@@ -27,4 +27,16 @@ public sealed record ScryMemberInfo(
     /// still validated, and still executed, so deprecating one leaves the queryable surface unchanged.
     /// </remarks>
     public string? Obsolete { get; init; }
+
+    /// <summary>
+    /// True for an <c>[Attachment]</c> member: one whose value no query reads, fetched instead by its
+    /// row's key. <see cref="TypeDisplay"/> already says so — it is the handle type rather than
+    /// <c>byte[]</c> — but a reader deciding what to project needs the fact without matching a string.
+    /// </summary>
+    /// <remarks>
+    /// Written only when true, so introspection of a model with no attachment is byte-identical to
+    /// what it was before they existed.
+    /// </remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsAttachment { get; init; }
 }

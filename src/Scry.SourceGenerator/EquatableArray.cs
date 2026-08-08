@@ -6,7 +6,14 @@ readonly struct EquatableArray<T>(ImmutableArray<T> array) :
     IEnumerable<T>
     where T : IEquatable<T>
 {
-    public ImmutableArray<T> Array { get; } = array;
+    readonly ImmutableArray<T> items = array;
+
+    /// <summary>
+    /// The wrapped array, with a default instance reading as empty. A record field left unset is
+    /// <c>default</c> rather than constructed, and an uninitialized <see cref="ImmutableArray{T}"/>
+    /// throws on every member — so normalizing here is what lets an optional array be simply absent.
+    /// </summary>
+    public ImmutableArray<T> Array => items.IsDefault ? ImmutableArray<T>.Empty : items;
 
     public int Length => Array.Length;
 

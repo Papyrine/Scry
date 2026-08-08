@@ -306,6 +306,43 @@ public class Announcement : Post
     public bool Pinned { get; set; }
 }
 
+/// <summary>
+/// Carries an attachment, so it is the fixture for everything that reads one. Kept apart from
+/// <see cref="Employee"/> deliberately: that type already carries a [BinaryTransfer] member and a row
+/// policy in some tests, and an attachment answers to neither. The check comes from
+/// [AttachmentWith] rather than a programmatic registration so every existing ScryProcessor.Create in
+/// this assembly keeps starting unchanged.
+/// </summary>
+// begin-snippet: attachmentMember
+[Queryable]
+[AttachmentWith(typeof(UnsealedContractsPolicy))]
+public class Contract
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+
+    // Never read by a query. A client sees a handle and fetches the bytes by this row's key.
+    [Attachment]
+    public byte[]? Document { get; set; }
+}
+// end-snippet
+
+/// <summary>
+/// <see cref="Contract"/>'s attachment check: everything but the sealed contract, whose document is
+/// refused however the row is reached.
+/// </summary>
+// begin-snippet: attachmentPolicy
+public sealed class UnsealedContractsPolicy :
+    IAttachmentPolicy<Contract>
+{
+    /// <summary>The seeded row this refuses, so a denial is exercised without needing a header.</summary>
+    public const int SealedId = 3;
+
+    public bool Authorize(ScryAttachmentContext context) =>
+        context.KeyValues is not [int id] || id != SealedId;
+}
+// end-snippet
+
 // begin-snippet: returnablePolicy
 /// <summary>A row policy that scopes <see cref="Employee"/> queries to active rows only.</summary>
 public sealed class ActiveOnlyPolicy :
@@ -407,6 +444,7 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
     public DbSet<Ticket> Tickets => Set<Ticket>();
     public DbSet<Asset> Assets => Set<Asset>();
     public DbSet<Post> Posts => Set<Post>();
+    public DbSet<Contract> Contracts => Set<Contract>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder builder) =>
         builder.Properties<decimal>().HavePrecision(18, 2);
@@ -425,6 +463,13 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
             .ComplexCollection(_ => _.PreviousAddresses)
             .ToJson();
         // end-snippet
+
+        // The attachment tests fetch by key and the policy refuses one row by id, so the ids are seeded
+        // explicitly rather than handed out by the identity column. The key itself stays the convention
+        // one — only who assigns its value changes.
+        builder.Entity<Contract>()
+            .Property(_ => _.Id)
+            .ValueGeneratedNever();
 
         // Table-per-hierarchy: every derived type shares the base table and is told apart by a
         // discriminator, which is what OfType narrows on.
@@ -728,6 +773,29 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
                 Name = "Live notice",
                 Published = true,
                 Pinned = true
+            });
+
+        // Ids are assigned explicitly: the attachment tests fetch by key, and the policy refuses one of
+        // them by id, so which row is which cannot be left to the identity column.
+        context.Contracts.AddRange(
+            new()
+            {
+                Id = 1,
+                Name = "Lease",
+                Document = [0x11, 0x22, 0x33]
+            },
+            // No document at all, which is the null a fetch answers with 204 rather than 404.
+            new()
+            {
+                Id = 2,
+                Name = "Draft",
+                Document = null
+            },
+            new()
+            {
+                Id = UnsealedContractsPolicy.SealedId,
+                Name = "Sealed",
+                Document = [0x44]
             });
 
         context.SaveChanges();

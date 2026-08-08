@@ -126,17 +126,47 @@ public static class ModelSynthesizer
             members.AddRange(ScalarMembers(baseType, introspection));
         }
 
+        // Attachments are excluded with navigations and collections, matching the generator: no query
+        // reads one, so it is not a member a projection can default to.
         members.AddRange(
             type.Members
-                .Where(_ => _ is {IsNavigation: false, IsCollection: false})
+                .Where(_ => _ is {IsNavigation: false, IsCollection: false, IsAttachment: false})
                 .Select(_ => _.Name));
         return members;
     }
 
+    // Mirrors ScryGenerator.Arguments: the source and its scalar members, plus the key and attachment
+    // names for a type carrying one. A type without an attachment emits exactly what it always did.
     static string Arguments(ScryTypeInfo type, ScryIntrospection introspection)
     {
         var source = introspection.Sources.First(_ => _.Model == type.Model).Name;
-        return string.Join(", ", new[] {source}.Concat(ScalarMembers(type, introspection)).Select(Literal));
+        var written = string.Join(", ", new[] {source}.Concat(ScalarMembers(type, introspection)).Select(Literal));
+
+        var attachments = Attachments(type, introspection);
+        if (attachments.Count == 0)
+        {
+            return written;
+        }
+
+        return $"{written}, Keys = new[] {{{string.Join(", ", (type.Keys ?? []).Select(Literal))}}}, Attachments = new[] {{{string.Join(", ", attachments.Select(Literal))}}}";
+    }
+
+    // Declared plus inherited, like ScalarMembers — an attachment declared on a base is the derived
+    // row's too.
+    static List<string> Attachments(ScryTypeInfo type, ScryIntrospection introspection)
+    {
+        var members = new List<string>();
+        if (type.Base is { } baseModel &&
+            introspection.Types.FirstOrDefault(_ => _.Model == baseModel) is { } baseType)
+        {
+            members.AddRange(Attachments(baseType, introspection));
+        }
+
+        members.AddRange(
+            type.Members
+                .Where(_ => _.IsAttachment)
+                .Select(_ => _.Name));
+        return members;
     }
 
     /// <summary>

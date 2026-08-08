@@ -19,5 +19,13 @@ public sealed class ScrySource(
     /// </summary>
     public IReadOnlyList<Type> Policies { get; } = policies;
 
+    /// <summary>
+    /// The <c>IAttachmentPolicy&lt;T&gt;</c> authorizing this source's attachment members, or null
+    /// where it exposes none. Unlike <see cref="Policies"/> there is exactly one: the check is a
+    /// decision rather than a filter, so the nearest declaration answers and composing several would
+    /// only raise the question of what a disagreement means.
+    /// </summary>
+    public Type? AttachmentPolicy { get; init; }
+
     public Func<DbContext, IServiceProvider, IQueryable> Resolve { get; } = resolve;
 }

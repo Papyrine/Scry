@@ -14,9 +14,16 @@ sealed class KnownTypes
     public INamedTypeSymbol? EqualityComparer { get; }
     public INamedTypeSymbol? Comparer { get; }
 
+    /// <summary>
+    /// The attachment handle type. Null in a compilation that has the model attribute but not the
+    /// client assembly, which leaves the attachment rules silent rather than guessing by name.
+    /// </summary>
+    public INamedTypeSymbol? Attachment { get; }
+
     KnownTypes(Compilation compilation, INamedTypeSymbol model)
     {
         Model = model;
+        Attachment = compilation.GetTypeByMetadataName(SupportedLinq.Attachment);
         Queryable = compilation.GetTypeByMetadataName(SupportedLinq.Queryable);
         Enumerable = compilation.GetTypeByMetadataName(SupportedLinq.Enumerable);
         Extensions = compilation.GetTypeByMetadataName(SupportedLinq.Extensions);
@@ -89,6 +96,41 @@ sealed class KnownTypes
     public bool IsScry(INamedTypeSymbol? containing) =>
         SymbolEqualityComparer.Default.Equals(containing, Extensions) ||
         SymbolEqualityComparer.Default.Equals(containing, Batch);
+
+    /// <summary>Whether a type is the attachment handle — a member typed as one is an attachment.</summary>
+    public bool IsAttachment(ITypeSymbol? type) =>
+        Attachment is not null &&
+        SymbolEqualityComparer.Default.Equals(type, Attachment);
+
+    /// <summary>
+    /// The members forming a model's row key, as its <c>[ScryModel]</c> names them. Empty for a type
+    /// that is not a model, or one carrying no attachment — nothing else declares a key.
+    /// </summary>
+    public IReadOnlyList<string> KeysOf(ITypeSymbol type)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            foreach (var attribute in current.GetAttributes())
+            {
+                if (!SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, Model))
+                {
+                    continue;
+                }
+
+                foreach (var argument in attribute.NamedArguments)
+                {
+                    if (argument.Key == "Keys")
+                    {
+                        return [..argument.Value.Values.Select(_ => _.Value as string).Where(_ => _ is not null)!];
+                    }
+                }
+
+                return [];
+            }
+        }
+
+        return [];
+    }
 
     /// <summary>Whether a parameter takes a client-side comparer, which no operator can carry.</summary>
     public bool IsComparer(ITypeSymbol type)

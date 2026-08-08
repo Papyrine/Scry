@@ -286,6 +286,30 @@ public class WireSerializationTests
         return Verify(json);
     }
 
+    [Test]
+    public Task AttachmentRequestRoundTrips()
+    {
+        var request = AttachmentRequest.Create(
+            "Employee",
+            "Photo",
+            [
+                new("7", ClrTypeTag.Int32),
+                new("a3f1c0de-0000-4000-8000-000000000001", ClrTypeTag.Guid)
+            ],
+            "SEJsUtm-XMA5VNZu");
+
+        var json = ScryJson.Serialize(request);
+        var roundTripped = ScryJson.DeserializeAttachmentRequest(json);
+
+        Assert.That(ScryJson.Serialize(roundTripped), Is.EqualTo(json));
+
+        return Verify(json);
+    }
+
+    [Test]
+    public void MalformedAttachmentRequestFailsClosed() =>
+        Assert.Throws<ScryWireException>(() => ScryJson.DeserializeAttachmentRequest("{ not json"));
+
     static Task VerifyRoundTrip(QueryRequest request)
     {
         var json = ScryJson.Serialize(request);

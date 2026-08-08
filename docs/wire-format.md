@@ -745,6 +745,84 @@ Where a diverted value would have been, the JSON carries a **placeholder**:
 Binary parts carry `Content-Type: application/octet-stream` and an advisory `Content-Length` (readers may preallocate from it but must not trust it); part identity is positional, so there is no `Content-Disposition`. A placeholder a reader cannot resolve — an index with no part, or a placeholder in a response that carried none — must fail the read rather than yield a guess.
 
 
+## Attachment retrieval
+
+A `byte[]` marked `[Attachment]` ([Annotations](annotations.md#attachment)) is never carried by a query at all — not inline, not as a part. It is fetched afterwards, by row key, from an endpoint of its own: `POST {pattern}/attachment`, mapped inside `MapScry` alongside the query, stream, and batch endpoints so one authorization convention covers all four.
+
+This adds nothing to the query vocabulary. No operator, node, or function changed, and the wire version did not move: an attachment member is absent from every response, and a request naming one is rejected. The request below is a shape of its own, versioned separately.
+
+<!-- snippet: wireAttachmentRequest -->
+<a id='snippet-wireAttachmentRequest'></a>
+```cs
+public sealed record AttachmentRequest(int Version, string Root, string Member, IReadOnlyList<AttachmentKey> Keys)
+{
+    /// <summary>The current attachment request version. Versioned apart from the query wire, which this does not touch.</summary>
+    public const int CurrentVersion = 1;
+
+    /// <summary>Creates a request stamped with <see cref="CurrentVersion"/>.</summary>
+    public static AttachmentRequest Create(string root, string member, IReadOnlyList<AttachmentKey> keys, string? stamp = null) =>
+        new(CurrentVersion, root, member, keys)
+        {
+            Stamp = stamp
+        };
+
+    /// <summary>
+    /// The schema stamp of the generated client model the handle came from, when known. Read for the
+    /// same reason <see cref="QueryRequest.Stamp"/> is — to attribute a rejection to a stale client —
+    /// and never as an authorization input.
+    /// </summary>
+    public string? Stamp { get; init; }
+}
+
+/// <summary>
+/// One value of the row's primary key. Mirrors <c>ConstNode</c>: the invariant-culture string form
+/// plus the shape the client had, which the server treats as a hint and never as an instruction — the
+/// value is parsed into the key member's own CLR type.
+/// </summary>
+/// <remarks>
+/// Keys are positional, ordered by member name ordinal — the order the generator and the server both
+/// derive independently, since a composite key's declared order is not visible to the metadata reader.
+/// </remarks>
+public sealed record AttachmentKey(string? Value, ClrTypeTag Tag);
+```
+<sup><a href='/src/Scry.Wire/AttachmentRequest.cs#L8-L39' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireAttachmentRequest' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+```json
+{
+  "version": 1,
+  "root": "Employee",
+  "member": "Photo",
+  "keys": [ { "value": "7", "tag": "Int32" } ],
+  "stamp": "9PcWs1g22NAOclcT"
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `version` | Attachment request version, checked as a query's is. Versioned apart, since this shape is not the query wire. |
+| `root` | The source name, resolved through the same allow-list a query's root is. |
+| `member` | The attachment member. Honours [`[PreviousNames]`](annotations.md#renaming) exactly as a query member does. |
+| `keys` | The row's primary key, ordered **by member name** — see below. |
+| `stamp` | Optional, and read for the same reason a query's is: to attribute a rejection to a stale client, never as an authorization input. |
+
+Each key value mirrors a `const` node: the invariant-culture string plus the shape the client had. The tag is a hint — the value is parsed into the **key member's** own type, resolved from the schema, and bound as a parameter exactly as a query constant is.
+
+**Key order is ordinal by member name**, on both sides. The values are positional and carry no names, so the two ends have to derive the same order independently; a composite key's declared order is not visible in the metadata a client is generated from, so it cannot be the one. The server verifies its derived key against the real EF key at startup — see [How the key is derived](attachments.md#how-the-key-is-derived).
+
+The response is not a `QueryResponse`:
+
+| Status | Body |
+| --- | --- |
+| `200` | The raw bytes, `application/octet-stream`, with an advisory `Content-Length`. |
+| `204` | Empty — the row was readable and the value is null. |
+| `404` | Empty — refused, absent, or hidden by a row policy, deliberately indistinguishable. |
+| `400` | A `ScryError`, as elsewhere: a malformed request, an unknown source or member, a wrong key count, or a value that does not parse. |
+| `500` | A `ScryError` carrying the fixed `Attachment fetch failed.` |
+
+Every one of them carries the `Scry-Schema-Stamp` header, including the `404` — a client whose fetch stopped working is exactly the one that wants to know its model drifted.
+
+
 ## Versioning
 
 <!-- snippet: wireVersion -->

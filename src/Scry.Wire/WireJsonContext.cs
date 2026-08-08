@@ -13,6 +13,7 @@
 /// </remarks>
 [JsonSerializable(typeof(QueryRequest))]
 [JsonSerializable(typeof(QueryResponse))]
+[JsonSerializable(typeof(AttachmentRequest))]
 [JsonSerializable(typeof(QueryBatchRequest))]
 [JsonSerializable(typeof(QueryBatchResponse))]
 [JsonSerializable(typeof(ScryIntrospection))]

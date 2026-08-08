@@ -46,6 +46,34 @@ public class SecurityTests
             "Employee",
             [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Address"]), new ConstNode("x", ClrTypeTag.String)))]));
 
+    // An attachment's value is never read by a query, so naming it anywhere is rejected — a generated
+    // client cannot express it, which makes every request below a hand-built one.
+    [Test]
+    public void RejectsAttachmentInPredicate() =>
+        AssertRejected(QueryRequest.Create(
+            "Contract",
+            [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Document"]), new ConstNode(null, ClrTypeTag.Null)))]));
+
+    [Test]
+    public void RejectsAttachmentInProjection() =>
+        AssertRejected(QueryRequest.Create(
+            "Contract",
+            [new SelectOp(new([new("Document", new NodeValue(new MemberNode(["Document"])))]))]));
+
+    [Test]
+    public void RejectsAttachmentInOrdering() =>
+        AssertRejected(QueryRequest.Create(
+            "Contract",
+            [new OrderByOp(new MemberNode(["Document"]), Descending: false)]));
+
+    // Reached by traversing a navigation rather than named on the root, which is the path a validator
+    // checking only the leaf would miss.
+    [Test]
+    public void RejectsAttachmentThroughNavigation() =>
+        AssertRejected(QueryRequest.Create(
+            "Employee",
+            [new SelectOp(new([new("Doc", new NodeValue(new MemberNode(["Manager", "Document"])))]))]));
+
     [Test]
     public void RejectsTakeOverMaxPageSize() =>
         AssertRejected(

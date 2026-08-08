@@ -2096,6 +2096,14 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         };
 
     /// <summary>
+    /// Parses one attachment key off the wire into the key member's own type. The same reconciliation
+    /// a constant in a predicate gets, and for the same reason: the wire's tag is a hint, and the type
+    /// that is actually constructed comes from the schema.
+    /// </summary>
+    public object ParseKey(string value, Type memberType) =>
+        ParseValue(value, Nullable.GetUnderlyingType(memberType) ?? memberType);
+
+    /// <summary>
     /// Parses a wire constant into <paramref name="underlying"/> — the member's own type, resolved
     /// from the schema, never from the wire's tag.
     /// </summary>

@@ -51,7 +51,7 @@ flowchart TB
 
 ### Run time — a query round-trip
 
-The client's LINQ is captured (never executed client-side) and serialized to a restricted AST. The server re-validates that AST against the allow-list — to completion, before anything is respond — then rebinds to the real EF types, executes, and returns only the projected rows. A `byte[]` member marked `[BinaryTransfer]` skips base64 and travels as a raw multipart part beside the JSON ([binary transfer](docs/wire-format.md#binary-transfer)).
+The client's LINQ is captured (never executed client-side) and serialized to a restricted AST. The server re-validates that AST against the allow-list — to completion, before anything is respond — then rebinds to the real EF types, executes, and returns only the projected rows. A `byte[]` member marked `[BinaryTransfer]` skips base64 and travels as a raw multipart part beside the JSON ([binary transfer](docs/wire-format.md#binary-transfer)); one marked `[Attachment]` is not carried at all, and is fetched on demand by row key through a check of its own ([attachments](docs/attachments.md)).
 
 ```mermaid
 flowchart TB
@@ -208,6 +208,7 @@ It is off unless mapped, and Development-only by default. See [Query explorer](d
 - [Writing queries](docs/querying.md)
 - [Server](docs/server.md)
 - [Row policies](docs/policies.md)
+- [Attachments](docs/attachments.md)
 - [Batching](docs/batching.md)
 - [Observability](docs/observability.md)
 - [Security model](docs/security.md)

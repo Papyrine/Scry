@@ -4,7 +4,12 @@
 /// <see cref="IScryAuditor"/>. All of it is pay-for-play — with no trace listener, no metrics
 /// listener, and no auditor registered, a query pays two timestamps and a few null checks.
 /// </summary>
-sealed class QueryRecorder(QueryRequest request, IServiceProvider services, string source, bool streamed)
+sealed class QueryRecorder(
+    QueryRequest? request,
+    AttachmentRequest? attachment,
+    IServiceProvider services,
+    string source,
+    bool streamed)
 {
     static readonly string? version = typeof(QueryRecorder).Assembly.GetName().Version?.ToString();
 
@@ -33,7 +38,7 @@ sealed class QueryRecorder(QueryRequest request, IServiceProvider services, stri
         });
 
     long started = Stopwatch.GetTimestamp();
-    Activity? activity = StartActivity(source, request);
+    Activity? activity = StartActivity(source, request, attachment);
     bool completed;
 
     /// <summary>
@@ -41,13 +46,33 @@ sealed class QueryRecorder(QueryRequest request, IServiceProvider services, stri
     /// name only when the schema knows it, so an arbitrary client string never becomes a tag value.
     /// </summary>
     public static QueryRecorder Start(Schema schema, QueryRequest request, IServiceProvider services, bool streamed = false) =>
-        new(request, services, schema.TryGetSource(request.Root, out _) ? request.Root : "(unknown)", streamed);
+        new(request, attachment: null, services, Source(schema, request.Root), streamed);
 
-    static Activity? StartActivity(string source, QueryRequest request)
+    /// <summary>
+    /// The same, for a fetch of one attachment. Recorded through the same path as a query — the
+    /// endpoint reaches the database and answers about a row, so leaving it out of the audit trail
+    /// would hide exactly the requests worth watching.
+    /// </summary>
+    public static QueryRecorder StartAttachment(Schema schema, AttachmentRequest request, IServiceProvider services) =>
+        new(request: null, request, services, Source(schema, request.Root), streamed: false);
+
+    static string Source(Schema schema, string root) =>
+        schema.TryGetSource(root, out _) ? root : "(unknown)";
+
+    static Activity? StartActivity(string source, QueryRequest? request, AttachmentRequest? attachment)
     {
-        var activity = activitySource.StartActivity($"scry.query {source}");
+        var activity = activitySource.StartActivity(attachment is null ? $"scry.query {source}" : $"scry.attachment {source}");
         activity?.SetTag("scry.source", source);
-        activity?.SetTag("scry.operators", request.Pipeline.Count);
+        if (request is not null)
+        {
+            activity?.SetTag("scry.operators", request.Pipeline.Count);
+        }
+
+        if (attachment is not null)
+        {
+            activity?.SetTag("scry.member", attachment.Member);
+        }
+
         return activity;
     }
 
@@ -174,6 +199,7 @@ sealed class QueryRecorder(QueryRequest request, IServiceProvider services, stri
         {
             entry ??= new(request, outcome, elapsed)
             {
+                Attachment = attachment,
                 Kind = kind,
                 Streamed = streamed,
                 Rows = rows,
@@ -188,6 +214,13 @@ sealed class QueryRecorder(QueryRequest request, IServiceProvider services, stri
     // something different when the rows were never buffered, so dashboards get to tell them apart.
     string? KindTag(ResultKind? kind)
     {
+        // An attachment has no ResultKind — it answers with bytes, not a shaped result — so it names
+        // itself, which is what lets a dashboard separate fetches from queries.
+        if (attachment is not null)
+        {
+            return "attachment";
+        }
+
         if (streamed)
         {
             return "stream";

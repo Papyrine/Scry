@@ -20,4 +20,11 @@ public sealed record ScryTypeInfo(string Model, IReadOnlyList<ScryMemberInfo> Me
     /// the attribute carried none.
     /// </summary>
     public string? Obsolete { get; init; }
+
+    /// <summary>
+    /// The members forming the row's primary key, ordinal by name. Set only on a type carrying an
+    /// <see cref="ScryMemberInfo.IsAttachment"/> member, which is the only thing fetched by key; null
+    /// everywhere else, and so absent from the JSON.
+    /// </summary>
+    public IReadOnlyList<string>? Keys { get; init; }
 }

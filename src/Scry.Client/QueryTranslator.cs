@@ -15,13 +15,40 @@ sealed class QueryTranslator
     // resolved through. Null while the query grouped by a single key.
     Dictionary<string, Node>? groupKeyParts;
 
-    public static IReadOnlyList<QueryOp> Translate(Expression expression)
+    // Attachment members met while translating the projection, resolved against it once it is whole:
+    // the keys an attachment needs are sibling members of the same projection, so none of them is
+    // known to be present until every member has been translated.
+    readonly List<Pending> pendingAttachments = [];
+
+    public static IReadOnlyList<QueryOp> Translate(Expression expression) =>
+        Translate(expression, out _);
+
+    /// <summary>
+    /// Translates a query, also reporting the attachment handles its result carries. The bindings are
+    /// a client-side concern — nothing about them is on the wire — so they come back beside the
+    /// pipeline rather than in it.
+    /// </summary>
+    public static IReadOnlyList<QueryOp> Translate(Expression expression, out IReadOnlyList<AttachmentBinding> attachments)
     {
         var translator = new QueryTranslator();
         var ops = new List<QueryOp>();
         translator.Visit(expression, ops);
+        attachments = translator.ResolveAttachments(ops);
         return ops;
     }
+
+    /// <summary>An attachment leaf met in a projection, before its keys have been looked for.</summary>
+    /// <param name="Target">Where it sits in the projected object.</param>
+    /// <param name="Prefix">
+    /// The member path of the row it hangs off — empty for the query's own row, or the navigation a
+    /// nested projection descended into. Its key members are read relative to this.
+    /// </param>
+    sealed record Pending(
+        IReadOnlyList<string> Target,
+        IReadOnlyList<string> Prefix,
+        string Root,
+        string Member,
+        IReadOnlyList<string> Keys);
 
     /// <summary>
     /// Translates a standalone lambda body — a predicate or an aggregate selector supplied to a
@@ -463,10 +490,15 @@ sealed class QueryTranslator
         var members = new List<ProjectionMember>(arguments.Count);
         for (var i = 0; i < arguments.Count; i++)
         {
-            members.Add(new(names[i], ProjectionValue(arguments[i], parameter, grouped)));
+            if (TryAttachment(arguments[i], parameter, grouped, [names[i]], prefix: []))
+            {
+                continue;
+            }
+
+            members.Add(new(names[i], ProjectionValue(arguments[i], parameter, grouped, [names[i]])));
         }
 
-        return new(members);
+        return Built(members);
     }
 
     Projection FromMemberInit(MemberInitExpression init, ParameterExpression parameter, bool grouped)
@@ -479,14 +511,143 @@ sealed class QueryTranslator
                 throw new NotSupportedException("Only simple member assignments are supported in a projection.");
             }
 
-            members.Add(new(assignment.Member.Name, ProjectionValue(assignment.Expression, parameter, grouped)));
+            if (TryAttachment(assignment.Expression, parameter, grouped, [assignment.Member.Name], prefix: []))
+            {
+                continue;
+            }
+
+            members.Add(new(assignment.Member.Name, ProjectionValue(assignment.Expression, parameter, grouped, [assignment.Member.Name])));
+        }
+
+        return Built(members);
+    }
+
+    // An attachment leaves the wire projection entirely, so a projection of nothing else would reach
+    // the server empty. Reported here rather than as the server's own "empty projection", which would
+    // read as a wire fault rather than the missing keys it really is.
+    static Projection Built(List<ProjectionMember> members)
+    {
+        if (members.Count == 0)
+        {
+            throw new NotSupportedException(
+                "A projection of nothing but attachments has no members left to send. Project the row's key beside the attachment — that is what the fetch is keyed by.");
         }
 
         return new(members);
     }
 
-    ProjectionValue ProjectionValue(Expression expression, ParameterExpression parameter, bool grouped)
+    /// <summary>
+    /// Records an attachment leaf and reports that it was one, so the caller leaves it out of the wire
+    /// projection. Nothing is validated here: whether its keys were projected too is a question about
+    /// the whole projection, answered once every member has been seen.
+    /// </summary>
+    bool TryAttachment(
+        Expression expression,
+        ParameterExpression parameter,
+        bool grouped,
+        IReadOnlyList<string> target,
+        IReadOnlyList<string> prefix)
     {
+        if (expression is not MemberExpression member ||
+            member.Type != typeof(ScryAttachment) ||
+            !IsRooted(member, parameter))
+        {
+            return false;
+        }
+
+        // A grouped projection reads the group, not a row — there is no single row left for a key to
+        // identify, and the aggregate the group folds to has no attachment either.
+        if (grouped)
+        {
+            throw new NotSupportedException(
+                $"Attachment '{member.Member.Name}' cannot be projected out of a group. A group is many rows folded to one, so there is no row key to fetch an attachment by.");
+        }
+
+        var path = MemberPath(member);
+        var declaring = member.Expression!.Type;
+        var (root, keys) = AttachmentModel.Fetching(declaring, member.Member.Name);
+
+        // The row the attachment hangs off: the query's own where the path is a bare member, or the
+        // navigation the path traversed to reach it.
+        var owner = prefix.Concat(path.Take(path.Count - 1)).ToList();
+        pendingAttachments.Add(new(target, owner, root, member.Member.Name, keys));
+        return true;
+    }
+
+    /// <summary>
+    /// Matches every attachment met in the projection to the key members it is fetched by, which must
+    /// have been projected as leaves of the same row. A missing one is refused here rather than
+    /// producing a handle that would fail at fetch time with nothing to say why.
+    /// </summary>
+    IReadOnlyList<AttachmentBinding> ResolveAttachments(IReadOnlyList<QueryOp> ops)
+    {
+        if (pendingAttachments.Count == 0)
+        {
+            return [];
+        }
+
+        // These rewrite what a row is — deduplicated, flattened, combined, or built from two sources —
+        // so a key projected beside an attachment no longer identifies one row of one source.
+        if (ops.FirstOrDefault(_ => _ is DistinctOp or SelectManyOp or JoinOp or SetOp or GroupByOp) is { } refused)
+        {
+            throw new NotSupportedException(
+                $"An attachment cannot be carried through {refused.GetType().Name.Replace("Op", "")}. The result's rows no longer correspond to single rows of the source the attachment is fetched from.");
+        }
+
+        var projection = ops.OfType<SelectOp>().Single().Projection;
+        var leaves = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        CollectLeaves(projection, [], leaves);
+
+        var bindings = new List<AttachmentBinding>(pendingAttachments.Count);
+        foreach (var pending in pendingAttachments)
+        {
+            var sources = new List<IReadOnlyList<string>>(pending.Keys.Count);
+            foreach (var key in pending.Keys)
+            {
+                var wanted = pending.Prefix.Append(key).ToList();
+                if (!leaves.TryGetValue(string.Join(".", wanted), out var source))
+                {
+                    throw new NotSupportedException(
+                        $"Attachment '{pending.Member}' needs '_.{string.Join(".", wanted)}' projected beside it: an attachment is fetched by its row's key, so the key has to come back with the row. Add it to the projection.");
+                }
+
+                sources.Add(source);
+            }
+
+            bindings.Add(new(pending.Target, pending.Root, pending.Member, sources));
+        }
+
+        return bindings;
+    }
+
+    // Every member path the projection reads, mapped to where its value lands in the result object.
+    // Only plain member reads are collected: a computed leaf is not a key, whatever it was computed
+    // from, so one cannot stand in for the key an attachment names.
+    static void CollectLeaves(
+        Projection projection,
+        IReadOnlyList<string> memberPrefix,
+        Dictionary<string, IReadOnlyList<string>> leaves,
+        IReadOnlyList<string>? outputPrefix = null)
+    {
+        foreach (var member in projection.Members)
+        {
+            var output = (outputPrefix ?? []).Append(member.Name).ToList();
+            switch (member.Value)
+            {
+                case NodeValue {Node: MemberNode node}:
+                    leaves[string.Join(".", memberPrefix.Concat(node.Path))] = output;
+                    break;
+
+                case NestedValue nested:
+                    CollectLeaves(nested.Projection, [..memberPrefix, ..nested.Path], leaves, output);
+                    break;
+            }
+        }
+    }
+
+    ProjectionValue ProjectionValue(Expression expression, ParameterExpression parameter, bool grouped, IReadOnlyList<string>? target = null)
+    {
+        target ??= [];
         // Over a group the row being read is the grouping itself, which TranslateExpr already knows how
         // to read: its Key is the group key and a call taking it is an aggregate. That leaves the two
         // free to compose — _.Sum(x => x.Amount) / _.Count(), or _.Key.ToUpper().
@@ -502,17 +663,24 @@ sealed class QueryTranslator
         if (expression is NewExpression or MemberInitExpression &&
             ReferencesParameter(expression, parameter))
         {
-            return TranslateNested(expression, parameter);
+            return TranslateNested(expression, parameter, target);
         }
 
         return new NodeValue(TranslateExpr(expression, parameter));
     }
 
-    NestedValue TranslateNested(Expression expression, ParameterExpression parameter)
+    NestedValue TranslateNested(Expression expression, ParameterExpression parameter, IReadOnlyList<string> target)
     {
         var members = new List<(string Name, Node Value)>();
         foreach (var (name, value) in NestedMembers(expression))
         {
+            // An attachment nested inside a projected object reads the same full path it would at the
+            // top level, so only where its handle lands differs.
+            if (TryAttachment(value, parameter, grouped: false, [..target, name], prefix: []))
+            {
+                continue;
+            }
+
             members.Add((name, TranslateExpr(value, parameter)));
         }
 
@@ -921,6 +1089,14 @@ sealed class QueryTranslator
 
                 case MemberExpression member when IsKnownProperty(member, out var function):
                     return new CallNode(function, TranslateExpr(member.Expression!, root), []);
+
+                // An attachment reached anywhere an expression is being built. A projection leaf is
+                // handled before this, so arriving here means it was used as a value — compared,
+                // ordered by, aggregated — and its value is the one thing no query has.
+                case MemberExpression member
+                    when member.Type == typeof(ScryAttachment) && IsRooted(member, root):
+                    throw new NotSupportedException(
+                        $"Attachment '{member.Member.Name}' is not a value: no query reads it, so it cannot be filtered, ordered, or computed on. Fetch it from the row with OpenAsync instead.");
 
                 case MemberExpression member when IsRooted(member, root):
                     return new MemberNode(MemberPath(member));
@@ -1852,33 +2028,8 @@ sealed class QueryTranslator
 
     static ConstNode ConstantOf(object? value)
     {
-        var culture = CultureInfo.InvariantCulture;
-        return value switch
-        {
-            null => new(null, ClrTypeTag.Null),
-            string text => new(text, ClrTypeTag.String),
-            // No tag of its own; the server reconciles it against the member's type. A comparison
-            // promotes char to int, so the value often arrives as a code point instead — which the
-            // server also accepts.
-            char character => new(character.ToString(), ClrTypeTag.String),
-            bool flag => new(flag ? "true" : "false", ClrTypeTag.Boolean),
-            // Compared against a day-of-week the server computes as a number, and not part of any
-            // model's schema, so this one enum travels as its value rather than by name.
-            DayOfWeek day => new(((int) day).ToString(culture), ClrTypeTag.Int32),
-            Enum enumeration => new(enumeration.ToString(), ClrTypeTag.Enum),
-            int number => new(number.ToString(culture), ClrTypeTag.Int32),
-            long number => new(number.ToString(culture), ClrTypeTag.Int64),
-            short number => new(number.ToString(culture), ClrTypeTag.Int32),
-            byte number => new(number.ToString(culture), ClrTypeTag.Int32),
-            decimal number => new(number.ToString(culture), ClrTypeTag.Decimal),
-            double number => new(number.ToString(culture), ClrTypeTag.Double),
-            float number => new(number.ToString(culture), ClrTypeTag.Double),
-            DateTime date => new(date.ToString("o", culture), ClrTypeTag.DateTime),
-            Date date => new(date.ToString("yyyy-MM-dd", culture), ClrTypeTag.DateOnly),
-            Guid guid => new(guid.ToString(), ClrTypeTag.Guid),
-            byte[] bytes => new(Convert.ToBase64String(bytes), ClrTypeTag.Bytes),
-            _ => new(Convert.ToString(value, culture) ?? "", ClrTypeTag.String)
-        };
+        var (text, tag) = ValueTag.Of(value);
+        return new(text, tag);
     }
 
     static NotSupportedException Unsupported(Expression expression) =>

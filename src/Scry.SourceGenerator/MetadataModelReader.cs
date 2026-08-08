@@ -12,6 +12,9 @@ static class MetadataModelReader
     const string queryableCollectionAttribute = "Scry.QueryableCollectionAttribute";
     const string keylessAttribute = "Microsoft.EntityFrameworkCore.KeylessAttribute";
     const string obsoleteAttribute = "System.ObsoleteAttribute";
+    const string attachmentAttribute = "Scry.AttachmentAttribute";
+    const string binaryTransferAttribute = "Scry.BinaryTransferAttribute";
+    const string keyAttribute = "System.ComponentModel.DataAnnotations.KeyAttribute";
 
     public static ModelExtract Read(string? dllPath)
     {
@@ -43,7 +46,8 @@ static class MetadataModelReader
                             $"{simpleName}QueryModel",
                             kind,
                             sourceName,
-                            ObsoleteOf(reader, type.GetCustomAttributes(), decoder)));
+                            ObsoleteOf(reader, type.GetCustomAttributes(), decoder),
+                            simpleName));
                 }
             }
 
@@ -62,15 +66,98 @@ static class MetadataModelReader
                         entry.Kind,
                         new(properties),
                         NearestOptedInBase(reader, entry.Type, discoveredByFullName),
-                        entry.Obsolete));
+                        entry.Obsolete,
+                        entry.ClrName));
             }
 
-            return new(null, new(sources.ToImmutable()), new(enums.Values.ToImmutableArray()));
+            return new(null, new(DeriveKeys(sources)), new(enums.Values.ToImmutableArray()));
         }
         catch (Exception exception)
         {
             return new($"Failed to read model assembly '{dllPath}': {exception.Message}", new([]), new([]));
         }
+    }
+
+    /// <summary>
+    /// Fills in <see cref="SourceInfo.Keys"/> for every model carrying an attachment. An attachment is
+    /// fetched by the row's key, so the key has to be nameable on the client — but fluent
+    /// configuration is invisible here (the assembly is read, never run), so the key is derived by
+    /// EF's own conventions and the server verifies the answer against the real model at startup.
+    /// </summary>
+    /// <remarks>
+    /// Must stay in lockstep with <c>Schema.DeriveKeys</c>, which repeats this over reflection. A
+    /// disagreement is not a compile error on either side: it is a client that names one key and a
+    /// server that expects another.
+    /// </remarks>
+    static ImmutableArray<SourceInfo> DeriveKeys(ImmutableArray<SourceInfo>.Builder sources)
+    {
+        var byModel = new Dictionary<string, SourceInfo>(StringComparer.Ordinal);
+        foreach (var source in sources)
+        {
+            byModel[source.ModelName] = source;
+        }
+
+        var result = ImmutableArray.CreateBuilder<SourceInfo>(sources.Count);
+        foreach (var source in sources)
+        {
+            var members = Inherited(source, byModel);
+            if (!members.Any(_ => _.IsAttachment))
+            {
+                result.Add(source);
+                continue;
+            }
+
+            result.Add(source with {Keys = new(Keys(source, members))});
+        }
+
+        return result.ToImmutable();
+    }
+
+    // A member of the row's key is a scalar the client can name and read: an attachment is neither, and
+    // a navigation or collection is not a value. [Key] wins where it is written, since it is the only
+    // one of the three that was stated rather than inferred.
+    static ImmutableArray<string> Keys(SourceInfo source, List<PropertyInfo> members)
+    {
+        var candidates = members
+            .Where(_ => _ is {IsNavigation: false, IsCollection: false, IsAttachment: false})
+            .ToList();
+
+        var declared = candidates
+            .Where(_ => _.IsKey)
+            .Select(_ => _.Name)
+            .OrderBy(_ => _, StringComparer.Ordinal)
+            .ToImmutableArray();
+        if (declared.Length > 0)
+        {
+            return declared;
+        }
+
+        foreach (var convention in new[] {"Id", $"{source.ClrName}Id"})
+        {
+            if (candidates.Any(_ => string.Equals(_.Name, convention, StringComparison.Ordinal)))
+            {
+                return [convention];
+            }
+        }
+
+        // No key derivable. Reported as SCRY007 by the generator, which is where a diagnostic has a
+        // model name to attribute it to.
+        return [];
+    }
+
+    // The members a model exposes, its inherited ones included — the same base-first walk the emitted
+    // default projection makes, since a key declared on a base is still the derived row's key.
+    static List<PropertyInfo> Inherited(SourceInfo source, Dictionary<string, SourceInfo> byModel)
+    {
+        var members = new List<PropertyInfo>();
+        if (source.BaseModelName is { } baseName &&
+            byModel.TryGetValue(baseName, out var baseSource))
+        {
+            members.AddRange(Inherited(baseSource, byModel));
+        }
+
+        members.AddRange(source.Properties);
+        return members;
     }
 
     // Walks up the base chain to the first type that was itself opted in, skipping any that were not —
@@ -118,16 +205,29 @@ static class MetadataModelReader
             }
 
             var signature = property.DecodeSignature(decoder, genericContext: null);
-            var collectionOptIn = HasAttribute(reader, property.GetCustomAttributes(), queryableCollectionAttribute);
-            if (Classify(reader, signature.ReturnType, modelByFullName, enums, collectionOptIn) is { } info)
+            var attributes = property.GetCustomAttributes();
+            var collectionOptIn = HasAttribute(reader, attributes, queryableCollectionAttribute);
+            var attachment = HasAttribute(reader, attributes, attachmentAttribute);
+            var classified = Classify(reader, signature.ReturnType, modelByFullName, enums, collectionOptIn);
+
+            // An attachment whose type is not one Classify recognizes is still carried, with the empty
+            // display standing for "not a byte[]". Dropping it silently would leave the misapplied
+            // attribute to be discovered at server startup instead of at the build that wrote it.
+            if (classified is null && !attachment)
             {
-                properties.Add(
-                    info with
-                    {
-                        Name = reader.GetString(property.Name),
-                        Obsolete = ObsoleteOf(reader, property.GetCustomAttributes(), decoder)
-                    });
+                continue;
             }
+
+            var info = classified ?? new("", "", NeedsNullDefault: false);
+            properties.Add(
+                info with
+                {
+                    Name = reader.GetString(property.Name),
+                    Obsolete = ObsoleteOf(reader, attributes, decoder),
+                    IsAttachment = attachment,
+                    HasBinaryTransfer = HasAttribute(reader, attributes, binaryTransferAttribute),
+                    IsKey = HasAttribute(reader, attributes, keyAttribute)
+                });
         }
 
         return properties.ToImmutable();
@@ -480,5 +580,6 @@ static class MetadataModelReader
         string ModelName,
         SourceKind Kind,
         string SourceName,
-        string? Obsolete);
+        string? Obsolete,
+        string ClrName);
 }

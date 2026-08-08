@@ -295,6 +295,8 @@ A [join](querying.md#joins) and a [membership test against another source](query
 
 See [Row policies](policies.md).
 
+An [`IAttachmentPolicy<T>`](attachments.md#security) is the same idea for a value no query carries. A source exposing an `[Attachment]` refuses to start without one — the fetch endpoint is reached by row key rather than by a composed query, so the allow-list that stands between a caller and everything else has nothing to say about it. The row is still resolved through its source's row policies, so both apply, and a refusal is indistinguishable from a row that was never there.
+
 
 ### 6. Resource limits
 
@@ -423,6 +425,8 @@ app.MapScry("/api/query")
 
 **CORS, CSRF, TLS.** Ordinary ASP.NET Core concerns, unchanged by Scry.
 
+**Cache or range-serve an [attachment](attachments.md).** Every fetch is authorized afresh, and there is no `ETag`, `Cache-Control`, or `Range` support — a cached attachment is one the policy no longer sees. Add caching in middleware only where that trade is acceptable.
+
 **Widen anything for [binary transfer](wire-format.md#binary-transfer).** `[BinaryTransfer]` changes how an already-allow-listed `byte[]` value is *encoded in the response* — a raw multipart part instead of base64 — and nothing about what a request may ask for: it adds no request-side input at all, and validation, policies, and limits are untouched. The response side is server-to-client and outside the hostile-client model; the client still bounds what it reads (the vendored multipart reader keeps its header count/length limits), so a compromised or misbehaving server cannot make it buffer unbounded headers.
 
 
@@ -431,6 +435,7 @@ app.MapScry("/api/query")
 - [ ] Every `[Queryable]` type is intended to be client-readable, and its exposed properties reviewed.
 - [ ] Sensitive columns carry `[QueryIgnore]` — and any newly added ones too.
 - [ ] Multi-tenant sources have a row policy.
+- [ ] Every `[Attachment]` has a policy that authorizes the caller, not merely one that returns true.
 - [ ] No row policy scopes rows by a request header — those are client-chosen.
 - [ ] The query endpoint requires authentication/authorization.
 - [ ] `MaxPageSize` matches what the UI actually needs.
