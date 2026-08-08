@@ -77,6 +77,54 @@ public class AttachmentClientTests
         });
     }
 
+    // Streaming binds each row as it arrives — there is no materialized list to walk afterwards — so
+    // the handle is attached on a path of its own.
+    [Test]
+    public async Task StreamedRowsCarryTheHandle()
+    {
+        await using var context = TestContext.CreateSeeded();
+
+        var rows = new List<ContractModel>();
+        var query = StreamingClientFor(context).Source<ContractModel>("Contract", ["Id", "Name"])
+            .OrderBy(_ => _.Id);
+        await foreach (var row in query.ToAsyncEnumerable())
+        {
+            rows.Add(row);
+        }
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rows.Select(_ => _.Name), Is.EqualTo(new[] {"Lease", "Draft", "Sealed"}));
+            Assert.That(rows.All(_ => _.Document is not null), Is.True);
+            Assert.That(rows[0].Document.Member, Is.EqualTo("Document"));
+        });
+    }
+
+    // A projected row has no setter to fill, so taking the handle rebuilds it through its
+    // constructor. Streaming does that per row rather than over a list.
+    [Test]
+    public async Task StreamedProjectionCarriesTheHandle()
+    {
+        await using var context = TestContext.CreateSeeded();
+
+        var rows = new List<ContractRow>();
+        var query = StreamingClientFor(context).Source<ContractModel>("Contract", ["Id", "Name"])
+            .Where(_ => _.Id == 1)
+            .Select(_ => new ContractRow(_.Id, _.Document));
+        await foreach (var row in query.ToAsyncEnumerable())
+        {
+            rows.Add(row);
+        }
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rows, Has.Count.EqualTo(1));
+            Assert.That(rows[0].Id, Is.EqualTo(1));
+            Assert.That(rows[0].Document.Source, Is.EqualTo("Contract"));
+            Assert.That(rows[0].Document.Member, Is.EqualTo("Document"));
+        });
+    }
+
     [Test]
     public async Task SingleRowCarriesTheHandle()
     {
@@ -203,4 +251,22 @@ public class AttachmentClientTests
 
     static ScryClient ClientFor(TestContext context) =>
         new((request, _) => Task.FromResult(SharedProcessor.Instance.Execute(request, context)));
+
+    // The same processor answered row by row instead of as one response, which is all
+    // ToAsyncEnumerable needs of a transport.
+    static ScryClient StreamingClientFor(TestContext context) =>
+        new(
+            (request, _) => Task.FromResult(SharedProcessor.Instance.Execute(request, context)),
+            (request, _) => Stream(request, context));
+
+    static async IAsyncEnumerable<JsonElement> Stream(QueryRequest request, TestContext context)
+    {
+        var (_, rows) = SharedProcessor.Instance.Stream(request, context);
+        await foreach (var row in rows)
+        {
+            // Each row is serialized exactly as a response payload's rows are, so what the client
+            // reads here is the shape the HTTP stream would hand it.
+            yield return JsonSerializer.SerializeToElement(row, ScryJson.Options);
+        }
+    }
 }

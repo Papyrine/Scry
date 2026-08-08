@@ -149,6 +149,29 @@ public class StreamingTests
         Assert.That((await Read(rows)).Select(_ => _["Region"]), Is.EqualTo(["North", "South"]));
     }
 
+    // An attachment is not a scalar, so it is absent from a streamed row exactly as it is from a
+    // listed one. The row still carries the key the bytes are fetched by, which is what makes the
+    // handle the client binds to it meaningful.
+    [Test]
+    public async Task StreamsARowCarryingAnAttachmentAsItsKeyOnly()
+    {
+        using var context = TestContext.CreateSeeded();
+
+        var request = QueryRequest.Create(
+            "Contract",
+            [new OrderByOp(new MemberNode(["Id"]), Descending: false)]);
+
+        var (_, rows) = SharedProcessor.Instance.Stream(request, context);
+        var streamed = await Read(rows);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(streamed.Select(_ => _["Id"]), Is.EqualTo([1, 2, UnsealedContractsPolicy.SealedId]));
+            Assert.That(streamed.Select(_ => _["Name"]), Is.EqualTo(["Lease", "Draft", "Sealed"]));
+            Assert.That(streamed.Any(_ => _.ContainsKey("Document")), Is.False);
+        });
+    }
+
     static async Task<List<Dictionary<string, object?>>> Read(IAsyncEnumerable<Dictionary<string, object?>> rows)
     {
         var read = new List<Dictionary<string, object?>>();
