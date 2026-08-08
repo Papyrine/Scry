@@ -361,7 +361,11 @@ public partial class App
 
             using var content = new StringContent(json, Encoding.UTF8, "application/json");
             using var response = await Http.PostAsync(introspection.QueryEndpoint, content);
-            var body = await response.Content.ReadAsStringAsync();
+
+            // Not read as a string: a result carrying [BinaryTransfer] values arrives as multipart,
+            // and the reader folds its parts back into the envelope as base64 — so a diverted member
+            // renders, exports, and tabulates as the byte[] it is either way.
+            var body = await BinaryResponseReader.ReadAsync(response);
             resultJson = Prettify(body);
 
             if (response.IsSuccessStatusCode)

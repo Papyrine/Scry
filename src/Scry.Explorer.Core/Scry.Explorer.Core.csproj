@@ -5,6 +5,10 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
+    <!-- Signed with the tree's own key so Scry.Client can name it as a friend: the client's vendored
+         multipart reader is what this reads binary responses with, and a strong-named assembly cannot
+         befriend an unsigned one. Directory.Build.targets supplies the key file. -->
+    <SignAssembly>true</SignAssembly>
   </PropertyGroup>
   <!--
     The browser-Roslyn layer for the explorer: synthesizes the query models, hosts an AdhocWorkspace

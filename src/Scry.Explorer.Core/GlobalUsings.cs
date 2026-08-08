@@ -1,5 +1,7 @@
-﻿global using System.Reflection;
+﻿global using System.Buffers;
+global using System.Reflection;
 global using System.Text;
+global using System.Text.Json;
 global using Basic.Reference.Assemblies;
 global using Microsoft.CodeAnalysis;
 global using Microsoft.CodeAnalysis.Completion;

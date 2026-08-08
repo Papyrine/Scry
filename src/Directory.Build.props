@@ -13,5 +13,9 @@
     <NuGetAuditMode>all</NuGetAuditMode>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <SuppressNETCoreSdkPreviewMessage>true</SuppressNETCoreSdkPreviewMessage>
+    <!-- The public half of key.snk, which every signed project in this tree is signed with. A
+         strong-named assembly names its friends by key rather than by name alone, so an
+         InternalsVisibleTo here quotes this rather than repeating the literal. -->
+    <ScryPublicKey>0024000004800000140100000602000000240000525341310008000001000100b5fd07dd157e46f4413c857c8a8e719be340d751ccf574089dcc3f5d60ffa8ef65b6d08fb3ba73f33cabd69a9997241a10033907c223ae4eab2d21b6d40c1e3938fb167ae462c471a7e23f940c6a7bcb5c8c6e0eee046f057068d58a51633f1c6e9e761193322d21cd4e274923dc79866fd3954156c2f55b959ea92dbeff31f46c43a0a926fb2c0f96f80668615a3bdcc18818536115d3ef7addc31119ef194cd46f8af9b4c0815f82eec19e107322d55924308b2453a4421c76af9121f69014d5e5e4d9d6c616d262c9945ea361c769924cc5b3bbef6a9b6b0ed96d431b9831bb11312a449c31a623fab76efc857f44210f51f56db5b08b3e12a385fec292e4</ScryPublicKey>
   </PropertyGroup>
 </Project>
