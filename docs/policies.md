@@ -267,7 +267,7 @@ public sealed class UnsealedContractsPolicy :
     public const int SealedId = 3;
 
     public bool Authorize(ScryAttachmentContext context) =>
-        context.KeyValues is not [int id] || id != SealedId;
+        context.KeyValues is not [SealedId];
 }
 ```
 <sup><a href='/src/Scry.Tests/TestModel.cs#L334-L344' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentPolicy' title='Start of snippet'>anchor</a></sup>

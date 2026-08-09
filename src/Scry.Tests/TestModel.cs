@@ -339,7 +339,7 @@ public sealed class UnsealedContractsPolicy :
     public const int SealedId = 3;
 
     public bool Authorize(ScryAttachmentContext context) =>
-        context.KeyValues is not [int id] || id != SealedId;
+        context.KeyValues is not [SealedId];
 }
 // end-snippet
 

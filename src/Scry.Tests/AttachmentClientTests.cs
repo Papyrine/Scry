@@ -72,7 +72,7 @@ public class AttachmentClientTests
         Assert.Multiple(() =>
         {
             Assert.That(rows, Has.Count.EqualTo(3));
-            Assert.That(rows.Select(_ => _.Name), Is.EqualTo(new[] {"Lease", "Draft", "Sealed"}));
+            Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Lease", "Draft", "Sealed"]));
             Assert.That(rows.All(_ => _.Document is not null), Is.True);
         });
     }
@@ -94,7 +94,7 @@ public class AttachmentClientTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(rows.Select(_ => _.Name), Is.EqualTo(new[] {"Lease", "Draft", "Sealed"}));
+            Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Lease", "Draft", "Sealed"]));
             Assert.That(rows.All(_ => _.Document is not null), Is.True);
             Assert.That(rows[0].Document.Member, Is.EqualTo("Document"));
         });

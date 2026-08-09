@@ -1,5 +1,3 @@
-using System.Globalization;
-
 /// <summary>
 /// The client's one mapping from a CLR value to its wire form — the invariant-culture string plus the
 /// shape tag. Shared by the query translator, which writes constants, and the attachment binder, which
