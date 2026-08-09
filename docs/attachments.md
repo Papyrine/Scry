@@ -138,6 +138,11 @@ The value being null is a *different* answer — `204`, meaning the row was read
 The request shape and the endpoint are in [Attachment retrieval](wire-format.md#attachment-retrieval). The query wire is untouched by all of this: no operator, node, or version changed, and an attachment member is not addressable by a query at any of the endpoints — a hand-built request naming one is rejected with `400`.
 
 
+## In the explorer
+
+The [query explorer](explorer.md#working-with-a-query) adds a column per attachment to a result whose rows it can identify, with a *fetch* link that exchanges the row's key for the bytes and saves them as a file. It never materializes a row into a generated model, so there is no handle to open — it builds the request from the key column instead, refusing the same operators a client's own plan refuses. Every fetch goes through the checks below unchanged.
+
+
 ## Observability
 
 An attachment fetch is audited like a query. Its [`ScryAuditEntry`](observability.md#the-audit-hook) carries `Attachment` instead of `Request`, and `Rows` is 1 when the value was handed over and 0 when it was withheld — so a run of withheld fetches is visible without recording which of the three refusals each one was. The activity is `scry.attachment {source}` and the duration histogram tags it `scry.result_kind: attachment`.

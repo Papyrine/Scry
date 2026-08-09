@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using BlazorMonaco;
@@ -23,8 +24,15 @@ public partial class App
     List<string>? resultColumns;
     List<List<string>>? resultRows;
     // The same rows unflattened, as the server sent them — what the exports that keep a nested
-    // projection nested are written from.
+    // projection nested are written from, and what an attachment reads its row's key out of.
     List<JsonElement>? payloadRows;
+    // The attachments these rows can be fetched by, one extra column each. Empty for every result
+    // whose source declares none, which is every result in a model without attachments.
+    IReadOnlyList<AttachmentLink> attachmentLinks = [];
+    // What a fetch that produced no file has to say, by row and member. Kept beside the table rather
+    // than raised as a page error: an attachment holding nothing, or one this caller may not have,
+    // is an answer about that row and not a failure of the query.
+    readonly Dictionary<(int Row, string Member), string> attachmentNotes = [];
     // Whether the result is a flat grid: every cell a scalar. Projecting into a navigation nests an
     // object inside the row instead, and a tree has no faithful CSV.
     bool resultFlat;
@@ -171,6 +179,121 @@ public partial class App
 
     Task Download(string extension, string type, string text, bool bom) =>
         JS.InvokeVoidAsync("scry.download", $"scry-result.{extension}", text, type, bom).AsTask();
+
+    /// <summary>
+    /// Claims one row's attachment and hands the bytes to the browser as a download. This is the
+    /// exchange <c>ScryAttachment.OpenAsync</c> performs on a generated client, built here from the
+    /// row's own key columns — the explorer never materializes a row into a model, so there is no
+    /// handle to open.
+    /// </summary>
+    async Task FetchAttachment(int row, AttachmentLink link)
+    {
+        if (introspection is null ||
+            payloadRows is null)
+        {
+            return;
+        }
+
+        attachmentNotes.Remove((row, link.Member));
+
+        var keys = new List<AttachmentKey>(link.KeyColumns.Count);
+        foreach (var column in link.KeyColumns)
+        {
+            // The linker only offers a member whose keys are columns of the result, so a row missing
+            // one is a row the server shaped differently than its schema describes.
+            if (!payloadRows[row].TryGetProperty(column, out var value))
+            {
+                attachmentNotes[(row, link.Member)] = "no key";
+                return;
+            }
+
+            keys.Add(new(Key(value), Tag(value)));
+        }
+
+        try
+        {
+            // The same path ScryClient.ForHttp derives, from the same endpoint: one mapping covers
+            // the query surface and its attachments, so a host that moved one moved both.
+            var request = AttachmentRequest.Create(link.Root, link.Member, keys, introspection.SchemaStamp);
+            using var content = new StringContent(ScryJson.Serialize(request), Encoding.UTF8, "application/json");
+            using var response = await Http.PostAsync($"{introspection.QueryEndpoint.TrimEnd('/')}/attachment", content);
+
+            switch (response.StatusCode)
+            {
+                // The row was readable and its column holds nothing. Distinct from the 404 below,
+                // which says the caller may not have it rather than that there is nothing to have.
+                case HttpStatusCode.NoContent:
+                    attachmentNotes[(row, link.Member)] = "empty";
+                    return;
+                // Refused, absent, and policy-filtered arrive as one status by design; the explorer
+                // is in no position to tell them apart either.
+                case HttpStatusCode.NotFound:
+                    attachmentNotes[(row, link.Member)] = "unavailable";
+                    return;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                error = ScryJson.TryDeserializeError(body) is {Error.Length: > 0} failure ? failure.Error : body;
+                return;
+            }
+
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            await JS.InvokeVoidAsync(
+                "scry.downloadBytes",
+                FileName(link, keys),
+                Convert.ToBase64String(bytes),
+                ScryBinary.PartContentType);
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+        }
+    }
+
+    /// <summary>What a fetch had to say about a row, or null where it has said nothing.</summary>
+    string? AttachmentNote(int row, AttachmentLink link) =>
+        attachmentNotes.GetValueOrDefault((row, link.Member));
+
+    // The invariant string form the wire carries. A JSON string is already one; everything else is
+    // written as it was received rather than reformatted, so a decimal or a long round-trips whole.
+    static string? Key(JsonElement value) =>
+        value.ValueKind switch
+        {
+            JsonValueKind.Null => null,
+            JsonValueKind.String => value.GetString(),
+            _ => value.GetRawText()
+        };
+
+    // The shape the value arrived in. A hint only: the server parses a key into the key member's own
+    // CLR type and never trusts the tag, so a Guid or a date travelling as a string is read as one.
+    static ClrTypeTag Tag(JsonElement value) =>
+        value.ValueKind switch
+        {
+            JsonValueKind.Null => ClrTypeTag.Null,
+            JsonValueKind.True or JsonValueKind.False => ClrTypeTag.Boolean,
+            JsonValueKind.Number when value.TryGetInt32(out _) => ClrTypeTag.Int32,
+            JsonValueKind.Number when value.TryGetInt64(out _) => ClrTypeTag.Int64,
+            JsonValueKind.Number => ClrTypeTag.Decimal,
+            _ => ClrTypeTag.String
+        };
+
+    // Named after what it is and which row it came from. The key values are the server's own data, so
+    // every character a file name cannot carry is replaced rather than trusted.
+    static string FileName(AttachmentLink link, IReadOnlyList<AttachmentKey> keys) =>
+        Safe($"{link.Root}-{link.Member}-{string.Join("-", keys.Select(_ => _.Value))}") + ".bin";
+
+    static string Safe(string name)
+    {
+        var builder = new StringBuilder(name.Length);
+        foreach (var character in name)
+        {
+            builder.Append(char.IsLetterOrDigit(character) || character is '-' or '_' or '.' ? character : '_');
+        }
+
+        return builder.ToString();
+    }
 
     // RFC 4180: a field containing a comma, a quote, or a newline is quoted, and quotes inside it are
     // doubled. Everything else is written as-is.
@@ -353,6 +476,8 @@ public partial class App
             resultFlat = false;
             scalarResult = null;
             sqlText = null;
+            attachmentLinks = [];
+            attachmentNotes.Clear();
             var code = await editor.GetValue();
             executor ??= SnippetExecutor.Create(introspection, scryReferences);
             var request = executor.Translate(code);
@@ -387,6 +512,12 @@ public partial class App
                     case ResultKind.Scalar:
                         scalarResult = parsed.Payload.GetRawText();
                         break;
+                }
+
+                // Rows only: a folded terminal has one value rather than a row to fetch by.
+                if (resultRows is not null)
+                {
+                    attachmentLinks = AttachmentLinker.Link(introspection, request);
                 }
             }
         }

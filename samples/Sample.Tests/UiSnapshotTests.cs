@@ -405,6 +405,48 @@ public class UiSnapshotTests :
         Assert.That(department!.Element("name")!.Value, Is.Not.Empty);
     }
 
+    /// <summary>
+    /// The claim check end to end in a real browser: the query carries no bytes, every row carries
+    /// the key, and the fetch link exchanges one for the file. Engineering holds a handbook; Sales
+    /// holds a null one, which is a different answer from a refusal and says so without a download.
+    /// </summary>
+    [Test]
+    public async Task ExplorerFetchesAnAttachment()
+    {
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+
+        await page.SetEditorValueAsync("Query.Department.OrderBy(_ => _.Name)");
+        await page.Locator("[data-testid='run']").ClickAsync();
+        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);
+
+        // The attachment is in no projection the client could write, so the column below is the
+        // explorer's own offer — built from the key the row does carry.
+        var wire = await page.Locator("[data-testid='wire']").InnerTextAsync();
+        Assert.That(wire, Does.Not.Contain("Handbook"));
+
+        await InterceptDownloadsAsync(page);
+        var links = page.Locator("[data-testid='attachment']");
+        await Assertions.Expect(links).ToHaveCountAsync(2);
+
+        // Engineering orders first, and its bytes arrive as the file the browser would have saved.
+        await links.Nth(0).ClickAsync();
+        await page.WaitForFunctionAsync("() => window.__file !== null", null, new() {Timeout = 30_000});
+        Assert.That(
+            await page.EvaluateAsync<string>("() => window.__file.name"),
+            Is.EqualTo("Department-Handbook-1.bin"));
+        Assert.That(
+            await page.EvaluateAsync<string>("() => atob(window.__file.base64)"),
+            Is.EqualTo("Engineering handbook."));
+
+        // Sales holds none. Reported beside the row rather than as a page error: it is an answer
+        // about that row, not a failure of the query.
+        await links.Nth(1).ClickAsync();
+        await Assertions.Expect(page.Locator("[data-testid='attachment-note']")).ToContainTextAsync("empty");
+    }
+
     // Replaces the real file-saving interop with a recorder, so an export can be asserted rather than
     // landing in the browser's downloads directory.
     static Task InterceptDownloadsAsync(IPage page) =>
@@ -413,6 +455,7 @@ public class UiSnapshotTests :
             () => {
                 window.__file = null;
                 window.scry.download = (name, text, type, bom) => window.__file = { name, text, type, bom };
+                window.scry.downloadBytes = (name, base64, type) => window.__file = { name, base64, type };
             }
             """);
 

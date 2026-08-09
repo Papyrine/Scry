@@ -64,7 +64,7 @@ app.MapScryExplorer(
         _.EnableGuard = _ => true;
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L54-L63' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L58-L67' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 | Option | Default | Meaning |
@@ -97,6 +97,10 @@ Three things the explorer does with the query in the editor, beyond running it.
 **Export the results.** The *Export:* line under the result table saves the rows it is showing — same rows, same order — as `csv`, `xml`, or `json`.
 
 `csv` writes them as displayed, with RFC 4180 quoting and a UTF-8 BOM so Excel reads non-ASCII values correctly. It is offered only for a **flat** result: [projecting into a navigation](wire-format.md) nests an object inside each row, and a grid cannot hold that without flattening the shape away. `xml` (a `row` element each, a child element per member) and `json` (the rows exactly as the server sent them) keep the nesting, so they are offered for every result the table can render.
+
+**Fetch an attachment.** An [`[Attachment]`](attachments.md) has no value in a result at all — no query reads one — so the explorer adds a column of its own, named after the member, with a *fetch* link per row. Clicking it exchanges that row's key for the bytes at the attachment endpoint and hands them to the browser as a file, which is exactly what a generated client's `ScryAttachment.OpenAsync` does — built from the key column rather than from a materialized handle. A row whose value is null reports *empty* beside the link, and one the server will not hand over reports *unavailable* — the same single answer a refused, hidden, and missing row all get.
+
+The column appears only where a row is identifiable: the source has to declare an attachment, and the result has to carry the key it is fetched by. A query that projected the key away, or one that went through `Distinct`, `GroupBy`, `SelectMany`, a join, or a set operator — all of which rewrite what a row *is* — gets no column, matching what a generated client refuses to bind. The fetch is authorized on its own terms whatever the query did, by the member's [`IAttachmentPolicy`](attachments.md#security) and the source's [row policies](policies.md), so the offer widens nothing: it saves writing the request, not the permission to make it.
 
 **Read a binary member.** A [`[BinaryTransfer]`](annotations.md) `byte[]` does not travel inside the JSON payload — the server sends it as a raw multipart part and leaves a `{"$bin":n}` placeholder where the value was ([Binary transfer](wire-format.md#binary-transfer)). The explorer reassembles that response and folds the parts back in as base64, so a diverted member tables, exports, and copies exactly as the same `byte[]` would without the attribute — which is the whole of what the attribute claims. The *Response* pane shows the reassembled envelope rather than the multipart body it arrived as.
 

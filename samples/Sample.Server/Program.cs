@@ -31,6 +31,10 @@ class Program
                 // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
                 // [QueryablePoco] type must be registered here or AddScry throws at startup.
                 _.AddPocoSource(_ => Holiday.Seed());
+                // Department.Handbook is an [Attachment], and one exposed without a check is a startup
+                // failure. Registered here rather than by [AttachmentWith] because the model project
+                // references the annotations alone and has no server type to name.
+                _.AddAttachmentPolicy<Department, HandbookPolicy>();
                 _.MaxPageSize = 200;
             });
         // end-snippet

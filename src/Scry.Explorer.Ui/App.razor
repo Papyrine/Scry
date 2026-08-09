@@ -139,12 +139,31 @@
     </div>
     <table data-testid="result-table">
         <thead>
-            <tr>@foreach (var column in resultColumns) { <th>@column</th> }</tr>
+            <tr>
+                @foreach (var column in resultColumns) { <th>@column</th> }
+                @* One column per attachment: never a value, always a claim to exchange for one. *@
+                @foreach (var link in attachmentLinks) { <th>@link.Member</th> }
+            </tr>
         </thead>
         <tbody>
-        @foreach (var row in resultRows!)
+        @for (var index = 0; index < resultRows!.Count; index++)
         {
-            <tr>@foreach (var cell in row) { <td>@cell</td> }</tr>
+            @* Copied out of the loop variable: the handlers below outlive this iteration. *@
+            var row = index;
+            <tr>
+                @foreach (var cell in resultRows[row]) { <td>@cell</td> }
+                @foreach (var link in attachmentLinks)
+                {
+                    <td>
+                        <a href="#" data-testid="attachment" @onclick:preventDefault @onclick="() => FetchAttachment(row, link)"
+                           title="Fetch this row's @link.Member. A request of its own, keyed by the row and authorized on its own terms — the query never carries the bytes.">fetch</a>
+                        @if (AttachmentNote(row, link) is { } note)
+                        {
+                            <span class="muted attachment-note" data-testid="attachment-note"> @note</span>
+                        }
+                    </td>
+                }
+            </tr>
         }
         </tbody>
     </table>

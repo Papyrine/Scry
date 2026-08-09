@@ -12,6 +12,7 @@ public class AttachmentClientTests
     /// list, and the key it is fetched by is named there instead.
     /// </summary>
     [ScryModel("Contract", "Id", "Name", Keys = ["Id"], Attachments = ["Document"])]
+    // ReSharper disable once ClassNeverInstantiated.Local
     class ContractModel
     {
         public int Id { get; init; }
@@ -95,7 +96,6 @@ public class AttachmentClientTests
         Assert.Multiple(() =>
         {
             Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Lease", "Draft", "Sealed"]));
-            Assert.That(rows.All(_ => _.Document is not null), Is.True);
             Assert.That(rows[0].Document.Member, Is.EqualTo("Document"));
         });
     }

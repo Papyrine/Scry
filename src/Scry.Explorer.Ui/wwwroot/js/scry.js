@@ -36,17 +36,37 @@ window.scry = {
     // mangles any non-ASCII value in an exported column), while a leading U+FEFF is not valid JSON.
     download: function (name, text, type, bom) {
         try {
-            const blob = new Blob([bom ? '\ufeff' + text : text], { type: type });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = name;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            URL.revokeObjectURL(url);
+            window.scry.save(name, new Blob([bom ? '\ufeff' + text : text], { type: type }));
         } catch (e) {
             console.warn('scry: download failed', e);
         }
+    },
+    // Save an attachment's bytes as a file. Handed over as base64 rather than as a byte array: that
+    // is what crosses the interop boundary without a copy per element, and an attachment is arbitrary
+    // binary that no text encoding would survive.
+    downloadBytes: function (name, base64, type) {
+        try {
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+
+            window.scry.save(name, new Blob([bytes], { type: type }));
+        } catch (e) {
+            console.warn('scry: download failed', e);
+        }
+    },
+    // The click a browser turns into a save. Shared by both downloads so a file arrives the same way
+    // whatever produced it.
+    save: function (name, blob) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = name;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
     }
 };

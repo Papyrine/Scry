@@ -36,6 +36,7 @@ public sealed class ScryTestServer :
         builder.Services.AddScry<SampleContext>(options =>
         {
             options.AddPocoSource(_ => Holiday.Seed());
+            options.AddAttachmentPolicy<Department, HandbookPolicy>();
             options.MaxPageSize = 200;
         });
 
