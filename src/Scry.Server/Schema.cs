@@ -327,7 +327,7 @@ sealed class Schema
                     schema.entitySourceTypes.Add(type);
                 }
             }
-            else if (type.GetCustomAttribute<QueryableComplexAttribute>(inherit: false) is not null)
+            else if (type.HasAttribute<QueryableComplexAttribute>(inherit: false))
             {
                 // A complex type is a traversable member type, not a root source: it gets member
                 // metadata (below) but no source entry and no resolver.
@@ -337,7 +337,7 @@ sealed class Schema
                 // run, whether the type is reached by traversal or aggregated as a [QueryableCollection]
                 // of it. The equivalent mistake on a collection of entities is refused below; that check
                 // can never fire for a complex element, because a complex type is never in `discovered`.
-                if (type.GetCustomAttribute<ReturnableWithAttribute>(inherit: false) is not null ||
+                if (type.HasAttribute<ReturnableWithAttribute>(inherit: false) ||
                     options.Policies.ContainsKey(type))
                 {
                     throw new($"'{type.Name}' is [QueryableComplex] and carries a row policy, which cannot apply: a policy filters a source, and a complex type is a member type with no source of its own. Filter on the type that owns it instead.");
@@ -400,7 +400,7 @@ sealed class Schema
         {
             if (Attachments(meta).Any())
             {
-                meta.AttachmentKeys = DeriveKeys(schema, meta);
+                meta.AttachmentKeys = DeriveKeys(meta);
             }
         }
 
@@ -683,7 +683,7 @@ sealed class Schema
     }
 
     static bool IsKeyless(Type type) =>
-        type.GetCustomAttribute<KeylessAttribute>() is not null;
+        type.HasAttribute<KeylessAttribute>();
 
     /// <summary>
     /// A collation is the one configured value that reaches the database as SQL text rather than as a
@@ -770,7 +770,7 @@ sealed class Schema
     /// agree at all — the generator never runs the model, so fluent configuration is invisible to it —
     /// and <see cref="ValidateAgainstModel"/> verifies the answer against the real key at startup.
     /// </remarks>
-    static IReadOnlyList<Member> DeriveKeys(Schema schema, TypeMeta meta)
+    static IReadOnlyList<Member> DeriveKeys(TypeMeta meta)
     {
         // An attachment is not a value and a navigation is not one either, so neither can be a key.
         var candidates = meta.Members.Values
@@ -778,7 +778,7 @@ sealed class Schema
             .ToList();
 
         var declared = candidates
-            .Where(_ => _.Property.GetCustomAttribute<System.ComponentModel.DataAnnotations.KeyAttribute>() is not null)
+            .Where(_ => _.Property.HasAttribute<KeyAttribute>())
             .OrderBy(_ => _.Name, StringComparer.Ordinal)
             .ToList();
         if (declared.Count > 0)
@@ -882,7 +882,7 @@ sealed class Schema
         {
             if (property.GetMethod is not { IsPublic: true } ||
                 property.GetIndexParameters().Length > 0 ||
-                property.GetCustomAttribute<QueryIgnoreAttribute>() is not null)
+                property.HasAttribute<QueryIgnoreAttribute>())
             {
                 EnsureNoPreviousNames(type, property);
                 EnsureNoBinaryTransfer(type, property, "which is not exposed to clients. Remove it, or remove whatever excludes the member.");
@@ -898,11 +898,11 @@ sealed class Schema
                     EnsureNoAttachment(type, property, $"which is a '{ScalarDisplay(property.PropertyType)}'. Only byte[] members can be attachments.");
                 }
 
-                if (property.GetCustomAttribute<AttachmentAttribute>() is not null)
+                if (property.HasAttribute<AttachmentAttribute>())
                 {
                     // The two describe opposite fates for the same value: one encodes what the query
                     // read, the other means the query never read it.
-                    if (property.GetCustomAttribute<BinaryTransferAttribute>() is not null)
+                    if (property.HasAttribute<BinaryTransferAttribute>())
                     {
                         throw new($"'{type.Name}.{property.Name}' carries both [Attachment] and [BinaryTransfer]. [BinaryTransfer] changes how a value the query read is encoded; [Attachment] means the query never reads it. Keep one.");
                     }
@@ -931,7 +931,7 @@ sealed class Schema
             // member, not just to the type — and its element must be something a query can already
             // read: an opted-in type, or a scalar (an EF primitive collection, whose elements are
             // values with no allow-list of their own to consult).
-            if (property.GetCustomAttribute<QueryableCollectionAttribute>() is not null &&
+            if (property.HasAttribute<QueryableCollectionAttribute>() &&
                 CollectionElement(property.PropertyType) is { } element &&
                 (queryableTypes.Contains(element) || IsScalar(element)))
             {
@@ -989,7 +989,7 @@ sealed class Schema
 
     static void EnsureNoBinaryTransfer(Type type, PropertyInfo property, string reason)
     {
-        if (property.GetCustomAttribute<BinaryTransferAttribute>() is not null)
+        if (property.HasAttribute<BinaryTransferAttribute>())
         {
             throw new($"[BinaryTransfer] on '{type.Name}.{property.Name}', {reason}");
         }
@@ -997,7 +997,7 @@ sealed class Schema
 
     static void EnsureNoAttachment(Type type, PropertyInfo property, string reason)
     {
-        if (property.GetCustomAttribute<AttachmentAttribute>() is not null)
+        if (property.HasAttribute<AttachmentAttribute>())
         {
             throw new($"[Attachment] on '{type.Name}.{property.Name}', {reason}");
         }

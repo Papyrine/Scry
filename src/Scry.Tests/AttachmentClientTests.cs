@@ -16,7 +16,9 @@ public class AttachmentClientTests
     class ContractModel
     {
         public int Id { get; init; }
+        // ReSharper disable once AutoPropertyCanBeMadeGetOnly.Local
         public string Name { get; init; } = "";
+        // ReSharper disable once AutoPropertyCanBeMadeGetOnly.Local
         public ScryAttachment Document { get; init; } = null!;
     }
 
@@ -74,6 +76,7 @@ public class AttachmentClientTests
         {
             Assert.That(rows, Has.Count.EqualTo(3));
             Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Lease", "Draft", "Sealed"]));
+            // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
             Assert.That(rows.All(_ => _.Document is not null), Is.True);
         });
     }
@@ -170,6 +173,7 @@ public class AttachmentClientTests
 
         var exception = Assert.Throws<NotSupportedException>(
             () => ClientFor(context).Source<ContractModel>("Contract", ["Id", "Name"])
+                // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
                 .Where(_ => _.Document != null)
                 .ToScryRequest());
 

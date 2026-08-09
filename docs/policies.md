@@ -204,7 +204,7 @@ public interface IAttachmentPolicy<T>
     bool Authorize(ScryAttachmentContext context);
 }
 ```
-<sup><a href='/src/Scry.Server/IAttachmentPolicy.cs#L14-L19' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentPolicyInterface' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/IAttachmentPolicy.cs#L15-L20' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentPolicyInterface' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: attachmentContext -->

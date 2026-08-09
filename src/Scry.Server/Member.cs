@@ -10,5 +10,5 @@ sealed class Member(string name, PropertyInfo property, MemberKind kind)
     /// Whether the member's values travel as raw multipart parts instead of base64 in JSON. A
     /// transfer-encoding concern only — the member is otherwise an ordinary scalar.
     /// </summary>
-    public bool BinaryTransfer { get; } = property.GetCustomAttribute<BinaryTransferAttribute>() is not null;
+    public bool BinaryTransfer { get; } = property.HasAttribute<BinaryTransferAttribute>();
 }
