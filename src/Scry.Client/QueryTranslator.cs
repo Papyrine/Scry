@@ -43,6 +43,9 @@ sealed class QueryTranslator
     /// The member path of the row it hangs off — empty for the query's own row, or the navigation a
     /// nested projection descended into. Its key members are read relative to this.
     /// </param>
+    /// <param name="Root">The name of the source the attachment is fetched from.</param>
+    /// <param name="Member">The attachment member on that source's row.</param>
+    /// <param name="Keys">The row's key members, named relative to <paramref name="Prefix"/>.</param>
     sealed record Pending(
         IReadOnlyList<string> Target,
         IReadOnlyList<string> Prefix,
