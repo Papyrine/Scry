@@ -14,10 +14,23 @@ static class PageExtensions
             });
 
     /// <summary>
-    /// Sets the Monaco editor's content. The query travels as a Playwright argument rather than being
+    /// Sets the Monaco editor's content and leaves the caret at the end of it, which is where a user who
+    /// typed the query would have left it. The caret matters because the explorer's completion list is the
+    /// one for the caret's position: dropping text in without placing it would complete against the start
+    /// of a query nobody wrote from the start. The query travels as a Playwright argument rather than being
     /// embedded in the evaluated JS, so a long query is never wrapped into a (syntactically invalid)
     /// multi-line JS string literal by the formatter.
     /// </summary>
     public static Task SetEditorValueAsync(this IPage page, string query) =>
-        page.EvaluateAsync("query => monaco.editor.getEditors()[0].setValue(query)", query);
+        page.EvaluateAsync(
+            """
+            query => {
+                const editor = monaco.editor.getEditors()[0];
+                editor.setValue(query);
+                const model = editor.getModel();
+                const line = model.getLineCount();
+                editor.setPosition({ lineNumber: line, column: model.getLineMaxColumn(line) });
+            }
+            """,
+            query);
 }

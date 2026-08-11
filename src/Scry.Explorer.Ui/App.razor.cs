@@ -558,7 +558,27 @@ public partial class App
             Run = _ => InvokeAsync(Run)
         });
 
+        await MoveCaretToEnd();
         await TryRegister();
+    }
+
+    /// <summary>
+    /// Puts the caret at the end of the query. The completions now describe wherever the caret is, so text
+    /// that arrives without anyone typing it — the sample the page opens on, a shared link, an entry
+    /// picked out of the history — needs a caret put somewhere deliberate, or the list on screen would be
+    /// the one for the start of a query nobody is writing at the start of.
+    /// </summary>
+    async Task MoveCaretToEnd()
+    {
+        var text = await editor.GetValue();
+        var (line, column) = ToLineColumn(text, text.Length);
+        await editor.SetPosition(
+            new()
+            {
+                LineNumber = line,
+                Column = column
+            },
+            "scry");
     }
 
     // Text only — the glyph beside it is the inline svg in App.razor.
@@ -728,7 +748,41 @@ public partial class App
         }
     }
 
-    async Task Complete()
+    CancellationTokenSource? completionsCts;
+
+    /// <summary>
+    /// Recomputes the pill list as the caret moves. The list describes the caret rather than the text as a
+    /// whole — that is what makes clicking a pill coherent, since what is offered is what belongs where it
+    /// would go. Debounced like the diagnostics above so holding an arrow key is one Roslyn pass and not
+    /// one per row, and a superseded run is dropped rather than allowed to overwrite a newer one.
+    /// </summary>
+    async Task OnCursorPositionChanged(CursorPositionChangedEvent _)
+    {
+        if (workspace is null)
+        {
+            return;
+        }
+
+        completionsCts?.Cancel();
+        var cts = completionsCts = new();
+
+        try
+        {
+            await Task.Delay(300, cts.Token);
+            await Complete(cts.Token);
+        }
+        catch
+        {
+            // Cancelled by a later move, which is the debounce working rather than a failure.
+        }
+    }
+
+    /// <summary>
+    /// Lists the completions available at the caret. Also the <em>Complete at cursor</em> button, which
+    /// asks for the same list on demand: the automatic path above is debounced and best-effort, so a
+    /// button that answers immediately is worth keeping.
+    /// </summary>
+    async Task Complete(CancellationToken cancel = default)
     {
         if (workspace is null)
         {
@@ -738,13 +792,97 @@ public partial class App
         try
         {
             var text = await editor.GetValue();
-            var items = await workspace.CompleteAsync(text, text.Length);
+            var position = await editor.GetPosition();
+            // No caret at all (the editor has never been focused) reads as the end of the text, which is
+            // where a caret that has never been placed would sit once the user starts typing. The text and
+            // the caret are two round trips, so an edit landing between them can put the caret past the end
+            // of what was read — clamped rather than handed to Roslyn as an out-of-range position.
+            var caret = position is null
+                ? text.Length
+                : Math.Clamp(ToOffset(text, position.LineNumber, position.Column), 0, text.Length);
+            var items = await workspace.CompleteAsync(text, caret);
+            if (cancel.IsCancellationRequested)
+            {
+                return;
+            }
+
             completions = items.Select(_ => _.Label).ToList();
             StateHasChanged();
         }
         catch (Exception exception)
         {
             error = exception.Message;
+        }
+    }
+
+    /// <summary>
+    /// Types a completion into the query at the caret. A selection is overwritten; so is the partial word
+    /// the caret is sitting in, so that picking <c>Active</c> after typing <c>_.Ac</c> reads
+    /// <c>_.Active</c> rather than <c>_.AcActive</c>. Focus returns to the editor, because the next thing
+    /// after picking a member is carrying on typing.
+    /// </summary>
+    async Task Insert(string label)
+    {
+        var selection = await editor.GetSelection();
+        if (selection is null)
+        {
+            return;
+        }
+
+        var range = new BlazorMonaco.Range
+        {
+            StartLineNumber = selection.StartLineNumber,
+            StartColumn = selection.StartColumn,
+            EndLineNumber = selection.EndLineNumber,
+            EndColumn = selection.EndColumn
+        };
+
+        await ExtendOverTypedPrefix(range);
+
+        var edit = new IdentifiedSingleEditOperation
+        {
+            Range = range,
+            Text = label,
+            // Leaves the caret after the inserted text rather than in front of it.
+            ForceMoveMarkers = true
+        };
+
+        // The cursor state is left to ForceMoveMarkers above; the cast picks between two overloads that
+        // are both willing to take a null there.
+        await editor.ExecuteEdits("scry-completion", [edit], (List<Selection>?) null);
+        await editor.Focus();
+    }
+
+    /// <summary>
+    /// Widens an insertion point back over the word already typed in front of it, so the completion
+    /// overwrites that word instead of being appended to it.
+    /// </summary>
+    /// <remarks>
+    /// The word comes from Monaco's own <c>getWordUntilPosition</c> rather than from a scan here, so what
+    /// counts as one is whatever the editor already treats as one — the same answer its inline dropdown
+    /// replaces.
+    ///
+    /// Only an empty selection is widened: a selection is an explicit statement of what to replace.
+    /// </remarks>
+    async Task ExtendOverTypedPrefix(BlazorMonaco.Range range)
+    {
+        if (range.StartLineNumber != range.EndLineNumber ||
+            range.StartColumn != range.EndColumn)
+        {
+            return;
+        }
+
+        var model = await editor.GetModel();
+        var word = await model.GetWordUntilPosition(
+            new()
+            {
+                LineNumber = range.StartLineNumber,
+                Column = range.StartColumn
+            });
+
+        if (word is {Word.Length: > 0})
+        {
+            range.StartColumn = word.StartColumn;
         }
     }
 
@@ -780,7 +918,12 @@ public partial class App
         }
     }
 
-    Task LoadQuery(string query) => editor.SetValue(query);
+    async Task LoadQuery(string query)
+    {
+        await editor.SetValue(query);
+        await MoveCaretToEnd();
+        await Complete();
+    }
 
     static readonly JsonSerializerOptions indented = new() { WriteIndented = true };
 

@@ -786,7 +786,8 @@ sealed class Schema
             return declared;
         }
 
-        foreach (var convention in new[] {"Id", $"{meta.ClrType.Name}Id"})
+        var type = meta.ClrType.Name;
+        foreach (var convention in new[] {"Id", $"{type}Id"})
         {
             if (candidates.FirstOrDefault(_ => string.Equals(_.Name, convention, StringComparison.Ordinal)) is { } match)
             {
@@ -796,7 +797,7 @@ sealed class Schema
 
         var attachment = Attachments(meta).First().Name;
         throw new(
-            $"'{meta.ClrType.Name}.{attachment}' is an [Attachment], but no primary key could be derived for '{meta.ClrType.Name}'. An attachment is fetched by its row's key, so one has to be nameable by a client: mark the key member(s) with [Key], or name a member 'Id' or '{meta.ClrType.Name}Id'. The member must also be exposed — a key a client cannot read is one it cannot send back.");
+            $"'{type}.{attachment}' is an [Attachment], but no primary key could be derived for '{type}'. An attachment is fetched by its row's key, so one has to be nameable by a client: mark the key member(s) with [Key], or name a member 'Id' or '{type}Id'. The member must also be exposed — a key a client cannot read is one it cannot send back.");
     }
 
     /// <summary>

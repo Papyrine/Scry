@@ -129,6 +129,44 @@ a {
     max-width: 78ch;
 }
 
+/*
+  Two columns once there is room for them: the query on the left, everything it produced on the right.
+  The breakpoint is where two columns still each hold a line of the sample LINQ without wrapping —
+  narrower than that, side by side is worse than stacked, so the sections stay plain blocks and the
+  single-column rules above apply unchanged.
+
+  The shell widens with the split, because the column that reads well at 1080px on its own needs about
+  twice that to sit next to a second one. minmax(0, 1fr) rather than 1fr: a grid track's automatic
+  minimum is its content, so a wide <pre> or table would otherwise push its column past half and take
+  the page's horizontal scrollbar with it.
+*/
+@media (min-width: 1200px) {
+    .shell {
+        max-width: 1600px;
+    }
+
+    .workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 1.6rem;
+        /* Each column is only as tall as its own content — the short one must not stretch to the tall one. */
+        align-items: start;
+    }
+
+    /*
+      The pane headings carry a top margin that separates them from the pane above. The first heading in
+      the output column has nothing above it, so that margin would drop the column below the editor's top
+      edge instead.
+    */
+    .pane-output > :first-child {
+        margin-top: 0;
+    }
+
+    .pane-output > :first-child h3 {
+        margin-top: 0;
+    }
+}
+
 /* Editor card */
 
 /*
@@ -326,7 +364,7 @@ pre {
 pre,
 .scalar,
 ul[data-testid="history"] a,
-ul[data-testid="completions"] li {
+ul[data-testid="completions"] button {
     font-variant-ligatures: none;
 }
 
@@ -337,6 +375,14 @@ ul[data-testid="completions"] li {
 .tok-kw { color: light-dark(#0000ff, #569cd6); }
 
 /* Result */
+
+/*
+  The result table's scroll box. A table sizes to its content, so a row wider than the column it is in
+  overflows — and without this, out of the page rather than inside the pane.
+*/
+.table-scroll {
+    overflow-x: auto;
+}
 
 table[data-testid="result-table"] {
     border-collapse: separate;
@@ -429,13 +475,34 @@ ul[data-testid="completions"] {
 }
 
 ul[data-testid="completions"] li {
+    display: flex;
+}
+
+/*
+  Each completion is a button: clicking it types its text into the editor. Styled as the pill it was
+  before it became one, and hovers like the history entries above it — the two lists do the same kind
+  of thing, in that both put text into the query.
+*/
+ul[data-testid="completions"] button {
     padding: 0.18rem 0.62rem;
     font-family: var(--mono);
     font-size: 0.76rem;
+    line-height: 1.5;
     color: var(--text);
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 999px;
+    cursor: pointer;
+}
+
+ul[data-testid="completions"] button:hover {
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+ul[data-testid="completions"] button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
 }
 
 /*
