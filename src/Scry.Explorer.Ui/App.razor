@@ -97,6 +97,26 @@
     </div>
 </div>
 
+@*
+    The completions belong to the editor above them rather than to the output: they describe the caret,
+    they are what typing into that editor changes, and clicking one types into it. So they sit with the
+    query in both layouts — directly under it, and above the history, which is the older thing.
+*@
+@if (completions is not null)
+{
+    <h3>Completions</h3>
+    <ul data-testid="completions">
+        @foreach (var item in completions)
+        {
+            @* Each pill types itself into the editor, so the list is a way into the schema and not only a view of it. *@
+            <li>
+                <button type="button" @onclick="() => Insert(item)"
+                        title="Insert @item into the query at the cursor.">@item</button>
+            </li>
+        }
+    </ul>
+}
+
 @if (history.Count > 0)
 {
     <h3>History</h3>
@@ -203,21 +223,6 @@
         <button class="icon-btn" @onclick='() => Copy(resultJson!, "response")'>@(copied == "response" ? "✓ Copied" : "Copy")</button>
     </div>
     <pre data-testid="result">@Highlight.Json(resultJson)</pre>
-}
-
-@if (completions is not null)
-{
-    <h3>Completions</h3>
-    <ul data-testid="completions">
-        @foreach (var item in completions)
-        {
-            @* Each pill types itself into the editor, so the list is a way into the schema and not only a view of it. *@
-            <li>
-                <button type="button" @onclick="() => Insert(item)"
-                        title="Insert @item into the query at the cursor.">@item</button>
-            </li>
-        }
-    </ul>
 }
 
 </section>
