@@ -33,6 +33,15 @@ public class UiScreenshotTests :
         Height = 1000
     };
 
+    // Past the breakpoint in app.css the query and everything it produced sit side by side rather than
+    // stacked. Every other capture here is narrower than that breakpoint, so this is the only one the
+    // two-column layout appears in.
+    static ViewportSize wideViewport = new()
+    {
+        Width = 1500,
+        Height = 1000
+    };
+
     // The IntelliSense capture is of the viewport rather than of the full page, so this height is its
     // crop — sized to the shell, because a screen of empty space under the completion list is not what
     // the doc is showing.
@@ -101,6 +110,34 @@ public class UiScreenshotTests :
         await toggle.ClickAsync();
         await toggle.ClickAsync();
         await page.WaitForSelectorAsync(".monaco-editor.vs-dark", 10);
+
+        await Verify(page)
+            .PageScreenshotOptions(
+                new()
+                {
+                    FullPage = true
+                },
+                screenshotOnly: true);
+    }
+
+    // The shell wide enough for the split layout, with a query run so that both columns have something
+    // in them: the editor and its history on the left, the wire request, rows and response on the right.
+    [Test]
+    public async Task ExplorerSideBySide()
+    {
+        var page = await NewPageAsync(wideViewport);
+        await GoToExplorer(page);
+
+        await page.SetEditorValueAsync(
+            """
+            Query.Employee
+                .Where(_ => _.Active)
+                .OrderBy(_ => _.Name)
+                .Select(_ => new { _.Name, _.Status })
+            """);
+        await page.Locator("[data-testid='run']").ClickAsync();
+        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);
+        await SettleScrollbarsAsync(page);
 
         await Verify(page)
             .PageScreenshotOptions(

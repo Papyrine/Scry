@@ -7,7 +7,7 @@ It is off unless mapped, and Development-only by default.
 <img src="../samples/Sample.Tests/UiScreenshotTests.ExplorerRun.verified.png" border="1" alt="The explorer after running a query: the LINQ, the serialized wire request, the result table, and the raw response">
 
 
-One screen shows the whole pipeline: the LINQ as written, the wire request it translated to, the rows the server returned, and the raw response envelope.
+One screen shows the whole pipeline: the LINQ as written, the wire request it translated to, the rows the server returned, and the raw response envelope. On a window wide enough for it the query sits beside its output rather than above it; narrower than that, the page stacks as shown here.
 
 
 ## Mapping it
