@@ -364,7 +364,7 @@ pre {
 pre,
 .scalar,
 ul[data-testid="history"] a,
-ul[data-testid="completions"] li {
+ul[data-testid="completions"] button {
     font-variant-ligatures: none;
 }
 
@@ -475,13 +475,34 @@ ul[data-testid="completions"] {
 }
 
 ul[data-testid="completions"] li {
+    display: flex;
+}
+
+/*
+  Each completion is a button: clicking it types its text into the editor. Styled as the pill it was
+  before it became one, and hovers like the history entries above it — the two lists do the same kind
+  of thing, in that both put text into the query.
+*/
+ul[data-testid="completions"] button {
     padding: 0.18rem 0.62rem;
     font-family: var(--mono);
     font-size: 0.76rem;
+    line-height: 1.5;
     color: var(--text);
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 999px;
+    cursor: pointer;
+}
+
+ul[data-testid="completions"] button:hover {
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+ul[data-testid="completions"] button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
 }
 
 /*

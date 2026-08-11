@@ -242,6 +242,83 @@ public class UiSnapshotTests :
         Assert.That(items, Does.Contain("CountAsync"));
     }
 
+    // The completion pills are buttons, not labels: clicking one types its text into the query at the
+    // caret — which is what makes the list a way into the schema rather than only a view of it.
+    [Test]
+    public async Task ExplorerInsertsACompletionAtTheCursor()
+    {
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+
+        await page.SetEditorValueAsync("Query.Employee.Where(_ => _.)");
+
+        // The caret goes between the '.' and the ')' — where a member would be typed — rather than at the
+        // end of the text, which is what proves the insert follows the cursor.
+        await page.EvaluateAsync(
+            "() => monaco.editor.getEditors()[0].setPosition({ lineNumber: 1, column: 29 })");
+
+        await page.Locator("[data-testid='completions'] button:text-is('Active')").ClickAsync();
+
+        var value = await page.EvaluateAsync<string>("() => monaco.editor.getEditors()[0].getValue()");
+        Assert.That(value, Is.EqualTo("Query.Employee.Where(_ => _.Active)"));
+    }
+
+    // The list is the one for the caret rather than for the end of the text, and it follows the caret as
+    // it moves. Without that the two halves of the panel disagree: it would offer an Employee member while
+    // the caret sat in front of "Query", and clicking it would type that member there.
+    [Test]
+    public async Task ExplorerCompletesAtTheCursorRatherThanTheEndOfTheQuery()
+    {
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+
+        // The page opens with the caret at the end of the sample query, which ends mid-expression on an
+        // Employee — so the members are what is offered.
+        var atEnd = await page.Locator("[data-testid='completions'] li").AllInnerTextsAsync();
+        Assert.That(atEnd, Does.Contain("ManagerId"));
+
+        // The start of the query is not a place an Employee member can be written, so the members go away.
+        // ManagerId rather than Status: Status is also an enum type, and a type name is in scope here.
+        await page.EvaluateAsync(
+            "() => monaco.editor.getEditors()[0].setPosition({ lineNumber: 1, column: 1 })");
+        await page.WaitForFunctionAsync(
+            "() => !Array.from(document.querySelectorAll(\"[data-testid='completions'] li\")).some(li => li.textContent === 'ManagerId')",
+            null,
+            new()
+            {
+                Timeout = 30_000
+            });
+
+        var atStart = await page.Locator("[data-testid='completions'] li").AllInnerTextsAsync();
+        Assert.That(atStart, Does.Not.Contain("ManagerId"));
+    }
+
+    // The same insert onto a partially typed name. The pill overwrites what was typed rather than being
+    // appended to it — clicking Active after typing "_.Ac" reads "_.Active", not "_.AcActive".
+    [Test]
+    public async Task ExplorerReplacesATypedPrefixWithTheCompletion()
+    {
+        var page = await Browser.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+
+        await page.SetEditorValueAsync("Query.Employee.Where(_ => _.Ac)");
+
+        // Caret immediately after the "Ac", which is the prefix the completion has to swallow.
+        await page.EvaluateAsync(
+            "() => monaco.editor.getEditors()[0].setPosition({ lineNumber: 1, column: 31 })");
+
+        await page.Locator("[data-testid='completions'] button:text-is('Active')").ClickAsync();
+
+        var value = await page.EvaluateAsync<string>("() => monaco.editor.getEditors()[0].getValue()");
+        Assert.That(value, Is.EqualTo("Query.Employee.Where(_ => _.Active)"));
+    }
+
     // The SQL pane: the server builds the query and reads its SQL back without executing it. The
     // sample server runs in Development, which is what the preview's own guard defaults to.
     [Test]

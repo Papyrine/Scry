@@ -137,6 +137,7 @@ public class UiScreenshotTests :
             """);
         await page.Locator("[data-testid='run']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);
+        await ParkCaretOnAMemberAsync(page);
         await SettleScrollbarsAsync(page);
 
         await Verify(page)
@@ -240,6 +241,8 @@ public class UiScreenshotTests :
             """);
         await page.Locator("[data-testid='run']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);
+
+        await ParkCaretOnAMemberAsync(page);
         await SettleScrollbarsAsync(page);
 
         await Verify(page)
@@ -249,6 +252,40 @@ public class UiScreenshotTests :
                     FullPage = true
                 },
                 screenshotOnly: true);
+    }
+
+    // The completion pills are the ones for the caret, and a caret left at the end of a finished query
+    // completes to the keywords that may follow an expression — true, but nothing a reader learns the
+    // schema from. Parked just past the "_." of the Where instead, so a capture shows the Employee
+    // members: the same list the IntelliSense capture shows. The position is found by searching the model
+    // for the text rather than written as a line/column pair, because these queries are laid out for the
+    // width they are captured at — reflowing one would otherwise move the caret somewhere meaningless and
+    // quietly degrade the image rather than fail. The caret itself is only painted while the editor has
+    // focus, which it does not have in these captures, so this changes the list without putting a blinking
+    // cursor in the image. Waits on the list rather than on a timer: the refresh is debounced and then
+    // costs a Roslyn pass, so a fixed sleep would be either flaky or slow.
+    static async Task ParkCaretOnAMemberAsync(IPage page)
+    {
+        await page.EvaluateAsync(
+            """
+            () => {
+                const editor = monaco.editor.getEditors()[0];
+                const model = editor.getModel();
+                const match = model.findMatches('_.Active', true, false, true, null, false)[0];
+                editor.setPosition({
+                    lineNumber: match.range.startLineNumber,
+                    column: match.range.startColumn + 2
+                });
+            }
+            """);
+
+        await page.WaitForFunctionAsync(
+            "() => Array.from(document.querySelectorAll(\"[data-testid='completions'] li\")).some(li => li.textContent === 'ManagerId')",
+            null,
+            new()
+            {
+                Timeout = 30_000
+            });
     }
 
     // Monaco fades a scrollbar out once whatever it belongs to stops being touched — the editor's after

@@ -72,7 +72,8 @@
 
 <div class="editor-card">
     <StandaloneCodeEditor @ref="editor" Id="scry-editor" CssClass="scry-editor" ConstructionOptions="EditorOptions"
-                          OnDidInit="OnEditorInit" OnDidChangeModelContent="OnContentChanged" />
+                          OnDidInit="OnEditorInit" OnDidChangeModelContent="OnContentChanged"
+                          OnDidChangeCursorPosition="OnCursorPositionChanged" />
     <div class="actions">
         <button class="btn btn-primary" data-testid="run" @onclick="Run" disabled="@(introspection is null)"
                 title="Translate the query to a wire request and run it against the server (Ctrl+Enter).">
@@ -80,8 +81,8 @@
                 <path d="M8 5v14l11-7z" />
             </svg>Run
         </button>
-        <button class="btn" data-testid="complete" @onclick="Complete" disabled="@(workspace is null)"
-                title="Lists every C# completion available at the end of the query text — the same Roslyn engine as the inline IntelliSense dropdown, shown here as a list. Ignores the cursor position.">Complete at end</button>
+        <button class="btn" data-testid="complete" @onclick="() => Complete()" disabled="@(workspace is null)"
+                title="Lists every C# completion available at the cursor — the same Roslyn engine as the inline IntelliSense dropdown, shown here as a list. The list follows the cursor on its own; this asks for it now.">Complete at cursor</button>
         @if (introspection?.SqlPreview == true)
         {
             <button class="btn" data-testid="sql-preview" @onclick="ShowSql"
@@ -210,7 +211,11 @@
     <ul data-testid="completions">
         @foreach (var item in completions)
         {
-            <li>@item</li>
+            @* Each pill types itself into the editor, so the list is a way into the schema and not only a view of it. *@
+            <li>
+                <button type="button" @onclick="() => Insert(item)"
+                        title="Insert @item into the query at the cursor.">@item</button>
+            </li>
         }
     </ul>
 }
