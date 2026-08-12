@@ -61,9 +61,19 @@
     <p class="error" role="alert" data-testid="error">@error</p>
 }
 
+@*
+    Query on the left, everything the query produced on the right — but only once the viewport is wide
+    enough for two columns to each hold a line of LINQ unwrapped. Below that breakpoint the two sections
+    are plain blocks and the page reads top to bottom, so the split lives entirely in app.css.
+*@
+<div class="workspace">
+
+<section class="pane-query">
+
 <div class="editor-card">
     <StandaloneCodeEditor @ref="editor" Id="scry-editor" CssClass="scry-editor" ConstructionOptions="EditorOptions"
-                          OnDidInit="OnEditorInit" OnDidChangeModelContent="OnContentChanged" />
+                          OnDidInit="OnEditorInit" OnDidChangeModelContent="OnContentChanged"
+                          OnDidChangeCursorPosition="OnCursorPositionChanged" />
     <div class="actions">
         <button class="btn btn-primary" data-testid="run" @onclick="Run" disabled="@(introspection is null)"
                 title="Translate the query to a wire request and run it against the server (Ctrl+Enter).">
@@ -71,8 +81,8 @@
                 <path d="M8 5v14l11-7z" />
             </svg>Run
         </button>
-        <button class="btn" data-testid="complete" @onclick="Complete" disabled="@(workspace is null)"
-                title="Lists every C# completion available at the end of the query text — the same Roslyn engine as the inline IntelliSense dropdown, shown here as a list. Ignores the cursor position.">Complete at end</button>
+        <button class="btn" data-testid="complete" @onclick="() => Complete()" disabled="@(workspace is null)"
+                title="Lists every C# completion available at the cursor — the same Roslyn engine as the inline IntelliSense dropdown, shown here as a list. The list follows the cursor on its own; this asks for it now.">Complete at cursor</button>
         @if (introspection?.SqlPreview == true)
         {
             <button class="btn" data-testid="sql-preview" @onclick="ShowSql"
@@ -87,6 +97,26 @@
     </div>
 </div>
 
+@*
+    The completions belong to the editor above them rather than to the output: they describe the caret,
+    they are what typing into that editor changes, and clicking one types into it. So they sit with the
+    query in both layouts — directly under it, and above the history, which is the older thing.
+*@
+@if (completions is not null)
+{
+    <h3>Completions</h3>
+    <ul data-testid="completions">
+        @foreach (var item in completions)
+        {
+            @* Each pill types itself into the editor, so the list is a way into the schema and not only a view of it. *@
+            <li>
+                <button type="button" @onclick="() => Insert(item)"
+                        title="Insert @item into the query at the cursor.">@item</button>
+            </li>
+        }
+    </ul>
+}
+
 @if (history.Count > 0)
 {
     <h3>History</h3>
@@ -97,6 +127,10 @@
         }
     </ul>
 }
+
+</section>
+
+<section class="pane-output">
 
 @if (wireJson is not null)
 {
@@ -137,6 +171,12 @@
             </p>
         }
     </div>
+    @*
+        A table is as wide as its widest row wants to be, and in a column half the page wide that is
+        routinely wider than the column. It scrolls inside this element rather than pushing a horizontal
+        scrollbar onto the whole page.
+    *@
+    <div class="table-scroll">
     <table data-testid="result-table">
         <thead>
             <tr>
@@ -167,6 +207,7 @@
         }
         </tbody>
     </table>
+    </div>
 }
 
 @if (scalarResult is not null)
@@ -184,15 +225,8 @@
     <pre data-testid="result">@Highlight.Json(resultJson)</pre>
 }
 
-@if (completions is not null)
-{
-    <h3>Completions</h3>
-    <ul data-testid="completions">
-        @foreach (var item in completions)
-        {
-            <li>@item</li>
-        }
-    </ul>
-}
+</section>
+
+</div>
 
 </main>

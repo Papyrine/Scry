@@ -14,7 +14,8 @@ static class RowPolicy
     public static Type EntityType(Type policyType)
     {
         var filtered = policyType.GetInterfaces()
-            .Where(_ => _.IsGenericType && _.GetGenericTypeDefinition() == typeof(IReturnablePolicy<>))
+            .Where(_ => _.IsGenericType &&
+                        _.GetGenericTypeDefinition() == typeof(IReturnablePolicy<>))
             .Select(_ => _.GenericTypeArguments[0])
             .ToList();
 
