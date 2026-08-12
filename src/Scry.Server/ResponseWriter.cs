@@ -12,6 +12,10 @@ static class ResponseWriter
     static readonly JsonEncodedText payload = JsonEncodedText.Encode("payload");
     static readonly JsonEncodedText stamp = JsonEncodedText.Encode("stamp");
     static readonly JsonEncodedText list = JsonEncodedText.Encode(nameof(ResultKind.List));
+    static readonly JsonEncodedText page = JsonEncodedText.Encode(nameof(ResultKind.Page));
+    static readonly JsonEncodedText items = JsonEncodedText.Encode("items");
+    static readonly JsonEncodedText hasMore = JsonEncodedText.Encode("hasMore");
+    static readonly JsonEncodedText cursor = JsonEncodedText.Encode("cursor");
 
     /// <summary>Writes the whole list envelope — version, kind, rows, stamp — returning the row count.</summary>
     public static int WriteList(IBufferWriter<byte> output, QueryExecutor.RowSet set, string schemaStamp)
@@ -36,6 +40,48 @@ static class ResponseWriter
         json.WriteEndObject();
         json.Flush();
         return rows;
+    }
+
+    /// <summary>
+    /// Writes the whole page envelope — the same header a list carries, then the
+    /// <see cref="ScryPage{T}"/> shape around the rows — returning the row count.
+    /// </summary>
+    /// <remarks>
+    /// The member order and the omitted null cursor are <see cref="ScryPage{T}"/>'s own, as
+    /// <c>ScryJson.Options</c> renders it: <c>items</c>, <c>hasMore</c>, then <c>cursor</c> only when
+    /// there is one (<c>DefaultIgnoreCondition</c> is <c>WhenWritingNull</c>). The rows themselves go
+    /// through the same shape writer a list's do, so a page and a list of the same projection are
+    /// written by the same code.
+    /// </remarks>
+    public static int WritePage(IBufferWriter<byte> output, QueryExecutor.PageSet set, string schemaStamp)
+    {
+        using var json = new Utf8JsonWriter(output);
+        json.WriteStartObject();
+        json.WriteNumber(version, WireFormat.Version);
+        json.WriteString(kind, page);
+        json.WritePropertyName(payload);
+        json.WriteStartObject();
+        json.WritePropertyName(items);
+        json.WriteStartArray();
+
+        var writer = set.Plan.Writer;
+        foreach (var row in set.Rows)
+        {
+            writer.WriteRow(json, row, set.Binary);
+        }
+
+        json.WriteEndArray();
+        json.WriteBoolean(hasMore, set.HasMore);
+        if (set.Cursor is { } resume)
+        {
+            json.WriteString(cursor, resume);
+        }
+
+        json.WriteEndObject();
+        json.WriteString(stamp, schemaStamp);
+        json.WriteEndObject();
+        json.Flush();
+        return set.Rows.Count;
     }
 
     public static object[] Row(object row, QueryExecutor.RowSet set) =>

@@ -154,6 +154,30 @@ public class FastWriterGoldenTests
                 {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}},
               {"$type":"page","size":2}]}
             """);
+        // The page above has a further page and so mints a cursor. This one asks for more rows than
+        // exist, so there is nothing to resume from and the cursor is omitted rather than written as
+        // null — the writer's other branch, and a different set of bytes.
+        yield return new TestCaseData(
+            "page envelope with no further page",
+            """
+            {"version":1,"root":"Employee","pipeline":[
+              {"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},
+              {"$type":"select","projection":{"members":[
+                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}},
+              {"$type":"page","size":100}]}
+            """);
+        // A poco source is never seek-safe, so a page of one carries no cursor even when a further
+        // page exists — the same omission arrived at down a different path.
+        yield return new TestCaseData(
+            "page envelope over a poco source",
+            """
+            {"version":1,"root":"Holiday","pipeline":[
+              {"$type":"orderBy","key":{"$type":"member","path":["Date"]},"descending":false},
+              {"$type":"select","projection":{"members":[
+                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},
+                {"name":"Date","value":{"$type":"node","node":{"$type":"member","path":["Date"]}}}]}},
+              {"$type":"page","size":2}]}
+            """);
         yield return new TestCaseData(
             "grouped aggregates",
             """

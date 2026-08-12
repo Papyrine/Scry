@@ -11,6 +11,10 @@
          tree's own src/key.snk, which Scry.Explorer.Core is signed with — a friend of a strong-named
          assembly has to be named by key, not by name alone. -->
     <InternalsVisibleTo Include="Scry.Explorer.Core" Key="$(ScryPublicKey)" />
+    <!-- The ndjson line reader hands back memory into its own buffer, so what it does across a refill,
+         at a line longer than that buffer, and at a stream that ends without a newline is worth testing
+         directly rather than only through a stream that happens to produce those. -->
+    <InternalsVisibleTo Include="Scry.Tests" Key="$(ScryPublicKey)" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Polyfill" PrivateAssets="all" />
     <PackageReference Include="ProjectDefaults" PrivateAssets="all" />

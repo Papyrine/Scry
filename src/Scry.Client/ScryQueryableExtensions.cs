@@ -102,17 +102,17 @@ public static class ScryQueryableExtensions
         var client = provider.Client;
         await foreach (var row in client.StreamAsync(source.ToScryRequest(), provider.Call, cancel).WithCancellation(cancel))
         {
-            yield return AttachmentBinder.BindRow(MaterializeRow<T>(source, row, client), plan, client)!;
+            yield return AttachmentBinder.BindRow(MaterializeRow<T>(source, row), plan, client)!;
         }
     }
 
     // Mirrors Materialize: a row that will not read into the client's model is drift when the stamps
     // already disagree, and a real bug when they do not.
-    static T MaterializeRow<T>(IQueryable source, JsonElement row, ScryClient client)
+    static T MaterializeRow<T>(IQueryable source, StreamedRow row)
     {
         try
         {
-            return ScryJson.DeserializeRow<T>(row, client.StreamAliases, client.StreamParts)!;
+            return row.Materialize<T>()!;
         }
         catch (JsonException exception)
             when (source.Provider is QueryProvider {Client.SchemaStale: true})

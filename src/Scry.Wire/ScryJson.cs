@@ -68,6 +68,15 @@ public static class ScryJson
         BinaryPartScope.Current = response.BinaryParts;
         try
         {
+            // Read from the bytes the transport kept, when it kept them: the payload is parsed once,
+            // straight into T. Going through Payload instead means parsing it into a document, writing
+            // that document back out to a buffer, and parsing the buffer — for a document that exists
+            // only to be spent here.
+            if (!response.RawPayload.IsEmpty)
+            {
+                return JsonSerializer.Deserialize<T>(response.RawPayload.Span, Options);
+            }
+
             return response.Payload.Deserialize<T>(Options);
         }
         finally
@@ -90,6 +99,27 @@ public static class ScryJson
         try
         {
             return row.Deserialize<T>(Options);
+        }
+        finally
+        {
+            EnumAliasScope.Current = null;
+            BinaryPartScope.Current = null;
+        }
+    }
+
+    /// <summary>
+    /// Reads one row of a streamed result from the UTF-8 line it arrived as. The same as the
+    /// <see cref="JsonElement"/> overload in every respect but what it starts from — a transport
+    /// holding the line's bytes has no reason to build a document out of them first, only for the row
+    /// to be written back out and re-read.
+    /// </summary>
+    public static T? DeserializeRow<T>(ReadOnlySpan<byte> row, IReadOnlyList<EnumAlias>? aliases, IReadOnlyList<byte[]>? parts = null)
+    {
+        EnumAliasScope.Current = aliases ?? [];
+        BinaryPartScope.Current = parts;
+        try
+        {
+            return JsonSerializer.Deserialize<T>(row, Options);
         }
         finally
         {
@@ -175,6 +205,11 @@ public static class ScryJson
         line.Deserialize(markerInfo) ??
         throw new ScryWireException("Stream marker deserialized to null.");
 
+    /// <summary>Reads a marker from the UTF-8 line it arrived as.</summary>
+    public static ScryStreamMarker DeserializeMarker(ReadOnlySpan<byte> line) =>
+        JsonSerializer.Deserialize(line, markerInfo) ??
+        throw new ScryWireException("Stream marker deserialized to null.");
+
     /// <summary>
     /// Reads a non-success response body, or null when it is not one. A failed request is usually
     /// answered with the endpoint's own <see cref="ScryError"/>, but may be answered by anything once a
@@ -193,31 +228,117 @@ public static class ScryJson
         }
     }
 
-    public static QueryBatchResponse DeserializeBatchResponse([StringSyntax(StringSyntaxAttribute.Json)] string json)
+    /// <summary>Reads a non-success response body from the UTF-8 it arrived as, or null when it is not one.</summary>
+    public static ScryError? TryDeserializeError(ReadOnlySpan<byte> utf8)
     {
-        var response = Deserialize(json, batchResponseInfo, "batch response");
-        // The same gate DeserializeResponse applies: a batch shaped by a newer wire format than this
-        // client understands is refused rather than misread.
-        if (response.Version <= WireFormat.Version)
+        try
         {
-            return response;
+            return JsonSerializer.Deserialize(utf8, errorInfo);
         }
-
-        throw new ScryWireException($"Unsupported response wire version {response.Version}; this client supports up to {WireFormat.Version}. The server is newer than the client.");
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
-    public static QueryResponse DeserializeResponse([StringSyntax(StringSyntaxAttribute.Json)] string json)
+    public static QueryBatchResponse DeserializeBatchResponse([StringSyntax(StringSyntaxAttribute.Json)] string json) =>
+        Versioned(Deserialize(json, batchResponseInfo, "batch response"));
+
+    /// <summary>
+    /// Reads a batch response from the UTF-8 it arrived as, keeping each entry's payload bytes for
+    /// <see cref="DeserializePayload{T}"/> — see the single-response overload for what that saves.
+    /// </summary>
+    public static QueryBatchResponse DeserializeBatchResponse(ReadOnlyMemory<byte> utf8)
     {
-        var response = Deserialize(json, responseInfo, "response");
-        // Mirror the server's request-version gate (QueryValidator): reject a response stamped with a
-        // newer wire format than this client understands rather than misreading a payload shaped by a
-        // format it was not built against.
-        if (response.Version <= WireFormat.Version)
+        var (response, ranges) = ReadEnvelope(utf8, batchResponseInfo, "batch response");
+        Versioned(response);
+        if (ranges.Count == 0)
         {
             return response;
         }
 
-        throw new ScryWireException($"Unsupported response wire version {response.Version}; this client supports up to {WireFormat.Version}. The server is newer than the client.");
+        // JSON is read front to back and only an entry that succeeded has a payload to step over, so
+        // the ranges line up with the entries carrying a response, in order.
+        var results = new List<QueryBatchResult>(response.Results.Count);
+        var next = 0;
+        foreach (var result in response.Results)
+        {
+            if (result.Response is { } entry &&
+                next < ranges.Count)
+            {
+                results.Add(result with {Response = entry with {RawPayload = Slice(utf8, ranges[next++])}});
+            }
+            else
+            {
+                results.Add(result);
+            }
+        }
+
+        return response with {Results = results};
+    }
+
+    public static QueryResponse DeserializeResponse([StringSyntax(StringSyntaxAttribute.Json)] string json) =>
+        Versioned(Deserialize(json, responseInfo, "response"));
+
+    /// <summary>
+    /// Reads a response from the UTF-8 it arrived as, keeping the payload's bytes on the response
+    /// rather than parsing them into a document. <see cref="DeserializePayload{T}"/> then reads the
+    /// result out of them once, which is what a list or page result wants; a payload something asks
+    /// <see cref="QueryResponse.Payload"/> for is parsed then, on first read.
+    /// </summary>
+    /// <remarks>
+    /// The memory is held by the returned response, so it must not be written to afterwards — the
+    /// transports pass a buffer they have just read and do not reuse.
+    /// </remarks>
+    public static QueryResponse DeserializeResponse(ReadOnlyMemory<byte> utf8)
+    {
+        var (response, ranges) = ReadEnvelope(utf8, responseInfo, "response");
+        Versioned(response);
+        if (ranges.Count == 1)
+        {
+            return response with {RawPayload = Slice(utf8, ranges[0])};
+        }
+
+        return response;
+    }
+
+    // Mirror the server's request-version gate (QueryValidator): reject a response stamped with a
+    // newer wire format than this client understands rather than misreading a payload shaped by a
+    // format it was not built against.
+    static QueryResponse Versioned(QueryResponse response) =>
+        response.Version <= WireFormat.Version
+            ? response
+            : throw Unsupported(response.Version);
+
+    static QueryBatchResponse Versioned(QueryBatchResponse response) =>
+        response.Version <= WireFormat.Version
+            ? response
+            : throw Unsupported(response.Version);
+
+    static ScryWireException Unsupported(int version) =>
+        new($"Unsupported response wire version {version}; this client supports up to {WireFormat.Version}. The server is newer than the client.");
+
+    static ReadOnlyMemory<byte> Slice(ReadOnlyMemory<byte> utf8, (int Start, int End) range) =>
+        utf8[range.Start..range.End];
+
+    // Reads an envelope while stepping over the payloads inside it, returning where each one sat.
+    static (T Value, List<(int Start, int End)> Ranges) ReadEnvelope<T>(
+        ReadOnlyMemory<byte> utf8,
+        JsonTypeInfo<T> info,
+        string what)
+    {
+        PayloadRangeScope.Begin();
+        try
+        {
+            var value = Deserialize(utf8.Span, info, what);
+            return (value, PayloadRangeScope.End());
+        }
+        finally
+        {
+            // Ends the scope on the throwing paths. Idempotent, so the success path above has already
+            // taken the ranges and this does nothing.
+            PayloadRangeScope.End();
+        }
     }
 
     static T Deserialize<T>([StringSyntax(StringSyntaxAttribute.Json)] string json, JsonTypeInfo<T> info, string what)

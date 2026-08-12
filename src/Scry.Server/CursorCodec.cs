@@ -17,8 +17,9 @@ static class CursorCodec
     {
         var payload = new Payload([.. keys.Select(_ => new CursorValue(_.Value, _.Tag))], order);
         var json = JsonSerializer.SerializeToUtf8Bytes(payload, ScryJson.Options);
-        var mac = HMACSHA256.HashData(signingKey, json);
-        return $"{Base64Url(json)}.{Base64Url(mac)}";
+        Span<byte> mac = stackalloc byte[HMACSHA256.HashSizeInBytes];
+        HMACSHA256.HashData(signingKey, json, mac);
+        return $"{Base64Url.EncodeToString(json)}.{Base64Url.EncodeToString(mac)}";
     }
 
     /// <summary>
@@ -55,10 +56,31 @@ static class CursorCodec
             builder.Append(descending ? " desc\n" : " asc\n");
         }
 
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(builder.ToString()));
-        // 96 bits, matching the schema stamp's reasoning: compared pairwise rather than searched, so
-        // the birthday bound does not apply, and 12 divides by 3 so the base64 needs no padding.
-        return Base64Url(hash[..12]);
+        // Encoded into a stack buffer rather than a byte[] of its own: the canonical form is a source
+        // name and a handful of member paths, so it comfortably fits one, and a rented array covers
+        // the pathological case rather than the common one paying for it.
+        var canonical = builder.ToString();
+        var maximum = Encoding.UTF8.GetMaxByteCount(canonical.Length);
+        byte[]? rented = null;
+        var utf8 = maximum <= 512
+            ? stackalloc byte[512]
+            : (rented = ArrayPool<byte>.Shared.Rent(maximum));
+        try
+        {
+            var written = Encoding.UTF8.GetBytes(canonical, utf8);
+            Span<byte> hash = stackalloc byte[SHA256.HashSizeInBytes];
+            SHA256.HashData(utf8[..written], hash);
+            // 96 bits, matching the schema stamp's reasoning: compared pairwise rather than searched,
+            // so the birthday bound does not apply, and 12 divides by 3 so the base64 needs no padding.
+            return Base64Url.EncodeToString(hash[..12]);
+        }
+        finally
+        {
+            if (rented is not null)
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
     }
 
     public static (IReadOnlyList<ConstNode> Values, string Order) Decode(string cursor, byte[] signingKey)
@@ -74,15 +96,16 @@ static class CursorCodec
         byte[] mac;
         try
         {
-            json = FromBase64Url(cursor[..dot]);
-            mac = FromBase64Url(cursor[(dot + 1)..]);
+            json = Base64Url.DecodeFromChars(cursor.AsSpan(0, dot));
+            mac = Base64Url.DecodeFromChars(cursor.AsSpan(dot + 1));
         }
         catch (FormatException)
         {
             throw Reject();
         }
 
-        var expected = HMACSHA256.HashData(signingKey, json);
+        Span<byte> expected = stackalloc byte[HMACSHA256.HashSizeInBytes];
+        HMACSHA256.HashData(signingKey, json, expected);
         if (!CryptographicOperations.FixedTimeEquals(mac, expected))
         {
             throw Reject();
@@ -138,21 +161,4 @@ static class CursorCodec
 
     static ScryValidationException Reject() =>
         new("Invalid paging cursor.");
-
-    static string Base64Url(byte[] bytes) =>
-        Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-
-    static byte[] FromBase64Url(string text)
-    {
-        var padded = text.Replace('-', '+').Replace('_', '/');
-        padded = (padded.Length % 4) switch
-        {
-            2 => padded + "==",
-            3 => padded + "=",
-            0 => padded,
-            _ => throw new FormatException("Invalid base64url length.")
-        };
-
-        return Convert.FromBase64String(padded);
-    }
 }

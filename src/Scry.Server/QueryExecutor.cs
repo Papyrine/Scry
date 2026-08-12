@@ -17,12 +17,33 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         bool Deduplicated,
         BinaryPartCollector? Binary = null);
 
+    /// <summary>
+    /// A page's rows, already read, plus what the envelope around them says. Read rather than unread
+    /// because a page is bounded and its extra row has to be fetched to know whether a further page
+    /// exists — so unlike a <see cref="RowSet"/> there is nothing left to defer.
+    /// </summary>
+    internal readonly record struct PageSet(
+        IReadOnlyList<object[]> Rows,
+        ProjectionPlan Plan,
+        bool HasMore,
+        string? Cursor,
+        BinaryPartCollector? Binary = null);
+
     public QueryResponse Execute(QueryRequest request, DbContext db, CallScope scope)
     {
-        var (response, rows) = Run(request, db, scope);
+        var (response, rows) = Run(request, db, scope, out var page);
         if (response is { } complete)
         {
             return complete;
+        }
+
+        if (page is { } paged)
+        {
+            var envelope = new ScryPage<Dictionary<string, object?>>(
+                [.. paged.Rows.Select(_ => Shape(_, paged.Plan, paged.Binary))],
+                paged.HasMore,
+                paged.Cursor);
+            return QueryResponse.Create(ResultKind.Page, JsonSerializer.SerializeToElement(envelope, ScryJson.Options));
         }
 
         var shaped = new List<Dictionary<string, object?>>();
@@ -35,11 +56,11 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     }
 
     /// <summary>
-    /// Executes like <see cref="Execute"/>, but a list result is written straight into
-    /// <paramref name="output"/> as the complete response envelope — rows never pass through
-    /// dictionaries or a <see cref="JsonElement"/>. A terminal-shaped result comes back as the
-    /// ordinary <see cref="QueryResponse"/> instead (with <paramref name="rows"/> = -1), for the
-    /// caller to serialize the general way.
+    /// Executes like <see cref="Execute"/>, but a result that is rows — a list, or a page of them — is
+    /// written straight into <paramref name="output"/> as the complete response envelope, never
+    /// passing through dictionaries or a <see cref="JsonElement"/>. A terminal-shaped result comes
+    /// back as the ordinary <see cref="QueryResponse"/> instead (with <paramref name="rows"/> = -1),
+    /// for the caller to serialize the general way.
     /// </summary>
     public QueryResponse? ExecuteBuffered(
         QueryRequest request,
@@ -47,15 +68,25 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         CallScope scope,
         string stamp,
         IBufferWriter<byte> output,
+        out ResultKind kind,
         out int rows)
     {
-        var (response, set) = Run(request, db, scope);
+        var (response, set) = Run(request, db, scope, out var page);
         if (response is { } complete)
         {
+            kind = complete.Kind;
             rows = -1;
             return complete;
         }
 
+        if (page is { } paged)
+        {
+            kind = ResultKind.Page;
+            rows = ResponseWriter.WritePage(output, paged, stamp);
+            return null;
+        }
+
+        kind = ResultKind.List;
         rows = ResponseWriter.WriteList(output, set!.Value, stamp);
         return null;
     }
@@ -68,11 +99,14 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// </summary>
     public RowSet Stream(QueryRequest request, DbContext db, CallScope scope)
     {
-        var (response, rows) = Run(request, db, scope);
+        var (response, rows) = Run(request, db, scope, out var page);
         if (rows is not { } set)
         {
+            // A page is bounded and answered whole, so it is as unstreamable as a folding terminal and
+            // says so the same way.
+            var kind = page is null ? response!.Kind : ResultKind.Page;
             throw new ScryValidationException(
-                $"Only a query that returns rows can be streamed; this one returns {response!.Kind}. Drop the terminal operator, or use the non-streaming endpoint.");
+                $"Only a query that returns rows can be streamed; this one returns {kind}. Drop the terminal operator, or use the non-streaming endpoint.");
         }
 
         return set;
@@ -127,7 +161,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// </summary>
     public RowSet Build(QueryRequest request, DbContext db, CallScope scope)
     {
-        var (_, rows) = Run(request, db, scope, buildOnly: true);
+        var (_, rows) = Run(request, db, scope, out _, buildOnly: true);
         if (rows is { } set)
         {
             return set;
@@ -136,10 +170,17 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         throw new ScryValidationException("The query produced no rows to read SQL from.");
     }
 
-    // Walks the pipeline once and either produces a finished response — every terminal does — or the
-    // unread rows of a list result, which the caller materializes or streams.
-    (QueryResponse? Response, RowSet? Rows) Run(QueryRequest request, DbContext db, CallScope scope, bool buildOnly = false)
+    // Walks the pipeline once and produces exactly one of three things: a finished response — every
+    // folding terminal does — the unread rows of a list result, which the caller materializes or
+    // streams, or the read rows of a page and what the envelope around them says.
+    (QueryResponse? Response, RowSet? Rows) Run(
+        QueryRequest request,
+        DbContext db,
+        CallScope scope,
+        out PageSet? page,
+        bool buildOnly = false)
     {
+        page = null;
         var source = validator.Validate(request);
         var elementType = source.ClrType;
 
@@ -294,9 +335,10 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             query = Apply(query, "Where", builder.BuildPredicate(predicate, elementType));
         }
 
-        if (terminal is PageOp page)
+        if (terminal is PageOp paging)
         {
-            return (Page(builder, query, elementType, select, orderings, tailIsOrdered && !sawSkipOrTake, page, source, db, scope.Binary), null);
+            page = Page(builder, query, elementType, select, orderings, tailIsOrdered && !sawSkipOrTake, paging, source, db, scope.Binary);
+            return (null, null);
         }
 
         // A join projects straight to the shaped row, so it replaces the projection step entirely and
@@ -893,7 +935,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             _ => throw new($"Unknown row method '{method}'.")
         };
 
-    QueryResponse Page(
+    PageSet Page(
         ExpressionBuilder builder,
         IQueryable query,
         Type elementType,
@@ -961,10 +1003,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             rows.RemoveRange(size, rows.Count - size);
         }
 
-        var items = rows.Select(_ => Shape(_, plan, binary)).ToArray();
-
         // The next cursor is the ordering-key tuple of the last returned row — omitted on the last page
-        // (nothing more to resume) and when the query is not seek-safe (offset paging only).
+        // (nothing more to resume) and when the query is not seek-safe (offset paging only). Read off
+        // the rows before they are shaped, since the key columns sit past the projected ones.
         string? cursor = null;
         if (seekSafe &&
             hasMore &&
@@ -980,8 +1021,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             cursor = CursorCodec.Encode(keyValues, order!, SigningKey());
         }
 
-        var envelope = new ScryPage<Dictionary<string, object?>>(items, hasMore, cursor);
-        return QueryResponse.Create(ResultKind.Page, JsonSerializer.SerializeToElement(envelope, ScryJson.Options));
+        return new(rows, plan, hasMore, cursor, binary);
     }
 
     // Decides whether a page can be resumed by a keyset cursor and, if so, the total ordering to seek

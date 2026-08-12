@@ -7,7 +7,7 @@
 public sealed class ScryClient
 {
     readonly Func<QueryRequest, ScryCall?, Cancel, Task<QueryResponse>> transport;
-    readonly Func<QueryRequest, ScryCall?, Cancel, IAsyncEnumerable<JsonElement>>? streamTransport;
+    readonly Func<QueryRequest, ScryCall?, Cancel, IAsyncEnumerable<StreamedRow>>? streamTransport;
     readonly Func<QueryBatchRequest, Cancel, Task<QueryBatchResponse>>? batchTransport;
     readonly Func<AttachmentRequest, Cancel, Task<Stream?>>? attachmentTransport;
 
@@ -39,8 +39,20 @@ public sealed class ScryClient
             : (request, call, cancel) =>
             {
                 RefuseHeaders(call);
-                return streamTransport(request, cancel);
+                return Adapt(streamTransport(request, cancel), cancel);
             };
+    }
+
+    // A supplied transport yields rows already parsed and consumes no markers of its own, so its rows
+    // carry neither aliases nor binary parts — exactly what they carried before rows began holding them.
+    static async IAsyncEnumerable<StreamedRow> Adapt(
+        IAsyncEnumerable<JsonElement> rows,
+        [EnumeratorCancellation] Cancel cancel)
+    {
+        await foreach (var row in rows.WithCancellation(cancel))
+        {
+            yield return StreamedRow.FromElement(row);
+        }
     }
 
     // The HTTP transport is an instance method so each response can record the server's advertised
@@ -206,7 +218,7 @@ public sealed class ScryClient
         SchemaStaleDetected?.Invoke(new(SchemaStamp!, ServerSchemaStamp!));
     }
 
-    internal IAsyncEnumerable<JsonElement> StreamAsync(QueryRequest request, ScryCall? call, Cancel cancel)
+    internal IAsyncEnumerable<StreamedRow> StreamAsync(QueryRequest request, ScryCall? call, Cancel cancel)
     {
         if (streamTransport is { } stream)
         {
@@ -225,7 +237,7 @@ public sealed class ScryClient
     /// consumed here rather than surfaced: the opening one records the server's stamp and its enum
     /// aliases, and the closing one decides whether the rows that arrived are the whole result.
     /// </summary>
-    async IAsyncEnumerable<JsonElement> StreamAsync(
+    async IAsyncEnumerable<StreamedRow> StreamAsync(
         HttpClient http,
         string endpoint,
         QueryRequest request,
@@ -252,18 +264,19 @@ public sealed class ScryClient
 
         if (!response.IsSuccessStatusCode)
         {
-            var body = await response.Content.ReadAsStringAsync(cancel);
+            var body = await response.Content.ReadAsByteArrayAsync(cancel);
             if (ScryJson.TryDeserializeError(body) is { StaleClient: true, Error.Length: > 0 } error)
             {
                 throw new ScryStaleClientException(error.Error);
             }
 
-            throw new ScryRequestException((int) response.StatusCode, body);
+            throw new ScryRequestException((int) response.StatusCode, Encoding.UTF8.GetString(body));
         }
 
         await using var responseStream = await response.Content.ReadAsStreamAsync(cancel);
 
         var ended = false;
+        IReadOnlyList<EnumAlias>? aliases = null;
 
         // A multipart stream alternates ndjson-line sections with sections carrying the next row's
         // binary parts; a plain stream is one run of lines. The parts accumulated since the last row
@@ -280,7 +293,7 @@ public sealed class ScryClient
                     continue;
                 }
 
-                using var lines = new StreamReader(section.Body);
+                using var lines = new NdjsonReader(section.Body);
                 while (await lines.ReadLineAsync(cancel) is { } line)
                 {
                     if (line.Length == 0)
@@ -288,23 +301,25 @@ public sealed class ScryClient
                         continue;
                     }
 
-                    var element = JsonSerializer.Deserialize<JsonElement>(line, ScryJson.Options);
-                    if (!element.TryGetProperty(ScryStream.MarkerProperty, out var kind))
+                    if (!IsMarker(line.Span))
                     {
-                        StreamParts = pending.Count > 0 ? pending.ToArray() : null;
-                        yield return element;
+                        yield return StreamedRow.FromUtf8(line) with
+                        {
+                            Aliases = aliases,
+                            Parts = pending.Count > 0 ? pending.ToArray() : null
+                        };
                         pending.Clear();
-                        StreamParts = null;
                         continue;
                     }
 
-                    ended |= HandleMarker(element, kind);
+                    (var closed, aliases) = HandleMarker(line.Span, aliases);
+                    ended |= closed;
                 }
             }
         }
         else
         {
-            using var reader = new StreamReader(responseStream);
+            using var reader = new NdjsonReader(responseStream);
             while (await reader.ReadLineAsync(cancel) is { } line)
             {
                 if (line.Length == 0)
@@ -312,14 +327,14 @@ public sealed class ScryClient
                     continue;
                 }
 
-                var element = JsonSerializer.Deserialize<JsonElement>(line, ScryJson.Options);
-                if (!element.TryGetProperty(ScryStream.MarkerProperty, out var kind))
+                if (!IsMarker(line.Span))
                 {
-                    yield return element;
+                    yield return StreamedRow.FromUtf8(line) with {Aliases = aliases};
                     continue;
                 }
 
-                ended |= HandleMarker(element, kind);
+                (var closed, aliases) = HandleMarker(line.Span, aliases);
+                ended |= closed;
             }
         }
 
@@ -332,13 +347,43 @@ public sealed class ScryClient
         }
     }
 
+    /// <summary>
+    /// Whether a line is one of the stream's own markers rather than a row. Reads only far enough to
+    /// answer — a row is not parsed here, since the caller materializes it into its own type.
+    /// </summary>
+    static bool IsMarker(ReadOnlySpan<byte> line)
+    {
+        var reader = new Utf8JsonReader(line);
+        if (!reader.Read() ||
+            reader.TokenType != JsonTokenType.StartObject)
+        {
+            return false;
+        }
+
+        while (reader.Read() &&
+               reader.TokenType == JsonTokenType.PropertyName)
+        {
+            if (reader.ValueTextEquals(ScryStream.MarkerProperty))
+            {
+                return true;
+            }
+
+            reader.Read();
+            reader.Skip();
+        }
+
+        return false;
+    }
+
     // The stream's own markers are consumed rather than surfaced: the opening one records the server's
     // stamp and its enum aliases, and the closing one decides whether the rows are the whole result.
-    // Returns true when the marker closes the stream.
-    bool HandleMarker(JsonElement element, JsonElement kind)
+    // Returns whether the marker closes the stream, and the aliases in force after it.
+    (bool Ended, IReadOnlyList<EnumAlias>? Aliases) HandleMarker(
+        ReadOnlySpan<byte> line,
+        IReadOnlyList<EnumAlias>? aliases)
     {
-        var marker = ScryJson.DeserializeMarker(element);
-        switch (kind.GetString())
+        var marker = ScryJson.DeserializeMarker(line);
+        switch (marker.Kind)
         {
             case ScryStream.Begin:
                 if (marker.Stamp is { } stamp)
@@ -346,31 +391,18 @@ public sealed class ScryClient
                     RecordServerStamp(stamp);
                 }
 
-                StreamAliases = marker.EnumAliases;
-                return false;
+                return (false, marker.EnumAliases);
 
             case ScryStream.End:
-                return true;
+                return (true, aliases);
 
             case ScryStream.Error:
                 throw new ScryWireException(
                     $"The server ended the stream early: {marker.Error ?? "no reason given"}");
         }
 
-        return false;
+        return (false, aliases);
     }
-
-    /// <summary>
-    /// The enum aliases the current stream opened with, so a row read mid-stream resolves a renamed
-    /// value the same way a single response's payload does.
-    /// </summary>
-    internal IReadOnlyList<EnumAlias>? StreamAliases { get; private set; }
-
-    /// <summary>
-    /// The binary parts belonging to the streamed row about to be materialized — set just before the
-    /// row is yielded and cleared after, mirroring how the row's own indices reset per line.
-    /// </summary>
-    internal IReadOnlyList<byte[]>? StreamParts { get; private set; }
 
     async Task<QueryResponse> PostAsync(
         HttpClient http,
@@ -409,7 +441,11 @@ public sealed class ScryClient
             return ScryJson.DeserializeResponse(envelope) with {BinaryParts = parts};
         }
 
-        var body = await response.Content.ReadAsStringAsync(cancel);
+        // Read as the UTF-8 it arrived as: the JSON reader wants those bytes, so decoding to a string
+        // first transcodes the whole response to UTF-16 only for the reader to transcode it back. The
+        // bytes are also what the response keeps, so the payload is parsed once, straight into the
+        // caller's type. Only a failure below needs text, and one is small.
+        var body = await response.Content.ReadAsByteArrayAsync(cancel);
         if (response.IsSuccessStatusCode)
         {
             return ScryJson.DeserializeResponse(body);
@@ -423,7 +459,7 @@ public sealed class ScryClient
             throw new ScryStaleClientException(error.Error);
         }
 
-        throw new ScryRequestException((int) response.StatusCode, body);
+        throw new ScryRequestException((int) response.StatusCode, Encoding.UTF8.GetString(body));
     }
 
     // Reached from ScryAttachment.OpenAsync, which a materialized row hands out; the transport is the
@@ -483,13 +519,13 @@ public sealed class ScryClient
                 return new AttachmentStream(body, response);
             }
 
-            var error = await response.Content.ReadAsStringAsync(cancel);
+            var error = await response.Content.ReadAsByteArrayAsync(cancel);
             if (ScryJson.TryDeserializeError(error) is {StaleClient: true, Error.Length: > 0} stale)
             {
                 throw new ScryStaleClientException(stale.Error);
             }
 
-            throw new ScryRequestException((int) response.StatusCode, error);
+            throw new ScryRequestException((int) response.StatusCode, Encoding.UTF8.GetString(error));
         }
         finally
         {
@@ -527,7 +563,7 @@ public sealed class ScryClient
             return ScryJson.DeserializeBatchResponse(envelope) with {BinaryParts = parts};
         }
 
-        var body = await response.Content.ReadAsStringAsync(cancel);
+        var body = await response.Content.ReadAsByteArrayAsync(cancel);
         if (response.IsSuccessStatusCode)
         {
             return ScryJson.DeserializeBatchResponse(body);
@@ -538,6 +574,6 @@ public sealed class ScryClient
             throw new ScryStaleClientException(error.Error);
         }
 
-        throw new ScryRequestException((int) response.StatusCode, body);
+        throw new ScryRequestException((int) response.StatusCode, Encoding.UTF8.GetString(body));
     }
 }

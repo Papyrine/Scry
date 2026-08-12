@@ -15,5 +15,8 @@
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <ProjectReference Include="..\src\Scry.Server\Scry.Server.csproj" />
     <ProjectReference Include="..\src\Scry.Annotations\Scry.Annotations.csproj" />
+    <!-- The client half of the wire is measured here too: reading a response and reading a streamed
+         row are the client's hot paths, and they are the counterpart of the writing measured above. -->
+    <ProjectReference Include="..\src\Scry.Client\Scry.Client.csproj" />
   </ItemGroup>
 </Project>

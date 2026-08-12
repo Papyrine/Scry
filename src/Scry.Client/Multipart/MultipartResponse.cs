@@ -33,7 +33,11 @@ static class MultipartResponse
     /// Reads a single/batch multipart body: binary parts in wire order, then the JSON envelope as the
     /// final section. Sections must be consumed in order — the reader is forward-only.
     /// </summary>
-    public static async Task<(string Envelope, IReadOnlyList<byte[]> Parts)> ReadAsync(
+    /// <remarks>
+    /// The envelope comes back as the UTF-8 it arrived as, for the reason the plain path reads bytes:
+    /// the JSON reader wants them, and the response keeps them so its payload is parsed once.
+    /// </remarks>
+    public static async Task<(ReadOnlyMemory<byte> Envelope, IReadOnlyList<byte[]> Parts)> ReadAsync(
         HttpResponseMessage response,
         string boundary,
         Cancel cancel)
@@ -41,7 +45,7 @@ static class MultipartResponse
         await using var body = await response.Content.ReadAsStreamAsync(cancel);
         var reader = new MultipartReader(boundary, body);
         var parts = new List<byte[]>();
-        string? envelope = null;
+        byte[]? envelope = null;
         while (await reader.ReadNextSectionAsync(cancel) is { } section)
         {
             if (IsBinary(section))
@@ -50,8 +54,7 @@ static class MultipartResponse
                 continue;
             }
 
-            using var text = new StreamReader(section.Body);
-            envelope = await text.ReadToEndAsync(cancel);
+            envelope = await ReadPartBytes(section, cancel);
         }
 
         if (envelope is null)

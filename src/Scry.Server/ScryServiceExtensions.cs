@@ -359,10 +359,10 @@ public static class ScryServiceExtensions
         {
             var db = (DbContext)services.GetRequiredService(options.ContextType);
 
-            // A list result is written straight from the projected rows — no dictionaries, no
+            // A list or page result is written straight from the projected rows — no dictionaries, no
             // JsonElement round trip. Everything else comes back as a QueryResponse and is
             // serialized the general way; the two produce identical bytes.
-            var buffer = new ArrayBufferWriter<byte>();
+            using var buffer = new PooledBufferWriter();
             var collector = new BinaryPartCollector();
             var buffered = processor.TryExecuteBuffered(
                 request,

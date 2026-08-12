@@ -239,7 +239,7 @@ public sealed class ScryProcessor
                 return false;
             }
 
-            if (executor.ExecuteBuffered(request, data, scope, schema.Stamp, output, out var rows) is { } complete)
+            if (executor.ExecuteBuffered(request, data, scope, schema.Stamp, output, out var kind, out var rows) is { } complete)
             {
                 fallback = complete with
                 {
@@ -249,7 +249,7 @@ public sealed class ScryProcessor
                 return false;
             }
 
-            recorder.Succeeded(ResultKind.List, rows);
+            recorder.Succeeded(kind, rows);
             fallback = null;
             return true;
         }
@@ -541,6 +541,8 @@ public sealed class ScryProcessor
 
     // One writer and one buffer serve the whole stream: each row overwrites the last, which is why
     // the yielded memory is only valid until the next pull — exactly how the transport consumes it.
+    // The buffer is pooled, so the memory is also only valid until the enumeration ends, which is the
+    // same moment by the time the transport has written the row out.
     static async IAsyncEnumerable<ReadOnlyMemory<byte>> Lines(
         QueryExecutor.RowSet rows,
         int? maxRows,
@@ -548,13 +550,13 @@ public sealed class ScryProcessor
         [EnumeratorCancellation] Cancel cancel)
     {
         var writer = rows.Plan.Writer;
-        var buffer = new ArrayBufferWriter<byte>();
+        var buffer = new PooledBufferWriter();
         Utf8JsonWriter? json = null;
         try
         {
             await foreach (var row in Raw(rows, maxRows, recorder, cancel))
             {
-                buffer.ResetWrittenCount();
+                buffer.Reset();
                 if (json is null)
                 {
                     json = new(buffer);
@@ -575,6 +577,8 @@ public sealed class ScryProcessor
             {
                 await json.DisposeAsync();
             }
+
+            buffer.Dispose();
         }
     }
 

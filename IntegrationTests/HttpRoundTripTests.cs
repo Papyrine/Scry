@@ -193,6 +193,56 @@ public class HttpRoundTripTests
         Assert.That(streamed, Is.EqualTo(listed.Select(_ => _.Name)));
     }
 
+    /// <summary>
+    /// Two streams read at once through one client. A client is registered per scope — which for a
+    /// WASM app is the whole app — so the state a row is read with (the stream's enum aliases, and the
+    /// binary parts belonging to that row) has to travel with the row rather than sit on the client,
+    /// where a second enumeration would overwrite the first's between its yield and its read.
+    /// </summary>
+    [Test]
+    public async Task ReadsTwoStreamsAtOnceThroughOneClient()
+    {
+        await using var employees = query.Employee
+            .Where(_ => _.Active)
+            .OrderBy(_ => _.Name)
+            .Select(_ => new NameRow(_.Name))
+            .ToAsyncEnumerable()
+            .GetAsyncEnumerator();
+
+        await using var departments = query.Department
+            .OrderBy(_ => _.Name)
+            .Select(_ => new NameRow(_.Name))
+            .ToAsyncEnumerable()
+            .GetAsyncEnumerator();
+
+        // Pulled alternately, so each row of one is read while the other stream is mid-flight.
+        var fromEmployees = new List<string>();
+        var fromDepartments = new List<string>();
+        bool more;
+        do
+        {
+            more = false;
+            if (await employees.MoveNextAsync())
+            {
+                fromEmployees.Add(employees.Current.Name);
+                more = true;
+            }
+
+            if (await departments.MoveNextAsync())
+            {
+                fromDepartments.Add(departments.Current.Name);
+                more = true;
+            }
+        }
+        while (more);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(fromEmployees, Is.EqualTo(activeEmployeeNames));
+            Assert.That(fromDepartments, Is.EqualTo(departmentNames));
+        });
+    }
+
     [Test]
     public void StreamingAQueryTheServerRejectsFailsBeforeAnyRowArrives()
     {

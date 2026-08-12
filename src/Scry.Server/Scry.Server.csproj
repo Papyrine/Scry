@@ -12,6 +12,12 @@
     <Compile Include="..\Shared\CSharpIdentifier.cs" Link="CSharpIdentifier.cs" />
   </ItemGroup>
   <ItemGroup>
+    <!-- The buffer writer, the multipart framing and the cursor codec are each exercised through the
+         endpoint by the tests above them, but their edge cases — a buffer grown past its rented size,
+         a cached part header, a cursor whose base64url carries the substituted characters — are worth
+         reaching directly rather than contriving a request that happens to hit them. Named by key for
+         the reason given on Scry.Client's friend. -->
+    <InternalsVisibleTo Include="Scry.Tests" Key="$(ScryPublicKey)" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Polyfill" PrivateAssets="all" />

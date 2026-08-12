@@ -32,7 +32,9 @@ public static class BinaryResponseReader
         }
 
         var (envelope, parts) = await MultipartResponse.ReadAsync(response, boundary, cancel);
-        return Inline(envelope, parts);
+        // The explorer's product is JSON text either way, so this is the one caller that does want the
+        // envelope as a string — the typed client keeps the bytes and parses them into its own model.
+        return Inline(Encoding.UTF8.GetString(envelope.Span), parts);
     }
 
     /// <summary>

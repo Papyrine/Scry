@@ -13,6 +13,18 @@ public static class Requests
                 Select("Id", "Name", "Region", "Grade", "Active", "Amount", "Ticks", "Created", "Score")
             ]);
 
+    /// <summary>
+    /// The same projection bounded as a page. A page is rows like a list is, so it is written the same
+    /// way; what it adds is the envelope around them.
+    /// </summary>
+    public static QueryRequest Page(int size) =>
+        QueryRequest.Create(
+            "MemRow",
+            [
+                Select("Id", "Name", "Region", "Grade", "Active", "Amount", "Ticks", "Created", "Score"),
+                new PageOp(size)
+            ]);
+
     static SelectOp Select(params string[] members) =>
         new(new([..members.Select(_ => new ProjectionMember(_, new NodeValue(new MemberNode([_]))))]));
 }
