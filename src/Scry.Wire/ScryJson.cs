@@ -113,6 +113,25 @@ public static class ScryJson
     public static string Serialize(QueryBatchRequest request) =>
         JsonSerializer.Serialize(request, batchRequestInfo);
 
+    // The serializer writes UTF-8 natively and a transport sends UTF-8, so the string overloads above
+    // transcode to UTF-16 only for the transport to transcode straight back. These skip both passes and
+    // the string that existed to be discarded — and hand the caller the exact bytes that go on the wire,
+    // which is what a caller fingerprinting a request wants to hash.
+    public static byte[] SerializeToUtf8(QueryRequest request) =>
+        JsonSerializer.SerializeToUtf8Bytes(request, requestInfo);
+
+    public static byte[] SerializeToUtf8(QueryResponse response) =>
+        JsonSerializer.SerializeToUtf8Bytes(response, responseInfo);
+
+    public static byte[] SerializeToUtf8(AttachmentRequest request) =>
+        JsonSerializer.SerializeToUtf8Bytes(request, attachmentRequestInfo);
+
+    public static byte[] SerializeToUtf8(QueryBatchRequest request) =>
+        JsonSerializer.SerializeToUtf8Bytes(request, batchRequestInfo);
+
+    public static byte[] SerializeToUtf8(QueryBatchResponse response) =>
+        JsonSerializer.SerializeToUtf8Bytes(response, batchResponseInfo);
+
     public static string Serialize(QueryBatchResponse response) =>
         JsonSerializer.Serialize(response, batchResponseInfo);
 
@@ -132,6 +151,17 @@ public static class ScryJson
     /// </summary>
     public static AttachmentRequest DeserializeAttachmentRequest([StringSyntax(StringSyntaxAttribute.Json)] string json) =>
         Deserialize(json, attachmentRequestInfo, "attachment request");
+
+    // The mirror of SerializeToUtf8: a body arrives as UTF-8 and the reader wants UTF-8, so decoding it
+    // to a string on the way in transcodes twice for nothing. These read the received bytes directly.
+    public static QueryRequest DeserializeRequest(ReadOnlySpan<byte> utf8) =>
+        Deserialize(utf8, requestInfo, "request");
+
+    public static QueryBatchRequest DeserializeBatchRequest(ReadOnlySpan<byte> utf8) =>
+        Deserialize(utf8, batchRequestInfo, "batch request");
+
+    public static AttachmentRequest DeserializeAttachmentRequest(ReadOnlySpan<byte> utf8) =>
+        Deserialize(utf8, attachmentRequestInfo, "attachment request");
 
     /// <summary>Reads a server's introspection document.</summary>
     public static ScryIntrospection DeserializeIntrospection([StringSyntax(StringSyntaxAttribute.Json)] string json) =>
@@ -195,6 +225,26 @@ public static class ScryJson
         try
         {
             var deserialize = JsonSerializer.Deserialize(json, info);
+            if (deserialize == null)
+            {
+                throw new ScryWireException($"Query {what} deserialized to null.");
+            }
+
+            return deserialize;
+        }
+        catch (JsonException exception)
+        {
+            throw new ScryWireException($"Invalid query {what}: {exception.Message}", exception);
+        }
+    }
+
+    // Duplicated rather than sharing a body with the string overload: a span cannot be captured, so the
+    // two cannot funnel into one without buffering the very copy this exists to avoid.
+    static T Deserialize<T>(ReadOnlySpan<byte> utf8, JsonTypeInfo<T> info, string what)
+    {
+        try
+        {
+            var deserialize = JsonSerializer.Deserialize(utf8, info);
             if (deserialize == null)
             {
                 throw new ScryWireException($"Query {what} deserialized to null.");

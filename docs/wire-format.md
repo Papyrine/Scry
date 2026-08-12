@@ -841,8 +841,16 @@ public static class WireFormat
     /// the wire contract.
     /// </summary>
     public const string SchemaStampHeader = "Scry-Schema-Stamp";
+
+    /// <summary>
+    /// The HTTP request header carrying the client's <see cref="QueryFingerprint"/> of the body it sent.
+    /// Optional — a request without it is answered exactly as one with it — and advisory: it comes from
+    /// the client, so it is never trusted as an identity the server acts on. See
+    /// <see cref="QueryFingerprint"/> for what may and may not be done with it. Part of the wire contract.
+    /// </summary>
+    public const string QueryHashHeader = "Scry-Query-Hash";
 ```
-<sup><a href='/src/Scry.Wire/WireFormat.cs#L3-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireVersion' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/WireFormat.cs#L3-L25' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireVersion' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `QueryRequest.Create` and `QueryResponse.Create` stamp the current version. The server rejects a request whose `version` is **greater** than its own — a newer client against an older server fails closed rather than being partially understood. Older requests continue to be accepted.

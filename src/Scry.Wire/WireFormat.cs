@@ -14,6 +14,14 @@ public static class WireFormat
     /// the wire contract.
     /// </summary>
     public const string SchemaStampHeader = "Scry-Schema-Stamp";
+
+    /// <summary>
+    /// The HTTP request header carrying the client's <see cref="QueryFingerprint"/> of the body it sent.
+    /// Optional — a request without it is answered exactly as one with it — and advisory: it comes from
+    /// the client, so it is never trusted as an identity the server acts on. See
+    /// <see cref="QueryFingerprint"/> for what may and may not be done with it. Part of the wire contract.
+    /// </summary>
+    public const string QueryHashHeader = "Scry-Query-Hash";
     // end-snippet
 
     /// <summary>

@@ -53,6 +53,24 @@ public sealed class ScryClient
         attachmentTransport = (request, cancel) => PostAttachmentAsync(http, $"{endpoint.TrimEnd('/')}/attachment", request, cancel);
     }
 
+    // Sends the serializer's own UTF-8 rather than a string: StringContent would encode the body to UTF-8
+    // at send time, so a string in between costs a transcode each way and an allocation discarded straight
+    // after. The content type is written out explicitly to stay byte-identical to what StringContent set.
+    static ByteArrayContent JsonBody(byte[] utf8)
+    {
+        var content = new ByteArrayContent(utf8);
+        content.Headers.ContentType = new("application/json")
+        {
+            CharSet = "utf-8"
+        };
+        // Fingerprints exactly what is being sent, which is free here — the bytes are in hand and about to
+        // be handed to the socket. Carried on the content rather than the message because it describes the
+        // entity, and because every sender below builds content where only some build a message of their
+        // own. The server treats it as advisory; see QueryFingerprint.
+        content.Headers.TryAddWithoutValidation(WireFormat.QueryHashHeader, QueryFingerprint.Compute(utf8));
+        return content;
+    }
+
     // A custom transport has nowhere to put a header, so a query that asked for one cannot be honoured.
     // Refusing keeps WithHeader from looking like it worked on a client that never sent it.
     static void RefuseHeaders(ScryCall? call)
@@ -214,8 +232,7 @@ public sealed class ScryClient
         ScryCall? call,
         [EnumeratorCancellation] Cancel cancel)
     {
-        var json = ScryJson.Serialize(request);
-        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var content = JsonBody(ScryJson.SerializeToUtf8(request));
         using var message = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
             Content = content
@@ -362,8 +379,7 @@ public sealed class ScryClient
         ScryCall? call,
         Cancel cancel)
     {
-        var json = ScryJson.Serialize(request);
-        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var content = JsonBody(ScryJson.SerializeToUtf8(request));
 
         // Built explicitly rather than posted through HttpClient.PostAsync: a per-query header needs a
         // request message of its own to be written onto.
@@ -437,8 +453,7 @@ public sealed class ScryClient
         AttachmentRequest request,
         Cancel cancel)
     {
-        var json = ScryJson.Serialize(request);
-        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var content = JsonBody(ScryJson.SerializeToUtf8(request));
         using var message = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
             Content = content
@@ -496,8 +511,7 @@ public sealed class ScryClient
         QueryBatchRequest request,
         Cancel cancel)
     {
-        var json = ScryJson.Serialize(request);
-        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var content = JsonBody(ScryJson.SerializeToUtf8(request));
         using var response = await http.PostAsync(endpoint, content, cancel);
 
         if (response.Headers.TryGetValues(WireFormat.SchemaStampHeader, out var values))

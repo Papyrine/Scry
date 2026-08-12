@@ -80,11 +80,7 @@ public static class ScryServiceExtensions
         context.Response.Headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
 
         var started = Stopwatch.GetTimestamp();
-        string body;
-        using (var reader = new StreamReader(context.Request.Body))
-        {
-            body = await reader.ReadToEndAsync(context.RequestAborted);
-        }
+        var body = await ReadBody(context);
 
         QueryRequest request;
         try
@@ -210,11 +206,7 @@ public static class ScryServiceExtensions
         context.Response.Headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
 
         var started = Stopwatch.GetTimestamp();
-        string body;
-        using (var reader = new StreamReader(context.Request.Body))
-        {
-            body = await reader.ReadToEndAsync(context.RequestAborted);
-        }
+        var body = await ReadBody(context);
 
         QueryBatchRequest request;
         try
@@ -252,13 +244,13 @@ public static class ScryServiceExtensions
                 }
 
                 await multipart.OpenPart("application/json", context.RequestAborted);
-                await context.Response.WriteAsync(ScryJson.Serialize(response), context.RequestAborted);
+                await context.Response.Body.WriteAsync(ScryJson.SerializeToUtf8(response), context.RequestAborted);
                 await multipart.Terminate(context.RequestAborted);
                 return;
             }
 
             context.Response.ContentType = "application/json";
-            await context.Response.WriteAsync(ScryJson.Serialize(response), context.RequestAborted);
+            await context.Response.Body.WriteAsync(ScryJson.SerializeToUtf8(response), context.RequestAborted);
         }
         catch (ScryValidationException exception)
         {
@@ -269,6 +261,40 @@ public static class ScryServiceExtensions
         {
             await WriteError(context, StatusCodes.Status500InternalServerError, "Query execution failed.", staleClient: false);
         }
+    }
+
+    /// <summary>
+    /// Reads the request body as the UTF-8 it arrived as. The wire readers take those bytes directly, so
+    /// decoding to a string first would transcode to UTF-16 only for the JSON reader to transcode back —
+    /// and the bytes are what a caller fingerprinting the request would hash.
+    /// </summary>
+    /// <remarks>
+    /// A declared length only sizes the buffer; it is never trusted as the amount to read. A body shorter
+    /// than its Content-Length stays what it is today — a short buffer, so a parse failure and a 400 —
+    /// rather than an exhausted read surfacing as a 500.
+    /// </remarks>
+    static async Task<byte[]> ReadBody(HttpContext context)
+    {
+        if (context.Request.ContentLength is > 0 and <= int.MaxValue)
+        {
+            var declared = (int) context.Request.ContentLength;
+            var exact = new byte[declared];
+            var read = await context.Request.Body.ReadAtLeastAsync(
+                exact,
+                declared,
+                throwOnEndOfStream: false,
+                context.RequestAborted);
+
+            // The server never receives more than Content-Length — the host stops the body there — so a
+            // full read is the whole body in one right-sized array. A short read means a truncated body,
+            // which stays exactly what it was before: unparseable, and answered as a malformed request.
+            return read == declared ? exact : exact[..read];
+        }
+
+        // No declared length (a chunked body). Nothing to size from, so it grows and is copied out once.
+        using var buffer = new MemoryStream();
+        await context.Request.Body.CopyToAsync(buffer, context.RequestAborted);
+        return buffer.ToArray();
     }
 
     static Task WriteLine(HttpContext context, ScryStreamMarker marker) =>
@@ -306,11 +332,7 @@ public static class ScryServiceExtensions
         context.Response.Headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
 
         var started = Stopwatch.GetTimestamp();
-        string body;
-        using (var reader = new StreamReader(context.Request.Body))
-        {
-            body = await reader.ReadToEndAsync(context.RequestAborted);
-        }
+        var body = await ReadBody(context);
 
         QueryRequest request;
         try
@@ -371,7 +393,7 @@ public static class ScryServiceExtensions
                 }
                 else
                 {
-                    await context.Response.WriteAsync(ScryJson.Serialize(response!), context.RequestAborted);
+                    await context.Response.Body.WriteAsync(ScryJson.SerializeToUtf8(response!), context.RequestAborted);
                 }
 
                 await multipart.Terminate(context.RequestAborted);
@@ -385,7 +407,7 @@ public static class ScryServiceExtensions
             }
             else
             {
-                await context.Response.WriteAsync(ScryJson.Serialize(response!), context.RequestAborted);
+                await context.Response.Body.WriteAsync(ScryJson.SerializeToUtf8(response!), context.RequestAborted);
             }
         }
         catch (ScryValidationException exception)
@@ -410,11 +432,7 @@ public static class ScryServiceExtensions
         context.Response.Headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
 
         var started = Stopwatch.GetTimestamp();
-        string body;
-        using (var reader = new StreamReader(context.Request.Body))
-        {
-            body = await reader.ReadToEndAsync(context.RequestAborted);
-        }
+        var body = await ReadBody(context);
 
         AttachmentRequest request;
         try

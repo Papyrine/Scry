@@ -9,7 +9,8 @@ sealed class QueryRecorder(
     AttachmentRequest? attachment,
     IServiceProvider services,
     string source,
-    bool streamed)
+    bool streamed,
+    string? fingerprint)
 {
     static readonly string? version = typeof(QueryRecorder).Assembly.GetName().Version?.ToString();
 
@@ -38,34 +39,52 @@ sealed class QueryRecorder(
         });
 
     long started = Stopwatch.GetTimestamp();
-    Activity? activity = StartActivity(source, request, attachment);
+    Activity? activity = StartActivity(source, request, attachment, fingerprint);
     bool completed;
 
     /// <summary>
     /// Starts the clock and, when something is listening, the activity. The source tag is the root
     /// name only when the schema knows it, so an arbitrary client string never becomes a tag value.
+    /// <paramref name="fingerprint"/> is the client's hash of the request body, when it sent one.
     /// </summary>
-    public static QueryRecorder Start(Schema schema, QueryRequest request, IServiceProvider services, bool streamed = false) =>
-        new(request, attachment: null, services, Source(schema, request.Root), streamed);
+    public static QueryRecorder Start(
+        Schema schema,
+        QueryRequest request,
+        IServiceProvider services,
+        string? fingerprint = null,
+        bool streamed = false) =>
+        new(request, attachment: null, services, Source(schema, request.Root), streamed, fingerprint);
 
     /// <summary>
     /// The same, for a fetch of one attachment. Recorded through the same path as a query — the
     /// endpoint reaches the database and answers about a row, so leaving it out of the audit trail
     /// would hide exactly the requests worth watching.
     /// </summary>
-    public static QueryRecorder StartAttachment(Schema schema, AttachmentRequest request, IServiceProvider services) =>
-        new(request: null, request, services, Source(schema, request.Root), streamed: false);
+    public static QueryRecorder StartAttachment(
+        Schema schema,
+        AttachmentRequest request,
+        IServiceProvider services,
+        string? fingerprint = null) =>
+        new(request: null, request, services, Source(schema, request.Root), streamed: false, fingerprint);
 
     static string Source(Schema schema, string root) =>
         schema.TryGetSource(root, out _) ? root : "(unknown)";
 
-    static Activity? StartActivity(string source, QueryRequest? request, AttachmentRequest? attachment)
+    static Activity? StartActivity(string source, QueryRequest? request, AttachmentRequest? attachment, string? fingerprint)
     {
         var activity = activitySource.StartActivity(attachment is null ? $"scry.query {source}" : $"scry.attachment {source}");
         activity?.SetTag("scry.source", source);
         if (request is not null)
         {
             activity?.SetTag("scry.operators", request.Pipeline.Count);
+        }
+
+        // The client's own fingerprint of what it sent, recorded rather than acted on: it groups traces
+        // for identical requests without the server hashing the body. Length-bounded on the way in, so a
+        // client cannot write an arbitrary payload into a trace through it.
+        if (fingerprint is not null)
+        {
+            activity?.SetTag("scry.query_hash", fingerprint);
         }
 
         if (attachment is not null)

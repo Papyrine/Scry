@@ -45,6 +45,17 @@ public sealed class ScryProcessor
         return new(Schema.Build(options), options);
     }
 
+    /// <summary>
+    /// The client's fingerprint of the body it sent, when it sent one. Recorded in telemetry and nothing
+    /// else: it is attacker-controlled, so it identifies the request only as far as the client is honest
+    /// — see <see cref="QueryFingerprint"/> for what it may and may not be used for. A transport that
+    /// carries no headers simply reports none.
+    /// </summary>
+    static string? Fingerprint(IHeaderDictionary headers) =>
+        headers.TryGetValue(WireFormat.QueryHashHeader, out var value)
+            ? QueryFingerprint.TryRead(value.ToString())
+            : null;
+
     /// <summary>Validates and executes a request, returning the shaped result.</summary>
     public QueryResponse Execute(QueryRequest request, DbContext data, IServiceProvider services) =>
         Execute(request, data, services, new HeaderDictionary(), new HeaderDictionary());
@@ -73,7 +84,7 @@ public sealed class ScryProcessor
     {
         var drifted = request.Stamp is { } requestStamp &&
                       requestStamp != schema.Stamp;
-        var recorder = QueryRecorder.StartAttachment(schema, request, services);
+        var recorder = QueryRecorder.StartAttachment(schema, request, services, Fingerprint(requestHeaders));
         try
         {
             var scope = new CallScope(services, requestHeaders, responseHeaders);
@@ -134,7 +145,7 @@ public sealed class ScryProcessor
     {
         var drifted = request.Stamp is { } requestStamp &&
                       requestStamp != schema.Stamp;
-        var recorder = QueryRecorder.Start(schema, request, services);
+        var recorder = QueryRecorder.Start(schema, request, services, Fingerprint(requestHeaders));
         try
         {
             var scope = new CallScope(services, requestHeaders, responseHeaders)
@@ -207,7 +218,7 @@ public sealed class ScryProcessor
     {
         var drifted = request.Stamp is { } requestStamp &&
                       requestStamp != schema.Stamp;
-        var recorder = QueryRecorder.Start(schema, request, services);
+        var recorder = QueryRecorder.Start(schema, request, services, Fingerprint(requestHeaders));
         try
         {
             var scope = new CallScope(services, requestHeaders, responseHeaders)
@@ -476,7 +487,7 @@ public sealed class ScryProcessor
         BinaryPartCollector? binary = null)
     {
         var drifted = request.Stamp is { } requestStamp && requestStamp != schema.Stamp;
-        var recorder = QueryRecorder.Start(schema, request, services, streamed: true);
+        var recorder = QueryRecorder.Start(schema, request, services, Fingerprint(requestHeaders), streamed: true);
         QueryExecutor.RowSet rows;
         try
         {
