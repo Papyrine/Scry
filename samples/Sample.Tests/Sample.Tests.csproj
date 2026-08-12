@@ -6,6 +6,9 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <!-- The snapshot scrubbers, shared with Scry.Tests: they keep the same unrelated churn out of
+         both projects' verified files, and two copies would eventually stop agreeing on what churn is. -->
+    <Compile Include="..\..\src\Shared\SnapshotScrubbers.cs" Link="SnapshotScrubbers.cs" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="AngleSharp" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />

@@ -18,6 +18,13 @@ public static class ModuleInitializer
         VerifierSettings.UseSsimForPng();
         VerifierSettings.AddScrubber("html", Scrub);
         VerifierSettings.InitializePlugins();
+
+        // Cursors and schema stamps, scrubbed the same way as in Scry.Tests — see SnapshotScrubbers
+        // for what each is and why a snapshot is better off without it. The stamp matters here in
+        // particular: these snapshots record a whole HTTP exchange and the introspection document, and
+        // every one of them carried a hash of the entire model that rewrote itself whenever the sample
+        // model gained a member.
+        SnapshotScrubbers.Register();
     }
 
     static void Scrub(StringBuilder builder)

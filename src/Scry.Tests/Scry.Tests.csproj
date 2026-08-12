@@ -8,6 +8,9 @@
          pinned against KnownFunction and against Queryable itself — neither of which the analyzer's
          own assembly can see. -->
     <Compile Include="..\Shared\SupportedLinq.cs" Link="SupportedLinq.cs" />
+    <!-- The snapshot scrubbers, shared with Sample.Tests: they keep the same unrelated churn out of
+         both projects' verified files, and two copies would eventually stop agreeing on what churn is. -->
+    <Compile Include="..\Shared\SnapshotScrubbers.cs" Link="SnapshotScrubbers.cs" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="NUnit" />
     <PackageReference Include="NUnit3TestAdapter" />
