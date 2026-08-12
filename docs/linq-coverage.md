@@ -130,7 +130,7 @@ The other two positions EF Core allows an aggregate in are both reachable as wel
 
 ### Expression operators
 
-`==` `!=` `<` `<=` `>` `>=` `&&` `||` `!` `+` `-` `*` `/` `%` `??` `?:` and unary `-`. Where either operand is a string, `+` is concatenation and the other operand is converted by the database; `string.Concat` and a plain-hole interpolated string both mean the same thing.
+`==` `!=` `<` `<=` `>` `>=` `&&` `||` `!` `+` `-` `*` `/` `%` `??` `?:` and unary `-`. Where either operand is a string, `+` is concatenation and the other operand is converted by the database; `string.Concat` and a plain-hole interpolated string both mean the same thing. `Equals` is the `==` comparison spelled as a method and carried as one, over any scalar and in either spelling — as are an optional member's `Value` and `HasValue`, which mean the member itself and `!= null`.
 
 ### Functions
 
@@ -221,7 +221,12 @@ The subset relation runs the other way in a few places. Each is an instance of t
 
 ### Normalizable into the existing vocabulary
 
-Sugar EF unfolds into operators the wire already carries, adopted as client-side rewrites with no wire change: `GroupBy(key, resultSelector)`, `Nullable<T>.GetValueOrDefault()`, and the `MaxByAsync` / `MinByAsync` terminals — the `OrderBy` + `First` unfolding EF 11 itself applies to `MaxBy` / `MinBy` — alongside the older precedent of `ElementAtAsync`, which is `Skip` + `First` under the covers. Nothing remains in this category.
+Sugar EF unfolds into operators the wire already carries, adopted as client-side rewrites with no wire change: `GroupBy(key, resultSelector)`, `Nullable<T>.GetValueOrDefault()`, and the `MaxByAsync` / `MinByAsync` terminals — the `OrderBy` + `First` unfolding EF 11 itself applies to `MaxBy` / `MinBy` — alongside the older precedent of `ElementAtAsync`, which is `Skip` + `First` under the covers.
+
+Two more join them, each the same rewrite EF's own translators perform:
+
+- **`Equals`** is `==` written as a method, in both spellings and over any scalar, and becomes the same comparison node. The `StringComparison` overloads are the exception and mean something else — a case sensitivity, read as a [collation](querying.md#operators-1) — including the static three-argument form.
+- **`Nullable<T>.Value` and `HasValue`.** Every wire operand is already optional, so `Value` is the member it wraps and `HasValue` is `!= null`. Carried as path segments they read as members no source has, which is how they used to fail: server-side, and named as a traversal error rather than as the unsupported members they were.
 
 ### Room to grow
 
@@ -234,9 +239,13 @@ Functions with an EF translation ready to rebind onto:
 
 | Group | Candidates |
 | --- | --- |
-| String | `IndexOf(value, start)`, `TrimStart` / `TrimEnd` with explicit characters (SQL Server 2022+), `string.Join` over row values (`CONCAT_WS`). The `char` overloads of the single-argument functions are already carried — a char constant travels as text — and `Compare` / `CompareTo` are carried as the `CompareTo` function. |
-| Temporal | `Microsecond` / `Nanosecond`, `TimeOfDay`, `DayNumber`, `TimeOnly.IsBetween`, and date difference — EF blocks `d1 - d2` arithmetic outright, so the translatable spelling is a dedicated function the server would rebind to `EF.Functions.DateDiff*` without exposing `EF.Functions` itself |
-| Binary | `byte[].Length` (`DATALENGTH`), `byte[].Contains` (`CHARINDEX`) |
+| String | `IndexOf(value, start)`, `TrimStart` / `TrimEnd` with explicit characters (SQL Server 2022+), `string.Join` over row values (`CONCAT_WS`), and reading a string as a sequence of characters — the `s[i]` indexer, `FirstOrDefault()`, `LastOrDefault()`. The `char` overloads of the single-argument functions are already carried — a char constant travels as text — and `Compare` / `CompareTo` are carried as the `CompareTo` function. |
+| Temporal | `Microsecond` / `Nanosecond`, `TimeOfDay` and the `TimeSpan` components it is read through (`Hours`, `Minutes`, `Seconds`, …), `DayNumber`, `TimeOnly.IsBetween`, the conversions between the temporal types (`DateOnly.FromDateTime`, `TimeOnly.FromTimeSpan`, `DateTimeOffset.UtcDateTime`, `ToUnixTimeSeconds`, …), and date difference — EF blocks `d1 - d2` arithmetic outright, so the translatable spelling is a dedicated function the server would rebind to `EF.Functions.DateDiff*` without exposing `EF.Functions` itself |
+| Binary | `byte[].Length` (`DATALENGTH`), `byte[].Contains` (`CHARINDEX`), `byte[].Any()` / `First()` |
+
+A member of a type the wire carries but has no function for is not refused by the translator: it reads as an ordinary path segment, and is rejected server-side as a member the source does not have. Read off one of the four temporal types the [analyzer](#reported-at-compile-time) reports it at the call site first — `_.Placed.TimeOfDay` is `SCRY107`. Read off a `TimeSpan` member it is not: `TimeSpan` is not one of the owners the analyzer measures against the callable set, since none of its members are on it yet.
+
+One operator belongs here too: `Order()` / `OrderDescending()`, the key-less orderings EF added in 8. They order by the element itself, so they need a sequence of scalars to be useful — and a Scry query's one `Select` [must construct an object](#anonymous-types), which is why nothing has asked for them.
 
 Environmental values — `DateTime.Now`, `Guid.NewGuid()`, `EF.Functions.Random()` — are representable but unmotivated: a closure's `DateTime.Now` already travels as the constant it evaluates to, so the only thing a wire function would add is the *database's* clock.
 

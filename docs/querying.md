@@ -376,6 +376,10 @@ Binary operator 'ExclusiveOr' is not supported by Scry.
 
 `??` requires a nullable left operand, and the two branches of a `?:` must have the same type; both are checked server-side when the expression is rebound.
 
+`Equals` is `==` spelled as a method and is carried as that comparison, in both spellings — `_.Name.Equals(x)` and `string.Equals(_.Name, x)` — and over any scalar rather than text alone. It is refused by exactly the rules `==` is refused by, since it becomes the same node; there is no function on the wire for it.
+
+An optional member's `Value` and `HasValue` are carried the same way, as what they mean rather than as members of their own. Every wire operand is already optional, so `Value` is the member it wraps and disappears — `_.Discount.Value > 6` is `_.Discount > 6` — and `HasValue` is the comparison that asks the same question, `_.Discount != null`. A row whose member is absent is left out either way, which is what SQL's three-valued logic does with it.
+
 The `StringComparison` overloads of `Contains`, `StartsWith`, `EndsWith` and `Equals` ask for a **case sensitivity**, and are supported when the server has configured a collation for it:
 
 <!-- snippet: clientCaseInsensitive -->
@@ -636,7 +640,7 @@ Mapped from:
 
 The date functions apply to `DateTime`, `DateOnly`, `DateTimeOffset`, and `TimeOnly`, and an optional member is unwrapped before the part is read. Only the parts a type actually has are available: asking for the `Hour` of a `DateOnly` is rejected. The trim functions map only the whitespace-trimming overloads — the `params char[]` forms have no SQL equivalent.
 
-The string functions take a `char` argument as readily as a string one — `Contains('x')`, `Replace('o', '0')` — since the constant travels as text either way. And two abbreviations are carried as what they abbreviate rather than as functions: `GetValueOrDefault([fallback])` is the `??` coalesce it stands for, and `GroupBy(key, resultSelector)` unfolds into the `GroupBy` + `Select` it spells in one call.
+The string functions take a `char` argument as readily as a string one — `Contains('x')`, `Replace('o', '0')` — since the constant travels as text either way. And several abbreviations are carried as what they abbreviate rather than as functions: `GetValueOrDefault([fallback])` is the `??` coalesce it stands for, `Value` and `HasValue` are [the member and the null comparison](#operators-1) they mean, `Equals` is the `==` it spells, and `GroupBy(key, resultSelector)` unfolds into the `GroupBy` + `Select` it spells in one call.
 
 `HasFlag` reads a `[Flags]` enum member; a combined flag — `_.Perks.HasFlag(Perks.Parking | Perks.Gym)` — folds into one constant and travels by name, exactly as `Enum.ToString` spells it.
 

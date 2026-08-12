@@ -1090,6 +1090,20 @@ sealed class QueryTranslator
                     when IsRootedCollection(owner, root):
                     return new SubqueryNode(MemberPath((MemberExpression)owner), SubqueryFn.Count, null, null);
 
+                // A nullable's Value is the member it wraps. Every wire operand is already optional, so
+                // there is no wrapper to strip on the far side — carried as a path segment it would
+                // only read as a member the server cannot find.
+                case MemberExpression {Member.Name: "Value", Expression: { } optional} valued
+                    when IsOptional(optional) && IsRooted(valued, root):
+                    expression = optional;
+                    continue;
+
+                // HasValue asks the one thing the wire already spells as a comparison: whether the
+                // member is there.
+                case MemberExpression {Member.Name: "HasValue", Expression: { } asked} present
+                    when IsOptional(asked) && IsRooted(present, root):
+                    return new BinaryNode(BinaryOp.NotEqual, TranslateExpr(asked, root), ConstantOf(null));
+
                 case MemberExpression member when IsKnownProperty(member, out var function):
                     return new CallNode(function, TranslateExpr(member.Expression!, root), []);
 
@@ -1168,6 +1182,22 @@ sealed class QueryTranslator
             ReferencesParameter(call, root))
         {
             return new CallNode(KnownFunction.CompareTo, TranslateExpr(compared, root), [TranslateExpr(call.Arguments[0], root)]);
+        }
+
+        // Equals is == spelled as a method: the same comparison, over the same operands, refused by the
+        // same rules when either is not a value. The overloads taking a StringComparison are not this
+        // — they ask for a case sensitivity, which the string path reads as a collation — so they are
+        // left for it.
+        if (call.Method.Name == "Equals" &&
+            !TakesComparison(call) &&
+            EqualityOperands(call) is (var equated, var against))
+        {
+            // One that reads nothing from the row is closure state, evaluated here as any other
+            // constant expression is — the string dispatch below would otherwise reach it first and
+            // refuse it for having no function to become.
+            return ReferencesParameter(call, root)
+                ? new BinaryNode(BinaryOp.Equal, TranslateExpr(equated, root), TranslateExpr(against, root))
+                : ConstantOf(Evaluate(call));
         }
 
         if (declaring == typeof(string))
@@ -1332,9 +1362,10 @@ sealed class QueryTranslator
         Node Argument(int index) => TranslateExpr(call.Arguments[index], root);
 
         // The StringComparison overloads ask for a case sensitivity rather than a different operation,
-        // so the target is read under it and the ordinary function applies on top.
-        if (call.Arguments.Count == 2 &&
-            call.Arguments[^1].Type == typeof(StringComparison) &&
+        // so the target is read under it and the ordinary function applies on top. Equals also has a
+        // static spelling, which puts the target in the first argument rather than in the instance.
+        if (TakesComparison(call) &&
+            call.Arguments.Count == (call.Object is null ? 3 : 2) &&
             call.Method.Name is "Contains" or "StartsWith" or "EndsWith" or "Equals")
         {
             var function = call.Method.Name switch
@@ -1345,12 +1376,16 @@ sealed class QueryTranslator
                 _ => (KnownFunction?)null
             };
 
-            var collated = new CollateNode(TranslateExpr(call.Object!, root), Sensitivity(call.Arguments[1]));
+            var (compared, operand) = call.Object is { } instance
+                ? (instance, call.Arguments[0])
+                : (call.Arguments[0], call.Arguments[1]);
+
+            var collated = new CollateNode(TranslateExpr(compared, root), Sensitivity(call.Arguments[^1]));
 
             // Equals is a comparison rather than a function; under a collation it is an ordinary one.
             return function is null
-                ? new BinaryNode(BinaryOp.Equal, collated, TranslateExpr(call.Arguments[0], root))
-                : new CallNode(function.Value, collated, [TranslateExpr(call.Arguments[0], root)]);
+                ? new BinaryNode(BinaryOp.Equal, collated, TranslateExpr(operand, root))
+                : new CallNode(function.Value, collated, [TranslateExpr(operand, root)]);
         }
 
         switch (call.Method.Name)
@@ -1868,6 +1903,26 @@ sealed class QueryTranslator
         type == typeof(Date) ||
         type == typeof(DateTimeOffset) ||
         type == typeof(Time);
+
+    // Whether the expression is an optional value, whose Value and HasValue members are carried as the
+    // member itself and as a comparison against null.
+    static bool IsOptional(Expression expression) =>
+        Nullable.GetUnderlyingType(expression.Type) is not null;
+
+    // Whether the call's last argument names a case sensitivity rather than an operand.
+    static bool TakesComparison(MethodCallExpression call) =>
+        call.Arguments.Count > 0 &&
+        call.Arguments[^1].Type == typeof(StringComparison);
+
+    // The two operands of an Equals that means ==: the instance and its one argument, or the two
+    // arguments of the static spelling. Any other shape is an overload the set does not carry.
+    static (Expression Left, Expression Right)? EqualityOperands(MethodCallExpression call) =>
+        call switch
+        {
+            {Object: { } instance, Arguments: [var argument]} => (instance, argument),
+            {Object: null, Arguments: [var first, var second]} => (first, second),
+            _ => null
+        };
 
     // The types the server compares three ways: numbers, text, and dates. Mirrors the server's own
     // allow-list, so an unsupported target refuses at translation rather than as a rejected request.

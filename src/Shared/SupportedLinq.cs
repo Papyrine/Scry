@@ -109,7 +109,12 @@ static class SupportedLinq
         ("System.String.StartsWith/2", "StringStartsWith"),
         ("System.String.EndsWith/1", "StringEndsWith"),
         ("System.String.EndsWith/2", "StringEndsWith"),
+        // Equals is the == comparison spelled as a method, so it carries no function of its own. The
+        // arities cover both spellings: instance with one operand, static with two, and each again
+        // with a StringComparison, which becomes a collated comparison instead.
+        ("System.String.Equals/1", ""),
         ("System.String.Equals/2", ""),
+        ("System.String.Equals/3", ""),
         ("System.String.ToLower/0", "StringToLower"),
         ("System.String.ToUpper/0", "StringToUpper"),
         ("System.String.IsNullOrEmpty/1", "StringIsNullOrEmpty"),
@@ -204,10 +209,29 @@ static class SupportedLinq
         ("System.Single.CompareTo/1", "CompareTo"),
         ("System.Double.CompareTo/1", "CompareTo"),
         ("System.Decimal.CompareTo/1", "CompareTo"),
+        // The same comparison on the other scalars, whose owners are listed for their Parse and
+        // CompareTo members and so are read against this table rather than left alone.
+        ("$temporal.Equals/1", ""),
+        ("System.Byte.Equals/1", ""),
+        ("System.SByte.Equals/1", ""),
+        ("System.Int16.Equals/1", ""),
+        ("System.UInt16.Equals/1", ""),
+        ("System.Int32.Equals/1", ""),
+        ("System.UInt32.Equals/1", ""),
+        ("System.Int64.Equals/1", ""),
+        ("System.UInt64.Equals/1", ""),
+        ("System.Single.Equals/1", ""),
+        ("System.Double.Equals/1", ""),
+        ("System.Decimal.Equals/1", ""),
+        ("System.Boolean.Equals/1", ""),
+        ("$nullable.Equals/1", ""),
         // Not calls of a wire function: GetValueOrDefault is the coalesce it abbreviates, carried as
-        // the ordinary binary operator.
+        // the ordinary binary operator, and Value and HasValue are the member itself and a comparison
+        // against null.
         ("$nullable.GetValueOrDefault/0", ""),
         ("$nullable.GetValueOrDefault/1", ""),
+        ("$nullable.Value/0", ""),
+        ("$nullable.HasValue/0", ""),
         // Not written as a call. A client-supplied set reaches the wire as In through Contains over a
         // closure collection, which is an Enumerable call rather than a member of a scalar.
         ("$set.Contains/1", "In")
