@@ -52,6 +52,9 @@ public class HttpRoundTripTests
             // reaches a policy and back. Order is used rather than Employee because Employee is the
             // element of a [QueryableCollection], which refuses a policied element type at startup.
             options.AddPolicy<Sample.Model.Order, EchoHeaderPolicy>();
+            // Department.Handbook is an [Attachment], and startup refuses a source whose attachment
+            // nothing authorizes. No test here fetches it, so an allow-all satisfies the check.
+            options.AddAttachmentPolicy<Sample.Model.Department, AllowAttachmentPolicy>();
         });
 
         app = builder.Build();
@@ -231,6 +234,46 @@ public class HttpRoundTripTests
             .CountAsync();
 
         Assert.That(count, Is.EqualTo(3));
+    }
+
+    // The scenario a hand-rolled filter DTO (property name + operator enum + value, e.g.
+    // AvnRepository's QueryFilter) exists for: criteria assembled at runtime — say from a grid's
+    // filter UI — and sent to an API for EF to run. No DTO is needed here because capture is lazy:
+    // nothing executes client-side, so operators appended conditionally at runtime are just more of
+    // the captured pipeline, and the terminal serializes whatever was built as the wire AST. The
+    // server validates it against the allow-list and runs it as SQL — no rows are loaded to filter
+    // in memory, and no property-name strings are involved on the client.
+    [Test]
+    public async Task RuntimeComposedFilterOverHttp()
+    {
+        // begin-snippet: clientRuntimeComposition
+        // Stand-ins for what a user typed into filter controls; unknowable at compile time.
+        string? nameContains = "o";
+        DateOnly? createdOnOrAfter = new(2026, 2, 1);
+        var newestFirst = true;
+
+        var employees = query.Employee;
+
+        if (nameContains is { } contains)
+        {
+            employees = employees.Where(_ => _.Name.Contains(contains));
+        }
+
+        if (createdOnOrAfter is { } created)
+        {
+            employees = employees.Where(_ => _.Created >= created);
+        }
+
+        employees = newestFirst
+            ? employees.OrderByDescending(_ => _.Created)
+            : employees.OrderBy(_ => _.Created);
+
+        var rows = await employees
+            .Select(_ => new NameRow(_.Name))
+            .ToListAsync();
+        // end-snippet
+
+        Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Carol", "Bob"]));
     }
 
     // begin-snippet: rawRequestRejected
@@ -636,4 +679,14 @@ public sealed class EchoHeaderPolicy :
         context.ResponseHeaders["X-Scry-Echo"] = context.RequestHeaders["X-Correlation"];
         return source;
     }
+}
+
+/// <summary>
+/// Satisfies the mandatory attachment check for Department.Handbook; no test in this fixture
+/// exercises the attachment endpoint itself — AttachmentTests covers that.
+/// </summary>
+public sealed class AllowAttachmentPolicy :
+    IAttachmentPolicy<Sample.Model.Department>
+{
+    public bool Authorize(ScryAttachmentContext context) => true;
 }

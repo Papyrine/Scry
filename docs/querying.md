@@ -230,7 +230,7 @@ await foreach (var row in query.Employee
     names.Add(row.Name);
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L161-L171' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientStream' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L164-L174' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientStream' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Neither side holds the whole result: the server never buffers the rows and the client yields each as it is read. That makes it the right terminal for a result too large to sit in memory comfortably, and unnecessary for one that is not — a small result costs an extra round-trip's worth of framing for nothing.
@@ -1001,6 +1001,44 @@ fullTimers = await Query
 A `char` has no tag of its own: C# promotes it to an `int` to compare it, so its literal reaches the wire as a code point about as often as it does as the character itself, and the server accepts either against a `char` member.
 
 A constant is carried as an invariant-culture string plus a type tag, and reconciled against the member type at the comparison site on the server. Enums travel as their **name**, not their numeric value.
+
+
+### Composing a query at runtime
+
+Runtime values parameterize a query; runtime **conditions** compose one. An `IQueryable` is a value, so a pipeline can be assembled a piece at a time — the filter-UI case, where which criteria apply is unknown until the user acts:
+
+<!-- snippet: clientRuntimeComposition -->
+<a id='snippet-clientRuntimeComposition'></a>
+```cs
+// Stand-ins for what a user typed into filter controls; unknowable at compile time.
+string? nameContains = "o";
+DateOnly? createdOnOrAfter = new(2026, 2, 1);
+var newestFirst = true;
+
+var employees = query.Employee;
+
+if (nameContains is { } contains)
+{
+    employees = employees.Where(_ => _.Name.Contains(contains));
+}
+
+if (createdOnOrAfter is { } created)
+{
+    employees = employees.Where(_ => _.Created >= created);
+}
+
+employees = newestFirst
+    ? employees.OrderByDescending(_ => _.Created)
+    : employees.OrderBy(_ => _.Created);
+
+var rows = await employees
+    .Select(_ => new NameRow(_.Name))
+    .ToListAsync();
+```
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L249-L274' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRuntimeComposition' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Nothing executes client-side, so an operator appended inside an `if` is part of the captured expression like any other, and the terminal serializes whatever was built. No criteria DTO — property-name strings, an operator enum — is needed, and the request that leaves is indistinguishable from one written as a single chain.
 
 
 ## Projections

@@ -46,11 +46,16 @@ public class FastWriterGoldenTests
         builder.WebHost.UseTestServer();
         builder.Services.AddDbContext<Sample.Model.SampleContext>(_ => _.UseSqlServer(database.ConnectionString));
         builder.Services.AddScry<Sample.Model.SampleContext>(options =>
+        {
             options.AddPocoSource(_ => naughty.Select((text, index) => new Sample.Model.Holiday
             {
                 Name = text,
                 Date = new(2026, 1, index + 1)
-            })));
+            }));
+            // Department.Handbook is an [Attachment], and startup refuses a source whose attachment
+            // nothing authorizes. No test here fetches it, so an allow-all satisfies the check.
+            options.AddAttachmentPolicy<Sample.Model.Department, AllowAttachmentPolicy>();
+        });
 
         app = builder.Build();
         app.MapScry("/api/query");

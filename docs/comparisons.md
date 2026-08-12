@@ -138,6 +138,15 @@ The consequence is a trust boundary. These libraries are built for expressivenes
 **Choose an expression serializer when** both ends are owned and mutually trusted — two services from the same team, an internal tool, a test harness. They are far more expressive and far less work than a closed AST.
 
 
+## Hand-rolled filter DTOs
+
+The other roll-your-own answer: a serializable criteria object, posted to an endpoint that rebuilds expressions from it by reflection. The object carries property names as strings, an operator enum, a value, and a sort column. Teams land here after concluding that expression trees cannot cross the wire. Structurally the object *is* a serialized query AST — a very small one — which is why it works at all.
+
+The costs are the vocabulary and the strings. Coverage stops where the hand-written expression builder stops; each operator, type, and nesting level is another case to write. Property names are strings the compiler cannot check, so a rename fails at runtime. And each name arriving on the wire is a reach into the model, unbounded until an allow-list is added by hand.
+
+Scry is this design carried to completion. The criteria language is [generated, typed LINQ](querying.md), the vocabulary is closed but broad, and validation is default-deny. The scenario the DTO exists for — criteria assembled at runtime from a filter UI — needs no DTO at all; see [composing a query at runtime](querying.md#composing-a-query-at-runtime).
+
+
 ## Generated APIs over the database (Hasura, PostgREST, Supabase)
 
 These derive an API straight from the database schema and express authorization in the database — row-level security, or the tool's own policy engine. Nothing to write on the server at all.
