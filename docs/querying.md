@@ -376,6 +376,10 @@ Binary operator 'ExclusiveOr' is not supported by Scry.
 
 `??` requires a nullable left operand, and the two branches of a `?:` must have the same type; both are checked server-side when the expression is rebound.
 
+`Equals` is `==` spelled as a method and is carried as that comparison, in both spellings — `_.Name.Equals(x)` and `string.Equals(_.Name, x)` — and over any scalar rather than text alone. It is refused by exactly the rules `==` is refused by, since it becomes the same node; there is no function on the wire for it.
+
+An optional member's `Value` and `HasValue` are carried the same way, as what they mean rather than as members of their own. Every wire operand is already optional, so `Value` is the member it wraps and disappears — `_.Discount.Value > 6` is `_.Discount > 6` — and `HasValue` is the comparison that asks the same question, `_.Discount != null`. A row whose member is absent is left out either way, which is what SQL's three-valued logic does with it.
+
 The `StringComparison` overloads of `Contains`, `StartsWith`, `EndsWith` and `Equals` ask for a **case sensitivity**, and are supported when the server has configured a collation for it:
 
 <!-- snippet: clientCaseInsensitive -->
@@ -460,6 +464,15 @@ public enum KnownFunction
     StringSubstring,
     StringIndexOf,
     StringReplace,
+
+    /// <summary>
+    /// The first and last character of a string, as <c>FirstOrDefault</c> and <c>LastOrDefault</c>
+    /// spell them — a substring of one, taken at either end. The indexer that looks like it means the
+    /// same is not carried: no provider translates it, and one that reads past the end of the text
+    /// would fault where these answer with the default.
+    /// </summary>
+    StringFirst,
+    StringLast,
     DateYear,
     DateMonth,
     DateDay,
@@ -470,11 +483,61 @@ public enum KnownFunction
     DateDayOfYear,
 
     /// <summary>
+    /// The sub-millisecond parts, each within the one above it: 0-999 microseconds of the
+    /// millisecond, 0-999 nanoseconds of the microsecond. SQL Server's DATEPART counts them from the
+    /// whole second, so the server takes the remainder, exactly as EF does.
+    /// </summary>
+    DateMicrosecond,
+    DateNanosecond,
+
+    /// <summary>The count of days since 0001-01-01 (<c>DateOnly.DayNumber</c>).</summary>
+    DateDayNumber,
+
+    /// <summary>
     /// The day of the week, numbered as <see cref="System.DayOfWeek"/> does — 0 for Sunday. The server
     /// owns how that is expressed in SQL, since the obvious formulation is not deterministic.
     /// </summary>
     DateDayOfWeek,
     DateDate,
+
+    /// <summary>
+    /// The time of day a date carries, as the <see cref="System.TimeSpan"/> since midnight. The
+    /// counterpart of <see cref="DateDate"/>, which drops the same part instead of keeping it.
+    /// </summary>
+    DateTimeOfDay,
+
+    /// <summary>
+    /// The parts of an elapsed time, each within the unit above it — the hours of the day, the
+    /// minutes of the hour, and so on down. Whole totals (<c>TotalHours</c> and its siblings) are a
+    /// division rather than a part and no provider translates them, so they are not carried.
+    /// </summary>
+    TimeSpanHours,
+    TimeSpanMinutes,
+    TimeSpanSeconds,
+    TimeSpanMilliseconds,
+    TimeSpanMicroseconds,
+    TimeSpanNanoseconds,
+
+    /// <summary>
+    /// Reading one temporal type as another: the date or the time half of a timestamp, a time read as
+    /// an elapsed time, and a date and a time composed back into one. Each is a conversion the
+    /// database performs, so the answer does not depend on the client's calendar or its clock.
+    /// </summary>
+    DateOnlyFromDateTime,
+    TimeOnlyFromDateTime,
+    TimeOnlyFromTimeSpan,
+    DateTimeFromDateAndTime,
+
+    /// <summary>
+    /// Unix time, counted from 1970-01-01 UTC (<c>DateTimeOffset.ToUnixTimeSeconds</c>). The
+    /// <c>DateTime</c> / <c>UtcDateTime</c> / <c>LocalDateTime</c> readings of an offset are not
+    /// carried alongside them: the provider has a translation only for a column whose store type is
+    /// <c>datetimeoffset</c> and refuses the expression otherwise, and the local reading would go
+    /// through <c>CURRENT_TIMEZONE_ID()</c> — the server's own zone — even where it does translate.
+    /// </summary>
+    UnixSecondsFromOffset,
+    UnixMillisecondsFromOffset,
+
     DateAddYears,
     DateAddMonths,
     DateAddDays,
@@ -576,10 +639,22 @@ public enum KnownFunction
     /// Numbers, text and dates compare; text compares under the server's collation, exactly as its
     /// ordering does.
     /// </summary>
-    CompareTo
+    CompareTo,
+
+    /// <summary>
+    /// Questions about a binary member's bytes, without reading them: how many there are
+    /// (<c>DATALENGTH</c>), whether a byte is among them (<c>CHARINDEX</c>), and the byte at one
+    /// position. An <c>[Attachment]</c> answers none of them — its value is the one thing no query
+    /// reads — so these reach a plain or <c>[BinaryTransfer]</c> member only. <c>Any()</c> is absent
+    /// because the provider refuses it; ask whether <see cref="BytesLength"/> is above zero, which is
+    /// the same question and does translate.
+    /// </summary>
+    BytesLength,
+    BytesContains,
+    BytesElementAt
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L139' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L210' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Mapped from:
@@ -597,11 +672,24 @@ Mapped from:
 | `text.Substring(start[, length])` | `StringSubstring` |
 | `text.IndexOf(value)` | `StringIndexOf` |
 | `text.Replace(from, to)` | `StringReplace` |
+| `text.FirstOrDefault()` / `text.LastOrDefault()` | `StringFirst` / `StringLast` |
 | `date.Year` / `.Month` / `.Day` | `DateYear` / `DateMonth` / `DateDay` |
 | `date.Hour` / `.Minute` / `.Second` / `.Millisecond` | `DateHour` / `DateMinute` / `DateSecond` / `DateMillisecond` |
+| `date.Microsecond` / `.Nanosecond` | `DateMicrosecond` / `DateNanosecond` |
 | `date.DayOfYear` | `DateDayOfYear` |
 | `date.DayOfWeek` | `DateDayOfWeek` |
+| `date.DayNumber` | `DateDayNumber` |
 | `date.Date` | `DateDate` |
+| `date.TimeOfDay` | `DateTimeOfDay` |
+| `elapsed.Hours` / `.Minutes` / `.Seconds` | `TimeSpanHours` / `TimeSpanMinutes` / `TimeSpanSeconds` |
+| `elapsed.Milliseconds` / `.Microseconds` / `.Nanoseconds` | `TimeSpanMilliseconds` / `TimeSpanMicroseconds` / `TimeSpanNanoseconds` |
+| `DateOnly.FromDateTime(date)` | `DateOnlyFromDateTime` |
+| `TimeOnly.FromDateTime(date)` / `TimeOnly.FromTimeSpan(elapsed)` | `TimeOnlyFromDateTime` / `TimeOnlyFromTimeSpan` |
+| `date.ToDateTime(time)` | `DateTimeFromDateAndTime` |
+| `offset.ToUnixTimeSeconds()` / `.ToUnixTimeMilliseconds()` | `UnixSecondsFromOffset` / `UnixMillisecondsFromOffset` |
+| `bytes.Length` | `BytesLength` |
+| `bytes.Contains(value)` | `BytesContains` |
+| `bytes.First()` / `bytes.ElementAt(i)` | `BytesElementAt` |
 | `date.AddYears(n)` / `.AddMonths(n)` / `.AddDays(n)` | `DateAddYears` / `DateAddMonths` / `DateAddDays` |
 | `date.AddHours(n)` / `.AddMinutes(n)` / `.AddSeconds(n)` / `.AddMilliseconds(n)` | `DateAddHours` / `DateAddMinutes` / `DateAddSeconds` / `DateAddMilliseconds` |
 | `Math.Abs(value)` | `MathAbs` |
@@ -636,7 +724,28 @@ Mapped from:
 
 The date functions apply to `DateTime`, `DateOnly`, `DateTimeOffset`, and `TimeOnly`, and an optional member is unwrapped before the part is read. Only the parts a type actually has are available: asking for the `Hour` of a `DateOnly` is rejected. The trim functions map only the whitespace-trimming overloads — the `params char[]` forms have no SQL equivalent.
 
-The string functions take a `char` argument as readily as a string one — `Contains('x')`, `Replace('o', '0')` — since the constant travels as text either way. And two abbreviations are carried as what they abbreviate rather than as functions: `GetValueOrDefault([fallback])` is the `??` coalesce it stands for, and `GroupBy(key, resultSelector)` unfolds into the `GroupBy` + `Select` it spells in one call.
+An **elapsed time** — a `TimeSpan` member, or the `TimeOfDay` a date is read through — answers a set of its own, spelled in the plural to tell it apart from a date's: `Hours` rather than `Hour`.
+
+<!-- snippet: clientTimeSpanParts -->
+<a id='snippet-clientTimeSpanParts'></a>
+```cs
+var rows = await client.Source<Shift>("Shift")
+    .Where(_ => _.Duration.Hours == 7 &&
+                _.Duration.Minutes == 30 &&
+                _.Duration.Seconds == 15)
+    .Select(_ => new ShiftRow(_.Name))
+    .ToListAsync();
+```
+<sup><a href='/src/Scry.Tests/TemporalPartTests.cs#L23-L30' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientTimeSpanParts' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Each is the part within the unit above it, so `Hours` of a two-day span is 0 to 23 and not 48. The whole totals — `TotalHours` and its siblings — are absent: each is a division rather than a part and no provider translates one, so they are [left out](linq-coverage.md#room-to-grow) rather than shipped as a query that fails at execution.
+
+The **conversions** read one temporal type as another, and the database performs each, so no answer depends on the client's calendar or its clock. Reading a `DateTimeOffset` as a `DateTime` is the exception and is [not carried](linq-coverage.md#waiting-on-the-framework-or-the-provider) — the parts of an offset and its Unix-time readings are.
+
+A **binary** member answers what can be asked without reading it: how many bytes it has, whether a byte is among them, and the byte at a position. `Any()` is not among them — the provider refuses it, so ask whether `Length` is above zero, which is the same question. An [`[Attachment]`](attachments.md) answers none of them, since its value is the one thing no query reads; a [`[BinaryTransfer]`](annotations.md) member is an ordinary value and answers them all.
+
+The string functions take a `char` argument as readily as a string one — `Contains('x')`, `Replace('o', '0')` — since the constant travels as text either way. And several abbreviations are carried as what they abbreviate rather than as functions: `GetValueOrDefault([fallback])` is the `??` coalesce it stands for, `Value` and `HasValue` are [the member and the null comparison](#operators-1) they mean, `Equals` is the `==` it spells, and `GroupBy(key, resultSelector)` unfolds into the `GroupBy` + `Select` it spells in one call.
 
 `HasFlag` reads a `[Flags]` enum member; a combined flag — `_.Perks.HasFlag(Perks.Parking | Perks.Gym)` — folds into one constant and travels by name, exactly as `Enum.ToString` spells it.
 

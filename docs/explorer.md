@@ -220,6 +220,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Obsolete: 
     },
     {
+      Name: Shift,
+      Kind: Entity,
+      Model: ShiftQueryModel
+    },
+    {
       Name: Ticket,
       Kind: Entity,
       Model: TicketQueryModel
@@ -741,6 +746,67 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       ]
     },
     {
+      Model: ShiftQueryModel,
+      Members: [
+        {
+          Name: Day,
+          TypeDisplay: global::System.DateOnly,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false
+        },
+        {
+          Name: Duration,
+          TypeDisplay: global::System.TimeSpan,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false
+        },
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false
+        },
+        {
+          Name: Signature,
+          TypeDisplay: byte[],
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false
+        },
+        {
+          Name: Stamped,
+          TypeDisplay: global::System.DateTimeOffset,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false
+        },
+        {
+          Name: Start,
+          TypeDisplay: global::System.TimeOnly,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false
+        }
+      ]
+    },
+    {
       Model: TicketQueryModel,
       Members: [
         {
@@ -812,10 +878,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
   ],
   QueryEndpoint: /api/query,
   SqlPreview: false,
-  SchemaStamp: bRwTlw_MuknEYcRj
+  SchemaStamp: N0Bv0Tb5gKZpFlJn
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L665' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L731' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names, member names with the exact C# type spelling the source generator would emit, and the re-emitted enums. It carries **no** policies, resolvers, connection details, or CLR internals.

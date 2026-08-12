@@ -79,6 +79,27 @@ public class CollationTests
         Assert.That(sensitive, Is.Zero);
     }
 
+    // The static spelling puts the target in its first argument rather than in the instance, and means
+    // the same comparison under the same collation.
+    [Test]
+    public async Task StaticEqualsUnderACollation()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context, Collating());
+
+        var sensitive = await client.Source<Employee>("Employee")
+            .CountAsync(_ => string.Equals(_.Name, "alice", StringComparison.Ordinal));
+
+        var insensitive = await client.Source<Employee>("Employee")
+            .CountAsync(_ => string.Equals(_.Name, "alice", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(sensitive, Is.Zero);
+            Assert.That(insensitive, Is.EqualTo(1));
+        });
+    }
+
     [Test]
     public void AnUnconfiguredCollationIsRejected()
     {

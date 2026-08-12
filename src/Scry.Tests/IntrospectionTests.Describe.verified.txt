@@ -69,6 +69,11 @@
       Obsolete: 
     },
     {
+      Name: Shift,
+      Kind: Entity,
+      Model: ShiftQueryModel
+    },
+    {
       Name: Ticket,
       Kind: Entity,
       Model: TicketQueryModel
@@ -590,6 +595,67 @@
       ]
     },
     {
+      Model: ShiftQueryModel,
+      Members: [
+        {
+          Name: Day,
+          TypeDisplay: global::System.DateOnly,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false
+        },
+        {
+          Name: Duration,
+          TypeDisplay: global::System.TimeSpan,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false
+        },
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false
+        },
+        {
+          Name: Signature,
+          TypeDisplay: byte[],
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false
+        },
+        {
+          Name: Stamped,
+          TypeDisplay: global::System.DateTimeOffset,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false
+        },
+        {
+          Name: Start,
+          TypeDisplay: global::System.TimeOnly,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false
+        }
+      ]
+    },
+    {
       Model: TicketQueryModel,
       Members: [
         {
@@ -661,5 +727,5 @@
   ],
   QueryEndpoint: /api/query,
   SqlPreview: false,
-  SchemaStamp: bRwTlw_MuknEYcRj
+  SchemaStamp: N0Bv0Tb5gKZpFlJn
 }

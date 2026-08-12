@@ -109,7 +109,12 @@ static class SupportedLinq
         ("System.String.StartsWith/2", "StringStartsWith"),
         ("System.String.EndsWith/1", "StringEndsWith"),
         ("System.String.EndsWith/2", "StringEndsWith"),
+        // Equals is the == comparison spelled as a method, so it carries no function of its own. The
+        // arities cover both spellings: instance with one operand, static with two, and each again
+        // with a StringComparison, which becomes a collated comparison instead.
+        ("System.String.Equals/1", ""),
         ("System.String.Equals/2", ""),
+        ("System.String.Equals/3", ""),
         ("System.String.ToLower/0", "StringToLower"),
         ("System.String.ToUpper/0", "StringToUpper"),
         ("System.String.IsNullOrEmpty/1", "StringIsNullOrEmpty"),
@@ -166,6 +171,21 @@ static class SupportedLinq
         ("$temporal.DayOfYear/0", "DateDayOfYear"),
         ("$temporal.DayOfWeek/0", "DateDayOfWeek"),
         ("$temporal.Date/0", "DateDate"),
+        ("$temporal.Microsecond/0", "DateMicrosecond"),
+        ("$temporal.Nanosecond/0", "DateNanosecond"),
+        ("$temporal.DayNumber/0", "DateDayNumber"),
+        ("$temporal.TimeOfDay/0", "DateTimeOfDay"),
+        ("$temporal.FromDateTime/1", "TimeOnlyFromDateTime"),
+        ("$temporal.FromTimeSpan/1", "TimeOnlyFromTimeSpan"),
+        ("$temporal.ToDateTime/1", "DateTimeFromDateAndTime"),
+        ("$temporal.ToUnixTimeSeconds/0", "UnixSecondsFromOffset"),
+        ("$temporal.ToUnixTimeMilliseconds/0", "UnixMillisecondsFromOffset"),
+        ("System.TimeSpan.Hours/0", "TimeSpanHours"),
+        ("System.TimeSpan.Minutes/0", "TimeSpanMinutes"),
+        ("System.TimeSpan.Seconds/0", "TimeSpanSeconds"),
+        ("System.TimeSpan.Milliseconds/0", "TimeSpanMilliseconds"),
+        ("System.TimeSpan.Microseconds/0", "TimeSpanMicroseconds"),
+        ("System.TimeSpan.Nanoseconds/0", "TimeSpanNanoseconds"),
         ("$temporal.AddYears/1", "DateAddYears"),
         ("$temporal.AddMonths/1", "DateAddMonths"),
         ("$temporal.AddDays/1", "DateAddDays"),
@@ -204,14 +224,53 @@ static class SupportedLinq
         ("System.Single.CompareTo/1", "CompareTo"),
         ("System.Double.CompareTo/1", "CompareTo"),
         ("System.Decimal.CompareTo/1", "CompareTo"),
+        // The same comparison on the other scalars, whose owners are listed for their Parse and
+        // CompareTo members and so are read against this table rather than left alone.
+        ("$temporal.Equals/1", ""),
+        ("System.Byte.Equals/1", ""),
+        ("System.SByte.Equals/1", ""),
+        ("System.Int16.Equals/1", ""),
+        ("System.UInt16.Equals/1", ""),
+        ("System.Int32.Equals/1", ""),
+        ("System.UInt32.Equals/1", ""),
+        ("System.Int64.Equals/1", ""),
+        ("System.UInt64.Equals/1", ""),
+        ("System.Single.Equals/1", ""),
+        ("System.Double.Equals/1", ""),
+        ("System.Decimal.Equals/1", ""),
+        ("System.Boolean.Equals/1", ""),
+        ("$nullable.Equals/1", ""),
         // Not calls of a wire function: GetValueOrDefault is the coalesce it abbreviates, carried as
-        // the ordinary binary operator.
+        // the ordinary binary operator, and Value and HasValue are the member itself and a comparison
+        // against null.
         ("$nullable.GetValueOrDefault/0", ""),
         ("$nullable.GetValueOrDefault/1", ""),
+        ("$nullable.Value/0", ""),
+        ("$nullable.HasValue/0", ""),
         // Not written as a call. A client-supplied set reaches the wire as In through Contains over a
         // closure collection, which is an Enumerable call rather than a member of a scalar.
-        ("$set.Contains/1", "In")
+        ("$set.Contains/1", "In"),
+        // DateOnly and TimeOnly both spell FromDateTime, so the one signature names two functions.
+        ("$temporal.FromDateTime/1", "DateOnlyFromDateTime"),
+        // Not members of a scalar either: text and binary answer these as Enumerable statics, so no
+        // owner declares them and the analyzer reaches them through the call rather than the type.
+        ("$sequence.FirstOrDefault/1", "StringFirst"),
+        ("$sequence.LastOrDefault/1", "StringLast"),
+        ("$binary.Length/0", "BytesLength"),
+        ("$binary.Contains/2", "BytesContains"),
+        ("$binary.ElementAt/2", "BytesElementAt")
     ];
+
+    /// <summary>
+    /// Owners that stand for a shape rather than a type, so no reflected member backs them. Each is a
+    /// call the wire carries whose C# spelling belongs to <c>Enumerable</c> or to the language itself.
+    /// </summary>
+    public static readonly HashSet<string> Markers = new(StringComparer.Ordinal)
+    {
+        "$set",
+        "$sequence",
+        "$binary"
+    };
 
     /// <summary>
     /// The signature every temporal type shares, since the four spell the same members. A member on a

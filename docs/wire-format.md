@@ -357,6 +357,15 @@ public enum KnownFunction
     StringSubstring,
     StringIndexOf,
     StringReplace,
+
+    /// <summary>
+    /// The first and last character of a string, as <c>FirstOrDefault</c> and <c>LastOrDefault</c>
+    /// spell them — a substring of one, taken at either end. The indexer that looks like it means the
+    /// same is not carried: no provider translates it, and one that reads past the end of the text
+    /// would fault where these answer with the default.
+    /// </summary>
+    StringFirst,
+    StringLast,
     DateYear,
     DateMonth,
     DateDay,
@@ -367,11 +376,61 @@ public enum KnownFunction
     DateDayOfYear,
 
     /// <summary>
+    /// The sub-millisecond parts, each within the one above it: 0-999 microseconds of the
+    /// millisecond, 0-999 nanoseconds of the microsecond. SQL Server's DATEPART counts them from the
+    /// whole second, so the server takes the remainder, exactly as EF does.
+    /// </summary>
+    DateMicrosecond,
+    DateNanosecond,
+
+    /// <summary>The count of days since 0001-01-01 (<c>DateOnly.DayNumber</c>).</summary>
+    DateDayNumber,
+
+    /// <summary>
     /// The day of the week, numbered as <see cref="System.DayOfWeek"/> does — 0 for Sunday. The server
     /// owns how that is expressed in SQL, since the obvious formulation is not deterministic.
     /// </summary>
     DateDayOfWeek,
     DateDate,
+
+    /// <summary>
+    /// The time of day a date carries, as the <see cref="System.TimeSpan"/> since midnight. The
+    /// counterpart of <see cref="DateDate"/>, which drops the same part instead of keeping it.
+    /// </summary>
+    DateTimeOfDay,
+
+    /// <summary>
+    /// The parts of an elapsed time, each within the unit above it — the hours of the day, the
+    /// minutes of the hour, and so on down. Whole totals (<c>TotalHours</c> and its siblings) are a
+    /// division rather than a part and no provider translates them, so they are not carried.
+    /// </summary>
+    TimeSpanHours,
+    TimeSpanMinutes,
+    TimeSpanSeconds,
+    TimeSpanMilliseconds,
+    TimeSpanMicroseconds,
+    TimeSpanNanoseconds,
+
+    /// <summary>
+    /// Reading one temporal type as another: the date or the time half of a timestamp, a time read as
+    /// an elapsed time, and a date and a time composed back into one. Each is a conversion the
+    /// database performs, so the answer does not depend on the client's calendar or its clock.
+    /// </summary>
+    DateOnlyFromDateTime,
+    TimeOnlyFromDateTime,
+    TimeOnlyFromTimeSpan,
+    DateTimeFromDateAndTime,
+
+    /// <summary>
+    /// Unix time, counted from 1970-01-01 UTC (<c>DateTimeOffset.ToUnixTimeSeconds</c>). The
+    /// <c>DateTime</c> / <c>UtcDateTime</c> / <c>LocalDateTime</c> readings of an offset are not
+    /// carried alongside them: the provider has a translation only for a column whose store type is
+    /// <c>datetimeoffset</c> and refuses the expression otherwise, and the local reading would go
+    /// through <c>CURRENT_TIMEZONE_ID()</c> — the server's own zone — even where it does translate.
+    /// </summary>
+    UnixSecondsFromOffset,
+    UnixMillisecondsFromOffset,
+
     DateAddYears,
     DateAddMonths,
     DateAddDays,
@@ -473,10 +532,22 @@ public enum KnownFunction
     /// Numbers, text and dates compare; text compares under the server's collation, exactly as its
     /// ordering does.
     /// </summary>
-    CompareTo
+    CompareTo,
+
+    /// <summary>
+    /// Questions about a binary member's bytes, without reading them: how many there are
+    /// (<c>DATALENGTH</c>), whether a byte is among them (<c>CHARINDEX</c>), and the byte at one
+    /// position. An <c>[Attachment]</c> answers none of them — its value is the one thing no query
+    /// reads — so these reach a plain or <c>[BinaryTransfer]</c> member only. <c>Any()</c> is absent
+    /// because the provider refuses it; ask whether <see cref="BytesLength"/> is above zero, which is
+    /// the same question and does translate.
+    /// </summary>
+    BytesLength,
+    BytesContains,
+    BytesElementAt
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L139' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L210' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 There is no free-form method name anywhere in the format. This enum is the complete set of behaviour a client can request.
@@ -1019,12 +1090,12 @@ Over HTTP, request and response look like this:
   {
     RequestUri: http://localhost/api/query,
     RequestMethod: POST,
-    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"node","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"8yskMW95UPUIz0wo"},
+    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"node","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"7G0DAc7vLEP4Bwo5"},
     ResponseStatus: OK 200,
     ResponseHeaders: {
-      Scry-Schema-Stamp: 8yskMW95UPUIz0wo
+      Scry-Schema-Stamp: 7G0DAc7vLEP4Bwo5
     },
-    ResponseContent: {"version":2,"kind":"List","payload":[{"name":"Aaron","status":"FullTime","manager":"Alice","department":"Engineering"},{"name":"Alice","status":"FullTime","manager":null,"department":"Engineering"},{"name":"Carol","status":"Contractor","manager":null,"department":"Sales"}],"stamp":"8yskMW95UPUIz0wo"}
+    ResponseContent: {"version":2,"kind":"List","payload":[{"name":"Aaron","status":"FullTime","manager":"Alice","department":"Engineering"},{"name":"Alice","status":"FullTime","manager":null,"department":"Engineering"},{"name":"Carol","status":"Contractor","manager":null,"department":"Sales"}],"stamp":"7G0DAc7vLEP4Bwo5"}
   }
 ]
 ```

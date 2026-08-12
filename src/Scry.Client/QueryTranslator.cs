@@ -1043,6 +1043,12 @@ sealed class QueryTranslator
                 case UnaryExpression {NodeType: ExpressionType.Negate} negate:
                     return new UnaryNode(UnaryOp.Negate, TranslateExpr(negate.Operand, root));
 
+                // A binary member's Length is an ArrayLength node rather than a member access, since
+                // the CLR spells an array's length as an operator.
+                case UnaryExpression {NodeType: ExpressionType.ArrayLength} length
+                    when length.Operand.Type == typeof(byte[]) && ReferencesParameter(length, root):
+                    return new CallNode(KnownFunction.BytesLength, TranslateExpr(length.Operand, root), []);
+
                 // C# compiles string concatenation to an Add carrying string.Concat as its method. The
                 // operator alone cannot say which was meant — an Add of a string and a number is a
                 // concatenation, an Add of two numbers is arithmetic — so the intent is recorded here,
@@ -1089,6 +1095,20 @@ sealed class QueryTranslator
                 case MemberExpression {Member.Name: "Count", Expression: { } owner}
                     when IsRootedCollection(owner, root):
                     return new SubqueryNode(MemberPath((MemberExpression)owner), SubqueryFn.Count, null, null);
+
+                // A nullable's Value is the member it wraps. Every wire operand is already optional, so
+                // there is no wrapper to strip on the far side — carried as a path segment it would
+                // only read as a member the server cannot find.
+                case MemberExpression {Member.Name: "Value", Expression: { } optional} valued
+                    when IsOptional(optional) && IsRooted(valued, root):
+                    expression = optional;
+                    continue;
+
+                // HasValue asks the one thing the wire already spells as a comparison: whether the
+                // member is there.
+                case MemberExpression {Member.Name: "HasValue", Expression: { } asked} present
+                    when IsOptional(asked) && IsRooted(present, root):
+                    return new BinaryNode(BinaryOp.NotEqual, TranslateExpr(asked, root), ConstantOf(null));
 
                 case MemberExpression member when IsKnownProperty(member, out var function):
                     return new CallNode(function, TranslateExpr(member.Expression!, root), []);
@@ -1170,6 +1190,22 @@ sealed class QueryTranslator
             return new CallNode(KnownFunction.CompareTo, TranslateExpr(compared, root), [TranslateExpr(call.Arguments[0], root)]);
         }
 
+        // Equals is == spelled as a method: the same comparison, over the same operands, refused by the
+        // same rules when either is not a value. The overloads taking a StringComparison are not this
+        // — they ask for a case sensitivity, which the string path reads as a collation — so they are
+        // left for it.
+        if (call.Method.Name == "Equals" &&
+            !TakesComparison(call) &&
+            EqualityOperands(call) is (var equated, var against))
+        {
+            // One that reads nothing from the row is closure state, evaluated here as any other
+            // constant expression is — the string dispatch below would otherwise reach it first and
+            // refuse it for having no function to become.
+            return ReferencesParameter(call, root)
+                ? new BinaryNode(BinaryOp.Equal, TranslateExpr(equated, root), TranslateExpr(against, root))
+                : ConstantOf(Evaluate(call));
+        }
+
         if (declaring == typeof(string))
         {
             return TranslateStringMethod(call, root);
@@ -1219,6 +1255,44 @@ sealed class QueryTranslator
 
                 return new CallNode(function, TranslateExpr(text, root), []);
             }
+        }
+
+        // The statics that read one temporal type as another. Each takes the value being read as its
+        // argument, so the wire's target is that argument rather than an instance.
+        if (IsTemporal(declaring) &&
+            call is {Object: null, Arguments: [var read]} &&
+            ReferencesParameter(call, root))
+        {
+            var conversion = call.Method.Name switch
+            {
+                "FromDateTime" when declaring == typeof(Date) => KnownFunction.DateOnlyFromDateTime,
+                "FromDateTime" when declaring == typeof(Time) => KnownFunction.TimeOnlyFromDateTime,
+                "FromTimeSpan" when declaring == typeof(Time) => KnownFunction.TimeOnlyFromTimeSpan,
+                _ => (KnownFunction?)null
+            };
+
+            if (conversion is { } function)
+            {
+                return new CallNode(function, TranslateExpr(read, root), []);
+            }
+        }
+
+        // The Unix-time readings, which are argument-less instance methods on an offset.
+        if (declaring == typeof(DateTimeOffset) &&
+            call is {Object: { } stamped, Arguments.Count: 0} &&
+            call.Method.Name is "ToUnixTimeSeconds" or "ToUnixTimeMilliseconds")
+        {
+            var unix = call.Method.Name == "ToUnixTimeSeconds"
+                ? KnownFunction.UnixSecondsFromOffset
+                : KnownFunction.UnixMillisecondsFromOffset;
+            return new CallNode(unix, TranslateExpr(stamped, root), []);
+        }
+
+        // A date and a time composed back into one timestamp.
+        if (declaring == typeof(Date) &&
+            call is {Method.Name: "ToDateTime", Object: { } dated, Arguments: [var timed]})
+        {
+            return new CallNode(KnownFunction.DateTimeFromDateAndTime, TranslateExpr(dated, root), [TranslateExpr(timed, root)]);
         }
 
         if (IsTemporal(declaring))
@@ -1287,6 +1361,14 @@ sealed class QueryTranslator
             return new CallNode(math, TranslateExpr(call.Arguments[0], root), arguments);
         }
 
+        // Text and binary answer a handful of Enumerable's questions without ever yielding their
+        // elements — the first character, the byte at a position, whether there are any bytes at all.
+        // Checked before the collection forms below, which read a navigation rather than a scalar.
+        if (TrySequenceRead(call, root) is { } sequence)
+        {
+            return sequence;
+        }
+
         // _.Orders.Any(o => …) — a question about a collection navigation, which the server evaluates
         // as a correlated subquery. Checked before the set-membership form below, whose Contains reads
         // a closure collection rather than one belonging to the row.
@@ -1332,9 +1414,10 @@ sealed class QueryTranslator
         Node Argument(int index) => TranslateExpr(call.Arguments[index], root);
 
         // The StringComparison overloads ask for a case sensitivity rather than a different operation,
-        // so the target is read under it and the ordinary function applies on top.
-        if (call.Arguments.Count == 2 &&
-            call.Arguments[^1].Type == typeof(StringComparison) &&
+        // so the target is read under it and the ordinary function applies on top. Equals also has a
+        // static spelling, which puts the target in the first argument rather than in the instance.
+        if (TakesComparison(call) &&
+            call.Arguments.Count == (call.Object is null ? 3 : 2) &&
             call.Method.Name is "Contains" or "StartsWith" or "EndsWith" or "Equals")
         {
             var function = call.Method.Name switch
@@ -1345,12 +1428,16 @@ sealed class QueryTranslator
                 _ => (KnownFunction?)null
             };
 
-            var collated = new CollateNode(TranslateExpr(call.Object!, root), Sensitivity(call.Arguments[1]));
+            var (compared, operand) = call.Object is { } instance
+                ? (instance, call.Arguments[0])
+                : (call.Arguments[0], call.Arguments[1]);
+
+            var collated = new CollateNode(TranslateExpr(compared, root), Sensitivity(call.Arguments[^1]));
 
             // Equals is a comparison rather than a function; under a collation it is an ordinary one.
             return function is null
-                ? new BinaryNode(BinaryOp.Equal, collated, TranslateExpr(call.Arguments[0], root))
-                : new CallNode(function.Value, collated, [TranslateExpr(call.Arguments[0], root)]);
+                ? new BinaryNode(BinaryOp.Equal, collated, TranslateExpr(operand, root))
+                : new CallNode(function.Value, collated, [TranslateExpr(operand, root)]);
         }
 
         switch (call.Method.Name)
@@ -1869,6 +1956,111 @@ sealed class QueryTranslator
         type == typeof(DateTimeOffset) ||
         type == typeof(Time);
 
+    /// <summary>
+    /// The questions a string or a binary member answers as a sequence. Both are scalars on the wire —
+    /// neither ever yields its elements — so each of these folds to a single value, and the ones with
+    /// no such folding (any predicate overload, anything returning a sequence) are left to fail as the
+    /// client-side code they are.
+    /// </summary>
+    Node? TrySequenceRead(MethodCallExpression call, ParameterExpression root)
+    {
+        // MemoryExtensions sits alongside Enumerable here because the compiler prefers its span
+        // overload for a byte[]'s Contains. The two spell one question, and the server rebinds either
+        // onto the Enumerable form the provider translates.
+        if (call is not {Object: null, Arguments: [var source, ..]} ||
+            (call.Method.DeclaringType != typeof(Enumerable) &&
+             call.Method.DeclaringType != typeof(MemoryExtensions)) ||
+            !ReferencesParameter(source, root))
+        {
+            return null;
+        }
+
+        // MemoryExtensions takes a span, so the array reaches it through a conversion — spelled as a
+        // call to the implicit operator rather than as a Convert node, since a ref struct is not a
+        // type the tree can convert to on its own. The question is about what was converted, and the
+        // wire carries that member rather than the span.
+        source = Unconverted(source);
+
+        if (source.Type == typeof(string))
+        {
+            var text = call.Method.Name switch
+            {
+                "FirstOrDefault" when call.Arguments.Count == 1 => KnownFunction.StringFirst,
+                "LastOrDefault" when call.Arguments.Count == 1 => KnownFunction.StringLast,
+                _ => (KnownFunction?)null
+            };
+
+            return text is { } reading
+                ? new CallNode(reading, TranslateExpr(source, root), [])
+                : null;
+        }
+
+        if (source.Type != typeof(byte[]))
+        {
+            return null;
+        }
+
+        // First is ElementAt at position zero, so it travels as that rather than as a function of its
+        // own — the same unfolding the terminals use for ElementAtAsync.
+        return call.Method.Name switch
+        {
+            "First" when call.Arguments.Count == 1 =>
+                new CallNode(KnownFunction.BytesElementAt, TranslateExpr(source, root), [ConstantOf(0)]),
+            "ElementAt" when call.Arguments is [_, var at] =>
+                new CallNode(KnownFunction.BytesElementAt, TranslateExpr(source, root), [TranslateExpr(at, root)]),
+            "Contains" when call.Arguments is [_, var value] =>
+                new CallNode(KnownFunction.BytesContains, TranslateExpr(source, root), [TranslateExpr(value, root)]),
+            _ => null
+        };
+    }
+
+    // The value under any conversions wrapping it, whichever way the compiler spelled them: a Convert
+    // node, or a call to a conversion operator where the target is a type the tree cannot convert to.
+    static Expression Unconverted(Expression expression)
+    {
+        while (true)
+        {
+            switch (expression)
+            {
+                case UnaryExpression {NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked} converted:
+                    expression = converted.Operand;
+                    continue;
+
+                case MethodCallExpression
+                {
+                    Object: null,
+                    Method.Name: "op_Implicit" or "op_Explicit",
+                    Arguments: [var operand]
+                }:
+                    expression = operand;
+                    continue;
+
+                default:
+                    return expression;
+            }
+        }
+    }
+
+    // Whether the expression is an optional value, whose Value and HasValue members are carried as the
+    // member itself and as a comparison against null.
+    static bool IsOptional(Expression expression) =>
+        Nullable.GetUnderlyingType(expression.Type) is not null;
+
+    // Whether the call's last argument names a case sensitivity rather than an operand.
+    static bool TakesComparison(MethodCallExpression call) =>
+        call.Arguments.Count > 0 &&
+        call.Arguments[^1].Type == typeof(StringComparison);
+
+    // The two operands of an Equals that means ==: the instance and its one argument, or the two
+    // arguments of the static spelling. Any other shape is an overload the set does not carry.
+    static (Expression Left, Expression Right)? EqualityOperands(MethodCallExpression call) =>
+        call switch
+        {
+            {Object: { } instance, Arguments: [var argument]} => (instance, argument),
+            {Object: null, Arguments: [var first, var second]} => (first, second),
+            _ => null
+        };
+
     // The types the server compares three ways: numbers, text, and dates. Mirrors the server's own
     // allow-list, so an unsupported target refuses at translation rather than as a rejected request.
     // Enums are excluded by hand: their type code reports the underlying number's.
@@ -1916,11 +2108,52 @@ sealed class QueryTranslator
                     case "DayOfYear":
                         function = KnownFunction.DateDayOfYear;
                         return true;
+                    case "Microsecond":
+                        function = KnownFunction.DateMicrosecond;
+                        return true;
+                    case "Nanosecond":
+                        function = KnownFunction.DateNanosecond;
+                        return true;
+                    case "DayNumber":
+                        function = KnownFunction.DateDayNumber;
+                        return true;
+                    case "TimeOfDay":
+                        function = KnownFunction.DateTimeOfDay;
+                        return true;
                     case "DayOfWeek":
                         function = KnownFunction.DateDayOfWeek;
                         return true;
                     case "Date":
                         function = KnownFunction.DateDate;
+                        return true;
+                }
+            }
+
+            // An elapsed time's parts are spelled in the plural — Hours, not Hour — which is what tells
+            // them apart from a date's, and is why they are read here rather than alongside them. The
+            // Total* readings are absent on purpose: each is a division rather than a part, and no
+            // provider translates one.
+            if (declaring == typeof(TimeSpan))
+            {
+                switch (member.Member.Name)
+                {
+                    case "Hours":
+                        function = KnownFunction.TimeSpanHours;
+                        return true;
+                    case "Minutes":
+                        function = KnownFunction.TimeSpanMinutes;
+                        return true;
+                    case "Seconds":
+                        function = KnownFunction.TimeSpanSeconds;
+                        return true;
+                    case "Milliseconds":
+                        function = KnownFunction.TimeSpanMilliseconds;
+                        return true;
+                    case "Microseconds":
+                        function = KnownFunction.TimeSpanMicroseconds;
+                        return true;
+                    case "Nanoseconds":
+                        function = KnownFunction.TimeSpanNanoseconds;
                         return true;
                 }
             }
