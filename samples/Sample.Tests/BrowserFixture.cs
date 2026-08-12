@@ -13,11 +13,60 @@ public abstract class BrowserFixture
     Process server = null!;
     IPlaywright playwright = null!;
     string workDir = null!;
+    IBrowser browser = null!;
 
-    protected IBrowser Browser { get; private set; } = null!;
+    // What the page logged during the current test. Written from Playwright's own threads, so a
+    // concurrent collection rather than a List.
+    readonly ConcurrentQueue<string> console = new();
 
     /// <summary>The origin the sample server is listening on, with no trailing slash.</summary>
     protected string BaseUrl { get; private set; } = null!;
+
+    /// <summary>
+    /// Opens a page, recording everything it logs for the duration of the test.
+    /// </summary>
+    /// <remarks>
+    /// The only way a test gets a page — the browser itself is private — so no test can be written
+    /// that quietly opts out of the recording.
+    /// </remarks>
+    protected async Task<IPage> NewPageAsync(BrowserNewPageOptions? options = null)
+    {
+        var page = await browser.NewPageAsync(options);
+        page.Console += (_, message) => console.Enqueue($"[{message.Type}] {message.Text}");
+        page.PageError += (_, error) => console.Enqueue($"[pageerror] {error}");
+        return page;
+    }
+
+    [SetUp]
+    public void ClearConsole() =>
+        console.Clear();
+
+    /// <summary>
+    /// Reports what the page logged, but only for a test that failed.
+    /// </summary>
+    /// <remarks>
+    /// A failure here is almost always the UI never reaching the state the test waits for, and what
+    /// Playwright can say about that is only that a selector never appeared — a bare 30 second timeout,
+    /// identical whatever the cause. The page usually knows exactly what went wrong and says so in its
+    /// console: a boot that failed an integrity check because the embedded assets went stale, an
+    /// exception out of the in-browser Roslyn, a 404 for an asset. None of that reached the test output
+    /// before, which made a whole suite of timeouts say nothing about which of those it was.
+    /// </remarks>
+    [TearDown]
+    public void ReportConsoleOnFailure()
+    {
+        if (TestContext.CurrentContext.Result.Outcome.Status != TestStatus.Failed ||
+            console.IsEmpty)
+        {
+            return;
+        }
+
+        TestContext.Out.WriteLine($"Browser console during {TestContext.CurrentContext.Test.Name}:");
+        foreach (var message in console)
+        {
+            TestContext.Out.WriteLine($"  {message}");
+        }
+    }
 
     [OneTimeSetUp]
     public async Task StartServer()
@@ -47,7 +96,7 @@ public abstract class BrowserFixture
         await WaitForServer(port);
 
         playwright = await Playwright.CreateAsync();
-        Browser = await playwright.Chromium.LaunchAsync(
+        browser = await playwright.Chromium.LaunchAsync(
             new()
             {
                 // Grayscale text rather than Chromium's default LCD subpixel antialiasing. The colour
@@ -64,9 +113,9 @@ public abstract class BrowserFixture
     public async Task Stop()
     {
         // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
-        if (Browser is not null)
+        if (browser is not null)
         {
-            await Browser.DisposeAsync();
+            await browser.DisposeAsync();
         }
 
         // ReSharper disable once ConditionalAccessQualifierIsNonNullableAccordingToAPIContract

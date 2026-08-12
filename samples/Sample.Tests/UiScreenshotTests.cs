@@ -54,7 +54,7 @@ public class UiScreenshotTests :
     [Test]
     public async Task SampleHomePage()
     {
-        var page = await NewPageAsync();
+        var page = await NewSizedPageAsync();
         await page.GotoAsync(BaseUrl);
 
         // All four tables have rendered, so the capture is of the settled page rather than of one
@@ -71,7 +71,7 @@ public class UiScreenshotTests :
     [Test]
     public async Task SampleEmployeeTable()
     {
-        var page = await NewPageAsync();
+        var page = await NewSizedPageAsync();
         await page.GotoAsync(BaseUrl);
         await page.WaitForSelectorAsync("table tbody tr");
 
@@ -85,7 +85,7 @@ public class UiScreenshotTests :
     [Test]
     public async Task ExplorerShell()
     {
-        var page = await NewPageAsync();
+        var page = await NewSizedPageAsync();
         await GoToExplorer(page);
 
         await Verify(page)
@@ -102,7 +102,7 @@ public class UiScreenshotTests :
     [Test]
     public async Task ExplorerDarkMode()
     {
-        var page = await NewPageAsync();
+        var page = await NewSizedPageAsync();
         await GoToExplorer(page);
 
         // System → Light → Dark, so the result does not depend on the machine's own preference.
@@ -125,7 +125,7 @@ public class UiScreenshotTests :
     [Test]
     public async Task ExplorerSideBySide()
     {
-        var page = await NewPageAsync(wideViewport);
+        var page = await NewSizedPageAsync(wideViewport);
         await GoToExplorer(page);
 
         await page.SetEditorValueAsync(
@@ -153,7 +153,7 @@ public class UiScreenshotTests :
     [Test]
     public async Task ExplorerResultTable()
     {
-        var page = await NewPageAsync();
+        var page = await NewSizedPageAsync();
         await GoToExplorer(page);
 
         await page.SetEditorValueAsync(
@@ -175,7 +175,7 @@ public class UiScreenshotTests :
     [Test]
     public async Task ExplorerSqlPreview()
     {
-        var page = await NewPageAsync();
+        var page = await NewSizedPageAsync();
         await GoToExplorer(page);
 
         await page.SetEditorValueAsync(
@@ -199,7 +199,7 @@ public class UiScreenshotTests :
     [Test]
     public async Task ExplorerIntelliSense()
     {
-        var page = await NewPageAsync(intelliSenseViewport);
+        var page = await NewSizedPageAsync(intelliSenseViewport);
         await GoToExplorer(page);
 
         // The caret goes to the end of the sample query ("…Where(_ => _."), which is where the member
@@ -227,7 +227,7 @@ public class UiScreenshotTests :
     [Test]
     public async Task ExplorerRun()
     {
-        var page = await NewPageAsync(docsViewport);
+        var page = await NewSizedPageAsync(docsViewport);
         await GoToExplorer(page);
 
         // Broken across lines so it sits inside the editor's width unwrapped: this is the capture that
@@ -309,8 +309,10 @@ public class UiScreenshotTests :
                     """
             });
 
-    Task<IPage> NewPageAsync(ViewportSize? size = null) =>
-        Browser.NewPageAsync(
+    // Through the fixture's factory rather than the browser directly, so a screenshot page records
+    // what it logs exactly as a snapshot page does.
+    Task<IPage> NewSizedPageAsync(ViewportSize? size = null) =>
+        NewPageAsync(
             new()
             {
                 ViewportSize = size ?? viewport

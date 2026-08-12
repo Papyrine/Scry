@@ -1,3 +1,4 @@
+global using System.Collections.Concurrent;
 global using System.Diagnostics;
 global using System.Net;
 global using System.Net.Http;
@@ -11,6 +12,7 @@ global using Microsoft.AspNetCore.TestHost;
 global using Microsoft.Extensions.DependencyInjection;
 global using Microsoft.Playwright;
 global using NUnit.Framework;
+global using NUnit.Framework.Interfaces;
 global using Scry;
 global using Scry.Generated;
 global using VerifyTests.AngleSharp;

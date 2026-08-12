@@ -13,7 +13,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task HomePage()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync(BaseUrl);
 
         // Wait until the WebAssembly app has run its queries and rendered the result tables.
@@ -43,7 +43,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerBoots()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
 
         // Allow the WASM runtime to download and boot before asserting the app rendered.
@@ -67,7 +67,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerShellMarkup()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         // Wait for the schema to load so the fully-initialised shell (enabled buttons, no "Loading
@@ -113,7 +113,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerEditorAcceptsTyping()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
 
@@ -135,7 +135,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerCompletion()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
 
         // Roslyn init + first completion in the WASM interpreter is slow on a cold load.
@@ -159,7 +159,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerCompletionDoesNotCrashWasmRuntime()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
 
         // Blazor logs unhandled .NET exceptions to console.error; the mono runtime prints
         // "FATAL UNHANDLED EXCEPTION" for a stack overflow; a boot-time asset failure aborts with
@@ -222,7 +222,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerCompletesTerminals()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
@@ -247,7 +247,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerInsertsACompletionAtTheCursor()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
@@ -271,7 +271,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerCompletesAtTheCursorRatherThanTheEndOfTheQuery()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
@@ -302,7 +302,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerReplacesATypedPrefixWithTheCompletion()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
@@ -324,7 +324,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerShowsSql()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
@@ -351,7 +351,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerSharesAQueryByLink()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
@@ -370,7 +370,7 @@ public class UiSnapshotTests :
 
         // A fresh load of the shared link, not a fragment change on the running app: a hash-only
         // navigation would leave the editor as it is and prove nothing.
-        var opened = await Browser.NewPageAsync();
+        var opened = await NewPageAsync();
         await opened.GotoAsync(shared);
         await opened.WaitForSelectorAsync(".monaco-editor", 30);
         await opened.WaitForFunctionAsync(
@@ -387,7 +387,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerIgnoresAMalformedShareLink()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry/#q=!!!not-base64!!!");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForFunctionAsync(
@@ -407,7 +407,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerExportsResults()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
@@ -455,7 +455,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerOffersCsvOnlyForAFlatResult()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
@@ -490,7 +490,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerFetchesAnAttachment()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
@@ -552,7 +552,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerInlineSuggestions()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         // Wait for the schema to load (provider registered) — the auto-run completion list appears.
@@ -580,7 +580,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerRun()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
@@ -624,7 +624,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerRunCarryingBinary()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
@@ -659,7 +659,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerRunToList()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
@@ -679,7 +679,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerRunCount()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
@@ -706,7 +706,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerRunFirst()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
@@ -735,7 +735,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerDarkMode()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
 
@@ -764,7 +764,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerRunViaKeyboard()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
@@ -788,7 +788,7 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerDiagnostics()
     {
-        var page = await Browser.NewPageAsync();
+        var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
         await page.WaitForSelectorAsync(".monaco-editor", 30);
         await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
