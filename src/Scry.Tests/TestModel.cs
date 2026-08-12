@@ -79,6 +79,29 @@ public class Employee
 }
 
 /// <summary>
+/// The temporal types a date is not: an elapsed time, a bare date, a bare time, and an offset one.
+/// Each maps to a column of its own on SQL Server, so the functions over them are exercised as
+/// translated SQL rather than in memory. Carries a plain binary member for the same reason.
+/// </summary>
+[Queryable]
+public class Shift
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+
+    // An elapsed time, whose parts are read in the plural — Hours, not Hour.
+    public TimeSpan Duration { get; set; }
+
+    public Date Day { get; set; }
+    public Time Start { get; set; }
+    public DateTimeOffset Stamped { get; set; }
+
+    // A plain byte[]: neither an attachment nor a binary transfer, so it is an ordinary value a query
+    // can ask questions about without ever reading.
+    public byte[] Signature { get; set; } = [];
+}
+
+/// <summary>
 /// A complex value type mapped to JSON. Opted in with [QueryableComplex]: reachable only by
 /// traversing from <see cref="Employee"/> (e.g. Address.City), never as a root source. Zip is hidden.
 /// </summary>
@@ -445,6 +468,7 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
     public DbSet<Asset> Assets => Set<Asset>();
     public DbSet<Post> Posts => Set<Post>();
     public DbSet<Contract> Contracts => Set<Contract>();
+    public DbSet<Shift> Shifts => Set<Shift>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder builder) =>
         builder.Properties<decimal>().HavePrecision(18, 2);
@@ -702,6 +726,28 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
                 Grade = 'A',
                 Code = "17",
                 Audited = "true"
+            });
+
+        // Durations and stamps chosen so each part reads as a distinct number, and so the two rows
+        // disagree on every one of them.
+        context.Shifts.AddRange(
+            new()
+            {
+                Name = "Early",
+                Duration = new(7, 30, 15),
+                Day = new(2026, 3, 4),
+                Start = new(6, 15, 30),
+                Stamped = new(2026, 3, 4, 6, 15, 30, TimeSpan.FromHours(2)),
+                Signature = [0x0A, 0x0B, 0x0C]
+            },
+            new()
+            {
+                Name = "Late",
+                Duration = new(9, 45, 50),
+                Day = new(2026, 7, 19),
+                Start = new(14, 5, 0),
+                Stamped = new(2026, 7, 19, 14, 5, 0, TimeSpan.Zero),
+                Signature = []
             });
 
         context.Assets.AddRange(

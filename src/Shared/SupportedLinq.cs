@@ -171,6 +171,21 @@ static class SupportedLinq
         ("$temporal.DayOfYear/0", "DateDayOfYear"),
         ("$temporal.DayOfWeek/0", "DateDayOfWeek"),
         ("$temporal.Date/0", "DateDate"),
+        ("$temporal.Microsecond/0", "DateMicrosecond"),
+        ("$temporal.Nanosecond/0", "DateNanosecond"),
+        ("$temporal.DayNumber/0", "DateDayNumber"),
+        ("$temporal.TimeOfDay/0", "DateTimeOfDay"),
+        ("$temporal.FromDateTime/1", "TimeOnlyFromDateTime"),
+        ("$temporal.FromTimeSpan/1", "TimeOnlyFromTimeSpan"),
+        ("$temporal.ToDateTime/1", "DateTimeFromDateAndTime"),
+        ("$temporal.ToUnixTimeSeconds/0", "UnixSecondsFromOffset"),
+        ("$temporal.ToUnixTimeMilliseconds/0", "UnixMillisecondsFromOffset"),
+        ("System.TimeSpan.Hours/0", "TimeSpanHours"),
+        ("System.TimeSpan.Minutes/0", "TimeSpanMinutes"),
+        ("System.TimeSpan.Seconds/0", "TimeSpanSeconds"),
+        ("System.TimeSpan.Milliseconds/0", "TimeSpanMilliseconds"),
+        ("System.TimeSpan.Microseconds/0", "TimeSpanMicroseconds"),
+        ("System.TimeSpan.Nanoseconds/0", "TimeSpanNanoseconds"),
         ("$temporal.AddYears/1", "DateAddYears"),
         ("$temporal.AddMonths/1", "DateAddMonths"),
         ("$temporal.AddDays/1", "DateAddDays"),
@@ -234,8 +249,28 @@ static class SupportedLinq
         ("$nullable.HasValue/0", ""),
         // Not written as a call. A client-supplied set reaches the wire as In through Contains over a
         // closure collection, which is an Enumerable call rather than a member of a scalar.
-        ("$set.Contains/1", "In")
+        ("$set.Contains/1", "In"),
+        // DateOnly and TimeOnly both spell FromDateTime, so the one signature names two functions.
+        ("$temporal.FromDateTime/1", "DateOnlyFromDateTime"),
+        // Not members of a scalar either: text and binary answer these as Enumerable statics, so no
+        // owner declares them and the analyzer reaches them through the call rather than the type.
+        ("$sequence.FirstOrDefault/1", "StringFirst"),
+        ("$sequence.LastOrDefault/1", "StringLast"),
+        ("$binary.Length/0", "BytesLength"),
+        ("$binary.Contains/2", "BytesContains"),
+        ("$binary.ElementAt/2", "BytesElementAt")
     ];
+
+    /// <summary>
+    /// Owners that stand for a shape rather than a type, so no reflected member backs them. Each is a
+    /// call the wire carries whose C# spelling belongs to <c>Enumerable</c> or to the language itself.
+    /// </summary>
+    public static readonly HashSet<string> Markers = new(StringComparer.Ordinal)
+    {
+        "$set",
+        "$sequence",
+        "$binary"
+    };
 
     /// <summary>
     /// The signature every temporal type shares, since the four spell the same members. A member on a

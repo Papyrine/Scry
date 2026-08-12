@@ -249,7 +249,7 @@ static class ExpressionRules
         }
 
         var name = type.ToDisplayString();
-        if (name is "System.Math" or "System.Enum" or "System.Convert")
+        if (name is "System.Math" or "System.Enum" or "System.Convert" or "System.TimeSpan")
         {
             return name;
         }

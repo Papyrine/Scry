@@ -75,7 +75,7 @@ public class AnalyzerTests
                 """
                 await Query.Order.Where(_ => _.Region.PadLeft(5) == "x").ToListAsync();
                 await Query.Order.Where(_ => _.Placed.Ticks > 0).ToListAsync();
-                await Query.Order.Where(_ => _.Placed.TimeOfDay.Hours > 0).ToListAsync();
+                await Query.Order.Where(_ => _.Placed.TimeOfDay.TotalHours > 0).ToListAsync();
                 await Query.Order.Where(_ => Math.Cbrt(_.Rate) > 1).ToListAsync();
                 await Query.Order.Where(_ => _.Region.Trim('x') == "y").ToListAsync();
                 """));
@@ -249,6 +249,7 @@ public class AnalyzerTests
             await Query.Order
                 .Where(_ => _.Region.Equals("N") || string.Equals(_.Region, "S"))
                 .Where(_ => _.Grade.Equals('A') && _.Rebate.HasValue && _.Rebate.Value > 1)
+                .Where(_ => _.Placed.TimeOfDay.Hours > 0 && _.Placed.Microsecond == 0)
                 .ToListAsync();
 
             await Query.Order.SelectMany(_ => _.Lines).Select(_ => new {_.Price}).ToListAsync();

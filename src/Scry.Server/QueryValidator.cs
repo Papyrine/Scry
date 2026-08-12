@@ -1311,6 +1311,24 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 KnownFunction.DateDayOfYear or
                 KnownFunction.DateDayOfWeek or
                 KnownFunction.DateDate or
+                KnownFunction.DateMicrosecond or
+                KnownFunction.DateNanosecond or
+                KnownFunction.DateDayNumber or
+                KnownFunction.DateTimeOfDay or
+                KnownFunction.TimeSpanHours or
+                KnownFunction.TimeSpanMinutes or
+                KnownFunction.TimeSpanSeconds or
+                KnownFunction.TimeSpanMilliseconds or
+                KnownFunction.TimeSpanMicroseconds or
+                KnownFunction.TimeSpanNanoseconds or
+                KnownFunction.DateOnlyFromDateTime or
+                KnownFunction.TimeOnlyFromDateTime or
+                KnownFunction.TimeOnlyFromTimeSpan or
+                KnownFunction.UnixSecondsFromOffset or
+                KnownFunction.UnixMillisecondsFromOffset or
+                KnownFunction.StringFirst or
+                KnownFunction.StringLast or
+                KnownFunction.BytesLength or
                 KnownFunction.MathAbs or
                 KnownFunction.MathCeiling or
                 KnownFunction.MathFloor or
@@ -1349,6 +1367,9 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 KnownFunction.DateAddSeconds or
                 KnownFunction.DateAddMilliseconds or
                 KnownFunction.EnumHasFlag or
+                KnownFunction.DateTimeFromDateAndTime or
+                KnownFunction.BytesContains or
+                KnownFunction.BytesElementAt or
                 KnownFunction.CompareTo => (1, 1),
 
             KnownFunction.StringReplace => (2, 2),
