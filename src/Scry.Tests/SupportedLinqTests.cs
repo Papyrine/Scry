@@ -34,8 +34,9 @@ public class SupportedLinqTests
             var (owner, member, arity) = Parse(signature);
 
             // A marker rather than a member: a client-supplied set reaches the wire through Contains
-            // over a closure collection, which is an Enumerable call and not a member of a scalar.
-            if (owner == "$set")
+            // over a closure collection, and text and binary answer their sequence questions the same
+            // way. All are Enumerable calls rather than members of a scalar, so nothing declares them.
+            if (SupportedLinq.Markers.Contains(owner))
             {
                 continue;
             }

@@ -1063,6 +1063,12 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
                 KnownFunction.StringSubstring => BuildSubstring(call, target, row),
                 KnownFunction.StringIndexOf => Expression.Call(target, stringIndexOf, StringArgument(call, 0, row)),
                 KnownFunction.StringReplace => Expression.Call(target, stringReplace, StringArgument(call, 0, row), StringArgument(call, 1, row)),
+                KnownFunction.StringFirst => Expression.Call(stringFirstOrDefault, target),
+                KnownFunction.StringLast => Expression.Call(stringLastOrDefault, target),
+
+                KnownFunction.BytesLength => Expression.ArrayLength(target),
+                KnownFunction.BytesContains => Expression.Call(bytesContains, target, Build(call.Arguments[0], row, typeof(byte))),
+                KnownFunction.BytesElementAt => Expression.Call(bytesElementAt, target, Build(call.Arguments[0], row, typeof(int))),
 
                 KnownFunction.DateYear => TemporalProperty(target, "Year"),
                 KnownFunction.DateMonth => TemporalProperty(target, "Month"),
@@ -1072,8 +1078,26 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
                 KnownFunction.DateSecond => TemporalProperty(target, "Second"),
                 KnownFunction.DateMillisecond => TemporalProperty(target, "Millisecond"),
                 KnownFunction.DateDayOfYear => TemporalProperty(target, "DayOfYear"),
+                KnownFunction.DateMicrosecond => TemporalProperty(target, "Microsecond"),
+                KnownFunction.DateNanosecond => TemporalProperty(target, "Nanosecond"),
+                KnownFunction.DateDayNumber => TemporalProperty(target, "DayNumber"),
                 KnownFunction.DateDayOfWeek => BuildDayOfWeek(target),
                 KnownFunction.DateDate => TemporalProperty(target, "Date"),
+                KnownFunction.DateTimeOfDay => TemporalProperty(target, "TimeOfDay"),
+
+                KnownFunction.TimeSpanHours => TemporalProperty(target, "Hours"),
+                KnownFunction.TimeSpanMinutes => TemporalProperty(target, "Minutes"),
+                KnownFunction.TimeSpanSeconds => TemporalProperty(target, "Seconds"),
+                KnownFunction.TimeSpanMilliseconds => TemporalProperty(target, "Milliseconds"),
+                KnownFunction.TimeSpanMicroseconds => TemporalProperty(target, "Microseconds"),
+                KnownFunction.TimeSpanNanoseconds => TemporalProperty(target, "Nanoseconds"),
+
+                KnownFunction.DateOnlyFromDateTime => TemporalStatic(typeof(Date), "FromDateTime", target),
+                KnownFunction.TimeOnlyFromDateTime => TemporalStatic(typeof(Time), "FromDateTime", target),
+                KnownFunction.TimeOnlyFromTimeSpan => TemporalStatic(typeof(Time), "FromTimeSpan", target),
+                KnownFunction.DateTimeFromDateAndTime => TemporalAdd(call, target, "ToDateTime", row),
+                KnownFunction.UnixSecondsFromOffset => TemporalCall(target, "ToUnixTimeSeconds"),
+                KnownFunction.UnixMillisecondsFromOffset => TemporalCall(target, "ToUnixTimeMilliseconds"),
                 KnownFunction.DateAddYears => TemporalAdd(call, target, "AddYears", row),
                 KnownFunction.DateAddMonths => TemporalAdd(call, target, "AddMonths", row),
                 KnownFunction.DateAddDays => TemporalAdd(call, target, "AddDays", row),
@@ -1214,6 +1238,34 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
         var property = value.Type.GetProperty(name) ??
                        throw new ScryValidationException($"'{value.Type.Name}' has no '{name}'.");
         return Expression.Property(value, property);
+    }
+
+    // A static that reads one temporal type as another — DateOnly.FromDateTime and its siblings. The
+    // target is the value being read, so it is the argument here rather than the instance.
+    static Expression TemporalStatic(Type owner, string name, Expression target)
+    {
+        var value = Nullable.GetUnderlyingType(target.Type) is null
+            ? target
+            : Expression.Property(target, "Value");
+
+        var method = owner.GetMethods(BindingFlags.Public | BindingFlags.Static)
+                         .FirstOrDefault(_ => _.Name == name &&
+                                              _.GetParameters() is [var parameter] &&
+                                              parameter.ParameterType == value.Type) ??
+                     throw new ScryValidationException($"'{owner.Name}' has no '{name}' reading a '{value.Type.Name}'.");
+        return Expression.Call(method, value);
+    }
+
+    // An argument-less instance method on a temporal — the Unix-time readings.
+    static Expression TemporalCall(Expression target, string name)
+    {
+        var value = Nullable.GetUnderlyingType(target.Type) is null
+            ? target
+            : Expression.Property(target, "Value");
+
+        var method = value.Type.GetMethod(name, []) ??
+                     throw new ScryValidationException($"'{value.Type.Name}' has no '{name}'.");
+        return Expression.Call(value, method);
     }
 
     // AddDays and friends take an int on DateOnly and a double on DateTime, so the argument is built
@@ -2009,6 +2061,20 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
     static readonly MethodInfo stringConcatObjects = StringMethod("Concat", typeof(object), typeof(object));
 
     static readonly MethodInfo enumHasFlag = typeof(Enum).GetMethod("HasFlag")!;
+
+    // The first and last character of a string, and the questions about a binary member's bytes. Each
+    // is an Enumerable static closed over the element the provider recognizes — char for text, byte
+    // for binary — which is the shape the SQL Server translator matches on.
+    static readonly MethodInfo stringFirstOrDefault = EnumerableMethod("FirstOrDefault", 1).MakeGenericMethod(typeof(char));
+    static readonly MethodInfo stringLastOrDefault = EnumerableMethod("LastOrDefault", 1).MakeGenericMethod(typeof(char));
+    static readonly MethodInfo bytesContains = EnumerableMethod("Contains", 2).MakeGenericMethod(typeof(byte));
+    // ElementAt carries an Index overload alongside its int one, so it is resolved by the argument
+    // type rather than by parameter count: the provider translates the int spelling and knows nothing
+    // of the other.
+    static readonly MethodInfo bytesElementAt = typeof(Enumerable)
+        .GetMethods(BindingFlags.Public | BindingFlags.Static)
+        .Single(_ => _.Name == "ElementAt" && _.GetParameters()[^1].ParameterType == typeof(int))
+        .MakeGenericMethod(typeof(byte));
 
     static readonly MethodInfo enumerableSelect = typeof(Enumerable).GetMethods()
         .Single(_ => _.Name == "Select" && _.GetParameters()[1].ParameterType.GetGenericArguments().Length == 2);

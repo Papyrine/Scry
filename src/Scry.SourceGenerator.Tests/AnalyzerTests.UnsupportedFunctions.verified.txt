@@ -1,11 +1,9 @@
 ﻿SCRY107: 'String.PadLeft' is not one of the functions Scry can carry
     await Query.Order.Where(_ => _.Region.PadLeft(5) == "x").ToListAsync();
-SCRY107: 'this overload of String.Equals' is not one of the functions Scry can carry
-    await Query.Order.Where(_ => _.Region.Equals("x")).ToListAsync();
 SCRY107: 'DateTime.Ticks' is not one of the functions Scry can carry
     await Query.Order.Where(_ => _.Placed.Ticks > 0).ToListAsync();
-SCRY107: 'DateTime.TimeOfDay' is not one of the functions Scry can carry
-    await Query.Order.Where(_ => _.Placed.TimeOfDay.Hours > 0).ToListAsync();
+SCRY107: 'TimeSpan.TotalHours' is not one of the functions Scry can carry
+    await Query.Order.Where(_ => _.Placed.TimeOfDay.TotalHours > 0).ToListAsync();
 SCRY107: 'Math.Cbrt' is not one of the functions Scry can carry
     await Query.Order.Where(_ => Math.Cbrt(_.Rate) > 1).ToListAsync();
 SCRY107: 'this overload of String.Trim' is not one of the functions Scry can carry

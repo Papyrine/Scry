@@ -21,8 +21,17 @@
 
     The UI is intentionally NOT in any solution: this package is its sole builder, so it restores +
     publishes the UI in isolation (avoiding the obj-cache contention of a parallel solution build).
-    The UI publish is itself incremental, so unchanged UI source is a near no-op; a UI change
-    re-publishes and re-embeds (CoreCompile sees the newer assets).
+    The UI publish is itself incremental, so unchanged UI source is a near no-op.
+
+    A re-publish alone does NOT re-embed. CoreCompile decides that by comparing input timestamps
+    against its output assembly, and the runtime assets carry the timestamps of the NuGet pack they
+    were copied from — dated whenever that pack was built, not when this project last compiled. A
+    newly published dotnet.native.wasm is therefore routinely OLDER than the existing obj assembly,
+    so the compile is skipped and the previously embedded copy survives. Silently: the package still
+    serves assets, they are just a different runtime's, and the browser refuses them for failing the
+    integrity digest its boot manifest declares. So the publish output is fingerprinted into a stamp
+    that is only rewritten when it actually differs, and embedded alongside the assets — giving
+    CoreCompile one input whose timestamp does move when the assets change.
   -->
   <Target Name="EmbedExplorerUi" BeforeTargets="AssignTargetPaths"
           Condition="'$(ScryExplorerUiEmbedded)' != 'true'">
@@ -46,6 +55,24 @@
       <EmbeddedResource Include="@(_ScryExplorerUiFile)"
                         WithCulture="false"
                         LogicalName="scryui/%(_ScryExplorerUiFile.RecursiveDir)%(_ScryExplorerUiFile.Filename)%(_ScryExplorerUiFile.Extension)" />
+    </ItemGroup>
+    <!-- Every published path with a hash of its contents. Hashing rather than reading %(ModifiedTime):
+         MSBuild answers that from a cache that outlives the build, so a file whose timestamp moved
+         still reports the old one and the stamp would never change. WriteOnlyWhenDifferent then
+         leaves the stamp (and so its own timestamp) alone while the published bytes are unchanged, so
+         this forces a recompile exactly when they differ and never otherwise. Named without the
+         "scryui/" prefix so ExplorerAssets does not serve it as one of the assets. -->
+    <GetFileHash Files="@(_ScryExplorerUiFile)" Algorithm="SHA256">
+      <Output TaskParameter="Items" ItemName="_ScryExplorerUiHashed" />
+    </GetFileHash>
+    <WriteLinesToFile File="$(IntermediateOutputPath)scryui.stamp"
+                      Lines="@(_ScryExplorerUiHashed->'%(RecursiveDir)%(Filename)%(Extension) %(FileHash)')"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <EmbeddedResource Include="$(IntermediateOutputPath)scryui.stamp"
+                        WithCulture="false"
+                        LogicalName="scryui.stamp" />
     </ItemGroup>
   </Target>
 </Project>
