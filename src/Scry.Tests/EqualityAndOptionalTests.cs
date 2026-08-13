@@ -103,7 +103,7 @@ public class EqualityAndOptionalTests
             .ToListAsync();
         // end-snippet
 
-        Assert.That(managed.Select(_ => _.Name), Is.EqualTo(new[] { "Aaron", "Bob" }));
+        Assert.That(managed.Select(_ => _.Name), Is.EqualTo(["Aaron", "Bob"]));
     }
 
     [Test]
@@ -118,7 +118,7 @@ public class EqualityAndOptionalTests
             .Select(_ => new NameRow(_.Name))
             .ToListAsync();
 
-        Assert.That(unmanaged.Select(_ => _.Name), Is.EqualTo(new[] { "Alice", "Carol" }));
+        Assert.That(unmanaged.Select(_ => _.Name), Is.EqualTo(["Alice", "Carol"]));
     }
 
     [Test]
