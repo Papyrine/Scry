@@ -165,6 +165,15 @@ public static class ScryJson
     public static string Serialize(QueryBatchResponse response) =>
         JsonSerializer.Serialize(response, batchResponseInfo);
 
+    /// <summary>
+    /// Writes a response into a writer that is already mid-document. What a batch envelope written
+    /// row-by-row falls back to for an entry the row writer cannot produce — a terminal result, or the
+    /// alias-carrying envelope a drifted client is answered with — so a batch mixing the two shapes is
+    /// still written in one pass rather than one of them being serialized to a buffer of its own.
+    /// </summary>
+    public static void Write(Utf8JsonWriter writer, QueryResponse response) =>
+        JsonSerializer.Serialize(writer, response, responseInfo);
+
     /// <summary>Writes one line of a streamed result — an opening or closing marker.</summary>
     public static string Serialize(ScryStreamMarker marker) =>
         JsonSerializer.Serialize(marker, markerInfo);

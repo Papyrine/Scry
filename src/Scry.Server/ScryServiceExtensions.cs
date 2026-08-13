@@ -223,13 +223,20 @@ public static class ScryServiceExtensions
         try
         {
             var db = (DbContext)services.GetRequiredService(options.ContextType);
+
+            // Each entry that is a list or page is written straight from its projected rows into the
+            // batch envelope — no dictionaries, no JsonElement round trip, and no second pass over
+            // every entry to serialize the envelope around them. An entry the writer cannot reproduce
+            // is serialized into the same envelope; the bytes are what ExecuteBatch would have produced.
+            using var buffer = new PooledBufferWriter();
             var collector = new BinaryPartCollector();
-            var response = processor.ExecuteBatch(
+            processor.ExecuteBatchBuffered(
                 request,
                 db,
                 services,
                 context.Request.Headers,
                 context.Response.Headers,
+                buffer,
                 collector);
 
             // One flat multipart for the whole batch: the collector threads through every entry, so
@@ -244,13 +251,13 @@ public static class ScryServiceExtensions
                 }
 
                 await multipart.OpenPart("application/json", context.RequestAborted);
-                await context.Response.Body.WriteAsync(ScryJson.SerializeToUtf8(response), context.RequestAborted);
+                await context.Response.Body.WriteAsync(buffer.WrittenMemory, context.RequestAborted);
                 await multipart.Terminate(context.RequestAborted);
                 return;
             }
 
             context.Response.ContentType = "application/json";
-            await context.Response.Body.WriteAsync(ScryJson.SerializeToUtf8(response), context.RequestAborted);
+            await context.Response.Body.WriteAsync(buffer.WrittenMemory, context.RequestAborted);
         }
         catch (ScryValidationException exception)
         {

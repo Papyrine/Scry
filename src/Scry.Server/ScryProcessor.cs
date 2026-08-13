@@ -359,16 +359,7 @@ public sealed class ScryProcessor
         IHeaderDictionary responseHeaders,
         BinaryPartCollector? binary)
     {
-        if (request.Version > WireFormat.Version)
-        {
-            throw new ScryValidationException($"Unsupported wire version {request.Version}.");
-        }
-
-        if (request.Queries.Count > options.MaxBatchSize)
-        {
-            throw new ScryValidationException(
-                $"The batch carries {request.Queries.Count} queries, more than the maximum of {options.MaxBatchSize}.");
-        }
+        RejectUnusableBatch(request);
 
         using var activity = QueryRecorder.StartBatch(request.Queries.Count);
 
@@ -381,9 +372,122 @@ public sealed class ScryProcessor
         return QueryBatchResponse.Create(results) with {Stamp = schema.Stamp};
     }
 
+    /// <summary>
+    /// Executes a batch like <see cref="ExecuteBatch(QueryBatchRequest, DbContext, IServiceProvider, IHeaderDictionary, IHeaderDictionary)"/>,
+    /// but writes the whole envelope into <paramref name="output"/> — every entry that is rows written
+    /// straight from the projected values rather than through dictionaries and a
+    /// <see cref="JsonElement"/> that the envelope around it would then serialize a second time.
+    /// Byte-identical to serializing what <c>ExecuteBatch</c> returns, which the golden tests pin.
+    /// </summary>
+    /// <remarks>
+    /// Only an envelope failure throws; a rejected or failed entry is written as its own result exactly
+    /// as <c>ExecuteBatch</c> reports one.
+    /// </remarks>
+    internal void ExecuteBatchBuffered(
+        QueryBatchRequest request,
+        DbContext data,
+        IServiceProvider services,
+        IHeaderDictionary requestHeaders,
+        IHeaderDictionary responseHeaders,
+        IBufferWriter<byte> output,
+        BinaryPartCollector? binary)
+    {
+        RejectUnusableBatch(request);
+
+        using var activity = QueryRecorder.StartBatch(request.Queries.Count);
+
+        // One scratch buffer for the whole batch, reset per entry rather than rented per entry, so a
+        // batch of n entries rents once and settles at the width of its largest.
+        using var entry = new PooledBufferWriter();
+        using var json = new Utf8JsonWriter(output);
+        ResponseWriter.BeginBatch(json);
+        foreach (var query in request.Queries)
+        {
+            WriteEntry(json, entry, query, data, services, requestHeaders, responseHeaders, binary);
+        }
+
+        ResponseWriter.EndBatch(json, schema.Stamp);
+        json.Flush();
+    }
+
+    // The envelope-level rejections, which are the only way a batch fails as a whole: they are checked
+    // before any entry runs, so a rejected batch has executed nothing.
+    void RejectUnusableBatch(QueryBatchRequest request)
+    {
+        if (request.Version > WireFormat.Version)
+        {
+            throw new ScryValidationException($"Unsupported wire version {request.Version}.");
+        }
+
+        if (request.Queries.Count > options.MaxBatchSize)
+        {
+            throw new ScryValidationException(
+                $"The batch carries {request.Queries.Count} queries, more than the maximum of {options.MaxBatchSize}.");
+        }
+    }
+
+    // One entry, written rather than returned — the buffered counterpart of ExecuteEntry, and its
+    // catches must stay identical to that one's.
+    //
+    // The entry is written into a buffer of its own first and only inserted once it is whole: an entry
+    // can fail part-way through its rows (the database is read as they are written), and a writer
+    // already mid-array cannot take back what it has written to report the failure in its place.
+    void WriteEntry(
+        Utf8JsonWriter json,
+        PooledBufferWriter entry,
+        QueryRequest query,
+        DbContext data,
+        IServiceProvider services,
+        IHeaderDictionary requestHeaders,
+        IHeaderDictionary responseHeaders,
+        BinaryPartCollector? binary)
+    {
+        entry.Reset();
+
+        bool buffered;
+        QueryResponse? fallback;
+        try
+        {
+            buffered = TryExecuteBuffered(
+                query,
+                data,
+                services,
+                requestHeaders,
+                responseHeaders,
+                entry,
+                out fallback,
+                binary);
+        }
+        catch (ScryValidationException exception)
+        {
+            ResponseWriter.WriteEntry(json, exception.Message, 400, exception.StaleClient);
+            return;
+        }
+        catch (Exception)
+        {
+            // A drifted client faulting the server is far more likely stale than the server broken,
+            // the same attribution the single-query endpoint makes for an execution failure.
+            ResponseWriter.WriteEntry(
+                json,
+                "Query execution failed.",
+                500,
+                query.Stamp is { } stamp && stamp != schema.Stamp);
+            return;
+        }
+
+        if (buffered)
+        {
+            ResponseWriter.WriteEntry(json, entry.WrittenMemory.Span);
+            return;
+        }
+
+        ResponseWriter.WriteEntry(json, fallback!);
+    }
+
     // One entry, reported rather than thrown. The catches mirror the HTTP endpoint's: a validation
     // message is the client's own doing and is safe to return, and anything else is the fixed text a
-    // 500 carries, so batching an entry never reveals more than sending it alone would.
+    // 500 carries, so batching an entry never reveals more than sending it alone would. WriteEntry
+    // above is the buffered counterpart and must report an entry exactly as this does.
     QueryBatchResult ExecuteEntry(
         QueryRequest query,
         DbContext data,

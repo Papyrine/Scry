@@ -1,6 +1,6 @@
 # Benchmarks
 
-What the plan-driven response writer is worth: rows written straight from the projected values, against the dictionary-and-`JsonElement` path a non-HTTP transport still takes.
+What the plan-driven response writer is worth: rows written straight from the projected values — for one query, a page, or every entry of a batch — against the dictionary-and-`JsonElement` path a non-HTTP transport still takes.
 
 ```bash
 dotnet run -c Release --project Benchmarks -- --filter '*'
@@ -15,6 +15,8 @@ Release is mandatory (BenchmarkDotNet refuses a Debug build), and this is a proj
 The source is a `[QueryablePoco]` supplied in memory, so no database is involved: the benchmark needs real rows to shape and serialize, both arms pay the same provider overhead, and the difference between them is exactly the shaping and serialization under test.
 
 `Legacy` is `ScryProcessor.Execute` plus `ScryJson.Serialize` — a dictionary per row, a `JsonElement` payload, then the envelope serialized a second time. `Endpoint` is the HTTP endpoint, which writes rows straight from the projected values. The two produce byte-identical output, pinned by `FastWriterGoldenTests` in `IntegrationTests`.
+
+`BatchBenchmarks` is the same pair for a batch, where the general path pays that per entry and then serializes every one of those elements again as the envelope. It holds the rows at a hundred and varies the entry count instead, since what a batch adds is the per-entry work repeated.
 
 
 ## Reading the output

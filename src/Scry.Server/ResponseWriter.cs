@@ -1,9 +1,10 @@
 /// <summary>
 /// Writes a list result straight from projected <c>object[]</c> rows to UTF-8 — no per-row
-/// dictionaries, no <see cref="JsonElement"/> round trip, no reflection walk over the envelope.
-/// Byte-for-byte identical to serializing the equivalent <see cref="QueryResponse"/>: that identity
-/// is pinned by the integration golden tests, and any case this writer cannot reproduce exactly
-/// stays on the general path instead.
+/// dictionaries, no <see cref="JsonElement"/> round trip, no reflection walk over the envelope — and
+/// the batch envelope that carries several of them. Byte-for-byte identical to serializing the
+/// equivalent <see cref="QueryResponse"/> or <see cref="QueryBatchResponse"/>: that identity is pinned
+/// by the integration golden tests, and any case this writer cannot reproduce exactly stays on the
+/// general path instead.
 /// </summary>
 static class ResponseWriter
 {
@@ -16,6 +17,11 @@ static class ResponseWriter
     static readonly JsonEncodedText items = JsonEncodedText.Encode("items");
     static readonly JsonEncodedText hasMore = JsonEncodedText.Encode("hasMore");
     static readonly JsonEncodedText cursor = JsonEncodedText.Encode("cursor");
+    static readonly JsonEncodedText results = JsonEncodedText.Encode("results");
+    static readonly JsonEncodedText response = JsonEncodedText.Encode("response");
+    static readonly JsonEncodedText error = JsonEncodedText.Encode("error");
+    static readonly JsonEncodedText status = JsonEncodedText.Encode("status");
+    static readonly JsonEncodedText staleClient = JsonEncodedText.Encode("staleClient");
 
     /// <summary>Writes the whole list envelope — version, kind, rows, stamp — returning the row count.</summary>
     public static int WriteList(IBufferWriter<byte> output, QueryExecutor.RowSet set, string schemaStamp)
@@ -88,6 +94,71 @@ static class ResponseWriter
         set.Deduplicated
             ? ExpressionBuilder.ReadDistinctRow(row, set.Plan.Shape.Count)
             : (object[])row;
+
+    /// <summary>Opens a batch envelope: its version, then the array its entries are written into.</summary>
+    public static void BeginBatch(Utf8JsonWriter json)
+    {
+        json.WriteStartObject();
+        json.WriteNumber(version, WireFormat.Version);
+        json.WritePropertyName(results);
+        json.WriteStartArray();
+    }
+
+    /// <summary>
+    /// Closes a batch envelope with the stamp the whole batch was answered by — carried once, because
+    /// every entry was answered by the same model.
+    /// </summary>
+    public static void EndBatch(Utf8JsonWriter json, string schemaStamp)
+    {
+        json.WriteEndArray();
+        json.WriteString(stamp, schemaStamp);
+        json.WriteEndObject();
+    }
+
+    /// <summary>
+    /// An entry already written by <see cref="WriteList"/> or <see cref="WritePage"/>. Those produce a
+    /// complete response envelope, which is exactly what the entry's <c>response</c> is — so it is
+    /// inserted as it stands rather than parsed back into a document to be written out again.
+    /// </summary>
+    public static void WriteEntry(Utf8JsonWriter json, ReadOnlySpan<byte> written)
+    {
+        json.WriteStartObject();
+        json.WritePropertyName(response);
+        // Written by this file a moment ago, so there is nothing for validation to find.
+        json.WriteRawValue(written, skipInputValidation: true);
+        json.WriteEndObject();
+    }
+
+    /// <summary>
+    /// An entry the row writer could not produce — a terminal result, or the alias-carrying envelope a
+    /// drifted client is answered with — serialized into the envelope being written.
+    /// </summary>
+    public static void WriteEntry(Utf8JsonWriter json, QueryResponse fallback)
+    {
+        json.WriteStartObject();
+        json.WritePropertyName(response);
+        ScryJson.Write(json, fallback);
+        json.WriteEndObject();
+    }
+
+    /// <summary>
+    /// An entry that was rejected or failed. Mirrors what <see cref="QueryBatchResult"/> serializes to:
+    /// no <c>response</c>, and a <c>staleClient</c> written only when it is true, since the member is
+    /// omitted when it is its default.
+    /// </summary>
+    public static void WriteEntry(Utf8JsonWriter json, string message, int entryStatus, bool stale)
+    {
+        json.WriteStartObject();
+        json.WriteString(error, message);
+        // Always 400 or 500 for a reported entry, so never the default that would omit it.
+        json.WriteNumber(status, entryStatus);
+        if (stale)
+        {
+            json.WriteBoolean(staleClient, true);
+        }
+
+        json.WriteEndObject();
+    }
 }
 
 /// <summary>

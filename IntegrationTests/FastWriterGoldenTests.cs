@@ -229,10 +229,33 @@ public class FastWriterGoldenTests
         Assert.That(body, Is.EqualTo(expected));
     }
 
-    async Task<string> Post(string request)
+    /// <summary>
+    /// A batch envelope is written the same way a single response is, so the same identity has to hold
+    /// for it. Every corpus request in one batch — which puts the two entry shapes the row writer does
+    /// not produce, a terminal's response and a page, beside the lists — plus a rejected entry and one
+    /// whose rejection is attributed to a drifted stamp, so the <c>error</c>, <c>status</c> and
+    /// <c>staleClient</c> members are written too.
+    /// </summary>
+    [Test]
+    public async Task BatchBytesMatchTheGeneralPath()
+    {
+        var queries = Corpus()
+            .Select(_ => (string)_.Arguments[1]!)
+            .ToList();
+        queries.Add("""{"version":1,"root":"Nonexistent","pipeline":[]}""");
+        queries.Add("""{"version":1,"root":"Nonexistent","pipeline":[],"stamp":"not-this-server"}""");
+
+        var batch = $$"""{"version":1,"queries":[{{string.Join(",", queries)}}]}""";
+        var expected = DirectBatch(batch);
+
+        Assert.That(await Post(batch, "/api/query/batch"), Is.EqualTo(expected), "miss");
+        Assert.That(await Post(batch, "/api/query/batch"), Is.EqualTo(expected), "hit");
+    }
+
+    async Task<string> Post(string request, string path = "/api/query")
     {
         using var content = new StringContent(request, Encoding.UTF8, "application/json");
-        using var response = await http.PostAsync("/api/query", content);
+        using var response = await http.PostAsync(path, content);
         var body = await response.Content.ReadAsStringAsync();
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), body);
         return body;
@@ -247,6 +270,17 @@ public class FastWriterGoldenTests
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<Sample.Model.SampleContext>();
         return ScryJson.Serialize(processor.Execute(parsed, db, scope.ServiceProvider));
+    }
+
+    // The general path for a batch: dictionaries and a JsonElement per entry, then one reflection pass
+    // over the envelope that serializes every one of them a second time.
+    string DirectBatch(string request)
+    {
+        var parsed = ScryJson.DeserializeBatchRequest(request);
+        var processor = app.Services.GetRequiredService<ScryProcessor>();
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<Sample.Model.SampleContext>();
+        return ScryJson.Serialize(processor.ExecuteBatch(parsed, db, scope.ServiceProvider));
     }
 
     async Task<string> DirectStream(string request)
