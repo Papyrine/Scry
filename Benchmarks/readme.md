@@ -16,6 +16,8 @@ The source is a `[QueryablePoco]` supplied in memory, so no database is involved
 
 `Legacy` is `ScryProcessor.Execute` plus `ScryJson.Serialize` — a dictionary per row, a `JsonElement` payload, then the envelope serialized a second time. `Endpoint` is the HTTP endpoint, which writes rows straight from the projected values. The two produce byte-identical output, pinned by `FastWriterGoldenTests` in `IntegrationTests`.
 
+`Drifted` is a third arm of that same pair: the endpoint answering a client whose schema stamp disagrees, which is the one case the row writer declines. It is the `Legacy` path reached over HTTP, so it prices what a rejected fast path costs, and it is the arm that moves when the fallback's own allocations do. `Grade` carries a `[PreviousNames]` value for its sake — the fallback needs a non-empty alias table as well as a mismatched stamp — and the setup checks the response came back with that table rather than trusting the arm to be measuring the path it names.
+
 `BatchBenchmarks` is the same pair for a batch, where the general path pays that per entry and then serializes every one of those elements again as the envelope. It holds the rows at a hundred and varies the entry count instead, since what a batch adds is the per-entry work repeated.
 
 `TerminalBenchmarks` is the same pair for the results that are not rows — one projected row, and a count. A terminal costs the same whatever the source holds, so it carries them as batch entries to divide out the fixed cost each arm pays, and keeps the source narrow so the pipeline work both arms share does not bury the difference.

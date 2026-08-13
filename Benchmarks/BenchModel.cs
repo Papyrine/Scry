@@ -52,10 +52,18 @@ public class MemRow
     }
 }
 
+/// <summary>
+/// The renamed value gives the schema a non-empty enum-alias table, which is what routes a drifted
+/// client onto the general fallback path <c>ResponseBenchmarks.Drifted</c> measures. It costs the
+/// other arms nothing: the table rides the envelope only when a request's stamp disagrees.
+/// </summary>
 public enum Grade
 {
     Bronze,
+
+    [PreviousNames("Standard")]
     Silver,
+
     Gold
 }
 
