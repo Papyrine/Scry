@@ -215,6 +215,7 @@ It is off unless mapped, and Development-only by default. See [Query explorer](d
 - [Attachments](docs/attachments.md)
 - [Batching](docs/batching.md)
 - [Observability](docs/observability.md)
+- [Performance](docs/performance.md)
 - [Security model](docs/security.md)
 - [Wire format](docs/wire-format.md)
 - [Schema versioning](docs/schema-versioning.md)
