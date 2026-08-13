@@ -129,6 +129,27 @@ public class FastWriterGoldenTests
             """
             {"version":1,"root":"Employee","pipeline":[{"$type":"count"}]}
             """);
+        // A count is an int and an aggregate is whatever the provider returns for it, which covers both
+        // halves of the value writer: a decimal is one of its fast cases, and a date-without-time is
+        // handed to the serializer.
+        yield return new TestCaseData(
+            "aggregate scalar terminal",
+            """
+            {"version":1,"root":"Order","pipeline":[
+              {"$type":"aggregate","function":"Sum","selector":{"$type":"member","path":["Amount"]}}]}
+            """);
+        yield return new TestCaseData(
+            "aggregate scalar over a date",
+            """
+            {"version":1,"root":"Employee","pipeline":[
+              {"$type":"aggregate","function":"Max","selector":{"$type":"member","path":["Created"]}}]}
+            """);
+        yield return new TestCaseData(
+            "all terminal",
+            """
+            {"version":1,"root":"Employee","pipeline":[
+              {"$type":"all","predicate":{"$type":"member","path":["Active"]}}]}
+            """);
         yield return new TestCaseData(
             "single row terminal",
             """

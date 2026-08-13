@@ -29,12 +29,25 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         string? Cursor,
         BinaryPartCollector? Binary = null);
 
+    /// <summary>
+    /// What a folding terminal produced, before anything has been written: a scalar's value, or the one
+    /// row and the plan that shapes it. Held unserialized like a <see cref="RowSet"/> is unread, so the
+    /// buffered path writes it straight into the response and the general path builds the
+    /// <see cref="JsonElement"/> it returns from the same thing.
+    /// </summary>
+    internal readonly record struct Terminal(
+        ResultKind Kind,
+        object? Value,
+        object[]? Row,
+        ProjectionPlan? Plan,
+        BinaryPartCollector? Binary);
+
     public QueryResponse Execute(QueryRequest request, DbContext db, CallScope scope)
     {
-        var (response, rows) = Run(request, db, scope, out var page);
-        if (response is { } complete)
+        var (terminal, rows) = Run(request, db, scope, out var page);
+        if (terminal is { } folded)
         {
-            return complete;
+            return Materialize(folded);
         }
 
         if (page is { } paged)
@@ -56,39 +69,38 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     }
 
     /// <summary>
-    /// Executes like <see cref="Execute"/>, but a result that is rows — a list, or a page of them — is
-    /// written straight into <paramref name="output"/> as the complete response envelope, never
-    /// passing through dictionaries or a <see cref="JsonElement"/>. A terminal-shaped result comes
-    /// back as the ordinary <see cref="QueryResponse"/> instead (with <paramref name="rows"/> = -1),
-    /// for the caller to serialize the general way.
+    /// Executes like <see cref="Execute"/>, but writes the complete response envelope straight into
+    /// <paramref name="output"/> — every result kind, never passing through dictionaries or a
+    /// <see cref="JsonElement"/>. <paramref name="rows"/> is what the result counts: the rows written
+    /// for a list or page, one or none for a single row, and nothing for a scalar, which folds the
+    /// rows away.
     /// </summary>
-    public QueryResponse? ExecuteBuffered(
+    public void ExecuteBuffered(
         QueryRequest request,
         DbContext db,
         CallScope scope,
         string stamp,
         IBufferWriter<byte> output,
         out ResultKind kind,
-        out int rows)
+        out int? rows)
     {
-        var (response, set) = Run(request, db, scope, out var page);
-        if (response is { } complete)
+        var (terminal, set) = Run(request, db, scope, out var page);
+        if (terminal is { } folded)
         {
-            kind = complete.Kind;
-            rows = -1;
-            return complete;
+            kind = folded.Kind;
+            rows = ResponseWriter.WriteTerminal(output, folded, stamp);
+            return;
         }
 
         if (page is { } paged)
         {
             kind = ResultKind.Page;
             rows = ResponseWriter.WritePage(output, paged, stamp);
-            return null;
+            return;
         }
 
         kind = ResultKind.List;
         rows = ResponseWriter.WriteList(output, set!.Value, stamp);
-        return null;
     }
 
     /// <summary>
@@ -99,12 +111,12 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// </summary>
     public RowSet Stream(QueryRequest request, DbContext db, CallScope scope)
     {
-        var (response, rows) = Run(request, db, scope, out var page);
+        var (terminal, rows) = Run(request, db, scope, out var page);
         if (rows is not { } set)
         {
             // A page is bounded and answered whole, so it is as unstreamable as a folding terminal and
             // says so the same way.
-            var kind = page is null ? response!.Kind : ResultKind.Page;
+            var kind = page is null ? terminal!.Value.Kind : ResultKind.Page;
             throw new ScryValidationException(
                 $"Only a query that returns rows can be streamed; this one returns {kind}. Drop the terminal operator, or use the non-streaming endpoint.");
         }
@@ -170,10 +182,10 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         throw new ScryValidationException("The query produced no rows to read SQL from.");
     }
 
-    // Walks the pipeline once and produces exactly one of three things: a finished response — every
-    // folding terminal does — the unread rows of a list result, which the caller materializes or
-    // streams, or the read rows of a page and what the envelope around them says.
-    (QueryResponse? Response, RowSet? Rows) Run(
+    // Walks the pipeline once and produces exactly one of three things: a folding terminal's result,
+    // the unread rows of a list result, which the caller materializes or streams, or the read rows of
+    // a page and what the envelope around them says.
+    (Terminal? Terminal, RowSet? Rows) Run(
         QueryRequest request,
         DbContext db,
         CallScope scope,
@@ -592,7 +604,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// picks its aggregate overload from the value type, which <see cref="ExpressionBuilder"/> has
     /// already widened to one that exists.
     /// </summary>
-    static QueryResponse Aggregate(ExpressionBuilder builder, IQueryable query, AggregateOp aggregate, Type elementType)
+    static Terminal Aggregate(ExpressionBuilder builder, IQueryable query, AggregateOp aggregate, Type elementType)
     {
         var selector = builder.BuildAggregateSelector(aggregate.Selector, elementType, aggregate.Function);
         var values = ApplySelectTyped(query, selector);
@@ -1088,14 +1100,33 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     // Used when no CursorSigningKey is configured: cursors are valid only within this process's lifetime.
     static readonly byte[] ephemeralSigningKey = RandomNumberGenerator.GetBytes(32);
 
-    static QueryResponse Scalar<T>(T value) =>
-        QueryResponse.Create(ResultKind.Scalar, JsonSerializer.SerializeToElement(value, ScryJson.Options));
+    static Terminal Scalar<T>(T value) =>
+        new(ResultKind.Scalar, value, Row: null, Plan: null, Binary: null);
 
-    static QueryResponse Single(object[]? row, ProjectionPlan plan, BinaryPartCollector? binary)
+    static Terminal Single(object[]? row, ProjectionPlan plan, BinaryPartCollector? binary) =>
+        new(ResultKind.Single, Value: null, row, plan, binary);
+
+    /// <summary>
+    /// A terminal's response the general way: the value through the serializer, or the row shaped into
+    /// a dictionary and serialized. <c>ResponseWriter.WriteTerminal</c> writes the same bytes straight,
+    /// and the golden tests hold the two together.
+    /// </summary>
+    /// <remarks>
+    /// A scalar is serialized as <see cref="object"/> rather than the static type it was executed as,
+    /// which the serializer answers by its runtime type — the same converter, and so the same bytes.
+    /// </remarks>
+    static QueryResponse Materialize(Terminal terminal)
     {
-        var payload = row is null
-            ? JsonSerializer.SerializeToElement<object?>(null)
-            : JsonSerializer.SerializeToElement(Shape(row, plan, binary), ScryJson.Options);
+        if (terminal.Kind == ResultKind.Scalar)
+        {
+            return QueryResponse.Create(
+                ResultKind.Scalar,
+                JsonSerializer.SerializeToElement(terminal.Value, ScryJson.Options));
+        }
+
+        var payload = terminal.Row is { } row
+            ? JsonSerializer.SerializeToElement(Shape(row, terminal.Plan!, terminal.Binary), ScryJson.Options)
+            : JsonSerializer.SerializeToElement<object?>(null);
         return QueryResponse.Create(ResultKind.Single, payload);
     }
 

@@ -102,8 +102,12 @@ sealed class QueryRecorder(
     public void Succeeded(int rows) =>
         Complete(ScryQueryOutcome.Success, ResultKind.List, rows, error: null, staleClient: false);
 
-    /// <summary>A buffered result written straight to the transport — kind and count arrive explicitly rather than being read off a payload.</summary>
-    public void Succeeded(ResultKind kind, int rows) =>
+    /// <summary>
+    /// A buffered result written straight to the transport — kind and count arrive explicitly rather
+    /// than being read off a payload, and a scalar reports no count at all, as reading one off a
+    /// payload also would not.
+    /// </summary>
+    public void Succeeded(ResultKind kind, int? rows) =>
         Complete(ScryQueryOutcome.Success, kind, rows, error: null, staleClient: false);
 
     public void Rejected(ScryValidationException exception) =>

@@ -201,10 +201,10 @@ public sealed class ScryProcessor
 
     /// <summary>
     /// Executes like <see cref="Execute(QueryRequest, DbContext, IServiceProvider, IHeaderDictionary, IHeaderDictionary)"/>,
-    /// but a list result is written into <paramref name="output"/> as complete response bytes (true).
-    /// Any other result — a terminal's response, or the rare drifted-client envelope that carries the
-    /// enum alias table — comes back as <paramref name="fallback"/> (false) for the caller to
-    /// serialize the general way. Rejections and failures throw exactly as <c>Execute</c> does.
+    /// but writes the result into <paramref name="output"/> as complete response bytes (true). The one
+    /// result that does not go that way is the rare drifted-client envelope carrying the enum alias
+    /// table, which comes back as <paramref name="fallback"/> (false) for the caller to serialize the
+    /// general way. Rejections and failures throw exactly as <c>Execute</c> does.
     /// </summary>
     internal bool TryExecuteBuffered(
         QueryRequest request,
@@ -239,16 +239,7 @@ public sealed class ScryProcessor
                 return false;
             }
 
-            if (executor.ExecuteBuffered(request, data, scope, schema.Stamp, output, out var kind, out var rows) is { } complete)
-            {
-                fallback = complete with
-                {
-                    Stamp = schema.Stamp
-                };
-                recorder.Succeeded(fallback);
-                return false;
-            }
-
+            executor.ExecuteBuffered(request, data, scope, schema.Stamp, output, out var kind, out var rows);
             recorder.Succeeded(kind, rows);
             fallback = null;
             return true;

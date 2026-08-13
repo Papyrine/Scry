@@ -14,6 +14,8 @@ static class ResponseWriter
     static readonly JsonEncodedText stamp = JsonEncodedText.Encode("stamp");
     static readonly JsonEncodedText list = JsonEncodedText.Encode(nameof(ResultKind.List));
     static readonly JsonEncodedText page = JsonEncodedText.Encode(nameof(ResultKind.Page));
+    static readonly JsonEncodedText scalar = JsonEncodedText.Encode(nameof(ResultKind.Scalar));
+    static readonly JsonEncodedText single = JsonEncodedText.Encode(nameof(ResultKind.Single));
     static readonly JsonEncodedText items = JsonEncodedText.Encode("items");
     static readonly JsonEncodedText hasMore = JsonEncodedText.Encode("hasMore");
     static readonly JsonEncodedText cursor = JsonEncodedText.Encode("cursor");
@@ -88,6 +90,50 @@ static class ResponseWriter
         json.WriteEndObject();
         json.Flush();
         return set.Rows.Count;
+    }
+
+    /// <summary>
+    /// Writes a folding terminal's whole envelope: a scalar's value written by the same value writer a
+    /// row's leaves go through, or the one row written by the same shape writer a list's rows do.
+    /// Returns what the result counts — one row or none for a single, and nothing for a scalar, which
+    /// folded the rows away.
+    /// </summary>
+    public static int? WriteTerminal(IBufferWriter<byte> output, QueryExecutor.Terminal terminal, string schemaStamp)
+    {
+        using var json = new Utf8JsonWriter(output);
+        json.WriteStartObject();
+        json.WriteNumber(version, WireFormat.Version);
+
+        int? rows;
+        if (terminal.Kind == ResultKind.Scalar)
+        {
+            json.WriteString(kind, scalar);
+            json.WritePropertyName(payload);
+            PlanShapeWriter.WriteValue(json, terminal.Value);
+            rows = null;
+        }
+        else
+        {
+            json.WriteString(kind, single);
+            json.WritePropertyName(payload);
+            if (terminal.Row is { } row)
+            {
+                terminal.Plan!.Writer.WriteRow(json, row, terminal.Binary);
+                rows = 1;
+            }
+            else
+            {
+                // What the query matched none of: a null payload, exactly as serializing a null row
+                // produces on the general path.
+                json.WriteNullValue();
+                rows = 0;
+            }
+        }
+
+        json.WriteString(stamp, schemaStamp);
+        json.WriteEndObject();
+        json.Flush();
+        return rows;
     }
 
     public static object[] Row(object row, QueryExecutor.RowSet set) =>
@@ -346,10 +392,17 @@ sealed class PlanShapeWriter
         json.WriteEndObject();
     }
 
-    // The fast cases call the same Utf8JsonWriter primitives the serializer's own converters call,
-    // so their bytes are identical by construction. Everything else — enums (name-writing tolerant
-    // converter), dates-without-time, chars, unsigned widths — goes through the serializer itself.
-    static void WriteValue(Utf8JsonWriter json, object? value)
+    /// <summary>
+    /// Writes one projected value. A row's leaves go through here, and so does a scalar terminal, which
+    /// is a leaf with no row around it.
+    /// </summary>
+    /// <remarks>
+    /// The fast cases call the same <see cref="Utf8JsonWriter"/> primitives the serializer's own
+    /// converters call, so their bytes are identical by construction. Everything else — enums (the
+    /// name-writing tolerant converter), dates-without-time, chars, unsigned widths — goes through the
+    /// serializer itself.
+    /// </remarks>
+    public static void WriteValue(Utf8JsonWriter json, object? value)
     {
         switch (value)
         {
