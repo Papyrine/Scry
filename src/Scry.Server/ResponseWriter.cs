@@ -26,7 +26,18 @@ static class ResponseWriter
     static readonly JsonEncodedText staleClient = JsonEncodedText.Encode("staleClient");
 
     /// <summary>Writes the whole list envelope — version, kind, rows, stamp — returning the row count.</summary>
-    public static int WriteList(IBufferWriter<byte> output, QueryExecutor.RowSet set, string schemaStamp)
+    /// <remarks>
+    /// The rows are pulled asynchronously, so the read that fills the envelope never blocks a request
+    /// thread on the database. <paramref name="spill"/> is what makes that worth doing: a list is the
+    /// one result whose size the server does not bound, and given permission it is sent as it is
+    /// written rather than held whole. Null — the batch's per-entry buffer — never sends anything early.
+    /// </remarks>
+    public static async ValueTask<int> WriteListAsync(
+        IBufferWriter<byte> output,
+        ResponseSpill? spill,
+        QueryExecutor.RowSet set,
+        string schemaStamp,
+        Cancel cancel)
     {
         using var json = new Utf8JsonWriter(output);
         json.WriteStartObject();
@@ -37,10 +48,17 @@ static class ResponseWriter
 
         var writer = set.Plan.Writer;
         var rows = 0;
-        foreach (var row in set.Rows)
+        await foreach (var row in QueryExecutor.Enumerate(set, cancel).WithCancellation(cancel))
         {
-            writer.WriteRow(json, Row(row!, set), set.Binary);
+            writer.WriteRow(json, Row(row, set), set.Binary);
             rows++;
+            if (spill?.ShouldDrain(json.BytesPending) == true)
+            {
+                // Flushed first: until it is, the writer holds a span into the buffer that draining
+                // hands straight back for overwriting.
+                json.Flush();
+                await spill.DrainAsync(cancel);
+            }
         }
 
         json.WriteEndArray();
@@ -61,7 +79,12 @@ static class ResponseWriter
     /// through the same shape writer a list's do, so a page and a list of the same projection are
     /// written by the same code.
     /// </remarks>
-    public static int WritePage(IBufferWriter<byte> output, QueryExecutor.PageSet set, string schemaStamp)
+    public static async ValueTask<int> WritePageAsync(
+        IBufferWriter<byte> output,
+        ResponseSpill? spill,
+        QueryExecutor.PageSet set,
+        string schemaStamp,
+        Cancel cancel)
     {
         using var json = new Utf8JsonWriter(output);
         json.WriteStartObject();
@@ -76,6 +99,11 @@ static class ResponseWriter
         foreach (var row in set.Rows)
         {
             writer.WriteRow(json, row, set.Binary);
+            if (spill?.ShouldDrain(json.BytesPending) == true)
+            {
+                json.Flush();
+                await spill.DrainAsync(cancel);
+            }
         }
 
         json.WriteEndArray();
@@ -162,7 +190,7 @@ static class ResponseWriter
     }
 
     /// <summary>
-    /// An entry already written by <see cref="WriteList"/> or <see cref="WritePage"/>. Those produce a
+    /// An entry already written by <see cref="WriteListAsync"/> or <see cref="WritePageAsync"/>. Those produce a
     /// complete response envelope, which is exactly what the entry's <c>response</c> is — so it is
     /// inserted as it stands rather than parsed back into a document to be written out again.
     /// </summary>

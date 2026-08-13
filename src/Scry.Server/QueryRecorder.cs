@@ -133,6 +133,14 @@ sealed class QueryRecorder(
     public void Canceled(int rows) =>
         Complete(ScryQueryOutcome.Canceled, kind: null, rows, "The stream ended before every row was read.", staleClient: false);
 
+    /// <summary>
+    /// A buffered read abandoned before it finished, which is a client that disconnected while its
+    /// rows were being read. Counted apart from a failure because it is not one — the query was fine
+    /// and nobody is left to answer.
+    /// </summary>
+    public void Canceled() =>
+        Complete(ScryQueryOutcome.Canceled, kind: null, rows: null, "The request was abandoned before the response was written.", staleClient: false);
+
     void Complete(ScryQueryOutcome outcome, ResultKind? kind, int? rows, string? error, bool staleClient, Exception? exception = null)
     {
         if (completed)

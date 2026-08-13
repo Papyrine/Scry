@@ -114,15 +114,16 @@ public int MaxBatchSize { get; set; } = 20;
 /// </summary>
 /// <remarks>
 /// Null matches <c>ToListAsync</c>, which has never been bounded either: <see cref="MaxPageSize"/>
-/// caps <c>Take</c> and a page, not an unbounded enumeration. Streaming is the safer of the two
-/// server-side, since the rows are never buffered — but it holds a connection and a response open
-/// for as long as the client reads, which is the reason to offer a bound at all. A stream that
+/// caps <c>Take</c> and a page, not an unbounded enumeration. Nor is streaming the safer of the two
+/// server-side any longer — a list that outgrows <see cref="ResponseSpillThreshold"/> is written out
+/// as it is read, so neither holds its rows. What both hold is a connection and a response open for
+/// as long as the client reads, which is the reason to offer a bound at all. A stream that
 /// reaches the limit ends with an error marker rather than a short result, so a client cannot
 /// mistake truncation for the end of the data.
 /// </remarks>
 public int? MaxStreamRows { get; set; }
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L56' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L57' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Every limit is enforced during validation, before any expression is rebound or executed.
@@ -142,6 +143,21 @@ Every limit is enforced during validation, before any expression is rebound or e
 Treat them like a connection string: **trusted configuration, never a value taken from a request** or from anywhere a caller can influence. A request cannot carry a collation — the wire names a case sensitivity and the string is looked up here — so the only remaining path is a deployment wiring the option up from somewhere it does not control. Both are checked at startup and must be plain names (letters, digits, underscores); a provider does quote the name as well, but that is provider-overridable behaviour rather than a guarantee.
 
 Applying a collation also costs an index. `WHERE col COLLATE X = @p` is not SARGable, so an index built under the column's own collation cannot be seeked and the query degrades to a scan. Where a whole column should be matched one way, setting the **column's** collation is both faster and simpler than asking per query.
+
+
+### Response size
+
+`ResponseSpillThreshold` is not one of the limits above: crossing it rejects nothing and bounds nothing a client may ask for. It is the size in bytes past which a response stops being held whole.
+
+| Option | Default | Does |
+| --- | --- | --- |
+| `ResponseSpillThreshold` | 65536 (64 KB) | Under it, a response is sent as one body declaring a `Content-Length`. Over it, the response is sent as it is written, so what is resident is bounded by the threshold rather than by the result. Zero holds every response whole, as every response once was. |
+
+A result that fits behaves exactly as every result did before the threshold existed — nothing reaches the wire until the whole envelope exists, so a failure part-way through reading the rows is still answered as a `400` or a `500` with a body. Past it the status is long since committed and a failure can only truncate the response, which a reader can always tell from a complete one; see [Wire format](wire-format.md#response) for why.
+
+A result carrying [binary transfer](wire-format.md#binary-transfer) values is held whole whatever this says, since its raw parts have to precede the JSON that references them. For a single query that is the projection plan's decision, taken before the first row is read. A batch commits to one framing before its first entry runs, so it asks the coarser question instead: any `[BinaryTransfer]` member anywhere in the model holds every batch whole.
+
+What the threshold buys is that an unbounded `ToListAsync` is no longer resident twice over, as rows and as bytes. What it costs is that past it a response holds a connection and its database read open for as long as the client reads — which is the exposure `…/stream` has always had, and the reason `MaxStreamRows` exists.
 
 
 ## POCO sources

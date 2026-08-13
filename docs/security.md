@@ -413,20 +413,23 @@ public int MaxBatchSize { get; set; } = 20;
 /// </summary>
 /// <remarks>
 /// Null matches <c>ToListAsync</c>, which has never been bounded either: <see cref="MaxPageSize"/>
-/// caps <c>Take</c> and a page, not an unbounded enumeration. Streaming is the safer of the two
-/// server-side, since the rows are never buffered — but it holds a connection and a response open
-/// for as long as the client reads, which is the reason to offer a bound at all. A stream that
+/// caps <c>Take</c> and a page, not an unbounded enumeration. Nor is streaming the safer of the two
+/// server-side any longer — a list that outgrows <see cref="ResponseSpillThreshold"/> is written out
+/// as it is read, so neither holds its rows. What both hold is a connection and a response open for
+/// as long as the client reads, which is the reason to offer a bound at all. A stream that
 /// reaches the limit ends with an error marker rather than a short result, so a client cannot
 /// mistake truncation for the end of the data.
 /// </remarks>
 public int? MaxStreamRows { get; set; }
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L56' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L57' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 These bound the work a single request can ask for: how many rows, how deep a join chain, how long a pipeline, how deeply nested an expression.
 
 All but one are **per query**, which is what makes `MaxBatchSize` load-bearing: a [batch](batching.md) is the only request that carries more than one query, so without it every other limit would apply to an arbitrary number of them at once. Each entry is otherwise validated, policy-filtered, and audited exactly as it would be sent alone — batching is a transport concern, and reaches nothing else on this page.
+
+[`ResponseSpillThreshold`](server.md#response-size) is deliberately not among them. It decides when a response stops being resident, not how large one may be: crossing it rejects nothing, and a request that would produce a gigabyte still produces a gigabyte. What it changes is where those bytes sit while they are produced.
 
 
 ### 7. Contained errors
@@ -485,6 +488,8 @@ app.MapScry("/api/query")
 ```
 
 **Rate limiting and cost control.** The limits bound the *shape* of a query, not its cost. An allow-listed query over a large unindexed table is still expensive, and `MaxPageSize` caps an explicit `Take` rather than implicitly paging an unbounded query. Apply ASP.NET Core rate limiting, a command timeout, and the usual database-side controls.
+
+**Bound how long a slow reader can hold a connection.** A response past [`ResponseSpillThreshold`](server.md#response-size) is written as it is read, so it holds a connection *and* its database read open for as long as the client takes to read it. That exposure is not new — `…/stream` has always had it, and `MapScry` maps every endpoint together precisely so the surface is uniform rather than one endpoint being protected while its neighbours are not — but it now reaches `ToListAsync` as well, which `MaxStreamRows` does not bound. Set the threshold to zero to hold responses whole as they once were, at the cost of an unbounded result being resident. The improvement in the same change is that such a result is no longer resident *twice*, as rows and as serialized bytes.
 
 **Column-level authorization per user.** `[QueryIgnore]` is static: a column is exposed or it is not. There is no per-caller column masking. Expose a view containing only the permitted columns instead.
 

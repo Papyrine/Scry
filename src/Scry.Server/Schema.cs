@@ -53,6 +53,20 @@ sealed class Schema
     /// </summary>
     public IReadOnlyList<EnumAlias> EnumAliases { get; private set; } = [];
 
+    /// <summary>
+    /// Whether any allow-listed member anywhere carries <c>[BinaryTransfer]</c>. False for almost every
+    /// model, and the only form of the question a batch can ask.
+    /// </summary>
+    /// <remarks>
+    /// A single query decides whether it may spill from its own projection plan, which is exact. A batch
+    /// cannot: it commits to one framing for the whole envelope before the first entry runs, and only
+    /// entry n's own plan says whether entry n diverts — so entry 1 draining would be a bet that no
+    /// later entry produces a part the drained bytes would have had to precede. This answers it the one
+    /// way that is sound up front, at the cost of holding a whole batch whole on any model that has a
+    /// binary member at all.
+    /// </remarks>
+    public bool CarriesBinary { get; private set; }
+
     IReadOnlyList<EnumAlias> BuildEnumAliases() =>
     [
         ..enumPreviousNames
@@ -468,6 +482,9 @@ sealed class Schema
         }
 
         schema.EnumAliases = schema.BuildEnumAliases();
+        schema.CarriesBinary = schema.types.Values
+            .SelectMany(_ => _.Members.Values)
+            .Any(_ => _.BinaryTransfer);
         schema.Stamp = schema.ComputeStamp();
         return schema;
     }

@@ -228,16 +228,26 @@ public static class ScryServiceExtensions
             // batch envelope — no dictionaries, no JsonElement round trip, and no second pass over
             // every entry to serialize the envelope around them. An entry the writer cannot reproduce
             // is serialized into the same envelope; the bytes are what ExecuteBatch would have produced.
-            using var buffer = new PooledBufferWriter();
+            using var spill = new ResponseSpill(context, options.ResponseSpillThreshold);
             var collector = new BinaryPartCollector();
-            processor.ExecuteBatchBuffered(
+            await processor.ExecuteBatchBufferedAsync(
                 request,
                 db,
                 services,
                 context.Request.Headers,
                 context.Response.Headers,
-                buffer,
-                collector);
+                spill.Output,
+                collector,
+                spill,
+                context.RequestAborted);
+
+            // Something is already on the wire, which nothing on a model carrying a binary member is
+            // ever allowed to put there — so the collector is empty by construction.
+            if (spill.Committed)
+            {
+                await spill.CompleteAsync(context.RequestAborted);
+                return;
+            }
 
             // One flat multipart for the whole batch: the collector threads through every entry, so
             // the parts are numbered globally and the batch envelope arrives last, referencing them.
@@ -251,20 +261,19 @@ public static class ScryServiceExtensions
                 }
 
                 await multipart.OpenPart("application/json", context.RequestAborted);
-                await context.Response.Body.WriteAsync(buffer.WrittenMemory, context.RequestAborted);
+                await context.Response.Body.WriteAsync(spill.Pending, context.RequestAborted);
                 await multipart.Terminate(context.RequestAborted);
                 return;
             }
 
-            context.Response.ContentType = "application/json";
-            await context.Response.Body.WriteAsync(buffer.WrittenMemory, context.RequestAborted);
+            await spill.CompleteAsync(context.RequestAborted);
         }
-        catch (ScryValidationException exception)
+        catch (ScryValidationException exception) when (!context.Response.HasStarted)
         {
             // Envelope-level only: a per-entry rejection never reaches here.
             await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, exception.StaleClient);
         }
-        catch (Exception)
+        catch (Exception) when (!context.Response.HasStarted && !context.RequestAborted.IsCancellationRequested)
         {
             await WriteError(context, StatusCodes.Status500InternalServerError, "Query execution failed.", staleClient: false);
         }
@@ -370,29 +379,40 @@ public static class ScryServiceExtensions
             // JsonElement round trip — whatever its kind. Only a drifted client's alias-carrying
             // envelope comes back as a QueryResponse to be serialized the general way; the two
             // produce identical bytes.
-            using var buffer = new PooledBufferWriter();
+            using var spill = new ResponseSpill(context, options.ResponseSpillThreshold);
             var collector = new BinaryPartCollector();
-            var buffered = processor.TryExecuteBuffered(
+            var fallback = await processor.TryExecuteBufferedAsync(
                 request,
                 db,
                 services,
                 context.Request.Headers,
                 context.Response.Headers,
-                buffer,
-                out var response,
-                collector);
+                spill.Output,
+                spill,
+                collector,
+                context.RequestAborted);
 
             // The writer declined this one, so the buffer it was handed is untouched — the envelope is
             // serialized into it rather than into a right-sized array that would be written once and
             // dropped. Past here the response is one span whichever produced it.
-            if (!buffered)
+            if (fallback is not null)
             {
-                ResponseWriter.Write(buffer, response!);
+                ResponseWriter.Write(spill.Output, fallback);
+            }
+
+            // Something is already on the wire, which only a plan carrying no binary slot is ever
+            // allowed to put there — so the collector is empty by construction and there is nothing
+            // left to decide, only the tail to send.
+            if (spill.Committed)
+            {
+                await spill.CompleteAsync(context.RequestAborted);
+                return;
             }
 
             // A result that diverted [BinaryTransfer] values travels as multipart: the raw parts
-            // first, then the JSON envelope that references them. The envelope is buffered either way,
-            // so parts-first is free. Anything else is today's plain JSON, byte for byte.
+            // first, then the JSON envelope that references them. Such a result is never allowed to
+            // spill, so the envelope is whole here and parts-first is free. Anything else is today's
+            // plain JSON, byte for byte.
             if (collector.Count > 0)
             {
                 var multipart = MultipartWriter.Create(context.Response.Body);
@@ -403,19 +423,18 @@ public static class ScryServiceExtensions
                 }
 
                 await multipart.OpenPart("application/json", context.RequestAborted);
-                await context.Response.Body.WriteAsync(buffer.WrittenMemory, context.RequestAborted);
+                await context.Response.Body.WriteAsync(spill.Pending, context.RequestAborted);
                 await multipart.Terminate(context.RequestAborted);
                 return;
             }
 
-            context.Response.ContentType = "application/json";
-            await context.Response.Body.WriteAsync(buffer.WrittenMemory, context.RequestAborted);
+            await spill.CompleteAsync(context.RequestAborted);
         }
-        catch (ScryValidationException exception)
+        catch (ScryValidationException exception) when (!context.Response.HasStarted)
         {
             await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, exception.StaleClient);
         }
-        catch (Exception)
+        catch (Exception) when (!context.Response.HasStarted && !context.RequestAborted.IsCancellationRequested)
         {
             // Never leak internals (stack traces, SQL) to the client.
             await WriteError(context, StatusCodes.Status500InternalServerError, "Query execution failed.", drifted);

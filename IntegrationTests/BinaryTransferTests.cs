@@ -177,6 +177,94 @@ public class BinaryTransferTests
         Assert.That(batch, Does.StartWith("application/json"));
     }
 
+    /// <summary>
+    /// A diverting result is held whole however small the buffer it is allowed, because its parts have
+    /// to precede the JSON that references them and a drained envelope could not be preceded by
+    /// anything. The threshold here is one byte, so every other result on this server spills.
+    /// </summary>
+    [Test]
+    public async Task ADivertingResultIsHeldWholeHoweverLowTheThreshold()
+    {
+        await using var spilling = await StartSpilling(1);
+        using var spillingHttp = spilling.GetTestClient();
+
+        var (contentType, body) = await PostRaw(spillingHttp, "/api/query", listRequest);
+        var sections = ParseMultipart(body, BoundaryOf(contentType));
+
+        // The framing this fixture already pins, arrived at with spilling switched on as hard as it goes.
+        Assert.That(sections, Has.Count.EqualTo(5));
+        Assert.That(sections[0].Content, Is.EqualTo(alphaPayload));
+        Assert.That(sections[3].Content, Is.EqualTo(fullPayload));
+        Assert.That(sections[4].Headers["Content-Type"], Is.EqualTo("application/json"));
+        Assert.That(
+            Encoding.UTF8.GetString(sections[4].Content),
+            Does.Contain("""{"name":"alpha","payload":{"$bin":0}}"""));
+    }
+
+    /// <summary>
+    /// The gate is the projection plan, not the schema: the same source, projected without its binary
+    /// member, carries no slot that could divert and so is free to spill. A response that spilled
+    /// declares no length, which is how one tells it did.
+    /// </summary>
+    [Test]
+    public async Task ABinaryFreeProjectionOverABinarySourceStillSpills()
+    {
+        const string namesOnly =
+            """
+            {"version":1,"root":"Document","pipeline":[
+              {"$type":"select","projection":{"members":[
+                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}]}
+            """;
+
+        await using var spilling = await StartSpilling(1);
+        using var spillingHttp = spilling.GetTestClient();
+
+        using var content = new StringContent(namesOnly, Encoding.UTF8, "application/json");
+        using var message = new HttpRequestMessage(HttpMethod.Post, "/api/query") {Content = content};
+        // Headers-first: buffering the content lets the client compute a length the response never sent.
+        using var response = await spillingHttp.SendAsync(message, HttpCompletionOption.ResponseHeadersRead);
+        var declared = response.Content.Headers.ContentLength;
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.Content.Headers.ContentType!.ToString(), Does.StartWith("application/json"));
+            Assert.That(declared, Is.Null);
+            Assert.That(body, Does.Contain("""{"name":"alpha"}"""));
+            Assert.That(body, Does.EndWith("}"));
+        });
+    }
+
+    /// <summary>
+    /// A batch cannot ask the plan's question, because it commits to one framing before the first entry
+    /// runs and only entry n's plan says whether entry n diverts. So it asks the model's instead, and
+    /// this model has a binary member — which holds the whole batch whole even for entries that could
+    /// not possibly divert, and even with the threshold at one byte.
+    /// </summary>
+    [Test]
+    public async Task ABatchOnABinaryCarryingModelIsHeldWhole()
+    {
+        const string namesOnly =
+            """
+            {"version":1,"root":"Document","pipeline":[
+              {"$type":"select","projection":{"members":[
+                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}]}
+            """;
+
+        await using var spilling = await StartSpilling(1);
+        using var spillingHttp = spilling.GetTestClient();
+
+        var batch = $$"""{"version":1,"queries":[{{namesOnly}},{{namesOnly}}]}""";
+        using var content = new StringContent(batch, Encoding.UTF8, "application/json");
+        using var message = new HttpRequestMessage(HttpMethod.Post, "/api/query/batch") {Content = content};
+        using var response = await spillingHttp.SendAsync(message, HttpCompletionOption.ResponseHeadersRead);
+        var declared = response.Content.Headers.ContentLength;
+        var body = await response.Content.ReadAsByteArrayAsync();
+
+        // A declared length is what never having drained looks like from the outside.
+        Assert.That(declared, Is.EqualTo(body.Length));
+    }
+
     [Test]
     public async Task SingleTerminalRoundTripsBinary()
     {
@@ -376,6 +464,21 @@ public class BinaryTransferTests
         // The rows that did arrive are whole — their parts were read and resolved before the failure,
         // so a truncated stream is an error rather than a short answer with mangled bytes.
         Assert.That(rows.Select(_ => (_.Name, _.Payload)), Is.EqualTo(seeded[..2]));
+    }
+
+    // A second server, because the spill threshold is fixed at startup and the fixture's own server
+    // keeps the default — under which nothing here is large enough to spill at all.
+    async Task<WebApplication> StartSpilling(int threshold)
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddDbContext<BinaryContext>(_ => _.UseSqlServer(database.ConnectionString));
+        builder.Services.AddScry<BinaryContext>(_ => _.ResponseSpillThreshold = threshold);
+
+        var app = builder.Build();
+        app.MapScry("/api/query");
+        await app.StartAsync();
+        return app;
     }
 
     // A second server, because the row limit is fixed at startup and the fixture's own server has none.

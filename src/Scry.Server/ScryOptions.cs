@@ -46,14 +46,32 @@ public sealed class ScryOptions(Type contextType)
     /// </summary>
     /// <remarks>
     /// Null matches <c>ToListAsync</c>, which has never been bounded either: <see cref="MaxPageSize"/>
-    /// caps <c>Take</c> and a page, not an unbounded enumeration. Streaming is the safer of the two
-    /// server-side, since the rows are never buffered — but it holds a connection and a response open
-    /// for as long as the client reads, which is the reason to offer a bound at all. A stream that
+    /// caps <c>Take</c> and a page, not an unbounded enumeration. Nor is streaming the safer of the two
+    /// server-side any longer — a list that outgrows <see cref="ResponseSpillThreshold"/> is written out
+    /// as it is read, so neither holds its rows. What both hold is a connection and a response open for
+    /// as long as the client reads, which is the reason to offer a bound at all. A stream that
     /// reaches the limit ends with an error marker rather than a short result, so a client cannot
     /// mistake truncation for the end of the data.
     /// </remarks>
     public int? MaxStreamRows { get; set; }
     // end-snippet
+
+    /// <summary>
+    /// The size in bytes past which a response stops being held whole and is sent as it is written.
+    /// Default 65,536 (64 KB); zero holds every response whole, as every response once was.
+    /// </summary>
+    /// <remarks>
+    /// This is not one of the limits above: crossing it rejects nothing and bounds nothing a client may
+    /// ask for. It is the point at which an unbounded result stops being resident, and what it pays is
+    /// the response's <c>Content-Length</c> — one that fits is sent whole and declares its length, and a
+    /// failure part-way through one is still answered as a 400 or a 500 with a body. Past the threshold
+    /// the status is long since committed, so a failure can only truncate the response; a truncated one
+    /// is never mistakable for a complete one, because the host closes the connection without a
+    /// terminating chunk rather than synthesising a valid end. A result that carries
+    /// <c>[BinaryTransfer]</c> values is held whole whatever this says, since its raw parts have to
+    /// precede the JSON document that references them.
+    /// </remarks>
+    public int ResponseSpillThreshold { get; set; } = 64 * 1024;
 
     /// <summary>
     /// The collation applied when a client asks for a case-sensitive string comparison. Null — the
