@@ -176,6 +176,17 @@ static class ResponseWriter
     }
 
     /// <summary>
+    /// A whole response the row writer could not produce — the alias-carrying envelope a drifted client
+    /// is answered with — serialized into the buffer a written result uses, rather than into an array of
+    /// its own that exists for the single write that follows it.
+    /// </summary>
+    public static void Write(IBufferWriter<byte> output, QueryResponse fallback)
+    {
+        using var json = new Utf8JsonWriter(output);
+        ScryJson.Write(json, fallback);
+    }
+
+    /// <summary>
     /// An entry the row writer could not produce — a terminal result, or the alias-carrying envelope a
     /// drifted client is answered with — serialized into the envelope being written.
     /// </summary>

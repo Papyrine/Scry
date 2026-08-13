@@ -382,6 +382,14 @@ public static class ScryServiceExtensions
                 out var response,
                 collector);
 
+            // The writer declined this one, so the buffer it was handed is untouched — the envelope is
+            // serialized into it rather than into a right-sized array that would be written once and
+            // dropped. Past here the response is one span whichever produced it.
+            if (!buffered)
+            {
+                ResponseWriter.Write(buffer, response!);
+            }
+
             // A result that diverted [BinaryTransfer] values travels as multipart: the raw parts
             // first, then the JSON envelope that references them. The envelope is buffered either way,
             // so parts-first is free. Anything else is today's plain JSON, byte for byte.
@@ -395,28 +403,13 @@ public static class ScryServiceExtensions
                 }
 
                 await multipart.OpenPart("application/json", context.RequestAborted);
-                if (buffered)
-                {
-                    await context.Response.Body.WriteAsync(buffer.WrittenMemory, context.RequestAborted);
-                }
-                else
-                {
-                    await context.Response.Body.WriteAsync(ScryJson.SerializeToUtf8(response!), context.RequestAborted);
-                }
-
+                await context.Response.Body.WriteAsync(buffer.WrittenMemory, context.RequestAborted);
                 await multipart.Terminate(context.RequestAborted);
                 return;
             }
 
             context.Response.ContentType = "application/json";
-            if (buffered)
-            {
-                await context.Response.Body.WriteAsync(buffer.WrittenMemory, context.RequestAborted);
-            }
-            else
-            {
-                await context.Response.Body.WriteAsync(ScryJson.SerializeToUtf8(response!), context.RequestAborted);
-            }
+            await context.Response.Body.WriteAsync(buffer.WrittenMemory, context.RequestAborted);
         }
         catch (ScryValidationException exception)
         {
