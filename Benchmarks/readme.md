@@ -18,6 +18,8 @@ The source is a `[QueryablePoco]` supplied in memory, so no database is involved
 
 `BatchBenchmarks` is the same pair for a batch, where the general path pays that per entry and then serializes every one of those elements again as the envelope. It holds the rows at a hundred and varies the entry count instead, since what a batch adds is the per-entry work repeated.
 
+`TerminalBenchmarks` is the same pair for the results that are not rows — one projected row, and a count. A terminal costs the same whatever the source holds, so it carries them as batch entries to divide out the fixed cost each arm pays, and keeps the source narrow so the pipeline work both arms share does not bury the difference.
+
 
 ## Reading the output
 
