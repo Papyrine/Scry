@@ -18,10 +18,14 @@ sealed class ProjectionPlan(
     PlanShapeWriter? writer;
 
     /// <summary>
-    /// The row writer for this shape. Built on first use and kept — a cached plan shares its
-    /// projection across every request of the shape, so names are camel-cased and escaped once, not
-    /// per row. A racing double build produces identical writers, so the bare assignment is benign.
+    /// The row writer for this shape, so names are camel-cased and escaped once rather than per row.
+    /// Held by shape rather than by plan: a plan is built per request, and the writer outlives it.
     /// </summary>
+    /// <remarks>
+    /// Kept in this field as well, so a plan that writes more than once — a page reads its rows and
+    /// writes them, a list writes as it reads — looks the shape up once. A racing double read returns
+    /// the same writer, so the bare assignment is benign.
+    /// </remarks>
     public PlanShapeWriter Writer =>
-        writer ??= PlanShapeWriter.Create(Shape, BinarySlots);
+        writer ??= PlanShapeWriter.Get(Shape, BinarySlots);
 }

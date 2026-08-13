@@ -189,7 +189,74 @@ sealed class PlanShapeWriter
     PlanShapeWriter(Node root) =>
         this.root = root;
 
-    public static PlanShapeWriter Create(
+    // Keyed on the shape rather than kept on the plan that asked for it: a ProjectionPlan is built per
+    // request, so a writer held there is rebuilt for every request of the same projection. Building one
+    // is a node and an escaped name per member, which only pays for itself once there are rows to
+    // amortize it over — a single row never does. Shared, it is built once for the process.
+    //
+    // A writer is immutable once built and is published through the dictionary, so concurrent readers
+    // see it whole. Two threads that both miss build identical writers and one of them wins, which is
+    // the same benign race the per-plan field had.
+    static readonly ConcurrentDictionary<string, PlanShapeWriter> writers = new(StringComparer.Ordinal);
+
+    // A projection is the client's, so the number of distinct shapes reaching this is bounded only by
+    // what a caller chooses to send. Growth stops here and a shape arriving past the limit builds its
+    // own writer per request — which is what every shape did before this cache, so a caller who fills
+    // it degrades the service to its previous behavior rather than to a new failure.
+    const int limit = 512;
+
+    /// <summary>The writer for a shape, built once per process and shared by every plan of that shape.</summary>
+    public static PlanShapeWriter Get(
+        IReadOnlyList<IReadOnlyList<string>> shape,
+        IReadOnlyList<bool>? binarySlots)
+    {
+        var key = Key(shape, binarySlots);
+        if (writers.TryGetValue(key, out var cached))
+        {
+            return cached;
+        }
+
+        var writer = Create(shape, binarySlots);
+        if (writers.Count < limit)
+        {
+            writers[key] = writer;
+        }
+
+        return writer;
+    }
+
+    /// <summary>
+    /// A shape's identity as a string. Every part is length-prefixed, so no projected name can be
+    /// arranged to read as a different shape's key — the names are the client's, and a caller who could
+    /// collide two shapes would have one projection answered in another's member order.
+    /// </summary>
+    static string Key(IReadOnlyList<IReadOnlyList<string>> shape, IReadOnlyList<bool>? binarySlots)
+    {
+        var key = new StringBuilder();
+        foreach (var path in shape)
+        {
+            key.Append(path.Count).Append(':');
+            foreach (var segment in path)
+            {
+                key.Append(segment.Length).Append(':').Append(segment);
+            }
+        }
+
+        // Same paths shaped by different binary slots are different writers, so the flags are part of
+        // the identity rather than an attribute of it.
+        if (binarySlots is not null)
+        {
+            key.Append('|');
+            foreach (var slot in binarySlots)
+            {
+                key.Append(slot ? '1' : '0');
+            }
+        }
+
+        return key.ToString();
+    }
+
+    static PlanShapeWriter Create(
         IReadOnlyList<IReadOnlyList<string>> shape,
         IReadOnlyList<bool>? binarySlots = null)
     {
