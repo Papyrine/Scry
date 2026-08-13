@@ -444,26 +444,23 @@ public class BinaryTransferTests
     [Test]
     public async Task FastAndGeneralPathsEmitIdenticalPayloads()
     {
-        // The same query through the fast writer (single endpoint, list result) and the general
-        // dictionary path (the same list as a batch entry): the parts and the payload JSON must
-        // match exactly — the placeholder identity the two writers are required to share.
-        var (singleType, singleBody) = await PostRaw("/api/query", listRequest);
-        var single = ParseMultipart(singleBody, BoundaryOf(singleType));
+        // The same query through the fast writer and through the general dictionary path: the parts
+        // and the payload JSON must match exactly — the placeholder identity the two writers are
+        // required to share. A drifted stamp is what reaches the general path here, since this model's
+        // DocumentKind carries a renamed value and so the response has an alias table to carry.
+        var (fastType, fastBody) = await PostRaw("/api/query", listRequest);
+        var fast = ParseMultipart(fastBody, BoundaryOf(fastType));
 
-        var (batchType, batchBody) = await PostRaw("/api/query/batch", $$"""{"version":1,"queries":[{{listRequest}}]}""");
-        var batch = ParseMultipart(batchBody, BoundaryOf(batchType));
+        var (generalType, generalBody) = await PostRaw("/api/query", driftedRequest);
+        var general = ParseMultipart(generalBody, BoundaryOf(generalType));
 
-        Assert.That(single[..^1].Select(_ => _.Content), Is.EqualTo(batch[..^1].Select(_ => _.Content)));
+        Assert.That(fast[..^1].Select(_ => _.Content), Is.EqualTo(general[..^1].Select(_ => _.Content)));
 
-        using var singleEnvelope = JsonDocument.Parse(single[^1].Content);
-        using var batchEnvelope = JsonDocument.Parse(batch[^1].Content);
-        var singlePayload = singleEnvelope.RootElement.GetProperty("payload").GetRawText();
-        var batchPayload = batchEnvelope.RootElement
-            .GetProperty("results")[0]
-            .GetProperty("response")
-            .GetProperty("payload")
-            .GetRawText();
-        Assert.That(singlePayload, Is.EqualTo(batchPayload));
+        using var fastEnvelope = JsonDocument.Parse(fast[^1].Content);
+        using var generalEnvelope = JsonDocument.Parse(general[^1].Content);
+        Assert.That(
+            fastEnvelope.RootElement.GetProperty("payload").GetRawText(),
+            Is.EqualTo(generalEnvelope.RootElement.GetProperty("payload").GetRawText()));
     }
 
     Task<(string ContentType, byte[] Body)> PostRaw(string endpoint, string request) =>
