@@ -1,6 +1,6 @@
 # Performance
 
-What a query costs to write on the server and to read on the client, measured rather than asserted.
+What it costs the server to write a response and the client to read one, in allocations and time.
 
 Both sides carry two ways of doing the same work. The server can shape a result into dictionaries, serialize that into a `JsonElement`, and serialize the envelope around it a second time — or it can write the rows straight from the projected values into the response buffer, for one query or for every entry of a batch. The client can decode a response body to a string and read the payload through a `JsonElement` — or it can read the UTF-8 exactly as it arrived. The pairs produce identical bytes and identical results; what differs is what they spend getting there.
 
