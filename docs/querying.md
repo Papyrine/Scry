@@ -923,14 +923,14 @@ The inner side is resolved and [policy-filtered](policies.md) before the groupin
 ```cs
 var rows = await client.Source<Employee>("Employee")
     .Where(_ => client.Source<Department>("Department")
-        .Where(d => d.Name == "Sales")
-        .Select(d => d.Id)
+        .Where(_ => _.Name == "Sales")
+        .Select(_ => _.Id)
         .Contains(_.DepartmentId))
     .OrderBy(_ => _.Name)
     .Select(_ => new NameRow(_.Name))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/SourceMembershipTests.cs#L37-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientSourceMembership' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/SourceMembershipTests.cs#L41-L50' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientSourceMembership' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The named source is resolved and [policy-filtered](policies.md) before the test, exactly as a [join](#joins) resolves its second side. Membership is therefore only ever of rows the caller could have queried directly: a row the source's policy hides is not in the set, so the test cannot be used to learn that it exists.
