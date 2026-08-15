@@ -201,20 +201,25 @@ public sealed class ScryProcessor
 
     /// <summary>
     /// Executes like <see cref="Execute(QueryRequest, DbContext, IServiceProvider, IHeaderDictionary, IHeaderDictionary)"/>,
-    /// but writes the result into <paramref name="output"/> as complete response bytes (true). The one
-    /// result that does not go that way is the rare drifted-client envelope carrying the enum alias
-    /// table, which comes back as <paramref name="fallback"/> (false) for the caller to serialize the
-    /// general way. Rejections and failures throw exactly as <c>Execute</c> does.
+    /// but writes the result into <paramref name="output"/> as complete response bytes, returning null.
+    /// The one result that does not go that way is the rare drifted-client envelope carrying the enum
+    /// alias table, which is returned instead for the caller to serialize the general way. Rejections
+    /// and failures throw exactly as <c>Execute</c> does.
     /// </summary>
-    internal bool TryExecuteBuffered(
+    /// <remarks>
+    /// <paramref name="spill"/> is what may let a large result stop being resident; null keeps the
+    /// whole envelope buffered, which is what the batch's per-entry buffer needs.
+    /// </remarks>
+    internal async ValueTask<QueryResponse?> TryExecuteBufferedAsync(
         QueryRequest request,
         DbContext data,
         IServiceProvider services,
         IHeaderDictionary requestHeaders,
         IHeaderDictionary responseHeaders,
         IBufferWriter<byte> output,
-        out QueryResponse? fallback,
-        BinaryPartCollector? binary = null)
+        ResponseSpill? spill = null,
+        BinaryPartCollector? binary = null,
+        Cancel cancel = default)
     {
         var drifted = request.Stamp is { } requestStamp &&
                       requestStamp != schema.Stamp;
@@ -230,19 +235,18 @@ public sealed class ScryProcessor
             // the fully-general path rather than teaching the writer a second shape.
             if (drifted && schema.EnumAliases.Count > 0)
             {
-                fallback = executor.Execute(request, data, scope) with
+                var fallback = executor.Execute(request, data, scope) with
                 {
                     Stamp = schema.Stamp,
                     EnumAliases = schema.EnumAliases
                 };
                 recorder.Succeeded(fallback);
-                return false;
+                return fallback;
             }
 
-            executor.ExecuteBuffered(request, data, scope, schema.Stamp, output, out var kind, out var rows);
+            var (kind, rows) = await executor.ExecuteBufferedAsync(request, data, scope, schema.Stamp, output, spill, cancel);
             recorder.Succeeded(kind, rows);
-            fallback = null;
-            return true;
+            return null;
         }
         catch (ScryValidationException exception) when (drifted)
         {
@@ -256,6 +260,14 @@ public sealed class ScryProcessor
         catch (ScryValidationException exception)
         {
             recorder.Rejected(exception);
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            // Reading the rows asynchronously is what makes a client disconnect land here rather than
+            // at the final write, and an abandoned request is not a query that failed. Ahead of the
+            // catch below so it is not counted as one.
+            recorder.Canceled();
             throw;
         }
         catch (Exception exception)
@@ -374,18 +386,26 @@ public sealed class ScryProcessor
     /// Only an envelope failure throws; a rejected or failed entry is written as its own result exactly
     /// as <c>ExecuteBatch</c> reports one.
     /// </remarks>
-    internal void ExecuteBatchBuffered(
+    internal async Task ExecuteBatchBufferedAsync(
         QueryBatchRequest request,
         DbContext data,
         IServiceProvider services,
         IHeaderDictionary requestHeaders,
         IHeaderDictionary responseHeaders,
         IBufferWriter<byte> output,
-        BinaryPartCollector? binary)
+        BinaryPartCollector? binary,
+        ResponseSpill? spill = null,
+        Cancel cancel = default)
     {
         RejectUnusableBatch(request);
 
         using var activity = QueryRecorder.StartBatch(request.Queries.Count);
+
+        // Granted once, before the first entry runs — the only point at which a batch can decide. Its
+        // parts are numbered globally and its envelope arrives last, so an entry that drained would be
+        // betting that no later entry produces a part the drained bytes should have preceded. Only a
+        // model with no binary member anywhere makes that bet safe.
+        spill?.AllowSpill(!schema.CarriesBinary);
 
         // One scratch buffer for the whole batch, reset per entry rather than rented per entry, so a
         // batch of n entries rents once and settles at the width of its largest.
@@ -394,7 +414,16 @@ public sealed class ScryProcessor
         ResponseWriter.BeginBatch(json);
         foreach (var query in request.Queries)
         {
-            WriteEntry(json, entry, query, data, services, requestHeaders, responseHeaders, binary);
+            await WriteEntryAsync(json, entry, query, data, services, requestHeaders, responseHeaders, binary, cancel);
+
+            // Between entries, never inside one: an entry is written to a buffer of its own and inserted
+            // whole precisely so a failure part-way through its rows is still reported as that entry's
+            // own result, which nothing already on the wire could be replaced by.
+            if (spill?.ShouldDrain(json.BytesPending) == true)
+            {
+                json.Flush();
+                await spill.DrainAsync(cancel);
+            }
         }
 
         ResponseWriter.EndBatch(json, schema.Stamp);
@@ -423,7 +452,7 @@ public sealed class ScryProcessor
     // The entry is written into a buffer of its own first and only inserted once it is whole: an entry
     // can fail part-way through its rows (the database is read as they are written), and a writer
     // already mid-array cannot take back what it has written to report the failure in its place.
-    void WriteEntry(
+    async Task WriteEntryAsync(
         Utf8JsonWriter json,
         PooledBufferWriter entry,
         QueryRequest query,
@@ -431,28 +460,38 @@ public sealed class ScryProcessor
         IServiceProvider services,
         IHeaderDictionary requestHeaders,
         IHeaderDictionary responseHeaders,
-        BinaryPartCollector? binary)
+        BinaryPartCollector? binary,
+        Cancel cancel)
     {
         entry.Reset();
 
-        bool buffered;
         QueryResponse? fallback;
         try
         {
-            buffered = TryExecuteBuffered(
+            // No spill: an entry is inserted into the envelope only once it is whole, which is the
+            // whole reason it is written into a buffer of its own.
+            fallback = await TryExecuteBufferedAsync(
                 query,
                 data,
                 services,
                 requestHeaders,
                 responseHeaders,
                 entry,
-                out fallback,
-                binary);
+                spill: null,
+                binary,
+                cancel);
         }
         catch (ScryValidationException exception)
         {
             ResponseWriter.WriteEntry(json, exception.Message, 400, exception.StaleClient);
             return;
+        }
+        catch (OperationCanceledException)
+        {
+            // The one place this diverges from ExecuteEntry, which reads its rows synchronously and so
+            // cannot be abandoned part-way. Nobody is left to read a per-entry failure, and the entries
+            // after this one have nobody to answer either, so the batch goes with it.
+            throw;
         }
         catch (Exception)
         {
@@ -466,13 +505,13 @@ public sealed class ScryProcessor
             return;
         }
 
-        if (buffered)
+        if (fallback is null)
         {
             ResponseWriter.WriteEntry(json, entry.WrittenMemory.Span);
             return;
         }
 
-        ResponseWriter.WriteEntry(json, fallback!);
+        ResponseWriter.WriteEntry(json, fallback);
     }
 
     // One entry, reported rather than thrown. The catches mirror the HTTP endpoint's: a validation

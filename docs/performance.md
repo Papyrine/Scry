@@ -38,6 +38,17 @@ The general path serves every transport that is not the HTTP endpoint, which is 
 What that fallback costs is a third arm of the same benchmark. Today the only result that takes it is the one answered to a drifted client — a request whose schema stamp disagrees with the server's, so the response carries the enum alias table — and at a thousand rows it allocates **2591 KB** against the writer's 910 KB. That is the general path's own cost plus the HTTP constant and nothing beyond it: the envelope is serialized into the same response buffer a written result fills, rather than into an array of its own for the single write that sends it.
 
 
+### Outgrowing the buffer
+
+A response that outgrows [`ResponseSpillThreshold`](server.md#response-size) — 64 KB by default — is drained to the response as it is written instead of grown to hold the whole result. A wide row here is a little over 200 bytes, so the thousand-row figures above measure the drained path and the hundred-row ones do not: the tables happen to straddle the threshold.
+
+Total allocations are the same either way — 908 KB at a thousand rows, against the 910 KB the same benchmark measured before the threshold existed. The same bytes are produced and written; what differs is how many of them are resident at once. Held whole, a large list is resident twice over, as the projected rows and as the serialized bytes, and the buffer settles at the size of the result. Drained, the buffer settles at the threshold and the rows are pulled one at a time.
+
+So this is a peak-memory change that the allocation column cannot show, and it is not free: past the threshold a response gives up its `Content-Length` — a length can only describe a body that is already whole when the headers go out — and gives up answering a failure part-way through with a `500`. [Wire format](wire-format.md#response) sets out what a reader sees instead.
+
+The rows are also pulled asynchronously now, so writing a buffered response no longer blocks a request thread on the database. That does not show here either: the benchmark reads an in-memory source, where there is nothing to await.
+
+
 ## Writing a batch
 
 A batch is the same work repeated, so the entry count is what varies here and the rows per entry sit at a hundred.
@@ -107,5 +118,6 @@ The crossover is around a hundred rows.
 - **The payload's bytes are produced once.** The writer emits the complete envelope, version through stamp, as it goes. The general path serializes rows into a document and then serializes that document into the response, so the same bytes are produced twice with a parse in between; a batch pays that per entry, and its envelope is the second pass over all of them at once.
 - **UTF-8 end to end.** A request and a response are both serialized to UTF-8 and read as UTF-8 on both sides. Decoding a body to a string transcodes the whole of it for the JSON reader to transcode straight back.
 - **Pooled buffers.** A response is written into an array-pool buffer, which hands each intermediate back to the pool as it grows. A buffer that doubles from 256 bytes instead discards every intermediate on the way up, and the last of those are large enough to land on the large object heap.
+- **A large response is drained rather than grown.** Past the threshold the buffer is written out and reset instead of doubling again, so a result of any size is held in at most the threshold's worth of buffer. Under it nothing changes: the response is written once, whole, declaring its length.
 
 See [Wire format](wire-format.md) for what is actually written, and [Server](server.md) for where in the pipeline it happens.

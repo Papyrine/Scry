@@ -71,36 +71,43 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// <summary>
     /// Executes like <see cref="Execute"/>, but writes the complete response envelope straight into
     /// <paramref name="output"/> — every result kind, never passing through dictionaries or a
-    /// <see cref="JsonElement"/>. <paramref name="rows"/> is what the result counts: the rows written
+    /// <see cref="JsonElement"/>. The returned row count is what the result counts: the rows written
     /// for a list or page, one or none for a single row, and nothing for a scalar, which folds the
     /// rows away.
     /// </summary>
-    public void ExecuteBuffered(
+    /// <remarks>
+    /// This is also the only place that knows the projection plan before the first row is read, so it
+    /// is where <paramref name="spill"/> is told whether it may send anything early. The decision is
+    /// the plan's rather than the data's — the same rule <c>StreamBuffered</c> applies to a different
+    /// question — because a plan carrying no binary slot can never produce a part, and so can never
+    /// need one to precede JSON that has already gone out.
+    /// </remarks>
+    public async ValueTask<(ResultKind Kind, int? Rows)> ExecuteBufferedAsync(
         QueryRequest request,
         DbContext db,
         CallScope scope,
         string stamp,
         IBufferWriter<byte> output,
-        out ResultKind kind,
-        out int? rows)
+        ResponseSpill? spill,
+        Cancel cancel)
     {
         var (terminal, set) = Run(request, db, scope, out var page);
+
+        // A terminal folded its rows away, so there is nothing to spill and permission stays withheld.
         if (terminal is { } folded)
         {
-            kind = folded.Kind;
-            rows = ResponseWriter.WriteTerminal(output, folded, stamp);
-            return;
+            return (folded.Kind, ResponseWriter.WriteTerminal(output, folded, stamp));
         }
 
         if (page is { } paged)
         {
-            kind = ResultKind.Page;
-            rows = ResponseWriter.WritePage(output, paged, stamp);
-            return;
+            spill?.AllowSpill(paged.Plan.BinarySlots is null);
+            return (ResultKind.Page, await ResponseWriter.WritePageAsync(output, spill, paged, stamp, cancel));
         }
 
-        kind = ResultKind.List;
-        rows = ResponseWriter.WriteList(output, set!.Value, stamp);
+        var rowSet = set!.Value;
+        spill?.AllowSpill(rowSet.Plan.BinarySlots is null);
+        return (ResultKind.List, await ResponseWriter.WriteListAsync(output, spill, rowSet, stamp, cancel));
     }
 
     /// <summary>

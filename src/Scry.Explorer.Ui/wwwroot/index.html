@@ -29,6 +29,21 @@
     <script src="_content/BlazorMonaco/lib/monaco-editor/min/vs/loader.js"></script>
     <script src="_content/BlazorMonaco/lib/monaco-editor/min/vs/editor/editor.main.js"></script>
     <script src="js/scry.js"></script>
-    <script src="_framework/blazor.webassembly.js"></script>
+    <script src="_framework/blazor.webassembly.js" autostart="false"></script>
+    <!--
+        Blazor is started by hand, once Monaco is actually there. The script tag above only *registers*
+        editor.main.js with the AMD loader; the loader then fetches the bundle's chunks and publishes
+        window.monaco some time later. Blazor's own boot races that, and the editor component calls
+        monaco.editor.create the moment it first renders — so whichever finishes second decides whether
+        the explorer gets an editor at all. On a cold load the WASM download (Roslyn included) is far
+        slower and Monaco always wins; on a reload every asset is cached, Blazor wins, and the editor
+        silently never mounts ("BlazorMonaco: monaco is undefined"). Requiring the module before
+        starting Blazor removes the race in both directions. The errorback still starts the app if
+        Monaco genuinely fails to load, so that arrives as the explorer's own visible error rather than
+        as a permanent "Loading Scry Explorer…".
+    -->
+    <script>
+        require(['vs/editor/editor.main'], () => Blazor.start(), () => Blazor.start());
+    </script>
 </body>
 </html>

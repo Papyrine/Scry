@@ -709,6 +709,10 @@ The client checks that `kind` matches the terminal it sent and throws `ScryWireE
 
 The payload itself always carries the **current** name — the aliases are a translation table for a reader generated before the rename, never a second serialization. A reader that does not understand the field ignores it.
 
+**A response declares its length when it has one.** The envelope is written into a buffer, and a result whose whole envelope fits under the server's [`ResponseSpillThreshold`](server.md#response-size) — 64 KB by default — is sent as one body with a `Content-Length`. A result that outgrows it is sent as it is written instead, which gives up the length: the response is chunked, and its status was committed before the last row was read.
+
+That is the same trade the closing marker below exists for, arrived at through the transport rather than through the format. Past the threshold a failure has no way to become a `400` or a `500`, so the answer is truncated instead — but a truncated one is never mistakable for a complete one. The envelope's closing `stamp` is written only after the last row, and the host does not synthesize a valid ending: HTTP/1.1 closes the connection with no terminating chunk, HTTP/2 resets the stream. A reader must treat a body that ends early as a failure, exactly as it must treat a stream that ends without its marker. A response carrying [binary parts](#binary-transfer) is never sent early whatever the threshold says, because its parts have to precede the JSON that references them.
+
 
 ### Streamed results
 
@@ -814,8 +818,8 @@ Where a diverted value would have been, the JSON carries a **placeholder**:
 
 **Every part precedes the JSON document that references it**, and `n` indexes that document's parts, 0-based in emission order. A reader resolving placeholders while parsing JSON therefore always has the parts in hand. Concretely, per endpoint:
 
-* **Single** — sections are the binary parts in encounter order, then one `application/json` section holding the ordinary response envelope. Indices span the whole response.
-* **Batch** — one flat multipart for the whole batch: parts numbered globally across entries in encounter order, then the batch envelope last. No nested multipart.
+* **Single** — sections are the binary parts in encounter order, then one `application/json` section holding the ordinary response envelope. Indices span the whole response. Whether the response *may* be sent before it is whole is the projection plan's decision, taken before the first row is read: a plan carrying a binary slot is always held whole. The framing itself stays the data's, so a plan that could divert but produced no part comes back as plain JSON — where a stream, deciding both questions from the plan, would still wrap.
+* **Batch** — one flat multipart for the whole batch: parts numbered globally across entries in encounter order, then the batch envelope last. No nested multipart. A batch commits to that framing before its first entry runs, while only entry *n*'s own plan says whether entry *n* diverts — so a batch on a model carrying any `[BinaryTransfer]` member anywhere is held whole. One on a model carrying none may be sent between entries, but never within one: an entry that fails part-way through its rows is still reported as that entry's own result, which nothing already sent could be replaced by.
 * **Stream** — the referencing document is each row line, and indices reset after every one. Sections of `application/x-ndjson` lines (markers and rows, exactly the [streamed format](#streamed-results)) alternate with each row's parts, every part arriving in the section run immediately before its row's line — so a reader holds at most one row's parts at a time. Whether the stream wraps at all is decided by the projection plan before the first byte, so an all-null result still arrives as multipart.
 
 Binary parts carry `Content-Type: application/octet-stream` and an advisory `Content-Length` (readers may preallocate from it but must not trust it); part identity is positional, so there is no `Content-Disposition`. A placeholder a reader cannot resolve — an index with no part, or a placeholder in a response that carried none — must fail the read rather than yield a guess.
