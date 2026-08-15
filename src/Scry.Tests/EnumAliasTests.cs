@@ -140,5 +140,4 @@ public class EnumAliasTests
             SchemaStamp = "stamp-from-an-older-model"
         };
     }
-
 }

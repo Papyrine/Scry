@@ -99,5 +99,4 @@ public class IntrospectionTests
         // entities/views — so the startup guardrail passes.
         Assert.DoesNotThrow(() => SharedProcessor.Instance.ValidateAgainstModel(context));
     }
-
 }
