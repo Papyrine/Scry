@@ -143,7 +143,7 @@ public class ResponseSpillTests
         using var spill = new ResponseSpill(context, 1);
         spill.AllowSpill(true);
 
-        using var json = new Utf8JsonWriter(spill.Output);
+        await using var json = new Utf8JsonWriter(spill.Output);
         json.WriteStartArray();
         for (var item = 0; item < 200; item++)
         {
@@ -151,12 +151,12 @@ public class ResponseSpillTests
 
             // The flush is what puts the writer's bytes in the buffer; draining before it would reset
             // the array out from under the span the writer is still holding.
-            json.Flush();
+            await json.FlushAsync();
             await spill.DrainAsync(default);
         }
 
         json.WriteEndArray();
-        json.Flush();
+        await json.FlushAsync();
         await spill.CompleteAsync(default);
 
         Assert.That(
@@ -173,8 +173,13 @@ public class ResponseSpillTests
     static (DefaultHttpContext Context, MemoryStream Body) Context()
     {
         var body = new MemoryStream();
-        var context = new DefaultHttpContext();
-        context.Response.Body = body;
+        var context = new DefaultHttpContext
+        {
+            Response =
+            {
+                Body = body
+            }
+        };
         return (context, body);
     }
 }

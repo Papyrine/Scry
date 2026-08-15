@@ -410,7 +410,7 @@ public sealed class ScryProcessor
         // One scratch buffer for the whole batch, reset per entry rather than rented per entry, so a
         // batch of n entries rents once and settles at the width of its largest.
         using var entry = new PooledBufferWriter();
-        using var json = new Utf8JsonWriter(output);
+        await using var json = new Utf8JsonWriter(output);
         ResponseWriter.BeginBatch(json);
         foreach (var query in request.Queries)
         {
@@ -421,13 +421,13 @@ public sealed class ScryProcessor
             // own result, which nothing already on the wire could be replaced by.
             if (spill?.ShouldDrain(json.BytesPending) == true)
             {
-                json.Flush();
+                await json.FlushAsync(cancel);
                 await spill.DrainAsync(cancel);
             }
         }
 
         ResponseWriter.EndBatch(json, schema.Stamp);
-        json.Flush();
+        await json.FlushAsync(cancel);
     }
 
     // The envelope-level rejections, which are the only way a batch fails as a whole: they are checked

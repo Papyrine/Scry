@@ -39,7 +39,7 @@ static class ResponseWriter
         string schemaStamp,
         Cancel cancel)
     {
-        using var json = new Utf8JsonWriter(output);
+        await using var json = new Utf8JsonWriter(output);
         json.WriteStartObject();
         json.WriteNumber(version, WireFormat.Version);
         json.WriteString(kind, list);
@@ -48,7 +48,7 @@ static class ResponseWriter
 
         var writer = set.Plan.Writer;
         var rows = 0;
-        await foreach (var row in QueryExecutor.Enumerate(set, cancel).WithCancellation(cancel))
+        await foreach (var row in QueryExecutor.Enumerate(set, cancel))
         {
             writer.WriteRow(json, Row(row, set), set.Binary);
             rows++;
@@ -56,7 +56,7 @@ static class ResponseWriter
             {
                 // Flushed first: until it is, the writer holds a span into the buffer that draining
                 // hands straight back for overwriting.
-                json.Flush();
+                await json.FlushAsync(cancel);
                 await spill.DrainAsync(cancel);
             }
         }
@@ -64,7 +64,7 @@ static class ResponseWriter
         json.WriteEndArray();
         json.WriteString(stamp, schemaStamp);
         json.WriteEndObject();
-        json.Flush();
+        await json.FlushAsync(cancel);
         return rows;
     }
 
@@ -86,7 +86,7 @@ static class ResponseWriter
         string schemaStamp,
         Cancel cancel)
     {
-        using var json = new Utf8JsonWriter(output);
+        await using var json = new Utf8JsonWriter(output);
         json.WriteStartObject();
         json.WriteNumber(version, WireFormat.Version);
         json.WriteString(kind, page);
@@ -101,7 +101,7 @@ static class ResponseWriter
             writer.WriteRow(json, row, set.Binary);
             if (spill?.ShouldDrain(json.BytesPending) == true)
             {
-                json.Flush();
+                await json.FlushAsync(cancel);
                 await spill.DrainAsync(cancel);
             }
         }
@@ -116,7 +116,7 @@ static class ResponseWriter
         json.WriteEndObject();
         json.WriteString(stamp, schemaStamp);
         json.WriteEndObject();
-        json.Flush();
+        await json.FlushAsync(cancel);
         return set.Rows.Count;
     }
 

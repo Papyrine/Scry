@@ -106,5 +106,4 @@ public class ResponseStampTests
             SchemaStamp = "stamp-from-an-older-model"
         };
     }
-
 }

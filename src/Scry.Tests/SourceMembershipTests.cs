@@ -23,7 +23,11 @@ public class SourceMembershipTests
 
         // Every employee's department id appears in Department, so all four match.
         var count = await client.Source<Employee>("Employee")
-            .CountAsync(_ => client.Source<Department>("Department").Select(d => d.Id).Contains(_.DepartmentId));
+            .CountAsync(_ =>
+                client
+                    .Source<Department>("Department")
+                    .Select(_ => _.Id)
+                    .Contains(_.DepartmentId));
 
         Assert.That(count, Is.EqualTo(4));
     }
@@ -37,8 +41,8 @@ public class SourceMembershipTests
         // begin-snippet: clientSourceMembership
         var rows = await client.Source<Employee>("Employee")
             .Where(_ => client.Source<Department>("Department")
-                .Where(d => d.Name == "Sales")
-                .Select(d => d.Id)
+                .Where(_ => _.Name == "Sales")
+                .Select(_ => _.Id)
                 .Contains(_.DepartmentId))
             .OrderBy(_ => _.Name)
             .Select(_ => new NameRow(_.Name))
@@ -57,7 +61,11 @@ public class SourceMembershipTests
         // Ticket carries [ReturnableWith(OpenTicketsOnlyPolicy)], hiding the closed ticket (Id 3).
         // Membership must not reveal that it exists.
         var open = await client.Source<Employee>("Employee")
-            .CountAsync(_ => client.Source<Ticket>("Ticket").Select(t => t.Id).Contains(_.Id));
+            .CountAsync(_ =>
+                client
+                    .Source<Ticket>("Ticket")
+                    .Select(_ => _.Id)
+                    .Contains(_.Id));
 
         // Employees are Ids 1..4; tickets 1 and 2 are open, 3 is not. So only two match, not three.
         Assert.That(open, Is.EqualTo(2));
@@ -111,19 +119,19 @@ public class SourceMembershipTests
         var request = QueryRequest.Create(
             "Employee",
             [
-                new WhereOp(new InSourceNode(
-                    new MemberNode(["DepartmentId"]),
-                    "Department",
-                    new MemberNode(["Id"]),
+                new WhereOp(
                     new InSourceNode(
-                        new MemberNode(["Id"]),
+                        new MemberNode(["DepartmentId"]),
                         "Department",
                         new MemberNode(["Id"]),
-                        null)))
+                        new InSourceNode(
+                            new MemberNode(["Id"]),
+                            "Department",
+                            new MemberNode(["Id"]),
+                            null)))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
-            () => SharedProcessor.Instance.Execute(request, context));
+        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
         Assert.That(exception!.Message, Does.Contain("inside another"));
     }
@@ -134,12 +142,12 @@ public class SourceMembershipTests
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<NotSupportedException>(
-            () => client.Source<Employee>("Employee")
-                .CountAsync(_ => client.Source<Department>("Department")
-                    .OrderBy(d => d.Name)
-                    .Select(d => d.Id)
-                    .Contains(_.DepartmentId)));
+        var exception = Assert.ThrowsAsync<NotSupportedException>(() => client.Source<Employee>("Employee")
+            .CountAsync(_ => client
+                .Source<Department>("Department")
+                .OrderBy(_ => _.Name)
+                .Select(_ => _.Id)
+                .Contains(_.DepartmentId)));
 
         Assert.That(exception!.Message, Does.Contain("Where and a Select"));
     }
@@ -159,8 +167,8 @@ public class SourceMembershipTests
                 _.Name,
                 new(_.Department!.Name,
                     client.Source<Department>("Department")
-                        .Where(d => d.Name == "Sales")
-                        .Select(d => d.Name)
+                        .Where(_ => _.Name == "Sales")
+                        .Select(_ => _.Name)
                         .Contains(_.Department!.Name))))
             .ToListAsync();
 

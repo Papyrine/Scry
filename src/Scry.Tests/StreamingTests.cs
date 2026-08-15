@@ -9,7 +9,7 @@ public class StreamingTests
     [Test]
     public async Task StreamsTheSameRowsAsAList()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Employee",
@@ -36,7 +36,7 @@ public class StreamingTests
     [Test]
     public async Task AppliesTheRowPolicyToAStream()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // A policy filters the source before any client operator, and streaming changes nothing about
         // where it is applied.
@@ -109,7 +109,7 @@ public class StreamingTests
     [Test]
     public async Task StreamsAJoinedResult()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Employee",
@@ -134,7 +134,7 @@ public class StreamingTests
     [Test]
     public async Task StreamsADeduplicatedResult()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",
@@ -155,7 +155,7 @@ public class StreamingTests
     [Test]
     public async Task StreamsARowCarryingAnAttachmentAsItsKeyOnly()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Contract",

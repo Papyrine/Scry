@@ -196,7 +196,7 @@ public class RepresentationChangeTests
     [Test]
     public async Task RetypeWithinOneTokenKindReportsNothing()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = StaleClient(context);
 
         var rows = await client.Source<StatusAsText>("Employee", ["Status"]).ToListAsync();
