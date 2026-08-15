@@ -760,6 +760,47 @@ public class UiSnapshotTests :
         await page.WaitForSelectorAsync(".monaco-editor.vs-dark", 10);
     }
 
+    // Boot ordering: the editor must mount even when Blazor finishes booting before Monaco has
+    // published window.monaco. Monaco's bundle registers itself synchronously but resolves its chunks
+    // asynchronously, so the two boots race — a cold load hides it (the WASM download is far slower and
+    // Monaco always wins) and a reload exposes it (every asset is cached, Blazor wins, and the editor
+    // component calls monaco.editor.create against an undefined monaco, which BlazorMonaco reports to
+    // the console and never retries). That is a race the suite would otherwise sample rather than test,
+    // so it is forced here: warm the cache with a normal load, then hold Monaco's chunks back across a
+    // reload so Blazor certainly gets there first. index.html defers Blazor.start until the module is
+    // required, which is what makes the wait below terminate.
+    [Test]
+    public async Task ExplorerMountsTheEditorWhenBlazorBootsFirst()
+    {
+        var page = await NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
+
+        // The chunks editor.main.js pulls in, which is the part of the load that is asynchronous —
+        // loader.js and editor.main.js themselves are plain synchronous script tags, and delaying one
+        // of those would only stall the parser and reinstate the ordering this is trying to invert.
+        // Matched by shape rather than by name: the chunk filenames carry a content hash.
+        await page.RouteAsync(
+            url => url.Contains("/monaco-editor/min/vs/") &&
+                   url.EndsWith(".js") &&
+                   !url.EndsWith("/loader.js") &&
+                   !url.Contains("/min/vs/editor/"),
+            async route =>
+            {
+                // Comfortably longer than a warm Blazor boot, so the ordering is decided rather than
+                // observed.
+                await Task.Delay(15_000);
+                await route.ContinueAsync();
+            });
+
+        await page.ReloadAsync();
+        await page.WaitForSelectorAsync(".monaco-editor", 60);
+
+        // Mounted, not merely present: the editor is only usable if it reached BlazorMonaco's registry.
+        var editors = await page.EvaluateAsync<int>("() => monaco.editor.getEditors().length");
+        Assert.That(editors, Is.EqualTo(1));
+    }
+
     // The Ctrl+Enter editor action runs the query without clicking Run.
     [Test]
     public async Task ExplorerRunViaKeyboard()
