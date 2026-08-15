@@ -67,7 +67,7 @@ public class EnumAliasTests
     [Test]
     public async Task StaleClientRoundTripsARenamedEnumValue()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = StaleClient(context);
 
         var rows = await client.Source<Employee>("Employee")

@@ -100,7 +100,7 @@ public static class ScryQueryableExtensions
 
         var plan = PlanFor(source);
         var client = provider.Client;
-        await foreach (var row in client.StreamAsync(source.ToScryRequest(), provider.Call, cancel).WithCancellation(cancel))
+        await foreach (var row in client.StreamAsync(source.ToScryRequest(), provider.Call, cancel))
         {
             yield return AttachmentBinder.BindRow(MaterializeRow<T>(source, row), plan, client)!;
         }

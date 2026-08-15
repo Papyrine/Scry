@@ -7,7 +7,7 @@ public class ObservabilityTests
         var stopped = new List<Activity>();
         using var listener = Listen(stopped);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         SharedProcessor.Instance.Execute(EmployeeNames(), context);
 
         var activity = stopped.Single();
@@ -25,7 +25,7 @@ public class ObservabilityTests
         var stopped = new List<Activity>();
         using var listener = Listen(stopped);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create("Missing", [new CountOp()]);
         Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
@@ -47,17 +47,18 @@ public class ObservabilityTests
         var measurements = new List<(string Instrument, object Value, Dictionary<string, object?> Tags)>();
         using var listener = ListenMeters(measurements);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         SharedProcessor.Instance.Execute(EmployeeNames(), context);
 
         // The duration value is wall-clock and scrubbed; the instruments, tags, and row count are the
         // stable part worth pinning.
-        await Verify(measurements.Select(_ => new
-        {
-            _.Instrument,
-            Value = _.Instrument == "scry.server.query.rows" ? _.Value : "{scrubbed}",
-            _.Tags
-        }));
+        await Verify(
+            measurements.Select(_ => new
+            {
+                _.Instrument,
+                Value = _.Instrument == "scry.server.query.rows" ? _.Value : "{scrubbed}",
+                _.Tags
+            }));
     }
 
     [Test]
@@ -66,7 +67,7 @@ public class ObservabilityTests
         var auditor = new RecordingAuditor();
         await using var provider = Services(auditor);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         SharedProcessor.Instance.Execute(EmployeeNames(), context, provider);
 
         var entry = auditor.Entries.Single();
@@ -80,7 +81,7 @@ public class ObservabilityTests
         var auditor = new RecordingAuditor();
         await using var provider = Services(auditor);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Employee",
             [
@@ -98,7 +99,7 @@ public class ObservabilityTests
         var auditor = new RecordingAuditor();
         await using var provider = Services(auditor);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Employee",
             [new WhereOp(new MemberNode(["Salary"]))]);
@@ -121,7 +122,7 @@ public class ObservabilityTests
             options.AddPolicy<Employee, ThrowingPolicy>();
         });
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         // The reflection invoke of the policy wraps the failure; the audit entry unwraps it, so the
         // trail names the root cause rather than the wrapper.
         var thrown = Assert.Throws<TargetInvocationException>(() => processor.Execute(EmployeeNames(), context, provider))!;

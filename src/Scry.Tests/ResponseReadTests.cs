@@ -7,6 +7,7 @@
 [TestFixture]
 public class ResponseReadTests
 {
+    // ReSharper disable once NotAccessedPositionalProperty.Local
     record Row(string Name, int Rank, Status Status);
 
     const string listJson =

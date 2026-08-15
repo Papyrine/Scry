@@ -34,7 +34,7 @@ public class ExecutionTests
     {
         var request = QueryRequest.Create("Employee", [new OrderByOp(new MemberNode(["Name"]), false)]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var response = SharedProcessor.Instance.Execute(request, context);
         var json = ScryJson.Serialize(response);
 
