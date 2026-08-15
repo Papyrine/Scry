@@ -160,7 +160,7 @@ builder.Services
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L55-L57' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L61-L63' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Point the client at the model by path — no reference:
@@ -215,6 +215,7 @@ It is off unless mapped, and Development-only by default. See [Query explorer](d
 - [Attachments](docs/attachments.md)
 - [Batching](docs/batching.md)
 - [Observability](docs/observability.md)
+- [Caching and 304](docs/caching.md)
 - [Performance](docs/performance.md)
 - [Security model](docs/security.md)
 - [Wire format](docs/wire-format.md)

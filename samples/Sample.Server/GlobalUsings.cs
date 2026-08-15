@@ -1,3 +1,4 @@
+global using Delta;
 global using Microsoft.EntityFrameworkCore;
 global using OpenTelemetry;
 global using OpenTelemetry.Metrics;

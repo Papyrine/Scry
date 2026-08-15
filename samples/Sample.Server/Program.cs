@@ -52,6 +52,12 @@ class Program
         app.UseBlazorFrameworkFiles();
         app.UseStaticFiles();
 
+        // Repeat a query while nothing has been written and the answer is a 304 rather than a
+        // re-execution. Entirely optional, and nothing in Scry knows it is here — see /docs/caching.md.
+        // begin-snippet: sampleQueryEtag
+        app.UseQueryEtag<SampleContext>("/api/query");
+        // end-snippet
+
         // begin-snippet: mapScry
         app.MapScry("/api/query");
         // end-snippet

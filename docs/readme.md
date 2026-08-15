@@ -19,6 +19,7 @@ Type-safe, serializable LINQ from a client to a server-side EF Core model.
 | [Row policies](policies.md) | `IReturnablePolicy<T>` for tenant scoping, soft delete, and row-level security. |
 | [Attachments](attachments.md) | `[Attachment]`: a binary member fetched on demand by row key, not carried by the query. |
 | [Observability](observability.md) | The traces, metrics, and per-query audit hook the server emits. |
+| [Caching and 304](caching.md) | Answering a repeated query with `304 Not Modified`, using Delta for the database timestamp. |
 | [Performance](performance.md) | What a response costs to write and to read, measured, and how to re-run the benchmarks. |
 | [Security model](security.md) | The threat model, every enforcement layer, and what Scry does *not* protect. |
 | [Wire format](wire-format.md) | The JSON query AST: request, response, every node type, versioning. |

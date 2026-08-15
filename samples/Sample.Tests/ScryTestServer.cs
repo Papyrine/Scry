@@ -26,9 +26,17 @@ public sealed class ScryTestServer :
         this.database = database;
     }
 
-    public static async Task<ScryTestServer> StartAsync()
+    /// <param name="conditionalRequests">
+    /// Wires up the sample's ETag middleware, as <c>Program.cs</c> does. Off by default: it puts an
+    /// <c>ETag</c> on every response, and the value moves with the database's log position, which would
+    /// be churn in the snapshots of the other fixtures that share one of these servers.
+    /// </param>
+    public static async Task<ScryTestServer> StartAsync(bool conditionalRequests = false)
     {
-        var database = await sqlInstance.Build();
+        // A database of its own when conditional requests are on: that fixture writes, and every other
+        // in-process fixture shares one of these servers and asserts against the seeded rows. Without
+        // the suffix they all resolve to the same database name, since it is derived from this method.
+        var database = await sqlInstance.Build(databaseSuffix: conditionalRequests ? "etag" : null);
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -41,11 +49,20 @@ public sealed class ScryTestServer :
         });
 
         var app = builder.Build();
+        if (conditionalRequests)
+        {
+            app.UseQueryEtag<SampleContext>("/api/query");
+        }
+
         app.MapScry("/api/query");
         await app.StartAsync();
 
         return new(app, database);
     }
+
+    /// <summary>A context over this server's database, for a test that needs to write to it.</summary>
+    public SampleContext NewContext() =>
+        database.NewDbContext();
 
     /// <summary>An <see cref="HttpClient"/> bound to the test server, rooted at the query endpoint.</summary>
     public HttpClient CreateClient() =>

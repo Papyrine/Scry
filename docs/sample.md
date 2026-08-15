@@ -175,7 +175,7 @@ builder.Services
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L55-L57' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L61-L63' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: mapExplorer -->
@@ -190,10 +190,22 @@ app.MapScryExplorer(
         _.EnableGuard = _ => true;
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L58-L67' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L64-L73' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The sample always exposes the explorer so it can be browsed without setting an environment. A real app should leave the default Development-only guard in place, or replace it with an authorization check — see [Query explorer](explorer.md).
+
+It also answers a repeated query with `304 Not Modified`, using [Delta](https://github.com/SimonCropp/Delta) for the database timestamp behind the ETag:
+
+<!-- snippet: sampleQueryEtag -->
+<a id='snippet-sampleQueryEtag'></a>
+```cs
+app.UseQueryEtag<SampleContext>("/api/query");
+```
+<sup><a href='/samples/Sample.Server/Program.cs#L57-L59' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleQueryEtag' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+The client half — re-asking with `If-None-Match` and replaying what the 304 stands for — is a `DelegatingHandler` in `Sample.Client`. Neither half is part of Scry; both are explained in [Caching and 304](caching.md).
 
 
 ## The client

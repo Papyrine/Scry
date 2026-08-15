@@ -8,6 +8,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <PackageReference Include="EfLocalDb" />
+    <!-- The database timestamp behind the query endpoint's ETag. See /docs/caching.md. -->
+    <PackageReference Include="Delta.EF" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <ProjectReference Include="..\..\src\Scry.Server\Scry.Server.csproj" />
