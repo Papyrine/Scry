@@ -112,6 +112,14 @@ public sealed class QueryCacheHandler(QueryCache cache) :
     /// </summary>
     static string? Key(HttpRequestMessage request)
     {
+        // A query asked as a URL is identified by that URL — which is the whole point of asking as one,
+        // and is why the browser's own cache can answer a repeat without this handler existing. Kept
+        // here anyway: a non-browser host has no such cache, and the sample runs in both.
+        if (request.Method == HttpMethod.Get)
+        {
+            return request.RequestUri?.ToString();
+        }
+
         if (request.Content is not { } content ||
             !content.Headers.TryGetValues(WireFormat.QueryHashHeader, out var values) ||
             values.FirstOrDefault() is not { } fingerprint)

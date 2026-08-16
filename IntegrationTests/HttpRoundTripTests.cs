@@ -19,6 +19,7 @@ public class HttpRoundTripTests
     ScryClient client = null!;
     ScryQuery query = null!;
     SqlDatabase<Sample.Model.SampleContext> database = null!;
+    static string? lastMethod;
 
     record EmployeeRow(string Name, Status Status, string? Manager, string Department);
 
@@ -58,6 +59,16 @@ public class HttpRoundTripTests
         });
 
         app = builder.Build();
+
+        // Records how each query actually travelled. The client chooses between a URL and a body by
+        // length, and a test that only checked the rows could not tell which path produced them.
+        app.Use(
+            async (context, next) =>
+            {
+                lastMethod = context.Request.Method;
+                await next();
+            });
+
         app.MapScry("/api/query");
         await app.StartAsync();
 
@@ -358,6 +369,74 @@ public class HttpRoundTripTests
     // The lockstep guarantee behind stale-client detection: the stamp the generator bakes into the
     // client (computed from Sample.Model's metadata on disk) must equal the stamp the server computes
     // from the same assembly via reflection. If the two surface readers ever diverge, this fails.
+    // A query that fits in a URL is asked as one, so the caller's own HTTP cache can answer a repeat.
+    // Same rows either way — the transport is the only thing that differs.
+    [Test]
+    public async Task SmallQueryTravelsAsAUrl()
+    {
+        var rows = await query.Employee
+            .Where(_ => _.Active)
+            .OrderBy(_ => _.Name)
+            .Select(_ => new NameRow(_.Name))
+            .ToListAsync();
+
+        Assert.That(lastMethod, Is.EqualTo("GET"));
+        Assert.That(rows.Select(_ => _.Name), Is.EqualTo(activeEmployeeNames));
+    }
+
+    // Past the length a URL can carry, the same query goes back to a body. The fallback is the whole
+    // reason POST stays mapped: a URL has a ceiling and an IN list is the easiest way to reach it.
+    [Test]
+    public async Task OversizedQueryFallsBackToABody()
+    {
+        var ids = Enumerable.Range(0, 400)
+            .Select(_ => $"tag-{_:D4}")
+            .ToArray();
+
+        var rows = await query.Order
+            .Where(_ => ids.Contains(_.Region))
+            .Select(_ => new NameRow(_.Region))
+            .ToListAsync();
+
+        Assert.That(lastMethod, Is.EqualTo("POST"));
+        Assert.That(rows, Is.Empty);
+    }
+
+    // The URL is attacker-controlled like everything else on the wire, and fails closed: a parameter
+    // that is not base64url of a request this server can parse is a 400, never a partial query.
+    [Test]
+    public async Task MalformedUrlQueryIsRejected()
+    {
+        using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}=not-base64url!!");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(response.Headers.GetValues("Scry-Schema-Stamp").Single(), Is.EqualTo(ScryQuery.SchemaStamp));
+    }
+
+    [Test]
+    public async Task UrlQueryWithoutTheParameterIsRejected()
+    {
+        using var response = await http.GetAsync("/api/query");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    // A URL identifies a response, so it may be stored — but only by the caller's own cache, and only
+    // with a revalidation on every reuse. Rows are shaped by policies that read the request, so the
+    // same URL answers differently for two principals.
+    [Test]
+    public async Task UrlQueryIsPrivatelyCacheable()
+    {
+        await query.Employee.Where(_ => _.Active).CountAsync();
+
+        var encoded = QueryUrl.Encode(
+            query.Employee.Where(_ => _.Active).ToScryRequest(new CountOp()));
+        using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
+
+        Assert.That(response.Headers.CacheControl!.Private, Is.True);
+        Assert.That(response.Headers.CacheControl.NoCache, Is.True);
+    }
+
     [Test]
     public void GeneratedSchemaStampMatchesServer()
     {

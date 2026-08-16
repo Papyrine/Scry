@@ -26,7 +26,7 @@ app.MapScryExplorer(options =>
 /// <summary>Sub-path the explorer UI is served under. Default <c>/scry</c>.</summary>
 public string Route { get; set; } = "/scry";
 
-/// <summary>The existing <c>MapScry</c> query endpoint the explorer POSTs validated requests to.
+/// <summary>The existing <c>MapScry</c> query endpoint the explorer sends validated requests to.
 /// Default <c>/api/query</c>.</summary>
 public string QueryEndpoint { get; set; } = "/api/query";
 

@@ -1,25 +1,38 @@
 ﻿[
   {
-    RequestUri: http://localhost/api/query,
-    RequestMethod: POST,
-    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"AndAlso","left":{"$type":"member","path":["Active"]},"right":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Department","Name"]},"right":{"$type":"const","value":"Engineering","tag":"String"}}}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}],"stamp":"{scrubbed stamp}"},
+    RequestUri: {
+      Path: http://localhost/api/query,
+      Query: {
+        q: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"AndAlso","left":{"$type":"member","path":["Active"]},"right":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Department","Name"]},"right":{"$type":"const","value":"Engineering","tag":"String"}}}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}],"stamp":"{scrubbed stamp}"}
+      }
+    },
+    RequestMethod: GET,
+    RequestHeaders: {
+      Scry-Query-Hash: FQpYgYkzoqTi3MHy
+    },
     ResponseStatus: OK 200,
     ResponseHeaders: {
+      Cache-Control: no-cache, private,
       ETag: {Scrubbed},
       Scry-Schema-Stamp: {Scrubbed}
     },
     ResponseContent: {"version":2,"kind":"List","payload":[{"name":"Aaron"},{"name":"Alice"}],"stamp":"{scrubbed stamp}"}
   },
   {
-    RequestUri: http://localhost/api/query,
-    RequestMethod: POST,
-    RequestHeaders: {
-      If-None-Match: {Scrubbed}
+    RequestUri: {
+      Path: http://localhost/api/query,
+      Query: {
+        q: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"AndAlso","left":{"$type":"member","path":["Active"]},"right":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Department","Name"]},"right":{"$type":"const","value":"Engineering","tag":"String"}}}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}],"stamp":"{scrubbed stamp}"}
+      }
     },
-    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"AndAlso","left":{"$type":"member","path":["Active"]},"right":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Department","Name"]},"right":{"$type":"const","value":"Engineering","tag":"String"}}}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}],"stamp":"{scrubbed stamp}"},
+    RequestMethod: GET,
+    RequestHeaders: {
+      If-None-Match: {Scrubbed},
+      Scry-Query-Hash: FQpYgYkzoqTi3MHy
+    },
     ResponseStatus: NotModified 304,
     ResponseHeaders: {
-      Cache-Control: no-cache,
+      Cache-Control: no-cache, private,
       ETag: {Scrubbed}
     }
   }

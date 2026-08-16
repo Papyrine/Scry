@@ -7,7 +7,7 @@ Scry lets a client compose queries. The design assumption is that **the client i
 
 Assumed:
 
-- An attacker can craft arbitrary JSON and POST it to the query endpoint.
+- An attacker can craft arbitrary JSON and send it to the query endpoint, in a `POST` body or [encoded into a `GET` URL](wire-format.md#the-url-form). Both reach the same handler and are validated identically; neither form is trusted more than the other, and a URL that does not decode into a request this server can parse is rejected before anything is bound.
 - An attacker can read the generated client code, and can see any schema the [explorer](explorer.md) exposes.
 - An attacker will try to name types and properties that were never generated for them.
 
@@ -474,7 +474,7 @@ public async Task DisallowedPropertyRejectedWith400()
     Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L329-L356' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L340-L367' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 

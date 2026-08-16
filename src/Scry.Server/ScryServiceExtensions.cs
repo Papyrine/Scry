@@ -40,6 +40,13 @@ public static class ScryServiceExtensions
         return new Endpoints(
         [
             endpoints.MapPost(pattern, Handle),
+            // The same query, asked as a URL. One handler serves both: a GET carries the request in its
+            // query string instead of its body, and nothing downstream of that difference changes —
+            // same validation, same allow-list, same policies. It exists because a POST is uncacheable
+            // by everything between the client and here, where a GET is answered by the browser's own
+            // cache and revalidated with an ETag it manages itself. See QueryUrl for why the request
+            // travels in the URL rather than in content on the GET, and for the length that bounds it.
+            endpoints.MapGet(pattern, Handle),
             endpoints.MapPost($"{pattern.TrimEnd('/')}/stream", HandleStream),
             endpoints.MapPost($"{pattern.TrimEnd('/')}/batch", HandleBatch),
             endpoints.MapPost($"{pattern.TrimEnd('/')}/attachment", HandleAttachment)
@@ -348,12 +355,25 @@ public static class ScryServiceExtensions
         context.Response.Headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
 
         var started = Stopwatch.GetTimestamp();
-        var body = await ReadBody(context);
+        var url = HttpMethods.IsGet(context.Request.Method);
+
+        if (url)
+        {
+            // A URL identifies a response, so a cache may keep this one — but only the cache belonging
+            // to the caller. Rows are shaped by policies that read the request, so the same URL answers
+            // differently for two principals and a shared cache would hand one of them the other's
+            // rows. `no-cache` keeps a stored copy revalidating rather than expiring on a guess: with
+            // no validator on the response, a browser is free to invent a freshness lifetime and serve
+            // stale rows without asking. An app that knows better can widen this above the endpoint.
+            context.Response.Headers.CacheControl = "private, no-cache";
+        }
 
         QueryRequest request;
         try
         {
-            request = ScryJson.DeserializeRequest(body);
+            request = url
+                ? QueryUrl.Decode(context.Request.Query[QueryUrl.Parameter])
+                : ScryJson.DeserializeRequest(await ReadBody(context));
         }
         catch (ScryWireException exception)
         {

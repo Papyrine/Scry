@@ -83,6 +83,13 @@ public sealed class ScryClient
         return content;
     }
 
+    // base64url carries nothing a query string would have to escape, so the encoded request is appended
+    // as it stands. An endpoint that already carries parameters of its own keeps them.
+    static string Url(string endpoint, string encoded) =>
+        endpoint.Contains('?')
+            ? $"{endpoint}&{QueryUrl.Parameter}={encoded}"
+            : $"{endpoint}?{QueryUrl.Parameter}={encoded}";
+
     // A custom transport has nowhere to put a header, so a query that asked for one cannot be honoured.
     // Refusing keeps WithHeader from looking like it worked on a client that never sent it.
     static void RefuseHeaders(ScryCall? call)
@@ -100,7 +107,10 @@ public sealed class ScryClient
     }
 
     // begin-snippet: scryClientApi
-    /// <summary>Creates a client that POSTs queries to an HTTP endpoint.</summary>
+    /// <summary>
+    /// Creates a client that sends queries to an HTTP endpoint — as a URL where the query fits in one
+    /// and as a body where it does not, which <see cref="QueryUrl"/> explains.
+    /// </summary>
     public static ScryClient ForHttp(HttpClient http, string endpoint) =>
         new(http, endpoint);
 
@@ -411,14 +421,33 @@ public sealed class ScryClient
         ScryCall? call,
         Cancel cancel)
     {
-        using var content = JsonBody(ScryJson.SerializeToUtf8(request));
+        var utf8 = ScryJson.SerializeToUtf8(request);
 
-        // Built explicitly rather than posted through HttpClient.PostAsync: a per-query header needs a
-        // request message of its own to be written onto.
-        using var message = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        // Asked as a URL whenever it fits in one. A POST is uncacheable by everything between here and
+        // the server, so every repeat of a query costs a full round trip and a full response; the same
+        // query as a GET is stored and revalidated by the caller's own HTTP cache, which is machinery
+        // that already exists and needs no client code. What does not fit stays a POST — see QueryUrl
+        // for the length that bounds this, and for what a URL exposes that a body does not.
+        var encoded = QueryUrl.Encode(utf8);
+        using var content = QueryUrl.WithinLimit(encoded) ? null : JsonBody(utf8);
+
+        // Built explicitly rather than sent through HttpClient.PostAsync/GetAsync: a per-query header
+        // needs a request message of its own to be written onto.
+        using var message = content is null
+            ? new HttpRequestMessage(HttpMethod.Get, Url(endpoint, encoded))
+            : new HttpRequestMessage(HttpMethod.Post, endpoint)
+            {
+                Content = content
+            };
+
+        // A GET has no content to carry the fingerprint, and the URL already identifies the request as
+        // exactly as well. Sent anyway, on the message, so a server reading it for telemetry sees the
+        // same value whichever way the query was asked.
+        if (content is null)
         {
-            Content = content
-        };
+            message.Headers.TryAddWithoutValidation(WireFormat.QueryHashHeader, QueryFingerprint.Compute(utf8));
+        }
+
         call?.Configure(message.Headers);
 
         using var response = await http.SendAsync(message, cancel);

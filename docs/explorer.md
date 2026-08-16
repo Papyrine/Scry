@@ -30,7 +30,7 @@ The explorer requires `AddScry` — it resolves the `ScryProcessor` to describe 
 /// <summary>Sub-path the explorer UI is served under. Default <c>/scry</c>.</summary>
 public string Route { get; set; } = "/scry";
 
-/// <summary>The existing <c>MapScry</c> query endpoint the explorer POSTs validated requests to.
+/// <summary>The existing <c>MapScry</c> query endpoint the explorer sends validated requests to.
 /// Default <c>/api/query</c>.</summary>
 public string QueryEndpoint { get; set; } = "/api/query";
 
@@ -902,7 +902,7 @@ var introspection = processor.Describe();
 
 ## How it works
 
-Everything except two HTTP calls happens **in the browser**: the schema is fetched once, the model is synthesized and compiled with Roslyn locally, and only an already-translated wire request crosses to the server — the same endpoint any client POSTs to.
+Everything except two HTTP calls happens **in the browser**: the schema is fetched once, the model is synthesized and compiled with Roslyn locally, and only an already-translated wire request crosses to the server — the same endpoint any client sends to, by the same route it would use.
 
 ```mermaid
 sequenceDiagram
@@ -922,7 +922,7 @@ sequenceDiagram
     UI->>Exec: user's LINQ snippet
     Note over Exec: compile, run vs capturing client,<br/>ToScryRequest (production translation)
     Exec-->>UI: serialized wire request
-    UI->>Server: POST {QueryEndpoint}
+    UI->>Server: GET {QueryEndpoint}?q= (POST when oversized)
     Note over Server: validated like any other request
     Server-->>UI: rows + raw response
 ```
@@ -931,7 +931,7 @@ sequenceDiagram
 2. `ModelSynthesizer` turns that contract into the same C# the design-time generator would emit — the enums, one query model per type, and a `ScryQuery` facade.
 3. `RoslynWorkspace` compiles that source in-browser and wraps the user's expression in a method body, so the C# completion service offers members, and diagnostics are real compiler diagnostics.
 4. `SnippetExecutor` compiles the expression, runs it against a capturing client to build the LINQ expression tree, and calls the production `ToScryRequest` — so the wire request shown is produced by exactly the same translation the real client performs.
-5. The request is POSTed to `QueryEndpoint`, where it is validated like any other.
+5. The request is sent to `QueryEndpoint` — [as a URL](wire-format.md#the-url-form) where it fits in one, as a body where it does not, the same choice `ScryClient` makes — and validated like any other.
 
 A trailing terminal (`.ToListAsync()`, `.FirstAsync()`, `.CountAsync()`, or a plain `.ToList()`) is recognised and folded into the wire request as its terminal operator.
 

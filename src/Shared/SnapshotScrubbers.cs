@@ -30,6 +30,14 @@ static partial class SnapshotScrubbers
         VerifierSettings.AddScrubber(ScrubCursors);
         VerifierSettings.AddScrubber(ScrubStamps);
 
+        // Registered last so that it runs first: each scrubber goes to the front of the list, so the
+        // order they execute in is the reverse of the order they are added. That order matters here and
+        // only here — a query asked as a URL carries the whole request base64url-encoded, and the stamp
+        // inside it is unreachable while it stays encoded. Decoded before the scrubbers above run, the
+        // stamp is scrubbed like any other and the request is legible again; decoded after, every model
+        // change would rewrite the blob in every recorded exchange.
+        VerifierSettings.AddScrubber(DecodeUrlQueries);
+
         // The stamp reaches a snapshot one further way, as the HTTP header on a recorded exchange, and
         // that one a scrubber cannot reach: a scrubber is handed each string value on its own, so a
         // header's value arrives with nothing of its name attached to match against. Named here
@@ -37,6 +45,41 @@ static partial class SnapshotScrubbers
         // at all is worth showing — and masks only what it carries.
         VerifierSettings.ScrubMember(WireFormat.SchemaStampHeader);
     }
+
+    /// <summary>
+    /// Replaces an encoded request in a recorded URL with the JSON it decodes to.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Matched by its own shape rather than by the parameter it sits in, because a scrubber is handed
+    /// each string value on its own — and a recorded URL reaches one already split, so the encoded
+    /// request arrives with no <c>q=</c> in front of it to anchor on.
+    /// </para>
+    /// <para>
+    /// The opening <c>eyJ</c> is base64url of <c>{"</c>, which is not enough on its own: a keyset
+    /// cursor opens the same way, and decoding one would corrupt the value the cursor scrubber is
+    /// about to replace. So what it decoded to has to look like a request before it is used, and
+    /// anything else — a cursor, a coincidence, something that does not decode at all — is left
+    /// exactly as it was rather than half-rewritten.
+    /// </para>
+    /// </remarks>
+    static void DecodeUrlQueries(StringBuilder builder) =>
+        Replace(
+            builder,
+            UrlQuery(),
+            _ =>
+            {
+                try
+                {
+                    var utf8 = System.Buffers.Text.Base64Url.DecodeFromChars(_.Value);
+                    var json = Encoding.UTF8.GetString(utf8);
+                    return json.StartsWith("{\"version\":", StringComparison.Ordinal) ? json : _.Value;
+                }
+                catch (FormatException)
+                {
+                    return _.Value;
+                }
+            });
 
     static void ScrubCursors(StringBuilder builder) =>
         Replace(builder, CursorValue(), "$1\"{scrubbed cursor}\"");
@@ -52,6 +95,16 @@ static partial class SnapshotScrubbers
         builder.Clear();
         builder.Append(scrubbed);
     }
+
+    static void Replace(StringBuilder builder, Regex regex, MatchEvaluator evaluator)
+    {
+        var scrubbed = regex.Replace(builder.ToString(), evaluator);
+        builder.Clear();
+        builder.Append(scrubbed);
+    }
+
+    [GeneratedRegex("\\beyJ[A-Za-z0-9_-]{40,}")]
+    private static partial Regex UrlQuery();
 
     [GeneratedRegex("(\"cursor\":\\s*)\"[^\"]*\"")]
     private static partial Regex CursorValue();

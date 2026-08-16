@@ -145,6 +145,15 @@ public class ConditionalQueryTests
         // for a reason that has nothing to do with the exchange being shown.
         await Active(new(server.CreateScryClient()), "Engineering").ToListAsync();
 
+        // And then waited on, because a warm-up only covers what this query does to the timestamp.
+        // Another test in this fixture wrote to the same database, and the log position that Delta
+        // reads keeps moving for a while after a write commits — long enough that the pair below can
+        // straddle it and be answered in full for a reason the exchange is not about.
+        await using (var data = server.NewContext())
+        {
+            await Settle(data);
+        }
+
         var first = await Active(query, "Engineering").ToListAsync();
         var second = await Active(query, "Engineering").ToListAsync();
 
@@ -187,6 +196,39 @@ public class ConditionalQueryTests
             }
 
             await Task.Delay(50);
+        }
+    }
+
+    /// <summary>
+    /// Waits until the database's timestamp has held still for long enough to be relied on, rather than
+    /// for it to move as <see cref="SettleAfterWrite"/> does.
+    /// </summary>
+    /// <remarks>
+    /// The two are the same property from opposite sides: a write's log position does not appear
+    /// instantly, and it does not stop moving instantly either. A test that asserts a 304 needs a
+    /// timestamp that will still be the same one a moment later, which is not something a single read
+    /// can tell — only a run of reads that agree.
+    /// </remarks>
+    static async Task Settle(SampleContext data)
+    {
+        var deadline = Stopwatch.StartNew();
+        var last = await data.GetLastTimeStamp();
+        var held = Stopwatch.StartNew();
+        while (held.Elapsed < TimeSpan.FromMilliseconds(300))
+        {
+            if (deadline.Elapsed > TimeSpan.FromSeconds(10))
+            {
+                Assert.Fail("The database timestamp never stopped moving.");
+            }
+
+            await Task.Delay(50);
+
+            var now = await data.GetLastTimeStamp();
+            if (now != last)
+            {
+                last = now;
+                held.Restart();
+            }
         }
     }
 

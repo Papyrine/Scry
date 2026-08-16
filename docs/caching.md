@@ -4,14 +4,24 @@ Scry caches nothing. Every query is executed, and every response is written in f
 
 [304 Not Modified](https://www.keycdn.com/support/304-not-modified) is the standard answer to that: the server hands out an `ETag` with a response, the client sends it back as `If-None-Match` next time, and a server that can cheaply prove nothing has changed replies with a status and no body. The hard part is the proof, and [Delta](https://github.com/SimonCropp/Delta) is a small library that supplies it — an `ETag` derived from the database's own change tracking, so "has anything changed" is one cheap read rather than a re-execution.
 
-None of this is built into Scry, and none of it is required. The [sample](sample.md) wires it up end to end — one middleware on the server, one `DelegatingHandler` on the client — and this page is that wiring explained.
+The ETag itself is not built into Scry and is not required. The [sample](sample.md) wires it up end to end — one middleware on the server, one `DelegatingHandler` on the client — and this page is that wiring explained. What *is* built in is the half that makes any of it reachable: a query short enough to fit in a URL is asked with `GET`, so the caches that already exist can answer it.
 
 
-## Why Delta's own middleware is not enough here
+## Why a query is a URL
 
-Delta's `UseDelta` handles GET requests, where the URL identifies the response and the browser's own cache does the client half for free. Scry posts its query as a body: the path is the same for every query, so the URL identifies nothing, and no intermediary caches a POST response anyway.
+A cache — the browser's, a proxy's, a CDN's — decides what it can store from the method and the URL, and it decides before it looks at anything else. A `POST` is uncacheable to all of them, and its body is not part of any cache key, so a query sent as one is invisible to every cache between the client and the server no matter what headers it carries.
 
-So both halves are yours. What Delta supplies is the part that is actually hard — `GetLastTimeStamp`, one cheap read of the database's change marker, in whatever form the provider underneath offers it (the transaction log's end position on SQL Server, `pg_last_committed_xact` on PostgreSQL). Everything above that is a dozen lines of plumbing.
+So a query that fits is sent as `GET {endpoint}?q={encoded}`, where `q` is the same serialized `QueryRequest` base64url-encoded ([`QueryUrl`](wire-format.md#the-url-form)). The URL identifies the response, which is what a cache needs, and `304` becomes what it is everywhere else on the web rather than something both ends have to hand-implement.
+
+Three consequences worth stating plainly:
+
+**The request travels in the URL, not in content on the GET.** A body would carry any query at any size, and it cannot be used. A browser refuses to send one — the Fetch standard forbids content on `GET`, which rules it out for a WASM client and for the explorer. And an intermediary is permitted to drop the content of a `GET`: what reaches the server is then still a well-formed request — same method, same URL — carrying nothing to execute, so the server answers 400 and the client that sent a complete request cannot tell that from a rejection it caused itself. The failure is silent, depends on infrastructure the client cannot see, and does not reproduce locally. A URL survives every hop by construction.
+
+**A URL has a ceiling, so `POST` stays mapped.** 8 KB is the usual server and proxy limit on a whole request line, and what exceeds it is rejected by whichever hop is strictest, as a 414 or a 400 depending on the deployment. `QueryUrl.MaxLength` is set well below that; a query over it is sent as a body exactly as before, with no cache involvement. An `IN` list is the easiest way to get there — a few hundred ids is enough.
+
+**A URL is logged.** Everything in the request, including the constants a filter compares against, lands in the access log of every hop and in the `Referer` of whatever the page does next. A query whose constants are sensitive on their own — an account number, a person's id — is one to keep on `POST` regardless of length.
+
+Beyond that, the ETag is the app's own to wire up. What Delta supplies is the part that is actually hard — `GetLastTimeStamp`, one cheap read of the database's change marker, in whatever form the provider underneath offers it (the transaction log's end position on SQL Server, `pg_last_committed_xact` on PostgreSQL). Everything above that is a dozen lines of plumbing. Delta's own `UseDelta` covers an app's ordinary GET traffic — the host page, static assets, conventional endpoints — with one line and no client-side work.
 
 | Package | Use |
 | --- | --- |
@@ -51,9 +61,11 @@ public static IApplicationBuilder UseQueryEtag<TContext>(
             var request = context.Request;
 
             // No fingerprint, no cache key. A request without one — a raw one written by hand, or
-            // anything else routed through here — is answered exactly as it was before.
+            // anything else routed through here — is answered exactly as it was before. A query
+            // asked as a URL always has one, whether or not the sender wrote the header: the
+            // encoded request is the same bytes the header would have fingerprinted.
             if (!request.Path.StartsWithSegments(path) ||
-                QueryFingerprint.TryRead(request.Headers[WireFormat.QueryHashHeader]) is not { } fingerprint)
+                Fingerprint(request) is not { } fingerprint)
             {
                 await next();
                 return;
@@ -80,9 +92,14 @@ public static IApplicationBuilder UseQueryEtag<TContext>(
             // Delta's own: the client may reuse what it holds, but has to ask again next time
             // rather than assume an expiry it was never given.
             context.Response.NoCache();
+
+            // And `private` with it, because a client updates the headers of the response it kept
+            // with the ones a 304 carries. Sending `no-cache` alone would strip `private` from the
+            // stored copy of a response that was only ever meant for this caller.
+            context.Response.Headers.CacheControl = "private, no-cache";
         });
 ```
-<sup><a href='/samples/Sample.Server/QueryEtag.cs#L42-L84' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryEtagMiddleware' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/QueryEtag.cs#L42-L91' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryEtagMiddleware' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Registered ahead of the endpoint, against the pattern `MapScry` was given — so it covers the query endpoint and the stream, batch, and attachment endpoints below it:
@@ -100,9 +117,11 @@ A request without a fingerprint is answered exactly as it was before the middlew
 
 ## The client half
 
-Without a client that understands them, ETags do nothing — and worse than nothing, since `ScryClient` treats a bare 304 as what it is at that layer: a response with no rows in it, surfaced as a `ScryRequestException` with status 304.
+In a browser, most of this half already exists. A query asked as a URL is an ordinary cacheable `GET`, so the browser stores the response, sends `If-None-Match` on its own next time, and turns the `304` back into the rows it already holds — none of which the app sees. That is the whole reason the request is a URL.
 
-The fix is a `DelegatingHandler` below the client, which re-asks with `If-None-Match` and rebuilds the response a 304 stands for:
+What the handler below adds is the same behaviour where that cache does not exist: a console app, a service, a test host. It matters here because the sample's own tests run outside a browser, and because without it `ScryClient` treats a bare 304 as what it is at that layer — a response with no rows in it, surfaced as a `ScryRequestException` with status 304.
+
+It is a `DelegatingHandler` below the client, which re-asks with `If-None-Match` and rebuilds the response a 304 stands for:
 
 <!-- snippet: clientCacheHandler -->
 <a id='snippet-clientCacheHandler'></a>
@@ -174,30 +193,43 @@ Above the handler nothing changes: the same `ScryClient`, the same generated mod
 
 ## The exchange
 
-Two identical queries, recorded at the socket. The first is answered in full and carries an `ETag`; the second sends it back and is answered with a status and nothing else:
+Two identical queries, recorded at the socket. Both are `GET`s carrying the query in `q` — shown decoded, since what travels is base64url. The first is answered in full and carries an `ETag`; the second sends it back and is answered with a status and nothing else:
 
 <!-- snippet: ConditionalQueryTests.ConditionalExchange.verified.txt -->
 <a id='snippet-ConditionalQueryTests.ConditionalExchange.verified.txt'></a>
 ```txt
 [
   {
-    RequestUri: http://localhost/api/query,
-    RequestMethod: POST,
-    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"AndAlso","left":{"$type":"member","path":["Active"]},"right":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Department","Name"]},"right":{"$type":"const","value":"Engineering","tag":"String"}}}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}],"stamp":"{scrubbed stamp}"},
+    RequestUri: {
+      Path: http://localhost/api/query,
+      Query: {
+        q: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"AndAlso","left":{"$type":"member","path":["Active"]},"right":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Department","Name"]},"right":{"$type":"const","value":"Engineering","tag":"String"}}}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}],"stamp":"{scrubbed stamp}"}
+      }
+    },
+    RequestMethod: GET,
+    RequestHeaders: {
+      Scry-Query-Hash: FQpYgYkzoqTi3MHy
+    },
     ResponseStatus: OK 200,
     ResponseHeaders: {
+      Cache-Control: no-cache, private,
       ETag: {Scrubbed},
       Scry-Schema-Stamp: {Scrubbed}
     },
     ResponseContent: {"version":2,"kind":"List","payload":[{"name":"Aaron"},{"name":"Alice"}],"stamp":"{scrubbed stamp}"}
   },
   {
-    RequestUri: http://localhost/api/query,
-    RequestMethod: POST,
-    RequestHeaders: {
-      If-None-Match: {Scrubbed}
+    RequestUri: {
+      Path: http://localhost/api/query,
+      Query: {
+        q: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"AndAlso","left":{"$type":"member","path":["Active"]},"right":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Department","Name"]},"right":{"$type":"const","value":"Engineering","tag":"String"}}}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}],"stamp":"{scrubbed stamp}"}
+      }
     },
-    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"AndAlso","left":{"$type":"member","path":["Active"]},"right":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Department","Name"]},"right":{"$type":"const","value":"Engineering","tag":"String"}}}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}],"stamp":"{scrubbed stamp}"},
+    RequestMethod: GET,
+    RequestHeaders: {
+      If-None-Match: {Scrubbed},
+      Scry-Query-Hash: FQpYgYkzoqTi3MHy
+    },
     ResponseStatus: NotModified 304,
     ResponseHeaders: {
       Cache-Control: no-cache,
@@ -206,7 +238,7 @@ Two identical queries, recorded at the socket. The first is answered in full and
   }
 ]
 ```
-<sup><a href='/samples/Sample.Tests/ConditionalQueryTests.ConditionalExchange.verified.txt#L1-L26' title='Snippet source file'>snippet source</a> | <a href='#snippet-ConditionalQueryTests.ConditionalExchange.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Tests/ConditionalQueryTests.ConditionalExchange.verified.txt#L1-L39' title='Snippet source file'>snippet source</a> | <a href='#snippet-ConditionalQueryTests.ConditionalExchange.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The ETag values are scrubbed from that snapshot because they carry the database's log position. That the two match is what the 304 proves.
@@ -228,6 +260,8 @@ Delta can remove even that read: its `UseDelta` accepts `Cache-Control` request 
 **Anything a response varies by must be in the key.** A [row policy](policies.md) that scopes rows to a tenant, or an [attachment policy](attachments.md) that answers per principal, makes two identical queries produce different bytes for different callers. The query fingerprint cannot see that. Pass it as the `suffix` — the tenant id, the user id — or a client whose identity changes mid-session can be handed a 304 for rows the new identity was never shown. For the same reason, the client's store has to be cleared on sign-in and sign-out.
 
 **The fingerprint comes from the client.** It is never trusted as more than a cache key. A client that sends a wrong one can only be told that its own cached response is still current — a lie it told itself. It cannot read another client's response, and it cannot widen what it is allowed to see, because the ETag is only ever compared against a value this server minted. Never key a *shared* cache on it.
+
+**A URL response is cacheable, so the server says who may keep it.** Every answer to a `GET` carries `Cache-Control: private, no-cache`, and both halves are load-bearing. `private` is what keeps a CDN or a shared proxy out of it: rows are shaped by [policies](policies.md) that read the request, so the same URL answers differently for two principals, and a shared cache keyed on the URL alone would hand one of them the other's rows. `no-cache` keeps a stored copy revalidating rather than expiring on a guess — without a directive, a browser is free to invent a freshness lifetime and serve stale rows without asking. An app whose rows genuinely do not vary by caller can widen this above the endpoint; nothing else should.
 
 **Not everything is cacheable.** The handler keeps `application/json` responses only. A [streamed](querying.md#streaming-rows) result is meant to be read a row at a time and a [multipart](wire-format.md#binary-transfer) one carries binary parts beside its envelope; caching either means buffering it whole, so both pass through untouched. They still get an ETag from the server — a client that wants to cache them needs a strategy of its own.
 

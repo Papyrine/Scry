@@ -1,4 +1,4 @@
-﻿# Scry documentation
+# Scry documentation
 
 Type-safe, serializable LINQ from a client to a server-side EF Core model.
 
@@ -48,7 +48,7 @@ Sample.Model (EF Core + [Queryable])
    │                                                                  │
    │                                                    Sample.Client (ordinary LINQ)
    │                                                                  │
-   │                                          QueryRequest (JSON AST) │ POST /api/query
+   │                                          QueryRequest (JSON AST) │ GET|POST /api/query
    │                                                                  ▼
    └─────────────────────────────────────────────────────▶ Sample.Server
       referenced normally                                  validate → policy → rebind

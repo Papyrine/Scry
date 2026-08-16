@@ -215,7 +215,7 @@ public partial class App
             // The same path ScryClient.ForHttp derives, from the same endpoint: one mapping covers
             // the query surface and its attachments, so a host that moved one moved both.
             var request = AttachmentRequest.Create(link.Root, link.Member, keys, introspection.SchemaStamp);
-            using var content = new StringContent(ScryJson.Serialize(request), Encoding.UTF8, "application/json");
+            using var content = JsonBody(ScryJson.Serialize(request));
             using var response = await Http.PostAsync($"{introspection.QueryEndpoint.TrimEnd('/')}/attachment", content);
 
             switch (response.StatusCode)
@@ -419,7 +419,7 @@ public partial class App
             executor ??= SnippetExecutor.Create(introspection, scryReferences);
             var json = ScryJson.Serialize(executor.Translate(code));
 
-            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+            using var content = JsonBody(json);
             using var response = await Http.PostAsync("sql", content);
             var body = await response.Content.ReadAsStringAsync();
 
@@ -484,8 +484,7 @@ public partial class App
             var json = ScryJson.Serialize(request);
             wireJson = Prettify(json);
 
-            using var content = new StringContent(json, Encoding.UTF8, "application/json");
-            using var response = await Http.PostAsync(introspection.QueryEndpoint, content);
+            using var response = await SendQuery(json);
 
             // Not read as a string: a result carrying [BinaryTransfer] values arrives as multipart,
             // and the reader folds its parts back into the envelope as base64 — so a diverted member
@@ -923,6 +922,46 @@ public partial class App
         await editor.SetValue(query);
         await MoveCaretToEnd();
         await Complete();
+    }
+
+    /// <summary>
+    /// Sends a query the way <c>ScryClient</c> would: as a URL where it fits in one, as a body where it
+    /// does not. The explorer does not send through the client — it translates the snippet and sends the
+    /// result itself — so the choice has to be made here too, or the explorer would demonstrate a
+    /// request shape production never uses.
+    /// </summary>
+    Task<HttpResponseMessage> SendQuery(string json)
+    {
+        var utf8 = Encoding.UTF8.GetBytes(json);
+        var encoded = QueryUrl.Encode(utf8);
+        if (!QueryUrl.WithinLimit(encoded))
+        {
+            return Http.PostAsync(introspection!.QueryEndpoint, JsonBody(json));
+        }
+
+        var endpoint = introspection!.QueryEndpoint;
+        var separator = endpoint.Contains('?') ? '&' : '?';
+        var message = new HttpRequestMessage(HttpMethod.Get, $"{endpoint}{separator}{QueryUrl.Parameter}={encoded}");
+        message.Headers.TryAddWithoutValidation(WireFormat.QueryHashHeader, QueryFingerprint.Compute(utf8));
+        return Http.SendAsync(message);
+    }
+
+    /// <summary>
+    /// A request body carrying the same headers <c>ScryClient</c> sends. The explorer does not post
+    /// through the client — it translates the snippet and sends the result itself — so the fingerprint
+    /// has to be attached here, or explorer traffic reaches the server as the one kind of request that
+    /// carries none.
+    /// </summary>
+    static ByteArrayContent JsonBody(string json)
+    {
+        var utf8 = Encoding.UTF8.GetBytes(json);
+        var content = new ByteArrayContent(utf8);
+        content.Headers.ContentType = new("application/json")
+        {
+            CharSet = "utf-8"
+        };
+        content.Headers.TryAddWithoutValidation(WireFormat.QueryHashHeader, QueryFingerprint.Compute(utf8));
+        return content;
     }
 
     static readonly JsonSerializerOptions indented = new() { WriteIndented = true };

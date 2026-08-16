@@ -51,9 +51,11 @@ public static class QueryEtagExtensions
                 var request = context.Request;
 
                 // No fingerprint, no cache key. A request without one — a raw one written by hand, or
-                // anything else routed through here — is answered exactly as it was before.
+                // anything else routed through here — is answered exactly as it was before. A query
+                // asked as a URL always has one, whether or not the sender wrote the header: the
+                // encoded request is the same bytes the header would have fingerprinted.
                 if (!request.Path.StartsWithSegments(path) ||
-                    QueryFingerprint.TryRead(request.Headers[WireFormat.QueryHashHeader]) is not { } fingerprint)
+                    Fingerprint(request) is not { } fingerprint)
                 {
                     await next();
                     return;
@@ -80,8 +82,17 @@ public static class QueryEtagExtensions
                 // Delta's own: the client may reuse what it holds, but has to ask again next time
                 // rather than assume an expiry it was never given.
                 context.Response.NoCache();
+
+                // And `private` with it, because a client updates the headers of the response it kept
+                // with the ones a 304 carries. Sending `no-cache` alone would strip `private` from the
+                // stored copy of a response that was only ever meant for this caller.
+                context.Response.Headers.CacheControl = "private, no-cache";
             });
     // end-snippet
+
+    static string? Fingerprint(HttpRequest request) =>
+        QueryFingerprint.TryRead(request.Headers[WireFormat.QueryHashHeader]) ??
+        QueryUrl.TryFingerprint(request.Query[QueryUrl.Parameter]);
 
     static string Etag(string schemaStamp, string timeStamp, string fingerprint, string? suffix)
     {

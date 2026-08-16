@@ -51,13 +51,15 @@ app.MapScry("/api/query");
 <sup><a href='/samples/Sample.Server/Program.cs#L61-L63' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-Three `POST` endpoints, from the one call:
+Three endpoints, from the one call:
 
-| Route | Request | Response |
-| --- | --- | --- |
-| the pattern given | [`QueryRequest`](wire-format.md) | one `QueryResponse` |
-| `…/stream` | the same `QueryRequest` | [newline-delimited rows](wire-format.md#streamed-results), for [`ToAsyncEnumerable`](querying.md#streaming-rows) |
-| `…/batch` | [`QueryBatchRequest`](wire-format.md#batched-queries) | one result per entry, for [batching](batching.md) |
+| Route | Method | Request | Response |
+| --- | --- | --- | --- |
+| the pattern given | `POST` or `GET` | [`QueryRequest`](wire-format.md), in the body or [in the URL](wire-format.md#the-url-form) | one `QueryResponse` |
+| `…/stream` | `POST` | the same `QueryRequest` | [newline-delimited rows](wire-format.md#streamed-results), for [`ToAsyncEnumerable`](querying.md#streaming-rows) |
+| `…/batch` | `POST` | [`QueryBatchRequest`](wire-format.md#batched-queries) | one result per entry, for [batching](batching.md) |
+
+The query pattern answers both methods with the same handler: a `GET` carries the request base64url-encoded in a `q` parameter instead of in a body, and everything after that — validation, the allow-list, policies, shaping — is identical. It exists so a response can be cached and revalidated by machinery that already exists, which a `POST` can never be; see [Caching](caching.md).
 
 They are mapped together deliberately. Streaming reads the same query surface a row at a time and batching carries several of its queries at once; neither widens what can be asked, so opting into them separately would only invite deployments where one is protected and the others are not. `MapScry` returns an `IEndpointConventionBuilder` covering **all three**, so the usual conventions apply once:
 

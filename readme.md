@@ -78,7 +78,7 @@ flowchart TB
         DB -- "projected rows" --> RESP
     end
 
-    TRANS -- "serialize + POST" --> REQ
+    TRANS -- "serialize + send" --> REQ
     REQ -- "deserialize" --> VALID
     RESP -- "rows" --> LINQ
 ```
