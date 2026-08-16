@@ -118,4 +118,51 @@ public class UrlLimitTests
 
         Assert.That(exception!.Message, Does.Contain(nameof(ScryOptions.QueryUrlLimit)));
     }
+
+    // A policied source answers differently for different callers, and an ETag over a URL says nothing
+    // about which one asked. Caught where it can still be fixed rather than in production, where it
+    // presents as one caller being handed another's rows.
+    [Test]
+    public void CachingAPoliciedSourceWithoutAScopeIsRefusedAtStartup()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddDbContext<Sample.Model.SampleContext>(_ => _.UseSqlServer(unusable));
+        builder.Services.AddScry<Sample.Model.SampleContext>(
+            options =>
+            {
+                options.AddPocoSource(_ => Sample.Model.Holiday.Seed());
+                options.AddAttachmentPolicy<Sample.Model.Department, AllowAttachmentPolicy>();
+                options.QueryFreshness = (_, _) => new("now");
+            });
+
+        var app = builder.Build();
+        var exception = Assert.Throws<Exception>(() => app.MapScry("/api/query"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception!.Message, Does.Contain("Department"));
+            Assert.That(exception.Message, Does.Contain(nameof(ScryOptions.CacheScope)));
+        });
+    }
+
+    [Test]
+    public void CachingAPoliciedSourceWithAScopeStarts()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddDbContext<Sample.Model.SampleContext>(_ => _.UseSqlServer(unusable));
+        builder.Services.AddScry<Sample.Model.SampleContext>(
+            options =>
+            {
+                options.AddPocoSource(_ => Sample.Model.Holiday.Seed());
+                options.AddAttachmentPolicy<Sample.Model.Department, AllowAttachmentPolicy>();
+                options.QueryFreshness = (_, _) => new("now");
+                options.CacheScope = _ => "tenant";
+            });
+
+        var app = builder.Build();
+
+        Assert.DoesNotThrow(() => app.MapScry("/api/query"));
+    }
 }

@@ -29,6 +29,7 @@ public static class ScryServiceExtensions
             var processor = scope.ServiceProvider.GetRequiredService<ScryProcessor>();
             var db = (DbContext)scope.ServiceProvider.GetRequiredService(options.ContextType);
             processor.ValidateAgainstModel(db);
+            RefuseUnscopedCaching(options, processor);
         }
 
         // One call, every transport of the same query surface: streaming reads it a row at a time and
@@ -64,6 +65,29 @@ public static class ScryServiceExtensions
         }
 
         return new Endpoints(builders);
+    }
+
+    /// <summary>
+    /// Refuses at startup to answer conditionally from a source whose rows depend on who asked, unless
+    /// the host has said what a cached response belongs to.
+    /// </summary>
+    /// <remarks>
+    /// A row policy reads the request, so the same query answers differently for two callers while its
+    /// URL — and therefore its ETag — says nothing about which one. A browser profile outlives a
+    /// sign-out, so the next identity revalidates, matches, and is handed the previous one's rows.
+    /// Loud here rather than silent there: caching is opt-in, so a host that asked for it is told
+    /// exactly what else to set.
+    /// </remarks>
+    static void RefuseUnscopedCaching(ScryOptions options, ScryProcessor processor)
+    {
+        if (options.QueryFreshness is null ||
+            options.CacheScope is not null ||
+            processor.PolicedSource is not { } source)
+        {
+            return;
+        }
+
+        throw new($"'{source}' carries a policy, so its rows depend on who asked — and a cached response identified by a URL does not say who that was. Set ScryOptions.CacheScope to what such a response belongs to (a tenant, a principal), or leave ScryOptions.QueryFreshness unset to answer nothing conditionally.");
     }
 
     sealed class Endpoints(IReadOnlyList<IEndpointConventionBuilder> builders) :
@@ -376,6 +400,16 @@ public static class ScryServiceExtensions
             // no validator on the response, a browser is free to invent a freshness lifetime and serve
             // stale rows without asking. An app that knows better can widen this above the endpoint.
             context.Response.Headers.CacheControl = "private, no-cache";
+
+            // Answered from what the caller already holds, where the host has said how to tell that
+            // nothing has changed. Before the request is decoded, since proving a repeat is the whole
+            // point of not doing the work — and after Cache-Control above, so a 304 carries both
+            // directives: a client merges a 304's headers into the response it kept, and `no-cache`
+            // alone would strip `private` from its stored copy.
+            if (await QueryEtag.NotModified(context, processor, options))
+            {
+                return;
+            }
         }
 
         QueryRequest request;

@@ -4,7 +4,7 @@ Scry caches nothing. Every query is executed, and every response is written in f
 
 [304 Not Modified](https://www.keycdn.com/support/304-not-modified) is the standard answer to that: the server hands out an `ETag` with a response, the client sends it back as `If-None-Match` next time, and a server that can cheaply prove nothing has changed replies with a status and no body. The hard part is the proof, and [Delta](https://github.com/SimonCropp/Delta) is a small library that supplies it — an `ETag` derived from the database's own change tracking, so "has anything changed" is one cheap read rather than a re-execution.
 
-The ETag itself is not built into Scry and is not required. The [sample](sample.md) wires it up end to end — one middleware on the server, one `DelegatingHandler` on the client — and this page is that wiring explained. What *is* built in is the half that makes any of it reachable: a query short enough to fit in a URL is asked with `GET`, so the caches that already exist can answer it.
+All of that ships. A query short enough to fit in a URL is asked with `GET`, so the caches that already exist can identify the response; `Scry.Server` writes the `ETag` and answers the `304`; and the one thing it cannot know — whether anything has changed — comes from a delegate the host supplies. [`Scry.Server.Delta`](#the-freshness-source) supplies one in a line. None of it is on until that delegate is set.
 
 
 ## Why a query is a URL
@@ -37,8 +37,9 @@ The ETag has to change whenever the bytes it stands for would change. Three thin
 | Part | Changes when | Read from |
 | --- | --- | --- |
 | Schema stamp | the queryable surface is redeployed | `ScryProcessor.SchemaStamp` |
-| Database timestamp | anything is written | Delta's `GetLastTimeStamp` |
+| Freshness token | anything is written | `ScryOptions.QueryFreshness` |
 | Query fingerprint | a different question is asked | a hash of the `q` parameter |
+| Cache scope | a different caller asks | `ScryOptions.CacheScope` |
 
 The fingerprint costs nothing to obtain: the encoded request in the URL *is* the query, so hashing it identifies the query exactly. It is hashed only for size — `q` runs to thousands of characters where an ETag wants a handful. Being a hash of the encoded **bytes** means two spellings of the same query miss rather than collide, which is the safe direction for a cache key: a miss costs a round trip, a collision would cost correctness.
 
@@ -46,74 +47,107 @@ Nothing about it comes from the client's own account of what it sent. There is n
 
 Delta's own ETag opens with the entry assembly's last write time, so any redeployment invalidates every entry. The schema stamp is the narrower version of that idea — narrower because a redeployed binary that left the queryable surface alone keeps its caches warm. It also means a client whose model has drifted can never be answered 304: the stamp in its ETag is the old one, so the comparison fails and it gets a full response carrying the server's current stamp, which is what [drift detection](schema-versioning.md) reads.
 
+`If-None-Match` is compared as HTTP defines it rather than as a string: a list matches if any member does, `*` matches anything current, and the comparison is the weak one RFC 9110 asks for — so a tag some proxy weakened on the way through still matches, instead of turning every hit into a permanent miss.
+
 
 ## The server half
 
-<!-- snippet: queryEtagMiddleware -->
-<a id='snippet-queryEtagMiddleware'></a>
+Two settings, and nothing else:
+
+<!-- snippet: serverRegistration -->
+<a id='snippet-serverRegistration'></a>
 ```cs
-public static IApplicationBuilder UseQueryEtag<TContext>(
-    this IApplicationBuilder builder,
-    string path,
-    Func<HttpContext, string?>? suffix = null)
-    where TContext : DbContext =>
-    builder.Use(
-        async (context, next) =>
-        {
-            var request = context.Request;
+builder.Services
+    .AddScry<SampleContext>(
+    _ =>
+    {
+        // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
+        // [QueryablePoco] type must be registered here or AddScry throws at startup.
+        _.AddPocoSource(_ => Holiday.Seed());
+        // Department.Handbook is an [Attachment], and one exposed without a check is a startup
+        // failure. Registered here rather than by [AttachmentWith] because the model project
+        // references the annotations alone and has no server type to name.
+        _.AddAttachmentPolicy<Department, HandbookPolicy>();
+        _.MaxPageSize = 200;
 
-            // No URL-borne query, no cache key. A request without one — a query too long for a
-            // URL, a raw one written by hand, a health probe routed through the same path — is
-            // answered exactly as it was before this middleware existed.
-            if (!request.Path.StartsWithSegments(path) ||
-                Fingerprint(request) is not { } fingerprint)
-            {
-                await next();
-                return;
-            }
+        // Repeat a query while nothing has been written and the answer is a 304 rather than a
+        // re-execution. Optional, and off until a freshness source says how to tell — see
+        // /docs/caching.md.
+        _.UseDeltaFreshness<SampleContext>();
 
-            var db = context.RequestServices.GetRequiredService<TContext>();
-            var stamp = context.RequestServices.GetRequiredService<ScryProcessor>().SchemaStamp;
-
-            // Delta, doing the part that is actually hard: one cheap read of the database's own
-            // change marker, whatever the provider underneath spells it as.
-            var timeStamp = await db.GetLastTimeStamp(context.RequestAborted);
-
-            var etag = Etag(stamp, timeStamp, fingerprint, suffix?.Invoke(context));
-            context.Response.Headers.ETag = etag;
-
-            if (request.Headers.IfNoneMatch != etag)
-            {
-                await next();
-                return;
-            }
-
-            context.Response.StatusCode = StatusCodes.Status304NotModified;
-
-            // Delta's own: the client may reuse what it holds, but has to ask again next time
-            // rather than assume an expiry it was never given.
-            context.Response.NoCache();
-
-            // And `private` with it, because a client updates the headers of the response it kept
-            // with the ones a 304 carries. Sending `no-cache` alone would strip `private` from the
-            // stored copy of a response that was only ever meant for this caller.
-            context.Response.Headers.CacheControl = "private, no-cache";
-        });
+        // What a cached response belongs to. Department.Handbook carries an attachment check,
+        // so this server has a source whose answers depend on who asked, and MapScry refuses
+        // to start without this. The sample has no sign-in, so there is one caller and one
+        // scope; a real app returns its tenant or its principal, and a client signing in as
+        // someone else is then never handed the previous one's rows.
+        _.CacheScope = _ => "sample";
+    });
 ```
-<sup><a href='/samples/Sample.Server/QueryEtag.cs#L43-L91' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryEtagMiddleware' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L26-L52' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-Registered ahead of the endpoint, against the pattern `MapScry` was given — so it covers the query endpoint and the stream, batch, and attachment endpoints below it:
+`QueryFreshness` is what the rows are current as of. Null — the default — writes no `ETag` and answers nothing conditionally, so a server that never sets it behaves exactly as it did before any of this existed. Returning null from it skips one request rather than turning the feature off, so a source that cannot answer right now degrades to a full response.
 
-<!-- snippet: sampleQueryEtag -->
-<a id='snippet-sampleQueryEtag'></a>
+`CacheScope` is who a cached response belongs to. It is not optional where it matters: if any source carries a [row policy](policies.md) or an [attachment policy](attachments.md), its rows depend on who asked while its URL says nothing about that, and `MapScry` **refuses to start** until the host has said what a cached response is scoped to. The failure is loud at startup because the alternative is silent in production — a browser profile outlives a sign-out, so the next identity revalidates, matches, and is handed the previous one's rows.
+
+
+### The freshness source
+
+Reading "has anything changed" cheaply is the hard part, and it has no single answer — a transaction log position, a change-tracking version, a counter in Redis. [Delta](https://github.com/SimonCropp/Delta) answers it for a database, and `Scry.Server.Delta` is that answer wired up:
+
+<!-- snippet: useDeltaFreshness -->
+<a id='snippet-useDeltaFreshness'></a>
 ```cs
-app.UseQueryEtag<SampleContext>("/api/query");
+/// <summary>
+/// Answers a repeated query with <c>304 Not Modified</c> while nothing has been written, by
+/// reading <typeparamref name="TContext"/>'s own change marker through Delta's
+/// <c>GetLastTimeStamp</c> — the transaction log's end position on SQL Server,
+/// <c>pg_last_committed_xact</c> on PostgreSQL.
+/// </summary>
+/// <remarks>
+/// <para>
+/// One read of a marker the database already maintains, in place of executing the query and
+/// writing its rows. That trade pays in almost any read-heavy app and does not pay where the data
+/// changes on every request, since the marker moves for a write to anything at all.
+/// </para>
+/// <para>
+/// The marker trails a commit rather than moving with it — a couple of hundred milliseconds on
+/// SQL Server — so inside that window a client that has just written can be told its copy is
+/// still current. A client that needs read-after-write sends <c>Cache-Control: no-cache</c>,
+/// which skips the comparison and re-executes.
+/// </para>
+/// <para>
+/// Where any source carries a row or attachment policy, its rows depend on who asked, and
+/// <see cref="ScryOptions.CacheScope"/> has to say what a cached response belongs to.
+/// <c>MapScry</c> refuses to start otherwise.
+/// </para>
+/// </remarks>
+public static ScryOptions UseDeltaFreshness<TContext>(this ScryOptions options)
+    where TContext : DbContext
+{
+    options.QueryFreshness = async (context, cancel) =>
+    {
+        var data = context.RequestServices.GetRequiredService<TContext>();
+        var timeStamp = await data.GetLastTimeStamp(cancel);
+
+        // A marker that says nothing identifies nothing, so the request is answered in full rather
+        // than with an ETag that has a hole where its freshness should be.
+        return timeStamp.Length == 0 ? null : timeStamp;
+    };
+
+    return options;
+}
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L57-L59' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleQueryEtag' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.Delta/ScryDeltaExtensions.cs#L9-L49' title='Snippet source file'>snippet source</a> | <a href='#snippet-useDeltaFreshness' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-A request without a fingerprint is answered exactly as it was before the middleware existed: no ETag, no short circuit. That keeps hand-written requests, health probes, and anything else routed through the same path out of it.
+Any other source is the same shape: a delegate returning a string that changes when the data does.
+
+| Package | Use |
+| --- | --- |
+| [`Scry.Server.Delta`](https://nuget.org/packages/Scry.Server.Delta/) | `UseDeltaFreshness<TContext>()`. What the sample uses. |
+| [`Delta`](https://nuget.org/packages/Delta/) | `UseDelta` for the app's own GET traffic — the host page, static assets, conventional endpoints. |
+| [`Delta.SqlServer`](https://nuget.org/packages/Delta.SqlServer/) | Helpers for enabling and inspecting SQL Server change tracking. |
 
 
 ## The client half
@@ -231,12 +265,14 @@ Two identical queries, recorded at the socket. Both are `GET`s carrying the quer
     ResponseStatus: NotModified 304,
     ResponseHeaders: {
       Cache-Control: no-cache, private,
-      ETag: {Scrubbed}
+      ETag: {Scrubbed},
+      Scry-Schema-Stamp: {Scrubbed},
+      Scry-Url-Limit: 4096
     }
   }
 ]
 ```
-<sup><a href='/samples/Sample.Tests/ConditionalQueryTests.ConditionalExchange.verified.txt#L1-L36' title='Snippet source file'>snippet source</a> | <a href='#snippet-ConditionalQueryTests.ConditionalExchange.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Tests/ConditionalQueryTests.ConditionalExchange.verified.txt#L1-L38' title='Snippet source file'>snippet source</a> | <a href='#snippet-ConditionalQueryTests.ConditionalExchange.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The ETag values are scrubbed from that snapshot because they carry the database's log position. That the two match is what the 304 proves.
@@ -246,22 +282,26 @@ Note what the 304 does **not** carry: `Scry-Schema-Stamp`, since the response wa
 
 ## What it costs
 
-Every request now reads the database timestamp before doing anything else. That read is cheap — it is a lookup, not a scan — but it is not free, and it happens whether or not the request turns out to be a hit. The trade is one lookup against one query execution plus one response serialization, which pays off in almost any read-heavy app and does not pay off if the data changes on every request.
-
-Delta can remove even that read: its `UseDelta` accepts `Cache-Control` request directives (`max-age`, `max-stale`) and will reuse a recently-read timestamp rather than going back to the database. The middleware here does not implement that; `GetLastTimeStamp` is called every time.
+A URL-borne query reads the freshness token before doing anything else. That read is cheap — a lookup, not a scan — but it is not free, and it happens whether or not the request turns out to be a hit. The trade is one lookup against one query execution plus one response serialization, which pays off in almost any read-heavy app and does not pay off if the data changes on every request. A query asked in a body pays nothing, since it is never answered conditionally.
 
 
 ## The sharp edges
 
-**A write is not visible instantly.** On SQL Server the log position Delta reads trails a committed transaction — a couple of hundred milliseconds on LocalDB. Inside that window a client that has written can still be told its cached copy is current. That is fine for a dashboard and wrong for read-after-write, so a client that writes should either bypass the cache afterwards or not use one. It is the same assumption Delta states outright: this approach suits data whose update frequency is low relative to reads.
+**A write is not visible instantly.** On SQL Server the log position Delta reads trails a committed transaction — a couple of hundred milliseconds on LocalDB. Inside that window a client that has written can still be told its cached copy is current. A client that needs read-after-write sends `Cache-Control: no-cache`, which skips the comparison and re-executes; that is the standard escape and it is honoured. Beyond it, this suits data whose update frequency is low relative to reads, which is the assumption Delta states outright.
 
-**Anything a response varies by must be in the key.** A [row policy](policies.md) that scopes rows to a tenant, or an [attachment policy](attachments.md) that answers per principal, makes two identical queries produce different bytes for different callers. The query fingerprint cannot see that. Pass it as the `suffix` — the tenant id, the user id — or a client whose identity changes mid-session can be handed a 304 for rows the new identity was never shown. For the same reason, the client's store has to be cleared on sign-in and sign-out.
+**One token invalidates everything.** A write to anything at all moves the freshness token, so it empties the whole cache rather than the entries that write affected. Correct, and the reason the trade collapses on a write-heavy database.
 
-**A query in a body is never answered conditionally.** The middleware keys on the URL, so a query too long to be one gets no ETag and no 304 — it is answered exactly as it would be with none of this wired up. That is not a gap so much as the same fact from the other side: what makes a response identifiable to a cache is the URL, and a body-borne query has none. An app that wants those cached too needs an identity of its own making, and should read the paragraph above before inventing one that the client supplies.
+**Anything a response varies by must be in the scope.** A [row policy](policies.md) that scopes rows to a tenant, or an [attachment policy](attachments.md) that answers per principal, makes two identical queries produce different bytes for different callers, and the URL says nothing about which one asked. `CacheScope` is where that goes, and a server carrying such a source will not start without it. For the same reason, a client's own store has to be cleared on sign-in and sign-out.
+
+**A 304 skips the policies.** Nothing runs on a hit — that is the point — so a response header a policy writes is absent on one. A client reading such a header has to treat its absence as "unchanged" rather than as "gone".
+
+**A query in a body is never answered conditionally.** A query too long for a URL, or one refused a URL by `[Sensitive]`, gets no ETag and no 304 — it is answered exactly as it would be with none of this configured. That is the same fact from the other side: what makes a response identifiable to a cache is its URL, and a body-borne query has none.
+
+**A sensitive member changes both halves.** A constant compared against a member the model marks [`[Sensitive]`](annotations.md) sends the query as a body, so nothing lands in a log; a result containing one is sent `Cache-Control: no-store` with no `ETag`, so nothing lands on a disk. The second is worth dwelling on, because `private, no-cache` **stores** — it means revalidate before reuse, not do not keep — and the server sets `no-store` whatever the client believed, which is what makes it a control rather than a convention. A query with no `Select` returns every member of its source, so it falls under that rule without having named one.
 
 **A URL response is cacheable, so the server says who may keep it.** Every answer to a `GET` carries `Cache-Control: private, no-cache`, and both halves are load-bearing. `private` is what keeps a CDN or a shared proxy out of it: rows are shaped by [policies](policies.md) that read the request, so the same URL answers differently for two principals, and a shared cache keyed on the URL alone would hand one of them the other's rows. `no-cache` keeps a stored copy revalidating rather than expiring on a guess — without a directive, a browser is free to invent a freshness lifetime and serve stale rows without asking. An app whose rows genuinely do not vary by caller can widen this above the endpoint; nothing else should.
 
-**Not everything is cacheable.** The handler keeps `application/json` responses only. A [streamed](querying.md#streaming-rows) result is meant to be read a row at a time and a [multipart](wire-format.md#binary-transfer) one carries binary parts beside its envelope; caching either means buffering it whole, so both pass through untouched. They still get an ETag from the server — a client that wants to cache them needs a strategy of its own.
+**Not everything the client caches is cacheable.** The sample's handler keeps `application/json` responses only. A [streamed](querying.md#streaming-rows) result is meant to be read a row at a time and a [multipart](wire-format.md#binary-transfer) one carries binary parts beside its envelope; caching either means buffering it whole, so both pass through untouched. They still get an ETag from the server — a client that wants to cache them needs a strategy of its own.
 
 **It is a cache, so it needs a bound.** The sample's is an unbounded dictionary, which suits a page that asks the same handful of queries. A real one wants an LRU, or a cap on the bytes held.
 
@@ -270,6 +310,6 @@ Delta can remove even that read: its `UseDelta` accepts `Cache-Control` request 
 
 Not every app needs this. Worth considering first:
 
-- **Nothing.** A query that runs in single-digit milliseconds against a warm database does not need a caching layer, and this one costs a timestamp read per request plus two places where staleness can hide.
-- **Delta's `UseDelta`, on the app's GET traffic.** The Blazor host page, static assets, and any conventional endpoints get the same treatment with one line and no client-side work, because the browser already implements the client half.
+- **Nothing.** A query that runs in single-digit milliseconds against a warm database does not need a caching layer, and this one costs a freshness read per request plus two places where staleness can hide. Leaving `QueryFreshness` unset is the default for that reason.
+- **Delta's `UseDelta`, on the app's own GET traffic.** The Blazor host page, static assets, and any conventional endpoints get the same treatment with one line and no client-side work, because the browser already implements the client half.
 - **A shorter-lived client cache with no server involvement.** If "the last few seconds" is fresh enough, a client that reuses a response for a fixed window skips the round trip entirely rather than shortening it.

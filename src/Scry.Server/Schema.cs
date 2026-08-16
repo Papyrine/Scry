@@ -33,6 +33,17 @@ sealed class Schema
     internal IEnumerable<TypeMeta> Types => types.Values;
 
     /// <summary>
+    /// The first source whose rows depend on who asked, or null where none does. Ordered by name so a
+    /// startup message names the same one every run.
+    /// </summary>
+    internal string? PolicedSource =>
+        sources.Values
+            .Where(_ => _.Policies.Count > 0 || _.AttachmentPolicy is not null)
+            .OrderBy(_ => _.Name, StringComparer.Ordinal)
+            .FirstOrDefault()
+            ?.Name;
+
+    /// <summary>
     /// Maps an enum value name off the wire to its current name, translating one a client was
     /// generated against before the value was renamed. Unknown names are returned unchanged, so the
     /// caller reports them against the real enum.

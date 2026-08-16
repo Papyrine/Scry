@@ -20,9 +20,21 @@ builder.Services
         // references the annotations alone and has no server type to name.
         _.AddAttachmentPolicy<Department, HandbookPolicy>();
         _.MaxPageSize = 200;
+
+        // Repeat a query while nothing has been written and the answer is a 304 rather than a
+        // re-execution. Optional, and off until a freshness source says how to tell — see
+        // /docs/caching.md.
+        _.UseDeltaFreshness<SampleContext>();
+
+        // What a cached response belongs to. Department.Handbook carries an attachment check,
+        // so this server has a source whose answers depend on who asked, and MapScry refuses
+        // to start without this. The sample has no sign-in, so there is one caller and one
+        // scope; a real app returns its tenant or its principal, and a client signing in as
+        // someone else is then never handed the previous one's rows.
+        _.CacheScope = _ => "sample";
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L26-L40' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L26-L52' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddPocoSource` registers the data for a `[QueryablePoco]` type — see [POCO sources](#poco-sources) below. `MaxPageSize` is one of the [limits](#options).
@@ -48,7 +60,7 @@ Failures surface at startup, not at first request:
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L61-L63' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L67-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Three routes, from the one call:

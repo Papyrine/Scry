@@ -12,7 +12,8 @@
   <Project Path="Scry.Wire/Scry.Wire.csproj" />
   <Project Path="Scry.Client/Scry.Client.csproj" />
   <Project Path="Scry.Server/Scry.Server.csproj" />
-  <Project Path="Scry.Server.Explorer/Scry.Server.Explorer.csproj" />
+  <Project Path="Scry.Server.Delta/Scry.Server.Delta.csproj" />
+    <Project Path="Scry.Server.Explorer/Scry.Server.Explorer.csproj" />
   <Project Path="Scry.Explorer.Core/Scry.Explorer.Core.csproj" />
   <Project Path="Scry.SourceGenerator/Scry.SourceGenerator.csproj" />
   <Project Path="Scry.SourceGenerator.Tests/Scry.SourceGenerator.Tests.csproj" />

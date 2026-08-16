@@ -27,9 +27,9 @@ public sealed class ScryTestServer :
     }
 
     /// <param name="conditionalRequests">
-    /// Wires up the sample's ETag middleware, as <c>Program.cs</c> does. Off by default: it puts an
-    /// <c>ETag</c> on every response, and the value moves with the database's log position, which would
-    /// be churn in the snapshots of the other fixtures that share one of these servers.
+    /// Answers repeats conditionally, as <c>Program.cs</c> does. Off by default: it puts an
+    /// <c>ETag</c> on every URL-borne response, and the value moves with the database's log position,
+    /// which would be churn in the snapshots of the other fixtures that share one of these servers.
     /// </param>
     public static async Task<ScryTestServer> StartAsync(bool conditionalRequests = false)
     {
@@ -46,14 +46,14 @@ public sealed class ScryTestServer :
             options.AddPocoSource(_ => Holiday.Seed());
             options.AddAttachmentPolicy<Department, HandbookPolicy>();
             options.MaxPageSize = 200;
+            if (conditionalRequests)
+            {
+                options.UseDeltaFreshness<SampleContext>();
+                options.CacheScope = _ => "sample";
+            }
         });
 
         var app = builder.Build();
-        if (conditionalRequests)
-        {
-            app.UseQueryEtag<SampleContext>("/api/query");
-        }
-
         app.MapScry("/api/query");
         await app.StartAsync();
 

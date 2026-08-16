@@ -83,6 +83,44 @@ public sealed class ScryOptions(Type contextType)
     // end-snippet
 
     /// <summary>
+    /// What the rows a query would return are current as of — a database change marker, typically.
+    /// Null, the default, writes no <c>ETag</c> and answers nothing conditionally.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// When set, a query asked as a URL is answered with an <c>ETag</c> over the schema stamp, this
+    /// token, the query, and <see cref="CacheScope"/>; a client sending that value back as
+    /// <c>If-None-Match</c> is answered <c>304</c> rather than re-executed. Returning null skips one
+    /// request rather than turning the whole thing off, so a source that cannot answer right now
+    /// degrades to a full response.
+    /// </para>
+    /// <para>
+    /// A delegate rather than a built-in reader because "has anything changed" has no one answer: a
+    /// transaction log position, a change-tracking version, a counter in Redis. Scry.Server.Delta
+    /// supplies one for a <c>DbContext</c> in a line.
+    /// </para>
+    /// <para>
+    /// The token invalidates every query at once — anything written moves it, so one write empties the
+    /// whole cache. That is the right default and the reason this suits a read-heavy database and does
+    /// not suit a write-heavy one.
+    /// </para>
+    /// </remarks>
+    public Func<HttpContext, Cancel, ValueTask<string?>>? QueryFreshness { get; set; }
+
+    /// <summary>
+    /// Who a cached response belongs to. Anything a response varies by that its query does not
+    /// describe: the tenant a row policy scopes rows to, the principal an attachment check answers
+    /// for, a build id where a response shape can change without the queryable surface changing.
+    /// </summary>
+    /// <remarks>
+    /// Without it, two callers asking the same question share an <c>ETag</c> — and a cache that holds
+    /// one caller's rows will hand them to the next. A server with a row or attachment policy
+    /// therefore has to set this before <see cref="QueryFreshness"/> is honoured; <c>MapScry</c>
+    /// refuses to start otherwise, since the alternative is a leak that only shows up in production.
+    /// </remarks>
+    public Func<HttpContext, string?>? CacheScope { get; set; }
+
+    /// <summary>
     /// The size in bytes past which a response stops being held whole and is sent as it is written.
     /// Default 65,536 (64 KB); zero holds every response whole, as every response once was.
     /// </summary>

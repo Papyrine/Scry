@@ -30,7 +30,9 @@
     ResponseStatus: NotModified 304,
     ResponseHeaders: {
       Cache-Control: no-cache, private,
-      ETag: {Scrubbed}
+      ETag: {Scrubbed},
+      Scry-Schema-Stamp: {Scrubbed},
+      Scry-Url-Limit: 4096
     }
   }
 ]

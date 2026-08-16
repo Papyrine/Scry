@@ -20,6 +20,13 @@ public sealed class ScryProcessor
         sensitive = new(schema);
     }
 
+    /// <summary>
+    /// The name of a source whose rows depend on who asked — one carrying a row or attachment policy —
+    /// or null where no source does. Read at startup to refuse a caching setup that would hand one
+    /// caller's rows to the next.
+    /// </summary>
+    internal string? PolicedSource => schema.PolicedSource;
+
     /// <summary>Describes the allow-listed query surface for tooling (the query explorer).</summary>
     public ScryIntrospection Describe() => schema.Describe(options);
 
