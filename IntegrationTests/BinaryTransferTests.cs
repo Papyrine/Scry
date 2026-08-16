@@ -103,12 +103,12 @@ public class BinaryTransferTests
     const string selectNameAndPayload =
         """
         {"$type":"select","projection":{"members":[
-          {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},
-          {"name":"Payload","value":{"$type":"node","node":{"$type":"member","path":["Payload"]}}}]}}
+          {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}},
+          {"name":"Payload","value":{"$type":"node","node":{"$type":"member","path":"Payload"}}}]}}
         """;
 
     const string orderById =
-        """{"$type":"orderBy","key":{"$type":"member","path":["Id"]},"descending":false}""";
+        """{"$type":"orderBy","key":{"$type":"member","path":"Id"},"descending":false}""";
 
     const string listRequest =
         $$"""{"version":1,"root":"Document","pipeline":[{{orderById}},{{selectNameAndPayload}}]}""";
@@ -126,7 +126,7 @@ public class BinaryTransferTests
         $$$$"""
             {"version":1,"root":"Document","pipeline":[
               {"$type":"where","predicate":{"$type":"binary","op":"Equal",
-                "left":{"$type":"member","path":["Name"]},
+                "left":{"$type":"member","path":"Name"},
                 "right":{"$type":"const","value":"{{{{name}}}}","tag":"String"}}},
               {{{{selectNameAndPayload}}}}]}
             """;
@@ -164,7 +164,7 @@ public class BinaryTransferTests
             """
             {"version":1,"root":"Document","pipeline":[
               {"$type":"select","projection":{"members":[
-                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}]}
+                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}}]}}]}
             """;
 
         var (single, _) = await PostRaw("/api/query", namesOnly);
@@ -213,7 +213,7 @@ public class BinaryTransferTests
             """
             {"version":1,"root":"Document","pipeline":[
               {"$type":"select","projection":{"members":[
-                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}]}
+                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}}]}}]}
             """;
 
         await using var spilling = await StartSpilling(1);
@@ -248,7 +248,7 @@ public class BinaryTransferTests
             """
             {"version":1,"root":"Document","pipeline":[
               {"$type":"select","projection":{"members":[
-                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}]}
+                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}}]}}]}
             """;
 
         await using var spilling = await StartSpilling(1);

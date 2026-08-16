@@ -343,7 +343,7 @@ fullTimers = await Query
     RequestUri: {
       Path: http://localhost/api/query,
       Query: {
-        q: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"node","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"{scrubbed stamp}"}
+        q: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":"Active"}},{"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}},{"name":"Status","value":{"$type":"node","node":{"$type":"member","path":"Status"}}},{"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"{scrubbed stamp}"}
       }
     },
     RequestMethod: GET,
@@ -383,7 +383,7 @@ public async Task DisallowedPropertyRejectedWith400()
               "predicate": {
                 "$type": "binary",
                 "op": "GreaterThan",
-                "left": { "$type": "member", "path": ["Salary"] },
+                "left": { "$type": "member", "path": "Salary" },
                 "right": { "$type": "const", "value": "100", "tag": "Decimal" }
               }
             }

@@ -9,30 +9,22 @@
       "kind": "Inner",
       "outerKey": {
         "$type": "member",
-        "path": [
-          "DepartmentId"
-        ]
+        "path": "DepartmentId"
       },
       "innerKey": {
         "$type": "member",
-        "path": [
-          "Id"
-        ]
+        "path": "Id"
       },
       "result": [
         {
           "name": "Employee",
           "side": "Outer",
-          "path": [
-            "Name"
-          ]
+          "path": "Name"
         },
         {
           "name": "Department",
           "side": "Inner",
-          "path": [
-            "Name"
-          ]
+          "path": "Name"
         }
       ]
     }
@@ -50,24 +42,18 @@ client.Source<Employee>("Employee").Join(client.Source<Department>("Department")
       "kind": "Inner",
       "outerKey": {
         "$type": "member",
-        "path": [
-          "DepartmentId"
-        ]
+        "path": "DepartmentId"
       },
       "innerKey": {
         "$type": "member",
-        "path": [
-          "Id"
-        ]
+        "path": "Id"
       },
       "innerPredicate": {
         "$type": "binary",
         "op": "Equal",
         "left": {
           "$type": "member",
-          "path": [
-            "Name"
-          ]
+          "path": "Name"
         },
         "right": {
           "$type": "const",
@@ -79,16 +65,12 @@ client.Source<Employee>("Employee").Join(client.Source<Department>("Department")
         {
           "name": "Employee",
           "side": "Outer",
-          "path": [
-            "Name"
-          ]
+          "path": "Name"
         },
         {
           "name": "Department",
           "side": "Inner",
-          "path": [
-            "Name"
-          ]
+          "path": "Name"
         }
       ]
     }
@@ -106,30 +88,22 @@ client.Source<Employee>("Employee").LeftJoin(client.Source<Department>("Departme
       "kind": "Left",
       "outerKey": {
         "$type": "member",
-        "path": [
-          "DepartmentId"
-        ]
+        "path": "DepartmentId"
       },
       "innerKey": {
         "$type": "member",
-        "path": [
-          "Id"
-        ]
+        "path": "Id"
       },
       "result": [
         {
           "name": "Employee",
           "side": "Outer",
-          "path": [
-            "Name"
-          ]
+          "path": "Name"
         },
         {
           "name": "Department",
           "side": "Inner",
-          "path": [
-            "Name"
-          ]
+          "path": "Name"
         }
       ]
     }
@@ -147,30 +121,22 @@ client.Source<Employee>("Employee").RightJoin(client.Source<Ticket>("Ticket"), _
       "kind": "Right",
       "outerKey": {
         "$type": "member",
-        "path": [
-          "Id"
-        ]
+        "path": "Id"
       },
       "innerKey": {
         "$type": "member",
-        "path": [
-          "Id"
-        ]
+        "path": "Id"
       },
       "result": [
         {
           "name": "Employee",
           "side": "Outer",
-          "path": [
-            "Name"
-          ]
+          "path": "Name"
         },
         {
           "name": "Ticket",
           "side": "Inner",
-          "path": [
-            "Name"
-          ]
+          "path": "Name"
         }
       ]
     }
@@ -188,23 +154,17 @@ client.Source<Department>("Department").GroupJoin(client.Source<Employee>("Emplo
       "kind": "Group",
       "outerKey": {
         "$type": "member",
-        "path": [
-          "Id"
-        ]
+        "path": "Id"
       },
       "innerKey": {
         "$type": "member",
-        "path": [
-          "DepartmentId"
-        ]
+        "path": "DepartmentId"
       },
       "result": [
         {
           "name": "Department",
           "side": "Outer",
-          "path": [
-            "Name"
-          ]
+          "path": "Name"
         },
         {
           "name": "Size",
@@ -233,15 +193,11 @@ client.Source<Order>("Order").Join(client.Source<Order>("Order"), _ => new {_.Re
         "parts": [
           {
             "$type": "member",
-            "path": [
-              "Region"
-            ]
+            "path": "Region"
           },
           {
             "$type": "member",
-            "path": [
-              "Grade"
-            ]
+            "path": "Grade"
           }
         ]
       },
@@ -250,15 +206,11 @@ client.Source<Order>("Order").Join(client.Source<Order>("Order"), _ => new {_.Re
         "parts": [
           {
             "$type": "member",
-            "path": [
-              "Region"
-            ]
+            "path": "Region"
           },
           {
             "$type": "member",
-            "path": [
-              "Grade"
-            ]
+            "path": "Grade"
           }
         ]
       },
@@ -266,16 +218,12 @@ client.Source<Order>("Order").Join(client.Source<Order>("Order"), _ => new {_.Re
         {
           "name": "Code",
           "side": "Outer",
-          "path": [
-            "Code"
-          ]
+          "path": "Code"
         },
         {
           "name": "Matched",
           "side": "Inner",
-          "path": [
-            "Amount"
-          ]
+          "path": "Amount"
         }
       ]
     }
@@ -293,30 +241,22 @@ client.Source<Order>("Order").Join(client.Source<Order>("Order").Where(_ => _.Gr
       "kind": "Inner",
       "outerKey": {
         "$type": "member",
-        "path": [
-          "Region"
-        ]
+        "path": "Region"
       },
       "innerKey": {
         "$type": "member",
-        "path": [
-          "Region"
-        ]
+        "path": "Region"
       },
       "result": [
         {
           "name": "Code",
           "side": "Outer",
-          "path": [
-            "Code"
-          ]
+          "path": "Code"
         },
         {
           "name": "Matched",
           "side": "Inner",
-          "path": [
-            "Amount"
-          ]
+          "path": "Amount"
         }
       ],
       "innerOps": [
@@ -327,9 +267,7 @@ client.Source<Order>("Order").Join(client.Source<Order>("Order").Where(_ => _.Gr
             "op": "Equal",
             "left": {
               "$type": "member",
-              "path": [
-                "Grade"
-              ]
+              "path": "Grade"
             },
             "right": {
               "$type": "const",
@@ -342,9 +280,7 @@ client.Source<Order>("Order").Join(client.Source<Order>("Order").Where(_ => _.Gr
           "$type": "orderBy",
           "key": {
             "$type": "member",
-            "path": [
-              "Amount"
-            ]
+            "path": "Amount"
           },
           "descending": true
         },

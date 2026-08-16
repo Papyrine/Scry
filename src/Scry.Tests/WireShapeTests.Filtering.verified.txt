@@ -7,9 +7,7 @@
       "$type": "where",
       "predicate": {
         "$type": "member",
-        "path": [
-          "Active"
-        ]
+        "path": "Active"
       }
     },
     {
@@ -22,9 +20,7 @@
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -46,9 +42,7 @@ client.Source<Employee>("Employee").Where(_ => !_.Active).Select(_ => new NameRo
         "op": "Not",
         "operand": {
           "$type": "member",
-          "path": [
-            "Active"
-          ]
+          "path": "Active"
         }
       }
     },
@@ -62,9 +56,7 @@ client.Source<Employee>("Employee").Where(_ => !_.Active).Select(_ => new NameRo
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -89,9 +81,7 @@ client.Source<Employee>("Employee").Where(_ => _.Status == wanted && _.Name.Star
           "op": "Equal",
           "left": {
             "$type": "member",
-            "path": [
-              "Status"
-            ]
+            "path": "Status"
           },
           "right": {
             "$type": "const",
@@ -104,9 +94,7 @@ client.Source<Employee>("Employee").Where(_ => _.Status == wanted && _.Name.Star
           "function": "StringStartsWith",
           "target": {
             "$type": "member",
-            "path": [
-              "Name"
-            ]
+            "path": "Name"
           },
           "arguments": [
             {
@@ -128,9 +116,7 @@ client.Source<Employee>("Employee").Where(_ => _.Status == wanted && _.Name.Star
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -155,9 +141,7 @@ client.Source<Employee>("Employee").Where(_ => _.Status != Status.FullTime || _.
           "op": "NotEqual",
           "left": {
             "$type": "member",
-            "path": [
-              "Status"
-            ]
+            "path": "Status"
           },
           "right": {
             "$type": "const",
@@ -170,9 +154,7 @@ client.Source<Employee>("Employee").Where(_ => _.Status != Status.FullTime || _.
           "op": "Equal",
           "left": {
             "$type": "member",
-            "path": [
-              "Name"
-            ]
+            "path": "Name"
           },
           "right": {
             "$type": "const",
@@ -192,9 +174,7 @@ client.Source<Employee>("Employee").Where(_ => _.Status != Status.FullTime || _.
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -216,9 +196,7 @@ client.Source<Employee>("Employee").Where(_ => _.ManagerId == null).Select(_ => 
         "op": "Equal",
         "left": {
           "$type": "member",
-          "path": [
-            "ManagerId"
-          ]
+          "path": "ManagerId"
         },
         "right": {
           "$type": "const",
@@ -236,9 +214,7 @@ client.Source<Employee>("Employee").Where(_ => _.ManagerId == null).Select(_ => 
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -260,9 +236,7 @@ client.Source<Employee>("Employee").Where(_ => _.ManagerId.HasValue).Select(_ =>
         "op": "NotEqual",
         "left": {
           "$type": "member",
-          "path": [
-            "ManagerId"
-          ]
+          "path": "ManagerId"
         },
         "right": {
           "$type": "const",
@@ -280,9 +254,7 @@ client.Source<Employee>("Employee").Where(_ => _.ManagerId.HasValue).Select(_ =>
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -304,9 +276,7 @@ client.Source<Employee>("Employee").Where(_ => _.Avatar == avatar).Select(_ => n
         "op": "Equal",
         "left": {
           "$type": "member",
-          "path": [
-            "Avatar"
-          ]
+          "path": "Avatar"
         },
         "right": {
           "$type": "const",
@@ -325,9 +295,7 @@ client.Source<Employee>("Employee").Where(_ => _.Avatar == avatar).Select(_ => n
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -371,9 +339,7 @@ client.Source<Employee>("Employee").Where(_ => _.Address.Country == "UK").Select
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -417,9 +383,7 @@ client.Source<Employee>("Employee").Where(_ => _.Manager!.Name == "Alice").Selec
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -441,9 +405,7 @@ client.Source<Employee>("Employee").Where(_ => _.Perks.HasFlag(Perks.Parking | P
         "function": "EnumHasFlag",
         "target": {
           "$type": "member",
-          "path": [
-            "Perks"
-          ]
+          "path": "Perks"
         },
         "arguments": [
           {
@@ -464,9 +426,7 @@ client.Source<Employee>("Employee").Where(_ => _.Perks.HasFlag(Perks.Parking | P
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -488,9 +448,7 @@ client.Source<Order>("Order").Where(_ => regions.Contains(_.Region)).Select(_ =>
         "function": "In",
         "target": {
           "$type": "member",
-          "path": [
-            "Region"
-          ]
+          "path": "Region"
         },
         "arguments": [
           {
@@ -516,9 +474,7 @@ client.Source<Order>("Order").Where(_ => regions.Contains(_.Region)).Select(_ =>
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -528,9 +484,7 @@ client.Source<Order>("Order").Where(_ => regions.Contains(_.Region)).Select(_ =>
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Amount"
-                ]
+                "path": "Amount"
               }
             }
           }
@@ -555,9 +509,7 @@ client.Source<Order>("Order").Where(_ => _.Amount >= 100m && _.Amount < 250m).Se
           "op": "GreaterThanOrEqual",
           "left": {
             "$type": "member",
-            "path": [
-              "Amount"
-            ]
+            "path": "Amount"
           },
           "right": {
             "$type": "const",
@@ -570,9 +522,7 @@ client.Source<Order>("Order").Where(_ => _.Amount >= 100m && _.Amount < 250m).Se
           "op": "LessThan",
           "left": {
             "$type": "member",
-            "path": [
-              "Amount"
-            ]
+            "path": "Amount"
           },
           "right": {
             "$type": "const",
@@ -592,9 +542,7 @@ client.Source<Order>("Order").Where(_ => _.Amount >= 100m && _.Amount < 250m).Se
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -604,9 +552,7 @@ client.Source<Order>("Order").Where(_ => _.Amount >= 100m && _.Amount < 250m).Se
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Amount"
-                ]
+                "path": "Amount"
               }
             }
           }
@@ -631,18 +577,14 @@ client.Source<Order>("Order").Where(_ => _.Amount - (_.Discount ?? 0m) > 90m).Se
           "op": "Subtract",
           "left": {
             "$type": "member",
-            "path": [
-              "Amount"
-            ]
+            "path": "Amount"
           },
           "right": {
             "$type": "binary",
             "op": "Coalesce",
             "left": {
               "$type": "member",
-              "path": [
-                "Discount"
-              ]
+              "path": "Discount"
             },
             "right": {
               "$type": "const",
@@ -668,9 +610,7 @@ client.Source<Order>("Order").Where(_ => _.Amount - (_.Discount ?? 0m) > 90m).Se
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -680,9 +620,7 @@ client.Source<Order>("Order").Where(_ => _.Amount - (_.Discount ?? 0m) > 90m).Se
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Amount"
-                ]
+                "path": "Amount"
               }
             }
           }
@@ -713,9 +651,7 @@ client.Source<Order>("Order").Where(_ => _.Amount * 2m / 4m + 1m <= 100m).Select
               "op": "Multiply",
               "left": {
                 "$type": "member",
-                "path": [
-                  "Amount"
-                ]
+                "path": "Amount"
               },
               "right": {
                 "$type": "const",
@@ -752,9 +688,7 @@ client.Source<Order>("Order").Where(_ => _.Amount * 2m / 4m + 1m <= 100m).Select
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -764,9 +698,7 @@ client.Source<Order>("Order").Where(_ => _.Amount * 2m / 4m + 1m <= 100m).Select
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Amount"
-                ]
+                "path": "Amount"
               }
             }
           }
@@ -794,9 +726,7 @@ client.Source<Order>("Order").Where(_ => _.Region.Length % 2 == 0).Select(_ => n
             "function": "StringLength",
             "target": {
               "$type": "member",
-              "path": [
-                "Region"
-              ]
+              "path": "Region"
             },
             "arguments": []
           },
@@ -823,9 +753,7 @@ client.Source<Order>("Order").Where(_ => _.Region.Length % 2 == 0).Select(_ => n
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -835,9 +763,7 @@ client.Source<Order>("Order").Where(_ => _.Region.Length % 2 == 0).Select(_ => n
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Amount"
-                ]
+                "path": "Amount"
               }
             }
           }
@@ -862,9 +788,7 @@ client.Source<Order>("Order").Where(_ => -_.Amount < 0m).Select(_ => new OrderRo
           "op": "Negate",
           "operand": {
             "$type": "member",
-            "path": [
-              "Amount"
-            ]
+            "path": "Amount"
           }
         },
         "right": {
@@ -884,9 +808,7 @@ client.Source<Order>("Order").Where(_ => -_.Amount < 0m).Select(_ => new OrderRo
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -896,9 +818,7 @@ client.Source<Order>("Order").Where(_ => -_.Amount < 0m).Select(_ => new OrderRo
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Amount"
-                ]
+                "path": "Amount"
               }
             }
           }
@@ -920,9 +840,7 @@ client.Source<Order>("Order").Where(_ => _.Grade == 'A').Select(_ => new OrderRo
         "op": "Equal",
         "left": {
           "$type": "member",
-          "path": [
-            "Grade"
-          ]
+          "path": "Grade"
         },
         "right": {
           "$type": "const",
@@ -941,9 +859,7 @@ client.Source<Order>("Order").Where(_ => _.Grade == 'A').Select(_ => new OrderRo
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -953,9 +869,7 @@ client.Source<Order>("Order").Where(_ => _.Grade == 'A').Select(_ => new OrderRo
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Amount"
-                ]
+                "path": "Amount"
               }
             }
           }
@@ -980,9 +894,7 @@ client.Source<Order>("Order").Where(_ => _.Quantity == 7u && _.Sku == ulong.MaxV
           "op": "Equal",
           "left": {
             "$type": "member",
-            "path": [
-              "Quantity"
-            ]
+            "path": "Quantity"
           },
           "right": {
             "$type": "const",
@@ -995,9 +907,7 @@ client.Source<Order>("Order").Where(_ => _.Quantity == 7u && _.Sku == ulong.MaxV
           "op": "Equal",
           "left": {
             "$type": "member",
-            "path": [
-              "Sku"
-            ]
+            "path": "Sku"
           },
           "right": {
             "$type": "const",
@@ -1017,9 +927,7 @@ client.Source<Order>("Order").Where(_ => _.Quantity == 7u && _.Sku == ulong.MaxV
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -1029,9 +937,7 @@ client.Source<Order>("Order").Where(_ => _.Quantity == 7u && _.Sku == ulong.MaxV
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Amount"
-                ]
+                "path": "Amount"
               }
             }
           }
@@ -1053,9 +959,7 @@ client.Source<Order>("Order").Where(_ => _.Placed > new DateTime(2026, 1, 1)).Se
         "op": "GreaterThan",
         "left": {
           "$type": "member",
-          "path": [
-            "Placed"
-          ]
+          "path": "Placed"
         },
         "right": {
           "$type": "const",
@@ -1074,9 +978,7 @@ client.Source<Order>("Order").Where(_ => _.Placed > new DateTime(2026, 1, 1)).Se
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -1086,9 +988,7 @@ client.Source<Order>("Order").Where(_ => _.Placed > new DateTime(2026, 1, 1)).Se
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Amount"
-                ]
+                "path": "Amount"
               }
             }
           }
@@ -1112,9 +1012,7 @@ client.Source<Employee>("Employee").Where(_ => _.Name.Contains("LIC", StringComp
           "$type": "collate",
           "target": {
             "$type": "member",
-            "path": [
-              "Name"
-            ]
+            "path": "Name"
           },
           "match": "CaseInsensitive"
         },
@@ -1137,9 +1035,7 @@ client.Source<Employee>("Employee").Where(_ => _.Name.Contains("LIC", StringComp
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -1163,9 +1059,7 @@ client.Source<Employee>("Employee").Where(_ => _.Name.Equals("Alice", StringComp
           "$type": "collate",
           "target": {
             "$type": "member",
-            "path": [
-              "Name"
-            ]
+            "path": "Name"
           },
           "match": "CaseSensitive"
         },
@@ -1186,9 +1080,7 @@ client.Source<Employee>("Employee").Where(_ => _.Name.Equals("Alice", StringComp
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }

@@ -11,5 +11,6 @@ namespace Scry;
 /// <c>[QueryableCollection]</c> of a policied type is refused at startup, carries no row policy that
 /// the flatten could bypass.
 /// </remarks>
-public sealed record SelectManyOp(IReadOnlyList<string> Path) :
+public sealed record SelectManyOp(
+    [property: JsonConverter(typeof(PathConverter))] IReadOnlyList<string> Path) :
     QueryOp;

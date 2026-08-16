@@ -16,9 +16,7 @@
                 "function": "DateYear",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": []
               }
@@ -33,9 +31,7 @@
                 "function": "DateMonth",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": []
               }
@@ -50,9 +46,7 @@
                 "function": "DateDay",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": []
               }
@@ -67,9 +61,7 @@
                 "function": "DateDayOfYear",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": []
               }
@@ -99,9 +91,7 @@ client.Source<Order>("Order").Select(_ => new {_.Placed.Hour, _.Placed.Minute, _
                 "function": "DateHour",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": []
               }
@@ -116,9 +106,7 @@ client.Source<Order>("Order").Select(_ => new {_.Placed.Hour, _.Placed.Minute, _
                 "function": "DateMinute",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": []
               }
@@ -133,9 +121,7 @@ client.Source<Order>("Order").Select(_ => new {_.Placed.Hour, _.Placed.Minute, _
                 "function": "DateSecond",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": []
               }
@@ -150,9 +136,7 @@ client.Source<Order>("Order").Select(_ => new {_.Placed.Hour, _.Placed.Minute, _
                 "function": "DateMillisecond",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": []
               }
@@ -182,9 +166,7 @@ client.Source<Order>("Order").Select(_ => new {_.Placed.Microsecond, _.Placed.Na
                 "function": "DateMicrosecond",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": []
               }
@@ -199,9 +181,7 @@ client.Source<Order>("Order").Select(_ => new {_.Placed.Microsecond, _.Placed.Na
                 "function": "DateNanosecond",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": []
               }
@@ -231,9 +211,7 @@ client.Source<Order>("Order").Select(_ => new {_.Placed.DayOfWeek, _.Placed.Date
                 "function": "DateDayOfWeek",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": []
               }
@@ -248,9 +226,7 @@ client.Source<Order>("Order").Select(_ => new {_.Placed.DayOfWeek, _.Placed.Date
                 "function": "DateDate",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": []
               }
@@ -265,9 +241,7 @@ client.Source<Order>("Order").Select(_ => new {_.Placed.DayOfWeek, _.Placed.Date
                 "function": "DateTimeOfDay",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": []
               }
@@ -297,9 +271,7 @@ client.Source<Shift>("Shift").Select(_ => new {_.Day.DayNumber}).ToListAsync()
                 "function": "DateDayNumber",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Day"
-                  ]
+                  "path": "Day"
                 },
                 "arguments": []
               }
@@ -329,9 +301,7 @@ client.Source<Shift>("Shift").Select(_ => new {_.Duration.Hours, _.Duration.Minu
                 "function": "TimeSpanHours",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Duration"
-                  ]
+                  "path": "Duration"
                 },
                 "arguments": []
               }
@@ -346,9 +316,7 @@ client.Source<Shift>("Shift").Select(_ => new {_.Duration.Hours, _.Duration.Minu
                 "function": "TimeSpanMinutes",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Duration"
-                  ]
+                  "path": "Duration"
                 },
                 "arguments": []
               }
@@ -363,9 +331,7 @@ client.Source<Shift>("Shift").Select(_ => new {_.Duration.Hours, _.Duration.Minu
                 "function": "TimeSpanSeconds",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Duration"
-                  ]
+                  "path": "Duration"
                 },
                 "arguments": []
               }
@@ -395,9 +361,7 @@ client.Source<Shift>("Shift").Select(_ => new {_.Duration.Milliseconds, _.Durati
                 "function": "TimeSpanMilliseconds",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Duration"
-                  ]
+                  "path": "Duration"
                 },
                 "arguments": []
               }
@@ -412,9 +376,7 @@ client.Source<Shift>("Shift").Select(_ => new {_.Duration.Milliseconds, _.Durati
                 "function": "TimeSpanMicroseconds",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Duration"
-                  ]
+                  "path": "Duration"
                 },
                 "arguments": []
               }
@@ -429,9 +391,7 @@ client.Source<Shift>("Shift").Select(_ => new {_.Duration.Milliseconds, _.Durati
                 "function": "TimeSpanNanoseconds",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Duration"
-                  ]
+                  "path": "Duration"
                 },
                 "arguments": []
               }
@@ -461,9 +421,7 @@ client.Source<Order>("Order").Select(_ => new {D = Date.FromDateTime(_.Placed), 
                 "function": "DateOnlyFromDateTime",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": []
               }
@@ -478,9 +436,7 @@ client.Source<Order>("Order").Select(_ => new {D = Date.FromDateTime(_.Placed), 
                 "function": "TimeOnlyFromDateTime",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": []
               }
@@ -510,9 +466,7 @@ client.Source<Shift>("Shift").Select(_ => new {T = Time.FromTimeSpan(_.Duration)
                 "function": "TimeOnlyFromTimeSpan",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Duration"
-                  ]
+                  "path": "Duration"
                 },
                 "arguments": []
               }
@@ -527,16 +481,12 @@ client.Source<Shift>("Shift").Select(_ => new {T = Time.FromTimeSpan(_.Duration)
                 "function": "DateTimeFromDateAndTime",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Day"
-                  ]
+                  "path": "Day"
                 },
                 "arguments": [
                   {
                     "$type": "member",
-                    "path": [
-                      "Start"
-                    ]
+                    "path": "Start"
                   }
                 ]
               }
@@ -566,9 +516,7 @@ client.Source<Shift>("Shift").Select(_ => new {S = _.Stamped.ToUnixTimeSeconds()
                 "function": "UnixSecondsFromOffset",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Stamped"
-                  ]
+                  "path": "Stamped"
                 },
                 "arguments": []
               }
@@ -583,9 +531,7 @@ client.Source<Shift>("Shift").Select(_ => new {S = _.Stamped.ToUnixTimeSeconds()
                 "function": "UnixMillisecondsFromOffset",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Stamped"
-                  ]
+                  "path": "Stamped"
                 },
                 "arguments": []
               }
@@ -615,9 +561,7 @@ client.Source<Order>("Order").Select(_ => new {A = _.Placed.AddYears(1), B = _.P
                 "function": "DateAddYears",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": [
                   {
@@ -638,9 +582,7 @@ client.Source<Order>("Order").Select(_ => new {A = _.Placed.AddYears(1), B = _.P
                 "function": "DateAddMonths",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": [
                   {
@@ -661,9 +603,7 @@ client.Source<Order>("Order").Select(_ => new {A = _.Placed.AddYears(1), B = _.P
                 "function": "DateAddDays",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": [
                   {
@@ -684,9 +624,7 @@ client.Source<Order>("Order").Select(_ => new {A = _.Placed.AddYears(1), B = _.P
                 "function": "DateAddHours",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": [
                   {
@@ -722,9 +660,7 @@ client.Source<Order>("Order").Select(_ => new {A = _.Placed.AddMinutes(1), B = _
                 "function": "DateAddMinutes",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": [
                   {
@@ -745,9 +681,7 @@ client.Source<Order>("Order").Select(_ => new {A = _.Placed.AddMinutes(1), B = _
                 "function": "DateAddSeconds",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": [
                   {
@@ -768,9 +702,7 @@ client.Source<Order>("Order").Select(_ => new {A = _.Placed.AddMinutes(1), B = _
                 "function": "DateAddMilliseconds",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": [
                   {
@@ -806,9 +738,7 @@ client.Source<Order>("Order").Select(_ => new {V = _.Placed.CompareTo(new(2026, 
                 "function": "CompareTo",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Placed"
-                  ]
+                  "path": "Placed"
                 },
                 "arguments": [
                   {

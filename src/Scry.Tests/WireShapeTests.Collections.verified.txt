@@ -5,9 +5,7 @@
   "pipeline": [
     {
       "$type": "selectMany",
-      "path": [
-        "Lines"
-      ]
+      "path": "Lines"
     },
     {
       "$type": "select",
@@ -19,9 +17,7 @@
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Sku"
-                ]
+                "path": "Sku"
               }
             }
           },
@@ -31,9 +27,7 @@
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Quantity"
-                ]
+                "path": "Quantity"
               }
             }
           }
@@ -55,9 +49,7 @@ client.Source<Order>("Order").Where(_ => _.Region == "North").SelectMany(_ => _.
         "op": "Equal",
         "left": {
           "$type": "member",
-          "path": [
-            "Region"
-          ]
+          "path": "Region"
         },
         "right": {
           "$type": "const",
@@ -68,9 +60,7 @@ client.Source<Order>("Order").Where(_ => _.Region == "North").SelectMany(_ => _.
     },
     {
       "$type": "selectMany",
-      "path": [
-        "Lines"
-      ]
+      "path": "Lines"
     },
     {
       "$type": "where",
@@ -79,9 +69,7 @@ client.Source<Order>("Order").Where(_ => _.Region == "North").SelectMany(_ => _.
         "op": "GreaterThan",
         "left": {
           "$type": "member",
-          "path": [
-            "Quantity"
-          ]
+          "path": "Quantity"
         },
         "right": {
           "$type": "const",
@@ -100,9 +88,7 @@ client.Source<Order>("Order").Where(_ => _.Region == "North").SelectMany(_ => _.
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Sku"
-                ]
+                "path": "Sku"
               }
             }
           },
@@ -112,9 +98,7 @@ client.Source<Order>("Order").Where(_ => _.Region == "North").SelectMany(_ => _.
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Quantity"
-                ]
+                "path": "Quantity"
               }
             }
           }
@@ -133,18 +117,14 @@ client.Source<Order>("Order").Where(_ => _.Lines.Any(l => l.Price == 25m)).Selec
       "$type": "where",
       "predicate": {
         "$type": "subquery",
-        "path": [
-          "Lines"
-        ],
+        "path": "Lines",
         "function": "Any",
         "predicate": {
           "$type": "binary",
           "op": "Equal",
           "left": {
             "$type": "member",
-            "path": [
-              "Price"
-            ]
+            "path": "Price"
           },
           "right": {
             "$type": "const",
@@ -164,9 +144,7 @@ client.Source<Order>("Order").Where(_ => _.Lines.Any(l => l.Price == 25m)).Selec
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -176,9 +154,7 @@ client.Source<Order>("Order").Where(_ => _.Lines.Any(l => l.Price == 25m)).Selec
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Amount"
-                ]
+                "path": "Amount"
               }
             }
           }
@@ -197,18 +173,14 @@ client.Source<Order>("Order").Where(_ => _.Lines.All(l => l.Quantity > 0)).Selec
       "$type": "where",
       "predicate": {
         "$type": "subquery",
-        "path": [
-          "Lines"
-        ],
+        "path": "Lines",
         "function": "All",
         "predicate": {
           "$type": "binary",
           "op": "GreaterThan",
           "left": {
             "$type": "member",
-            "path": [
-              "Quantity"
-            ]
+            "path": "Quantity"
           },
           "right": {
             "$type": "const",
@@ -228,9 +200,7 @@ client.Source<Order>("Order").Where(_ => _.Lines.All(l => l.Quantity > 0)).Selec
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -240,9 +210,7 @@ client.Source<Order>("Order").Where(_ => _.Lines.All(l => l.Quantity > 0)).Selec
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Amount"
-                ]
+                "path": "Amount"
               }
             }
           }
@@ -267,9 +235,7 @@ client.Source<Order>("Order").Select(_ => new {_.Region, Lines = _.Lines.Count(l
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -279,18 +245,14 @@ client.Source<Order>("Order").Select(_ => new {_.Region, Lines = _.Lines.Count(l
               "$type": "node",
               "node": {
                 "$type": "subquery",
-                "path": [
-                  "Lines"
-                ],
+                "path": "Lines",
                 "function": "Count",
                 "predicate": {
                   "$type": "binary",
                   "op": "GreaterThan",
                   "left": {
                     "$type": "member",
-                    "path": [
-                      "Quantity"
-                    ]
+                    "path": "Quantity"
                   },
                   "right": {
                     "$type": "const",
@@ -322,9 +284,7 @@ client.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Lines.Sum(l =
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -334,15 +294,11 @@ client.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Lines.Sum(l =
               "$type": "node",
               "node": {
                 "$type": "subquery",
-                "path": [
-                  "Lines"
-                ],
+                "path": "Lines",
                 "function": "Sum",
                 "selector": {
                   "$type": "member",
-                  "path": [
-                    "Price"
-                  ]
+                  "path": "Price"
                 }
               }
             }
@@ -353,15 +309,11 @@ client.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Lines.Sum(l =
               "$type": "node",
               "node": {
                 "$type": "subquery",
-                "path": [
-                  "Lines"
-                ],
+                "path": "Lines",
                 "function": "Average",
                 "selector": {
                   "$type": "member",
-                  "path": [
-                    "Price"
-                  ]
+                  "path": "Price"
                 }
               }
             }
@@ -372,15 +324,11 @@ client.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Lines.Sum(l =
               "$type": "node",
               "node": {
                 "$type": "subquery",
-                "path": [
-                  "Lines"
-                ],
+                "path": "Lines",
                 "function": "Min",
                 "selector": {
                   "$type": "member",
-                  "path": [
-                    "Price"
-                  ]
+                  "path": "Price"
                 }
               }
             }
@@ -391,15 +339,11 @@ client.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Lines.Sum(l =
               "$type": "node",
               "node": {
                 "$type": "subquery",
-                "path": [
-                  "Lines"
-                ],
+                "path": "Lines",
                 "function": "Max",
                 "selector": {
                   "$type": "member",
-                  "path": [
-                    "Price"
-                  ]
+                  "path": "Price"
                 }
               }
             }
@@ -419,9 +363,7 @@ client.Source<Order>("Order").Where(_ => _.Tags.Contains("urgent")).Select(_ => 
       "$type": "where",
       "predicate": {
         "$type": "subquery",
-        "path": [
-          "Tags"
-        ],
+        "path": "Tags",
         "function": "Any",
         "predicate": {
           "$type": "binary",
@@ -447,9 +389,7 @@ client.Source<Order>("Order").Where(_ => _.Tags.Contains("urgent")).Select(_ => 
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           }
@@ -474,9 +414,7 @@ client.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Scores.Sum(),
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -486,9 +424,7 @@ client.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Scores.Sum(),
               "$type": "node",
               "node": {
                 "$type": "subquery",
-                "path": [
-                  "Scores"
-                ],
+                "path": "Scores",
                 "function": "Sum",
                 "selector": {
                   "$type": "element"
@@ -502,9 +438,7 @@ client.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Scores.Sum(),
               "$type": "node",
               "node": {
                 "$type": "subquery",
-                "path": [
-                  "Scores"
-                ],
+                "path": "Scores",
                 "function": "Max",
                 "selector": {
                   "$type": "element"
@@ -527,18 +461,14 @@ client.Source<Employee>("Employee").Where(_ => _.PreviousAddresses.Any(address =
       "$type": "where",
       "predicate": {
         "$type": "subquery",
-        "path": [
-          "PreviousAddresses"
-        ],
+        "path": "PreviousAddresses",
         "function": "Any",
         "predicate": {
           "$type": "binary",
           "op": "Equal",
           "left": {
             "$type": "member",
-            "path": [
-              "City"
-            ]
+            "path": "City"
           },
           "right": {
             "$type": "const",
@@ -558,9 +488,7 @@ client.Source<Employee>("Employee").Where(_ => _.PreviousAddresses.Any(address =
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -581,25 +509,19 @@ client.Source<Employee>("Employee").Where(_ => client.Source<Department>("Depart
         "$type": "inSource",
         "value": {
           "$type": "member",
-          "path": [
-            "DepartmentId"
-          ]
+          "path": "DepartmentId"
         },
         "root": "Department",
         "selector": {
           "$type": "member",
-          "path": [
-            "Id"
-          ]
+          "path": "Id"
         },
         "predicate": {
           "$type": "binary",
           "op": "Equal",
           "left": {
             "$type": "member",
-            "path": [
-              "Name"
-            ]
+            "path": "Name"
           },
           "right": {
             "$type": "const",
@@ -619,9 +541,7 @@ client.Source<Employee>("Employee").Where(_ => client.Source<Department>("Depart
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }

@@ -273,7 +273,7 @@ public class AttachmentTests
                   "$type": "select",
                   "projection": {
                     "members": [
-                      { "name": "Photo", "value": { "$type": "node", "node": { "$type": "member", "path": ["Photo"] } } }
+                      { "name": "Photo", "value": { "$type": "node", "node": { "$type": "member", "path": "Photo" } } }
                     ]
                   }
                 }

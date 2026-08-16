@@ -126,7 +126,7 @@ The `page` terminal carries the requested page `size` (omitted for the server de
   "version": 1,
   "root": "Employee",
   "pipeline": [
-    { "$type": "orderBy", "key": { "$type": "member", "path": ["Created"] }, "descending": false },
+    { "$type": "orderBy", "key": { "$type": "member", "path": "Created" }, "descending": false },
     { "$type": "page", "size": 20, "cursor": "eyJrZXlzIjpb...w9.Ab3f..." }
   ]
 }

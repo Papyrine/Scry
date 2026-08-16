@@ -13,9 +13,7 @@
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -25,9 +23,7 @@
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Amount"
-                ]
+                "path": "Amount"
               }
             }
           }
@@ -46,9 +42,7 @@
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Sku"
-                ]
+                "path": "Sku"
               }
             }
           },
@@ -58,9 +52,7 @@
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Price"
-                ]
+                "path": "Price"
               }
             }
           }
@@ -85,9 +77,7 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Conc
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -97,9 +87,7 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Conc
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Amount"
-                ]
+                "path": "Amount"
               }
             }
           }
@@ -118,9 +106,7 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Conc
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Sku"
-                ]
+                "path": "Sku"
               }
             }
           },
@@ -130,9 +116,7 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Conc
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Price"
-                ]
+                "path": "Price"
               }
             }
           }
@@ -157,9 +141,7 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Inte
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -169,9 +151,7 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Inte
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Amount"
-                ]
+                "path": "Amount"
               }
             }
           }
@@ -190,9 +170,7 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Inte
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Sku"
-                ]
+                "path": "Sku"
               }
             }
           },
@@ -202,9 +180,7 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Inte
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Price"
-                ]
+                "path": "Price"
               }
             }
           }
@@ -229,9 +205,7 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Exce
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -241,9 +215,7 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Exce
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Amount"
-                ]
+                "path": "Amount"
               }
             }
           }
@@ -262,9 +234,7 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Exce
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Sku"
-                ]
+                "path": "Sku"
               }
             }
           },
@@ -274,9 +244,7 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Exce
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Price"
-                ]
+                "path": "Price"
               }
             }
           }
@@ -301,9 +269,7 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Unio
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -313,9 +279,7 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Unio
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Amount"
-                ]
+                "path": "Amount"
               }
             }
           }
@@ -334,9 +298,7 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Unio
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -346,9 +308,7 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Unio
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Amount"
-                ]
+                "path": "Amount"
               }
             }
           }
@@ -362,9 +322,7 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Unio
             "op": "Equal",
             "left": {
               "$type": "member",
-              "path": [
-                "Grade"
-              ]
+              "path": "Grade"
             },
             "right": {
               "$type": "const",
@@ -377,9 +335,7 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Unio
           "$type": "orderBy",
           "key": {
             "$type": "member",
-            "path": [
-              "Amount"
-            ]
+            "path": "Amount"
           },
           "descending": false
         },

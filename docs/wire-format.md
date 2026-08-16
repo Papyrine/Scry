@@ -265,10 +265,13 @@ public abstract record Node;
 ### `member`
 
 ```json
+{ "$type": "member", "path": "Name" }
 { "$type": "member", "path": ["Manager", "Name"] }
 ```
 
 A navigation path of allow-listed property names. Each segment is validated against the allow-list of the type reached so far; every non-final segment must be a reference navigation.
+
+A path naming a single member is written as a bare string, and one naming any other number as an array. The two spellings are alternatives rather than synonyms — `["Name"]` is **rejected**, so a path has exactly one encoding and two requests meaning the same thing cannot differ in bytes. Every `path` on the wire follows this rule, not only this node's: `selectMany`, `subquery`, `nested`, and a join's projected members read the same way.
 
 
 ### `element`
@@ -323,7 +326,7 @@ The tag is a hint, not an instruction. The server parses the value into the **me
 {
   "$type": "binary",
   "op": "GreaterThan",
-  "left":  { "$type": "member", "path": ["Amount"] },
+  "left":  { "$type": "member", "path": "Amount" },
   "right": { "$type": "const", "value": "100", "tag": "Decimal" }
 }
 ```
@@ -369,7 +372,7 @@ When one side is a constant, its type is inferred from the other side, and nulla
 {
   "$type": "call",
   "function": "StringStartsWith",
-  "target": { "$type": "member", "path": ["Name"] },
+  "target": { "$type": "member", "path": "Name" },
   "arguments": [ { "$type": "const", "value": "A", "tag": "String" } ]
 }
 ```
@@ -593,7 +596,7 @@ There is no free-form method name anywhere in the format. This enum is the compl
 ### `aggregate`
 
 ```json
-{ "$type": "aggregate", "function": "Sum", "selector": { "$type": "member", "path": ["Amount"] } }
+{ "$type": "aggregate", "function": "Sum", "selector": { "$type": "member", "path": "Amount" } }
 ```
 
 <!-- snippet: wireAggregates -->
@@ -644,7 +647,7 @@ A key that is a plain member is named instead by its own `member` node, whose pa
 {
   "projection": {
     "members": [
-      { "name": "Name", "value": { "$type": "node", "node": { "$type": "member", "path": ["Name"] } } }
+      { "name": "Name", "value": { "$type": "node", "node": { "$type": "member", "path": "Name" } } }
     ]
   }
 }
@@ -665,7 +668,7 @@ public abstract record ProjectionValue;
 | `$type` | Payload | Produces |
 | --- | --- | --- |
 | `node` | `node: Node` | A scalar leaf, or an aggregate in a grouped select. |
-| `nested` | `path: string[]`, `projection: Projection` | A nested JSON object built from a navigation. |
+| `nested` | `path: string` or `string[]`, `projection: Projection` | A nested JSON object built from a navigation. |
 
 A projection must have at least one member. Nested projections are not allowed in a grouped select, and nesting depth is capped by `MaxNavigationDepth`.
 
@@ -1133,7 +1136,7 @@ Over HTTP, request and response look like this:
     RequestUri: {
       Path: http://localhost/api/query,
       Query: {
-        q: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"node","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"{scrubbed stamp}"}
+        q: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":"Active"}},{"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}},{"name":"Status","value":{"$type":"node","node":{"$type":"member","path":"Status"}}},{"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"{scrubbed stamp}"}
       }
     },
     RequestMethod: GET,

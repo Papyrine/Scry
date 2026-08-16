@@ -13,9 +13,7 @@
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           },
@@ -25,9 +23,7 @@
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Status"
-                ]
+                "path": "Status"
               }
             }
           }
@@ -52,9 +48,7 @@ client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).ToListAsync
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -79,9 +73,7 @@ client.Source<Employee>("Employee").Select(_ => new {_.Name, Manager = _.Manager
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           },
@@ -119,9 +111,7 @@ client.Source<Employee>("Employee").Select(_ => new EmployeeCard(_.Name, new(_.D
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           },
@@ -129,9 +119,7 @@ client.Source<Employee>("Employee").Select(_ => new EmployeeCard(_.Name, new(_.D
             "name": "Department",
             "value": {
               "$type": "nested",
-              "path": [
-                "Department"
-              ],
+              "path": "Department",
               "projection": {
                 "members": [
                   {
@@ -140,9 +128,7 @@ client.Source<Employee>("Employee").Select(_ => new EmployeeCard(_.Name, new(_.D
                       "$type": "node",
                       "node": {
                         "$type": "member",
-                        "path": [
-                          "Name"
-                        ]
+                        "path": "Name"
                       }
                     }
                   }
@@ -171,9 +157,7 @@ client.Source<Employee>("Employee").Select(_ => new EmployeeCard(_.Name, new(_.D
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           },
@@ -181,9 +165,7 @@ client.Source<Employee>("Employee").Select(_ => new EmployeeCard(_.Name, new(_.D
             "name": "Department",
             "value": {
               "$type": "nested",
-              "path": [
-                "Department"
-              ],
+              "path": "Department",
               "projection": {
                 "members": [
                   {
@@ -195,9 +177,7 @@ client.Source<Employee>("Employee").Select(_ => new EmployeeCard(_.Name, new(_.D
                         "function": "StringToUpper",
                         "target": {
                           "$type": "member",
-                          "path": [
-                            "Name"
-                          ]
+                          "path": "Name"
                         },
                         "arguments": []
                       }
@@ -228,9 +208,7 @@ client.Source<Employee>("Employee").Select(_ => new {_.Name, _.Address.City, _.A
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           },
@@ -286,9 +264,7 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region == "North" ? "N"
                   "op": "Equal",
                   "left": {
                     "$type": "member",
-                    "path": [
-                      "Region"
-                    ]
+                    "path": "Region"
                   },
                   "right": {
                     "$type": "const",
@@ -318,18 +294,14 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region == "North" ? "N"
                 "op": "Subtract",
                 "left": {
                   "$type": "member",
-                  "path": [
-                    "Amount"
-                  ]
+                  "path": "Amount"
                 },
                 "right": {
                   "$type": "binary",
                   "op": "Coalesce",
                   "left": {
                     "$type": "member",
-                    "path": [
-                      "Discount"
-                    ]
+                    "path": "Discount"
                   },
                   "right": {
                     "$type": "const",
@@ -367,9 +339,7 @@ client.Source<Order>("Order").Select(_ => new {Label = $"{_.Region}-{_.Quantity}
                   "function": "StringConcat",
                   "target": {
                     "$type": "member",
-                    "path": [
-                      "Region"
-                    ]
+                    "path": "Region"
                   },
                   "arguments": [
                     {
@@ -382,9 +352,7 @@ client.Source<Order>("Order").Select(_ => new {Label = $"{_.Region}-{_.Quantity}
                 "arguments": [
                   {
                     "$type": "member",
-                    "path": [
-                      "Quantity"
-                    ]
+                    "path": "Quantity"
                   }
                 ]
               }
@@ -411,9 +379,7 @@ client.Source<Order>("Order").Select(_ => new {_.Region}).Distinct().ToListAsync
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           }

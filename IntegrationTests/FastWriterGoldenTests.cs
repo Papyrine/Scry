@@ -79,13 +79,13 @@ public class FastWriterGoldenTests
             "nested projection with nulls",
             """
             {"version":1,"root":"Employee","pipeline":[
-              {"$type":"where","predicate":{"$type":"member","path":["Active"]}},
-              {"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},
+              {"$type":"where","predicate":{"$type":"member","path":"Active"}},
+              {"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},
               {"$type":"select","projection":{"members":[
-                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},
-                {"name":"Status","value":{"$type":"node","node":{"$type":"member","path":["Status"]}}},
-                {"name":"Created","value":{"$type":"node","node":{"$type":"member","path":["Created"]}}},
-                {"name":"ManagerId","value":{"$type":"node","node":{"$type":"member","path":["ManagerId"]}}},
+                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}},
+                {"name":"Status","value":{"$type":"node","node":{"$type":"member","path":"Status"}}},
+                {"name":"Created","value":{"$type":"node","node":{"$type":"member","path":"Created"}}},
+                {"name":"ManagerId","value":{"$type":"node","node":{"$type":"member","path":"ManagerId"}}},
                 {"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},
                 {"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}]}
             """);
@@ -93,36 +93,36 @@ public class FastWriterGoldenTests
             "naughty strings through a poco source",
             """
             {"version":1,"root":"Holiday","pipeline":[
-              {"$type":"orderBy","key":{"$type":"member","path":["Date"]},"descending":false},
+              {"$type":"orderBy","key":{"$type":"member","path":"Date"},"descending":false},
               {"$type":"select","projection":{"members":[
-                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},
-                {"name":"Date","value":{"$type":"node","node":{"$type":"member","path":["Date"]}}}]}}]}
+                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}},
+                {"name":"Date","value":{"$type":"node","node":{"$type":"member","path":"Date"}}}]}}]}
             """);
         yield return new TestCaseData(
             "duplicate projected name overwrites in place",
             """
             {"version":1,"root":"Employee","pipeline":[
-              {"$type":"orderBy","key":{"$type":"member","path":["Id"]},"descending":false},
+              {"$type":"orderBy","key":{"$type":"member","path":"Id"},"descending":false},
               {"$type":"select","projection":{"members":[
-                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},
-                {"name":"Active","value":{"$type":"node","node":{"$type":"member","path":["Active"]}}},
+                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}},
+                {"name":"Active","value":{"$type":"node","node":{"$type":"member","path":"Active"}}},
                 {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}]}
             """);
         yield return new TestCaseData(
             "nested path claiming a scalar's position",
             """
             {"version":1,"root":"Employee","pipeline":[
-              {"$type":"orderBy","key":{"$type":"member","path":["Id"]},"descending":false},
+              {"$type":"orderBy","key":{"$type":"member","path":"Id"},"descending":false},
               {"$type":"select","projection":{"members":[
-                {"name":"Boss","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},
-                {"name":"Boss","value":{"$type":"nested","path":["Manager"],"projection":{"members":[
-                  {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}}]}}]}
+                {"name":"Boss","value":{"$type":"node","node":{"$type":"member","path":"Name"}}},
+                {"name":"Boss","value":{"$type":"nested","path":"Manager","projection":{"members":[
+                  {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}}]}}}]}}]}
             """);
         yield return new TestCaseData(
             "default projection",
             """
             {"version":1,"root":"Employee","pipeline":[
-              {"$type":"orderBy","key":{"$type":"member","path":["Id"]},"descending":false}]}
+              {"$type":"orderBy","key":{"$type":"member","path":"Id"},"descending":false}]}
             """);
         yield return new TestCaseData(
             "scalar terminal",
@@ -136,25 +136,25 @@ public class FastWriterGoldenTests
             "aggregate scalar terminal",
             """
             {"version":1,"root":"Order","pipeline":[
-              {"$type":"aggregate","function":"Sum","selector":{"$type":"member","path":["Amount"]}}]}
+              {"$type":"aggregate","function":"Sum","selector":{"$type":"member","path":"Amount"}}]}
             """);
         yield return new TestCaseData(
             "aggregate scalar over a date",
             """
             {"version":1,"root":"Employee","pipeline":[
-              {"$type":"aggregate","function":"Max","selector":{"$type":"member","path":["Created"]}}]}
+              {"$type":"aggregate","function":"Max","selector":{"$type":"member","path":"Created"}}]}
             """);
         yield return new TestCaseData(
             "all terminal",
             """
             {"version":1,"root":"Employee","pipeline":[
-              {"$type":"all","predicate":{"$type":"member","path":["Active"]}}]}
+              {"$type":"all","predicate":{"$type":"member","path":"Active"}}]}
             """);
         yield return new TestCaseData(
             "single row terminal",
             """
             {"version":1,"root":"Employee","pipeline":[
-              {"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},
+              {"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},
               {"$type":"first","orDefault":false,"predicate":null}]}
             """);
         yield return new TestCaseData(
@@ -162,7 +162,7 @@ public class FastWriterGoldenTests
             """
             {"version":1,"root":"Employee","pipeline":[
               {"$type":"where","predicate":{"$type":"binary","op":"Equal",
-                "left":{"$type":"member","path":["Name"]},
+                "left":{"$type":"member","path":"Name"},
                 "right":{"$type":"const","value":"Nobody","tag":"String"}}},
               {"$type":"first","orDefault":true,"predicate":null}]}
             """);
@@ -170,9 +170,9 @@ public class FastWriterGoldenTests
             "page envelope",
             """
             {"version":1,"root":"Employee","pipeline":[
-              {"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},
+              {"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},
               {"$type":"select","projection":{"members":[
-                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}},
+                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}}]}},
               {"$type":"page","size":2}]}
             """);
         // The page above has a further page and so mints a cursor. This one asks for more rows than
@@ -182,9 +182,9 @@ public class FastWriterGoldenTests
             "page envelope with no further page",
             """
             {"version":1,"root":"Employee","pipeline":[
-              {"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},
+              {"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},
               {"$type":"select","projection":{"members":[
-                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}},
+                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}}]}},
               {"$type":"page","size":100}]}
             """);
         // A poco source is never seek-safe, so a page of one carries no cursor even when a further
@@ -193,20 +193,20 @@ public class FastWriterGoldenTests
             "page envelope over a poco source",
             """
             {"version":1,"root":"Holiday","pipeline":[
-              {"$type":"orderBy","key":{"$type":"member","path":["Date"]},"descending":false},
+              {"$type":"orderBy","key":{"$type":"member","path":"Date"},"descending":false},
               {"$type":"select","projection":{"members":[
-                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},
-                {"name":"Date","value":{"$type":"node","node":{"$type":"member","path":["Date"]}}}]}},
+                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}},
+                {"name":"Date","value":{"$type":"node","node":{"$type":"member","path":"Date"}}}]}},
               {"$type":"page","size":2}]}
             """);
         yield return new TestCaseData(
             "grouped aggregates",
             """
             {"version":1,"root":"Order","pipeline":[
-              {"$type":"groupBy","keys":[{"$type":"member","path":["Region"]}]},
+              {"$type":"groupBy","keys":[{"$type":"member","path":"Region"}]},
               {"$type":"select","projection":{"members":[
-                {"name":"Region","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}},
-                {"name":"Total","value":{"$type":"node","node":{"$type":"aggregate","function":"Sum","selector":{"$type":"member","path":["Amount"]}}}},
+                {"name":"Region","value":{"$type":"node","node":{"$type":"member","path":"Region"}}},
+                {"name":"Total","value":{"$type":"node","node":{"$type":"aggregate","function":"Sum","selector":{"$type":"member","path":"Amount"}}}},
                 {"name":"Count","value":{"$type":"node","node":{"$type":"aggregate","function":"Count"}}}]}}]}
             """);
         yield return new TestCaseData(
@@ -236,10 +236,10 @@ public class FastWriterGoldenTests
         const string request =
             """
             {"version":1,"root":"Holiday","pipeline":[
-              {"$type":"orderBy","key":{"$type":"member","path":["Date"]},"descending":false},
+              {"$type":"orderBy","key":{"$type":"member","path":"Date"},"descending":false},
               {"$type":"select","projection":{"members":[
-                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},
-                {"name":"Date","value":{"$type":"node","node":{"$type":"member","path":["Date"]}}}]}}]}
+                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}},
+                {"name":"Date","value":{"$type":"node","node":{"$type":"member","path":"Date"}}}]}}]}
             """;
         var expected = await DirectStream(request);
 

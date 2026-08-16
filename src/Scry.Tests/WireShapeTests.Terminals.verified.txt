@@ -18,9 +18,7 @@ client.Source<Employee>("Employee").CountAsync(_ => _.Active)
       "$type": "count",
       "predicate": {
         "$type": "member",
-        "path": [
-          "Active"
-        ]
+        "path": "Active"
       }
     }
   ]
@@ -46,9 +44,7 @@ client.Source<Employee>("Employee").LongCountAsync(_ => _.Active)
       "$type": "longCount",
       "predicate": {
         "$type": "member",
-        "path": [
-          "Active"
-        ]
+        "path": "Active"
       }
     }
   ]
@@ -74,9 +70,7 @@ client.Source<Employee>("Employee").AnyAsync(_ => _.Active)
       "$type": "any",
       "predicate": {
         "$type": "member",
-        "path": [
-          "Active"
-        ]
+        "path": "Active"
       }
     }
   ]
@@ -91,9 +85,7 @@ client.Source<Employee>("Employee").AllAsync(_ => _.Active)
       "$type": "all",
       "predicate": {
         "$type": "member",
-        "path": [
-          "Active"
-        ]
+        "path": "Active"
       }
     }
   ]
@@ -114,9 +106,7 @@ client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).FirstAsync(
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -145,9 +135,7 @@ client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).FirstOrDefa
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -162,9 +150,7 @@ client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).FirstOrDefa
         "op": "Equal",
         "left": {
           "$type": "member",
-          "path": [
-            "Name"
-          ]
+          "path": "Name"
         },
         "right": {
           "$type": "const",
@@ -191,9 +177,7 @@ client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).SingleAsync
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -222,9 +206,7 @@ client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).SingleOrDef
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -247,9 +229,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
       "$type": "orderBy",
       "key": {
         "$type": "member",
-        "path": [
-          "Name"
-        ]
+        "path": "Name"
       },
       "descending": false
     },
@@ -263,9 +243,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -288,9 +266,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
       "$type": "orderBy",
       "key": {
         "$type": "member",
-        "path": [
-          "Name"
-        ]
+        "path": "Name"
       },
       "descending": false
     },
@@ -304,9 +280,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -329,9 +303,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
       "$type": "orderBy",
       "key": {
         "$type": "member",
-        "path": [
-          "Name"
-        ]
+        "path": "Name"
       },
       "descending": false
     },
@@ -345,9 +317,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -374,9 +344,7 @@ client.Source<Order>("Order").MaxByAsync(_ => _.Amount)
       "$type": "orderBy",
       "key": {
         "$type": "member",
-        "path": [
-          "Amount"
-        ]
+        "path": "Amount"
       },
       "descending": true
     },
@@ -396,9 +364,7 @@ client.Source<Order>("Order").MinByAsync(_ => _.Amount)
       "$type": "orderBy",
       "key": {
         "$type": "member",
-        "path": [
-          "Amount"
-        ]
+        "path": "Amount"
       },
       "descending": false
     },
@@ -419,9 +385,7 @@ client.Source<Order>("Order").SumAsync(_ => _.Amount)
       "function": "Sum",
       "selector": {
         "$type": "member",
-        "path": [
-          "Amount"
-        ]
+        "path": "Amount"
       }
     }
   ]
@@ -437,9 +401,7 @@ client.Source<Order>("Order").AverageAsync(_ => _.Amount)
       "function": "Average",
       "selector": {
         "$type": "member",
-        "path": [
-          "Amount"
-        ]
+        "path": "Amount"
       }
     }
   ]
@@ -455,9 +417,7 @@ client.Source<Order>("Order").MinAsync(_ => _.Amount)
       "function": "Min",
       "selector": {
         "$type": "member",
-        "path": [
-          "Amount"
-        ]
+        "path": "Amount"
       }
     }
   ]
@@ -473,9 +433,7 @@ client.Source<Order>("Order").MaxAsync(_ => _.Amount)
       "function": "Max",
       "selector": {
         "$type": "member",
-        "path": [
-          "Amount"
-        ]
+        "path": "Amount"
       }
     }
   ]
@@ -490,9 +448,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
       "$type": "orderBy",
       "key": {
         "$type": "member",
-        "path": [
-          "Name"
-        ]
+        "path": "Name"
       },
       "descending": false
     },
@@ -506,9 +462,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -530,9 +484,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
       "$type": "orderBy",
       "key": {
         "$type": "member",
-        "path": [
-          "Name"
-        ]
+        "path": "Name"
       },
       "descending": false
     },
@@ -546,9 +498,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -571,9 +521,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
       "$type": "orderBy",
       "key": {
         "$type": "member",
-        "path": [
-          "Name"
-        ]
+        "path": "Name"
       },
       "descending": false
     },
@@ -587,9 +535,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }

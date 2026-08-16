@@ -7,9 +7,7 @@
       "$type": "orderBy",
       "key": {
         "$type": "member",
-        "path": [
-          "Name"
-        ]
+        "path": "Name"
       },
       "descending": false
     },
@@ -23,9 +21,7 @@
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -44,9 +40,7 @@ client.Source<Employee>("Employee").OrderByDescending(_ => _.Name).Select(_ => n
       "$type": "orderBy",
       "key": {
         "$type": "member",
-        "path": [
-          "Name"
-        ]
+        "path": "Name"
       },
       "descending": true
     },
@@ -60,9 +54,7 @@ client.Source<Employee>("Employee").OrderByDescending(_ => _.Name).Select(_ => n
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -81,9 +73,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Status).ThenBy(_ => _.Name).S
       "$type": "orderBy",
       "key": {
         "$type": "member",
-        "path": [
-          "Status"
-        ]
+        "path": "Status"
       },
       "descending": false
     },
@@ -91,9 +81,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Status).ThenBy(_ => _.Name).S
       "$type": "thenBy",
       "key": {
         "$type": "member",
-        "path": [
-          "Name"
-        ]
+        "path": "Name"
       },
       "descending": false
     },
@@ -107,9 +95,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Status).ThenBy(_ => _.Name).S
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -128,9 +114,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Status).ThenByDescending(_ =>
       "$type": "orderBy",
       "key": {
         "$type": "member",
-        "path": [
-          "Status"
-        ]
+        "path": "Status"
       },
       "descending": false
     },
@@ -138,9 +122,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Status).ThenByDescending(_ =>
       "$type": "thenBy",
       "key": {
         "$type": "member",
-        "path": [
-          "Name"
-        ]
+        "path": "Name"
       },
       "descending": true
     },
@@ -154,9 +136,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Status).ThenByDescending(_ =>
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -175,9 +155,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Reverse().Select(_ => n
       "$type": "orderBy",
       "key": {
         "$type": "member",
-        "path": [
-          "Name"
-        ]
+        "path": "Name"
       },
       "descending": false
     },
@@ -194,9 +172,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Reverse().Select(_ => n
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -215,9 +191,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Skip(2).Take(1).Select(
       "$type": "orderBy",
       "key": {
         "$type": "member",
-        "path": [
-          "Name"
-        ]
+        "path": "Name"
       },
       "descending": false
     },
@@ -239,9 +213,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Skip(2).Take(1).Select(
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           }
@@ -263,9 +235,7 @@ client.Source<Order>("Order").OrderBy(_ => int.Parse(_.Code)).Select(_ => new Or
         "function": "Int32From",
         "target": {
           "$type": "member",
-          "path": [
-            "Code"
-          ]
+          "path": "Code"
         },
         "arguments": []
       },
@@ -281,9 +251,7 @@ client.Source<Order>("Order").OrderBy(_ => int.Parse(_.Code)).Select(_ => new Or
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -293,9 +261,7 @@ client.Source<Order>("Order").OrderBy(_ => int.Parse(_.Code)).Select(_ => new Or
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Amount"
-                ]
+                "path": "Amount"
               }
             }
           }

@@ -16,9 +16,7 @@
                 "function": "Int32From",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Code"
-                  ]
+                  "path": "Code"
                 },
                 "arguments": []
               }
@@ -48,9 +46,7 @@ client.Source<Order>("Order").Select(_ => new {V = long.Parse(_.Code)}).ToListAs
                 "function": "Int64From",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Code"
-                  ]
+                  "path": "Code"
                 },
                 "arguments": []
               }
@@ -80,9 +76,7 @@ client.Source<Order>("Order").Select(_ => new {V = decimal.Parse(_.Code)}).ToLis
                 "function": "DecimalFrom",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Code"
-                  ]
+                  "path": "Code"
                 },
                 "arguments": []
               }
@@ -112,9 +106,7 @@ client.Source<Order>("Order").Select(_ => new {V = double.Parse(_.Code)}).ToList
                 "function": "DoubleFrom",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Code"
-                  ]
+                  "path": "Code"
                 },
                 "arguments": []
               }
@@ -144,9 +136,7 @@ client.Source<Order>("Order").Select(_ => new {V = short.Parse(_.Code)}).ToListA
                 "function": "Int16From",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Code"
-                  ]
+                  "path": "Code"
                 },
                 "arguments": []
               }
@@ -176,9 +166,7 @@ client.Source<Order>("Order").Select(_ => new {V = byte.Parse(_.Code)}).ToListAs
                 "function": "ByteFrom",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Code"
-                  ]
+                  "path": "Code"
                 },
                 "arguments": []
               }
@@ -208,9 +196,7 @@ client.Source<Order>("Order").Select(_ => new {V = float.Parse(_.Code)}).ToListA
                 "function": "SingleFrom",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Code"
-                  ]
+                  "path": "Code"
                 },
                 "arguments": []
               }
@@ -240,9 +226,7 @@ client.Source<Order>("Order").Select(_ => new {V = bool.Parse(_.Audited)}).ToLis
                 "function": "BooleanFrom",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Audited"
-                  ]
+                  "path": "Audited"
                 },
                 "arguments": []
               }
@@ -272,9 +256,7 @@ client.Source<Order>("Order").Select(_ => new {V = Convert.ToInt32(_.Code)}).ToL
                 "function": "Int32From",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Code"
-                  ]
+                  "path": "Code"
                 },
                 "arguments": []
               }
@@ -304,9 +286,7 @@ client.Source<Order>("Order").Select(_ => new {V = Convert.ToString(_.Amount)}).
                 "function": "StringFrom",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Amount"
-                  ]
+                  "path": "Amount"
                 },
                 "arguments": []
               }

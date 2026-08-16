@@ -1,1 +1,1 @@
-﻿{"version":1,"root":"Employees","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Avatar"]},"right":{"$type":"const","value":"AQID","tag":"Bytes"}}}]}
+﻿{"version":1,"root":"Employees","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"Equal","left":{"$type":"member","path":"Avatar"},"right":{"$type":"const","value":"AQID","tag":"Bytes"}}}]}

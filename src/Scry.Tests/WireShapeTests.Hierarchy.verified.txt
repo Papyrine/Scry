@@ -17,9 +17,7 @@
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           },
@@ -29,9 +27,7 @@
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Wheels"
-                ]
+                "path": "Wheels"
               }
             }
           }
@@ -57,9 +53,7 @@ client.Source<Asset>("Asset").OfType<Building>().Where(_ => _.Floors > 1).Select
         "op": "GreaterThan",
         "left": {
           "$type": "member",
-          "path": [
-            "Floors"
-          ]
+          "path": "Floors"
         },
         "right": {
           "$type": "const",
@@ -78,9 +72,7 @@ client.Source<Asset>("Asset").OfType<Building>().Where(_ => _.Floors > 1).Select
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Name"
-                ]
+                "path": "Name"
               }
             }
           },
@@ -90,9 +82,7 @@ client.Source<Asset>("Asset").OfType<Building>().Where(_ => _.Floors > 1).Select
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Floors"
-                ]
+                "path": "Floors"
               }
             }
           }

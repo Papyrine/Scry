@@ -488,7 +488,7 @@ public async Task DisallowedPropertyRejectedWith400()
               "predicate": {
                 "$type": "binary",
                 "op": "GreaterThan",
-                "left": { "$type": "member", "path": ["Salary"] },
+                "left": { "$type": "member", "path": "Salary" },
                 "right": { "$type": "const", "value": "100", "tag": "Decimal" }
               }
             }

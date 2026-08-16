@@ -16,9 +16,7 @@
                 "function": "BytesLength",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Signature"
-                  ]
+                  "path": "Signature"
                 },
                 "arguments": []
               }
@@ -48,9 +46,7 @@ client.Source<Shift>("Shift").Select(_ => new {V = _.Signature.Contains((byte) 0
                 "function": "BytesContains",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Signature"
-                  ]
+                  "path": "Signature"
                 },
                 "arguments": [
                   {
@@ -86,9 +82,7 @@ client.Source<Shift>("Shift").Select(_ => new {V = _.Signature.ElementAt(1)}).To
                 "function": "BytesElementAt",
                 "target": {
                   "$type": "member",
-                  "path": [
-                    "Signature"
-                  ]
+                  "path": "Signature"
                 },
                 "arguments": [
                   {

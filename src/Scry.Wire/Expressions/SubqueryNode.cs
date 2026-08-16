@@ -11,7 +11,7 @@ namespace Scry;
 /// shape of a response. A subquery may not appear inside another subquery.
 /// </remarks>
 public sealed record SubqueryNode(
-    IReadOnlyList<string> Path,
+    [property: JsonConverter(typeof(PathConverter))] IReadOnlyList<string> Path,
     SubqueryFn Function,
     Node? Predicate,
     Node? Selector) :

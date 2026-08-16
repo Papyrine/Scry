@@ -8,9 +8,7 @@
       "keys": [
         {
           "$type": "member",
-          "path": [
-            "Region"
-          ]
+          "path": "Region"
         }
       ]
     },
@@ -24,9 +22,7 @@
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -39,9 +35,7 @@
                 "function": "Sum",
                 "selector": {
                   "$type": "member",
-                  "path": [
-                    "Amount"
-                  ]
+                  "path": "Amount"
                 }
               }
             }
@@ -72,9 +66,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Low
       "keys": [
         {
           "$type": "member",
-          "path": [
-            "Region"
-          ]
+          "path": "Region"
         }
       ]
     },
@@ -88,9 +80,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Low
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -103,9 +93,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Low
                 "function": "Min",
                 "selector": {
                   "$type": "member",
-                  "path": [
-                    "Amount"
-                  ]
+                  "path": "Amount"
                 }
               }
             }
@@ -119,9 +107,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Low
                 "function": "Max",
                 "selector": {
                   "$type": "member",
-                  "path": [
-                    "Amount"
-                  ]
+                  "path": "Amount"
                 }
               }
             }
@@ -135,9 +121,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Low
                 "function": "Average",
                 "selector": {
                   "$type": "member",
-                  "path": [
-                    "Amount"
-                  ]
+                  "path": "Amount"
                 }
               }
             }
@@ -158,15 +142,11 @@ client.Source<Order>("Order").GroupBy(_ => new {_.Region, _.Grade}).Select(_ => 
       "keys": [
         {
           "$type": "member",
-          "path": [
-            "Region"
-          ]
+          "path": "Region"
         },
         {
           "$type": "member",
-          "path": [
-            "Grade"
-          ]
+          "path": "Grade"
         }
       ]
     },
@@ -180,9 +160,7 @@ client.Source<Order>("Order").GroupBy(_ => new {_.Region, _.Grade}).Select(_ => 
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -192,9 +170,7 @@ client.Source<Order>("Order").GroupBy(_ => new {_.Region, _.Grade}).Select(_ => 
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Grade"
-                ]
+                "path": "Grade"
               }
             }
           },
@@ -207,9 +183,7 @@ client.Source<Order>("Order").GroupBy(_ => new {_.Region, _.Grade}).Select(_ => 
                 "function": "Sum",
                 "selector": {
                   "$type": "member",
-                  "path": [
-                    "Amount"
-                  ]
+                  "path": "Amount"
                 }
               }
             }
@@ -233,9 +207,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Placed.DayOfWeek).Select(_ => new {
           "function": "DateDayOfWeek",
           "target": {
             "$type": "member",
-            "path": [
-              "Placed"
-            ]
+            "path": "Placed"
           },
           "arguments": []
         }
@@ -284,9 +256,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region.ToUpper()).Select(_ => new {
           "function": "StringToUpper",
           "target": {
             "$type": "member",
-            "path": [
-              "Region"
-            ]
+            "path": "Region"
           },
           "arguments": []
         }
@@ -315,9 +285,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region.ToUpper()).Select(_ => new {
                 "function": "Sum",
                 "selector": {
                   "$type": "member",
-                  "path": [
-                    "Amount"
-                  ]
+                  "path": "Amount"
                 }
               }
             }
@@ -338,9 +306,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region, (region, orders) => new {Re
       "keys": [
         {
           "$type": "member",
-          "path": [
-            "Region"
-          ]
+          "path": "Region"
         }
       ]
     },
@@ -354,9 +320,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region, (region, orders) => new {Re
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -369,9 +333,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region, (region, orders) => new {Re
                 "function": "Sum",
                 "selector": {
                   "$type": "member",
-                  "path": [
-                    "Amount"
-                  ]
+                  "path": "Amount"
                 }
               }
             }
@@ -392,9 +354,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Where(_ => _.Sum(o => o.Amo
       "keys": [
         {
           "$type": "member",
-          "path": [
-            "Region"
-          ]
+          "path": "Region"
         }
       ]
     },
@@ -411,9 +371,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Where(_ => _.Sum(o => o.Amo
             "function": "Sum",
             "selector": {
               "$type": "member",
-              "path": [
-                "Amount"
-              ]
+              "path": "Amount"
             }
           },
           "right": {
@@ -427,9 +385,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Where(_ => _.Sum(o => o.Amo
           "op": "NotEqual",
           "left": {
             "$type": "member",
-            "path": [
-              "Region"
-            ]
+            "path": "Region"
           },
           "right": {
             "$type": "const",
@@ -449,9 +405,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Where(_ => _.Sum(o => o.Amo
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -464,9 +418,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Where(_ => _.Sum(o => o.Amo
                 "function": "Sum",
                 "selector": {
                   "$type": "member",
-                  "path": [
-                    "Amount"
-                  ]
+                  "path": "Amount"
                 }
               }
             }
@@ -487,9 +439,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Big
       "keys": [
         {
           "$type": "member",
-          "path": [
-            "Region"
-          ]
+          "path": "Region"
         }
       ]
     },
@@ -503,9 +453,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Big
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -521,9 +469,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Big
                   "op": "GreaterThan",
                   "left": {
                     "$type": "member",
-                    "path": [
-                      "Amount"
-                    ]
+                    "path": "Amount"
                   },
                   "right": {
                     "$type": "const",
@@ -546,9 +492,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Big
                   "op": "Equal",
                   "left": {
                     "$type": "member",
-                    "path": [
-                      "Grade"
-                    ]
+                    "path": "Grade"
                   },
                   "right": {
                     "$type": "const",
@@ -575,9 +519,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Gra
       "keys": [
         {
           "$type": "member",
-          "path": [
-            "Region"
-          ]
+          "path": "Region"
         }
       ]
     },
@@ -591,9 +533,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Gra
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -606,9 +546,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Gra
                 "function": "Count",
                 "selector": {
                   "$type": "member",
-                  "path": [
-                    "Grade"
-                  ]
+                  "path": "Grade"
                 },
                 "distinct": true
               }
@@ -630,9 +568,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Cod
       "keys": [
         {
           "$type": "member",
-          "path": [
-            "Region"
-          ]
+          "path": "Region"
         }
       ]
     },
@@ -646,9 +582,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Cod
               "$type": "node",
               "node": {
                 "$type": "member",
-                "path": [
-                  "Region"
-                ]
+                "path": "Region"
               }
             }
           },
@@ -661,9 +595,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Cod
                 "function": "Join",
                 "selector": {
                   "$type": "member",
-                  "path": [
-                    "Code"
-                  ]
+                  "path": "Code"
                 },
                 "separator": ","
               }

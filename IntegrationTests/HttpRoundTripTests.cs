@@ -353,7 +353,7 @@ public class HttpRoundTripTests
                   "predicate": {
                     "$type": "binary",
                     "op": "GreaterThan",
-                    "left": { "$type": "member", "path": ["Salary"] },
+                    "left": { "$type": "member", "path": "Salary" },
                     "right": { "$type": "const", "value": "100", "tag": "Decimal" }
                   }
                 }
@@ -779,7 +779,7 @@ public class HttpRoundTripTests
                   "predicate": {
                     "$type": "binary",
                     "op": "Equal",
-                    "left": { "$type": "member", "path": ["Amount"] },
+                    "left": { "$type": "member", "path": "Amount" },
                     "right": { "$type": "const", "value": "abc", "tag": "String" }
                   }
                 },

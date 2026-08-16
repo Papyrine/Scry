@@ -175,6 +175,40 @@ public class WireSerializationTests
         Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest("{ not json"));
 
     [Test]
+    public void PathNamingOneMemberTravelsAsAString()
+    {
+        var request = QueryRequest.Create("Employees", [new WhereOp(new MemberNode(["Active"]))]);
+
+        var json = ScryJson.Serialize(request);
+
+        Assert.That(json, Does.Contain("""{"$type":"member","path":"Active"}"""));
+    }
+
+    [Test]
+    public void PathNamingOneMemberAsAnArrayFailsClosed()
+    {
+        // The two spellings are alternatives, not synonyms: one member is a string and any other count
+        // is an array, so a path has a single encoding and two requests meaning the same thing cannot
+        // differ in bytes.
+        var json =
+            """
+            {
+              "version": 1,
+              "root": "Employees",
+              "pipeline": [
+                {
+                  "$type": "where",
+                  "predicate": { "$type": "member", "path": ["Active"] }
+                }
+              ]
+            }
+            """;
+
+        var exception = Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest(json));
+        Assert.That(exception!.Message, Does.Contain("written as a string"));
+    }
+
+    [Test]
     public void NewerResponseVersionFailsClosed()
     {
         var json =
