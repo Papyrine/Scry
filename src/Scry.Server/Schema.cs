@@ -29,6 +29,9 @@ sealed class Schema
     public bool TryGetType(Type type, [MaybeNullWhen(false)] out TypeMeta meta) =>
         types.TryGetValue(type, out meta);
 
+    /// <summary>Every allow-listed type, for a reader that has no path to resolve one by.</summary>
+    internal IEnumerable<TypeMeta> Types => types.Values;
+
     /// <summary>
     /// Maps an enum value name off the wire to its current name, translating one a client was
     /// generated against before the value was renamed. Unknown names are returned unchanged, so the

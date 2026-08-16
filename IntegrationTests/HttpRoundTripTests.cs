@@ -20,6 +20,7 @@ public class HttpRoundTripTests
     ScryQuery query = null!;
     SqlDatabase<Sample.Model.SampleContext> database = null!;
     static string? lastMethod;
+    static readonly List<string> methods = [];
 
     record EmployeeRow(string Name, Status Status, string? Manager, string Department);
 
@@ -66,6 +67,7 @@ public class HttpRoundTripTests
             async (context, next) =>
             {
                 lastMethod = context.Request.Method;
+                methods.Add(lastMethod);
                 await next();
             });
 
@@ -428,6 +430,132 @@ public class HttpRoundTripTests
 
         Assert.That(lastMethod, Is.EqualTo("GET"));
         Assert.That(rows, Is.Not.Empty);
+    }
+
+    // The rule a client applies is the one the server holds it to. A hand-written request that broke
+    // it — as a stale client's would — is refused, and refused in a way that says what to do instead.
+    [Test]
+    public async Task SensitiveConstantInAUrlIsRefused()
+    {
+        var encoded = QueryUrl.Encode(
+            query.Employee
+                .Where(_ => _.Password == "hunter2")
+                .Select(_ => new NameRow(_.Name))
+                .ToScryRequest());
+
+        using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
+        var error = ScryJson.TryDeserializeError(await response.Content.ReadAsByteArrayAsync());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+            Assert.That(error!.RequiresBody, Is.True);
+
+            // Says what to do, never which member — a message naming it would answer "which of these
+            // columns is the sensitive one?" for anyone who asked.
+            Assert.That(error.Error, Does.Not.Contain("Password"));
+            Assert.That(error.Error, Does.Contain("request body"));
+
+            // And the refusal is never the thing a cache keeps.
+            Assert.That(response.Headers.CacheControl!.NoStore, Is.True);
+        });
+    }
+
+    // The same query in a body is accepted, which is what makes the refusal above a retry rather than
+    // a failure.
+    [Test]
+    public async Task SensitiveConstantInABodyIsAccepted()
+    {
+        var rows = await query.Employee
+            .Where(_ => _.Password == "hunter2")
+            .Select(_ => new NameRow(_.Name))
+            .ToListAsync();
+
+        Assert.That(lastMethod, Is.EqualTo("POST"));
+        Assert.That(rows, Is.Empty);
+    }
+
+    // Returning a sensitive member puts nothing in the URL, so the query keeps it — and the response
+    // is marked unstorable, because `private, no-cache` would still write the rows to the caller's
+    // disk. This is the half no client can opt out of.
+    [Test]
+    public async Task ProjectingASensitiveMemberIsNotStorable()
+    {
+        var encoded = QueryUrl.Encode(
+            query.Employee
+                .Where(_ => _.Active)
+                .Select(_ => new PasswordRow(_.Password))
+                .ToScryRequest());
+
+        using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(response.Headers.CacheControl!.NoStore, Is.True);
+        });
+    }
+
+    // A query with no Select is answered with every member of the source, sensitive ones included, so
+    // it is unstorable for the same reason without having named one.
+    [Test]
+    public async Task DefaultProjectionOfASensitiveSourceIsNotStorable()
+    {
+        var encoded = QueryUrl.Encode(query.Employee.Where(_ => _.Active).ToScryRequest());
+
+        using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
+
+        Assert.That(response.Headers.CacheControl!.NoStore, Is.True);
+    }
+
+    [Test]
+    public async Task QueryTouchingNothingSensitiveStaysStorable()
+    {
+        var encoded = QueryUrl.Encode(
+            query.Employee
+                .Where(_ => _.Active)
+                .Select(_ => new NameRow(_.Name))
+                .ToScryRequest());
+
+        using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.Headers.CacheControl!.NoStore, Is.False);
+            Assert.That(response.Headers.CacheControl.Private, Is.True);
+        });
+    }
+
+    record PasswordRow(string Password);
+
+    // What a client generated before the member was marked does: it reads its own model, sees nothing
+    // sensitive, and asks in a URL. The refusal is one it can act on without a person reading it, so
+    // the query still returns — one round trip later, in a body — rather than failing.
+    [Test]
+    public async Task AClientThatDoesNotKnowRetriesInABody()
+    {
+        var stale = ScryClient.ForHttp(http, "/api/query");
+        methods.Clear();
+
+        var rows = await stale.Source<UnmarkedEmployee>("Employee", ["Id", "Name", "Password"])
+            .Where(_ => _.Password == "hunter2")
+            .Select(_ => new NameRow(_.Name))
+            .ToListAsync();
+
+        // Asked the way it believed it could, refused, and asked again the way it was told to — which
+        // is the whole of the self-healing, and is why this is two requests rather than one.
+        Assert.That(methods, Is.EqualTo(["GET", "POST"]));
+        Assert.That(rows, Is.Empty);
+    }
+
+    // Deliberately without [ScrySensitive], which is what makes it stand for a client generated before
+    // the model marked the member.
+    [ScryModel("Employee", "Id", "Name", "Password")]
+    public class UnmarkedEmployee
+    {
+        public int Id { get; init; }
+        public string Name { get; init; } = "";
+        public string Password { get; init; } = "";
     }
 
     // The URL is attacker-controlled like everything else on the wire, and fails closed: a parameter

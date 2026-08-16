@@ -497,10 +497,27 @@ public sealed class ScryClient
             response = await Send(url: false);
         }
 
+        // The server marks a member sensitive that this client was generated before, so it read the
+        // query as one that could travel in a URL and the server disagreed. The disagreement is worth
+        // one round trip rather than a failure: the same request in a body is the thing being asked
+        // for, and the flag says so in a way a client can act on without matching a message. The
+        // constant has already reached the log this refusal is about, which is why the answer is to
+        // stop the response being cached under that URL rather than to pretend nothing happened.
+        if (!response.IsSuccessStatusCode &&
+            response.RequestMessage?.Method == HttpMethod.Get &&
+            await IsRequiresBody(response, cancel))
+        {
+            response.Dispose();
+            response = await Send(url: false);
+        }
+
         using (response)
         {
             return await Read(response, call, cancel);
         }
+
+        static async Task<bool> IsRequiresBody(HttpResponseMessage response, Cancel cancel) =>
+            ScryJson.TryDeserializeError(await response.Content.ReadAsByteArrayAsync(cancel)) is {RequiresBody: true};
 
         async Task<HttpResponseMessage> Send(bool url)
         {

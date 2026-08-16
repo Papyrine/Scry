@@ -420,7 +420,8 @@ public static class ScryServiceExtensions
                 spill.Output,
                 spill,
                 collector,
-                context.RequestAborted);
+                context.RequestAborted,
+                url);
 
             // The writer declined this one, so the buffer it was handed is untouched — the envelope is
             // serialized into it rather than into a right-sized array that would be written once and
@@ -462,7 +463,7 @@ public static class ScryServiceExtensions
         }
         catch (ScryValidationException exception) when (!context.Response.HasStarted)
         {
-            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, exception.StaleClient);
+            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, exception.StaleClient, exception.RequiresBody);
         }
         catch (Exception) when (!context.Response.HasStarted && !context.RequestAborted.IsCancellationRequested)
         {
@@ -550,15 +551,25 @@ public static class ScryServiceExtensions
         headers[WireFormat.UrlLimitHeader] = options.QueryUrlLimit.ToString(CultureInfo.InvariantCulture);
     }
 
-    static Task WriteError(HttpContext context, int status, string message, bool staleClient)
+    static Task WriteError(
+        HttpContext context,
+        int status,
+        string message,
+        bool staleClient,
+        bool requiresBody = false)
     {
         var response = context.Response;
         response.StatusCode = status;
         response.ContentType = "application/json";
+
+        // A refusal is never the thing to keep: this one exists to be retried in a body, and the
+        // header set for the query it refused would otherwise let a cache answer for it.
+        response.Headers.CacheControl = "no-store";
         return response.WriteAsJsonAsync(
             new ScryError(message)
             {
-                StaleClient = staleClient
+                StaleClient = staleClient,
+                RequiresBody = requiresBody
             },
             ScryJson.Options,
             context.RequestAborted);

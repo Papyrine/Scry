@@ -10,12 +10,14 @@ public sealed class ScryProcessor
     QueryExecutor executor;
     Schema schema;
     ScryOptions options;
+    SensitiveSchema sensitive;
 
     internal ScryProcessor(Schema schema, ScryOptions options)
     {
         this.schema = schema;
         this.options = options;
         executor = new(schema, options);
+        sensitive = new(schema);
     }
 
     /// <summary>Describes the allow-listed query surface for tooling (the query explorer).</summary>
@@ -88,6 +90,9 @@ public sealed class ScryProcessor
         {
             var stale = new ScryValidationException($"{exception.Message} The request's schema stamp does not match this server's model, so the client was generated against a different model surface — regenerate the client.")
             {
+                // Kept through the rewrite: a stale client's refusal is still one it can act on
+                // immediately by re-sending in a body, whatever it does about regenerating.
+                RequiresBody = exception.RequiresBody,
                 StaleClient = true
             };
             recorder.Rejected(stale);
@@ -122,6 +127,49 @@ public sealed class ScryProcessor
         IHeaderDictionary responseHeaders) =>
         Execute(request, data, services, requestHeaders, responseHeaders, binary: null);
 
+
+    /// <summary>
+    /// Applies what the model marks <c>[Sensitive]</c> to this request: refusing it where a constant
+    /// compared against such a member arrived in a URL, and marking the response unstorable where one
+    /// is returned.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The two halves answer the two ways such a value escapes, and only the second is enforceable on
+    /// its own. A URL is logged by every hop before it reaches here, so refusing it cannot unsay the
+    /// first one — what refusing does is keep the answer from being cached under that URL, and make a
+    /// client that got the choice wrong say so out loud rather than keep getting it wrong. The client
+    /// reads the same rule off the same walk, so a request that reaches this is one whose sender was
+    /// stale, hand-written, or lying.
+    /// </para>
+    /// <para>
+    /// The message says only what to do. Naming the member would answer "which of these columns is the
+    /// sensitive one?" for anyone willing to ask, and the attachment endpoint already collapses its own
+    /// refusals for the same reason. What a developer needs is the analyzer, where the query is
+    /// written.
+    /// </para>
+    /// </remarks>
+    void ApplySensitivity(QueryRequest request, IHeaderDictionary responseHeaders, bool fromUrl)
+    {
+        var use = SensitiveWalk.Inspect(request, sensitive.IsSensitive);
+        if (fromUrl && use.InConstant)
+        {
+            throw new ScryValidationException("This query compares a value against a member the model marks sensitive, so it must be sent as a request body rather than in a URL.")
+            {
+                RequiresBody = true
+            };
+        }
+
+        // Not `private, no-cache`, which still stores: the rows are on the caller's disk either way and
+        // outlive the session that asked for them. `no-store` is the only directive that says do not
+        // keep this, and it is set here rather than at the endpoint because what is being returned is
+        // not known until the request has been read.
+        if (use.InProjection)
+        {
+            responseHeaders.CacheControl = "no-store";
+        }
+    }
+
     // The HTTP endpoints pass a collector so [BinaryTransfer] values leave as multipart parts; the
     // public overloads leave it null, so every non-HTTP consumer keeps today's inline base64.
     internal QueryResponse Execute(
@@ -130,16 +178,19 @@ public sealed class ScryProcessor
         IServiceProvider services,
         IHeaderDictionary requestHeaders,
         IHeaderDictionary responseHeaders,
-        BinaryPartCollector? binary)
+        BinaryPartCollector? binary,
+        bool fromUrl = false)
     {
         var drifted = request.Stamp is { } requestStamp &&
                       requestStamp != schema.Stamp;
         var recorder = QueryRecorder.Start(schema, request, services);
         try
         {
+            ApplySensitivity(request, responseHeaders, fromUrl);
             var scope = new CallScope(services, requestHeaders, responseHeaders)
             {
-                Binary = binary
+                Binary = binary,
+                FromUrl = fromUrl
             };
             var response = executor.Execute(request, data, scope) with
             {
@@ -171,6 +222,9 @@ public sealed class ScryProcessor
         {
             var stale = new ScryValidationException($"{exception.Message} The request's schema stamp does not match this server's model, so the client was generated against a different model surface — regenerate the client.")
             {
+                // Kept through the rewrite: a stale client's refusal is still one it can act on
+                // immediately by re-sending in a body, whatever it does about regenerating.
+                RequiresBody = exception.RequiresBody,
                 StaleClient = true
             };
             recorder.Rejected(stale);
@@ -208,13 +262,15 @@ public sealed class ScryProcessor
         IBufferWriter<byte> output,
         ResponseSpill? spill = null,
         BinaryPartCollector? binary = null,
-        Cancel cancel = default)
+        Cancel cancel = default,
+        bool fromUrl = false)
     {
         var drifted = request.Stamp is { } requestStamp &&
                       requestStamp != schema.Stamp;
         var recorder = QueryRecorder.Start(schema, request, services);
         try
         {
+            ApplySensitivity(request, responseHeaders, fromUrl);
             var scope = new CallScope(services, requestHeaders, responseHeaders)
             {
                 Binary = binary
@@ -241,6 +297,9 @@ public sealed class ScryProcessor
         {
             var stale = new ScryValidationException($"{exception.Message} The request's schema stamp does not match this server's model, so the client was generated against a different model surface — regenerate the client.")
             {
+                // Kept through the rewrite: a stale client's refusal is still one it can act on
+                // immediately by re-sending in a body, whatever it does about regenerating.
+                RequiresBody = exception.RequiresBody,
                 StaleClient = true
             };
             recorder.Rejected(stale);
@@ -623,6 +682,9 @@ public sealed class ScryProcessor
         {
             var stale = new ScryValidationException($"{exception.Message} The request's schema stamp does not match this server's model, so the client was generated against a different model surface — regenerate the client.")
             {
+                // Kept through the rewrite: a stale client's refusal is still one it can act on
+                // immediately by re-sending in a body, whatever it does about regenerating.
+                RequiresBody = exception.RequiresBody,
                 StaleClient = true
             };
             recorder.Rejected(stale);

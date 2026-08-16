@@ -252,7 +252,7 @@ await foreach (var row in query.Employee
     names.Add(row.Name);
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L175-L185' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientStream' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L177-L187' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientStream' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Neither side holds the whole result: the server never buffers the rows and the client yields each as it is read. That makes it the right terminal for a result too large to sit in memory comfortably, and unnecessary for one that is not — a small result costs an extra round-trip's worth of framing for nothing.
@@ -1166,7 +1166,7 @@ var rows = await employees
     .Select(_ => new NameRow(_.Name))
     .ToListAsync();
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L310-L335' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRuntimeComposition' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L312-L337' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRuntimeComposition' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Nothing executes client-side, so an operator appended inside an `if` is part of the captured expression like any other, and the terminal serializes whatever was built. No criteria DTO — property-name strings, an operator enum — is needed, and the request that leaves is indistinguishable from one written as a single chain.
