@@ -21,13 +21,32 @@ Three consequences worth stating plainly:
 
 **A URL is logged.** Everything in the request, including the constants a filter compares against, lands in the access log of every hop and in the `Referer` of whatever the page does next. A query whose constants are sensitive on their own — an account number, a person's id — is one to keep on `POST` regardless of length.
 
-Beyond that, the ETag is the app's own to wire up. What Delta supplies is the part that is actually hard — `GetLastTimeStamp`, one cheap read of the database's change marker, in whatever form the provider underneath offers it (the transaction log's end position on SQL Server, `pg_last_committed_xact` on PostgreSQL). Everything above that is a dozen lines of plumbing. Delta's own `UseDelta` covers an app's ordinary GET traffic — the host page, static assets, conventional endpoints — with one line and no client-side work.
 
-| Package | Use |
-| --- | --- |
-| [`Delta.EF`](https://nuget.org/packages/Delta.EF/) | `GetLastTimeStamp` on a `DbContext`. What the sample references. |
-| [`Delta`](https://nuget.org/packages/Delta/) | The same over a raw `DbConnection`, plus `UseDelta` for the app's GET traffic. |
-| [`Delta.SqlServer`](https://nuget.org/packages/Delta.SqlServer/) | Helpers for enabling and inspecting SQL Server change tracking. |
+## Which transport a query gets
+
+The client decides, per query, before it sends anything. Nothing about it is configurable: each branch below is a fact about the query or about what the server said, and the two escapes to `POST` are the two things a URL cannot carry safely.
+
+```mermaid
+flowchart TD
+    Q[A query to send] --> T{"Streamed, batched,<br/>or an attachment fetch?"}
+    T -- Yes --> P["POST<br/>no URL to identify it,<br/>so never cached, never conditional"]
+    T -- No --> S{"Compares a Sensitive member<br/>against a constant?"}
+    S -- Yes --> P
+    S -- No --> L{"Encoded query within<br/>the server budget?"}
+    L -- "No, or the budget is 0" --> P
+    L -- Yes --> G["GET endpoint?q=encoded"]
+    G --> R{What came back}
+    R -- "405 Method Not Allowed" --> Z[Budget to 0<br/>for the life of the client]
+    R -- "400 carrying RequiresBody" --> Y["The server marks something sensitive<br/>this client did not know about"]
+    Z --> P
+    Y --> P
+    R -- Anything else --> D[Answered]
+```
+
+The two retries are what a *stale* client does — one built before the budget dropped to `0`, or before a member was marked. Neither needs a redeploy to start behaving: the 405 and the flag each say what to do instead, and the query still returns, one round trip later. A client in step with its server takes neither branch.
+
+Both are bounded to one retry, and only ever from a URL to a body.
+
 
 
 ## What identifies a response
