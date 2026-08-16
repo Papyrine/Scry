@@ -60,6 +60,8 @@ A Scry deployment has two independent version axes, both documented in [Wire for
 
 The wire version is a hard compatibility gate. The schema stamp is softer: a mismatch is not an error, but it is a signal a deployed client can use to notice it has drifted from the server. This page covers the client-side API for that.
 
+What moves the stamp is what changes the surface a client was built against, or what a client is allowed to do with it. Adding, removing, renaming, or retyping an exposed member moves it, and so does [`[Sensitive]`](annotations.md#sensitive) — a client generated before that marking will keep asking in URLs and start being refused, and the stamp moving is what turns the refusal into a reported staleness rather than a mystery. [`[Obsolete]`](annotations.md#obsolete) does not move it: an obsolete member is still allowed, still validated, still executed, so hashing it would report every deployed client as stale over a note. Neither does the [URL budget](server.md#options), which describes the network in front of the server rather than the model.
+
 
 ## Detecting a stale client
 

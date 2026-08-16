@@ -494,6 +494,35 @@ It is also absent from the default projection — a query with no `Select` retur
 To warn clients before taking a member away, deprecate it first with [`[Obsolete]`](#obsolete).
 
 
+## `[Sensitive]`
+
+```cs
+[Sensitive]
+public string Password { get; set; } = "";
+```
+
+A member that stays queryable, but whose values must not be written into a log or kept by a cache. Where [`[QueryIgnore]`](#queryignore) hides a member outright, this one leaves it askable and refuses the two ways its value escapes.
+
+| | Rule | Why |
+| --- | --- | --- |
+| A constant compared against it | the query travels as a `POST` body | a URL is written to the access log of every hop it passes, and to the `Referer` of whatever the page does next |
+| It appears in the result | the response is sent `Cache-Control: no-store`, with no `ETag` | a storable response is written to the caller's disk, where it outlives the session that asked |
+
+Naming the member without either — ordering by it, comparing it against another column — changes nothing: no value travels in the URL and none comes back.
+
+The client picks the transport and the server holds it to that choice. A client generated before the marking reads its own model, sees nothing sensitive, and asks in a URL; the server refuses with a flag the client acts on, re-sending the same request in a body. One extra round trip, and no code change.
+
+Refusing cannot unsay the first leak — the URL was logged by every hop before it arrived — so what it buys is that the answer is never cached under that URL, and that a client getting it wrong says so. The second rule is the one that needs no cooperation at all.
+
+On a type it covers every member read off that type, including one reached by navigating into it from somewhere else, which is how a [`[QueryableComplex]`](#queryablecomplex) shape is marked.
+
+Marking a member **moves the [schema stamp](schema-versioning.md)**, unlike [`[Obsolete]`](#obsolete) and for the reason `[Obsolete]` does not: it changes what an already-deployed client is allowed to do, and moving the stamp is what makes that client report itself stale.
+
+Fields are not a target. Nothing in Scry reads one — the generator and the server both walk properties — so the attribute would read as protection while doing nothing.
+
+The message a refusal carries says only what to do, never which member is sensitive: naming it would answer "which of these columns is the sensitive one?" for anyone who asked. See [Caching](caching.md#the-sharp-edges).
+
+
 ## `[BinaryTransfer]`
 
 <!-- snippet: binaryTransferMember -->

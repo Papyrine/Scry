@@ -11,6 +11,8 @@ Assumed:
 - An attacker can read the generated client code, and can see any schema the [explorer](explorer.md) exposes.
 - An attacker will try to name types and properties that were never generated for them.
 
+Sensitivity is a separate axis from access. [`[Sensitive]`](annotations.md#sensitive) does not decide *whether* a member may be read — the allow-list and [row policies](policies.md) do that — it decides how the value may travel and whether the answer may be kept. A caller allowed to read a member is allowed to read it either way; what changes is that the value never reaches an access log and the response is never stored.
+
 Not assumed:
 
 - That the client-side type system constrains anything. It is a developer-experience feature, not a control.
