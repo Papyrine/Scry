@@ -96,7 +96,7 @@ public class ConditionalQueryTests
     }
 
     [Test]
-    public async Task RequestWithoutAFingerprintGetsNoEtag()
+    public async Task QueryInABodyGetsNoEtag()
     {
         var query = new ScryQuery(server.CreateScryClient());
         var body = ScryJson.SerializeToUtf8(Active(query, "Engineering").ToScryRequest());
@@ -105,8 +105,9 @@ public class ConditionalQueryTests
         using var content = new ByteArrayContent(body);
         content.Headers.ContentType = new("application/json");
 
-        // The same bytes ScryClient would have posted, minus the header it attaches to them. Nothing
-        // identifies the request, so it is answered exactly as it would be with no ETag wiring at all.
+        // The same query, asked as a body rather than as a URL — which is what a query too long for a
+        // URL does. Nothing identifies the request to a cache, so it is answered exactly as it would be
+        // with no ETag wiring at all.
         using var response = await http.PostAsync("/api/query", content);
 
         Assert.Multiple(() =>

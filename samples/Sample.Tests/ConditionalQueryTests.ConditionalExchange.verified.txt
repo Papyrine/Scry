@@ -7,9 +7,6 @@
       }
     },
     RequestMethod: GET,
-    RequestHeaders: {
-      Scry-Query-Hash: FQpYgYkzoqTi3MHy
-    },
     ResponseStatus: OK 200,
     ResponseHeaders: {
       Cache-Control: no-cache, private,
@@ -27,8 +24,7 @@
     },
     RequestMethod: GET,
     RequestHeaders: {
-      If-None-Match: {Scrubbed},
-      Scry-Query-Hash: FQpYgYkzoqTi3MHy
+      If-None-Match: {Scrubbed}
     },
     ResponseStatus: NotModified 304,
     ResponseHeaders: {

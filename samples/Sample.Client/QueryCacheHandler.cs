@@ -107,26 +107,15 @@ public sealed class QueryCacheHandler(QueryCache cache) :
             : null;
 
     /// <summary>
-    /// The cache key: the endpoint, and the fingerprint the client attached to the body it is sending.
-    /// Null for a request carrying no fingerprint, which is one this handler leaves alone.
+    /// The cache key: the URL, which is the query. Null for anything else — a query too long for a URL
+    /// travels as a body, and a body is part of no cache key here any more than it is anywhere else, so
+    /// this handler leaves it alone rather than inventing an identity for it.
     /// </summary>
-    static string? Key(HttpRequestMessage request)
-    {
-        // A query asked as a URL is identified by that URL — which is the whole point of asking as one,
-        // and is why the browser's own cache can answer a repeat without this handler existing. Kept
-        // here anyway: a non-browser host has no such cache, and the sample runs in both.
-        if (request.Method == HttpMethod.Get)
-        {
-            return request.RequestUri?.ToString();
-        }
-
-        if (request.Content is not { } content ||
-            !content.Headers.TryGetValues(WireFormat.QueryHashHeader, out var values) ||
-            values.FirstOrDefault() is not { } fingerprint)
-        {
-            return null;
-        }
-
-        return $"{request.RequestUri}|{fingerprint}";
-    }
+    /// <remarks>
+    /// That the URL is the key is the whole point of asking as one: it is also why a browser answers a
+    /// repeat out of its own cache without this handler existing at all. This exists for the hosts that
+    /// have no such cache — a console app, a service, the tests — and the sample runs in both.
+    /// </remarks>
+    static string? Key(HttpRequestMessage request) =>
+        request.Method == HttpMethod.Get ? request.RequestUri?.ToString() : null;
 }

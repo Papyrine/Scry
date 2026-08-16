@@ -38,9 +38,11 @@ The ETag has to change whenever the bytes it stands for would change. Three thin
 | --- | --- | --- |
 | Schema stamp | the queryable surface is redeployed | `ScryProcessor.SchemaStamp` |
 | Database timestamp | anything is written | Delta's `GetLastTimeStamp` |
-| Query fingerprint | a different question is asked | the `Scry-Query-Hash` request header |
+| Query fingerprint | a different question is asked | a hash of the `q` parameter |
 
-The fingerprint is already there: `ScryClient` hashes the exact bytes of every request it sends and carries the result in `Scry-Query-Hash` — part of [the wire contract](wire-format.md#versioning). It is a hash of the **bytes**, so two spellings of the same query miss rather than collide, which is the safe direction for a cache key: a miss costs a round trip, a collision would cost correctness.
+The fingerprint costs nothing to obtain: the encoded request in the URL *is* the query, so hashing it identifies the query exactly. It is hashed only for size — `q` runs to thousands of characters where an ETag wants a handful. Being a hash of the encoded **bytes** means two spellings of the same query miss rather than collide, which is the safe direction for a cache key: a miss costs a round trip, a collision would cost correctness.
+
+Nothing about it comes from the client's own account of what it sent. There is no header asserting a query hash and nothing that reads one — a client cannot describe its request as something other than what its URL says, because the URL is what the server hashed.
 
 Delta's own ETag opens with the entry assembly's last write time, so any redeployment invalidates every entry. The schema stamp is the narrower version of that idea — narrower because a redeployed binary that left the queryable surface alone keeps its caches warm. It also means a client whose model has drifted can never be answered 304: the stamp in its ETag is the old one, so the comparison fails and it gets a full response carrying the server's current stamp, which is what [drift detection](schema-versioning.md) reads.
 
@@ -60,10 +62,9 @@ public static IApplicationBuilder UseQueryEtag<TContext>(
         {
             var request = context.Request;
 
-            // No fingerprint, no cache key. A request without one — a raw one written by hand, or
-            // anything else routed through here — is answered exactly as it was before. A query
-            // asked as a URL always has one, whether or not the sender wrote the header: the
-            // encoded request is the same bytes the header would have fingerprinted.
+            // No URL-borne query, no cache key. A request without one — a query too long for a
+            // URL, a raw one written by hand, a health probe routed through the same path — is
+            // answered exactly as it was before this middleware existed.
             if (!request.Path.StartsWithSegments(path) ||
                 Fingerprint(request) is not { } fingerprint)
             {
@@ -99,7 +100,7 @@ public static IApplicationBuilder UseQueryEtag<TContext>(
             context.Response.Headers.CacheControl = "private, no-cache";
         });
 ```
-<sup><a href='/samples/Sample.Server/QueryEtag.cs#L42-L91' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryEtagMiddleware' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/QueryEtag.cs#L43-L91' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryEtagMiddleware' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Registered ahead of the endpoint, against the pattern `MapScry` was given — so it covers the query endpoint and the stream, batch, and attachment endpoints below it:
@@ -207,9 +208,6 @@ Two identical queries, recorded at the socket. Both are `GET`s carrying the quer
       }
     },
     RequestMethod: GET,
-    RequestHeaders: {
-      Scry-Query-Hash: FQpYgYkzoqTi3MHy
-    },
     ResponseStatus: OK 200,
     ResponseHeaders: {
       Cache-Control: no-cache, private,
@@ -227,18 +225,17 @@ Two identical queries, recorded at the socket. Both are `GET`s carrying the quer
     },
     RequestMethod: GET,
     RequestHeaders: {
-      If-None-Match: {Scrubbed},
-      Scry-Query-Hash: FQpYgYkzoqTi3MHy
+      If-None-Match: {Scrubbed}
     },
     ResponseStatus: NotModified 304,
     ResponseHeaders: {
-      Cache-Control: no-cache,
+      Cache-Control: no-cache, private,
       ETag: {Scrubbed}
     }
   }
 ]
 ```
-<sup><a href='/samples/Sample.Tests/ConditionalQueryTests.ConditionalExchange.verified.txt#L1-L39' title='Snippet source file'>snippet source</a> | <a href='#snippet-ConditionalQueryTests.ConditionalExchange.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Tests/ConditionalQueryTests.ConditionalExchange.verified.txt#L1-L35' title='Snippet source file'>snippet source</a> | <a href='#snippet-ConditionalQueryTests.ConditionalExchange.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The ETag values are scrubbed from that snapshot because they carry the database's log position. That the two match is what the 304 proves.
@@ -259,7 +256,7 @@ Delta can remove even that read: its `UseDelta` accepts `Cache-Control` request 
 
 **Anything a response varies by must be in the key.** A [row policy](policies.md) that scopes rows to a tenant, or an [attachment policy](attachments.md) that answers per principal, makes two identical queries produce different bytes for different callers. The query fingerprint cannot see that. Pass it as the `suffix` — the tenant id, the user id — or a client whose identity changes mid-session can be handed a 304 for rows the new identity was never shown. For the same reason, the client's store has to be cleared on sign-in and sign-out.
 
-**The fingerprint comes from the client.** It is never trusted as more than a cache key. A client that sends a wrong one can only be told that its own cached response is still current — a lie it told itself. It cannot read another client's response, and it cannot widen what it is allowed to see, because the ETag is only ever compared against a value this server minted. Never key a *shared* cache on it.
+**A query in a body is never answered conditionally.** The middleware keys on the URL, so a query too long to be one gets no ETag and no 304 — it is answered exactly as it would be with none of this wired up. That is not a gap so much as the same fact from the other side: what makes a response identifiable to a cache is the URL, and a body-borne query has none. An app that wants those cached too needs an identity of its own making, and should read the paragraph above before inventing one that the client supplies.
 
 **A URL response is cacheable, so the server says who may keep it.** Every answer to a `GET` carries `Cache-Control: private, no-cache`, and both halves are load-bearing. `private` is what keeps a CDN or a shared proxy out of it: rows are shaped by [policies](policies.md) that read the request, so the same URL answers differently for two principals, and a shared cache keyed on the URL alone would hand one of them the other's rows. `no-cache` keeps a stored copy revalidating rather than expiring on a guess — without a directive, a browser is free to invent a freshness lifetime and serve stale rows without asking. An app whose rows genuinely do not vary by caller can widen this above the endpoint; nothing else should.
 

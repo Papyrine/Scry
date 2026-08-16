@@ -57,34 +57,11 @@ public static class QueryUrl
 
     /// <summary>
     /// Encodes the serialized bytes of a request. Taken as bytes rather than as a request so a sender
-    /// that already has them — every sender that also fingerprints what it sends — encodes exactly what
-    /// it hashed, with no second serialization in between that could differ.
+    /// that already has them encodes exactly those, with no second serialization in between that could
+    /// differ from what it meant to send.
     /// </summary>
     public static string Encode(ReadOnlySpan<byte> utf8) =>
         Base64Url.EncodeToString(utf8);
-
-    /// <summary>
-    /// The fingerprint of the request a URL carries, or null when the parameter is absent or not
-    /// base64url. The same value the sender puts in <see cref="WireFormat.QueryHashHeader"/>, because it
-    /// is computed over the same bytes — so a cache keyed on one is keyed on the other, whichever way
-    /// the query arrived. Reads the encoding only; the request itself is never parsed here.
-    /// </summary>
-    public static string? TryFingerprint(string? encoded)
-    {
-        if (string.IsNullOrEmpty(encoded))
-        {
-            return null;
-        }
-
-        try
-        {
-            return QueryFingerprint.Compute(Base64Url.DecodeFromChars(encoded));
-        }
-        catch (FormatException)
-        {
-            return null;
-        }
-    }
 
     /// <summary>
     /// Decodes a <see cref="Parameter"/> value a client sent. Fails closed, as the rest of the wire

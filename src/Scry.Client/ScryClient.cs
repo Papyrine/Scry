@@ -75,11 +75,6 @@ public sealed class ScryClient
         {
             CharSet = "utf-8"
         };
-        // Fingerprints exactly what is being sent, which is free here — the bytes are in hand and about to
-        // be handed to the socket. Carried on the content rather than the message because it describes the
-        // entity, and because every sender below builds content where only some build a message of their
-        // own. The server treats it as advisory; see QueryFingerprint.
-        content.Headers.TryAddWithoutValidation(WireFormat.QueryHashHeader, QueryFingerprint.Compute(utf8));
         return content;
     }
 
@@ -439,14 +434,6 @@ public sealed class ScryClient
             {
                 Content = content
             };
-
-        // A GET has no content to carry the fingerprint, and the URL already identifies the request as
-        // exactly as well. Sent anyway, on the message, so a server reading it for telemetry sees the
-        // same value whichever way the query was asked.
-        if (content is null)
-        {
-            message.Headers.TryAddWithoutValidation(WireFormat.QueryHashHeader, QueryFingerprint.Compute(utf8));
-        }
 
         call?.Configure(message.Headers);
 

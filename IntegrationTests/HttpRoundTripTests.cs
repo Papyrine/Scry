@@ -792,30 +792,6 @@ public class HttpRoundTripTests
         Assert.That(stamp, Is.EqualTo(ScryQuery.SchemaStamp));
     }
 
-    // The client fingerprints the exact bytes it is about to send and carries the value in a header. The
-    // policy reads it off the same ScryPolicyContext a correlation header arrives on, so a match here
-    // proves it survived the round trip; comparing against the fingerprint of the serialized request
-    // proves both sides agree on what was hashed, rather than merely on some value being present.
-    [Test]
-    public async Task QueryFingerprintReachesTheServerOverHttp()
-    {
-        string? received = null;
-
-        var rows = await query.Order
-            .OnResponseHeaders(_ => received = _.GetValues("X-Scry-Hash").Single())
-            .Select(_ => new RegionRow(_.Region))
-            .ToListAsync();
-
-        var sent = QueryFingerprint.Compute(
-            ScryJson.SerializeToUtf8(
-                query.Order
-                    .Select(_ => new RegionRow(_.Region))
-                    .ToScryRequest()));
-
-        Assert.That(rows, Is.Not.Empty);
-        Assert.That(received, Is.EqualTo(sent));
-    }
-
     record RegionRow(string Region);
 }
 
@@ -830,10 +806,6 @@ public sealed class EchoHeaderPolicy :
     public IQueryable<Sample.Model.Order> Filter(IQueryable<Sample.Model.Order> source, ScryPolicyContext context)
     {
         context.ResponseHeaders["X-Scry-Echo"] = context.RequestHeaders["X-Correlation"];
-        // The client's fingerprint of the request body, echoed the same way — this is a test double for a
-        // server that would compare it against one of its own, not a suggestion that a policy should read
-        // it. Nothing here filters on it; the client controls its value.
-        context.ResponseHeaders["X-Scry-Hash"] = context.RequestHeaders[WireFormat.QueryHashHeader];
         return source;
     }
 }

@@ -7,9 +7,6 @@
       }
     },
     RequestMethod: GET,
-    RequestHeaders: {
-      Scry-Query-Hash: HMwByeX1kdeH2NYi
-    },
     ResponseStatus: OK 200,
     ResponseHeaders: {
       Cache-Control: no-cache, private,
