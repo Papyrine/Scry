@@ -1508,8 +1508,3 @@ paging without an ordering would be slicing an order the deduplication never def
 See [Server](server.md#error-handling) for the response bodies.
 
 A deployed client can also drift from the server's model over time — see [Schema versioning](schema-versioning.md) for detecting a stale client.
-
-
-## Future enhancements
-
-- Nothing outstanding. [`ToAsyncEnumerable`](#streaming-rows) was the last entry here; see the [coverage matrix](linq-coverage.md) for what LINQ surface is and is not supported.

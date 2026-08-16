@@ -233,12 +233,7 @@ Two more join them, each the same rewrite EF's own translators perform:
 
 ### Room to grow
 
-Translatable by EF, compatible with the wire model, and absent only because nothing has asked for it yet. Operators and shapes:
-
-| Surface | What adopting it would mean |
-| --- | --- |
-
-Functions with an EF translation ready to rebind onto:
+Translatable by EF, compatible with the wire model, and absent only because nothing has asked for it yet. Functions with an EF translation ready to rebind onto:
 
 | Group | Candidates |
 | --- | --- |

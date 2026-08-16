@@ -1,0 +1,22 @@
+﻿[
+  {
+    Query: client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Union(client.Source<OrderLine>("OrderLine").Select(_ => new OrderRow(_.Sku, _.Price))).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}},{"name":"Amount","value":{"$type":"node","node":{"$type":"member","path":["Amount"]}}}]}},{"$type":"set","kind":"Union","root":"OrderLine","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"member","path":["Sku"]}}},{"name":"Amount","value":{"$type":"node","node":{"$type":"member","path":["Price"]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Concat(client.Source<OrderLine>("OrderLine").Select(_ => new OrderRow(_.Sku, _.Price))).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}},{"name":"Amount","value":{"$type":"node","node":{"$type":"member","path":["Amount"]}}}]}},{"$type":"set","kind":"Concat","root":"OrderLine","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"member","path":["Sku"]}}},{"name":"Amount","value":{"$type":"node","node":{"$type":"member","path":["Price"]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Intersect(client.Source<OrderLine>("OrderLine").Select(_ => new OrderRow(_.Sku, _.Price))).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}},{"name":"Amount","value":{"$type":"node","node":{"$type":"member","path":["Amount"]}}}]}},{"$type":"set","kind":"Intersect","root":"OrderLine","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"member","path":["Sku"]}}},{"name":"Amount","value":{"$type":"node","node":{"$type":"member","path":["Price"]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Except(client.Source<OrderLine>("OrderLine").Select(_ => new OrderRow(_.Sku, _.Price))).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}},{"name":"Amount","value":{"$type":"node","node":{"$type":"member","path":["Amount"]}}}]}},{"$type":"set","kind":"Except","root":"OrderLine","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"member","path":["Sku"]}}},{"name":"Amount","value":{"$type":"node","node":{"$type":"member","path":["Price"]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Union(client.Source<Order>("Order").Where(_ => _.Grade == 'A').OrderBy(_ => _.Amount).Take(2).Select(_ => new OrderRow(_.Region, _.Amount))).ToListAsync(),
+    Wire: {"version":2,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}},{"name":"Amount","value":{"$type":"node","node":{"$type":"member","path":["Amount"]}}}]}},{"$type":"set","kind":"Union","root":"Order","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}},{"name":"Amount","value":{"$type":"node","node":{"$type":"member","path":["Amount"]}}}]},"operandOps":[{"$type":"where","predicate":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Grade"]},"right":{"$type":"const","value":"65","tag":"Int32"}}},{"$type":"orderBy","key":{"$type":"member","path":["Amount"]},"descending":false},{"$type":"take","count":2}]}]}
+  }
+]

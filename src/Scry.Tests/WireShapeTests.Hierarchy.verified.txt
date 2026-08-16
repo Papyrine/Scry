@@ -1,0 +1,10 @@
+﻿[
+  {
+    Query: client.Source<Asset>("Asset").OfType<Vehicle>().Select(_ => new {_.Name, _.Wheels}).ToListAsync(),
+    Wire: {"version":1,"root":"Asset","pipeline":[{"$type":"ofType","type":"Vehicle"},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Wheels","value":{"$type":"node","node":{"$type":"member","path":["Wheels"]}}}]}}]}
+  },
+  {
+    Query: client.Source<Asset>("Asset").OfType<Building>().Where(_ => _.Floors > 1).Select(_ => new {_.Name, _.Floors}).ToListAsync(),
+    Wire: {"version":1,"root":"Asset","pipeline":[{"$type":"ofType","type":"Building"},{"$type":"where","predicate":{"$type":"binary","op":"GreaterThan","left":{"$type":"member","path":["Floors"]},"right":{"$type":"const","value":"1","tag":"Int32"}}},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Floors","value":{"$type":"node","node":{"$type":"member","path":["Floors"]}}}]}}]}
+  }
+]

@@ -1,0 +1,38 @@
+﻿[
+  {
+    Query: client.Source<Employee>("Employee", ["Name", "Status"]).ToListAsync(),
+    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"node","node":{"$type":"member","path":["Status"]}}}]}}]}
+  },
+  {
+    Query: client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).ToListAsync(),
+    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}]}
+  },
+  {
+    Query: client.Source<Employee>("Employee").Select(_ => new {_.Name, Manager = _.Manager!.Name}).ToListAsync(),
+    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}}]}}]}
+  },
+  {
+    Query: client.Source<Employee>("Employee").Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name))).ToListAsync(),
+    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Department","value":{"$type":"nested","path":["Department"],"projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}}]}}]}
+  },
+  {
+    Query: client.Source<Employee>("Employee").Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name.ToUpper()))).ToListAsync(),
+    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Department","value":{"$type":"nested","path":["Department"],"projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"call","function":"StringToUpper","target":{"$type":"member","path":["Name"]},"arguments":[]}}}]}}}]}}]}
+  },
+  {
+    Query: client.Source<Employee>("Employee").Select(_ => new {_.Name, _.Address.City, _.Address.Country}).ToListAsync(),
+    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"City","value":{"$type":"node","node":{"$type":"member","path":["Address","City"]}}},{"name":"Country","value":{"$type":"node","node":{"$type":"member","path":["Address","Country"]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new OrderRow(_.Region == "North" ? "N" : "S", _.Amount - (_.Discount ?? 0m))).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"conditional","test":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Region"]},"right":{"$type":"const","value":"North","tag":"String"}},"ifTrue":{"$type":"const","value":"N","tag":"String"},"ifFalse":{"$type":"const","value":"S","tag":"String"}}}},{"name":"Amount","value":{"$type":"node","node":{"$type":"binary","op":"Subtract","left":{"$type":"member","path":["Amount"]},"right":{"$type":"binary","op":"Coalesce","left":{"$type":"member","path":["Discount"]},"right":{"$type":"const","value":"0","tag":"Decimal"}}}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {Label = $"{_.Region}-{_.Quantity}"}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"Label","value":{"$type":"node","node":{"$type":"call","function":"StringConcat","target":{"$type":"call","function":"StringConcat","target":{"$type":"member","path":["Region"]},"arguments":[{"$type":"const","value":"-","tag":"String"}]},"arguments":[{"$type":"member","path":["Quantity"]}]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {_.Region}).Distinct().ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}}]}},{"$type":"distinct"}]}
+  }
+]

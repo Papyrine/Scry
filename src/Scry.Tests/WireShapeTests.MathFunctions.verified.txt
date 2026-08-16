@@ -1,0 +1,78 @@
+﻿[
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = Math.Abs(_.Amount)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"MathAbs","target":{"$type":"member","path":["Amount"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = Math.Ceiling(_.Amount)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"MathCeiling","target":{"$type":"member","path":["Amount"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = Math.Floor(_.Amount)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"MathFloor","target":{"$type":"member","path":["Amount"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = Math.Round(_.Amount)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"MathRound","target":{"$type":"member","path":["Amount"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = Math.Round(_.Amount, 1)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"MathRound","target":{"$type":"member","path":["Amount"]},"arguments":[{"$type":"const","value":"1","tag":"Int32"}]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = Math.Truncate(_.Amount)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"MathTruncate","target":{"$type":"member","path":["Amount"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = Math.Sign(_.Amount - 100m)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"MathSign","target":{"$type":"binary","op":"Subtract","left":{"$type":"member","path":["Amount"]},"right":{"$type":"const","value":"100","tag":"Decimal"}},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = Math.Sqrt((double) _.Amount)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"MathSqrt","target":{"$type":"member","path":["Amount"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = Math.Pow((double) _.Amount, 2d)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"MathPow","target":{"$type":"member","path":["Amount"]},"arguments":[{"$type":"const","value":"2","tag":"Double"}]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = Math.Exp((double) _.Amount)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"MathExp","target":{"$type":"member","path":["Amount"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = Math.Log((double) _.Amount)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"MathLog","target":{"$type":"member","path":["Amount"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = Math.Log((double) _.Amount, 10d)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"MathLog","target":{"$type":"member","path":["Amount"]},"arguments":[{"$type":"const","value":"10","tag":"Double"}]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = Math.Log10((double) _.Amount)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"MathLog10","target":{"$type":"member","path":["Amount"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {A = Math.Sin((double) _.Amount), B = Math.Cos((double) _.Amount), C = Math.Tan((double) _.Amount)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"A","value":{"$type":"node","node":{"$type":"call","function":"MathSin","target":{"$type":"member","path":["Amount"]},"arguments":[]}}},{"name":"B","value":{"$type":"node","node":{"$type":"call","function":"MathCos","target":{"$type":"member","path":["Amount"]},"arguments":[]}}},{"name":"C","value":{"$type":"node","node":{"$type":"call","function":"MathTan","target":{"$type":"member","path":["Amount"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {A = Math.Asin((double) _.Amount), B = Math.Acos((double) _.Amount), C = Math.Atan((double) _.Amount)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"A","value":{"$type":"node","node":{"$type":"call","function":"MathAsin","target":{"$type":"member","path":["Amount"]},"arguments":[]}}},{"name":"B","value":{"$type":"node","node":{"$type":"call","function":"MathAcos","target":{"$type":"member","path":["Amount"]},"arguments":[]}}},{"name":"C","value":{"$type":"node","node":{"$type":"call","function":"MathAtan","target":{"$type":"member","path":["Amount"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = Math.Atan2((double) _.Amount, 2d)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"MathAtan2","target":{"$type":"member","path":["Amount"]},"arguments":[{"$type":"const","value":"2","tag":"Double"}]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {A = Math.Max(_.Amount, 100m), B = Math.Min(_.Amount, 100m)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"A","value":{"$type":"node","node":{"$type":"call","function":"MathMax","target":{"$type":"member","path":["Amount"]},"arguments":[{"$type":"const","value":"100","tag":"Decimal"}]}}},{"name":"B","value":{"$type":"node","node":{"$type":"call","function":"MathMin","target":{"$type":"member","path":["Amount"]},"arguments":[{"$type":"const","value":"100","tag":"Decimal"}]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = double.DegreesToRadians((double) _.Amount)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"MathDegreesToRadians","target":{"$type":"member","path":["Amount"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = double.RadiansToDegrees((double) _.Amount)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"MathRadiansToDegrees","target":{"$type":"member","path":["Amount"]},"arguments":[]}}}]}}]}
+  }
+]

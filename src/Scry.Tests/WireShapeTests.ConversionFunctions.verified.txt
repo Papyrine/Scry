@@ -1,0 +1,42 @@
+﻿[
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = int.Parse(_.Code)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"Int32From","target":{"$type":"member","path":["Code"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = long.Parse(_.Code)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"Int64From","target":{"$type":"member","path":["Code"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = decimal.Parse(_.Code)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"DecimalFrom","target":{"$type":"member","path":["Code"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = double.Parse(_.Code)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"DoubleFrom","target":{"$type":"member","path":["Code"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = short.Parse(_.Code)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"Int16From","target":{"$type":"member","path":["Code"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = byte.Parse(_.Code)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"ByteFrom","target":{"$type":"member","path":["Code"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = float.Parse(_.Code)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"SingleFrom","target":{"$type":"member","path":["Code"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = bool.Parse(_.Audited)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"BooleanFrom","target":{"$type":"member","path":["Audited"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = Convert.ToInt32(_.Code)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"Int32From","target":{"$type":"member","path":["Code"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = Convert.ToString(_.Amount)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"StringFrom","target":{"$type":"member","path":["Amount"]},"arguments":[]}}}]}}]}
+  }
+]

@@ -1,0 +1,90 @@
+﻿[
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = _.Region.Contains("or")}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"StringContains","target":{"$type":"member","path":["Region"]},"arguments":[{"$type":"const","value":"or","tag":"String"}]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = _.Region.StartsWith("No")}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"StringStartsWith","target":{"$type":"member","path":["Region"]},"arguments":[{"$type":"const","value":"No","tag":"String"}]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = _.Region.EndsWith("th")}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"StringEndsWith","target":{"$type":"member","path":["Region"]},"arguments":[{"$type":"const","value":"th","tag":"String"}]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {A = _.Region.StartsWith('N'), B = _.Region.EndsWith('h'), C = _.Region.Contains('o')}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"A","value":{"$type":"node","node":{"$type":"call","function":"StringStartsWith","target":{"$type":"member","path":["Region"]},"arguments":[{"$type":"const","value":"N","tag":"String"}]}}},{"name":"B","value":{"$type":"node","node":{"$type":"call","function":"StringEndsWith","target":{"$type":"member","path":["Region"]},"arguments":[{"$type":"const","value":"h","tag":"String"}]}}},{"name":"C","value":{"$type":"node","node":{"$type":"call","function":"StringContains","target":{"$type":"member","path":["Region"]},"arguments":[{"$type":"const","value":"o","tag":"String"}]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = _.Region.ToLower()}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"StringToLower","target":{"$type":"member","path":["Region"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = _.Region.ToUpper()}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"StringToUpper","target":{"$type":"member","path":["Region"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = string.IsNullOrEmpty(_.Region)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"StringIsNullOrEmpty","target":{"$type":"member","path":["Region"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = string.IsNullOrWhiteSpace(_.Region)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"StringIsNullOrWhiteSpace","target":{"$type":"member","path":["Region"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = _.Region.Length}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"StringLength","target":{"$type":"member","path":["Region"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = _.Region.Trim()}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"StringTrim","target":{"$type":"member","path":["Region"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = _.Region.TrimStart()}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"StringTrimStart","target":{"$type":"member","path":["Region"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = _.Region.TrimEnd()}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"StringTrimEnd","target":{"$type":"member","path":["Region"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = _.Region.Substring(1)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"StringSubstring","target":{"$type":"member","path":["Region"]},"arguments":[{"$type":"const","value":"1","tag":"Int32"}]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = _.Region.Substring(1, 2)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"StringSubstring","target":{"$type":"member","path":["Region"]},"arguments":[{"$type":"const","value":"1","tag":"Int32"},{"$type":"const","value":"2","tag":"Int32"}]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = _.Region.IndexOf('o')}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"StringIndexOf","target":{"$type":"member","path":["Region"]},"arguments":[{"$type":"const","value":"o","tag":"String"}]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = _.Region.Replace("o", "0")}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"StringReplace","target":{"$type":"member","path":["Region"]},"arguments":[{"$type":"const","value":"o","tag":"String"},{"$type":"const","value":"0","tag":"String"}]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = _.Region.FirstOrDefault()}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"StringFirst","target":{"$type":"member","path":["Region"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = _.Region.LastOrDefault()}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"StringLast","target":{"$type":"member","path":["Region"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = _.Amount.ToString()}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"StringFrom","target":{"$type":"member","path":["Amount"]},"arguments":[]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = _.Region.CompareTo("South")}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"CompareTo","target":{"$type":"member","path":["Region"]},"arguments":[{"$type":"const","value":"South","tag":"String"}]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = string.Compare(_.Region, "South")}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"CompareTo","target":{"$type":"member","path":["Region"]},"arguments":[{"$type":"const","value":"South","tag":"String"}]}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Select(_ => new {V = _.Amount.CompareTo(100m)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"CompareTo","target":{"$type":"member","path":["Amount"]},"arguments":[{"$type":"const","value":"100","tag":"Decimal"}]}}}]}}]}
+  }
+]

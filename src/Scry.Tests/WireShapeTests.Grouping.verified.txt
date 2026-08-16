@@ -1,0 +1,42 @@
+﻿[
+  {
+    Query: client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Total = _.Sum(o => o.Amount), Rows = _.Count()}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"groupBy","keys":[{"$type":"member","path":["Region"]}]},{"$type":"select","projection":{"members":[{"name":"Key","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}},{"name":"Total","value":{"$type":"node","node":{"$type":"aggregate","function":"Sum","selector":{"$type":"member","path":["Amount"]}}}},{"name":"Rows","value":{"$type":"node","node":{"$type":"aggregate","function":"Count"}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Low = _.Min(o => o.Amount), High = _.Max(o => o.Amount), Mean = _.Average(o => o.Amount)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"groupBy","keys":[{"$type":"member","path":["Region"]}]},{"$type":"select","projection":{"members":[{"name":"Key","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}},{"name":"Low","value":{"$type":"node","node":{"$type":"aggregate","function":"Min","selector":{"$type":"member","path":["Amount"]}}}},{"name":"High","value":{"$type":"node","node":{"$type":"aggregate","function":"Max","selector":{"$type":"member","path":["Amount"]}}}},{"name":"Mean","value":{"$type":"node","node":{"$type":"aggregate","function":"Average","selector":{"$type":"member","path":["Amount"]}}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").GroupBy(_ => new {_.Region, _.Grade}).Select(_ => new {_.Key.Region, _.Key.Grade, Total = _.Sum(o => o.Amount)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"groupBy","keys":[{"$type":"member","path":["Region"]},{"$type":"member","path":["Grade"]}]},{"$type":"select","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}},{"name":"Grade","value":{"$type":"node","node":{"$type":"member","path":["Grade"]}}},{"name":"Total","value":{"$type":"node","node":{"$type":"aggregate","function":"Sum","selector":{"$type":"member","path":["Amount"]}}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").GroupBy(_ => _.Placed.DayOfWeek).Select(_ => new {Day = _.Key, Count = _.Count()}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"groupBy","keys":[{"$type":"call","function":"DateDayOfWeek","target":{"$type":"member","path":["Placed"]},"arguments":[]}]},{"$type":"select","projection":{"members":[{"name":"Day","value":{"$type":"node","node":{"$type":"groupKey","index":0}}},{"name":"Count","value":{"$type":"node","node":{"$type":"aggregate","function":"Count"}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").GroupBy(_ => _.Region.ToUpper()).Select(_ => new {Region = _.Key, Total = _.Sum(o => o.Amount)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"groupBy","keys":[{"$type":"call","function":"StringToUpper","target":{"$type":"member","path":["Region"]},"arguments":[]}]},{"$type":"select","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"groupKey","index":0}}},{"name":"Total","value":{"$type":"node","node":{"$type":"aggregate","function":"Sum","selector":{"$type":"member","path":["Amount"]}}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").GroupBy(_ => _.Region, (region, orders) => new {Region = region, Total = orders.Sum(o => o.Amount)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"groupBy","keys":[{"$type":"member","path":["Region"]}]},{"$type":"select","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}},{"name":"Total","value":{"$type":"node","node":{"$type":"aggregate","function":"Sum","selector":{"$type":"member","path":["Amount"]}}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").GroupBy(_ => _.Region).Where(_ => _.Sum(o => o.Amount) > 100m && _.Key != "South").Select(_ => new {_.Key, Total = _.Sum(o => o.Amount)}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"groupBy","keys":[{"$type":"member","path":["Region"]}]},{"$type":"where","predicate":{"$type":"binary","op":"AndAlso","left":{"$type":"binary","op":"GreaterThan","left":{"$type":"aggregate","function":"Sum","selector":{"$type":"member","path":["Amount"]}},"right":{"$type":"const","value":"100","tag":"Decimal"}},"right":{"$type":"binary","op":"NotEqual","left":{"$type":"member","path":["Region"]},"right":{"$type":"const","value":"South","tag":"String"}}}},{"$type":"select","projection":{"members":[{"name":"Key","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}},{"name":"Total","value":{"$type":"node","node":{"$type":"aggregate","function":"Sum","selector":{"$type":"member","path":["Amount"]}}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Big = _.Where(o => o.Amount > 90m).Count(), Graded = _.Count(o => o.Grade == 'A')}).ToListAsync(),
+    Wire: {"version":2,"root":"Order","pipeline":[{"$type":"groupBy","keys":[{"$type":"member","path":["Region"]}]},{"$type":"select","projection":{"members":[{"name":"Key","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}},{"name":"Big","value":{"$type":"node","node":{"$type":"aggregate","function":"Count","predicate":{"$type":"binary","op":"GreaterThan","left":{"$type":"member","path":["Amount"]},"right":{"$type":"const","value":"90","tag":"Decimal"}}}}},{"name":"Graded","value":{"$type":"node","node":{"$type":"aggregate","function":"Count","predicate":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Grade"]},"right":{"$type":"const","value":"65","tag":"Int32"}}}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Grades = _.Select(o => o.Grade).Distinct().Count()}).ToListAsync(),
+    Wire: {"version":2,"root":"Order","pipeline":[{"$type":"groupBy","keys":[{"$type":"member","path":["Region"]}]},{"$type":"select","projection":{"members":[{"name":"Key","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}},{"name":"Grades","value":{"$type":"node","node":{"$type":"aggregate","function":"Count","selector":{"$type":"member","path":["Grade"]},"distinct":true}}}]}}]}
+  },
+  {
+    Query: client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Codes = string.Join(",", _.Select(o => o.Code))}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"groupBy","keys":[{"$type":"member","path":["Region"]}]},{"$type":"select","projection":{"members":[{"name":"Key","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}},{"name":"Codes","value":{"$type":"node","node":{"$type":"aggregate","function":"Join","selector":{"$type":"member","path":["Code"]},"separator":","}}}]}}]}
+  }
+]

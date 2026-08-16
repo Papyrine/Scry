@@ -1,0 +1,30 @@
+﻿[
+  {
+    Query: client.Source<Employee>("Employee").Join(client.Source<Department>("Department"), _ => _.DepartmentId, _ => _.Id, (employee, department) => new {Employee = employee.Name, Department = department.Name}).ToListAsync(),
+    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"join","root":"Department","kind":"Inner","outerKey":{"$type":"member","path":["DepartmentId"]},"innerKey":{"$type":"member","path":["Id"]},"result":[{"name":"Employee","side":"Outer","path":["Name"]},{"name":"Department","side":"Inner","path":["Name"]}]}]}
+  },
+  {
+    Query: client.Source<Employee>("Employee").Join(client.Source<Department>("Department").Where(_ => _.Name == "Engineering"), _ => _.DepartmentId, _ => _.Id, (employee, department) => new {Employee = employee.Name, Department = department.Name}).ToListAsync(),
+    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"join","root":"Department","kind":"Inner","outerKey":{"$type":"member","path":["DepartmentId"]},"innerKey":{"$type":"member","path":["Id"]},"innerPredicate":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Name"]},"right":{"$type":"const","value":"Engineering","tag":"String"}},"result":[{"name":"Employee","side":"Outer","path":["Name"]},{"name":"Department","side":"Inner","path":["Name"]}]}]}
+  },
+  {
+    Query: client.Source<Employee>("Employee").LeftJoin(client.Source<Department>("Department"), _ => _.DepartmentId, _ => _.Id, (employee, department) => new {Employee = employee.Name, Department = department!.Name}).ToListAsync(),
+    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"join","root":"Department","kind":"Left","outerKey":{"$type":"member","path":["DepartmentId"]},"innerKey":{"$type":"member","path":["Id"]},"result":[{"name":"Employee","side":"Outer","path":["Name"]},{"name":"Department","side":"Inner","path":["Name"]}]}]}
+  },
+  {
+    Query: client.Source<Employee>("Employee").RightJoin(client.Source<Ticket>("Ticket"), _ => _.Id, _ => _.Id, (employee, ticket) => new {Employee = employee!.Name, Ticket = ticket.Name}).ToListAsync(),
+    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"join","root":"Ticket","kind":"Right","outerKey":{"$type":"member","path":["Id"]},"innerKey":{"$type":"member","path":["Id"]},"result":[{"name":"Employee","side":"Outer","path":["Name"]},{"name":"Ticket","side":"Inner","path":["Name"]}]}]}
+  },
+  {
+    Query: client.Source<Department>("Department").GroupJoin(client.Source<Employee>("Employee"), _ => _.Id, _ => _.DepartmentId, (department, employees) => new {Department = department.Name, Size = employees.Count()}).ToListAsync(),
+    Wire: {"version":1,"root":"Department","pipeline":[{"$type":"join","root":"Employee","kind":"Group","outerKey":{"$type":"member","path":["Id"]},"innerKey":{"$type":"member","path":["DepartmentId"]},"result":[{"name":"Department","side":"Outer","path":["Name"]},{"name":"Size","side":"Inner","path":[],"aggregate":{"function":"Count"}}]}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Join(client.Source<Order>("Order"), _ => new {_.Region, _.Grade}, _ => new {_.Region, _.Grade}, (outer, inner) => new {outer.Code, Matched = inner.Amount}).ToListAsync(),
+    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"join","root":"Order","kind":"Inner","outerKey":{"$type":"compositeKey","parts":[{"$type":"member","path":["Region"]},{"$type":"member","path":["Grade"]}]},"innerKey":{"$type":"compositeKey","parts":[{"$type":"member","path":["Region"]},{"$type":"member","path":["Grade"]}]},"result":[{"name":"Code","side":"Outer","path":["Code"]},{"name":"Matched","side":"Inner","path":["Amount"]}]}]}
+  },
+  {
+    Query: client.Source<Order>("Order").Join(client.Source<Order>("Order").Where(_ => _.Grade == 'A').OrderByDescending(_ => _.Amount).Take(1), _ => _.Region, _ => _.Region, (outer, inner) => new {outer.Code, Matched = inner.Amount}).ToListAsync(),
+    Wire: {"version":2,"root":"Order","pipeline":[{"$type":"join","root":"Order","kind":"Inner","outerKey":{"$type":"member","path":["Region"]},"innerKey":{"$type":"member","path":["Region"]},"result":[{"name":"Code","side":"Outer","path":["Code"]},{"name":"Matched","side":"Inner","path":["Amount"]}],"innerOps":[{"$type":"where","predicate":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Grade"]},"right":{"$type":"const","value":"65","tag":"Int32"}}},{"$type":"orderBy","key":{"$type":"member","path":["Amount"]},"descending":true},{"$type":"take","count":1}]}]}
+  }
+]
