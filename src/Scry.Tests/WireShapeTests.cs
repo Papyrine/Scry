@@ -432,11 +432,26 @@ public partial class WireShapeTests
 
         Assert.That(sent, Is.Not.Null, text);
 
-        return new(Label(text), ScryJson.Serialize(sent!));
+        return new(Label(text), JsonSerializer.Serialize(sent, indented));
     }
 
+    /// <summary>
+    /// The wire's own options, indented. What travels is compact — a request is bytes on a socket, not
+    /// something anyone reads — but a compact request is one long line, and a diff over one long line
+    /// says only that it changed. These files are read as the specification, so they are written to be
+    /// read. Nothing but the whitespace between tokens differs: same resolver, same converters, so the
+    /// member order and the escaping are the ones that travel.
+    /// </summary>
+    static readonly JsonSerializerOptions indented = new(ScryJson.Options)
+    {
+        WriteIndented = true
+    };
+
+    // Written as one document rather than as a list of pairs: an indented request nested inside a
+    // rendered object would be indented against the wrong margin, and the request is the thing being
+    // read. Each entry is the query that produced it, then what it produced.
     static Task VerifyWire(Entry[] entries) =>
-        Verify(entries);
+        Verify(string.Join("\n\n", entries.Select(_ => $"{_.Query}\n{_.Wire}")));
 
     // The query as it was written, minus the parameter the corpus threads the client through on and
     // the line breaks C# needed to fit it. Taken from the call site rather than restated as a string,
@@ -459,9 +474,9 @@ public partial class WireShapeTests
     [GeneratedRegex(@"\s+")]
     private static partial Regex Whitespace();
 
-    [GeneratedRegex("\"\\$type\":\"([^\"]+)\"")]
+    [GeneratedRegex("\"\\$type\":\\s*\"([^\"]+)\"")]
     private static partial Regex Discriminator();
 
-    [GeneratedRegex("\"function\":\"([^\"]+)\"")]
+    [GeneratedRegex("\"function\":\\s*\"([^\"]+)\"")]
     private static partial Regex Function();
 }

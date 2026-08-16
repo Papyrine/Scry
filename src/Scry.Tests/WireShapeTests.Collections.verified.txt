@@ -1,42 +1,632 @@
-﻿[
-  {
-    Query: client.Source<Order>("Order").SelectMany(_ => _.Lines).Select(_ => new LineRow(_.Sku, _.Quantity)).ToListAsync(),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"selectMany","path":["Lines"]},{"$type":"select","projection":{"members":[{"name":"Sku","value":{"$type":"node","node":{"$type":"member","path":["Sku"]}}},{"name":"Quantity","value":{"$type":"node","node":{"$type":"member","path":["Quantity"]}}}]}}]}
-  },
-  {
-    Query: client.Source<Order>("Order").Where(_ => _.Region == "North").SelectMany(_ => _.Lines).Where(_ => _.Quantity > 1).Select(_ => new LineRow(_.Sku, _.Quantity)).ToListAsync(),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Region"]},"right":{"$type":"const","value":"North","tag":"String"}}},{"$type":"selectMany","path":["Lines"]},{"$type":"where","predicate":{"$type":"binary","op":"GreaterThan","left":{"$type":"member","path":["Quantity"]},"right":{"$type":"const","value":"1","tag":"Int32"}}},{"$type":"select","projection":{"members":[{"name":"Sku","value":{"$type":"node","node":{"$type":"member","path":["Sku"]}}},{"name":"Quantity","value":{"$type":"node","node":{"$type":"member","path":["Quantity"]}}}]}}]}
-  },
-  {
-    Query: client.Source<Order>("Order").Where(_ => _.Lines.Any(l => l.Price == 25m)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync(),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"where","predicate":{"$type":"subquery","path":["Lines"],"function":"Any","predicate":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Price"]},"right":{"$type":"const","value":"25","tag":"Decimal"}}}},{"$type":"select","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}},{"name":"Amount","value":{"$type":"node","node":{"$type":"member","path":["Amount"]}}}]}}]}
-  },
-  {
-    Query: client.Source<Order>("Order").Where(_ => _.Lines.All(l => l.Quantity > 0)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync(),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"where","predicate":{"$type":"subquery","path":["Lines"],"function":"All","predicate":{"$type":"binary","op":"GreaterThan","left":{"$type":"member","path":["Quantity"]},"right":{"$type":"const","value":"0","tag":"Int32"}}}},{"$type":"select","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}},{"name":"Amount","value":{"$type":"node","node":{"$type":"member","path":["Amount"]}}}]}}]}
-  },
-  {
-    Query: client.Source<Order>("Order").Select(_ => new {_.Region, Lines = _.Lines.Count(l => l.Quantity > 1)}).ToListAsync(),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}},{"name":"Lines","value":{"$type":"node","node":{"$type":"subquery","path":["Lines"],"function":"Count","predicate":{"$type":"binary","op":"GreaterThan","left":{"$type":"member","path":["Quantity"]},"right":{"$type":"const","value":"1","tag":"Int32"}}}}}]}}]}
-  },
-  {
-    Query: client.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Lines.Sum(l => l.Price), Mean = _.Lines.Average(l => l.Price), Low = _.Lines.Min(l => l.Price), High = _.Lines.Max(l => l.Price)}).ToListAsync(),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}},{"name":"Total","value":{"$type":"node","node":{"$type":"subquery","path":["Lines"],"function":"Sum","selector":{"$type":"member","path":["Price"]}}}},{"name":"Mean","value":{"$type":"node","node":{"$type":"subquery","path":["Lines"],"function":"Average","selector":{"$type":"member","path":["Price"]}}}},{"name":"Low","value":{"$type":"node","node":{"$type":"subquery","path":["Lines"],"function":"Min","selector":{"$type":"member","path":["Price"]}}}},{"name":"High","value":{"$type":"node","node":{"$type":"subquery","path":["Lines"],"function":"Max","selector":{"$type":"member","path":["Price"]}}}}]}}]}
-  },
-  {
-    Query: client.Source<Order>("Order").Where(_ => _.Tags.Contains("urgent")).Select(_ => new {_.Region}).ToListAsync(),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"where","predicate":{"$type":"subquery","path":["Tags"],"function":"Any","predicate":{"$type":"binary","op":"Equal","left":{"$type":"element"},"right":{"$type":"const","value":"urgent","tag":"String"}}}},{"$type":"select","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}}]}}]}
-  },
-  {
-    Query: client.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Scores.Sum(), High = _.Scores.Max()}).ToListAsync(),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}},{"name":"Total","value":{"$type":"node","node":{"$type":"subquery","path":["Scores"],"function":"Sum","selector":{"$type":"element"}}}},{"name":"High","value":{"$type":"node","node":{"$type":"subquery","path":["Scores"],"function":"Max","selector":{"$type":"element"}}}}]}}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").Where(_ => _.PreviousAddresses.Any(address => address.City == "Berlin")).Select(_ => new NameRow(_.Name)).ToListAsync(),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"subquery","path":["PreviousAddresses"],"function":"Any","predicate":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["City"]},"right":{"$type":"const","value":"Berlin","tag":"String"}}}},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").Where(_ => client.Source<Department>("Department").Where(_ => _.Name == "Sales").Select(_ => _.Id).Contains(_.DepartmentId)).Select(_ => new NameRow(_.Name)).ToListAsync(),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"inSource","value":{"$type":"member","path":["DepartmentId"]},"root":"Department","selector":{"$type":"member","path":["Id"]},"predicate":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Name"]},"right":{"$type":"const","value":"Sales","tag":"String"}}}},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}]}
-  }
-]
+﻿client.Source<Order>("Order").SelectMany(_ => _.Lines).Select(_ => new LineRow(_.Sku, _.Quantity)).ToListAsync()
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "selectMany",
+      "path": [
+        "Lines"
+      ]
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Sku",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Sku"
+                ]
+              }
+            }
+          },
+          {
+            "name": "Quantity",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Quantity"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Order>("Order").Where(_ => _.Region == "North").SelectMany(_ => _.Lines).Where(_ => _.Quantity > 1).Select(_ => new LineRow(_.Sku, _.Quantity)).ToListAsync()
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "where",
+      "predicate": {
+        "$type": "binary",
+        "op": "Equal",
+        "left": {
+          "$type": "member",
+          "path": [
+            "Region"
+          ]
+        },
+        "right": {
+          "$type": "const",
+          "value": "North",
+          "tag": "String"
+        }
+      }
+    },
+    {
+      "$type": "selectMany",
+      "path": [
+        "Lines"
+      ]
+    },
+    {
+      "$type": "where",
+      "predicate": {
+        "$type": "binary",
+        "op": "GreaterThan",
+        "left": {
+          "$type": "member",
+          "path": [
+            "Quantity"
+          ]
+        },
+        "right": {
+          "$type": "const",
+          "value": "1",
+          "tag": "Int32"
+        }
+      }
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Sku",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Sku"
+                ]
+              }
+            }
+          },
+          {
+            "name": "Quantity",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Quantity"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Order>("Order").Where(_ => _.Lines.Any(l => l.Price == 25m)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "where",
+      "predicate": {
+        "$type": "subquery",
+        "path": [
+          "Lines"
+        ],
+        "function": "Any",
+        "predicate": {
+          "$type": "binary",
+          "op": "Equal",
+          "left": {
+            "$type": "member",
+            "path": [
+              "Price"
+            ]
+          },
+          "right": {
+            "$type": "const",
+            "value": "25",
+            "tag": "Decimal"
+          }
+        }
+      }
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Region",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Region"
+                ]
+              }
+            }
+          },
+          {
+            "name": "Amount",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Amount"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Order>("Order").Where(_ => _.Lines.All(l => l.Quantity > 0)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "where",
+      "predicate": {
+        "$type": "subquery",
+        "path": [
+          "Lines"
+        ],
+        "function": "All",
+        "predicate": {
+          "$type": "binary",
+          "op": "GreaterThan",
+          "left": {
+            "$type": "member",
+            "path": [
+              "Quantity"
+            ]
+          },
+          "right": {
+            "$type": "const",
+            "value": "0",
+            "tag": "Int32"
+          }
+        }
+      }
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Region",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Region"
+                ]
+              }
+            }
+          },
+          {
+            "name": "Amount",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Amount"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Order>("Order").Select(_ => new {_.Region, Lines = _.Lines.Count(l => l.Quantity > 1)}).ToListAsync()
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Region",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Region"
+                ]
+              }
+            }
+          },
+          {
+            "name": "Lines",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "subquery",
+                "path": [
+                  "Lines"
+                ],
+                "function": "Count",
+                "predicate": {
+                  "$type": "binary",
+                  "op": "GreaterThan",
+                  "left": {
+                    "$type": "member",
+                    "path": [
+                      "Quantity"
+                    ]
+                  },
+                  "right": {
+                    "$type": "const",
+                    "value": "1",
+                    "tag": "Int32"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Lines.Sum(l => l.Price), Mean = _.Lines.Average(l => l.Price), Low = _.Lines.Min(l => l.Price), High = _.Lines.Max(l => l.Price)}).ToListAsync()
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Region",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Region"
+                ]
+              }
+            }
+          },
+          {
+            "name": "Total",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "subquery",
+                "path": [
+                  "Lines"
+                ],
+                "function": "Sum",
+                "selector": {
+                  "$type": "member",
+                  "path": [
+                    "Price"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "name": "Mean",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "subquery",
+                "path": [
+                  "Lines"
+                ],
+                "function": "Average",
+                "selector": {
+                  "$type": "member",
+                  "path": [
+                    "Price"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "name": "Low",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "subquery",
+                "path": [
+                  "Lines"
+                ],
+                "function": "Min",
+                "selector": {
+                  "$type": "member",
+                  "path": [
+                    "Price"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "name": "High",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "subquery",
+                "path": [
+                  "Lines"
+                ],
+                "function": "Max",
+                "selector": {
+                  "$type": "member",
+                  "path": [
+                    "Price"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Order>("Order").Where(_ => _.Tags.Contains("urgent")).Select(_ => new {_.Region}).ToListAsync()
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "where",
+      "predicate": {
+        "$type": "subquery",
+        "path": [
+          "Tags"
+        ],
+        "function": "Any",
+        "predicate": {
+          "$type": "binary",
+          "op": "Equal",
+          "left": {
+            "$type": "element"
+          },
+          "right": {
+            "$type": "const",
+            "value": "urgent",
+            "tag": "String"
+          }
+        }
+      }
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Region",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Region"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Scores.Sum(), High = _.Scores.Max()}).ToListAsync()
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Region",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Region"
+                ]
+              }
+            }
+          },
+          {
+            "name": "Total",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "subquery",
+                "path": [
+                  "Scores"
+                ],
+                "function": "Sum",
+                "selector": {
+                  "$type": "element"
+                }
+              }
+            }
+          },
+          {
+            "name": "High",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "subquery",
+                "path": [
+                  "Scores"
+                ],
+                "function": "Max",
+                "selector": {
+                  "$type": "element"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").Where(_ => _.PreviousAddresses.Any(address => address.City == "Berlin")).Select(_ => new NameRow(_.Name)).ToListAsync()
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "where",
+      "predicate": {
+        "$type": "subquery",
+        "path": [
+          "PreviousAddresses"
+        ],
+        "function": "Any",
+        "predicate": {
+          "$type": "binary",
+          "op": "Equal",
+          "left": {
+            "$type": "member",
+            "path": [
+              "City"
+            ]
+          },
+          "right": {
+            "$type": "const",
+            "value": "Berlin",
+            "tag": "String"
+          }
+        }
+      }
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Name",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Name"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").Where(_ => client.Source<Department>("Department").Where(_ => _.Name == "Sales").Select(_ => _.Id).Contains(_.DepartmentId)).Select(_ => new NameRow(_.Name)).ToListAsync()
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "where",
+      "predicate": {
+        "$type": "inSource",
+        "value": {
+          "$type": "member",
+          "path": [
+            "DepartmentId"
+          ]
+        },
+        "root": "Department",
+        "selector": {
+          "$type": "member",
+          "path": [
+            "Id"
+          ]
+        },
+        "predicate": {
+          "$type": "binary",
+          "op": "Equal",
+          "left": {
+            "$type": "member",
+            "path": [
+              "Name"
+            ]
+          },
+          "right": {
+            "$type": "const",
+            "value": "Sales",
+            "tag": "String"
+          }
+        }
+      }
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Name",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Name"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,94 +1,605 @@
-﻿[
-  {
-    Query: client.Source<Employee>("Employee").CountAsync(),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"count"}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").CountAsync(_ => _.Active),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"count","predicate":{"$type":"member","path":["Active"]}}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").LongCountAsync(),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"longCount"}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").LongCountAsync(_ => _.Active),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"longCount","predicate":{"$type":"member","path":["Active"]}}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").AnyAsync(),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"any"}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").AnyAsync(_ => _.Active),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"any","predicate":{"$type":"member","path":["Active"]}}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").AllAsync(_ => _.Active),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"all","predicate":{"$type":"member","path":["Active"]}}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).FirstAsync(),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}},{"$type":"first","orDefault":false}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).FirstOrDefaultAsync(_ => _.Name == "Alice"),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}},{"$type":"first","orDefault":true,"predicate":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Name"]},"right":{"$type":"const","value":"Alice","tag":"String"}}}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).SingleAsync(),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}},{"$type":"single","orDefault":false}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).SingleOrDefaultAsync(),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}},{"$type":"single","orDefault":true}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).LastAsync(),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}},{"$type":"last","orDefault":false}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).LastOrDefaultAsync(),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}},{"$type":"last","orDefault":true}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ElementAtAsync(1),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}},{"$type":"skip","count":1},{"$type":"first","orDefault":false}]}
-  },
-  {
-    Query: client.Source<Order>("Order").MaxByAsync(_ => _.Amount),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"orderBy","key":{"$type":"member","path":["Amount"]},"descending":true},{"$type":"first","orDefault":false}]}
-  },
-  {
-    Query: client.Source<Order>("Order").MinByAsync(_ => _.Amount),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"orderBy","key":{"$type":"member","path":["Amount"]},"descending":false},{"$type":"first","orDefault":false}]}
-  },
-  {
-    Query: client.Source<Order>("Order").SumAsync(_ => _.Amount),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"aggregate","function":"Sum","selector":{"$type":"member","path":["Amount"]}}]}
-  },
-  {
-    Query: client.Source<Order>("Order").AverageAsync(_ => _.Amount),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"aggregate","function":"Average","selector":{"$type":"member","path":["Amount"]}}]}
-  },
-  {
-    Query: client.Source<Order>("Order").MinAsync(_ => _.Amount),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"aggregate","function":"Min","selector":{"$type":"member","path":["Amount"]}}]}
-  },
-  {
-    Query: client.Source<Order>("Order").MaxAsync(_ => _.Amount),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"aggregate","function":"Max","selector":{"$type":"member","path":["Amount"]}}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToPageAsync(),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}},{"$type":"page"}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToPageAsync(2),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}},{"$type":"page","size":2}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToPageAsync(2, "eyJrIjpbXX0.c2ln"),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}},{"$type":"page","size":2,"cursor":"{scrubbed cursor}"}]}
-  }
-]
+﻿client.Source<Employee>("Employee").CountAsync()
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "count"
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").CountAsync(_ => _.Active)
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "count",
+      "predicate": {
+        "$type": "member",
+        "path": [
+          "Active"
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").LongCountAsync()
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "longCount"
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").LongCountAsync(_ => _.Active)
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "longCount",
+      "predicate": {
+        "$type": "member",
+        "path": [
+          "Active"
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").AnyAsync()
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "any"
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").AnyAsync(_ => _.Active)
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "any",
+      "predicate": {
+        "$type": "member",
+        "path": [
+          "Active"
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").AllAsync(_ => _.Active)
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "all",
+      "predicate": {
+        "$type": "member",
+        "path": [
+          "Active"
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).FirstAsync()
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Name",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Name"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "$type": "first",
+      "orDefault": false
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).FirstOrDefaultAsync(_ => _.Name == "Alice")
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Name",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Name"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "$type": "first",
+      "orDefault": true,
+      "predicate": {
+        "$type": "binary",
+        "op": "Equal",
+        "left": {
+          "$type": "member",
+          "path": [
+            "Name"
+          ]
+        },
+        "right": {
+          "$type": "const",
+          "value": "Alice",
+          "tag": "String"
+        }
+      }
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).SingleAsync()
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Name",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Name"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "$type": "single",
+      "orDefault": false
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).SingleOrDefaultAsync()
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Name",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Name"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "$type": "single",
+      "orDefault": true
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).LastAsync()
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "orderBy",
+      "key": {
+        "$type": "member",
+        "path": [
+          "Name"
+        ]
+      },
+      "descending": false
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Name",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Name"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "$type": "last",
+      "orDefault": false
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).LastOrDefaultAsync()
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "orderBy",
+      "key": {
+        "$type": "member",
+        "path": [
+          "Name"
+        ]
+      },
+      "descending": false
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Name",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Name"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "$type": "last",
+      "orDefault": true
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ElementAtAsync(1)
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "orderBy",
+      "key": {
+        "$type": "member",
+        "path": [
+          "Name"
+        ]
+      },
+      "descending": false
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Name",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Name"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "$type": "skip",
+      "count": 1
+    },
+    {
+      "$type": "first",
+      "orDefault": false
+    }
+  ]
+}
+
+client.Source<Order>("Order").MaxByAsync(_ => _.Amount)
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "orderBy",
+      "key": {
+        "$type": "member",
+        "path": [
+          "Amount"
+        ]
+      },
+      "descending": true
+    },
+    {
+      "$type": "first",
+      "orDefault": false
+    }
+  ]
+}
+
+client.Source<Order>("Order").MinByAsync(_ => _.Amount)
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "orderBy",
+      "key": {
+        "$type": "member",
+        "path": [
+          "Amount"
+        ]
+      },
+      "descending": false
+    },
+    {
+      "$type": "first",
+      "orDefault": false
+    }
+  ]
+}
+
+client.Source<Order>("Order").SumAsync(_ => _.Amount)
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "aggregate",
+      "function": "Sum",
+      "selector": {
+        "$type": "member",
+        "path": [
+          "Amount"
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Order>("Order").AverageAsync(_ => _.Amount)
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "aggregate",
+      "function": "Average",
+      "selector": {
+        "$type": "member",
+        "path": [
+          "Amount"
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Order>("Order").MinAsync(_ => _.Amount)
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "aggregate",
+      "function": "Min",
+      "selector": {
+        "$type": "member",
+        "path": [
+          "Amount"
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Order>("Order").MaxAsync(_ => _.Amount)
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "aggregate",
+      "function": "Max",
+      "selector": {
+        "$type": "member",
+        "path": [
+          "Amount"
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToPageAsync()
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "orderBy",
+      "key": {
+        "$type": "member",
+        "path": [
+          "Name"
+        ]
+      },
+      "descending": false
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Name",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Name"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "$type": "page"
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToPageAsync(2)
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "orderBy",
+      "key": {
+        "$type": "member",
+        "path": [
+          "Name"
+        ]
+      },
+      "descending": false
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Name",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Name"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "$type": "page",
+      "size": 2
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToPageAsync(2, "eyJrIjpbXX0.c2ln")
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "orderBy",
+      "key": {
+        "$type": "member",
+        "path": [
+          "Name"
+        ]
+      },
+      "descending": false
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Name",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Name"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "$type": "page",
+      "size": 2,
+      "cursor": "{scrubbed cursor}"
+    }
+  ]
+}

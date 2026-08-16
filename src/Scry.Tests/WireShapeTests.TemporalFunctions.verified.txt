@@ -1,54 +1,827 @@
-﻿[
-  {
-    Query: client.Source<Order>("Order").Select(_ => new {_.Placed.Year, _.Placed.Month, _.Placed.Day, _.Placed.DayOfYear}).ToListAsync(),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"Year","value":{"$type":"node","node":{"$type":"call","function":"DateYear","target":{"$type":"member","path":["Placed"]},"arguments":[]}}},{"name":"Month","value":{"$type":"node","node":{"$type":"call","function":"DateMonth","target":{"$type":"member","path":["Placed"]},"arguments":[]}}},{"name":"Day","value":{"$type":"node","node":{"$type":"call","function":"DateDay","target":{"$type":"member","path":["Placed"]},"arguments":[]}}},{"name":"DayOfYear","value":{"$type":"node","node":{"$type":"call","function":"DateDayOfYear","target":{"$type":"member","path":["Placed"]},"arguments":[]}}}]}}]}
-  },
-  {
-    Query: client.Source<Order>("Order").Select(_ => new {_.Placed.Hour, _.Placed.Minute, _.Placed.Second, _.Placed.Millisecond}).ToListAsync(),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"Hour","value":{"$type":"node","node":{"$type":"call","function":"DateHour","target":{"$type":"member","path":["Placed"]},"arguments":[]}}},{"name":"Minute","value":{"$type":"node","node":{"$type":"call","function":"DateMinute","target":{"$type":"member","path":["Placed"]},"arguments":[]}}},{"name":"Second","value":{"$type":"node","node":{"$type":"call","function":"DateSecond","target":{"$type":"member","path":["Placed"]},"arguments":[]}}},{"name":"Millisecond","value":{"$type":"node","node":{"$type":"call","function":"DateMillisecond","target":{"$type":"member","path":["Placed"]},"arguments":[]}}}]}}]}
-  },
-  {
-    Query: client.Source<Order>("Order").Select(_ => new {_.Placed.Microsecond, _.Placed.Nanosecond}).ToListAsync(),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"Microsecond","value":{"$type":"node","node":{"$type":"call","function":"DateMicrosecond","target":{"$type":"member","path":["Placed"]},"arguments":[]}}},{"name":"Nanosecond","value":{"$type":"node","node":{"$type":"call","function":"DateNanosecond","target":{"$type":"member","path":["Placed"]},"arguments":[]}}}]}}]}
-  },
-  {
-    Query: client.Source<Order>("Order").Select(_ => new {_.Placed.DayOfWeek, _.Placed.Date, _.Placed.TimeOfDay}).ToListAsync(),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"DayOfWeek","value":{"$type":"node","node":{"$type":"call","function":"DateDayOfWeek","target":{"$type":"member","path":["Placed"]},"arguments":[]}}},{"name":"Date","value":{"$type":"node","node":{"$type":"call","function":"DateDate","target":{"$type":"member","path":["Placed"]},"arguments":[]}}},{"name":"TimeOfDay","value":{"$type":"node","node":{"$type":"call","function":"DateTimeOfDay","target":{"$type":"member","path":["Placed"]},"arguments":[]}}}]}}]}
-  },
-  {
-    Query: client.Source<Shift>("Shift").Select(_ => new {_.Day.DayNumber}).ToListAsync(),
-    Wire: {"version":1,"root":"Shift","pipeline":[{"$type":"select","projection":{"members":[{"name":"DayNumber","value":{"$type":"node","node":{"$type":"call","function":"DateDayNumber","target":{"$type":"member","path":["Day"]},"arguments":[]}}}]}}]}
-  },
-  {
-    Query: client.Source<Shift>("Shift").Select(_ => new {_.Duration.Hours, _.Duration.Minutes, _.Duration.Seconds}).ToListAsync(),
-    Wire: {"version":1,"root":"Shift","pipeline":[{"$type":"select","projection":{"members":[{"name":"Hours","value":{"$type":"node","node":{"$type":"call","function":"TimeSpanHours","target":{"$type":"member","path":["Duration"]},"arguments":[]}}},{"name":"Minutes","value":{"$type":"node","node":{"$type":"call","function":"TimeSpanMinutes","target":{"$type":"member","path":["Duration"]},"arguments":[]}}},{"name":"Seconds","value":{"$type":"node","node":{"$type":"call","function":"TimeSpanSeconds","target":{"$type":"member","path":["Duration"]},"arguments":[]}}}]}}]}
-  },
-  {
-    Query: client.Source<Shift>("Shift").Select(_ => new {_.Duration.Milliseconds, _.Duration.Microseconds, _.Duration.Nanoseconds}).ToListAsync(),
-    Wire: {"version":1,"root":"Shift","pipeline":[{"$type":"select","projection":{"members":[{"name":"Milliseconds","value":{"$type":"node","node":{"$type":"call","function":"TimeSpanMilliseconds","target":{"$type":"member","path":["Duration"]},"arguments":[]}}},{"name":"Microseconds","value":{"$type":"node","node":{"$type":"call","function":"TimeSpanMicroseconds","target":{"$type":"member","path":["Duration"]},"arguments":[]}}},{"name":"Nanoseconds","value":{"$type":"node","node":{"$type":"call","function":"TimeSpanNanoseconds","target":{"$type":"member","path":["Duration"]},"arguments":[]}}}]}}]}
-  },
-  {
-    Query: client.Source<Order>("Order").Select(_ => new {D = Date.FromDateTime(_.Placed), T = Time.FromDateTime(_.Placed)}).ToListAsync(),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"D","value":{"$type":"node","node":{"$type":"call","function":"DateOnlyFromDateTime","target":{"$type":"member","path":["Placed"]},"arguments":[]}}},{"name":"T","value":{"$type":"node","node":{"$type":"call","function":"TimeOnlyFromDateTime","target":{"$type":"member","path":["Placed"]},"arguments":[]}}}]}}]}
-  },
-  {
-    Query: client.Source<Shift>("Shift").Select(_ => new {T = Time.FromTimeSpan(_.Duration), Stamp = _.Day.ToDateTime(_.Start)}).ToListAsync(),
-    Wire: {"version":1,"root":"Shift","pipeline":[{"$type":"select","projection":{"members":[{"name":"T","value":{"$type":"node","node":{"$type":"call","function":"TimeOnlyFromTimeSpan","target":{"$type":"member","path":["Duration"]},"arguments":[]}}},{"name":"Stamp","value":{"$type":"node","node":{"$type":"call","function":"DateTimeFromDateAndTime","target":{"$type":"member","path":["Day"]},"arguments":[{"$type":"member","path":["Start"]}]}}}]}}]}
-  },
-  {
-    Query: client.Source<Shift>("Shift").Select(_ => new {S = _.Stamped.ToUnixTimeSeconds(), Ms = _.Stamped.ToUnixTimeMilliseconds()}).ToListAsync(),
-    Wire: {"version":1,"root":"Shift","pipeline":[{"$type":"select","projection":{"members":[{"name":"S","value":{"$type":"node","node":{"$type":"call","function":"UnixSecondsFromOffset","target":{"$type":"member","path":["Stamped"]},"arguments":[]}}},{"name":"Ms","value":{"$type":"node","node":{"$type":"call","function":"UnixMillisecondsFromOffset","target":{"$type":"member","path":["Stamped"]},"arguments":[]}}}]}}]}
-  },
-  {
-    Query: client.Source<Order>("Order").Select(_ => new {A = _.Placed.AddYears(1), B = _.Placed.AddMonths(1), C = _.Placed.AddDays(1), D = _.Placed.AddHours(1)}).ToListAsync(),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"A","value":{"$type":"node","node":{"$type":"call","function":"DateAddYears","target":{"$type":"member","path":["Placed"]},"arguments":[{"$type":"const","value":"1","tag":"Int32"}]}}},{"name":"B","value":{"$type":"node","node":{"$type":"call","function":"DateAddMonths","target":{"$type":"member","path":["Placed"]},"arguments":[{"$type":"const","value":"1","tag":"Int32"}]}}},{"name":"C","value":{"$type":"node","node":{"$type":"call","function":"DateAddDays","target":{"$type":"member","path":["Placed"]},"arguments":[{"$type":"const","value":"1","tag":"Double"}]}}},{"name":"D","value":{"$type":"node","node":{"$type":"call","function":"DateAddHours","target":{"$type":"member","path":["Placed"]},"arguments":[{"$type":"const","value":"1","tag":"Double"}]}}}]}}]}
-  },
-  {
-    Query: client.Source<Order>("Order").Select(_ => new {A = _.Placed.AddMinutes(1), B = _.Placed.AddSeconds(1), C = _.Placed.AddMilliseconds(1)}).ToListAsync(),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"A","value":{"$type":"node","node":{"$type":"call","function":"DateAddMinutes","target":{"$type":"member","path":["Placed"]},"arguments":[{"$type":"const","value":"1","tag":"Double"}]}}},{"name":"B","value":{"$type":"node","node":{"$type":"call","function":"DateAddSeconds","target":{"$type":"member","path":["Placed"]},"arguments":[{"$type":"const","value":"1","tag":"Double"}]}}},{"name":"C","value":{"$type":"node","node":{"$type":"call","function":"DateAddMilliseconds","target":{"$type":"member","path":["Placed"]},"arguments":[{"$type":"const","value":"1","tag":"Double"}]}}}]}}]}
-  },
-  {
-    Query: client.Source<Order>("Order").Select(_ => new {V = _.Placed.CompareTo(new DateTime(2026, 1, 1))}).ToListAsync(),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"CompareTo","target":{"$type":"member","path":["Placed"]},"arguments":[{"$type":"const","value":"2026-01-01T00:00:00.0000000","tag":"DateTime"}]}}}]}}]}
-  }
-]
+﻿client.Source<Order>("Order").Select(_ => new {_.Placed.Year, _.Placed.Month, _.Placed.Day, _.Placed.DayOfYear}).ToListAsync()
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Year",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateYear",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          },
+          {
+            "name": "Month",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateMonth",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          },
+          {
+            "name": "Day",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateDay",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          },
+          {
+            "name": "DayOfYear",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateDayOfYear",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Order>("Order").Select(_ => new {_.Placed.Hour, _.Placed.Minute, _.Placed.Second, _.Placed.Millisecond}).ToListAsync()
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Hour",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateHour",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          },
+          {
+            "name": "Minute",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateMinute",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          },
+          {
+            "name": "Second",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateSecond",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          },
+          {
+            "name": "Millisecond",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateMillisecond",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Order>("Order").Select(_ => new {_.Placed.Microsecond, _.Placed.Nanosecond}).ToListAsync()
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Microsecond",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateMicrosecond",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          },
+          {
+            "name": "Nanosecond",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateNanosecond",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Order>("Order").Select(_ => new {_.Placed.DayOfWeek, _.Placed.Date, _.Placed.TimeOfDay}).ToListAsync()
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "DayOfWeek",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateDayOfWeek",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          },
+          {
+            "name": "Date",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateDate",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          },
+          {
+            "name": "TimeOfDay",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateTimeOfDay",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Shift>("Shift").Select(_ => new {_.Day.DayNumber}).ToListAsync()
+{
+  "version": 1,
+  "root": "Shift",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "DayNumber",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateDayNumber",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Day"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Shift>("Shift").Select(_ => new {_.Duration.Hours, _.Duration.Minutes, _.Duration.Seconds}).ToListAsync()
+{
+  "version": 1,
+  "root": "Shift",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Hours",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "TimeSpanHours",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Duration"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          },
+          {
+            "name": "Minutes",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "TimeSpanMinutes",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Duration"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          },
+          {
+            "name": "Seconds",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "TimeSpanSeconds",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Duration"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Shift>("Shift").Select(_ => new {_.Duration.Milliseconds, _.Duration.Microseconds, _.Duration.Nanoseconds}).ToListAsync()
+{
+  "version": 1,
+  "root": "Shift",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Milliseconds",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "TimeSpanMilliseconds",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Duration"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          },
+          {
+            "name": "Microseconds",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "TimeSpanMicroseconds",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Duration"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          },
+          {
+            "name": "Nanoseconds",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "TimeSpanNanoseconds",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Duration"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Order>("Order").Select(_ => new {D = Date.FromDateTime(_.Placed), T = Time.FromDateTime(_.Placed)}).ToListAsync()
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "D",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateOnlyFromDateTime",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          },
+          {
+            "name": "T",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "TimeOnlyFromDateTime",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Shift>("Shift").Select(_ => new {T = Time.FromTimeSpan(_.Duration), Stamp = _.Day.ToDateTime(_.Start)}).ToListAsync()
+{
+  "version": 1,
+  "root": "Shift",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "T",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "TimeOnlyFromTimeSpan",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Duration"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          },
+          {
+            "name": "Stamp",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateTimeFromDateAndTime",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Day"
+                  ]
+                },
+                "arguments": [
+                  {
+                    "$type": "member",
+                    "path": [
+                      "Start"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Shift>("Shift").Select(_ => new {S = _.Stamped.ToUnixTimeSeconds(), Ms = _.Stamped.ToUnixTimeMilliseconds()}).ToListAsync()
+{
+  "version": 1,
+  "root": "Shift",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "S",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "UnixSecondsFromOffset",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Stamped"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          },
+          {
+            "name": "Ms",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "UnixMillisecondsFromOffset",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Stamped"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Order>("Order").Select(_ => new {A = _.Placed.AddYears(1), B = _.Placed.AddMonths(1), C = _.Placed.AddDays(1), D = _.Placed.AddHours(1)}).ToListAsync()
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "A",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateAddYears",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": [
+                  {
+                    "$type": "const",
+                    "value": "1",
+                    "tag": "Int32"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "B",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateAddMonths",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": [
+                  {
+                    "$type": "const",
+                    "value": "1",
+                    "tag": "Int32"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "C",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateAddDays",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": [
+                  {
+                    "$type": "const",
+                    "value": "1",
+                    "tag": "Double"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "D",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateAddHours",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": [
+                  {
+                    "$type": "const",
+                    "value": "1",
+                    "tag": "Double"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Order>("Order").Select(_ => new {A = _.Placed.AddMinutes(1), B = _.Placed.AddSeconds(1), C = _.Placed.AddMilliseconds(1)}).ToListAsync()
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "A",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateAddMinutes",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": [
+                  {
+                    "$type": "const",
+                    "value": "1",
+                    "tag": "Double"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "B",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateAddSeconds",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": [
+                  {
+                    "$type": "const",
+                    "value": "1",
+                    "tag": "Double"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "name": "C",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "DateAddMilliseconds",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": [
+                  {
+                    "$type": "const",
+                    "value": "1",
+                    "tag": "Double"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Order>("Order").Select(_ => new {V = _.Placed.CompareTo(new(2026, 1, 1))}).ToListAsync()
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "V",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "CompareTo",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Placed"
+                  ]
+                },
+                "arguments": [
+                  {
+                    "$type": "const",
+                    "value": "2026-01-01T00:00:00.0000000",
+                    "tag": "DateTime"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

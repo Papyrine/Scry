@@ -1,14 +1,107 @@
-﻿[
-  {
-    Query: client.Source<Shift>("Shift").Select(_ => new {V = _.Signature.Length}).ToListAsync(),
-    Wire: {"version":1,"root":"Shift","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"BytesLength","target":{"$type":"member","path":["Signature"]},"arguments":[]}}}]}}]}
-  },
-  {
-    Query: client.Source<Shift>("Shift").Select(_ => new {V = _.Signature.Contains((byte) 0x0B)}).ToListAsync(),
-    Wire: {"version":1,"root":"Shift","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"BytesContains","target":{"$type":"member","path":["Signature"]},"arguments":[{"$type":"const","value":"11","tag":"Int32"}]}}}]}}]}
-  },
-  {
-    Query: client.Source<Shift>("Shift").Select(_ => new {V = _.Signature.ElementAt(1)}).ToListAsync(),
-    Wire: {"version":1,"root":"Shift","pipeline":[{"$type":"select","projection":{"members":[{"name":"V","value":{"$type":"node","node":{"$type":"call","function":"BytesElementAt","target":{"$type":"member","path":["Signature"]},"arguments":[{"$type":"const","value":"1","tag":"Int32"}]}}}]}}]}
-  }
-]
+﻿client.Source<Shift>("Shift").Select(_ => new {V = _.Signature.Length}).ToListAsync()
+{
+  "version": 1,
+  "root": "Shift",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "V",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "BytesLength",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Signature"
+                  ]
+                },
+                "arguments": []
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Shift>("Shift").Select(_ => new {V = _.Signature.Contains((byte) 0x0B)}).ToListAsync()
+{
+  "version": 1,
+  "root": "Shift",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "V",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "BytesContains",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Signature"
+                  ]
+                },
+                "arguments": [
+                  {
+                    "$type": "const",
+                    "value": "11",
+                    "tag": "Int32"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Shift>("Shift").Select(_ => new {V = _.Signature.ElementAt(1)}).ToListAsync()
+{
+  "version": 1,
+  "root": "Shift",
+  "pipeline": [
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "V",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "call",
+                "function": "BytesElementAt",
+                "target": {
+                  "$type": "member",
+                  "path": [
+                    "Signature"
+                  ]
+                },
+                "arguments": [
+                  {
+                    "$type": "const",
+                    "value": "1",
+                    "tag": "Int32"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

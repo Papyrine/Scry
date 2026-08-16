@@ -1,30 +1,306 @@
-﻿[
-  {
-    Query: client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync(),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").OrderByDescending(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync(),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":true},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").OrderBy(_ => _.Status).ThenBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync(),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"orderBy","key":{"$type":"member","path":["Status"]},"descending":false},{"$type":"thenBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").OrderBy(_ => _.Status).ThenByDescending(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync(),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"orderBy","key":{"$type":"member","path":["Status"]},"descending":false},{"$type":"thenBy","key":{"$type":"member","path":["Name"]},"descending":true},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").OrderBy(_ => _.Name).Reverse().Select(_ => new NameRow(_.Name)).ToListAsync(),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"reverse"},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}]}
-  },
-  {
-    Query: client.Source<Employee>("Employee").OrderBy(_ => _.Name).Skip(2).Take(1).Select(_ => new NameRow(_.Name)).ToListAsync(),
-    Wire: {"version":1,"root":"Employee","pipeline":[{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"skip","count":2},{"$type":"take","count":1},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}}]}}]}
-  },
-  {
-    Query: client.Source<Order>("Order").OrderBy(_ => int.Parse(_.Code)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync(),
-    Wire: {"version":1,"root":"Order","pipeline":[{"$type":"orderBy","key":{"$type":"call","function":"Int32From","target":{"$type":"member","path":["Code"]},"arguments":[]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Region","value":{"$type":"node","node":{"$type":"member","path":["Region"]}}},{"name":"Amount","value":{"$type":"node","node":{"$type":"member","path":["Amount"]}}}]}}]}
-  }
-]
+﻿client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "orderBy",
+      "key": {
+        "$type": "member",
+        "path": [
+          "Name"
+        ]
+      },
+      "descending": false
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Name",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Name"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").OrderByDescending(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "orderBy",
+      "key": {
+        "$type": "member",
+        "path": [
+          "Name"
+        ]
+      },
+      "descending": true
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Name",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Name"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").OrderBy(_ => _.Status).ThenBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "orderBy",
+      "key": {
+        "$type": "member",
+        "path": [
+          "Status"
+        ]
+      },
+      "descending": false
+    },
+    {
+      "$type": "thenBy",
+      "key": {
+        "$type": "member",
+        "path": [
+          "Name"
+        ]
+      },
+      "descending": false
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Name",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Name"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").OrderBy(_ => _.Status).ThenByDescending(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "orderBy",
+      "key": {
+        "$type": "member",
+        "path": [
+          "Status"
+        ]
+      },
+      "descending": false
+    },
+    {
+      "$type": "thenBy",
+      "key": {
+        "$type": "member",
+        "path": [
+          "Name"
+        ]
+      },
+      "descending": true
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Name",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Name"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").OrderBy(_ => _.Name).Reverse().Select(_ => new NameRow(_.Name)).ToListAsync()
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "orderBy",
+      "key": {
+        "$type": "member",
+        "path": [
+          "Name"
+        ]
+      },
+      "descending": false
+    },
+    {
+      "$type": "reverse"
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Name",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Name"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Employee>("Employee").OrderBy(_ => _.Name).Skip(2).Take(1).Select(_ => new NameRow(_.Name)).ToListAsync()
+{
+  "version": 1,
+  "root": "Employee",
+  "pipeline": [
+    {
+      "$type": "orderBy",
+      "key": {
+        "$type": "member",
+        "path": [
+          "Name"
+        ]
+      },
+      "descending": false
+    },
+    {
+      "$type": "skip",
+      "count": 2
+    },
+    {
+      "$type": "take",
+      "count": 1
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Name",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Name"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+
+client.Source<Order>("Order").OrderBy(_ => int.Parse(_.Code)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
+{
+  "version": 1,
+  "root": "Order",
+  "pipeline": [
+    {
+      "$type": "orderBy",
+      "key": {
+        "$type": "call",
+        "function": "Int32From",
+        "target": {
+          "$type": "member",
+          "path": [
+            "Code"
+          ]
+        },
+        "arguments": []
+      },
+      "descending": false
+    },
+    {
+      "$type": "select",
+      "projection": {
+        "members": [
+          {
+            "name": "Region",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Region"
+                ]
+              }
+            }
+          },
+          {
+            "name": "Amount",
+            "value": {
+              "$type": "node",
+              "node": {
+                "$type": "member",
+                "path": [
+                  "Amount"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
