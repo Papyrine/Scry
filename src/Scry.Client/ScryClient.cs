@@ -154,6 +154,19 @@ public sealed class ScryClient
     public string? ServerSchemaStamp { get; private set; }
 
     /// <summary>
+    /// The longest encoded query this client will ask as a URL. Starts at
+    /// <see cref="QueryUrl.MaxLength"/> and is replaced by the server's own budget as soon as any
+    /// response carries one, so a deployment behind a strict proxy is honoured without the client
+    /// being told out of band. Zero asks everything as a body.
+    /// </summary>
+    /// <remarks>
+    /// Learned rather than configured because the number describes the hops between a client and its
+    /// server, which only the server end is in a position to know. It is kept for the life of the
+    /// client, which is why <c>AddScryClient</c> registers one per scope rather than per injection.
+    /// </remarks>
+    public int QueryUrlLimit { get; private set; } = QueryUrl.MaxLength;
+
+    /// <summary>
     /// True once the server has advertised a schema stamp that differs from this client's, meaning the
     /// client was generated against a different model surface. Queries may still succeed — an additive
     /// model change breaks nothing — so treat this as a signal to regenerate or reload, not an error.
@@ -208,6 +221,30 @@ public sealed class ScryClient
         return response;
     }
 
+    /// <summary>
+    /// Reads what the server says about itself off any response, success or failure. The stamp matters
+    /// most on a rejection — one caused by drift is exactly when a client wants to know — and the URL
+    /// budget is worth taking from wherever it first appears, including a response to a query this
+    /// client sent as a body.
+    /// </summary>
+    void RecordServerHeaders(HttpResponseMessage response)
+    {
+        if (response.Headers.TryGetValues(WireFormat.SchemaStampHeader, out var stamps))
+        {
+            RecordServerStamp(stamps.FirstOrDefault());
+        }
+
+        // A value this client cannot read is left alone rather than treated as zero: falling back to
+        // "ask everything as a body" on a malformed header would quietly disable the URL form, where
+        // keeping the budget it already had is both safe and visible.
+        if (response.Headers.TryGetValues(WireFormat.UrlLimitHeader, out var limits) &&
+            int.TryParse(limits.FirstOrDefault(), CultureInfo.InvariantCulture, out var limit) &&
+            limit >= 0)
+        {
+            QueryUrlLimit = limit;
+        }
+    }
+
     // Raised once, not per response: a chatty app would otherwise re-prompt on every query for as
     // long as the drift lasts.
     void RecordServerStamp(string? server)
@@ -258,10 +295,7 @@ public sealed class ScryClient
 
         using var response = await http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancel);
 
-        if (response.Headers.TryGetValues(WireFormat.SchemaStampHeader, out var values))
-        {
-            RecordServerStamp(values.FirstOrDefault());
-        }
+        RecordServerHeaders(response);
 
         // Read here rather than after the rows: this is the point the response headers are known, and
         // every path below it either throws or hands control to the caller mid-enumeration.
@@ -424,26 +458,51 @@ public sealed class ScryClient
         // that already exists and needs no client code. What does not fit stays a POST — see QueryUrl
         // for the length that bounds this, and for what a URL exposes that a body does not.
         var encoded = QueryUrl.Encode(utf8);
-        using var content = QueryUrl.WithinLimit(encoded) ? null : JsonBody(utf8);
 
-        // Built explicitly rather than sent through HttpClient.PostAsync/GetAsync: a per-query header
-        // needs a request message of its own to be written onto.
-        using var message = content is null
-            ? new HttpRequestMessage(HttpMethod.Get, Url(endpoint, encoded))
-            : new HttpRequestMessage(HttpMethod.Post, endpoint)
-            {
-                Content = content
-            };
+        var response = await Send(QueryUrl.WithinLimit(encoded, QueryUrlLimit));
 
-        call?.Configure(message.Headers);
-
-        using var response = await http.SendAsync(message, cancel);
-
-        // Recorded from failures too: a rejection caused by schema drift is exactly when this matters.
-        if (response.Headers.TryGetValues(WireFormat.SchemaStampHeader, out var values))
+        // A server that maps no GET route answers one from its routing table, so the reply carries
+        // neither a budget to learn from nor a body to read — this client would otherwise keep asking
+        // the same way and keep being refused the same way. The status says exactly what to do instead,
+        // so it is done once: the budget drops to zero for the life of the client, and the query is
+        // re-asked as a body. Only ever this direction, and only ever once.
+        if ((int) response.StatusCode == 405 &&
+            response.RequestMessage?.Method == HttpMethod.Get)
         {
-            RecordServerStamp(values.FirstOrDefault());
+            QueryUrlLimit = 0;
+            response.Dispose();
+            response = await Send(url: false);
         }
+
+        using (response)
+        {
+            return await Read(response, call, cancel);
+        }
+
+        async Task<HttpResponseMessage> Send(bool url)
+        {
+            // Built explicitly rather than sent through HttpClient.PostAsync/GetAsync: a per-query
+            // header needs a request message of its own to be written onto.
+            using var message = url
+                ? new HttpRequestMessage(HttpMethod.Get, Url(endpoint, encoded))
+                : new HttpRequestMessage(HttpMethod.Post, endpoint)
+                {
+                    Content = JsonBody(utf8)
+                };
+
+            call?.Configure(message.Headers);
+
+            var sent = await http.SendAsync(message, cancel);
+
+            // Recorded from failures too: a rejection caused by schema drift is exactly when this
+            // matters.
+            RecordServerHeaders(sent);
+            return sent;
+        }
+    }
+
+    static async Task<QueryResponse> Read(HttpResponseMessage response, ScryCall? call, Cancel cancel)
+    {
 
         // Read before the body is inspected, so the hook still runs on the paths below that throw.
         call?.Read(response.Headers);
@@ -517,10 +576,7 @@ public sealed class ScryClient
         {
             // Recorded from failures too, exactly as a query response is: a 404 caused by drift is
             // where a stale client most wants to know.
-            if (response.Headers.TryGetValues(WireFormat.SchemaStampHeader, out var values))
-            {
-                RecordServerStamp(values.FirstOrDefault());
-            }
+            RecordServerHeaders(response);
 
             // A null value produces no body — the row was readable, the column simply holds nothing.
             if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
@@ -566,10 +622,7 @@ public sealed class ScryClient
         using var content = JsonBody(ScryJson.SerializeToUtf8(request));
         using var response = await http.PostAsync(endpoint, content, cancel);
 
-        if (response.Headers.TryGetValues(WireFormat.SchemaStampHeader, out var values))
-        {
-            RecordServerStamp(values.FirstOrDefault());
-        }
+        RecordServerHeaders(response);
 
         // A batch's parts are numbered globally across entries, so the one list serves every result.
         if (response.IsSuccessStatusCode &&

@@ -930,16 +930,21 @@ public partial class App
     /// result itself — so the choice has to be made here too, or the explorer would demonstrate a
     /// request shape production never uses.
     /// </summary>
+    /// <remarks>
+    /// The budget comes from introspection rather than from a response header the way a client's does,
+    /// because this app is built and embedded when Scry is: it can carry no per-deployment value of its
+    /// own, and it has the whole contract in hand before it sends anything.
+    /// </remarks>
     Task<HttpResponseMessage> SendQuery(string json)
     {
         var utf8 = Encoding.UTF8.GetBytes(json);
         var encoded = QueryUrl.Encode(utf8);
-        if (!QueryUrl.WithinLimit(encoded))
+        var endpoint = introspection!.QueryEndpoint;
+        if (!QueryUrl.WithinLimit(encoded, introspection.QueryUrlLimit))
         {
-            return Http.PostAsync(introspection!.QueryEndpoint, new StringContent(json, Encoding.UTF8, "application/json"));
+            return Http.PostAsync(endpoint, new StringContent(json, Encoding.UTF8, "application/json"));
         }
 
-        var endpoint = introspection!.QueryEndpoint;
         var separator = endpoint.Contains('?') ? '&' : '?';
         return Http.GetAsync($"{endpoint}{separator}{QueryUrl.Parameter}={encoded}");
     }

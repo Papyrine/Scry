@@ -87,7 +87,8 @@ sealed class Schema
         var (sourceInfos, typeInfos, enumInfos) = DescribeSurface();
         return new(ScryIntrospection.CurrentVersion, options.MaxPageSize, sourceInfos, typeInfos, enumInfos)
         {
-            SchemaStamp = Stamp
+            SchemaStamp = Stamp,
+            QueryUrlLimit = options.QueryUrlLimit
         };
     }
 
@@ -325,6 +326,11 @@ sealed class Schema
 
         EnsureCollationIsAName(options.CaseSensitiveCollation, nameof(options.CaseSensitiveCollation));
         EnsureCollationIsAName(options.CaseInsensitiveCollation, nameof(options.CaseInsensitiveCollation));
+
+        if (options.QueryUrlLimit < 0)
+        {
+            throw new($"ScryOptions.{nameof(options.QueryUrlLimit)} must be zero or greater. Zero maps no GET route; any other value is the longest encoded query a client is asked to keep in a URL.");
+        }
 
         var schema = new Schema();
         var discovered = new List<(Type Type, string Name, SourceKind Kind, IReadOnlyList<Type> Policies)>();

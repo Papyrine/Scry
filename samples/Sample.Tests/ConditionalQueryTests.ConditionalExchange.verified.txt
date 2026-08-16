@@ -11,7 +11,8 @@
     ResponseHeaders: {
       Cache-Control: no-cache, private,
       ETag: {Scrubbed},
-      Scry-Schema-Stamp: {Scrubbed}
+      Scry-Schema-Stamp: {Scrubbed},
+      Scry-Url-Limit: 4096
     },
     ResponseContent: {"version":2,"kind":"List","payload":[{"name":"Aaron"},{"name":"Alice"}],"stamp":"{scrubbed stamp}"}
   },

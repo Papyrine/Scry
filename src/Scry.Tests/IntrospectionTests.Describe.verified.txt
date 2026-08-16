@@ -726,6 +726,7 @@
     }
   ],
   QueryEndpoint: /api/query,
+  QueryUrlLimit: 4096,
   SqlPreview: false,
   SchemaStamp: N0Bv0Tb5gKZpFlJn
 }

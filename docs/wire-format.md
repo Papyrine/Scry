@@ -958,8 +958,17 @@ public static class WireFormat
     /// the wire contract.
     /// </summary>
     public const string SchemaStampHeader = "Scry-Schema-Stamp";
+
+    /// <summary>
+    /// The HTTP response header carrying the longest encoded query this server wants asked as a URL,
+    /// as a decimal integer. Written on every response, so a client learns it from whatever it asked
+    /// first and never has to be told out of band. Advisory: a request over the limit is still answered,
+    /// because the ceiling being described belongs to the hops in between rather than to this server.
+    /// Zero says this deployment maps no GET route at all. Part of the wire contract.
+    /// </summary>
+    public const string UrlLimitHeader = "Scry-Url-Limit";
 ```
-<sup><a href='/src/Scry.Wire/WireFormat.cs#L3-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireVersion' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/WireFormat.cs#L3-L26' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireVersion' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `QueryRequest.Create` and `QueryResponse.Create` stamp the current version. The server rejects a request whose `version` is **greater** than its own — a newer client against an older server fails closed rather than being partially understood. Older requests continue to be accepted.
@@ -1131,11 +1140,12 @@ Over HTTP, request and response look like this:
     ResponseStatus: OK 200,
     ResponseHeaders: {
       Cache-Control: no-cache, private,
-      Scry-Schema-Stamp: {Scrubbed}
+      Scry-Schema-Stamp: {Scrubbed},
+      Scry-Url-Limit: 4096
     },
     ResponseContent: {"version":2,"kind":"List","payload":[{"name":"Aaron","status":"FullTime","manager":"Alice","department":"Engineering"},{"name":"Alice","status":"FullTime","manager":null,"department":"Engineering"},{"name":"Carol","status":"Contractor","manager":null,"department":"Sales"}],"stamp":"{scrubbed stamp}"}
   }
 ]
 ```
-<sup><a href='/samples/Sample.Tests/WireFormatTests.EmployeeQueryWireFormat.verified.txt#L1-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-WireFormatTests.EmployeeQueryWireFormat.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Tests/WireFormatTests.EmployeeQueryWireFormat.verified.txt#L1-L18' title='Snippet source file'>snippet source</a> | <a href='#snippet-WireFormatTests.EmployeeQueryWireFormat.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->

@@ -16,14 +16,16 @@ public static class ScryServiceExtensions
         return services;
     }
 
-    /// <summary>Maps the query-execution endpoint (HTTP POST) at <paramref name="pattern"/>.</summary>
+    /// <summary>Maps the query-execution endpoint at <paramref name="pattern"/>.</summary>
     public static IEndpointConventionBuilder MapScry(this IEndpointRouteBuilder endpoints, string pattern)
     {
+        ScryOptions options;
+
         // Validate the annotations against the live EF model once, at startup, where a model exists.
         // A misapplied [Queryable]/[QueryableComplex] fails loudly here rather than obscurely per-query.
         using (var scope = endpoints.ServiceProvider.CreateScope())
         {
-            var options = scope.ServiceProvider.GetRequiredService<ScryOptions>();
+            options = scope.ServiceProvider.GetRequiredService<ScryOptions>();
             var processor = scope.ServiceProvider.GetRequiredService<ScryProcessor>();
             var db = (DbContext)scope.ServiceProvider.GetRequiredService(options.ContextType);
             processor.ValidateAgainstModel(db);
@@ -32,25 +34,36 @@ public static class ScryServiceExtensions
         // One call, every transport of the same query surface: streaming reads it a row at a time and
         // batching carries several queries at once, but neither widens what can be asked. Mapping them
         // separately would only invite deployments where one is protected and the others are not.
-        // Conventions applied to the returned builder reach all four.
+        // Conventions applied to the returned builder reach all of them.
         //
         // The attachment endpoint belongs here for that reason above all: it answers about a row of the
         // same model, so a deployment that authorizes queries and leaves it open would be handing out
         // by key exactly what the guard on the others exists to protect.
-        return new Endpoints(
+        List<IEndpointConventionBuilder> builders =
         [
             endpoints.MapPost(pattern, Handle),
-            // The same query, asked as a URL. One handler serves both: a GET carries the request in its
-            // query string instead of its body, and nothing downstream of that difference changes —
-            // same validation, same allow-list, same policies. It exists because a POST is uncacheable
-            // by everything between the client and here, where a GET is answered by the browser's own
-            // cache and revalidated with an ETag it manages itself. See QueryUrl for why the request
-            // travels in the URL rather than in content on the GET, and for the length that bounds it.
-            endpoints.MapGet(pattern, Handle),
             endpoints.MapPost($"{pattern.TrimEnd('/')}/stream", HandleStream),
             endpoints.MapPost($"{pattern.TrimEnd('/')}/batch", HandleBatch),
             endpoints.MapPost($"{pattern.TrimEnd('/')}/attachment", HandleAttachment)
-        ]);
+        ];
+
+        // The same query, asked as a URL. One handler serves both: a GET carries the request in its
+        // query string instead of its body, and nothing downstream of that difference changes — same
+        // validation, same allow-list, same policies. It exists because a POST is uncacheable by
+        // everything between the client and here, where a GET is answered by the caller's own cache and
+        // revalidated with an ETag. See QueryUrl for why the request travels in the URL rather than in
+        // content on the GET.
+        //
+        // A limit of zero says this deployment will not have queries in URLs at all, and the route is
+        // simply not mapped: routing then answers a GET with a 405 naming POST, which is both the
+        // accurate status and a capability that is absent rather than guarded — there is no handler for
+        // a stale client to reach, and no URL for this server to read or log.
+        if (options.QueryUrlLimit > 0)
+        {
+            builders.Insert(1, endpoints.MapGet(pattern, Handle));
+        }
+
+        return new Endpoints(builders);
     }
 
     sealed class Endpoints(IReadOnlyList<IEndpointConventionBuilder> builders) :
@@ -84,7 +97,7 @@ public static class ScryServiceExtensions
         var options = services.GetRequiredService<ScryOptions>();
         var processor = services.GetRequiredService<ScryProcessor>();
 
-        context.Response.Headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
+        Advertise(context, processor, options);
 
         var started = Stopwatch.GetTimestamp();
         var body = await ReadBody(context);
@@ -210,7 +223,7 @@ public static class ScryServiceExtensions
         var options = services.GetRequiredService<ScryOptions>();
         var processor = services.GetRequiredService<ScryProcessor>();
 
-        context.Response.Headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
+        Advertise(context, processor, options);
 
         var started = Stopwatch.GetTimestamp();
         var body = await ReadBody(context);
@@ -349,10 +362,7 @@ public static class ScryServiceExtensions
         var options = services.GetRequiredService<ScryOptions>();
         var processor = services.GetRequiredService<ScryProcessor>();
 
-        // Advertised on every response, including rejections, so a client can notice a drifted model
-        // while its queries are still succeeding rather than only once one breaks. Set before any
-        // write, since headers are fixed once the response has started.
-        context.Response.Headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
+        Advertise(context, processor, options);
 
         var started = Stopwatch.GetTimestamp();
         var url = HttpMethods.IsGet(context.Request.Method);
@@ -469,7 +479,7 @@ public static class ScryServiceExtensions
 
         // Advertised here for the same reason as on a query, and on a 404 too: a client whose fetch
         // stopped working wants to know whether its model drifted.
-        context.Response.Headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
+        Advertise(context, processor, options);
 
         var started = Stopwatch.GetTimestamp();
         var body = await ReadBody(context);
@@ -521,6 +531,23 @@ public static class ScryServiceExtensions
         {
             await WriteError(context, StatusCodes.Status500InternalServerError, "Attachment fetch failed.", drifted);
         }
+    }
+
+    /// <summary>
+    /// What every response says about this server regardless of what it was asked, written before any
+    /// body since headers are fixed once a response has started.
+    /// </summary>
+    /// <remarks>
+    /// The stamp lets a client notice a drifted model while its queries are still succeeding, rather
+    /// than only once one breaks — which is why it is on rejections too. The URL limit rides the same
+    /// path for the same reason: a client that has heard from this server once never has to be told its
+    /// budget out of band, and one that has not yet heard uses QueryUrl.MaxLength until it does.
+    /// </remarks>
+    static void Advertise(HttpContext context, ScryProcessor processor, ScryOptions options)
+    {
+        var headers = context.Response.Headers;
+        headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
+        headers[WireFormat.UrlLimitHeader] = options.QueryUrlLimit.ToString(CultureInfo.InvariantCulture);
     }
 
     static Task WriteError(HttpContext context, int status, string message, bool staleClient)

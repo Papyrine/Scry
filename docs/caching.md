@@ -212,7 +212,8 @@ Two identical queries, recorded at the socket. Both are `GET`s carrying the quer
     ResponseHeaders: {
       Cache-Control: no-cache, private,
       ETag: {Scrubbed},
-      Scry-Schema-Stamp: {Scrubbed}
+      Scry-Schema-Stamp: {Scrubbed},
+      Scry-Url-Limit: 4096
     },
     ResponseContent: {"version":2,"kind":"List","payload":[{"name":"Aaron"},{"name":"Alice"}],"stamp":"{scrubbed stamp}"}
   },
@@ -235,7 +236,7 @@ Two identical queries, recorded at the socket. Both are `GET`s carrying the quer
   }
 ]
 ```
-<sup><a href='/samples/Sample.Tests/ConditionalQueryTests.ConditionalExchange.verified.txt#L1-L35' title='Snippet source file'>snippet source</a> | <a href='#snippet-ConditionalQueryTests.ConditionalExchange.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Tests/ConditionalQueryTests.ConditionalExchange.verified.txt#L1-L36' title='Snippet source file'>snippet source</a> | <a href='#snippet-ConditionalQueryTests.ConditionalExchange.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The ETag values are scrubbed from that snapshot because they carry the database's log position. That the two match is what the 304 proves.

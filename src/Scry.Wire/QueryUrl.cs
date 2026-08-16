@@ -24,9 +24,10 @@ namespace Scry;
 /// <para>
 /// <b>Length is bounded, so this form is not always available.</b> 8 KB is the usual server and proxy
 /// limit on a whole request line, and what exceeds it is rejected by whichever hop is strictest — as a
-/// 414 or a 400, varying by deployment. <see cref="WithinLimit"/> answers whether an encoded query fits
-/// under <see cref="MaxLength"/>, which is set well below that ceiling; a query that does not fit is
-/// asked with <c>POST</c>, whose body has no such limit.
+/// 414 or a 400, varying by deployment. The budget a client stays inside of is the server's, carried on
+/// every response in <see cref="WireFormat.UrlLimitHeader"/>; <see cref="MaxLength"/> is what a sender
+/// uses until it has heard one. A query that does not fit is asked with <c>POST</c>, whose body has no
+/// such limit.
 /// </para>
 /// <para>
 /// <b>What a URL exposes.</b> Everything in the request — including the constants a filter compares
@@ -41,15 +42,20 @@ public static class QueryUrl
     public const string Parameter = "q";
 
     /// <summary>
-    /// The longest encoded request this form is used for. Deliberately well under the 8 KB request line
-    /// that servers and proxies commonly cap: a URL carries more than the parameter, the limit is on the
-    /// whole line, and the hop that enforces it is not the one being written against here.
+    /// The budget a sender uses before a server has told it one, and the default a server advertises.
+    /// Deliberately well under the 8 KB request line that servers and proxies commonly cap: a URL
+    /// carries more than the parameter, the limit is on the whole line, and the hop that enforces it is
+    /// not the one being written against here.
     /// </summary>
     public const int MaxLength = 4096;
 
-    /// <summary>Whether <paramref name="encoded"/> is short enough to be asked as a URL.</summary>
-    public static bool WithinLimit(string encoded) =>
-        encoded.Length <= MaxLength;
+    /// <summary>
+    /// Whether <paramref name="encoded"/> is short enough to be asked as a URL under
+    /// <paramref name="limit"/>. A limit of zero admits nothing, so a deployment that wants no URL form
+    /// needs no special case here.
+    /// </summary>
+    public static bool WithinLimit(string encoded, int limit) =>
+        encoded.Length <= limit;
 
     /// <summary>Encodes a request into its <see cref="Parameter"/> value.</summary>
     public static string Encode(QueryRequest request) =>

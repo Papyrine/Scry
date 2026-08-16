@@ -421,8 +421,34 @@ public int MaxBatchSize { get; set; } = 20;
 /// mistake truncation for the end of the data.
 /// </remarks>
 public int? MaxStreamRows { get; set; }
+
+/// <summary>
+/// The longest encoded query this deployment wants asked as a URL. Default 4096; zero maps no GET
+/// route at all, so every query travels as a body.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Unlike the limits above this one rejects nothing — it is advertised rather than enforced,
+/// because the ceiling it describes is not this server's. What actually truncates or refuses a long
+/// URL is whichever hop is strictest: 8 KB on a whole request line is the common default for a
+/// server or a proxy, and the number here is the budget a client is asked to stay inside of so it
+/// never finds out where the real edge is. A request that arrives is answered whatever its length.
+/// </para>
+/// <para>
+/// It is a deployment setting rather than something the model declares, since the ingress in front
+/// of a server is a property of where it runs — one model can be hosted behind two of them.
+/// Clients learn it from <see cref="WireFormat.UrlLimitHeader"/>, carried on every response.
+/// </para>
+/// <para>
+/// Zero is the exception, and is enforced: it says a query may never appear in a URL here, which is
+/// a statement about this deployment rather than a guess about a length. <c>MapScry</c> honours it
+/// by not mapping the GET route, so routing answers such a request with a 405 naming POST and Scry
+/// never sees it. Setting it means giving up conditional requests — see /docs/caching.md.
+/// </para>
+/// </remarks>
+public int QueryUrlLimit { get; set; } = QueryUrl.MaxLength;
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L57' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L83' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 These bound the work a single request can ask for: how many rows, how deep a join chain, how long a pipeline, how deeply nested an expression.

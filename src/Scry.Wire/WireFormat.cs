@@ -14,6 +14,15 @@ public static class WireFormat
     /// the wire contract.
     /// </summary>
     public const string SchemaStampHeader = "Scry-Schema-Stamp";
+
+    /// <summary>
+    /// The HTTP response header carrying the longest encoded query this server wants asked as a URL,
+    /// as a decimal integer. Written on every response, so a client learns it from whatever it asked
+    /// first and never has to be told out of band. Advisory: a request over the limit is still answered,
+    /// because the ceiling being described belongs to the hops in between rather than to this server.
+    /// Zero says this deployment maps no GET route at all. Part of the wire contract.
+    /// </summary>
+    public const string UrlLimitHeader = "Scry-Url-Limit";
     // end-snippet
 
     /// <summary>
