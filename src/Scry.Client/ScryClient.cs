@@ -75,13 +75,15 @@ public sealed class ScryClient
         {
             CharSet = "utf-8"
         };
-        // Fingerprints exactly what is being sent, which is free here — the bytes are in hand and about to
-        // be handed to the socket. Carried on the content rather than the message because it describes the
-        // entity, and because every sender below builds content where only some build a message of their
-        // own. The server treats it as advisory; see QueryFingerprint.
-        content.Headers.TryAddWithoutValidation(WireFormat.QueryHashHeader, QueryFingerprint.Compute(utf8));
         return content;
     }
+
+    // base64url carries nothing a query string would have to escape, so the encoded request is appended
+    // as it stands. An endpoint that already carries parameters of its own keeps them.
+    static string Url(string endpoint, string encoded) =>
+        endpoint.Contains('?')
+            ? $"{endpoint}&{QueryUrl.Parameter}={encoded}"
+            : $"{endpoint}?{QueryUrl.Parameter}={encoded}";
 
     // A custom transport has nowhere to put a header, so a query that asked for one cannot be honoured.
     // Refusing keeps WithHeader from looking like it worked on a client that never sent it.
@@ -100,17 +102,39 @@ public sealed class ScryClient
     }
 
     // begin-snippet: scryClientApi
-    /// <summary>Creates a client that POSTs queries to an HTTP endpoint.</summary>
+    /// <summary>
+    /// Creates a client that sends queries to an HTTP endpoint — as a URL where the query fits in one
+    /// and as a body where it does not, which <see cref="QueryUrl"/> explains.
+    /// </summary>
     public static ScryClient ForHttp(HttpClient http, string endpoint) =>
         new(http, endpoint);
+
+    /// <summary>
+    /// Whether a request has to travel in a body rather than a URL, because it compares a member the
+    /// model marks <c>[Sensitive]</c> against a constant — a value a URL would write into the access
+    /// log of every hop on the way.
+    /// </summary>
+    /// <remarks>
+    /// This client applies it to everything it sends; it is public for tooling that sends a request
+    /// itself, which has the same choice to make and no other way to make it. Answered from the
+    /// generated models the request was written against, so a request naming sources this process has
+    /// never opened is answered conservatively rather than optimistically.
+    /// </remarks>
+    public static bool RequiresBody(QueryRequest request) =>
+        SensitiveWalk.Inspect(request, SensitiveModel.IsSensitive).InConstant;
 
     /// <summary>
     /// Returns an <see cref="IQueryable{T}"/> backed by the named allow-listed source.
     /// <paramref name="defaultProjection"/> is the source's scalar member names, passed by the
     /// generated entry point so a query without a <c>Select</c> still projects explicitly.
     /// </summary>
-    public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjection = null) =>
-        new CaptureQueryable<T>(new(this, name, defaultProjection));
+    public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjection = null)
+    {
+        // Recorded so a finished request can be read back against the model it was written from: by
+        // the time the transport chooses, all it holds is source names and member paths.
+        SensitiveModel.Register(name, typeof(T));
+        return new CaptureQueryable<T>(new(this, name, defaultProjection));
+    }
 
     /// <summary>
     /// Starts a batch: several queries collected on the client and sent as one request. Attach it to a
@@ -147,6 +171,19 @@ public sealed class ScryClient
     /// can use a difference to prompt a reload before a breaking change reaches it.
     /// </summary>
     public string? ServerSchemaStamp { get; private set; }
+
+    /// <summary>
+    /// The longest encoded query this client will ask as a URL. Starts at
+    /// <see cref="QueryUrl.MaxLength"/> and is replaced by the server's own budget as soon as any
+    /// response carries one, so a deployment behind a strict proxy is honoured without the client
+    /// being told out of band. Zero asks everything as a body.
+    /// </summary>
+    /// <remarks>
+    /// Learned rather than configured because the number describes the hops between a client and its
+    /// server, which only the server end is in a position to know. It is kept for the life of the
+    /// client, which is why <c>AddScryClient</c> registers one per scope rather than per injection.
+    /// </remarks>
+    public int QueryUrlLimit { get; private set; } = QueryUrl.MaxLength;
 
     /// <summary>
     /// True once the server has advertised a schema stamp that differs from this client's, meaning the
@@ -203,6 +240,30 @@ public sealed class ScryClient
         return response;
     }
 
+    /// <summary>
+    /// Reads what the server says about itself off any response, success or failure. The stamp matters
+    /// most on a rejection — one caused by drift is exactly when a client wants to know — and the URL
+    /// budget is worth taking from wherever it first appears, including a response to a query this
+    /// client sent as a body.
+    /// </summary>
+    void RecordServerHeaders(HttpResponseMessage response)
+    {
+        if (response.Headers.TryGetValues(WireFormat.SchemaStampHeader, out var stamps))
+        {
+            RecordServerStamp(stamps.FirstOrDefault());
+        }
+
+        // A value this client cannot read is left alone rather than treated as zero: falling back to
+        // "ask everything as a body" on a malformed header would quietly disable the URL form, where
+        // keeping the budget it already had is both safe and visible.
+        if (response.Headers.TryGetValues(WireFormat.UrlLimitHeader, out var limits) &&
+            int.TryParse(limits.FirstOrDefault(), CultureInfo.InvariantCulture, out var limit) &&
+            limit >= 0)
+        {
+            QueryUrlLimit = limit;
+        }
+    }
+
     // Raised once, not per response: a chatty app would otherwise re-prompt on every query for as
     // long as the drift lasts.
     void RecordServerStamp(string? server)
@@ -253,10 +314,7 @@ public sealed class ScryClient
 
         using var response = await http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancel);
 
-        if (response.Headers.TryGetValues(WireFormat.SchemaStampHeader, out var values))
-        {
-            RecordServerStamp(values.FirstOrDefault());
-        }
+        RecordServerHeaders(response);
 
         // Read here rather than after the rows: this is the point the response headers are known, and
         // every path below it either throws or hands control to the caller mid-enumeration.
@@ -411,23 +469,80 @@ public sealed class ScryClient
         ScryCall? call,
         Cancel cancel)
     {
-        using var content = JsonBody(ScryJson.SerializeToUtf8(request));
+        var utf8 = ScryJson.SerializeToUtf8(request);
 
-        // Built explicitly rather than posted through HttpClient.PostAsync: a per-query header needs a
-        // request message of its own to be written onto.
-        using var message = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        // Asked as a URL whenever it fits in one. A POST is uncacheable by everything between here and
+        // the server, so every repeat of a query costs a full round trip and a full response; the same
+        // query as a GET is stored and revalidated by the caller's own HTTP cache, which is machinery
+        // that already exists and needs no client code. What does not fit stays a POST — see QueryUrl
+        // for the length that bounds this, and for what a URL exposes that a body does not.
+        var encoded = QueryUrl.Encode(utf8);
+
+        // A query comparing a [Sensitive] member against a constant writes that constant into the
+        // access log of every hop a URL passes, so it travels as a body however short it is. Read off
+        // the finished request rather than the expression tree, which has four ways to build one that
+        // never pass through a single point — see SensitiveWalk.
+        var response = await Send(!RequiresBody(request) && QueryUrl.WithinLimit(encoded, QueryUrlLimit));
+
+        // A server that maps no GET route answers one from its routing table, so the reply carries
+        // neither a budget to learn from nor a body to read — this client would otherwise keep asking
+        // the same way and keep being refused the same way. The status says exactly what to do instead,
+        // so it is done once: the budget drops to zero for the life of the client, and the query is
+        // re-asked as a body. Only ever this direction, and only ever once.
+        if ((int) response.StatusCode == 405 &&
+            response.RequestMessage?.Method == HttpMethod.Get)
         {
-            Content = content
-        };
-        call?.Configure(message.Headers);
-
-        using var response = await http.SendAsync(message, cancel);
-
-        // Recorded from failures too: a rejection caused by schema drift is exactly when this matters.
-        if (response.Headers.TryGetValues(WireFormat.SchemaStampHeader, out var values))
-        {
-            RecordServerStamp(values.FirstOrDefault());
+            QueryUrlLimit = 0;
+            response.Dispose();
+            response = await Send(url: false);
         }
+
+        // The server marks a member sensitive that this client was generated before, so it read the
+        // query as one that could travel in a URL and the server disagreed. The disagreement is worth
+        // one round trip rather than a failure: the same request in a body is the thing being asked
+        // for, and the flag says so in a way a client can act on without matching a message. The
+        // constant has already reached the log this refusal is about, which is why the answer is to
+        // stop the response being cached under that URL rather than to pretend nothing happened.
+        if (!response.IsSuccessStatusCode &&
+            response.RequestMessage?.Method == HttpMethod.Get &&
+            await IsRequiresBody(response, cancel))
+        {
+            response.Dispose();
+            response = await Send(url: false);
+        }
+
+        using (response)
+        {
+            return await Read(response, call, cancel);
+        }
+
+        static async Task<bool> IsRequiresBody(HttpResponseMessage response, Cancel cancel) =>
+            ScryJson.TryDeserializeError(await response.Content.ReadAsByteArrayAsync(cancel)) is {RequiresBody: true};
+
+        async Task<HttpResponseMessage> Send(bool url)
+        {
+            // Built explicitly rather than sent through HttpClient.PostAsync/GetAsync: a per-query
+            // header needs a request message of its own to be written onto.
+            using var message = url
+                ? new HttpRequestMessage(HttpMethod.Get, Url(endpoint, encoded))
+                : new HttpRequestMessage(HttpMethod.Post, endpoint)
+                {
+                    Content = JsonBody(utf8)
+                };
+
+            call?.Configure(message.Headers);
+
+            var sent = await http.SendAsync(message, cancel);
+
+            // Recorded from failures too: a rejection caused by schema drift is exactly when this
+            // matters.
+            RecordServerHeaders(sent);
+            return sent;
+        }
+    }
+
+    static async Task<QueryResponse> Read(HttpResponseMessage response, ScryCall? call, Cancel cancel)
+    {
 
         // Read before the body is inspected, so the hook still runs on the paths below that throw.
         call?.Read(response.Headers);
@@ -501,10 +616,7 @@ public sealed class ScryClient
         {
             // Recorded from failures too, exactly as a query response is: a 404 caused by drift is
             // where a stale client most wants to know.
-            if (response.Headers.TryGetValues(WireFormat.SchemaStampHeader, out var values))
-            {
-                RecordServerStamp(values.FirstOrDefault());
-            }
+            RecordServerHeaders(response);
 
             // A null value produces no body — the row was readable, the column simply holds nothing.
             if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
@@ -550,10 +662,7 @@ public sealed class ScryClient
         using var content = JsonBody(ScryJson.SerializeToUtf8(request));
         using var response = await http.PostAsync(endpoint, content, cancel);
 
-        if (response.Headers.TryGetValues(WireFormat.SchemaStampHeader, out var values))
-        {
-            RecordServerStamp(values.FirstOrDefault());
-        }
+        RecordServerHeaders(response);
 
         // A batch's parts are numbered globally across entries, so the one list serves every result.
         if (response.IsSuccessStatusCode &&

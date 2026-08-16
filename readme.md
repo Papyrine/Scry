@@ -78,7 +78,7 @@ flowchart TB
         DB -- "projected rows" --> RESP
     end
 
-    TRANS -- "serialize + POST" --> REQ
+    TRANS -- "serialize + send" --> REQ
     REQ -- "deserialize" --> VALID
     RESP -- "rows" --> LINQ
 ```
@@ -95,6 +95,7 @@ See [docs/security.md](docs/security.md) for the full threat model.
 | [Scry.Client](https://nuget.org/packages/Scry.Client/) | Client-side `IQueryable` provider (no EF dependency). Ships the source generator. |
 | [Scry.Server](https://nuget.org/packages/Scry.Server/) | Server-side validation + execution against EF Core. |
 | [Scry.Server.Explorer](https://nuget.org/packages/Scry.Server.Explorer/) | Opt-in, GraphiQL-style query explorer. |
+| [Scry.Server.Delta](https://nuget.org/packages/Scry.Server.Delta/) | Opt-in `304 Not Modified`, backed by Delta. |
 
 `Scry.SourceGenerator` is packed inside `Scry.Client` rather than published separately.
 
@@ -126,9 +127,17 @@ public class Employee
     // Never exposed to clients.
     [QueryIgnore]
     public decimal Salary { get; set; }
+
+    // The other half of that pair: queryable, but never in a URL and never in a cache. [QueryIgnore]
+    // hides a member outright; [Sensitive] keeps it askable while refusing the two ways its value
+    // escapes — a query comparing it against a constant travels as a body rather than a URL, where the
+    // constant would land in every access log on the way, and a response projecting it is sent
+    // no-store, where a cacheable one would be written to the caller's disk.
+    [Sensitive]
+    public string Password { get; set; } = "";
 }
 ```
-<sup><a href='/samples/Sample.Model/Entities/Employee.cs#L3-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableEntity' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Model/Entities/Employee.cs#L3-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableEntity' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Register and map on the server:
@@ -148,9 +157,21 @@ builder.Services
         // references the annotations alone and has no server type to name.
         _.AddAttachmentPolicy<Department, HandbookPolicy>();
         _.MaxPageSize = 200;
+
+        // Repeat a query while nothing has been written and the answer is a 304 rather than a
+        // re-execution. Optional, and off until a freshness source says how to tell — see
+        // /docs/caching.md.
+        _.UseDeltaFreshness<SampleContext>();
+
+        // What a cached response belongs to. Department.Handbook carries an attachment check,
+        // so this server has a source whose answers depend on who asked, and MapScry refuses
+        // to start without this. The sample has no sign-in, so there is one caller and one
+        // scope; a real app returns its tenant or its principal, and a client signing in as
+        // someone else is then never handed the previous one's rows.
+        _.CacheScope = _ => "sample";
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L26-L40' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L26-L52' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddPocoSource` supplies the rows for a `[QueryablePoco]` type — see [POCO sources](docs/server.md#poco-sources).
@@ -160,7 +181,7 @@ builder.Services
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L55-L57' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L67-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Point the client at the model by path — no reference:
@@ -215,6 +236,7 @@ It is off unless mapped, and Development-only by default. See [Query explorer](d
 - [Attachments](docs/attachments.md)
 - [Batching](docs/batching.md)
 - [Observability](docs/observability.md)
+- [Caching and 304](docs/caching.md)
 - [Performance](docs/performance.md)
 - [Security model](docs/security.md)
 - [Wire format](docs/wire-format.md)

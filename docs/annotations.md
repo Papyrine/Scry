@@ -42,9 +42,17 @@ public class Employee
     // Never exposed to clients.
     [QueryIgnore]
     public decimal Salary { get; set; }
+
+    // The other half of that pair: queryable, but never in a URL and never in a cache. [QueryIgnore]
+    // hides a member outright; [Sensitive] keeps it askable while refusing the two ways its value
+    // escapes — a query comparing it against a constant travels as a body rather than a URL, where the
+    // constant would land in every access log on the way, and a response projecting it is sent
+    // no-store, where a cacheable one would be written to the caller's disk.
+    [Sensitive]
+    public string Password { get; set; } = "";
 }
 ```
-<sup><a href='/samples/Sample.Model/Entities/Employee.cs#L3-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableEntity' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Model/Entities/Employee.cs#L3-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableEntity' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The source name exposed to clients defaults to the **type name** — `Employee`. That is what appears as the `root` of a wire request, as the property name on the generated `ScryQuery`, and in the introspection output.
@@ -78,7 +86,7 @@ public class Building : Asset
     public int Floors { get; set; }
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L124-L143' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableHierarchy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L127-L146' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableHierarchy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 That is default-deny applied to the hierarchy: adding a subclass to the model exposes nothing until it is annotated. A type left out is unreachable — it has no wire name, its members are not readable, and no query can narrow to it — while its own descendants stay reachable if they opted in, since the base link skips over types that did not.
@@ -110,7 +118,7 @@ public class SalesRegion
     public string Name { get; set; } = "";
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L250-L263' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSource' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L253-L266' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSource' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The generated entry point exposes the configured name, while the **model class name stays derived from the CLR type**:
@@ -366,9 +374,21 @@ builder.Services
         // references the annotations alone and has no server type to name.
         _.AddAttachmentPolicy<Department, HandbookPolicy>();
         _.MaxPageSize = 200;
+
+        // Repeat a query while nothing has been written and the answer is a 304 rather than a
+        // re-execution. Optional, and off until a freshness source says how to tell — see
+        // /docs/caching.md.
+        _.UseDeltaFreshness<SampleContext>();
+
+        // What a cached response belongs to. Department.Handbook carries an attachment check,
+        // so this server has a source whose answers depend on who asked, and MapScry refuses
+        // to start without this. The sample has no sign-in, so there is one caller and one
+        // scope; a real app returns its tenant or its principal, and a client signing in as
+        // someone else is then never handed the previous one's rows.
+        _.CacheScope = _ => "sample";
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L26-L40' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L26-L52' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The registered sequence is wrapped with `AsQueryable()`, so the pipeline runs in memory over LINQ to<!-- include: poco-in-memory. path: /docs/includes/poco-in-memory.include.md -->
@@ -391,6 +411,7 @@ For an EF Core **complex type** — a value object with no key of its own, typic
 <a id='snippet-queryableComplex'></a>
 ```cs
 [QueryableComplex]
+[Sensitive]
 public class Address
 {
     public string City { get; set; } = "";
@@ -400,7 +421,7 @@ public class Address
     public string Zip { get; set; } = "";
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L108-L118' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableComplex' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L110-L121' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableComplex' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 paired with the usual EF mapping on the owning entity:
@@ -412,7 +433,7 @@ builder.Entity<Employee>()
     .ComplexProperty(_ => _.Address)
     .ToJson();
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L479-L483' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L482-L486' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A complex type is **not a root source**: it produces no property on the generated `ScryQuery` and no server resolver. It is reachable only by traversing into it from an opted-in entity/view/POCO — for example `Employee.Address.City`. Its members follow the same exposure rules as any other type (`[QueryIgnore]` still hides `Zip`), and the traversal is bounded by `MaxNavigationDepth` like any navigation. How EF stores the type — a JSON column or separate columns — is transparent to Scry; the server rebinds the member path onto EF, which translates it either way.
@@ -430,7 +451,7 @@ A complex type can also be held as a **collection** — a JSON array of value ob
 [QueryableCollection]
 public List<Address> PreviousAddresses { get; set; } = [];
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L69-L75' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableComplexCollection' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L71-L77' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableComplexCollection' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: complexCollectionToJson -->
@@ -440,7 +461,7 @@ builder.Entity<Employee>()
     .ComplexCollection(_ => _.PreviousAddresses)
     .ToJson();
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L485-L489' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexCollectionToJson' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L488-L492' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexCollectionToJson' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The element type being a complex type rather than a source changes nothing a client can see: the array is aggregable and flattenable exactly like a collection of entities, and the wire request is indistinguishable from one over a collection navigation. Because a complex type is never a source, it can carry no [row policy](policies.md) — attaching one is refused at startup rather than silently ignored, since a policy that cannot run reads as protection it is not providing:
@@ -473,16 +494,47 @@ It is also absent from the default projection — a query with no `Select` retur
 To warn clients before taking a member away, deprecate it first with [`[Obsolete]`](#obsolete).
 
 
+## `[Sensitive]`
+
+```cs
+[Sensitive]
+public string Password { get; set; } = "";
+```
+
+A member that stays queryable, but whose values must not be written into a log or kept by a cache. Where [`[QueryIgnore]`](#queryignore) hides a member outright, this one leaves it askable and refuses the two ways its value escapes.
+
+| | Rule | Why |
+| --- | --- | --- |
+| A constant compared against it | the query travels as a `POST` body | a URL is written to the access log of every hop it passes, and to the `Referer` of whatever the page does next |
+| It appears in the result | the response is sent `Cache-Control: no-store`, with no `ETag` | a storable response is written to the caller's disk, where it outlives the session that asked |
+
+Naming the member without either — ordering by it, comparing it against another column — changes nothing: no value travels in the URL and none comes back.
+
+The client picks the transport and the server holds it to that choice. A client generated before the marking reads its own model, sees nothing sensitive, and asks in a URL; the server refuses with a flag the client acts on, re-sending the same request in a body. One extra round trip, and no code change.
+
+Refusing cannot unsay the first leak — the URL was logged by every hop before it arrived — so what it buys is that the answer is never cached under that URL, and that a client getting it wrong says so. The second rule is the one that needs no cooperation at all.
+
+On a type it covers every member read off that type, including one reached by navigating into it from somewhere else, which is how a [`[QueryableComplex]`](#queryablecomplex) shape is marked.
+
+Marking a member **moves the [schema stamp](schema-versioning.md)**, unlike [`[Obsolete]`](#obsolete) and for the reason `[Obsolete]` does not: it changes what an already-deployed client is allowed to do, and moving the stamp is what makes that client report itself stale.
+
+Fields are not a target. Nothing in Scry reads one — the generator and the server both walk properties — so the attribute would read as protection while doing nothing.
+
+The message a refusal carries says only what to do, never which member is sensitive: naming it would answer "which of these columns is the sensitive one?" for anyone who asked. See [Caching](caching.md#the-sharp-edges).
+
+
 ## `[BinaryTransfer]`
 
 <!-- snippet: binaryTransferMember -->
 <a id='snippet-binaryTransferMember'></a>
 ```cs
-// Travels as a raw multipart part in HTTP responses instead of base64 in the JSON payload.
+// Travels as a raw multipart part in HTTP responses instead of base64 in the JSON payload, and —
+// being a photograph of a person — is never written to a cache that outlives the session reading it.
 [BinaryTransfer]
+[Sensitive]
 public byte[] Avatar { get; set; } = [];
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L59-L63' title='Snippet source file'>snippet source</a> | <a href='#snippet-binaryTransferMember' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L59-L65' title='Snippet source file'>snippet source</a> | <a href='#snippet-binaryTransferMember' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A `byte[]` member's values normally travel as base64 strings inside the JSON payload — +33% size and an encode/decode on both ends. `[BinaryTransfer]` opts a member out: over HTTP its values travel as raw `multipart/mixed` parts beside the JSON, on all three endpoints. See [Binary transfer](wire-format.md#binary-transfer) for the format.
@@ -513,7 +565,7 @@ public class Contract
     public byte[]? Document { get; set; }
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L339-L351' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentMember' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L342-L354' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentMember' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The other way to expose a `byte[]`, and the opposite trade from `[BinaryTransfer]`: the query never reads the value at all. What the client gets instead is a handle carrying the row's key, exchanged for the bytes by a second request whenever — or if ever — they are wanted. See [Attachments](attachments.md).
@@ -564,7 +616,7 @@ Unlike a row policy there is exactly one: the check is a yes/no decision rather 
 [Obsolete("Counts open roles too; use the Region rollup.")]
 public int Headcount { get; set; }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L274-L279' title='Snippet source file'>snippet source</a> | <a href='#snippet-obsoleteMember' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L277-L282' title='Snippet source file'>snippet source</a> | <a href='#snippet-obsoleteMember' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The client never references the model assembly, so a deprecation would otherwise stop at the boundary. It is replicated instead: onto the generated query model, onto the member, and onto the `ScryQuery` entry point, so a query written against a deprecated source or member warns where it is written.
@@ -651,7 +703,7 @@ A property whose type is a collection of another opted-in type is a **collection
 [QueryableCollection]
 public List<OrderLine> Lines { get; set; } = [];
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L192-L197' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableCollection' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L195-L200' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableCollection' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 An exposed collection is **aggregable, not projectable**. A client can ask a question about it — `Any`, `All`, `Count`, `Sum`, `Average`, `Min`, `Max`, which the database answers as a correlated subquery — but can never enumerate its rows, project it, traverse through it in a member path, or order by it. Every answer is a scalar, so a response can never carry an unbounded nested collection. See [subqueries](querying.md#collection-subqueries).
@@ -677,7 +729,7 @@ public List<string> Tags { get; set; } = [];
 [QueryableCollection]
 public List<int> Scores { get; set; } = [];
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L199-L208' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryablePrimitiveCollection' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L202-L211' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryablePrimitiveCollection' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 It opts in the same way and answers the same questions. The one difference is that its elements are values with no members, so a question reads the element *itself* — `_.Tags.Contains("urgent")`, `_.Tags.Any(tag => tag.StartsWith("ex"))`, `_.Scores.Sum()`. See [collections of values](querying.md#collections-of-values).

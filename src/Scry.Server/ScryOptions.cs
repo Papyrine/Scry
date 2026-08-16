@@ -54,7 +54,71 @@ public sealed class ScryOptions(Type contextType)
     /// mistake truncation for the end of the data.
     /// </remarks>
     public int? MaxStreamRows { get; set; }
+
+    /// <summary>
+    /// The longest encoded query this deployment wants asked as a URL. Default 4096; zero maps no GET
+    /// route at all, so every query travels as a body.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Unlike the limits above this one rejects nothing — it is advertised rather than enforced,
+    /// because the ceiling it describes is not this server's. What actually truncates or refuses a long
+    /// URL is whichever hop is strictest: 8 KB on a whole request line is the common default for a
+    /// server or a proxy, and the number here is the budget a client is asked to stay inside of so it
+    /// never finds out where the real edge is. A request that arrives is answered whatever its length.
+    /// </para>
+    /// <para>
+    /// It is a deployment setting rather than something the model declares, since the ingress in front
+    /// of a server is a property of where it runs — one model can be hosted behind two of them.
+    /// Clients learn it from <see cref="WireFormat.UrlLimitHeader"/>, carried on every response.
+    /// </para>
+    /// <para>
+    /// Zero is the exception, and is enforced: it says a query may never appear in a URL here, which is
+    /// a statement about this deployment rather than a guess about a length. <c>MapScry</c> honours it
+    /// by not mapping the GET route, so routing answers such a request with a 405 naming POST and Scry
+    /// never sees it. Setting it means giving up conditional requests — see /docs/caching.md.
+    /// </para>
+    /// </remarks>
+    public int QueryUrlLimit { get; set; } = QueryUrl.MaxLength;
     // end-snippet
+
+    /// <summary>
+    /// What the rows a query would return are current as of — a database change marker, typically.
+    /// Null, the default, writes no <c>ETag</c> and answers nothing conditionally.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// When set, a query asked as a URL is answered with an <c>ETag</c> over the schema stamp, this
+    /// token, the query, and <see cref="CacheScope"/>; a client sending that value back as
+    /// <c>If-None-Match</c> is answered <c>304</c> rather than re-executed. Returning null skips one
+    /// request rather than turning the whole thing off, so a source that cannot answer right now
+    /// degrades to a full response.
+    /// </para>
+    /// <para>
+    /// A delegate rather than a built-in reader because "has anything changed" has no one answer: a
+    /// transaction log position, a change-tracking version, a counter in Redis. Scry.Server.Delta
+    /// supplies one for a <c>DbContext</c> in a line.
+    /// </para>
+    /// <para>
+    /// The token invalidates every query at once — anything written moves it, so one write empties the
+    /// whole cache. That is the right default and the reason this suits a read-heavy database and does
+    /// not suit a write-heavy one.
+    /// </para>
+    /// </remarks>
+    public Func<HttpContext, Cancel, ValueTask<string?>>? QueryFreshness { get; set; }
+
+    /// <summary>
+    /// Who a cached response belongs to. Anything a response varies by that its query does not
+    /// describe: the tenant a row policy scopes rows to, the principal an attachment check answers
+    /// for, a build id where a response shape can change without the queryable surface changing.
+    /// </summary>
+    /// <remarks>
+    /// Without it, two callers asking the same question share an <c>ETag</c> — and a cache that holds
+    /// one caller's rows will hand them to the next. A server with a row or attachment policy
+    /// therefore has to set this before <see cref="QueryFreshness"/> is honoured; <c>MapScry</c>
+    /// refuses to start otherwise, since the alternative is a leak that only shows up in production.
+    /// </remarks>
+    public Func<HttpContext, string?>? CacheScope { get; set; }
 
     /// <summary>
     /// The size in bytes past which a response stops being held whole and is sent as it is written.

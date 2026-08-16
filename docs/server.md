@@ -20,9 +20,21 @@ builder.Services
         // references the annotations alone and has no server type to name.
         _.AddAttachmentPolicy<Department, HandbookPolicy>();
         _.MaxPageSize = 200;
+
+        // Repeat a query while nothing has been written and the answer is a 304 rather than a
+        // re-execution. Optional, and off until a freshness source says how to tell — see
+        // /docs/caching.md.
+        _.UseDeltaFreshness<SampleContext>();
+
+        // What a cached response belongs to. Department.Handbook carries an attachment check,
+        // so this server has a source whose answers depend on who asked, and MapScry refuses
+        // to start without this. The sample has no sign-in, so there is one caller and one
+        // scope; a real app returns its tenant or its principal, and a client signing in as
+        // someone else is then never handed the previous one's rows.
+        _.CacheScope = _ => "sample";
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L26-L40' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L26-L52' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddPocoSource` registers the data for a `[QueryablePoco]` type — see [POCO sources](#poco-sources) below. `MaxPageSize` is one of the [limits](#options).
@@ -48,18 +60,24 @@ Failures surface at startup, not at first request:
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L55-L57' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L67-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-Three `POST` endpoints, from the one call:
+Three routes, from the one call:
 
-| Route | Request | Response |
-| --- | --- | --- |
-| the pattern given | [`QueryRequest`](wire-format.md) | one `QueryResponse` |
-| `…/stream` | the same `QueryRequest` | [newline-delimited rows](wire-format.md#streamed-results), for [`ToAsyncEnumerable`](querying.md#streaming-rows) |
-| `…/batch` | [`QueryBatchRequest`](wire-format.md#batched-queries) | one result per entry, for [batching](batching.md) |
+| Route | Method | Request | Response |
+| --- | --- | --- | --- |
+| the pattern given | `GET` or `POST` | [`QueryRequest`](wire-format.md), [in the URL](wire-format.md#the-url-form) or in the body | one `QueryResponse` |
+| `…/stream` | `POST` | the same `QueryRequest` | [newline-delimited rows](wire-format.md#streamed-results), for [`ToAsyncEnumerable`](querying.md#streaming-rows) |
+| `…/batch` | `POST` | [`QueryBatchRequest`](wire-format.md#batched-queries) | one result per entry, for [batching](batching.md) |
 
-They are mapped together deliberately. Streaming reads the same query surface a row at a time and batching carries several of its queries at once; neither widens what can be asked, so opting into them separately would only invite deployments where one is protected and the others are not. `MapScry` returns an `IEndpointConventionBuilder` covering **all three**, so the usual conventions apply once:
+(Plus `…/attachment`, which [attachments](attachments.md) covers — mapped here so one authorization convention reaches it too.)
+
+The query pattern answers both methods with the same handler: a `GET` carries the request base64url-encoded in a `q` parameter instead of in a body, and everything after that — validation, the allow-list, policies, shaping — is identical. `GET` is what a client uses by default, because a response identified by a URL can be cached and revalidated by machinery that already exists where a `POST` can never be; see [Caching](caching.md).
+
+Setting [`QueryUrlLimit`](#options) to `0` maps no `GET` route at all, and routing then answers one with a `405` naming `POST`. Clients notice and stop offering URLs, so the status is a backstop for a stale one rather than the everyday path.
+
+The routes are mapped together deliberately. Streaming reads the same query surface a row at a time and batching carries several of its queries at once; neither widens what can be asked, so opting into them separately would only invite deployments where one is protected and the others are not. `MapScry` returns an `IEndpointConventionBuilder` covering **every** route it mapped, so the usual conventions apply once:
 
 ```cs
 app.MapScry("/api/query")
@@ -122,8 +140,34 @@ public int MaxBatchSize { get; set; } = 20;
 /// mistake truncation for the end of the data.
 /// </remarks>
 public int? MaxStreamRows { get; set; }
+
+/// <summary>
+/// The longest encoded query this deployment wants asked as a URL. Default 4096; zero maps no GET
+/// route at all, so every query travels as a body.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Unlike the limits above this one rejects nothing — it is advertised rather than enforced,
+/// because the ceiling it describes is not this server's. What actually truncates or refuses a long
+/// URL is whichever hop is strictest: 8 KB on a whole request line is the common default for a
+/// server or a proxy, and the number here is the budget a client is asked to stay inside of so it
+/// never finds out where the real edge is. A request that arrives is answered whatever its length.
+/// </para>
+/// <para>
+/// It is a deployment setting rather than something the model declares, since the ingress in front
+/// of a server is a property of where it runs — one model can be hosted behind two of them.
+/// Clients learn it from <see cref="WireFormat.UrlLimitHeader"/>, carried on every response.
+/// </para>
+/// <para>
+/// Zero is the exception, and is enforced: it says a query may never appear in a URL here, which is
+/// a statement about this deployment rather than a guess about a length. <c>MapScry</c> honours it
+/// by not mapping the GET route, so routing answers such a request with a 405 naming POST and Scry
+/// never sees it. Setting it means giving up conditional requests — see /docs/caching.md.
+/// </para>
+/// </remarks>
+public int QueryUrlLimit { get; set; } = QueryUrl.MaxLength;
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L57' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L83' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Every limit is enforced during validation, before any expression is rebound or executed.

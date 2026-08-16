@@ -34,9 +34,17 @@ public class Employee
     // Never exposed to clients.
     [QueryIgnore]
     public decimal Salary { get; set; }
+
+    // The other half of that pair: queryable, but never in a URL and never in a cache. [QueryIgnore]
+    // hides a member outright; [Sensitive] keeps it askable while refusing the two ways its value
+    // escapes — a query comparing it against a constant travels as a body rather than a URL, where the
+    // constant would land in every access log on the way, and a response projecting it is sent
+    // no-store, where a cacheable one would be written to the caller's disk.
+    [Sensitive]
+    public string Password { get; set; } = "";
 }
 ```
-<sup><a href='/samples/Sample.Model/Entities/Employee.cs#L3-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableEntity' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Model/Entities/Employee.cs#L3-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableEntity' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `[Queryable]` opts the type in; nothing is exposed without it. Every public readable property is then exposed unless it carries `[QueryIgnore]`. See [Annotations](annotations.md) for views, POCOs, and the exact member rules.
@@ -101,9 +109,21 @@ builder.Services
         // references the annotations alone and has no server type to name.
         _.AddAttachmentPolicy<Department, HandbookPolicy>();
         _.MaxPageSize = 200;
+
+        // Repeat a query while nothing has been written and the answer is a 304 rather than a
+        // re-execution. Optional, and off until a freshness source says how to tell — see
+        // /docs/caching.md.
+        _.UseDeltaFreshness<SampleContext>();
+
+        // What a cached response belongs to. Department.Handbook carries an attachment check,
+        // so this server has a source whose answers depend on who asked, and MapScry refuses
+        // to start without this. The sample has no sign-in, so there is one caller and one
+        // scope; a real app returns its tenant or its principal, and a client signing in as
+        // someone else is then never handed the previous one's rows.
+        _.CacheScope = _ => "sample";
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L26-L40' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L26-L52' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddScry<TContext>` scans `typeof(TContext).Assembly` once at startup, builds the allow-list schema, and registers it as a singleton along with the `ScryProcessor`.
@@ -117,10 +137,10 @@ Then map the endpoint:
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L55-L57' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L67-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-That is a single HTTP `POST` endpoint which accepts a serialized query and returns the projected rows. See [Server](server.md) for all options, and [Row policies](policies.md) for row-level filtering.
+That is a single HTTP endpoint which accepts a serialized query and returns the projected rows. It answers `POST`, where the query is the body, and `GET`, where the query [rides in the URL](wire-format.md#the-url-form) so the response can be cached and revalidated. See [Server](server.md) for all options, and [Row policies](policies.md) for row-level filtering.
 
 
 ## 3. The client
@@ -164,7 +184,7 @@ builder.Services.AddScoped<ScryQuery>();
 <sup><a href='/samples/Sample.Client/Program.cs#L14-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-`AddScryClient` registers a `ScryClient` that POSTs to the given endpoint using the `HttpClient` the delegate resolves — here a **named** one, so Scry's base address, and any handler pipeline it grows, stay separate from every other call the app makes. `ScryQuery` is generated into the `Scry.Generated` namespace.
+`AddScryClient` registers a `ScryClient` that sends to the given endpoint using the `HttpClient` the delegate resolves — here a **named** one, so Scry's base address, and any handler pipeline it grows, stay separate from every other call the app makes. `ScryQuery` is generated into the `Scry.Generated` namespace.
 
 The factory is reached through that delegate rather than being a dependency of `Scry.Client`, so an application that does not otherwise want `Microsoft.Extensions.Http` does not acquire it by referencing Scry.
 
@@ -218,7 +238,7 @@ employees = await Query
 <sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L35-L42' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-That query is captured — never executed client-side — serialized to the wire AST, POSTed, validated against the allow-list on the server, rebound to the real `Employee` type, run through EF Core, and returned as exactly the four projected columns.
+That query is captured — never executed client-side — serialized to the wire AST, sent, validated against the allow-list on the server, rebound to the real `Employee` type, run through EF Core, and returned as exactly the four projected columns.
 
 Adding a new query is more LINQ. No new endpoint, no new contract, no server change.
 

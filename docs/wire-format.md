@@ -97,6 +97,43 @@ Because `root` is part of the contract, prefer setting `Name` over relying on th
 `QueryRequest.Create(root, pipeline)` fills in the current wire version, and takes an optional schema stamp.
 
 
+### The URL form
+
+The same request travels one of two ways, and the JSON above is identical in both. As a body:
+
+```
+POST {pattern}
+Content-Type: application/json
+
+{"version":1,"root":"Employee","pipeline":[...]}
+```
+
+Or, when it is short enough, as a URL — the serialized request base64url-encoded into a single `q` parameter:
+
+```
+GET {pattern}?q=eyJ2ZXJzaW9uIjoxLCJyb290IjoiRW1wbG95ZWUi...
+```
+
+| | |
+| --- | --- |
+| Parameter | `q` (`QueryUrl.Parameter`) |
+| Encoding | base64url of the UTF-8 JSON, unpadded (`QueryUrl.Encode`) |
+| Limit | `QueryUrl.MaxLength` — 4096 encoded characters |
+| Over the limit | sent as a body instead; both endpoints stay mapped |
+
+`MapScry` maps `GET` and `POST` on the same pattern to the same handler, so the two forms differ in transport only: same validation, same allow-list, same policies, same response. Which one a client uses is not a property of the query — a client may send either, and a server answers both.
+
+The form exists because a cache decides what it may store from the method and the URL, before it looks at anything else. A `POST` is uncacheable to every cache between the client and the server, and its body is part of no cache key; a `GET` carrying the query in its URL is an ordinary cacheable request, which is what makes [conditional requests](caching.md) work without both ends hand-implementing them.
+
+The request travels in the URL rather than in content on the `GET` for two reasons, both of which are about what survives the trip. A browser will not send content on a `GET` at all — the Fetch standard forbids it, which rules a body out for a WASM client and for the explorer. And an intermediary is permitted to drop the content of a `GET`, after which the request still looks well-formed — same method, same URL — but carries nothing to execute, so the server answers 400 and the client cannot distinguish that from a rejection it caused itself. A URL survives every hop by construction.
+
+base64url rather than the JSON percent-encoded: length is the binding constraint, and percent-encoding inflates JSON by about 1.84× where base64url costs 1.33×. It also has no reserved characters, so what the client writes is what the server reads.
+
+A URL is logged, though, by every hop it passes and in the `Referer` of whatever the page does next — constants included. A query whose constants are sensitive on their own belongs on `POST` whatever its length.
+
+Decoding fails closed like the rest of the wire: a `q` that is absent, not base64url, or not a request the server can parse is a 400, never a partial query.
+
+
 ## Operators
 
 <!-- snippet: wireOperators -->
@@ -923,14 +960,15 @@ public static class WireFormat
     public const string SchemaStampHeader = "Scry-Schema-Stamp";
 
     /// <summary>
-    /// The HTTP request header carrying the client's <see cref="QueryFingerprint"/> of the body it sent.
-    /// Optional — a request without it is answered exactly as one with it — and advisory: it comes from
-    /// the client, so it is never trusted as an identity the server acts on. See
-    /// <see cref="QueryFingerprint"/> for what may and may not be done with it. Part of the wire contract.
+    /// The HTTP response header carrying the longest encoded query this server wants asked as a URL,
+    /// as a decimal integer. Written on every response, so a client learns it from whatever it asked
+    /// first and never has to be told out of band. Advisory: a request over the limit is still answered,
+    /// because the ceiling being described belongs to the hops in between rather than to this server.
+    /// Zero says this deployment maps no GET route at all. Part of the wire contract.
     /// </summary>
-    public const string QueryHashHeader = "Scry-Query-Hash";
+    public const string UrlLimitHeader = "Scry-Url-Limit";
 ```
-<sup><a href='/src/Scry.Wire/WireFormat.cs#L3-L25' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireVersion' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/WireFormat.cs#L3-L26' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireVersion' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `QueryRequest.Create` and `QueryResponse.Create` stamp the current version. The server rejects a request whose `version` is **greater** than its own — a newer client against an older server fails closed rather than being partially understood. Older requests continue to be accepted.
@@ -1092,16 +1130,22 @@ Over HTTP, request and response look like this:
 ```txt
 [
   {
-    RequestUri: http://localhost/api/query,
-    RequestMethod: POST,
-    RequestContent: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"node","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"{scrubbed stamp}"},
+    RequestUri: {
+      Path: http://localhost/api/query,
+      Query: {
+        q: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":["Active"]}},{"$type":"orderBy","key":{"$type":"member","path":["Name"]},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Name"]}}},{"name":"Status","value":{"$type":"node","node":{"$type":"member","path":["Status"]}}},{"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"{scrubbed stamp}"}
+      }
+    },
+    RequestMethod: GET,
     ResponseStatus: OK 200,
     ResponseHeaders: {
-      Scry-Schema-Stamp: {Scrubbed}
+      Cache-Control: no-cache, private,
+      Scry-Schema-Stamp: {Scrubbed},
+      Scry-Url-Limit: 4096
     },
     ResponseContent: {"version":2,"kind":"List","payload":[{"name":"Aaron","status":"FullTime","manager":"Alice","department":"Engineering"},{"name":"Alice","status":"FullTime","manager":null,"department":"Engineering"},{"name":"Carol","status":"Contractor","manager":null,"department":"Sales"}],"stamp":"{scrubbed stamp}"}
   }
 ]
 ```
-<sup><a href='/samples/Sample.Tests/WireFormatTests.EmployeeQueryWireFormat.verified.txt#L1-L12' title='Snippet source file'>snippet source</a> | <a href='#snippet-WireFormatTests.EmployeeQueryWireFormat.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Tests/WireFormatTests.EmployeeQueryWireFormat.verified.txt#L1-L18' title='Snippet source file'>snippet source</a> | <a href='#snippet-WireFormatTests.EmployeeQueryWireFormat.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->

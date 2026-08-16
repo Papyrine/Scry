@@ -15,8 +15,18 @@ public sealed record ScryIntrospection(
     /// <summary>Current introspection contract version.</summary>
     public const int CurrentVersion = 1;
 
-    /// <summary>The query endpoint the explorer POSTs translated requests to (set by the explorer host).</summary>
+    /// <summary>The query endpoint the explorer sends translated requests to (set by the explorer host).</summary>
     public string QueryEndpoint { get; init; } = "/api/query";
+
+    /// <summary>
+    /// The longest encoded query this server wants asked as a URL, or zero where it maps no GET route.
+    /// </summary>
+    /// <remarks>
+    /// The same number <see cref="WireFormat.UrlLimitHeader"/> carries, published here because the
+    /// explorer needs it before it has sent anything — and because the explorer is built and embedded
+    /// when Scry is, so it can carry no per-deployment value of its own.
+    /// </remarks>
+    public int QueryUrlLimit { get; init; } = QueryUrl.MaxLength;
 
     /// <summary>
     /// Whether this host will show the SQL a request would run (set by the explorer host, from a guard

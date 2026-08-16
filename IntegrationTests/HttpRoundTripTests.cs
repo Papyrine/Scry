@@ -19,6 +19,8 @@ public class HttpRoundTripTests
     ScryClient client = null!;
     ScryQuery query = null!;
     SqlDatabase<Sample.Model.SampleContext> database = null!;
+    static string? lastMethod;
+    static readonly List<string> methods = [];
 
     record EmployeeRow(string Name, Status Status, string? Manager, string Department);
 
@@ -58,6 +60,17 @@ public class HttpRoundTripTests
         });
 
         app = builder.Build();
+
+        // Records how each query actually travelled. The client chooses between a URL and a body by
+        // length, and a test that only checked the rows could not tell which path produced them.
+        app.Use(
+            async (context, next) =>
+            {
+                lastMethod = context.Request.Method;
+                methods.Add(lastMethod);
+                await next();
+            });
+
         app.MapScry("/api/query");
         await app.StartAsync();
 
@@ -358,6 +371,228 @@ public class HttpRoundTripTests
     // The lockstep guarantee behind stale-client detection: the stamp the generator bakes into the
     // client (computed from Sample.Model's metadata on disk) must equal the stamp the server computes
     // from the same assembly via reflection. If the two surface readers ever diverge, this fails.
+    // A query that fits in a URL is asked as one, so the caller's own HTTP cache can answer a repeat.
+    // Same rows either way — the transport is the only thing that differs.
+    [Test]
+    public async Task SmallQueryTravelsAsAUrl()
+    {
+        var rows = await query.Employee
+            .Where(_ => _.Active)
+            .OrderBy(_ => _.Name)
+            .Select(_ => new NameRow(_.Name))
+            .ToListAsync();
+
+        Assert.That(lastMethod, Is.EqualTo("GET"));
+        Assert.That(rows.Select(_ => _.Name), Is.EqualTo(activeEmployeeNames));
+    }
+
+    // Past the length a URL can carry, the same query goes back to a body. The fallback is the whole
+    // reason POST stays mapped: a URL has a ceiling and an IN list is the easiest way to reach it.
+    [Test]
+    public async Task OversizedQueryFallsBackToABody()
+    {
+        var ids = Enumerable.Range(0, 400)
+            .Select(_ => $"tag-{_:D4}")
+            .ToArray();
+
+        var rows = await query.Order
+            .Where(_ => ids.Contains(_.Region))
+            .Select(_ => new NameRow(_.Region))
+            .ToListAsync();
+
+        Assert.That(lastMethod, Is.EqualTo("POST"));
+        Assert.That(rows, Is.Empty);
+    }
+
+    // Employee.Password is [Sensitive], so the value compared against it never reaches a URL — where
+    // it would be written to the access log of every hop between here and the server.
+    [Test]
+    public async Task SensitiveConstantTravelsAsABody()
+    {
+        var rows = await query.Employee
+            .Where(_ => _.Password == "hunter2")
+            .Select(_ => new NameRow(_.Name))
+            .ToListAsync();
+
+        Assert.That(lastMethod, Is.EqualTo("POST"));
+        Assert.That(rows, Is.Empty);
+    }
+
+    // Naming the same member without a constant leaves the transport alone: an ordering puts nothing
+    // in the URL, so there is nothing to keep out of one.
+    [Test]
+    public async Task OrderingByASensitiveMemberKeepsTheUrl()
+    {
+        var rows = await query.Employee
+            .OrderBy(_ => _.Password)
+            .Select(_ => new NameRow(_.Name))
+            .ToListAsync();
+
+        Assert.That(lastMethod, Is.EqualTo("GET"));
+        Assert.That(rows, Is.Not.Empty);
+    }
+
+    // The rule a client applies is the one the server holds it to. A hand-written request that broke
+    // it — as a stale client's would — is refused, and refused in a way that says what to do instead.
+    [Test]
+    public async Task SensitiveConstantInAUrlIsRefused()
+    {
+        var encoded = QueryUrl.Encode(
+            query.Employee
+                .Where(_ => _.Password == "hunter2")
+                .Select(_ => new NameRow(_.Name))
+                .ToScryRequest());
+
+        using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
+        var error = ScryJson.TryDeserializeError(await response.Content.ReadAsByteArrayAsync());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+            Assert.That(error!.RequiresBody, Is.True);
+
+            // Says what to do, never which member — a message naming it would answer "which of these
+            // columns is the sensitive one?" for anyone who asked.
+            Assert.That(error.Error, Does.Not.Contain("Password"));
+            Assert.That(error.Error, Does.Contain("request body"));
+
+            // And the refusal is never the thing a cache keeps.
+            Assert.That(response.Headers.CacheControl!.NoStore, Is.True);
+        });
+    }
+
+    // The same query in a body is accepted, which is what makes the refusal above a retry rather than
+    // a failure.
+    [Test]
+    public async Task SensitiveConstantInABodyIsAccepted()
+    {
+        var rows = await query.Employee
+            .Where(_ => _.Password == "hunter2")
+            .Select(_ => new NameRow(_.Name))
+            .ToListAsync();
+
+        Assert.That(lastMethod, Is.EqualTo("POST"));
+        Assert.That(rows, Is.Empty);
+    }
+
+    // Returning a sensitive member puts nothing in the URL, so the query keeps it — and the response
+    // is marked unstorable, because `private, no-cache` would still write the rows to the caller's
+    // disk. This is the half no client can opt out of.
+    [Test]
+    public async Task ProjectingASensitiveMemberIsNotStorable()
+    {
+        var encoded = QueryUrl.Encode(
+            query.Employee
+                .Where(_ => _.Active)
+                .Select(_ => new PasswordRow(_.Password))
+                .ToScryRequest());
+
+        using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(response.Headers.CacheControl!.NoStore, Is.True);
+        });
+    }
+
+    // A query with no Select is answered with every member of the source, sensitive ones included, so
+    // it is unstorable for the same reason without having named one.
+    [Test]
+    public async Task DefaultProjectionOfASensitiveSourceIsNotStorable()
+    {
+        var encoded = QueryUrl.Encode(query.Employee.Where(_ => _.Active).ToScryRequest());
+
+        using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
+
+        Assert.That(response.Headers.CacheControl!.NoStore, Is.True);
+    }
+
+    [Test]
+    public async Task QueryTouchingNothingSensitiveStaysStorable()
+    {
+        var encoded = QueryUrl.Encode(
+            query.Employee
+                .Where(_ => _.Active)
+                .Select(_ => new NameRow(_.Name))
+                .ToScryRequest());
+
+        using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.Headers.CacheControl!.NoStore, Is.False);
+            Assert.That(response.Headers.CacheControl.Private, Is.True);
+        });
+    }
+
+    record PasswordRow(string Password);
+
+    // What a client generated before the member was marked does: it reads its own model, sees nothing
+    // sensitive, and asks in a URL. The refusal is one it can act on without a person reading it, so
+    // the query still returns — one round trip later, in a body — rather than failing.
+    [Test]
+    public async Task AClientThatDoesNotKnowRetriesInABody()
+    {
+        var stale = ScryClient.ForHttp(http, "/api/query");
+        methods.Clear();
+
+        var rows = await stale.Source<UnmarkedEmployee>("Employee", ["Id", "Name", "Password"])
+            .Where(_ => _.Password == "hunter2")
+            .Select(_ => new NameRow(_.Name))
+            .ToListAsync();
+
+        // Asked the way it believed it could, refused, and asked again the way it was told to — which
+        // is the whole of the self-healing, and is why this is two requests rather than one.
+        Assert.That(methods, Is.EqualTo(["GET", "POST"]));
+        Assert.That(rows, Is.Empty);
+    }
+
+    // Deliberately without [ScrySensitive], which is what makes it stand for a client generated before
+    // the model marked the member.
+    [ScryModel("Employee", "Id", "Name", "Password")]
+    public class UnmarkedEmployee
+    {
+        public int Id { get; init; }
+        public string Name { get; init; } = "";
+        public string Password { get; init; } = "";
+    }
+
+    // The URL is attacker-controlled like everything else on the wire, and fails closed: a parameter
+    // that is not base64url of a request this server can parse is a 400, never a partial query.
+    [Test]
+    public async Task MalformedUrlQueryIsRejected()
+    {
+        using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}=not-base64url!!");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(response.Headers.GetValues("Scry-Schema-Stamp").Single(), Is.EqualTo(ScryQuery.SchemaStamp));
+    }
+
+    [Test]
+    public async Task UrlQueryWithoutTheParameterIsRejected()
+    {
+        using var response = await http.GetAsync("/api/query");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    // A URL identifies a response, so it may be stored — but only by the caller's own cache, and only
+    // with a revalidation on every reuse. Rows are shaped by policies that read the request, so the
+    // same URL answers differently for two principals.
+    [Test]
+    public async Task UrlQueryIsPrivatelyCacheable()
+    {
+        await query.Employee.Where(_ => _.Active).CountAsync();
+
+        var encoded = QueryUrl.Encode(
+            query.Employee.Where(_ => _.Active).ToScryRequest(new CountOp()));
+        using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
+
+        Assert.That(response.Headers.CacheControl!.Private, Is.True);
+        Assert.That(response.Headers.CacheControl.NoCache, Is.True);
+    }
+
     [Test]
     public void GeneratedSchemaStampMatchesServer()
     {
@@ -713,30 +948,6 @@ public class HttpRoundTripTests
         Assert.That(stamp, Is.EqualTo(ScryQuery.SchemaStamp));
     }
 
-    // The client fingerprints the exact bytes it is about to send and carries the value in a header. The
-    // policy reads it off the same ScryPolicyContext a correlation header arrives on, so a match here
-    // proves it survived the round trip; comparing against the fingerprint of the serialized request
-    // proves both sides agree on what was hashed, rather than merely on some value being present.
-    [Test]
-    public async Task QueryFingerprintReachesTheServerOverHttp()
-    {
-        string? received = null;
-
-        var rows = await query.Order
-            .OnResponseHeaders(_ => received = _.GetValues("X-Scry-Hash").Single())
-            .Select(_ => new RegionRow(_.Region))
-            .ToListAsync();
-
-        var sent = QueryFingerprint.Compute(
-            ScryJson.SerializeToUtf8(
-                query.Order
-                    .Select(_ => new RegionRow(_.Region))
-                    .ToScryRequest()));
-
-        Assert.That(rows, Is.Not.Empty);
-        Assert.That(received, Is.EqualTo(sent));
-    }
-
     record RegionRow(string Region);
 }
 
@@ -751,10 +962,6 @@ public sealed class EchoHeaderPolicy :
     public IQueryable<Sample.Model.Order> Filter(IQueryable<Sample.Model.Order> source, ScryPolicyContext context)
     {
         context.ResponseHeaders["X-Scry-Echo"] = context.RequestHeaders["X-Correlation"];
-        // The client's fingerprint of the request body, echoed the same way — this is a test double for a
-        // server that would compare it against one of its own, not a suggestion that a policy should read
-        // it. Nothing here filters on it; the client controls its value.
-        context.ResponseHeaders["X-Scry-Hash"] = context.RequestHeaders[WireFormat.QueryHashHeader];
         return source;
     }
 }

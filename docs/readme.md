@@ -1,4 +1,4 @@
-﻿# Scry documentation
+# Scry documentation
 
 Type-safe, serializable LINQ from a client to a server-side EF Core model.
 
@@ -19,6 +19,7 @@ Type-safe, serializable LINQ from a client to a server-side EF Core model.
 | [Row policies](policies.md) | `IReturnablePolicy<T>` for tenant scoping, soft delete, and row-level security. |
 | [Attachments](attachments.md) | `[Attachment]`: a binary member fetched on demand by row key, not carried by the query. |
 | [Observability](observability.md) | The traces, metrics, and per-query audit hook the server emits. |
+| [Caching and 304](caching.md) | Answering a repeated query with `304 Not Modified`, using Delta for the database timestamp. |
 | [Performance](performance.md) | What a response costs to write and to read, measured, and how to re-run the benchmarks. |
 | [Security model](security.md) | The threat model, every enforcement layer, and what Scry does *not* protect. |
 | [Wire format](wire-format.md) | The JSON query AST: request, response, every node type, versioning. |
@@ -47,7 +48,7 @@ Sample.Model (EF Core + [Queryable])
    │                                                                  │
    │                                                    Sample.Client (ordinary LINQ)
    │                                                                  │
-   │                                          QueryRequest (JSON AST) │ POST /api/query
+   │                                          QueryRequest (JSON AST) │ GET|POST /api/query
    │                                                                  ▼
    └─────────────────────────────────────────────────────▶ Sample.Server
       referenced normally                                  validate → policy → rebind
@@ -64,6 +65,7 @@ Sample.Model (EF Core + [Queryable])
 | [Scry.Client](https://nuget.org/packages/Scry.Client/) | Client-side `IQueryable` provider (no EF dependency). Ships the source generator. |
 | [Scry.Server](https://nuget.org/packages/Scry.Server/) | Server-side validation + execution against EF Core. |
 | [Scry.Server.Explorer](https://nuget.org/packages/Scry.Server.Explorer/) | Opt-in query explorer UI. |
+| [Scry.Server.Delta](https://nuget.org/packages/Scry.Server.Delta/) | Opt-in `304 Not Modified`, using Delta for the database's change marker. |
 
 `Scry.SourceGenerator` is not published on its own — it is packed inside `Scry.Client` as an analyzer, so referencing `Scry.Client` is all a client project needs.
 
@@ -71,7 +73,7 @@ Every package puts its public types in the single `Scry` namespace, so one `usin
 
 ## Requirements
 
-- .NET 10 (`net10.0`) for `Scry.Wire`, `Scry.Client`, `Scry.Server`, and `Scry.Server.Explorer`.
+- .NET 10 (`net10.0`) for `Scry.Wire`, `Scry.Client`, `Scry.Server`, `Scry.Server.Explorer`, and `Scry.Server.Delta`.
 - `Scry.Annotations` targets `netstandard2.0`, so any model project can reference it.
 - EF Core on the server. The client has no EF dependency, which keeps it small under trimmed Blazor WebAssembly.
 

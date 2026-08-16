@@ -335,6 +335,93 @@ public class GeneratorTests
         Assert.That(Stamp(annotated), Is.EqualTo(Stamp(bare)));
     }
 
+    // The counterpart to the test above, and the reason the two are worth stating together: [Sensitive]
+    // changes what an already-deployed client may do, where [Obsolete] only changes what it is told. A
+    // client generated before the marking keeps asking in URLs and starts being refused, so the stamp
+    // has to move — that is what turns the refusal into a reported staleness with a fix attached.
+    [Test]
+    public void SensitiveMovesTheSchemaStamp()
+    {
+        const string bare = """
+            using Scry;
+
+            namespace Sample.Model;
+
+            [Queryable]
+            public class Employee
+            {
+                public int Id { get; set; }
+                public string Ssn { get; set; } = "";
+            }
+            """;
+
+        const string marked = """
+            using Scry;
+
+            namespace Sample.Model;
+
+            [Queryable]
+            public class Employee
+            {
+                public int Id { get; set; }
+                [Sensitive] public string Ssn { get; set; } = "";
+            }
+            """;
+
+        const string wholeType = """
+            using Scry;
+
+            namespace Sample.Model;
+
+            [Queryable]
+            [Sensitive]
+            public class Employee
+            {
+                public int Id { get; set; }
+                public string Ssn { get; set; } = "";
+            }
+            """;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Stamp(marked), Is.Not.EqualTo(Stamp(bare)));
+            Assert.That(Stamp(wholeType), Is.Not.EqualTo(Stamp(bare)));
+
+            // Marking the type is not the same statement as marking its one member, so the two do not
+            // collapse onto each other: the type's mark reaches members added later, and any navigation
+            // into it.
+            Assert.That(Stamp(wholeType), Is.Not.EqualTo(Stamp(marked)));
+        });
+    }
+
+    [Test]
+    public Task Sensitive()
+    {
+        const string model = """
+            using Scry;
+
+            namespace Sample.Model;
+
+            [Queryable]
+            public class Employee
+            {
+                public int Id { get; set; }
+                public string Name { get; set; } = "";
+                [Sensitive] public string Ssn { get; set; } = "";
+                public Payroll? Payroll { get; set; }
+            }
+
+            [QueryableComplex]
+            [Sensitive]
+            public class Payroll
+            {
+                public decimal Salary { get; set; }
+            }
+            """;
+
+        return Verify(RunGenerator(model));
+    }
+
     static string Stamp(string modelSource) =>
         GeneratedSources(modelSource)
             .SelectMany(_ => _.Split('\n'))

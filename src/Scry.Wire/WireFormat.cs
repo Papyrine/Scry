@@ -16,12 +16,13 @@ public static class WireFormat
     public const string SchemaStampHeader = "Scry-Schema-Stamp";
 
     /// <summary>
-    /// The HTTP request header carrying the client's <see cref="QueryFingerprint"/> of the body it sent.
-    /// Optional — a request without it is answered exactly as one with it — and advisory: it comes from
-    /// the client, so it is never trusted as an identity the server acts on. See
-    /// <see cref="QueryFingerprint"/> for what may and may not be done with it. Part of the wire contract.
+    /// The HTTP response header carrying the longest encoded query this server wants asked as a URL,
+    /// as a decimal integer. Written on every response, so a client learns it from whatever it asked
+    /// first and never has to be told out of band. Advisory: a request over the limit is still answered,
+    /// because the ceiling being described belongs to the hops in between rather than to this server.
+    /// Zero says this deployment maps no GET route at all. Part of the wire contract.
     /// </summary>
-    public const string QueryHashHeader = "Scry-Query-Hash";
+    public const string UrlLimitHeader = "Scry-Url-Limit";
     // end-snippet
 
     /// <summary>

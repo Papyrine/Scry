@@ -19,4 +19,11 @@ readonly record struct CallScope(
     /// leaves this null and stays bit-identical.
     /// </summary>
     public BinaryPartCollector? Binary { get; init; }
+
+    /// <summary>
+    /// Whether the request arrived as a URL rather than as a body, which decides whether the sensitive
+    /// rule applies to it. Only the query endpoint's GET sets it; a host with no URL to speak of leaves
+    /// it false, and nothing changes for one.
+    /// </summary>
+    public bool FromUrl { get; init; }
 }

@@ -57,8 +57,10 @@ public class Employee
     public Department? Department { get; set; }
 
     // begin-snippet: binaryTransferMember
-    // Travels as a raw multipart part in HTTP responses instead of base64 in the JSON payload.
+    // Travels as a raw multipart part in HTTP responses instead of base64 in the JSON payload, and —
+    // being a photograph of a person — is never written to a cache that outlives the session reading it.
     [BinaryTransfer]
+    [Sensitive]
     public byte[] Avatar { get; set; } = [];
     // end-snippet
 
@@ -107,6 +109,7 @@ public class Shift
 /// </summary>
 // begin-snippet: queryableComplex
 [QueryableComplex]
+[Sensitive]
 public class Address
 {
     public string City { get; set; } = "";

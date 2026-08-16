@@ -16,34 +16,78 @@ public static class ScryServiceExtensions
         return services;
     }
 
-    /// <summary>Maps the query-execution endpoint (HTTP POST) at <paramref name="pattern"/>.</summary>
+    /// <summary>Maps the query-execution endpoint at <paramref name="pattern"/>.</summary>
     public static IEndpointConventionBuilder MapScry(this IEndpointRouteBuilder endpoints, string pattern)
     {
+        ScryOptions options;
+
         // Validate the annotations against the live EF model once, at startup, where a model exists.
         // A misapplied [Queryable]/[QueryableComplex] fails loudly here rather than obscurely per-query.
         using (var scope = endpoints.ServiceProvider.CreateScope())
         {
-            var options = scope.ServiceProvider.GetRequiredService<ScryOptions>();
+            options = scope.ServiceProvider.GetRequiredService<ScryOptions>();
             var processor = scope.ServiceProvider.GetRequiredService<ScryProcessor>();
             var db = (DbContext)scope.ServiceProvider.GetRequiredService(options.ContextType);
             processor.ValidateAgainstModel(db);
+            RefuseUnscopedCaching(options, processor);
         }
 
         // One call, every transport of the same query surface: streaming reads it a row at a time and
         // batching carries several queries at once, but neither widens what can be asked. Mapping them
         // separately would only invite deployments where one is protected and the others are not.
-        // Conventions applied to the returned builder reach all four.
+        // Conventions applied to the returned builder reach all of them.
         //
         // The attachment endpoint belongs here for that reason above all: it answers about a row of the
         // same model, so a deployment that authorizes queries and leaves it open would be handing out
         // by key exactly what the guard on the others exists to protect.
-        return new Endpoints(
+        List<IEndpointConventionBuilder> builders =
         [
             endpoints.MapPost(pattern, Handle),
             endpoints.MapPost($"{pattern.TrimEnd('/')}/stream", HandleStream),
             endpoints.MapPost($"{pattern.TrimEnd('/')}/batch", HandleBatch),
             endpoints.MapPost($"{pattern.TrimEnd('/')}/attachment", HandleAttachment)
-        ]);
+        ];
+
+        // The same query, asked as a URL. One handler serves both: a GET carries the request in its
+        // query string instead of its body, and nothing downstream of that difference changes — same
+        // validation, same allow-list, same policies. It exists because a POST is uncacheable by
+        // everything between the client and here, where a GET is answered by the caller's own cache and
+        // revalidated with an ETag. See QueryUrl for why the request travels in the URL rather than in
+        // content on the GET.
+        //
+        // A limit of zero says this deployment will not have queries in URLs at all, and the route is
+        // simply not mapped: routing then answers a GET with a 405 naming POST, which is both the
+        // accurate status and a capability that is absent rather than guarded — there is no handler for
+        // a stale client to reach, and no URL for this server to read or log.
+        if (options.QueryUrlLimit > 0)
+        {
+            builders.Insert(1, endpoints.MapGet(pattern, Handle));
+        }
+
+        return new Endpoints(builders);
+    }
+
+    /// <summary>
+    /// Refuses at startup to answer conditionally from a source whose rows depend on who asked, unless
+    /// the host has said what a cached response belongs to.
+    /// </summary>
+    /// <remarks>
+    /// A row policy reads the request, so the same query answers differently for two callers while its
+    /// URL — and therefore its ETag — says nothing about which one. A browser profile outlives a
+    /// sign-out, so the next identity revalidates, matches, and is handed the previous one's rows.
+    /// Loud here rather than silent there: caching is opt-in, so a host that asked for it is told
+    /// exactly what else to set.
+    /// </remarks>
+    static void RefuseUnscopedCaching(ScryOptions options, ScryProcessor processor)
+    {
+        if (options.QueryFreshness is null ||
+            options.CacheScope is not null ||
+            processor.PolicedSource is not { } source)
+        {
+            return;
+        }
+
+        throw new($"'{source}' carries a policy, so its rows depend on who asked — and a cached response identified by a URL does not say who that was. Set ScryOptions.CacheScope to what such a response belongs to (a tenant, a principal), or leave ScryOptions.QueryFreshness unset to answer nothing conditionally.");
     }
 
     sealed class Endpoints(IReadOnlyList<IEndpointConventionBuilder> builders) :
@@ -77,7 +121,7 @@ public static class ScryServiceExtensions
         var options = services.GetRequiredService<ScryOptions>();
         var processor = services.GetRequiredService<ScryProcessor>();
 
-        context.Response.Headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
+        Advertise(context, processor, options);
 
         var started = Stopwatch.GetTimestamp();
         var body = await ReadBody(context);
@@ -203,7 +247,7 @@ public static class ScryServiceExtensions
         var options = services.GetRequiredService<ScryOptions>();
         var processor = services.GetRequiredService<ScryProcessor>();
 
-        context.Response.Headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
+        Advertise(context, processor, options);
 
         var started = Stopwatch.GetTimestamp();
         var body = await ReadBody(context);
@@ -342,18 +386,38 @@ public static class ScryServiceExtensions
         var options = services.GetRequiredService<ScryOptions>();
         var processor = services.GetRequiredService<ScryProcessor>();
 
-        // Advertised on every response, including rejections, so a client can notice a drifted model
-        // while its queries are still succeeding rather than only once one breaks. Set before any
-        // write, since headers are fixed once the response has started.
-        context.Response.Headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
+        Advertise(context, processor, options);
 
         var started = Stopwatch.GetTimestamp();
-        var body = await ReadBody(context);
+        var url = HttpMethods.IsGet(context.Request.Method);
+
+        if (url)
+        {
+            // A URL identifies a response, so a cache may keep this one — but only the cache belonging
+            // to the caller. Rows are shaped by policies that read the request, so the same URL answers
+            // differently for two principals and a shared cache would hand one of them the other's
+            // rows. `no-cache` keeps a stored copy revalidating rather than expiring on a guess: with
+            // no validator on the response, a browser is free to invent a freshness lifetime and serve
+            // stale rows without asking. An app that knows better can widen this above the endpoint.
+            context.Response.Headers.CacheControl = "private, no-cache";
+
+            // Answered from what the caller already holds, where the host has said how to tell that
+            // nothing has changed. Before the request is decoded, since proving a repeat is the whole
+            // point of not doing the work — and after Cache-Control above, so a 304 carries both
+            // directives: a client merges a 304's headers into the response it kept, and `no-cache`
+            // alone would strip `private` from its stored copy.
+            if (await QueryEtag.NotModified(context, processor, options))
+            {
+                return;
+            }
+        }
 
         QueryRequest request;
         try
         {
-            request = ScryJson.DeserializeRequest(body);
+            request = url
+                ? QueryUrl.Decode(context.Request.Query[QueryUrl.Parameter])
+                : ScryJson.DeserializeRequest(await ReadBody(context));
         }
         catch (ScryWireException exception)
         {
@@ -390,7 +454,8 @@ public static class ScryServiceExtensions
                 spill.Output,
                 spill,
                 collector,
-                context.RequestAborted);
+                context.RequestAborted,
+                url);
 
             // The writer declined this one, so the buffer it was handed is untouched — the envelope is
             // serialized into it rather than into a right-sized array that would be written once and
@@ -432,7 +497,7 @@ public static class ScryServiceExtensions
         }
         catch (ScryValidationException exception) when (!context.Response.HasStarted)
         {
-            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, exception.StaleClient);
+            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, exception.StaleClient, exception.RequiresBody);
         }
         catch (Exception) when (!context.Response.HasStarted && !context.RequestAborted.IsCancellationRequested)
         {
@@ -449,7 +514,7 @@ public static class ScryServiceExtensions
 
         // Advertised here for the same reason as on a query, and on a 404 too: a client whose fetch
         // stopped working wants to know whether its model drifted.
-        context.Response.Headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
+        Advertise(context, processor, options);
 
         var started = Stopwatch.GetTimestamp();
         var body = await ReadBody(context);
@@ -503,15 +568,42 @@ public static class ScryServiceExtensions
         }
     }
 
-    static Task WriteError(HttpContext context, int status, string message, bool staleClient)
+    /// <summary>
+    /// What every response says about this server regardless of what it was asked, written before any
+    /// body since headers are fixed once a response has started.
+    /// </summary>
+    /// <remarks>
+    /// The stamp lets a client notice a drifted model while its queries are still succeeding, rather
+    /// than only once one breaks — which is why it is on rejections too. The URL limit rides the same
+    /// path for the same reason: a client that has heard from this server once never has to be told its
+    /// budget out of band, and one that has not yet heard uses QueryUrl.MaxLength until it does.
+    /// </remarks>
+    static void Advertise(HttpContext context, ScryProcessor processor, ScryOptions options)
+    {
+        var headers = context.Response.Headers;
+        headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
+        headers[WireFormat.UrlLimitHeader] = options.QueryUrlLimit.ToString(CultureInfo.InvariantCulture);
+    }
+
+    static Task WriteError(
+        HttpContext context,
+        int status,
+        string message,
+        bool staleClient,
+        bool requiresBody = false)
     {
         var response = context.Response;
         response.StatusCode = status;
         response.ContentType = "application/json";
+
+        // A refusal is never the thing to keep: this one exists to be retried in a body, and the
+        // header set for the query it refused would otherwise let a cache answer for it.
+        response.Headers.CacheControl = "no-store";
         return response.WriteAsJsonAsync(
             new ScryError(message)
             {
-                StaleClient = staleClient
+                StaleClient = staleClient,
+                RequiresBody = requiresBody
             },
             ScryJson.Options,
             context.RequestAborted);

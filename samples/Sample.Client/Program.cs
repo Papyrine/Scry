@@ -21,6 +21,18 @@
         builder.Services.AddScoped<ScryQuery>();
         // end-snippet
 
+        // The client half of the server's 304: re-ask with If-None-Match, and answer a 304 from what
+        // was kept last time. One handler in the pipeline, invisible above it — see /docs/caching.md.
+        // The store is the singleton because the handler is not: the factory rotates handlers, and a
+        // cache that rotated with them would forget everything every couple of minutes.
+        // begin-snippet: clientCacheRegistration
+        builder.Services.AddSingleton<QueryCache>();
+        builder.Services.AddTransient<QueryCacheHandler>();
+        builder.Services
+            .AddHttpClient("scry")
+            .AddHttpMessageHandler<QueryCacheHandler>();
+        // end-snippet
+
         return builder.Build().RunAsync();
     }
 }

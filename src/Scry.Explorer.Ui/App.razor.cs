@@ -484,8 +484,7 @@ public partial class App
             var json = ScryJson.Serialize(request);
             wireJson = Prettify(json);
 
-            using var content = new StringContent(json, Encoding.UTF8, "application/json");
-            using var response = await Http.PostAsync(introspection.QueryEndpoint, content);
+            using var response = await SendQuery(json, ScryClient.RequiresBody(request));
 
             // Not read as a string: a result carrying [BinaryTransfer] values arrives as multipart,
             // and the reader folds its parts back into the envelope as base64 — so a diverted member
@@ -923,6 +922,34 @@ public partial class App
         await editor.SetValue(query);
         await MoveCaretToEnd();
         await Complete();
+    }
+
+    /// <summary>
+    /// Sends a query the way <c>ScryClient</c> would: as a body where the query compares a
+    /// <c>[Sensitive]</c> member against a constant or is too long for a URL, and as a URL otherwise.
+    /// The explorer does not send through the client — it translates the snippet and sends the result
+    /// itself — so the choice has to be made here too, or the explorer would demonstrate a request
+    /// shape production never uses. Both halves of it are the client's own: <c>RequiresBody</c> reads
+    /// the same models, and the budget comes from introspection.
+    /// </summary>
+    /// <remarks>
+    /// The budget comes from introspection rather than from a response header the way a client's does,
+    /// because this app is built and embedded when Scry is: it can carry no per-deployment value of its
+    /// own, and it has the whole contract in hand before it sends anything.
+    /// </remarks>
+    Task<HttpResponseMessage> SendQuery(string json, bool requiresBody)
+    {
+        var utf8 = Encoding.UTF8.GetBytes(json);
+        var encoded = QueryUrl.Encode(utf8);
+        var endpoint = introspection!.QueryEndpoint;
+        if (requiresBody ||
+            !QueryUrl.WithinLimit(encoded, introspection.QueryUrlLimit))
+        {
+            return Http.PostAsync(endpoint, new StringContent(json, Encoding.UTF8, "application/json"));
+        }
+
+        var separator = endpoint.Contains('?') ? '&' : '?';
+        return Http.GetAsync($"{endpoint}{separator}{QueryUrl.Parameter}={encoded}");
     }
 
     static readonly JsonSerializerOptions indented = new() { WriteIndented = true };

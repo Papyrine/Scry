@@ -72,17 +72,39 @@ A source can also be reached by name, which is what the generated code does unde
 <!-- snippet: scryClientApi -->
 <a id='snippet-scryClientApi'></a>
 ```cs
-/// <summary>Creates a client that POSTs queries to an HTTP endpoint.</summary>
+/// <summary>
+/// Creates a client that sends queries to an HTTP endpoint — as a URL where the query fits in one
+/// and as a body where it does not, which <see cref="QueryUrl"/> explains.
+/// </summary>
 public static ScryClient ForHttp(HttpClient http, string endpoint) =>
     new(http, endpoint);
+
+/// <summary>
+/// Whether a request has to travel in a body rather than a URL, because it compares a member the
+/// model marks <c>[Sensitive]</c> against a constant — a value a URL would write into the access
+/// log of every hop on the way.
+/// </summary>
+/// <remarks>
+/// This client applies it to everything it sends; it is public for tooling that sends a request
+/// itself, which has the same choice to make and no other way to make it. Answered from the
+/// generated models the request was written against, so a request naming sources this process has
+/// never opened is answered conservatively rather than optimistically.
+/// </remarks>
+public static bool RequiresBody(QueryRequest request) =>
+    SensitiveWalk.Inspect(request, SensitiveModel.IsSensitive).InConstant;
 
 /// <summary>
 /// Returns an <see cref="IQueryable{T}"/> backed by the named allow-listed source.
 /// <paramref name="defaultProjection"/> is the source's scalar member names, passed by the
 /// generated entry point so a query without a <c>Select</c> still projects explicitly.
 /// </summary>
-public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjection = null) =>
-    new CaptureQueryable<T>(new(this, name, defaultProjection));
+public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjection = null)
+{
+    // Recorded so a finished request can be read back against the model it was written from: by
+    // the time the transport chooses, all it holds is source names and member paths.
+    SensitiveModel.Register(name, typeof(T));
+    return new CaptureQueryable<T>(new(this, name, defaultProjection));
+}
 
 /// <summary>
 /// Starts a batch: several queries collected on the client and sent as one request. Attach it to a
@@ -103,7 +125,7 @@ public ScryBatch Batch()
         """);
 }
 ```
-<sup><a href='/src/Scry.Client/ScryClient.cs#L102-L133' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Client/ScryClient.cs#L104-L157' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -230,7 +252,7 @@ await foreach (var row in query.Employee
     names.Add(row.Name);
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L164-L174' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientStream' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L177-L187' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientStream' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Neither side holds the whole result: the server never buffers the rows and the client yields each as it is read. That makes it the right terminal for a result too large to sit in memory comfortably, and unnecessary for one that is not — a small result costs an extra round-trip's worth of framing for nothing.
@@ -1144,7 +1166,7 @@ var rows = await employees
     .Select(_ => new NameRow(_.Name))
     .ToListAsync();
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L299-L324' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRuntimeComposition' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L312-L337' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRuntimeComposition' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Nothing executes client-side, so an operator appended inside an `if` is part of the captured expression like any other, and the terminal serializes whatever was built. No criteria DTO — property-name strings, an operator enum — is needed, and the request that leaves is indistinguishable from one written as a single chain.
