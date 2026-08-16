@@ -237,13 +237,14 @@ public class ScryGenerator :
         builder.AppendLine(
             $$"""
             /// <summary>Client query model for the '{{source.SourceName}}' {{descriptor}}.</summary>
-            {{Obsolete(source.Obsolete)}}{{attribute}}public class {{source.ModelName}}{{inherits}}
+            {{Obsolete(source.Obsolete)}}{{Sensitive(source.IsSensitive)}}{{attribute}}public class {{source.ModelName}}{{inherits}}
             {
             """);
         foreach (var property in source.Properties)
         {
             var initializer = property.NeedsNullDefault || property.IsAttachment ? " = null!;" : "";
             builder.Append(Obsolete(property.Obsolete, indent: "    "));
+            builder.Append(Sensitive(property.IsSensitive, indent: "    "));
             builder.AppendLine($"    public {Display(property)} {property.Name} {{ get; init; }}{initializer}");
         }
 
@@ -268,6 +269,15 @@ public class ScryGenerator :
         var arguments = message.Length == 0 ? "" : $"({Literal(message)})";
         return $"{indent}[global::System.ObsoleteAttribute{arguments}]{Environment.NewLine}";
     }
+
+    /// <summary>
+    /// The <c>[ScrySensitive]</c> line a model type or member the server marked <c>[Sensitive]</c> is
+    /// preceded by, and empty for everything else. Unlike <c>[Obsolete]</c> this one is not advisory: it
+    /// is what a client reads to decide that a query has to travel in a body, and it moves the schema
+    /// stamp because it changes what an already-deployed client is allowed to do.
+    /// </summary>
+    static string Sensitive(bool sensitive, string indent = "") =>
+        sensitive ? $"{indent}[global::Scry.ScrySensitive]{Environment.NewLine}" : "";
 
     /// <summary>
     /// The type the generated member is declared as. Everything but an attachment is spelled as the
@@ -443,7 +453,37 @@ public class ScryGenerator :
             members.Add(("~keys", string.Join(" ", source.Keys)));
         }
 
+        if (Sensitivity(source) is { Length: > 0 } sensitive)
+        {
+            members.Add(("~sensitive", sensitive));
+        }
+
         return members;
+    }
+
+    /// <summary>
+    /// The sensitivity line a type contributes to the stamp: the members it marks, and <c>*</c> where
+    /// the type itself is marked. Present only where something is, so a model that marks nothing hashes
+    /// exactly as it did before <c>[Sensitive]</c> existed.
+    /// </summary>
+    /// <remarks>
+    /// Hashed — unlike <c>[Obsolete]</c> — because it changes what an already-deployed client may do
+    /// rather than only what it should be told. A client generated before a member was marked keeps
+    /// asking in URLs and is refused; moving the stamp is what turns that into a reported staleness
+    /// with a regenerate to fix it. <c>*</c> is not a member name, so it cannot collide with one.
+    /// </remarks>
+    static string Sensitivity(SourceInfo source)
+    {
+        var names = source.Properties
+            .Where(_ => _.IsSensitive)
+            .Select(_ => _.Name)
+            .ToList();
+        if (source.IsSensitive)
+        {
+            names.Insert(0, "*");
+        }
+
+        return string.Join(" ", names);
     }
 
     static StringBuilder Header()

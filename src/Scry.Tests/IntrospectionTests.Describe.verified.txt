@@ -94,7 +94,8 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Country,
@@ -102,9 +103,11 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         }
-      ]
+      ],
+      IsSensitive: true
     },
     {
       Model: AnnouncementQueryModel,
@@ -115,10 +118,12 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         }
       ],
-      Base: PostQueryModel
+      Base: PostQueryModel,
+      IsSensitive: false
     },
     {
       Model: AssetQueryModel,
@@ -129,7 +134,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Name,
@@ -137,9 +143,11 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         }
-      ]
+      ],
+      IsSensitive: false
     },
     {
       Model: BuildingQueryModel,
@@ -150,10 +158,12 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         }
       ],
-      Base: AssetQueryModel
+      Base: AssetQueryModel,
+      IsSensitive: false
     },
     {
       Model: ContractQueryModel,
@@ -164,7 +174,8 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: true
+          IsAttachment: true,
+          IsSensitive: false
         },
         {
           Name: Id,
@@ -172,7 +183,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Name,
@@ -180,12 +192,14 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         }
       ],
       Keys: [
         Id
-      ]
+      ],
+      IsSensitive: false
     },
     {
       Model: DepartmentQueryModel,
@@ -196,7 +210,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Name,
@@ -204,9 +219,11 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         }
-      ]
+      ],
+      IsSensitive: false
     },
     {
       Model: DepartmentHeadcountQueryModel,
@@ -217,7 +234,8 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Headcount,
@@ -226,9 +244,11 @@
           IsNavigation: false,
           IsCollection: false,
           Obsolete: Counts open roles too; use the Region rollup.,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         }
-      ]
+      ],
+      IsSensitive: false
     },
     {
       Model: EmployeeQueryModel,
@@ -239,7 +259,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Address,
@@ -247,7 +268,8 @@
           NeedsNullDefault: false,
           IsNavigation: true,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Avatar,
@@ -255,7 +277,8 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: true
         },
         {
           Name: Department,
@@ -263,7 +286,8 @@
           NeedsNullDefault: false,
           IsNavigation: true,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: DepartmentId,
@@ -271,7 +295,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Id,
@@ -279,7 +304,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Manager,
@@ -287,7 +313,8 @@
           NeedsNullDefault: false,
           IsNavigation: true,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: ManagerId,
@@ -295,7 +322,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Name,
@@ -303,7 +331,8 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Perks,
@@ -311,7 +340,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: PreviousAddresses,
@@ -319,7 +349,8 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: true,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Status,
@@ -327,9 +358,11 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         }
-      ]
+      ],
+      IsSensitive: false
     },
     {
       Model: HolidayQueryModel,
@@ -340,7 +373,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Name,
@@ -348,9 +382,11 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         }
-      ]
+      ],
+      IsSensitive: false
     },
     {
       Model: OrderQueryModel,
@@ -361,7 +397,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Audited,
@@ -369,7 +406,8 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Code,
@@ -377,7 +415,8 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Discount,
@@ -385,7 +424,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Grade,
@@ -393,7 +433,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Id,
@@ -401,7 +442,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Lines,
@@ -409,7 +451,8 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: true,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Placed,
@@ -417,7 +460,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Priorities,
@@ -425,7 +469,8 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: true,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Quantity,
@@ -433,7 +478,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Region,
@@ -441,7 +487,8 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Scores,
@@ -449,7 +496,8 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: true,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Sku,
@@ -457,7 +505,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Tags,
@@ -465,9 +514,11 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: true,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         }
-      ]
+      ],
+      IsSensitive: false
     },
     {
       Model: OrderLineQueryModel,
@@ -478,7 +529,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Order,
@@ -486,7 +538,8 @@
           NeedsNullDefault: false,
           IsNavigation: true,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: OrderId,
@@ -494,7 +547,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Price,
@@ -502,7 +556,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Quantity,
@@ -510,7 +565,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Sku,
@@ -518,9 +574,11 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         }
-      ]
+      ],
+      IsSensitive: false
     },
     {
       Model: PostQueryModel,
@@ -531,7 +589,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Name,
@@ -539,7 +598,8 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Published,
@@ -547,9 +607,11 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         }
-      ]
+      ],
+      IsSensitive: false
     },
     {
       Model: RegionSummaryQueryModel,
@@ -560,7 +622,8 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Total,
@@ -568,10 +631,12 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         }
       ],
-      Obsolete: 
+      Obsolete: ,
+      IsSensitive: false
     },
     {
       Model: SalesRegionQueryModel,
@@ -582,7 +647,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Name,
@@ -590,9 +656,11 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         }
-      ]
+      ],
+      IsSensitive: false
     },
     {
       Model: ShiftQueryModel,
@@ -603,7 +671,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Duration,
@@ -611,7 +680,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Id,
@@ -619,7 +689,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Name,
@@ -627,7 +698,8 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Signature,
@@ -635,7 +707,8 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Stamped,
@@ -643,7 +716,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Start,
@@ -651,9 +725,11 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         }
-      ]
+      ],
+      IsSensitive: false
     },
     {
       Model: TicketQueryModel,
@@ -664,7 +740,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: IsOpen,
@@ -672,7 +749,8 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         },
         {
           Name: Name,
@@ -680,9 +758,11 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         }
-      ]
+      ],
+      IsSensitive: false
     },
     {
       Model: VehicleQueryModel,
@@ -693,10 +773,12 @@
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
-          IsAttachment: false
+          IsAttachment: false,
+          IsSensitive: false
         }
       ],
-      Base: AssetQueryModel
+      Base: AssetQueryModel,
+      IsSensitive: false
     }
   ],
   Enums: [
@@ -728,5 +810,5 @@
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: N0Bv0Tb5gKZpFlJn
+  SchemaStamp: QXFfswLTFnDBeTv3
 }

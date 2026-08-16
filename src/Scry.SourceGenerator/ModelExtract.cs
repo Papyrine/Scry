@@ -36,7 +36,8 @@ record struct SourceInfo(
     string? BaseModelName = null,
     string? Obsolete = null,
     string ClrName = "",
-    EquatableArray<string> Keys = default);
+    EquatableArray<string> Keys = default,
+    bool IsSensitive = false);
 
 /// <summary>An allow-listed property and the C# type the client DTO should expose.</summary>
 /// <param name="IsNavigation">
@@ -62,6 +63,11 @@ record struct SourceInfo(
 /// <paramref name="IsAttachment"/> — on its own the attribute changes nothing the generator emits.
 /// </param>
 /// <param name="IsKey">True for a <c>[Key]</c> member, which takes precedence over the name conventions.</param>
+/// <param name="IsSensitive">
+/// True for a <c>[Sensitive]</c> member: one a query may not compare against a constant in a URL, and
+/// may not have projected into a cacheable response. Re-emitted as <c>[ScrySensitive]</c> so the client
+/// can make the first of those choices before it sends anything.
+/// </param>
 record struct PropertyInfo(
     string Name,
     string TypeDisplay,
@@ -71,7 +77,8 @@ record struct PropertyInfo(
     string? Obsolete = null,
     bool IsAttachment = false,
     bool HasBinaryTransfer = false,
-    bool IsKey = false);
+    bool IsKey = false,
+    bool IsSensitive = false);
 
 /// <summary>An enum referenced by a model, re-emitted so the client needs no server reference.</summary>
 record struct EnumInfo(string Name, EquatableArray<string> Members);

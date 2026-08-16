@@ -129,7 +129,37 @@ sealed class Schema
             members.Add(("~keys", string.Join(" ", keys)));
         }
 
+        if (Sensitivity(type) is { Length: > 0 } sensitive)
+        {
+            members.Add(("~sensitive", sensitive));
+        }
+
         return members;
+    }
+
+    /// <summary>
+    /// The sensitivity line a type contributes to the stamp: the members it marks, and <c>*</c> where
+    /// the type itself is marked. Present only where something is, so a model that marks nothing hashes
+    /// exactly as it did before <c>[Sensitive]</c> existed.
+    /// </summary>
+    /// <remarks>
+    /// Hashed — unlike <c>[Obsolete]</c> — because it changes what an already-deployed client may do
+    /// rather than only what it should be told. A client generated before a member was marked keeps
+    /// asking in URLs and is refused; moving the stamp is what turns that into a reported staleness
+    /// with a regenerate to fix it. <c>*</c> is not a member name, so it cannot collide with one.
+    /// </remarks>
+    static string Sensitivity(ScryTypeInfo type)
+    {
+        var names = type.Members
+            .Where(_ => _.IsSensitive)
+            .Select(_ => _.Name)
+            .ToList();
+        if (type.IsSensitive)
+        {
+            names.Insert(0, "*");
+        }
+
+        return string.Join(" ", names);
     }
 
     (List<ScrySourceInfo> Sources, List<ScryTypeInfo> Types, List<ScryEnumInfo> Enums) DescribeSurface()
@@ -150,6 +180,7 @@ sealed class Schema
             {
                 Base = meta.Base is { } clrBase ? $"{clrBase.Name}QueryModel" : null,
                 Obsolete = ObsoleteOf(meta.ClrType),
+                IsSensitive = meta.Sensitive,
                 // Carried only where something fetches by it, which keeps every other type's
                 // description — and so its stamp — exactly what it was.
                 Keys = meta.AttachmentKeys?.Select(_ => _.Name).ToList()
@@ -187,7 +218,8 @@ sealed class Schema
     static ScryMemberInfo DescribeMember(Member member, Dictionary<string, ScryEnumInfo> enums) =>
         DescribeShape(member, enums) with
         {
-            Obsolete = ObsoleteOf(member.Property)
+            Obsolete = ObsoleteOf(member.Property),
+            IsSensitive = member.Sensitive
         };
 
     static ScryMemberInfo DescribeShape(Member member, Dictionary<string, ScryEnumInfo> enums)
@@ -900,7 +932,12 @@ sealed class Schema
 
     static TypeMeta BuildTypeMeta(Type type, HashSet<Type> queryableTypes)
     {
-        var meta = new TypeMeta(type);
+        // Declared-only, like every other opt-in read here: a subclass of a sensitive type is not
+        // itself sensitive unless it says so, matching what the metadata side can see.
+        var meta = new TypeMeta(type)
+        {
+            Sensitive = type.HasAttribute<SensitiveAttribute>(inherit: false)
+        };
 
         foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {

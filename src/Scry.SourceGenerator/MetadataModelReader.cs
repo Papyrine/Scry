@@ -15,6 +15,7 @@ static class MetadataModelReader
     const string attachmentAttribute = "Scry.AttachmentAttribute";
     const string binaryTransferAttribute = "Scry.BinaryTransferAttribute";
     const string keyAttribute = "System.ComponentModel.DataAnnotations.KeyAttribute";
+    const string sensitiveAttribute = "Scry.SensitiveAttribute";
 
     public static ModelExtract Read(string? dllPath)
     {
@@ -47,7 +48,8 @@ static class MetadataModelReader
                             kind,
                             sourceName,
                             ObsoleteOf(reader, type.GetCustomAttributes(), decoder),
-                            simpleName));
+                            simpleName,
+                            HasAttribute(reader, type.GetCustomAttributes(), sensitiveAttribute)));
                 }
             }
 
@@ -67,7 +69,8 @@ static class MetadataModelReader
                         new(properties),
                         NearestOptedInBase(reader, entry.Type, discoveredByFullName),
                         entry.Obsolete,
-                        entry.ClrName));
+                        entry.ClrName,
+                        IsSensitive: entry.IsSensitive));
             }
 
             return new(null, new(DeriveKeys(sources)), new(enums.Values.ToImmutableArray()));
@@ -226,7 +229,8 @@ static class MetadataModelReader
                     Obsolete = ObsoleteOf(reader, attributes, decoder),
                     IsAttachment = attachment,
                     HasBinaryTransfer = HasAttribute(reader, attributes, binaryTransferAttribute),
-                    IsKey = HasAttribute(reader, attributes, keyAttribute)
+                    IsKey = HasAttribute(reader, attributes, keyAttribute),
+                    IsSensitive = HasAttribute(reader, attributes, sensitiveAttribute)
                 });
         }
 
@@ -581,5 +585,6 @@ static class MetadataModelReader
         SourceKind Kind,
         string SourceName,
         string? Obsolete,
-        string ClrName);
+        string ClrName,
+        bool IsSensitive);
 }

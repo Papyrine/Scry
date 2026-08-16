@@ -52,13 +52,14 @@ public static class ModelSynthesizer
 
             builder.AppendLine(
                 $$"""
-                {{Obsolete(type.Obsolete)}}{{attribute}}public class {{type.Model}}{{inherits}}
+                {{Obsolete(type.Obsolete)}}{{Sensitive(type.IsSensitive, executable)}}{{attribute}}public class {{type.Model}}{{inherits}}
                 {
                 """);
             foreach (var member in type.Members)
             {
                 var initializer = member.NeedsNullDefault ? " = null!;" : "";
                 builder.Append(Obsolete(member.Obsolete, indent: "    "));
+                builder.Append(Sensitive(member.IsSensitive, executable, indent: "    "));
                 builder.AppendLine($"    public {member.TypeDisplay} {member.Name} {{ get; init; }}{initializer}");
             }
 
@@ -168,6 +169,18 @@ public static class ModelSynthesizer
                 .Select(_ => _.Name));
         return members;
     }
+
+    /// <summary>
+    /// Mirrors the generator's <c>[ScrySensitive]</c> emission, so a snippet written in the explorer
+    /// makes the same transport choice compiled client code would: the explorer sends what
+    /// <c>ToScryRequest</c> produced, and that choice is read off these attributes.
+    /// </summary>
+    /// <remarks>
+    /// Only where the models are executable. The completion-only facade names no Scry.Client type at
+    /// all — it exists to give the editor a shape, and it never sends anything.
+    /// </remarks>
+    static string Sensitive(bool sensitive, bool executable, string indent = "") =>
+        sensitive && executable ? $"{indent}[global::Scry.ScrySensitive]{Environment.NewLine}" : "";
 
     /// <summary>
     /// Mirrors the generator's <c>[Obsolete]</c> emission, so a snippet written in the explorer warns

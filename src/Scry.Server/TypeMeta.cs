@@ -11,6 +11,12 @@ sealed class TypeMeta(Type clrType)
     /// tooling only once, on the base, so the generated models can inherit rather than repeat them.
     /// </summary>
     public Type? Base { get; set; }
+
+    /// <summary>
+    /// Whether the model marks the type itself <c>[Sensitive]</c>, which makes every member read off
+    /// it sensitive — including one reached by navigating into it from somewhere else.
+    /// </summary>
+    public bool Sensitive { get; set; }
     public Dictionary<string, Member> Members { get; } = new(StringComparer.Ordinal);
 
     /// <summary>

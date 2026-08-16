@@ -27,4 +27,11 @@ public sealed record ScryTypeInfo(string Model, IReadOnlyList<ScryMemberInfo> Me
     /// everywhere else, and so absent from the JSON.
     /// </summary>
     public IReadOnlyList<string>? Keys { get; init; }
+
+    /// <summary>
+    /// True where the model marks the CLR type itself <c>[Sensitive]</c>, which makes every member read
+    /// off it sensitive. Written only when true.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsSensitive { get; init; }
 }

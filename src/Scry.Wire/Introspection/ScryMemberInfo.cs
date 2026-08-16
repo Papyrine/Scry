@@ -39,4 +39,16 @@ public sealed record ScryMemberInfo(
     /// </remarks>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsAttachment { get; init; }
+
+    /// <summary>
+    /// True for a member the model marks <c>[Sensitive]</c>: a query comparing it against a constant
+    /// must travel in a body rather than a URL, and a response projecting it is never stored.
+    /// </summary>
+    /// <remarks>
+    /// Published so tooling makes the same choice generated code does — the explorer synthesizes its
+    /// models from this document and has no other way to know. Written only when true, so introspection
+    /// of a model marking nothing is byte-identical to what it was before the attribute existed.
+    /// </remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsSensitive { get; init; }
 }
