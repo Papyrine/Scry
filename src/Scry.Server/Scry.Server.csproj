@@ -9,6 +9,7 @@
          same shared source. Which source names are expressible is shared for the same reason: the
          generator refuses to emit one it cannot write, so the server has to refuse the same set. -->
     <Compile Include="..\Shared\SchemaStamp.cs" Link="SchemaStamp.cs" />
+    <Compile Include="..\Shared\SensitiveWalk.cs" Link="SensitiveWalk.cs" />
     <Compile Include="..\Shared\CSharpIdentifier.cs" Link="CSharpIdentifier.cs" />
   </ItemGroup>
   <ItemGroup>

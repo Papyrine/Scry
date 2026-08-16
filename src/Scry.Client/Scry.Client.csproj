@@ -15,6 +15,10 @@
          at a line longer than that buffer, and at a stream that ends without a newline is worth testing
          directly rather than only through a stream that happens to produce those. -->
     <InternalsVisibleTo Include="Scry.Tests" Key="$(ScryPublicKey)" />
+    <!-- The walk that decides whether a query may travel as a URL. Compiled into the server too: it
+         chooses here and is enforced there, and two copies that drifted would refuse queries a client
+         had no way to know about. -->
+    <Compile Include="..\Shared\SensitiveWalk.cs" Link="SensitiveWalk.cs" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Polyfill" PrivateAssets="all" />
     <PackageReference Include="ProjectDefaults" PrivateAssets="all" />

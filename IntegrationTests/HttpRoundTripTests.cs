@@ -402,6 +402,34 @@ public class HttpRoundTripTests
         Assert.That(rows, Is.Empty);
     }
 
+    // Employee.Password is [Sensitive], so the value compared against it never reaches a URL — where
+    // it would be written to the access log of every hop between here and the server.
+    [Test]
+    public async Task SensitiveConstantTravelsAsABody()
+    {
+        var rows = await query.Employee
+            .Where(_ => _.Password == "hunter2")
+            .Select(_ => new NameRow(_.Name))
+            .ToListAsync();
+
+        Assert.That(lastMethod, Is.EqualTo("POST"));
+        Assert.That(rows, Is.Empty);
+    }
+
+    // Naming the same member without a constant leaves the transport alone: an ordering puts nothing
+    // in the URL, so there is nothing to keep out of one.
+    [Test]
+    public async Task OrderingByASensitiveMemberKeepsTheUrl()
+    {
+        var rows = await query.Employee
+            .OrderBy(_ => _.Password)
+            .Select(_ => new NameRow(_.Name))
+            .ToListAsync();
+
+        Assert.That(lastMethod, Is.EqualTo("GET"));
+        Assert.That(rows, Is.Not.Empty);
+    }
+
     // The URL is attacker-controlled like everything else on the wire, and fails closed: a parameter
     // that is not base64url of a request this server can parse is a 400, never a partial query.
     [Test]

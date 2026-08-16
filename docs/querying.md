@@ -80,12 +80,31 @@ public static ScryClient ForHttp(HttpClient http, string endpoint) =>
     new(http, endpoint);
 
 /// <summary>
+/// Whether a request has to travel in a body rather than a URL, because it compares a member the
+/// model marks <c>[Sensitive]</c> against a constant — a value a URL would write into the access
+/// log of every hop on the way.
+/// </summary>
+/// <remarks>
+/// This client applies it to everything it sends; it is public for tooling that sends a request
+/// itself, which has the same choice to make and no other way to make it. Answered from the
+/// generated models the request was written against, so a request naming sources this process has
+/// never opened is answered conservatively rather than optimistically.
+/// </remarks>
+public static bool RequiresBody(QueryRequest request) =>
+    SensitiveWalk.Inspect(request, SensitiveModel.IsSensitive).InConstant;
+
+/// <summary>
 /// Returns an <see cref="IQueryable{T}"/> backed by the named allow-listed source.
 /// <paramref name="defaultProjection"/> is the source's scalar member names, passed by the
 /// generated entry point so a query without a <c>Select</c> still projects explicitly.
 /// </summary>
-public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjection = null) =>
-    new CaptureQueryable<T>(new(this, name, defaultProjection));
+public IQueryable<T> Source<T>(string name, IReadOnlyList<string>? defaultProjection = null)
+{
+    // Recorded so a finished request can be read back against the model it was written from: by
+    // the time the transport chooses, all it holds is source names and member paths.
+    SensitiveModel.Register(name, typeof(T));
+    return new CaptureQueryable<T>(new(this, name, defaultProjection));
+}
 
 /// <summary>
 /// Starts a batch: several queries collected on the client and sent as one request. Attach it to a
@@ -106,7 +125,7 @@ public ScryBatch Batch()
         """);
 }
 ```
-<sup><a href='/src/Scry.Client/ScryClient.cs#L104-L138' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Client/ScryClient.cs#L104-L157' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
