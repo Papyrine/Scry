@@ -46,9 +46,17 @@ public class Employee
     // Never exposed to clients.
     [QueryIgnore]
     public decimal Salary { get; set; }
+
+    // The other half of that pair: queryable, but never in a URL and never in a cache. [QueryIgnore]
+    // hides a member outright; [Sensitive] keeps it askable while refusing the two ways its value
+    // escapes — a query comparing it against a constant travels as a body rather than a URL, where the
+    // constant would land in every access log on the way, and a response projecting it is sent
+    // no-store, where a cacheable one would be written to the caller's disk.
+    [Sensitive]
+    public string Password { get; set; } = "";
 }
 ```
-<sup><a href='/samples/Sample.Model/Entities/Employee.cs#L3-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableEntity' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Model/Entities/Employee.cs#L3-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableEntity' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Salary` is `[QueryIgnore]`d, so it is absent from the generated client model and rejected if named in a raw request.
