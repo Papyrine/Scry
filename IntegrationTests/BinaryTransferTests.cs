@@ -20,7 +20,7 @@ public class BinaryTransferTests
 
     // Boundary-shaped content: the delimiter prefix in the part bytes proves the random boundary is
     // never confused by content, and the 0x00/0xFF spread catches any text-mode mangling.
-    static readonly byte[] boundaryPayload = [..Encoding.ASCII.GetBytes("\r\n--scry"), 0x00, 0xFF, 0x0D, 0x0A];
+    static readonly byte[] boundaryPayload = [.."\r\n--scry"u8.ToArray(), 0x00, 0xFF, 0x0D, 0x0A];
 
     static readonly byte[] emptyPayload = [];
 
@@ -145,7 +145,7 @@ public class BinaryTransferTests
         Assert.That(sections[1].Content, Is.EqualTo(boundaryPayload));
         Assert.That(sections[2].Content, Is.Empty);
         Assert.That(sections[3].Content, Is.EqualTo(fullPayload));
-        Assert.That(sections[..4].Select(_ => int.Parse(_.Headers["Content-Length"])), Is.EqualTo(new[] {3, boundaryPayload.Length, 0, 256}));
+        Assert.That(sections[..4].Select(_ => int.Parse(_.Headers["Content-Length"])), Is.EqualTo([3, boundaryPayload.Length, 0, 256]));
 
         Assert.That(sections[4].Headers["Content-Type"], Is.EqualTo("application/json"));
         var envelope = Encoding.UTF8.GetString(sections[4].Content);
@@ -272,7 +272,7 @@ public class BinaryTransferTests
             .Where(_ => _.Name == "full")
             .FirstAsync();
 
-        Assert.That(row.Payload, Is.EqualTo(fullPayload));
+        Assert.That(row!.Payload, Is.EqualTo(fullPayload));
     }
 
     [Test]
@@ -323,14 +323,13 @@ public class BinaryTransferTests
         // boundary-row | part | empty-row + partless missing-row | part | full-row + end.
         Assert.That(
             sections.Select(_ => _.Headers["Content-Type"]),
-            Is.EqualTo(new[]
-            {
+            Is.EqualTo([
                 ScryStream.ContentType, ScryBinary.PartContentType,
                 ScryStream.ContentType, ScryBinary.PartContentType,
                 ScryStream.ContentType, ScryBinary.PartContentType,
                 ScryStream.ContentType, ScryBinary.PartContentType,
                 ScryStream.ContentType
-            }));
+            ]));
 
         Assert.That(sections[1].Content, Is.EqualTo(alphaPayload));
         Assert.That(sections[3].Content, Is.EqualTo(boundaryPayload));
@@ -361,7 +360,7 @@ public class BinaryTransferTests
         var (nullType, nullBody) = await PostRaw("/api/query/stream", NamedRequest("missing"));
         var nullSections = ParseMultipart(nullBody, BoundaryOf(nullType));
 
-        Assert.That(nullSections.Select(_ => _.Headers["Content-Type"]), Is.EqualTo(new[] {ScryStream.ContentType}));
+        Assert.That(nullSections.Select(_ => _.Headers["Content-Type"]), Is.EqualTo([ScryStream.ContentType]));
         var nullLines = LinesOf(nullSections[0]);
         Assert.That(nullLines, Has.Length.EqualTo(3));
         Assert.That(nullLines[1], Does.Contain("""{"name":"missing","payload":null}"""));
@@ -369,7 +368,7 @@ public class BinaryTransferTests
         var (emptyType, emptyBody) = await PostRaw("/api/query/stream", NamedRequest("nothing is named this"));
         var emptySections = ParseMultipart(emptyBody, BoundaryOf(emptyType));
 
-        Assert.That(emptySections.Select(_ => _.Headers["Content-Type"]), Is.EqualTo(new[] {ScryStream.ContentType}));
+        Assert.That(emptySections.Select(_ => _.Headers["Content-Type"]), Is.EqualTo([ScryStream.ContentType]));
         // Nothing between the markers: an empty result is still a multipart response, just an empty one.
         var emptyLines = LinesOf(emptySections[0]);
         Assert.That(emptyLines, Has.Length.EqualTo(2));
@@ -424,12 +423,11 @@ public class BinaryTransferTests
         // written into, and the closing marker never comes.
         Assert.That(
             sections.Select(_ => _.Headers["Content-Type"]),
-            Is.EqualTo(new[]
-            {
+            Is.EqualTo([
                 ScryStream.ContentType, ScryBinary.PartContentType,
                 ScryStream.ContentType, ScryBinary.PartContentType,
                 ScryStream.ContentType
-            }));
+            ]));
         Assert.That(sections[1].Content, Is.EqualTo(alphaPayload));
         Assert.That(sections[3].Content, Is.EqualTo(boundaryPayload));
 

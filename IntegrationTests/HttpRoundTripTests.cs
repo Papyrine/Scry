@@ -63,12 +63,11 @@ public class HttpRoundTripTests
 
         // Records how each query actually travelled. The client chooses between a URL and a body by
         // length, and a test that only checked the rows could not tell which path produced them.
-        app.Use(
-            async (context, next) =>
+        app.Use((context, next) =>
             {
                 lastMethod = context.Request.Method;
                 methods.Add(lastMethod);
-                await next();
+                return next();
             });
 
         app.MapScry("/api/query");
@@ -311,7 +310,7 @@ public class HttpRoundTripTests
     {
         // begin-snippet: clientRuntimeComposition
         // Stand-ins for what a user typed into filter controls; unknowable at compile time.
-        string? nameContains = "o";
+        var nameContains = "o";
         DateOnly? createdOnOrAfter = new(2026, 2, 1);
         var newestFirst = true;
 

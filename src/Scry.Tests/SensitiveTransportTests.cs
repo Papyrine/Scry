@@ -95,7 +95,7 @@ public class SensitiveTransportTests
     public async Task ConstantElsewhereInTheSameFilterTravelsAsABody()
     {
         var method = await Method(
-            _ => _.Where(_ => _.Name == "Ada" && _.Ssn != null)
+            _ => _.Where(_ => _.Name == "Ada" && _.Ssn != "")
                 .Select(_ => new NameRow(_.Name))
                 .ToListAsync());
 
@@ -151,7 +151,7 @@ public class SensitiveTransportTests
     sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) :
         HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancel) =>
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, Cancel cancel) =>
             Task.FromResult(respond(request));
     }
 }

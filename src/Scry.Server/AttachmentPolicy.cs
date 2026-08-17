@@ -53,6 +53,6 @@ static class AttachmentPolicy
                 }
 
                 var single = interfaces[0];
-                return (single.GenericTypeArguments[0], single.GetMethod(nameof(IAttachmentPolicy<object>.Authorize))!);
+                return (single.GenericTypeArguments[0], single.GetMethod(nameof(IAttachmentPolicy<>.Authorize))!);
             });
 }
