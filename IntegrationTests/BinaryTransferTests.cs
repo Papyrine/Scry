@@ -272,7 +272,7 @@ public class BinaryTransferTests
             .Where(_ => _.Name == "full")
             .FirstAsync();
 
-        Assert.That(row.Payload, Is.EqualTo(fullPayload));
+        Assert.That(row!.Payload, Is.EqualTo(fullPayload));
     }
 
     [Test]
