@@ -100,16 +100,7 @@ client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).FirstAsync(
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Name",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Name"
-              }
-            }
-          }
+          "Name"
         ]
       }
     },
@@ -129,16 +120,7 @@ client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).FirstOrDefa
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Name",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Name"
-              }
-            }
-          }
+          "Name"
         ]
       }
     },
@@ -171,16 +153,7 @@ client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).SingleAsync
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Name",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Name"
-              }
-            }
-          }
+          "Name"
         ]
       }
     },
@@ -200,16 +173,7 @@ client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).SingleOrDef
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Name",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Name"
-              }
-            }
-          }
+          "Name"
         ]
       }
     },
@@ -237,16 +201,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Name",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Name"
-              }
-            }
-          }
+          "Name"
         ]
       }
     },
@@ -274,16 +229,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Name",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Name"
-              }
-            }
-          }
+          "Name"
         ]
       }
     },
@@ -311,16 +257,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Name",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Name"
-              }
-            }
-          }
+          "Name"
         ]
       }
     },
@@ -456,16 +393,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Name",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Name"
-              }
-            }
-          }
+          "Name"
         ]
       }
     },
@@ -492,16 +420,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Name",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Name"
-              }
-            }
-          }
+          "Name"
         ]
       }
     },
@@ -529,16 +448,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Name",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Name"
-              }
-            }
-          }
+          "Name"
         ]
       }
     },

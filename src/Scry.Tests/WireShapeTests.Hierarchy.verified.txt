@@ -11,26 +11,8 @@
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Name",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Name"
-              }
-            }
-          },
-          {
-            "name": "Wheels",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Wheels"
-              }
-            }
-          }
+          "Name",
+          "Wheels"
         ]
       }
     }
@@ -66,26 +48,8 @@ client.Source<Asset>("Asset").OfType<Building>().Where(_ => _.Floors > 1).Select
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Name",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Name"
-              }
-            }
-          },
-          {
-            "name": "Floors",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Floors"
-              }
-            }
-          }
+          "Name",
+          "Floors"
         ]
       }
     }

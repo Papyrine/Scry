@@ -7,26 +7,8 @@
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Region",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Region"
-              }
-            }
-          },
-          {
-            "name": "Amount",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Amount"
-              }
-            }
-          }
+          "Region",
+          "Amount"
         ]
       }
     },
@@ -71,26 +53,8 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Conc
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Region",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Region"
-              }
-            }
-          },
-          {
-            "name": "Amount",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Amount"
-              }
-            }
-          }
+          "Region",
+          "Amount"
         ]
       }
     },
@@ -135,26 +99,8 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Inte
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Region",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Region"
-              }
-            }
-          },
-          {
-            "name": "Amount",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Amount"
-              }
-            }
-          }
+          "Region",
+          "Amount"
         ]
       }
     },
@@ -199,26 +145,8 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Exce
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Region",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Region"
-              }
-            }
-          },
-          {
-            "name": "Amount",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Amount"
-              }
-            }
-          }
+          "Region",
+          "Amount"
         ]
       }
     },
@@ -263,26 +191,8 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Unio
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Region",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Region"
-              }
-            }
-          },
-          {
-            "name": "Amount",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Amount"
-              }
-            }
-          }
+          "Region",
+          "Amount"
         ]
       }
     },
@@ -292,26 +202,8 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region, _.Amount)).Unio
       "root": "Order",
       "projection": {
         "members": [
-          {
-            "name": "Region",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Region"
-              }
-            }
-          },
-          {
-            "name": "Amount",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Amount"
-              }
-            }
-          }
+          "Region",
+          "Amount"
         ]
       },
       "operandOps": [

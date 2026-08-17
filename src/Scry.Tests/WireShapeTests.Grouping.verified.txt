@@ -154,26 +154,8 @@ client.Source<Order>("Order").GroupBy(_ => new {_.Region, _.Grade}).Select(_ => 
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Region",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Region"
-              }
-            }
-          },
-          {
-            "name": "Grade",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Grade"
-              }
-            }
-          },
+          "Region",
+          "Grade",
           {
             "name": "Total",
             "value": {
@@ -314,16 +296,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region, (region, orders) => new {Re
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Region",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Region"
-              }
-            }
-          },
+          "Region",
           {
             "name": "Total",
             "value": {

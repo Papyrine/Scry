@@ -11,26 +11,8 @@
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Sku",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Sku"
-              }
-            }
-          },
-          {
-            "name": "Quantity",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Quantity"
-              }
-            }
-          }
+          "Sku",
+          "Quantity"
         ]
       }
     }
@@ -82,26 +64,8 @@ client.Source<Order>("Order").Where(_ => _.Region == "North").SelectMany(_ => _.
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Sku",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Sku"
-              }
-            }
-          },
-          {
-            "name": "Quantity",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Quantity"
-              }
-            }
-          }
+          "Sku",
+          "Quantity"
         ]
       }
     }
@@ -138,26 +102,8 @@ client.Source<Order>("Order").Where(_ => _.Lines.Any(l => l.Price == 25m)).Selec
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Region",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Region"
-              }
-            }
-          },
-          {
-            "name": "Amount",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Amount"
-              }
-            }
-          }
+          "Region",
+          "Amount"
         ]
       }
     }
@@ -194,26 +140,8 @@ client.Source<Order>("Order").Where(_ => _.Lines.All(l => l.Quantity > 0)).Selec
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Region",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Region"
-              }
-            }
-          },
-          {
-            "name": "Amount",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Amount"
-              }
-            }
-          }
+          "Region",
+          "Amount"
         ]
       }
     }
@@ -229,16 +157,7 @@ client.Source<Order>("Order").Select(_ => new {_.Region, Lines = _.Lines.Count(l
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Region",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Region"
-              }
-            }
-          },
+          "Region",
           {
             "name": "Lines",
             "value": {
@@ -278,16 +197,7 @@ client.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Lines.Sum(l =
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Region",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Region"
-              }
-            }
-          },
+          "Region",
           {
             "name": "Total",
             "value": {
@@ -383,16 +293,7 @@ client.Source<Order>("Order").Where(_ => _.Tags.Contains("urgent")).Select(_ => 
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Region",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Region"
-              }
-            }
-          }
+          "Region"
         ]
       }
     }
@@ -408,16 +309,7 @@ client.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Scores.Sum(),
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Region",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Region"
-              }
-            }
-          },
+          "Region",
           {
             "name": "Total",
             "value": {
@@ -482,16 +374,7 @@ client.Source<Employee>("Employee").Where(_ => _.PreviousAddresses.Any(address =
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Name",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Name"
-              }
-            }
-          }
+          "Name"
         ]
       }
     }
@@ -535,16 +418,7 @@ client.Source<Employee>("Employee").Where(_ => client.Source<Department>("Depart
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Name",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Name"
-              }
-            }
-          }
+          "Name"
         ]
       }
     }

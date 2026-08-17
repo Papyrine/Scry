@@ -41,8 +41,8 @@ public class ResponseSpillTests
         """
         {"version":1,"root":"Holiday","pipeline":[
           {"$type":"select","projection":{"members":[
-            {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}},
-            {"name":"Date","value":{"$type":"node","node":{"$type":"member","path":"Date"}}}]}}]}
+            "Name",
+            "Date"]}}]}
         """;
 
     /// <summary>
