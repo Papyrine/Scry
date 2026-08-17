@@ -15,8 +15,6 @@ sealed class ProjectionPlan(
     /// </summary>
     public IReadOnlyList<bool>? BinarySlots { get; } = binarySlots;
 
-    PlanShapeWriter? writer;
-
     /// <summary>
     /// The row writer for this shape, so names are camel-cased and escaped once rather than per row.
     /// Held by shape rather than by plan: a plan is built per request, and the writer outlives it.
@@ -27,5 +25,5 @@ sealed class ProjectionPlan(
     /// the same writer, so the bare assignment is benign.
     /// </remarks>
     public PlanShapeWriter Writer =>
-        writer ??= PlanShapeWriter.Get(Shape, BinarySlots);
+        field ??= PlanShapeWriter.Get(Shape, BinarySlots);
 }

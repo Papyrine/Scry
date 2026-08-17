@@ -64,7 +64,7 @@ static class CursorCodec
         byte[]? rented = null;
         var utf8 = maximum <= 512
             ? stackalloc byte[512]
-            : (rented = ArrayPool<byte>.Shared.Rent(maximum));
+            : rented = ArrayPool<byte>.Shared.Rent(maximum);
         try
         {
             var written = Encoding.UTF8.GetBytes(canonical, utf8);

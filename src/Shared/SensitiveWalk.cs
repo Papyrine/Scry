@@ -1,3 +1,4 @@
+// ReSharper disable TailRecursiveCall
 /// <summary>
 /// What a finished request does with the members its model marks <c>[Sensitive]</c>: whether it
 /// compares one against a constant, and whether it returns one.
@@ -204,7 +205,7 @@ static class SensitiveWalk
 
             var found = new Found();
             Visit(node, root, projected, found);
-            if (found.Sensitive && found.Constant)
+            if (found is { Sensitive: true, Constant: true })
             {
                 InConstant = true;
             }

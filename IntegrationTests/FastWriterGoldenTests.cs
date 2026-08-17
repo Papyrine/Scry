@@ -75,7 +75,7 @@ public class FastWriterGoldenTests
 
     public static IEnumerable<TestCaseData> Corpus()
     {
-        yield return new TestCaseData(
+        yield return new(
             "nested projection with nulls",
             """
             {"version":1,"root":"Employee","pipeline":[
@@ -89,7 +89,7 @@ public class FastWriterGoldenTests
                 {"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},
                 {"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}]}
             """);
-        yield return new TestCaseData(
+        yield return new(
             "naughty strings through a poco source",
             """
             {"version":1,"root":"Holiday","pipeline":[
@@ -98,7 +98,7 @@ public class FastWriterGoldenTests
                 {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}},
                 {"name":"Date","value":{"$type":"node","node":{"$type":"member","path":"Date"}}}]}}]}
             """);
-        yield return new TestCaseData(
+        yield return new(
             "duplicate projected name overwrites in place",
             """
             {"version":1,"root":"Employee","pipeline":[
@@ -108,7 +108,7 @@ public class FastWriterGoldenTests
                 {"name":"Active","value":{"$type":"node","node":{"$type":"member","path":"Active"}}},
                 {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}]}
             """);
-        yield return new TestCaseData(
+        yield return new(
             "nested path claiming a scalar's position",
             """
             {"version":1,"root":"Employee","pipeline":[
@@ -118,13 +118,13 @@ public class FastWriterGoldenTests
                 {"name":"Boss","value":{"$type":"nested","path":"Manager","projection":{"members":[
                   {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}}]}}}]}}]}
             """);
-        yield return new TestCaseData(
+        yield return new(
             "default projection",
             """
             {"version":1,"root":"Employee","pipeline":[
               {"$type":"orderBy","key":{"$type":"member","path":"Id"},"descending":false}]}
             """);
-        yield return new TestCaseData(
+        yield return new(
             "scalar terminal",
             """
             {"version":1,"root":"Employee","pipeline":[{"$type":"count"}]}
@@ -132,32 +132,32 @@ public class FastWriterGoldenTests
         // A count is an int and an aggregate is whatever the provider returns for it, which covers both
         // halves of the value writer: a decimal is one of its fast cases, and a date-without-time is
         // handed to the serializer.
-        yield return new TestCaseData(
+        yield return new(
             "aggregate scalar terminal",
             """
             {"version":1,"root":"Order","pipeline":[
               {"$type":"aggregate","function":"Sum","selector":{"$type":"member","path":"Amount"}}]}
             """);
-        yield return new TestCaseData(
+        yield return new(
             "aggregate scalar over a date",
             """
             {"version":1,"root":"Employee","pipeline":[
               {"$type":"aggregate","function":"Max","selector":{"$type":"member","path":"Created"}}]}
             """);
-        yield return new TestCaseData(
+        yield return new(
             "all terminal",
             """
             {"version":1,"root":"Employee","pipeline":[
               {"$type":"all","predicate":{"$type":"member","path":"Active"}}]}
             """);
-        yield return new TestCaseData(
+        yield return new(
             "single row terminal",
             """
             {"version":1,"root":"Employee","pipeline":[
               {"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},
               {"$type":"first","orDefault":false,"predicate":null}]}
             """);
-        yield return new TestCaseData(
+        yield return new(
             "null single terminal",
             """
             {"version":1,"root":"Employee","pipeline":[
@@ -166,7 +166,7 @@ public class FastWriterGoldenTests
                 "right":{"$type":"const","value":"Nobody","tag":"String"}}},
               {"$type":"first","orDefault":true,"predicate":null}]}
             """);
-        yield return new TestCaseData(
+        yield return new(
             "page envelope",
             """
             {"version":1,"root":"Employee","pipeline":[
@@ -178,7 +178,7 @@ public class FastWriterGoldenTests
         // The page above has a further page and so mints a cursor. This one asks for more rows than
         // exist, so there is nothing to resume from and the cursor is omitted rather than written as
         // null — the writer's other branch, and a different set of bytes.
-        yield return new TestCaseData(
+        yield return new(
             "page envelope with no further page",
             """
             {"version":1,"root":"Employee","pipeline":[
@@ -189,7 +189,7 @@ public class FastWriterGoldenTests
             """);
         // A poco source is never seek-safe, so a page of one carries no cursor even when a further
         // page exists — the same omission arrived at down a different path.
-        yield return new TestCaseData(
+        yield return new(
             "page envelope over a poco source",
             """
             {"version":1,"root":"Holiday","pipeline":[
@@ -199,7 +199,7 @@ public class FastWriterGoldenTests
                 {"name":"Date","value":{"$type":"node","node":{"$type":"member","path":"Date"}}}]}},
               {"$type":"page","size":2}]}
             """);
-        yield return new TestCaseData(
+        yield return new(
             "grouped aggregates",
             """
             {"version":1,"root":"Order","pipeline":[
@@ -209,7 +209,7 @@ public class FastWriterGoldenTests
                 {"name":"Total","value":{"$type":"node","node":{"$type":"aggregate","function":"Sum","selector":{"$type":"member","path":"Amount"}}}},
                 {"name":"Count","value":{"$type":"node","node":{"$type":"aggregate","function":"Count"}}}]}}]}
             """);
-        yield return new TestCaseData(
+        yield return new(
             "distinct projection",
             """
             {"version":1,"root":"Employee","pipeline":[
