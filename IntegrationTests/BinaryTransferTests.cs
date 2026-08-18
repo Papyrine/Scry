@@ -103,8 +103,8 @@ public class BinaryTransferTests
     const string selectNameAndPayload =
         """
         {"$type":"select","projection":{"members":[
-          {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}},
-          {"name":"Payload","value":{"$type":"node","node":{"$type":"member","path":"Payload"}}}]}}
+          "Name",
+          "Payload"]}}
         """;
 
     const string orderById =
@@ -164,7 +164,7 @@ public class BinaryTransferTests
             """
             {"version":1,"root":"Document","pipeline":[
               {"$type":"select","projection":{"members":[
-                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}}]}}]}
+                "Name"]}}]}
             """;
 
         var (single, _) = await PostRaw("/api/query", namesOnly);
@@ -213,7 +213,7 @@ public class BinaryTransferTests
             """
             {"version":1,"root":"Document","pipeline":[
               {"$type":"select","projection":{"members":[
-                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}}]}}]}
+                "Name"]}}]}
             """;
 
         await using var spilling = await StartSpilling(1);
@@ -248,7 +248,7 @@ public class BinaryTransferTests
             """
             {"version":1,"root":"Document","pipeline":[
               {"$type":"select","projection":{"members":[
-                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}}]}}]}
+                "Name"]}}]}
             """;
 
         await using var spilling = await StartSpilling(1);

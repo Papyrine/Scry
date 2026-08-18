@@ -647,11 +647,18 @@ A key that is a plain member is named instead by its own `member` node, whose pa
 {
   "projection": {
     "members": [
-      { "name": "Name", "value": { "$type": "node", "node": { "$type": "member", "path": "Name" } } }
+      "Name",
+      { "name": "ManagerName", "value": { "$type": "node", "node": { "$type": "member", "path": ["Manager", "Name"] } } }
     ]
   }
 }
 ```
+
+A member has two spellings, and — as with a [member path](#member) — each case has exactly one of them.
+
+A member reading the member it is named for travels as a **bare string**: the name and the single-segment path of the node it wraps are the same token, and spelling it twice says nothing. This is what every member of a [default projection](querying.md#without-a-select) is, so it is most of what a query writing no `Select` sends.
+
+Everything else travels as an **object** with `name` and `value`: a member renamed away from what it reads, one reaching through a navigation, and one whose value is not a member read at all. A member qualifying for the string but arriving as an object is refused, so two requests meaning the same thing are the same bytes — which is what the `ETag` and anything else keying off a request already assume.
 
 <!-- snippet: wireProjectionValues -->
 <a id='snippet-wireProjectionValues'></a>
@@ -1136,7 +1143,7 @@ Over HTTP, request and response look like this:
     RequestUri: {
       Path: http://localhost/api/query,
       Query: {
-        q: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":"Active"}},{"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}},{"name":"Status","value":{"$type":"node","node":{"$type":"member","path":"Status"}}},{"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"{scrubbed stamp}"}
+        q: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":"Active"}},{"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},{"$type":"select","projection":{"members":["Name","Status",{"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},{"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}],"stamp":"{scrubbed stamp}"}
       }
     },
     RequestMethod: GET,

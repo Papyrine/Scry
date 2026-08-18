@@ -7,26 +7,8 @@
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Name",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Name"
-              }
-            }
-          },
-          {
-            "name": "Status",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Status"
-              }
-            }
-          }
+          "Name",
+          "Status"
         ]
       }
     }
@@ -42,16 +24,7 @@ client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).ToListAsync
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Name",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Name"
-              }
-            }
-          }
+          "Name"
         ]
       }
     }
@@ -67,16 +40,7 @@ client.Source<Employee>("Employee").Select(_ => new {_.Name, Manager = _.Manager
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Name",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Name"
-              }
-            }
-          },
+          "Name",
           {
             "name": "Manager",
             "value": {
@@ -105,16 +69,7 @@ client.Source<Employee>("Employee").Select(_ => new EmployeeCard(_.Name, new(_.D
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Name",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Name"
-              }
-            }
-          },
+          "Name",
           {
             "name": "Department",
             "value": {
@@ -122,16 +77,7 @@ client.Source<Employee>("Employee").Select(_ => new EmployeeCard(_.Name, new(_.D
               "path": "Department",
               "projection": {
                 "members": [
-                  {
-                    "name": "Name",
-                    "value": {
-                      "$type": "node",
-                      "node": {
-                        "$type": "member",
-                        "path": "Name"
-                      }
-                    }
-                  }
+                  "Name"
                 ]
               }
             }
@@ -151,16 +97,7 @@ client.Source<Employee>("Employee").Select(_ => new EmployeeCard(_.Name, new(_.D
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Name",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Name"
-              }
-            }
-          },
+          "Name",
           {
             "name": "Department",
             "value": {
@@ -202,16 +139,7 @@ client.Source<Employee>("Employee").Select(_ => new {_.Name, _.Address.City, _.A
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Name",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Name"
-              }
-            }
-          },
+          "Name",
           {
             "name": "City",
             "value": {
@@ -373,16 +301,7 @@ client.Source<Order>("Order").Select(_ => new {_.Region}).Distinct().ToListAsync
       "$type": "select",
       "projection": {
         "members": [
-          {
-            "name": "Region",
-            "value": {
-              "$type": "node",
-              "node": {
-                "$type": "member",
-                "path": "Region"
-              }
-            }
-          }
+          "Region"
         ]
       }
     },

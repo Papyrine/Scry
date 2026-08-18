@@ -3,7 +3,7 @@
     RequestUri: {
       Path: http://localhost/api/query,
       Query: {
-        q: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"AndAlso","left":{"$type":"member","path":"Active"},"right":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Department","Name"]},"right":{"$type":"const","value":"Engineering","tag":"String"}}}},{"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}}]}}],"stamp":"{scrubbed stamp}"}
+        q: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"AndAlso","left":{"$type":"member","path":"Active"},"right":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Department","Name"]},"right":{"$type":"const","value":"Engineering","tag":"String"}}}},{"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},{"$type":"select","projection":{"members":["Name"]}}],"stamp":"{scrubbed stamp}"}
       }
     },
     RequestMethod: GET,
@@ -20,7 +20,7 @@
     RequestUri: {
       Path: http://localhost/api/query,
       Query: {
-        q: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"AndAlso","left":{"$type":"member","path":"Active"},"right":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Department","Name"]},"right":{"$type":"const","value":"Engineering","tag":"String"}}}},{"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},{"$type":"select","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}}]}}],"stamp":"{scrubbed stamp}"}
+        q: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"AndAlso","left":{"$type":"member","path":"Active"},"right":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Department","Name"]},"right":{"$type":"const","value":"Engineering","tag":"String"}}}},{"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},{"$type":"select","projection":{"members":["Name"]}}],"stamp":"{scrubbed stamp}"}
       }
     },
     RequestMethod: GET,
