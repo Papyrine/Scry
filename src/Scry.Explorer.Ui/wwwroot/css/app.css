@@ -358,13 +358,13 @@ pre {
 }
 
 /*
-  The editor renders => as two characters (Monaco ships with ligatures off); the panes and pills that
-  echo the same query must agree, and a ligature font in the mono stack would fuse it into an arrow.
+  The editor renders => as two characters (Monaco ships with ligatures off); the panes and the history
+  entries that echo the same query must agree, and a ligature font in the mono stack would fuse it into
+  an arrow.
 */
 pre,
 .scalar,
-ul[data-testid="history"] a,
-ul[data-testid="completions"] button {
+ul[data-testid="history"] a {
     font-variant-ligatures: none;
 }
 
@@ -429,7 +429,7 @@ table[data-testid="result-table"] tbody tr:hover td {
     border-radius: 8px;
 }
 
-/* History and completions */
+/* History */
 
 ul[data-testid="history"] {
     list-style: none;
@@ -463,46 +463,6 @@ ul[data-testid="history"] a {
 ul[data-testid="history"] a:hover {
     color: var(--accent);
     border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-}
-
-ul[data-testid="completions"] {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-}
-
-ul[data-testid="completions"] li {
-    display: flex;
-}
-
-/*
-  Each completion is a button: clicking it types its text into the editor. Styled as the pill it was
-  before it became one, and hovers like the history entries above it — the two lists do the same kind
-  of thing, in that both put text into the query.
-*/
-ul[data-testid="completions"] button {
-    padding: 0.18rem 0.62rem;
-    font-family: var(--mono);
-    font-size: 0.76rem;
-    line-height: 1.5;
-    color: var(--text);
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    cursor: pointer;
-}
-
-ul[data-testid="completions"] button:hover {
-    color: var(--accent);
-    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-}
-
-ul[data-testid="completions"] button:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
 }
 
 /*
