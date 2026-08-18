@@ -7,7 +7,7 @@ Scry lets a client compose queries. The design assumption is that **the client i
 
 Assumed:
 
-- An attacker can craft arbitrary JSON and send it to the query endpoint, in a `POST` body or [encoded into a `GET` URL](wire-format.md#the-url-form). Both reach the same handler and are validated identically; neither form is trusted more than the other, and a URL that does not decode into a request this server can parse is rejected before anything is bound.
+- An attacker can craft arbitrary JSON and send it to the query endpoint, in a `POST` body or [encoded into a `GET` URL](wire-format.md#the-url-form), in either [encoding](wire-format.md#choosing-the-encoding). All of these reach the same handler and are validated identically; no form is trusted more than another, and anything that does not decode into a request this server can parse is rejected before anything is bound. Content arriving on a `GET` is never read at all, so it is not a second way to ask.
 - An attacker can read the generated client code, and can see any schema the [explorer](explorer.md) exposes.
 - An attacker will try to name types and properties that were never generated for them.
 

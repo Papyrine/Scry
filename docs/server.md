@@ -73,7 +73,7 @@ Three routes, from the one call:
 
 (Plus `…/attachment`, which [attachments](attachments.md) covers — mapped here so one authorization convention reaches it too.)
 
-The query pattern answers both methods with the same handler: a `GET` carries the request base64url-encoded in a `q` parameter instead of in a body, and everything after that — validation, the allow-list, policies, shaping — is identical. `GET` is what a client uses by default, because a response identified by a URL can be cached and revalidated by machinery that already exists where a `POST` can never be; see [Caching](caching.md).
+The query pattern answers both methods with the same handler: a `GET` carries the request [encoded into a `q` parameter](wire-format.md#the-url-form) instead of in a body, and everything after that — validation, the allow-list, policies, shaping — is identical. `GET` is what a client uses by default, because a response identified by a URL can be cached and revalidated by machinery that already exists where a `POST` can never be; see [Caching](caching.md).
 
 Setting [`QueryUrlLimit`](#options) to `0` maps no `GET` route at all, and routing then answers one with a `405` naming `POST`. Clients notice and stop offering URLs, so the status is a backstop for a stale one rather than the everyday path.
 

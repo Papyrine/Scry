@@ -108,30 +108,44 @@ Content-Type: application/json
 {"version":1,"root":"Employee","pipeline":[...]}
 ```
 
-Or, when it is short enough, as a URL — the serialized request base64url-encoded into a single `q` parameter:
+Or, when it is short enough, as a URL — the serialized request written into a single `q` parameter:
 
 ```
-GET {pattern}?q=eyJ2ZXJzaW9uIjoxLCJyb290IjoiRW1wbG95ZWUi...
+GET {pattern}?q=%7B%22version%22%3A1%2C%22root%22%3A%22Employee%22...
 ```
 
 | | |
 | --- | --- |
 | Parameter | `q` (`QueryUrl.Parameter`) |
-| Encoding | base64url of the UTF-8 JSON, unpadded (`QueryUrl.Encode`) |
-| Limit | `QueryUrl.MaxLength` — 4096 encoded characters |
+| Encoding | percent-encoded JSON by default, or unpadded base64url (`QueryUrl.Encode`, `QueryUrlEncoding`) |
+| Limit | `QueryUrl.MaxLength` — 4096 encoded characters, measured after escaping |
 | Over the limit | sent as a body instead; both endpoints stay mapped |
 
 `MapScry` maps `GET` and `POST` on the same pattern to the same handler, so the two forms differ in transport only: same validation, same allow-list, same policies, same response. Which one a client uses is not a property of the query — a client may send either, and a server answers both.
 
 The form exists because a cache decides what it may store from the method and the URL, before it looks at anything else. A `POST` is uncacheable to every cache between the client and the server, and its body is part of no cache key; a `GET` carrying the query in its URL is an ordinary cacheable request, which is what makes [conditional requests](caching.md) work without both ends hand-implementing them.
 
-The request travels in the URL rather than in content on the `GET` for two reasons, both of which are about what survives the trip. A browser will not send content on a `GET` at all — the Fetch standard forbids it, which rules a body out for a WASM client and for the explorer. And an intermediary is permitted to drop the content of a `GET`, after which the request still looks well-formed — same method, same URL — but carries nothing to execute, so the server answers 400 and the client cannot distinguish that from a rejection it caused itself. A URL survives every hop by construction.
+The request travels in the URL rather than in content on the `GET` for two reasons, both about what survives the trip. HTTP itself allows content on a `GET` — RFC 9110 only says it has no defined semantics and may be rejected — but a browser will not send it: the Fetch standard throws on a body set with method `GET`, which rules it out for a WASM client and for the explorer. And an intermediary is permitted to drop the content of a `GET`, after which the request still looks well-formed — same method, same URL — but carries nothing to execute, so the server answers 400 and the client cannot distinguish that from a rejection it caused itself. A URL survives every hop by construction, which is why the URL is what a server reads and content arriving on a `GET` is ignored.
 
-base64url rather than the JSON percent-encoded: length is the binding constraint, and percent-encoding inflates JSON by about 1.84× where base64url costs 1.33×. It also has no reserved characters, so what the client writes is what the server reads.
+### Choosing the encoding
 
-A URL is logged, though, by every hop it passes and in the `Referer` of whatever the page does next — constants included. A query whose constants are sensitive on their own belongs on `POST` whatever its length.
+Both encodings decode to the same request and a server accepts either on any query, so this is a per-client choice rather than a property of the wire. Nothing announces which is in use: a query string arrives percent-decoded, so JSON is read back as itself and always opens with `{`, which base64url's alphabet — letters, digits, `-` and `_` — cannot produce.
 
-Decoding fails closed like the rest of the wire: a `q` that is absent, not base64url, or not a request the server can parse is a 400, never a partial query.
+| | `QueryUrlEncoding.Json` (default) | `QueryUrlEncoding.Base64Url` |
+| --- | --- | --- |
+| Cost over the raw JSON | ~1.84× | 1.33× |
+| Readable in a log or a proxy trace | yes | only once decoded |
+| Reaches `MaxLength` at | ~2/3 the query size | the full budget |
+
+JSON is the default because a URL that carries it says what it asked for to anything that reads URLs. base64url is what to set when length is the binding constraint and queries would otherwise fall back to bodies — `ScryClient.UrlEncoding` selects it.
+
+Neither is concealment. A URL is logged by every hop it passes and appears in the `Referer` of whatever the page does next — constants included, in both encodings. A query whose constants are sensitive on their own belongs on `POST` whatever its length.
+
+Decoding fails closed like the rest of the wire: a `q` that is absent, or is neither a JSON request nor valid base64url, or is not a request the server can parse, is a 400 — never a partial query.
+
+### Content on a URL query
+
+`ScryClient.IncludeJsonBodyOnUrlQuery` (off by default) repeats the request as content on the `GET`. It is a debugging aid for tools that log bodies rather than URLs: the server reads the URL and ignores the content entirely, so a hop that strips it costs the query nothing and content disagreeing with the URL cannot change what runs. A browser cannot send it at all, per the Fetch restriction above — the explorer offers the nearest reachable thing, a `POST` carrying the same JSON, behind its **JSON body** toggle.
 
 
 ## Operators

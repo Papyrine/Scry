@@ -382,6 +382,59 @@ public class UiSnapshotTests :
         Assert.That(restored, Is.EqualTo(query));
     }
 
+    // The explorer sends its query with the JSON as content by default, so a request reads as itself
+    // in a network pane. That is the one place the explorer departs from what a client sends, and it
+    // costs the GET to do it: a browser cannot put content on a GET at all, so the readable body is
+    // only reachable as a POST. Unticking restores the production shape, and the choice is kept per
+    // browser so it survives a reload of an app that is otherwise stateless.
+    [Test]
+    public async Task ExplorerRemembersTheJsonBodyChoice()
+    {
+        const string query = "Query.Employee.Select(_ => new { _.Name })";
+
+        var page = await NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/scry");
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+
+        List<string> methods = [];
+        page.Request += (_, request) =>
+        {
+            if (request.Url.Contains("/api/query"))
+            {
+                methods.Add(request.Method);
+            }
+        };
+
+        var toggle = page.Locator("[data-testid='send-body']");
+        Assert.That(await toggle.IsCheckedAsync(), Is.True, "ticked by default");
+
+        await page.SetEditorValueAsync(query);
+        await page.Locator("[data-testid='run']").ClickAsync();
+        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 30);
+
+        Assert.That(methods, Has.Count.EqualTo(1).And.All.EqualTo("POST"));
+
+        // Unticked, the same query goes back to the shape production sends.
+        methods.Clear();
+        await toggle.UncheckAsync();
+        await page.Locator("[data-testid='run']").ClickAsync();
+        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 30);
+
+        Assert.That(methods, Has.Count.EqualTo(1).And.All.EqualTo("GET"));
+
+        // Reloaded rather than opened in a new page: NewPageAsync builds a fresh browser context, whose
+        // empty localStorage would read as the default and prove nothing. A reload discards the running
+        // component and keeps the storage, which is exactly the boundary being asserted.
+        await page.ReloadAsync();
+        await page.WaitForSelectorAsync(".monaco-editor", 30);
+
+        Assert.That(
+            await page.Locator("[data-testid='send-body']").IsCheckedAsync(),
+            Is.False,
+            "the unticked choice did not survive a reload");
+    }
+
     // A link whose fragment is not a query the explorer wrote is ignored rather than surfaced: a URL
     // is untrusted input, and the explorer opens on its sample query instead of on an error.
     [Test]

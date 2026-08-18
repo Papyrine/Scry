@@ -90,6 +90,10 @@
         }
         <button class="btn" data-testid="share" @onclick="Share"
                 title="Put this query in the URL and copy the link. The query is placed in the fragment, so it is never sent to the server.">@(copied == "share" ? "✓ Link copied" : "Share")</button>
+        <label class="check"
+               title="Send the query as a POST carrying its JSON as content, so the request reads as itself in the network pane. A browser cannot put content on a GET, so this trades the cacheable GET for a readable body. Unticked sends what production sends: a GET with the query in the URL.">
+            <input type="checkbox" data-testid="send-body" checked="@sendBody" @onchange="ToggleSendBody" />JSON body
+        </label>
         @if (workspace is null && error is null)
         {
             <span class="muted loading-hint">Loading schema…</span>

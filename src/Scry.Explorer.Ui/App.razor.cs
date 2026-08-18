@@ -4,6 +4,7 @@ using System.Text.Json;
 using BlazorMonaco;
 using BlazorMonaco.Editor;
 using BlazorMonaco.Languages;
+using Microsoft.AspNetCore.Components;
 using Microsoft.CodeAnalysis;
 using Microsoft.JSInterop;
 
@@ -48,8 +49,16 @@ public partial class App
     string? initialCode;
 
     const string HistoryKey = "scry-history";
+    const string SendBodyKey = "scry-send-body";
     const string SharePrefix = "#q=";
     List<string> history = [];
+
+    // On unless this browser has been told otherwise. The explorer is for seeing what a query becomes,
+    // and a request carrying its JSON as content shows that to the network pane with nothing to decode
+    // first — which is worth more here than the cacheable GET it gives up, this being the one caller
+    // that is never in production. See SendQuery for why the trade is GET-for-POST rather than a body
+    // on the GET.
+    bool sendBody = true;
 
     // Resolve the saved theme and any shared query synchronously, before the editor is created: the
     // theme has to be right at construction (no light-flash) and the editor takes its initial value
@@ -62,6 +71,10 @@ public partial class App
             resolvedDark = ResolveDark(js);
             js.InvokeVoid("scry.setDataTheme", themeMode);
             initialCode = SharedQuery(js.Invoke<string?>("scry.hash"));
+
+            // Read as "anything but false" so a browser that has never been asked keeps the default on,
+            // rather than a missing key reading as off.
+            sendBody = js.Invoke<string?>("localStorage.getItem", SendBodyKey) != "false";
         }
     }
 
@@ -600,6 +613,17 @@ public partial class App
         await BlazorMonaco.Editor.Global.SetTheme(JS, resolvedDark ? "vs-dark" : "vs");
     }
 
+    // Persisted per browser, alongside the theme, so the choice survives a reload of an app that is
+    // otherwise stateless.
+    void ToggleSendBody(ChangeEventArgs args)
+    {
+        sendBody = args.Value is true;
+        if (JS is IJSInProcessRuntime js)
+        {
+            js.InvokeVoid("localStorage.setItem", SendBodyKey, sendBody ? "true" : "false");
+        }
+    }
+
     async Task Copy(string text, string key)
     {
         await JS.InvokeVoidAsync("scry.copy", text);
@@ -933,9 +957,20 @@ public partial class App
     /// the same models, and the budget comes from introspection.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The budget comes from introspection rather than from a response header the way a client's does,
     /// because this app is built and embedded when Scry is: it can carry no per-deployment value of its
     /// own, and it has the whole contract in hand before it sends anything.
+    /// </para>
+    /// <para>
+    /// <see cref="sendBody"/> is the one deliberate departure, and it costs the <c>GET</c> rather than
+    /// adding to it. <c>ScryClient.IncludeJsonBodyOnUrlQuery</c> keeps the URL and repeats it as
+    /// content, which is not reachable from here: the Fetch standard throws on a body set with method
+    /// <c>GET</c>, so this app cannot send that shape at all. A <c>POST</c> is the nearest thing a
+    /// browser can emit — the JSON is on the wire and readable in the network pane, which is the whole
+    /// point of the setting — and what it gives up is the cacheable <c>GET</c>. Turn it off to watch
+    /// the production shape.
+    /// </para>
     /// </remarks>
     Task<HttpResponseMessage> SendQuery(string json, bool requiresBody)
     {
@@ -943,6 +978,7 @@ public partial class App
         var encoded = QueryUrl.Encode(utf8);
         var endpoint = introspection!.QueryEndpoint;
         if (requiresBody ||
+            sendBody ||
             !QueryUrl.WithinLimit(encoded, introspection.QueryUrlLimit))
         {
             return Http.PostAsync(endpoint, new StringContent(json, Encoding.UTF8, "application/json"));

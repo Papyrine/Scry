@@ -78,8 +78,9 @@ public sealed class ScryClient
         return content;
     }
 
-    // base64url carries nothing a query string would have to escape, so the encoded request is appended
-    // as it stands. An endpoint that already carries parameters of its own keeps them.
+    // QueryUrl.Encode returns a value already escaped for a query string, whichever encoding produced
+    // it, so the request is appended as it stands. An endpoint that already carries parameters of its
+    // own keeps them.
     static string Url(string endpoint, string encoded) =>
         endpoint.Contains('?')
             ? $"{endpoint}&{QueryUrl.Parameter}={encoded}"
@@ -184,6 +185,36 @@ public sealed class ScryClient
     /// client, which is why <c>AddScryClient</c> registers one per scope rather than per injection.
     /// </remarks>
     public int QueryUrlLimit { get; private set; } = QueryUrl.MaxLength;
+
+    /// <summary>
+    /// How a query asked as a URL is written into it. Defaults to <see cref="QueryUrlEncoding.Json"/>,
+    /// which any hop can read without decoding it first; <see cref="QueryUrlEncoding.Base64Url"/> is
+    /// about a third shorter and therefore keeps more queries inside <see cref="QueryUrlLimit"/>.
+    /// </summary>
+    /// <remarks>
+    /// Configured rather than learned, because unlike the budget it is not a fact about the hops in
+    /// between: a server accepts either encoding on any query, so nothing downstream has to agree with
+    /// what is set here. See <see cref="QueryUrl"/> for what a URL exposes either way.
+    /// </remarks>
+    public QueryUrlEncoding UrlEncoding { get; set; } = QueryUrlEncoding.Json;
+
+    /// <summary>
+    /// Whether a query asked as a URL also carries its JSON in the request body. Off by default, and a
+    /// debugging aid only — the server reads the URL and ignores the body.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The body is a duplicate, so nothing depends on it arriving: an intermediary is free to drop the
+    /// content of a <c>GET</c>, and one that does costs this nothing. What it buys is a request that
+    /// shows what it asked in a tool that logs bodies rather than URLs.
+    /// </para>
+    /// <para>
+    /// Not available on every transport. A browser refuses to send content on a <c>GET</c> — the Fetch
+    /// standard throws rather than dropping it — so a WASM client that turns this on fails to send at
+    /// all rather than sending without the body.
+    /// </para>
+    /// </remarks>
+    public bool IncludeJsonBodyOnUrlQuery { get; set; }
 
     /// <summary>
     /// True once the server has advertised a schema stamp that differs from this client's, meaning the
@@ -476,7 +507,7 @@ public sealed class ScryClient
         // query as a GET is stored and revalidated by the caller's own HTTP cache, which is machinery
         // that already exists and needs no client code. What does not fit stays a POST — see QueryUrl
         // for the length that bounds this, and for what a URL exposes that a body does not.
-        var encoded = QueryUrl.Encode(utf8);
+        var encoded = QueryUrl.Encode(utf8, UrlEncoding);
 
         // A query comparing a [Sensitive] member against a constant writes that constant into the
         // access log of every hop a URL passes, so it travels as a body however short it is. Read off
@@ -525,6 +556,12 @@ public sealed class ScryClient
             // header needs a request message of its own to be written onto.
             using var message = url
                 ? new HttpRequestMessage(HttpMethod.Get, Url(endpoint, encoded))
+                {
+                    // A duplicate of what the URL already carries, sent only where it has been asked
+                    // for. The server reads the URL either way, so a hop that strips this costs the
+                    // query nothing.
+                    Content = IncludeJsonBodyOnUrlQuery ? JsonBody(utf8) : null
+                }
                 : new HttpRequestMessage(HttpMethod.Post, endpoint)
                 {
                     Content = JsonBody(utf8)

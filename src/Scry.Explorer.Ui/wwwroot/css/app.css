@@ -240,6 +240,31 @@ a {
     border-color: transparent;
 }
 
+/* A toggle sharing the button row, so it takes .btn's metrics rather than the body's and sits on the
+   same baseline as the buttons beside it. Muted until ticked, which is the only state worth a look. */
+.check {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45em;
+    padding: 0.42rem 0.6rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+}
+
+.check:has(input:checked) {
+    color: var(--text);
+}
+
+.check input {
+    margin: 0;
+    accent-color: var(--accent-strong);
+    cursor: pointer;
+}
+
 /* Sized in em so an icon tracks its button's font-size rather than a pixel box beside it. */
 .btn-icon {
     width: 0.75em;

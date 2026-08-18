@@ -11,11 +11,11 @@ All of that ships. A query short enough to fit in a URL is asked with `GET`, so 
 
 A cache — the browser's, a proxy's, a CDN's — decides what it can store from the method and the URL, and it decides before it looks at anything else. A `POST` is uncacheable to all of them, and its body is not part of any cache key, so a query sent as one is invisible to every cache between the client and the server no matter what headers it carries.
 
-So a query that fits is sent as `GET {endpoint}?q={encoded}`, where `q` is the same serialized `QueryRequest` base64url-encoded ([`QueryUrl`](wire-format.md#the-url-form)). The URL identifies the response, which is what a cache needs, and `304` becomes what it is everywhere else on the web rather than something both ends have to hand-implement.
+So a query that fits is sent as `GET {endpoint}?q={encoded}`, where `q` is the same serialized `QueryRequest`, percent-encoded — or base64url, which is shorter and fits more queries in a URL; [`QueryUrl`](wire-format.md#choosing-the-encoding) covers the choice. The URL identifies the response, which is what a cache needs, and `304` becomes what it is everywhere else on the web rather than something both ends have to hand-implement.
 
 Three consequences worth stating plainly:
 
-**The request travels in the URL, not in content on the GET.** A body would carry any query at any size, and it cannot be used. A browser refuses to send one — the Fetch standard forbids content on `GET`, which rules it out for a WASM client and for the explorer. And an intermediary is permitted to drop the content of a `GET`: what reaches the server is then still a well-formed request — same method, same URL — carrying nothing to execute, so the server answers 400 and the client that sent a complete request cannot tell that from a rejection it caused itself. The failure is silent, depends on infrastructure the client cannot see, and does not reproduce locally. A URL survives every hop by construction.
+**The request travels in the URL, not in content on the GET.** A body would carry any query at any size, and it cannot be used. HTTP permits content on a `GET`, but a browser refuses to send it — the Fetch standard throws on a body set with method `GET`, which rules it out for a WASM client and for the explorer. And an intermediary is permitted to drop the content of a `GET`: what reaches the server is then still a well-formed request — same method, same URL — carrying nothing to execute, so the server answers 400 and the client that sent a complete request cannot tell that from a rejection it caused itself. The failure is silent, depends on infrastructure the client cannot see, and does not reproduce locally. A URL survives every hop by construction.
 
 **A URL has a ceiling, so `POST` stays mapped.** 8 KB is the usual server and proxy limit on a whole request line, and what exceeds it is rejected by whichever hop is strictest, as a 414 or a 400 depending on the deployment. `QueryUrl.MaxLength` is set well below that; a query over it is sent as a body exactly as before, with no cache involvement. An `IN` list is the easiest way to get there — a few hundred ids is enough.
 
@@ -247,7 +247,7 @@ Above the handler nothing changes: the same `ScryClient`, the same generated mod
 
 ## The exchange
 
-Two identical queries, recorded at the socket. Both are `GET`s carrying the query in `q` — shown decoded, since what travels is base64url. The first is answered in full and carries an `ETag`; the second sends it back and is answered with a status and nothing else:
+Two identical queries, recorded at the socket. Both are `GET`s carrying the query in `q` — shown with the percent-encoding undone, as a query-string parser hands it to the server. The first is answered in full and carries an `ETag`; the second sends it back and is answered with a status and nothing else:
 
 <!-- snippet: ConditionalQueryTests.ConditionalExchange.verified.txt -->
 <a id='snippet-ConditionalQueryTests.ConditionalExchange.verified.txt'></a>

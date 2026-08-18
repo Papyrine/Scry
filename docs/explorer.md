@@ -90,7 +90,9 @@ When the guard returns false every explorer route returns **404**, not 403 — a
 
 ## Working with a query
 
-Three things the explorer does with the query in the editor, beyond running it.
+Four things the explorer does with the query in the editor, beyond running it.
+
+**Send the JSON as content.** The *JSON body* toggle, **on by default**, sends the query as a `POST` carrying its JSON as content, so the request reads as itself in a browser's network pane. It is the one place the explorer departs from what a client sends, and it costs the `GET` to do it: a browser cannot put content on a `GET` at all ([why](wire-format.md#content-on-a-url-query)), so a readable body is only reachable as a `POST`. Untick it to watch the production shape — a `GET` with the query [in the URL](wire-format.md#the-url-form) — and the choice is remembered per browser.
 
 **Share a link.** *Share* puts the query in the URL and copies the link. It is placed in the **fragment** (`/scry/#q=…`), which browsers never send to the server — so a shared query cannot land in an access log, a proxy trace, or a referrer header on the way. Opening the link loads the query into the editor; a fragment that does not decode is ignored, and the explorer opens on its sample query rather than on an error.
 
