@@ -45,6 +45,15 @@ public sealed class ScryProcessor
     public void ValidateAgainstModel(DbContext data) =>
         schema.ValidateAgainstModel(data.Model, options.ContextType);
 
+    /// <summary>
+    /// Translates every navigation that steps into a row-policied source, so a policy that does not
+    /// compose in correlated-subquery position fails at startup rather than on the first client to
+    /// name the member. Called once by <c>MapScry</c> unless
+    /// <see cref="ScryOptions.ProbePoliciedNavigations"/> is cleared.
+    /// </summary>
+    public void ProbePoliciedNavigations(DbContext data, IServiceProvider services) =>
+        executor.ProbeNavigationPolicies(data, services);
+
     /// <summary>Builds a processor from configuration (e.g. for tests or non-DI hosting).</summary>
     public static ScryProcessor Create<TContext>(Action<ScryOptions> configure)
         where TContext : DbContext
@@ -840,6 +849,10 @@ public sealed class ScryProcessor
     /// <summary>Executes a request without a service provider (no DI-resolved policies).</summary>
     public QueryResponse Execute(QueryRequest request, DbContext data) =>
         Execute(request, data, EmptyServiceProvider.Instance);
+
+    /// <summary>Probes without a service provider, for a host that has no DI to resolve one from.</summary>
+    public void ProbePoliciedNavigations(DbContext data) =>
+        ProbePoliciedNavigations(data, EmptyServiceProvider.Instance);
 
     /// <summary>
     /// Fetches an attachment without a service provider. The attachment policy still runs — it is

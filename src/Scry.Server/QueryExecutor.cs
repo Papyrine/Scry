@@ -205,7 +205,14 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
         // Built per request so a node that reads another source resolves it the same way the root was
         // resolved — through the schema, and policy-filtered — rather than reaching a DbSet directly.
-        var builder = new ExpressionBuilder(schema, options, name => ResolveSource(name, db, scope));
+        // The same resolution backs a traversal into a policied source, which is read through its
+        // policy rather than off the owner it was reached from.
+        var resolve = (string name) => ResolveSource(name, db, scope);
+        var builder = new ExpressionBuilder(
+            schema,
+            options,
+            resolve,
+            new NavigationPolicy(schema, db.Model, resolve));
 
         var query = source.Resolve(db, scope.Services);
         query = ApplyPolicy(query, source, db, scope);
@@ -629,6 +636,16 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         }
 
         return Scalar(values.Provider.Execute(call));
+    }
+
+    /// <summary>
+    /// Translates every navigation into a policied source once, at startup. Runs through the same
+    /// resolution a request does, so what is probed is what will execute.
+    /// </summary>
+    internal void ProbeNavigationPolicies(DbContext db, IServiceProvider services)
+    {
+        var scope = new CallScope(services, new HeaderDictionary(), new HeaderDictionary());
+        NavigationPolicyProbe.Run(schema, db.Model, name => ResolveSource(name, db, scope), db);
     }
 
     IQueryable ResolveSource(string name, DbContext db, CallScope scope)

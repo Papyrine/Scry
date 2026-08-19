@@ -6,9 +6,14 @@
 /// <remarks>
 /// <c>sources</c> resolves a named source, already policy-filtered, for a node that reads one — a
 /// membership test against another source. Null where no such node can occur, which makes the
-/// omission a rejection rather than an unfiltered read.
+/// omission a rejection rather than an unfiltered read. <c>navigations</c> is the same idea for a
+/// member path that steps into a policied source, and is omitted on the same terms.
 /// </remarks>
-sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, IQueryable>? sources = null)
+sealed class ExpressionBuilder(
+    Schema schema,
+    ScryOptions options,
+    Func<string, IQueryable>? sources = null,
+    NavigationPolicy? navigations = null)
 {
     /// <summary>Builds a predicate lambda <c>TElement =&gt; bool</c>.</summary>
     public LambdaExpression BuildPredicate(Node predicate, Type type)
@@ -896,6 +901,10 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
     Expression BuildMemberAccess(Expression root, IReadOnlyList<string> path)
     {
         var expression = root;
+
+        // Whether the path stepped into a source whose rows are policy-filtered. Such a step can yield
+        // no row where a plain navigation would have yielded one, which is what the widening below is for.
+        var policied = false;
         foreach (var segment in path)
         {
             // Traversing into an optional struct complex member (Nullable<T>): resolve against the
@@ -913,7 +922,42 @@ sealed class ExpressionBuilder(Schema schema, ScryOptions options, Func<string, 
                 expression = Expression.Property(expression, "Value");
             }
 
+            if (member.Kind == MemberKind.Navigation)
+            {
+                // Unwrap Nullable<T> for the same reason the owner was: an optional struct member
+                // names its underlying type.
+                var target = Nullable.GetUnderlyingType(member.Type) ?? member.Type;
+
+                // A navigation into a policied source is read through that source's policy rather than
+                // off the owner, so the rows it reaches are the rows a direct query would have returned.
+                if (navigations?.Applies(target) == true)
+                {
+                    expression = navigations.Correlate(expression, ownerType, member, target);
+                    policied = true;
+                    continue;
+                }
+
+                // Reached only where no rewriter was supplied, which is a context that cannot read
+                // another source. Refused rather than read off the owner, where the policy would
+                // silently not run.
+                if (navigations is null &&
+                    schema.TryGetPoliciedSource(target, out _))
+                {
+                    throw new ScryValidationException($"'{ownerType.Name}.{member.Name}' navigates into a row-policied source, which cannot be filtered here.");
+                }
+            }
+
             expression = Expression.Property(expression, member.Property);
+        }
+
+        // A policied traversal yields SQL NULL for a row the policy hides, so a non-nullable value read
+        // through one is widened; without that the shaper faults materializing the null. Mirrors the
+        // same widening on the unmatched side of an outer join.
+        if (policied &&
+            expression.Type.IsValueType &&
+            Nullable.GetUnderlyingType(expression.Type) is null)
+        {
+            expression = Expression.Convert(expression, typeof(Nullable<>).MakeGenericType(expression.Type));
         }
 
         return expression;

@@ -11,6 +11,11 @@ sealed class Schema
     readonly Dictionary<string, ScrySource> sources = new(StringComparer.Ordinal);
     readonly Dictionary<Type, TypeMeta> types = [];
 
+    // The policied sources keyed by the CLR type a navigation would land on. Only the policied ones:
+    // this exists so a traversal can ask whether the type it is stepping into filters its rows, and a
+    // source with no policy is nothing for that question to find.
+    readonly Dictionary<Type, ScrySource> policiedSources = [];
+
     // Previous wire names still answered to, kept apart from the current surface above so they never
     // leak into introspection or the stamp. Enum values are keyed by enum type, then previous name.
     readonly Dictionary<string, ScrySource> sourcePreviousNames = new(StringComparer.Ordinal);
@@ -28,6 +33,18 @@ sealed class Schema
 
     public bool TryGetType(Type type, [MaybeNullWhen(false)] out TypeMeta meta) =>
         types.TryGetValue(type, out meta);
+
+    /// <summary>
+    /// The source for <paramref name="type"/> where it carries a row policy. A navigation into such a
+    /// type is rewritten to read through that policy (see <see cref="NavigationPolicy"/>) rather than
+    /// straight off the owner, which is what keeps a policy that filters a source from being walked
+    /// around by naming the source as another type's member.
+    /// </summary>
+    public bool TryGetPoliciedSource(Type type, [MaybeNullWhen(false)] out ScrySource source) =>
+        policiedSources.TryGetValue(type, out source);
+
+    /// <summary>Every policied source, for the startup probe that translates each one's rewrite.</summary>
+    internal IEnumerable<ScrySource> PoliciedSources => policiedSources.Values;
 
     /// <summary>Every allow-listed type, for a reader that has no path to resolve one by.</summary>
     internal IEnumerable<TypeMeta> Types => types.Values;
@@ -454,10 +471,15 @@ sealed class Schema
                 throw new($"Duplicate queryable source name '{name}'.");
             }
 
-            schema.sources[name] = new(name, type, kind, policies, BuildResolver(type, kind, options))
+            var source = new ScrySource(name, type, kind, policies, BuildResolver(type, kind, options))
             {
                 AttachmentPolicy = ResolveAttachmentPolicy(schema, type, name, kind, options)
             };
+            schema.sources[name] = source;
+            if (policies.Count > 0)
+            {
+                schema.policiedSources[type] = source;
+            }
         }
 
         // Pass 2b: derive the key every attachment is fetched by. Deferred until the member metadata

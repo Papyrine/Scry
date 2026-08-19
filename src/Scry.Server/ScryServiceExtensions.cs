@@ -29,6 +29,11 @@ public static class ScryServiceExtensions
             var processor = scope.ServiceProvider.GetRequiredService<ScryProcessor>();
             var db = (DbContext)scope.ServiceProvider.GetRequiredService(options.ContextType);
             processor.ValidateAgainstModel(db);
+            if (options.ProbePoliciedNavigations)
+            {
+                processor.ProbePoliciedNavigations(db, scope.ServiceProvider);
+            }
+
             RefuseUnscopedCaching(options, processor);
         }
 

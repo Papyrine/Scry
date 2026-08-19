@@ -170,6 +170,94 @@ This test demonstrates it: the request carries no filter on `Active`, yet the in
 <!-- endSnippet -->
 
 
+## Reached through a navigation
+
+A policy filters a *source*, and a navigation into that source is a second way to reach its rows. So a policy applies at the traversal too, not only where the source is the root:
+
+<!-- snippet: navigationPolicy -->
+<a id='snippet-navigationPolicy'></a>
+```cs
+class EngineeringOnlyPolicy :
+    IReturnablePolicy<Department>
+{
+    public IQueryable<Department> Filter(IQueryable<Department> source, ScryPolicyContext context) =>
+        source.Where(_ => _.Name == "Engineering");
+}
+```
+<sup><a href='/src/Scry.Tests/NavigationPolicyTests.cs#L11-L18' title='Snippet source file'>snippet source</a> | <a href='#snippet-navigationPolicy' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+`Employee.Department` navigates into `Department`, which the policy above filters. Reading a member through that navigation reads it through the policy:
+
+<!-- snippet: navigationPolicyQuery -->
+<a id='snippet-navigationPolicyQuery'></a>
+```cs
+var rows = await client.Source<Employee>("Employee")
+    .OrderBy(_ => _.Name)
+    .Select(_ => new {_.Name, Department = _.Department!.Name})
+    .ToListAsync();
+```
+<sup><a href='/src/Scry.Tests/NavigationPolicyTests.cs#L26-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-navigationPolicyQuery' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+An employee in a department the policy hides still comes back — it is `Employee` that was queried, and `Employee` carries no policy here — but the department it names reads as **null**.
+
+That null is deliberate and is the whole point: it is indistinguishable from an absent optional navigation. The client learns there is nothing here to read, never that there is something it may not have.
+
+The traversal is rewritten into a correlated subquery over the policy-filtered set, keyed on the navigation's own foreign key, so it stays part of the one query that was going to run:
+
+```sql
+SELECT [e].[Name], (
+    SELECT TOP(1) [d].[Name]
+    FROM [Departments] AS [d]
+    WHERE [d].[Name] = N'Engineering' AND [e].[DepartmentId] = [d].[Id])
+FROM [Employees] AS [e]
+```
+
+The cost of that is one subquery per *member read*, not per navigation: a projection naming three members of a policied navigation emits three, where an unpoliced one is a single join. A policy on a type that many queries navigate into is worth measuring.
+
+### It applies wherever the path appears
+
+Not only projections. Every rooted member path is rebound through one place, so the policy applies to all of them:
+
+| Where the traversal appears | What the policy does |
+| --- | --- |
+| A projection leaf, or a nested projection | The value reads as null |
+| A `Where` predicate | Compares against nothing, so the row does not match |
+| An `OrderBy` | Sorts as null |
+| A `GroupBy` key | Hidden targets group together, under a null key |
+| A join key, or a member of a join's projection | As above, per side |
+| An aggregate's selector inside a collection subquery | Contributes nothing |
+
+The predicate row is the one that matters most. A predicate runs in SQL, so without the policy applied at the traversal, `Where(_ => _.Department!.Name == "Sales")` would answer — row by row — about departments a direct query of `Department` could never return. That is an oracle for hidden rows even though nothing is projected. Applying the policy at the traversal closes it.
+
+### Nullability
+
+A value type read through a policied traversal is widened to its nullable form, because the policy can produce a null where the model says there is always a row. A client projecting `_.Department!.Id` therefore receives null rather than an `int` for a hidden department, and should project it as `int?`.
+
+### Collections are refused instead
+
+This applies to reference navigations. A `[QueryableCollection]` of a policied type is a [startup failure](annotations.md#queryablecollection) rather than a rewrite: aggregating a collection cannot apply a policy — a policy filters a source, and a subquery has none — so exposing it would count exactly the rows the policy hides.
+
+### The startup probe
+
+Applying a policy at a traversal puts the policy's own queryable in correlated-subquery position, where a policy that composes perfectly well as a root filter can still fail to translate. So startup translates every navigation into a policied source once, and refuses to start if one does not:
+
+```
+The row policy on 'Department' does not translate where 'Employee.Department' navigates into it. A
+navigation into a policied source is read through that source's policy, which puts the policy's
+queryable in a correlated subquery — so it has to be composable, not merely runnable at the root.
+```
+
+Probing resolves and runs each such policy once, outside a request — with no principal, and with empty headers. A policy that cannot answer under those conditions opts out:
+
+```cs
+options.ProbePoliciedNavigations = false;
+```
+
+That gives up only the startup proof. The policy still applies at every traversal per request.
+
+
 ## Instantiation
 
 The policy type is resolved from the request's `IServiceProvider` first, so it can take constructor dependencies:
