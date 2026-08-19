@@ -133,6 +133,12 @@ Code registration is the better fit when the policy lives in the server project 
 
 Either form also covers every opted-in type deriving from the one it names. A policy is the one annotation that [inherits](annotations.md#inheritance), so a subclass cannot shed the one its base carries — which matters because an opted-in subclass is a source in its own right, queryable without naming the base. Where several apply they all narrow, base-most first, and registering one in code replaces the attribute on that same type without displacing what that type inherits.
 
+### Inheritance runs downwards only
+
+The converse does not hold, and the difference is load-bearing. A policy on a **derived** type is not in the base's chain, so it does not filter the base source: given a policy on `Vehicle` and none on `Asset`, `Source<Vehicle>` hides the rows it names and `Source<Asset>` returns and counts those same rows as assets. Only the members `Asset` itself exposes are readable that way — a derived type's own members stay unreachable until a query narrows to it — and narrowing does apply the policy, so `Source<Asset>.OfType<Vehicle>` matches `Source<Vehicle>` exactly.
+
+That is deliberate: each source is its own authorization surface, and a policy filters the source it is attached to. A hierarchy where the rows must be restricted however they are reached wants the policy on the **base**, where every source below inherits it. Attaching one only to a subclass restricts that subclass's source and nothing above it.
+
 
 ## Ordering guarantee
 
@@ -168,6 +174,94 @@ This test demonstrates it: the request carries no filter on `Active`, yet the in
 ```
 <sup><a href='/src/Scry.Tests/ExecutionTests.PolicyScopesRowsBeforeClientFilter.verified.txt#L1-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-ExecutionTests.PolicyScopesRowsBeforeClientFilter.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
+
+
+## Reached through a navigation
+
+A policy filters a *source*, and a navigation into that source is a second way to reach its rows. So a policy applies at the traversal too, not only where the source is the root:
+
+<!-- snippet: navigationPolicy -->
+<a id='snippet-navigationPolicy'></a>
+```cs
+class EngineeringOnlyPolicy :
+    IReturnablePolicy<Department>
+{
+    public IQueryable<Department> Filter(IQueryable<Department> source, ScryPolicyContext context) =>
+        source.Where(_ => _.Name == "Engineering");
+}
+```
+<sup><a href='/src/Scry.Tests/NavigationPolicyTests.cs#L11-L18' title='Snippet source file'>snippet source</a> | <a href='#snippet-navigationPolicy' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+`Employee.Department` navigates into `Department`, which the policy above filters. Reading a member through that navigation reads it through the policy:
+
+<!-- snippet: navigationPolicyQuery -->
+<a id='snippet-navigationPolicyQuery'></a>
+```cs
+var rows = await client.Source<Employee>("Employee")
+    .OrderBy(_ => _.Name)
+    .Select(_ => new {_.Name, Department = _.Department!.Name})
+    .ToListAsync();
+```
+<sup><a href='/src/Scry.Tests/NavigationPolicyTests.cs#L26-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-navigationPolicyQuery' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+An employee in a department the policy hides still comes back — it is `Employee` that was queried, and `Employee` carries no policy here — but the department it names reads as **null**.
+
+That null is deliberate and is the whole point: it is indistinguishable from an absent optional navigation. The client learns there is nothing here to read, never that there is something it may not have.
+
+The traversal is rewritten into a correlated subquery over the policy-filtered set, keyed on the navigation's own foreign key, so it stays part of the one query that was going to run:
+
+```sql
+SELECT [e].[Name], (
+    SELECT TOP(1) [d].[Name]
+    FROM [Departments] AS [d]
+    WHERE [d].[Name] = N'Engineering' AND [e].[DepartmentId] = [d].[Id])
+FROM [Employees] AS [e]
+```
+
+The cost of that is one subquery per *member read*, not per navigation: a projection naming three members of a policied navigation emits three, where an unpoliced one is a single join. A policy on a type that many queries navigate into is worth measuring.
+
+### It applies wherever the path appears
+
+Not only projections. Every rooted member path is rebound through one place, so the policy applies to all of them:
+
+| Where the traversal appears | What the policy does |
+| --- | --- |
+| A projection leaf, or a nested projection | The value reads as null |
+| A `Where` predicate | Compares against nothing, so the row does not match |
+| An `OrderBy` | Sorts as null |
+| A `GroupBy` key | Hidden targets group together, under a null key |
+| A join key, or a member of a join's projection | As above, per side |
+| An aggregate's selector inside a collection subquery | Contributes nothing |
+
+The predicate row is the one that matters most. A predicate runs in SQL, so without the policy applied at the traversal, `Where(_ => _.Department!.Name == "Sales")` would answer — row by row — about departments a direct query of `Department` could never return. That is an oracle for hidden rows even though nothing is projected. Applying the policy at the traversal closes it.
+
+### Nullability
+
+A value type read through a policied traversal is widened to its nullable form, because the policy can produce a null where the model says there is always a row. A client projecting `_.Department!.Id` therefore receives null rather than an `int` for a hidden department, and should project it as `int?`.
+
+### Collections are refused instead
+
+This applies to reference navigations. A `[QueryableCollection]` of a policied type is a [startup failure](annotations.md#queryablecollection) rather than a rewrite: aggregating a collection cannot apply a policy — a policy filters a source, and a subquery has none — so exposing it would count exactly the rows the policy hides.
+
+### The startup probe
+
+Applying a policy at a traversal puts the policy's own queryable in correlated-subquery position, where a policy that composes perfectly well as a root filter can still fail to translate. So startup translates every navigation into a policied source once, and refuses to start if one does not:
+
+```
+The row policy on 'Department' does not translate where 'Employee.Department' navigates into it. A
+navigation into a policied source is read through that source's policy, which puts the policy's
+queryable in a correlated subquery — so it has to be composable, not merely runnable at the root.
+```
+
+Probing resolves and runs each such policy once, outside a request — with no principal, and with empty headers. A policy that cannot answer under those conditions opts out:
+
+```cs
+options.ProbePoliciedNavigations = false;
+```
+
+That gives up only the startup proof. The policy still applies at every traversal per request.
 
 
 ## Instantiation

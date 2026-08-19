@@ -166,6 +166,18 @@ public sealed class ScryOptions(Type contextType)
     /// </summary>
     public byte[]? CursorSigningKey { get; set; }
 
+    /// <summary>
+    /// Whether startup translates each navigation that steps into a row-policied source, to prove the
+    /// policy composes where it is applied. On by default: the alternative to failing here is failing
+    /// as a generic 500 on the first client to name such a member.
+    /// </summary>
+    /// <remarks>
+    /// Probing resolves and runs every such policy once, outside a request — with no principal, and
+    /// with empty headers. Clear this where a policy cannot answer under those conditions; the policy
+    /// still applies per request either way, and only the startup proof is given up.
+    /// </remarks>
+    public bool ProbePoliciedNavigations { get; set; } = true;
+
     internal Type ContextType { get; private set; } = contextType;
 
     internal Dictionary<Type, Func<IServiceProvider, IQueryable>> PocoSources { get; } = [];
