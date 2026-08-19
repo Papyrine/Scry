@@ -203,6 +203,10 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         var source = validator.Validate(request);
         var elementType = source.ClrType;
 
+        // A query that runs reads rows, so a cached policy's answers are brought up to date for it. A
+        // SQL preview reads none and leaves them as they are.
+        scope = scope with {EnsureCachedFreshness = !buildOnly};
+
         // Built per request so a node that reads another source resolves it the same way the root was
         // resolved — through the schema, and policy-filtered — rather than reaching a DbSet directly.
         // The same resolution backs a traversal into a policied source, which is read through its
@@ -701,6 +705,10 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             throw new ScryValidationException($"Unsupported attachment request version {request.Version}; this server supports up to {AttachmentRequest.CurrentVersion}.");
         }
 
+        // An attachment is a row read like any other, so the policies deciding whether it is readable
+        // answer from decisions as current as a query's would be.
+        scope = scope with {EnsureCachedFreshness = true};
+
         if (!schema.TryGetSource(request.Root, out var source))
         {
             throw new ScryValidationException($"Unknown source '{request.Root}'.");
@@ -852,14 +860,21 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 continue;
             }
 
-            var policy = scope.Services.GetService(use.Policy) ?? Activator.CreateInstance(use.Policy);
+            var policy = use.Instance ?? scope.Services.GetService(use.Policy) ?? Activator.CreateInstance(use.Policy);
             if (policy is null)
             {
                 throw new($"Could not create policy '{use.Policy.Name}'.");
             }
 
             var (entityType, filter) = policyFilters.GetOrAdd(use.Policy, PolicyFilter);
-            query = (IQueryable)filter.Invoke(policy, [Retype(query, entityType), context])!;
+
+            // A cached policy is applied directly rather than through the interface: what it needs
+            // beyond the context — where to remember this call's answer, and whether it may decide any
+            // rows — belongs to the call, not to the policy, and hanging it off the context would put
+            // it in front of every host-written policy too.
+            query = policy is ICachedPolicyAdapter cached
+                ? cached.Filter(Retype(query, entityType), context, scope.Cached, scope.EnsureCachedFreshness)
+                : (IQueryable)filter.Invoke(policy, [Retype(query, entityType), context])!;
         }
 
         return Retype(query, source.ClrType);

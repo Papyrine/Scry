@@ -8,6 +8,14 @@ namespace Scry;
 public readonly record struct PolicyUse(Type Policy, DeniedRowHandling Handling)
 {
     /// <summary>
+    /// The policy object to use, where the schema built one rather than leaving it to be resolved per
+    /// request. A cached policy's adapter holds the store and the compiled accessors its whole
+    /// deployment shares, so it is built once at startup and is the same object every request applies.
+    /// </summary>
+    internal object? Instance { get; init; }
+
+
+    /// <summary>
     /// Whether this policy fails the request for a row it denies read at <paramref name="position"/>,
     /// rather than hiding it.
     /// </summary>

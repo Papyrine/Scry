@@ -211,6 +211,47 @@ public sealed class ScryOptions(Type contextType)
         where TPolicy : IReturnablePolicy<TEntity> =>
         Policies[typeof(TEntity)] = (typeof(TPolicy), handling);
 
+    internal Dictionary<Type, (Type Policy, LambdaExpression Version, DeniedRowHandling Handling)> CachedPolicies { get; } = [];
+
+    /// <summary>
+    /// Where cached row policies keep their answers. In this process by default, which is enough for a
+    /// single server; a deployment running several, or one that would rather not decide every row again
+    /// after a restart, sets a store of its own.
+    /// </summary>
+    public ICachedPolicyStore CachedPolicyStore { get; set; } = new MemoryCachedPolicyStore();
+
+    /// <summary>
+    /// The most rows one caller may be allowed by a cached policy before a query is refused rather than
+    /// run. Null for no limit. Every allowed key travels to the database with each query, so this is
+    /// what turns an allow-list that quietly grew unbounded into a message rather than a slow query.
+    /// </summary>
+    public int? MaxCachedPolicyKeys { get; set; }
+
+    /// <summary>
+    /// Attaches a row policy whose decision is too expensive to make in SQL. The policy answers one row
+    /// at a time in C#; the server remembers the answers and composes a membership test over the keys
+    /// this caller may see, wherever a row policy applies.
+    /// </summary>
+    /// <param name="version">
+    /// A column that goes up whenever the row changes — a <c>ulong</c>-mapped <c>rowversion</c>, a
+    /// counter, a last-modified stamp. It is what lets a new or changed row be decided on its first
+    /// read without every other row being decided again, so index it.
+    /// </param>
+    /// <param name="handling">What a denied row produces; hidden everywhere by default.</param>
+    /// <remarks>
+    /// Registered in code rather than by attribute: the version column is an expression, and which
+    /// store the answers live in is a property of the deployment rather than of the model. The rows
+    /// are remembered by their primary key, derived the same way an attachment's is and checked
+    /// against the real one at startup.
+    /// </remarks>
+    public void AddCachedPolicy<TEntity, TVersion, TPolicy>(
+        Expression<Func<TEntity, TVersion>> version,
+        DeniedRowHandling? handling = null)
+        where TEntity : class
+        where TVersion : struct
+        where TPolicy : ICachedRowPolicy<TEntity> =>
+        CachedPolicies[typeof(TEntity)] = (typeof(TPolicy), version, handling ?? DeniedRowHandling.Default);
+
     internal Dictionary<Type, Type> AttachmentPolicies { get; } = [];
 
     /// <summary>

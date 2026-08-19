@@ -18,6 +18,7 @@ public sealed class ScryProcessor
         this.options = options;
         executor = new(schema, options);
         sensitive = new(schema);
+        PolicyCache = new(schema.CachedPolicies);
     }
 
     /// <summary>
@@ -35,6 +36,13 @@ public sealed class ScryProcessor
     /// compare it against the stamp it was generated with and detect a drifted model.
     /// </summary>
     public string SchemaStamp => schema.Stamp;
+
+    /// <summary>
+    /// The cached row policies' answers: what a host invalidates when a grant changed, and primes when
+    /// it has just written rows somebody is about to read. Also registered as a singleton by
+    /// <c>AddScry</c>, which is how a host reaches it without holding the processor.
+    /// </summary>
+    public ScryPolicyCache PolicyCache { get; }
 
     /// <summary>
     /// Confirms the model's annotations match its live EF mapping (e.g. a <c>[Queryable]</c> type is

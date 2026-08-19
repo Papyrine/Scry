@@ -11,8 +11,10 @@ public static class ScryServiceExtensions
         configure(options);
 
         var schema = Schema.Build(options);
+        var processor = new ScryProcessor(schema, options);
         services.AddSingleton(options);
-        services.AddSingleton(new ScryProcessor(schema, options));
+        services.AddSingleton(processor);
+        services.AddSingleton(processor.PolicyCache);
         return services;
     }
 

@@ -26,4 +26,16 @@ readonly record struct CallScope(
     /// it false, and nothing changes for one.
     /// </summary>
     public bool FromUrl { get; init; }
+
+    /// <summary>
+    /// What each cached row policy answered with during this call. One per call, so the several sites
+    /// that can apply the same policy to one query all read the same keys.
+    /// </summary>
+    public CachedDecisions Cached { get; init; } = new();
+
+    /// <summary>
+    /// Whether this call may bring a cached policy's answers up to date, which is every call that
+    /// actually reads rows. Building a query without running it neither needs nor earns the work.
+    /// </summary>
+    public bool EnsureCachedFreshness { get; init; }
 }

@@ -192,6 +192,12 @@ public class Order
     // Boolean text, which is what BooleanFrom reads.
     public string Audited { get; set; } = "";
 
+    // The column a cached row policy reads to know a row needs deciding again. Server-side machinery
+    // rather than query surface, so it is hidden like any other member Scry was not told to expose —
+    // which is also what pins that a version column need not be one clients can see.
+    [QueryIgnore]
+    public long Revision { get; set; }
+
     // begin-snippet: queryableCollection
     // Opted in for aggregation: a client can ask how many lines an order has, or what they total, but
     // can never enumerate them into a result.
@@ -686,6 +692,7 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
             {
                 Region = "North",
                 Amount = 100m,
+                Revision = 1,
                 Quantity = 3,
                 Sku = 1000,
                 Placed = new(2026, 3, 4, 9, 30, 15),
@@ -719,6 +726,7 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
             {
                 Region = "North",
                 Amount = 250m,
+                Revision = 2,
                 Quantity = 7,
                 Sku = ulong.MaxValue,
                 Placed = new(2026, 7, 20, 14, 5, 0),
@@ -745,6 +753,7 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
             {
                 Region = "South",
                 Amount = 75m,
+                Revision = 3,
                 Quantity = 1,
                 Sku = 3000,
                 Placed = new(2025, 12, 31, 23, 59, 59),

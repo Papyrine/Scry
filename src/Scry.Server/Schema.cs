@@ -32,6 +32,12 @@ sealed class Schema
     readonly List<Type> entitySourceTypes = [];
     readonly List<Type> complexTypes = [];
 
+    // The cached row policies, for the facade a host invalidates and primes through.
+    readonly List<CachedPolicyRegistration> cachedPolicies = [];
+
+    /// <summary>Every cached row policy registered, or nothing where none is.</summary>
+    internal IReadOnlyList<CachedPolicyRegistration> CachedPolicies => cachedPolicies;
+
     public bool TryGetSource(string name, [MaybeNullWhen(false)] out ScrySource source) =>
         sources.TryGetValue(name, out source) ||
         sourcePreviousNames.TryGetValue(name, out source);
@@ -408,15 +414,14 @@ sealed class Schema
         }
 
         var schema = new Schema();
-        var discovered = new List<(Type Type, string Name, SourceKind Kind, IReadOnlyList<PolicyUse> Policies)>();
+        var found = new List<(Type Type, string Name, SourceKind Kind)>();
 
         foreach (var type in contextType.Assembly.GetTypes())
         {
             if (TryClassify(type, out var kind, out var name))
             {
                 EnsureNameIsIdentifier(type, name);
-                var policies = ResolvePolicies(type, name, options);
-                discovered.Add((type, name, kind, policies));
+                found.Add((type, name, kind));
                 if (kind is SourceKind.Entity or SourceKind.View)
                 {
                     schema.entitySourceTypes.Add(type);
@@ -452,7 +457,7 @@ sealed class Schema
         }
 
         // Navigation targets are every opted-in type — the sources plus the complex value types.
-        var queryableTypes = discovered.Select(_ => _.Type).Concat(schema.complexTypes).ToHashSet();
+        var queryableTypes = found.Select(_ => _.Type).Concat(schema.complexTypes).ToHashSet();
 
         // Pass 1: build the allow-listed member metadata for every queryable type.
         foreach (var type in queryableTypes)
@@ -474,6 +479,18 @@ sealed class Schema
                 }
             }
         }
+
+        // Pass 1c: build the cached policies' adapters, which need the member metadata above to derive
+        // the key their answers are remembered by. One adapter per registration however many sources
+        // carry it, since what it holds — the answers, and the gate serializing the work to produce
+        // them — is exactly what those sources have to share.
+        var cached = BuildCachedPolicies(schema, options);
+
+        // Resolved here rather than during discovery: a cached policy's adapter is part of the chain,
+        // and building one needs the metadata that pass 1 produced.
+        var discovered = found
+            .Select(_ => (_.Type, _.Name, _.Kind, Policies: ResolvePolicies(_.Type, _.Name, options, cached)))
+            .ToList();
 
         // Pass 2: register each source with its resolver. Complex types are deliberately absent.
         foreach (var (type, name, kind, policies) in discovered)
@@ -501,7 +518,7 @@ sealed class Schema
         {
             if (Attachments(meta).Any())
             {
-                meta.AttachmentKeys = DeriveKeys(meta);
+                meta.AttachmentKeys = DeriveAttachmentKeys(meta);
             }
         }
 
@@ -834,34 +851,93 @@ sealed class Schema
     /// documents. It does not replace what a base declares — that would let registering a policy
     /// remove one — so both stay in the chain and both narrow.
     /// </remarks>
-    static IReadOnlyList<PolicyUse> ResolvePolicies(Type type, string name, ScryOptions options)
+    static IReadOnlyList<PolicyUse> ResolvePolicies(
+        Type type,
+        string name,
+        ScryOptions options,
+        IReadOnlyDictionary<Type, PolicyUse> cached)
     {
         List<PolicyUse> policies = [];
         for (var candidate = type; candidate is not null; candidate = candidate.BaseType)
         {
+            // Both kinds at each level, and the level's own before anything its base declares is
+            // reached: a derived source's chain has to extend its base's rather than interleave with
+            // it, which is what lets narrowing apply only the levels the base has not.
+            List<PolicyUse> declared = [];
+
             // inherit: false, because the walk is done here. Reading the attribute inheritably would
             // find a base's policy again at every level below it and apply it once per level.
-            if (DeclaredPolicy(candidate, options) is not { } use)
+            if (DeclaredPolicy(candidate, options) is { } use)
             {
-                continue;
+                declared.Add(use);
             }
 
-            // The policy filters the type it was written against, which the executor widens the query
-            // to. One written against something outside this hierarchy has no rows here to filter.
-            var entityType = RowPolicy.EntityType(use.Policy);
-            if (!entityType.IsAssignableFrom(type))
+            if (cached.TryGetValue(candidate, out var adapter))
             {
-                throw new(
-                    $"Row policy '{use.Policy.Name}' on '{candidate.Name}' filters '{entityType.Name}', which source '{name}' does not derive from. A policy has to be written against the type it is attached to, or one of its bases.");
+                declared.Add(adapter);
             }
 
-            policies.Add(use);
+            foreach (var policy in declared)
+            {
+                // The policy filters the type it was written against, which the executor widens the
+                // query to. One written against something outside this hierarchy has no rows to filter.
+                var entityType = RowPolicy.EntityType(policy.Policy);
+                if (!entityType.IsAssignableFrom(type))
+                {
+                    throw new(
+                        $"Row policy '{policy.Policy.Name}' on '{candidate.Name}' filters '{entityType.Name}', which source '{name}' does not derive from. A policy has to be written against the type it is attached to, or one of its bases.");
+                }
+
+                policies.Add(policy);
+            }
         }
+
 
         // Collected derived-first and applied base-first, so narrowing to a subclass filters exactly as
         // the base it narrows from would have — the invariant the OfType operator relies on.
         policies.Reverse();
         return policies;
+    }
+
+    /// <summary>
+    /// Builds one adapter per registered cached policy: the ordinary row policy the rest of the server
+    /// applies, holding the store its answers live in and the accessors for the key they are remembered
+    /// by and the version that says a row needs deciding again.
+    /// </summary>
+    static IReadOnlyDictionary<Type, PolicyUse> BuildCachedPolicies(Schema schema, ScryOptions options)
+    {
+        Dictionary<Type, PolicyUse> adapters = [];
+        foreach (var (entity, (policy, version, handling)) in options.CachedPolicies)
+        {
+            // A cached policy filters a source, and a type that is not one has no rows for it to
+            // decide about — the same reason an ordinary policy on a complex type is refused.
+            if (!schema.types.TryGetValue(entity, out var meta))
+            {
+                throw new($"Cached row policy '{policy.Name}' is registered against '{entity.Name}', which is not an opted-in source. Attach it to a [Queryable] type.");
+            }
+
+            var keys = DeriveKeys(meta);
+            if (keys.Count != 1)
+            {
+                throw new(
+                    $"Cached row policy '{policy.Name}' is registered against '{entity.Name}', whose key is {(keys.Count == 0 ? "not derivable" : $"made of {keys.Count} members")}. Answers are remembered per row by a single key value, so the type needs one key member — a [Key], an 'Id', or an '{entity.Name}Id'.");
+            }
+
+            var parameter = Expression.Parameter(entity, "e");
+            var key = Expression.Lambda(Expression.Property(parameter, keys[0].Property), parameter);
+
+            var registration = new CachedPolicyRegistration(entity, policy, options.CachedPolicyStore, options.MaxCachedPolicyKeys);
+            var adapter = typeof(CachedRowPolicyAdapter<,,>).MakeGenericType(entity, keys[0].Type, version.ReturnType);
+
+            registration.Adapter = Activator.CreateInstance(adapter, registration, key, version)!;
+            schema.cachedPolicies.Add(registration);
+            adapters[entity] = new(adapter, handling)
+            {
+                Instance = registration.Adapter
+            };
+        }
+
+        return adapters;
     }
 
     /// <summary>
@@ -931,6 +1007,21 @@ sealed class Schema
             }
         }
 
+        return [];
+    }
+
+    /// <summary>
+    /// The same, for an attachment — which is what a key was first derived for, and so what the failure
+    /// where none can be says.
+    /// </summary>
+    static IReadOnlyList<Member> DeriveAttachmentKeys(TypeMeta meta)
+    {
+        if (DeriveKeys(meta) is {Count: > 0} keys)
+        {
+            return keys;
+        }
+
+        var type = meta.ClrType.Name;
         var attachment = Attachments(meta).First().Name;
         throw new(
             $"'{type}.{attachment}' is an [Attachment], but no primary key could be derived for '{type}'. An attachment is fetched by its row's key, so one has to be nameable by a client: mark the key member(s) with [Key], or name a member 'Id' or '{type}Id'. The member must also be exposed — a key a client cannot read is one it cannot send back.");
