@@ -418,6 +418,7 @@ public partial class App
             error = null;
             sqlText = null;
             var code = await editor.GetValue();
+            await EnsureCompiles(code);
             executor ??= SnippetExecutor.Create(introspection, scryReferences);
             var json = ScryJson.Serialize(executor.Translate(code));
 
@@ -462,6 +463,45 @@ public partial class App
         }
     }
 
+    /// <summary>
+    /// Throws unless the query compiles, so a query the editor has squiggled is refused rather than run.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="SnippetExecutor"/> strips a trailing collection terminal — arguments and all — before it
+    /// compiles anything. That is right for the wire, where a key selector shapes rows client-side and has
+    /// no representation at all, but it leaves nothing written inside <c>.ToDictionaryAsync(…)</c> ever
+    /// compiled: a missing key selector, a member the allow-list excludes, or plain nonsense would be
+    /// squiggled by the editor and then run perfectly happily, returning rows for a query that a real
+    /// client project would not build. Checked here against the text as written, so the two agree.
+    ///
+    /// Diagnosed on demand rather than read off the debounced pass behind the squiggles: that one is
+    /// best-effort by design — it may be mid-flight, superseded, or to have failed silently — and none of
+    /// those should be what decides whether a query runs. For the same reason the buttons stay enabled:
+    /// a refusal that names the error is worth more than one that greys out, and a background pass that
+    /// quietly died must not leave Run dead with it.
+    ///
+    /// Thrown rather than returned so it lands in the caller's existing catch, beside the compile failures
+    /// the executor raises for the code it does compile, and reads identically in the banner.
+    /// </remarks>
+    async Task EnsureCompiles(string code)
+    {
+        if (workspace is null)
+        {
+            return;
+        }
+
+        var errors = (await workspace.DiagnoseAsync(code))
+            .Where(_ => _.IsError)
+            .Select(_ => _.Message)
+            .Take(3)
+            .ToList();
+
+        if (errors.Count > 0)
+        {
+            throw new($"Could not compile the query: {string.Join("; ", errors)}");
+        }
+    }
+
     async Task Run()
     {
         if (introspection is null || scryReferences is null)
@@ -480,7 +520,15 @@ public partial class App
             sqlText = null;
             attachmentLinks = [];
             attachmentNotes.Clear();
+            // Cleared with the rest, so a run that never got as far as translating does not leave the
+            // panes showing the previous query's request and response under the error explaining that
+            // this one produced neither. Both are set again below the moment there is something to show,
+            // which keeps the wire request on screen for a query the *server* rejected — there the
+            // request is what the rejection is about.
+            wireJson = null;
+            resultJson = null;
             var code = await editor.GetValue();
+            await EnsureCompiles(code);
             executor ??= SnippetExecutor.Create(introspection, scryReferences);
             var request = executor.Translate(code);
             var json = ScryJson.Serialize(request);
@@ -785,6 +833,20 @@ public partial class App
         {
             history.RemoveRange(10, history.Count - 10);
         }
+    }
+
+    // Removal is by text rather than by index: entries are deduped on exactly that, so it identifies
+    // one, and it survives the list having moved under a render the click raced.
+    Task RemoveHistory(string query)
+    {
+        history.Remove(query);
+        return SaveHistory();
+    }
+
+    Task ClearHistory()
+    {
+        history.Clear();
+        return SaveHistory();
     }
 
     async Task LoadQuery(string query)

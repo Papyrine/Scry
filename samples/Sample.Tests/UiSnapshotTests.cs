@@ -636,6 +636,150 @@ public class UiSnapshotTests :
         Assert.That(historyText, Does.Contain(".Where(_ => _.Active)"));
     }
 
+    // The executor strips a trailing collection terminal — arguments and all — before it compiles, so
+    // nothing written inside .ToDictionaryAsync(…) reaches its compiler. Every one of these is squiggled
+    // by the editor, and every one of them used to run: a wire request, rows, and an entry in the
+    // history, for a query a real client project would not build. Salary is the one that stings — it is
+    // [QueryIgnore]d, and the explorer's claim is that what completes is the allow-list.
+    [TestCase("Query.Employee.ToDictionaryAsync()", "takes 0 arguments")]
+    [TestCase("Query.Employee.ToDictionaryAsync(_ => _.Salary)", "'Salary'")]
+    [TestCase("Query.Employee.ToListAsync(totalGarbage, 42)", "'totalGarbage'")]
+    public async Task ExplorerRefusesAQueryThatDoesNotCompile(string query, string expected)
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await page.SetEditorValueAsync(query);
+        await page.Locator("[data-testid='run']").ClickAsync();
+
+        // The refusal names the error rather than grinding to a halt, and reads the same as one raised
+        // for code the executor did compile.
+        var error = page.Locator("[data-testid='error']");
+        await Assertions.Expect(error).ToContainTextAsync(expected, new() {Timeout = 60_000});
+        await Assertions.Expect(error).ToContainTextAsync("Could not compile the query");
+
+        // And it is total: nothing was translated, sent, or remembered.
+        await Assertions.Expect(page.Locator("[data-testid='wire']")).ToHaveCountAsync(0);
+        await Assertions.Expect(page.Locator("[data-testid='history']")).ToHaveCountAsync(0);
+    }
+
+    // Show SQL translates the same query through the same executor, so it is refused on the same terms.
+    [Test]
+    public async Task ExplorerRefusesToShowSqlForAQueryThatDoesNotCompile()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await page.SetEditorValueAsync("Query.Employee.ToDictionaryAsync()");
+        await page.Locator("[data-testid='sql-preview']").ClickAsync();
+
+        await Assertions.Expect(page.Locator("[data-testid='error']"))
+            .ToContainTextAsync("takes 0 arguments", new() {Timeout = 60_000});
+        await Assertions.Expect(page.Locator("[data-testid='sql']")).ToHaveCountAsync(0);
+    }
+
+    // A refused run clears the panes rather than leaving the last query's request and response sitting
+    // under an error saying this one produced neither.
+    [Test]
+    public async Task ExplorerClearsThePanesWhenARunIsRefused()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await RunQueryAsync(page, "Query.Employee.OrderBy(_ => _.Name).Select(_ => new { _.Name })", 1);
+        await Assertions.Expect(page.Locator("[data-testid='wire']")).ToHaveCountAsync(1);
+
+        await page.SetEditorValueAsync("Query.Employee.ToDictionaryAsync()");
+        await page.Locator("[data-testid='run']").ClickAsync();
+
+        await Assertions.Expect(page.Locator("[data-testid='error']"))
+            .ToContainTextAsync("takes 0 arguments", new() {Timeout = 60_000});
+        await Assertions.Expect(page.Locator("[data-testid='wire']")).ToHaveCountAsync(0);
+        await Assertions.Expect(page.Locator("[data-testid='result']")).ToHaveCountAsync(0);
+
+        // The run that did work is still in the history: a refusal forgets nothing.
+        await Assertions.Expect(page.Locator("[data-testid='history'] li")).ToHaveCountAsync(1);
+    }
+
+    // The gate is on compiling, not on the editor having last said so: a query that does compile still
+    // runs, and the added Roslyn pass does not swallow the run.
+    [Test]
+    public async Task ExplorerRunsAQueryThatCompiles()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await RunQueryAsync(page, "Query.Employee.ToDictionaryAsync(_ => _.Name)", 1);
+
+        await Assertions.Expect(page.Locator("[data-testid='error']")).ToHaveCountAsync(0);
+        Assert.That(
+            await page.Locator("[data-testid='wire']").InnerTextAsync(),
+            Does.Contain("\"root\"").And.Contain("Employee"));
+    }
+
+    // The history is the explorer's only state that outlives the tab, so it is the only thing a user can
+    // be stuck with. Removing one entry has to take the one aimed at, which is what a list ordered newest
+    // first and rendered on text alone makes worth proving.
+    [Test]
+    public async Task ExplorerForgetsOneHistoryEntry()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await RunQueryAsync(page, "Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name })", 1);
+        await RunQueryAsync(page, "Query.Department.OrderBy(_ => _.Name).Select(_ => new { _.Name })", 2);
+
+        // Newest first, so the Employee query is the second entry.
+        var entries = page.Locator("[data-testid='history'] li");
+        await entries.Nth(1).Locator("[data-testid='history-remove']").ClickAsync();
+
+        await Assertions.Expect(entries).ToHaveCountAsync(1);
+        Assert.That(await entries.InnerTextAsync(), Does.Contain("Query.Department"));
+        Assert.That(
+            await StoredHistoryAsync(page),
+            Does.Contain("Query.Department").And.Not.Contain("Query.Employee"));
+    }
+
+    [Test]
+    public async Task ExplorerClearsTheHistory()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await RunQueryAsync(page, "Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name })", 1);
+
+        await page.Locator("[data-testid='history-clear']").ClickAsync();
+
+        // The heading and the Clear button go with the last entry: an emptied history renders nothing,
+        // rather than an empty list under a heading offering to clear it again.
+        await Assertions.Expect(page.Locator("[data-testid='history']")).ToHaveCountAsync(0);
+        await Assertions.Expect(page.Locator("[data-testid='history-clear']")).ToHaveCountAsync(0);
+        Assert.That(await StoredHistoryAsync(page), Is.EqualTo("[]"));
+    }
+
+    /// <summary>
+    /// Runs <paramref name="query"/>, waiting until the history holds <paramref name="expectedEntries"/>.
+    /// </summary>
+    /// <remarks>
+    /// The history taking the query is what marks a run as having finished, and finished *successfully* —
+    /// it is written on a 2xx. Waiting on the result table instead would not do for the second run: the
+    /// first run's table is still on screen while this one is in flight, so the selector is satisfied
+    /// before anything has happened. The long timeout is for the first run on a page, which pays for
+    /// Roslyn compiling the snippet in the interpreter.
+    /// </remarks>
+    static async Task RunQueryAsync(IPage page, string query, int expectedEntries)
+    {
+        await page.SetEditorValueAsync(query);
+        await page.Locator("[data-testid='run']").ClickAsync();
+        await Assertions.Expect(page.Locator("[data-testid='history'] li"))
+            .ToHaveCountAsync(expectedEntries, new() {Timeout = 60_000});
+    }
+
+    // Read out of storage rather than off the rendered list, because the two can disagree: a removal
+    // that only dropped the entry from the render looks identical until a reload brings it back.
+    static Task<string> StoredHistoryAsync(IPage page) =>
+        page.EvaluateAsync<string>("() => localStorage.getItem('scry-history')");
+
     // A [BinaryTransfer] member never travels inside the JSON payload: the server diverts it to a raw
     // multipart part and leaves {"$bin":n} behind, which is a response the explorer cannot parse as
     // JSON at all. It reassembles one instead, so a diverted member reads as the base64 the same

@@ -442,6 +442,7 @@ ul[data-testid="history"] {
 
 ul[data-testid="history"] li {
     display: flex;
+    gap: 0.25rem;
     min-width: 0;
 }
 
@@ -463,6 +464,24 @@ ul[data-testid="history"] a {
 ul[data-testid="history"] a:hover {
     color: var(--accent);
     border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+/*
+  The per-entry remove. Sized to the glyph and unshrinkable, so it stays beside the entry it removes
+  rather than aligning into a column at the right margin, where the cross for a short entry would sit
+  a long way from it. It borrows .icon-btn for the hover and focus treatment and overrides only the
+  glyph's metrics; the hover color has to be redeclared after .icon-btn:hover to win, the two selectors
+  being of equal weight.
+*/
+.history-remove {
+    flex: none;
+    padding: 0 0.55rem;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.history-remove:hover {
+    color: light-dark(#d03a42, #e07777);
 }
 
 /*

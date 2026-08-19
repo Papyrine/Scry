@@ -101,11 +101,24 @@
 
 @if (history.Count > 0)
 {
-    <h3>History</h3>
+    <div class="pane-head">
+        <h3>History</h3>
+        <button class="icon-btn" data-testid="history-clear" @onclick="ClearHistory"
+                title="Forget every remembered query. The history is this browser's alone — nothing is sent to the server.">Clear</button>
+    </div>
     <ul data-testid="history">
         @foreach (var item in history)
         {
-            <li><a href="#" @onclick:preventDefault @onclick="() => LoadQuery(item)">@item</a></li>
+            @*
+                The remove sits beside the entry rather than on it: the entry is the link that loads the
+                query back into the editor, and a button inside an anchor is not markup a browser has to
+                make sense of.
+            *@
+            <li>
+                <a href="#" @onclick:preventDefault @onclick="() => LoadQuery(item)">@item</a>
+                <button class="icon-btn history-remove" data-testid="history-remove" title="Forget this query."
+                        aria-label="Forget this query" @onclick="() => RemoveHistory(item)">×</button>
+            </li>
         }
     </ul>
 }
