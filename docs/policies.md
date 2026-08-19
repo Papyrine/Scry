@@ -133,6 +133,12 @@ Code registration is the better fit when the policy lives in the server project 
 
 Either form also covers every opted-in type deriving from the one it names. A policy is the one annotation that [inherits](annotations.md#inheritance), so a subclass cannot shed the one its base carries — which matters because an opted-in subclass is a source in its own right, queryable without naming the base. Where several apply they all narrow, base-most first, and registering one in code replaces the attribute on that same type without displacing what that type inherits.
 
+### Inheritance runs downwards only
+
+The converse does not hold, and the difference is load-bearing. A policy on a **derived** type is not in the base's chain, so it does not filter the base source: given a policy on `Vehicle` and none on `Asset`, `Source<Vehicle>` hides the rows it names and `Source<Asset>` returns and counts those same rows as assets. Only the members `Asset` itself exposes are readable that way — a derived type's own members stay unreachable until a query narrows to it — and narrowing does apply the policy, so `Source<Asset>.OfType<Vehicle>` matches `Source<Vehicle>` exactly.
+
+That is deliberate: each source is its own authorization surface, and a policy filters the source it is attached to. A hierarchy where the rows must be restricted however they are reached wants the policy on the **base**, where every source below inherits it. Attaching one only to a subclass restricts that subclass's source and nothing above it.
+
 
 ## Ordering guarantee
 
