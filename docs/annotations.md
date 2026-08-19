@@ -13,7 +13,7 @@ The model is **default-deny**: a type that carries none of the opt-in attributes
 | `[QueryableCollection]` | property | Opts a collection in for aggregation and flattening — never for projection into a result. |
 | `[QueryIgnore]` | property, field | Excludes a member from an opted-in type. |
 | `[PreviousNames("...")]` | class, struct, property, field | Keeps accepting the names a source, member, or enum value used to be exposed under. |
-| `[ReturnableWith(typeof(TPolicy))]` | class, struct | Attaches a server-side row policy. |
+| `[ReturnableWith(typeof(TPolicy))]` | class, struct | Attaches a server-side row policy, and optionally says [what a row it denies produces](policies.md#what-a-denied-row-produces). |
 | `[BinaryTransfer]` | property, field | Sends a `byte[]` as a raw multipart part instead of base64. |
 | `[Attachment]` | property, field | Makes a `byte[]` a claim check: never carried by a query, fetched on demand by row key. |
 | `[AttachmentWith(typeof(TPolicy))]` | class, struct | Attaches the check authorizing this type's attachments. Required where one is exposed. |
@@ -708,7 +708,7 @@ public List<OrderLine> Lines { get; set; } = [];
 
 An exposed collection is **aggregable, not projectable**. A client can ask a question about it — `Any`, `All`, `Count`, `Sum`, `Average`, `Min`, `Max`, which the database answers as a correlated subquery — but can never enumerate its rows, project it, traverse through it in a member path, or order by it. Every answer is a scalar, so a response can never carry an unbounded nested collection. See [subqueries](querying.md#collection-subqueries).
 
-The element type must itself be opted in, and must **not carry a [row policy](policies.md)** — a policy filters a source, and a subquery has none, so aggregating a policied collection would count exactly the rows the policy hides. The server refuses to start in that case, naming the member.
+The element type must itself be opted in. If it carries a [row policy](policies.md) the server refuses to start, naming the member — a policy filters a source and a subquery has none, so aggregating the collection off its owner would count exactly the rows the policy hides. Setting [`CollectionNavigation`](policies.md#collections) on that policy is what unlocks it: `Hide` reads the collection through the policy, so the aggregate counts what a direct query of the element source would have reached.
 
 The element may be a source type or a [`[QueryableComplex]`](#queryablecomplex) type. The latter is a **JSON array of value objects**, and behaves identically — how it is stored is EF's concern, and nothing about it reaches the wire.
 

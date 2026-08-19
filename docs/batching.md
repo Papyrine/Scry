@@ -57,7 +57,7 @@ var count = await good;      // answered
 var rows = await bad;        // throws, exactly as it would have unbatched
 ```
 
-A rejected entry faults its own task with the same exception the query would have raised sent alone — `ScryRequestException`, or `ScryStaleClientException` when the rejection is attributed to [schema drift](schema-versioning.md). Code that already handles a failed query needs no second shape for one that happened to be batched.
+A rejected entry faults its own task with the same exception the query would have raised sent alone — `ScryRequestException`, `ScryStaleClientException` when the rejection is attributed to [schema drift](schema-versioning.md), or `ScryPermissionException` where a [row policy denied it](policies.md#what-a-denied-row-produces). Code that already handles a failed query needs no second shape for one that happened to be batched. One entry's rows being denied says nothing about another's, so the rest are answered as usual.
 
 `SendAsync` itself throws only when the **batch** failed: the transport, an unreadable response, or a rejection of the whole envelope. Such a failure also faults every entry's task, so a caller awaiting them is never left waiting on a response that is not coming.
 

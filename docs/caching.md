@@ -314,6 +314,8 @@ A URL-borne query reads the freshness token before doing anything else. That rea
 
 **A 304 skips the policies.** Nothing runs on a hit — that is the point — so a response header a policy writes is absent on one. A client reading such a header has to treat its absence as "unchanged" rather than as "gone".
 
+**A denied query is never cached.** Where a policy is set to [fail the request](policies.md#what-a-denied-row-produces) rather than hide the row, the 403 carries `Cache-Control: no-store` and no `ETag`, so it is neither kept nor revalidated against. What keeps the *successful* answer from reaching the next caller is the same `CacheScope` every policied source already demands.
+
 **A query in a body is never answered conditionally.** A query too long for a URL, or one refused a URL by `[Sensitive]`, gets no ETag and no 304 — it is answered exactly as it would be with none of this configured. That is the same fact from the other side: what makes a response identifiable to a cache is its URL, and a body-borne query has none.
 
 **A sensitive member changes both halves.** A constant compared against a member the model marks [`[Sensitive]`](annotations.md) sends the query as a body, so nothing lands in a log; a result containing one is sent `Cache-Control: no-store` with no `ETag`, so nothing lands on a disk. The second is worth dwelling on, because `private, no-cache` **stores** — it means revalidate before reuse, not do not keep — and the server sets `no-store` whatever the client believed, which is what makes it a control rather than a convention. A query with no `Select` returns every member of its source, so it falls under that rule without having named one.

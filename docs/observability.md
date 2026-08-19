@@ -53,7 +53,10 @@ Every query records a duration, whatever its outcome, so query counts come off t
 | `rejected` | Refused by validation — or a stream truncated by `MaxStreamRows`. |
 | `failed` | Validation passed; execution threw. |
 | `canceled` | A streamed read that ended before the last row: canceled, or its consumer stopped reading. |
+| `denied` | A [row policy denied a row](policies.md#what-a-denied-row-produces) the query read, and reports denials rather than hiding them. |
 | `malformed` | The HTTP body failed to deserialize; the request never reached the processor. |
+
+`denied` is counted apart from `rejected` because nothing about the query was wrong: it asked for rows this caller may not have. It is also the mode that discloses their existence, so a rate worth watching — a caller driving it up is mapping what it cannot see.
 
 A `rejected` rate that deployments do not explain is the signal worth alerting on. A generated client cannot produce an invalid request, so rejections are either stale clients — benign, marked by `scry.stale_client` and a `staleClient` audit entry, expected to spike right after a model change ships — or requests written by hand, which is probing. `malformed` is the same signal one layer earlier.
 

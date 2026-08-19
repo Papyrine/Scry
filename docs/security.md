@@ -364,11 +364,25 @@ That shape is deliberate and worth keeping. A bare `Expression.Constant` is *not
 An `IReturnablePolicy<T>` is applied to the source before any client operator, so client filters can<!-- include: policy-ordering. path: /docs/includes/policy-ordering.include.md -->
 only narrow an already-authorized set.<!-- endInclude -->
 
-A [join](querying.md#joins) and a [membership test against another source](querying.md#membership-of-another-source) both resolve their second source through the same path: that source's policy is applied **before** the two sides meet, so a join can only narrow and never becomes a way to observe rows through a source whose policy hides them. The same reasoning is why a [collection navigation](annotations.md#collections) of a policied type is refused outright — there, the aggregate has no source for a policy to filter.
+A [join](querying.md#joins) and a [membership test against another source](querying.md#membership-of-another-source) both resolve their second source through the same path: that source's policy is applied **before** the two sides meet, so a join can only narrow and never becomes a way to observe rows through a source whose policy hides them.
 
 A [reference navigation](policies.md#reached-through-a-navigation) into a policied type is the third route to the same rows, and is closed the same way: the traversal is rebound to read through the target's policy, so a hidden row reads as null wherever the path appears — a projection leaf, an ordering, a key, and above all a predicate, which runs in SQL and would otherwise answer about rows a direct query could never return. Because every rooted member path is rebound through one place, this holds for all of them rather than per operator. Startup translates each such traversal once and refuses to start if a policy does not compose there.
 
+A [collection navigation](annotations.md#collections) of a policied type is the fourth, and is **refused at startup** unless the policy says how it wants to be read through: an aggregate off the owner has no source for a policy to filter, so it would count exactly the rows the policy hides. Opting into `DeniedCollectionMode.Hide` rewrites the collection into the same policy-filtered subquery a reference navigation uses, which makes an aggregate over it count what a direct query of the element source would have reached, and a flatten reach exactly those rows.
+
 See [Row policies](policies.md).
+
+#### Reporting a denial discloses that there was one
+
+A denied row is hidden by default, at every one of those positions, and hiding is the only answer that discloses nothing. A policy can be configured to [fail the request](policies.md#what-a-denied-row-produces) instead, per position — a 403 carrying a fixed message that names no source, member, row, or policy.
+
+That is a **deliberate existence oracle**. A caller that receives it learns that rows it may not see matched its query, which is exactly the signal hiding exists to withhold; by varying the query it can narrow down what those rows are. Enable it only where "you lack permission" is itself not sensitive — an internal tool, an auditable tenant — and never on a source whose row existence is the secret. A row another policy already hid is never reported, so raising one policy's mode cannot expose what a different one is hiding, and the outcome is audited as `Denied` so the disclosure is countable.
+
+#### Cached decisions are server-held state
+
+A [cached row policy](policies.md#when-the-decision-is-too-expensive-for-sql) moves the decision off the query and remembers it, keyed by policy, scope, and row key. Three things follow. The scope key must come from the authenticated principal via `context.Services` and never from a request header — it selects which set of answers applies, so a caller choosing it is a caller choosing its permissions. A row that is new or has changed is decided on its first read, so nothing is served on the strength of an answer nobody made. And a permission change reaches queries only when the host says it has, so the decisions can be stale by design: the lag is bounded by how promptly `InvalidateRows`/`InvalidateScope` are called, which makes calling them part of the authorization path rather than a cache optimization.
+
+Decisions are made over the raw source rather than through its other policies, so one caller's view is never baked into an answer the others read; the other policies still apply to the query itself.
 
 An [`IAttachmentPolicy<T>`](attachments.md#security) is the same idea for a value no query carries. A source exposing an `[Attachment]` refuses to start without one — the fetch endpoint is reached by row key rather than by a composed query, so the allow-list that stands between a caller and everything else has nothing to say about it. The row is still resolved through its source's row policies, so both apply, and a refusal is indistinguishable from a row that was never there.
 
@@ -541,7 +555,10 @@ app.MapScry("/api/query")
 - [ ] Multi-tenant sources have a row policy.
 - [ ] A policy meant to cover a hierarchy is attached to the base, not only to a subclass — it does not filter upwards.
 - [ ] Every `[Attachment]` has a policy that authorizes the caller, not merely one that returns true.
-- [ ] No row policy scopes rows by a request header — those are client-chosen.
+- [ ] No row policy scopes rows by a request header — those are client-chosen. Nor does a cached policy's `ScopeKey`, which selects a whole set of decisions.
+- [ ] Every position set to `DeniedRowMode.Error` is one where revealing that hidden rows exist is acceptable — hiding is the non-disclosing default.
+- [ ] Every `[QueryableCollection]` opted into `DeniedCollectionMode.Hide` is one whose aggregates are meant to be answerable at all.
+- [ ] Every grant change that a cached row policy would decide differently calls `InvalidateRows` or `InvalidateScope` — nothing else can know.
 - [ ] The query endpoint requires authentication/authorization.
 - [ ] `MaxPageSize` matches what the UI actually needs.
 - [ ] The [explorer](explorer.md) is either unmapped or behind a real guard in production.

@@ -176,6 +176,52 @@ This test demonstrates it: the request carries no filter on `Active`, yet the in
 <!-- endSnippet -->
 
 
+## What a denied row produces
+
+By default a denied row is not there at all: absent from a list, missing from a single-row result, null through a navigation. That is the only answer that discloses nothing — a caller cannot tell a row it may not see from one that never existed.
+
+Where that silence is worse than the disclosure, a policy can be told to fail the request instead. The choice is made per policy and per position, because a denial means something different depending on where it lands:
+
+| Position | Default | `Error` |
+| --- | --- | --- |
+| `RootSingle` — `First`, `Single`, `Last` | the result is empty | HTTP 403 |
+| `RootList` — lists, pages, streams, counts, aggregates | the row is missing | HTTP 403 |
+| `Navigation` — a traversal into the source | the traversal reads null | HTTP 403 |
+| `CollectionNavigation` — a `[QueryableCollection]` of it | `Refuse`: startup failure | HTTP 403 |
+
+On the model:
+
+```cs
+[Queryable]
+[ReturnableWith(typeof(ActiveOnlyPolicy), RootList = DeniedRowMode.Error)]
+public class Employee { ... }
+```
+
+Or in code:
+
+```cs
+options.AddPolicy<Employee, ActiveOnlyPolicy>(new()
+{
+    RootList = DeniedRowMode.Error
+});
+```
+
+The response is a 403 carrying one fixed message — `The query was denied by a server policy.` — which names no source, member, row, or policy. Erroring already discloses that something matched; naming what would disclose the shape of the policy on top of it. Clients raise `ScryPermissionException` for it, on the query, stream, and batch paths alike; in a batch it is one entry's result and the others are answered normally. The 403 is never cached, and the outcome is recorded as `Denied` rather than as a failure — a mode that discloses existence is worth being able to count.
+
+### When it fires
+
+For the two root positions, the request fails if a row the caller could see once every *hiding* policy has run is one an *erroring* policy denies. A row already hidden by another policy is therefore never reported: an error says what this caller lost to this policy, not what it was never going to be shown.
+
+The rows in question are the ones the query asked for, narrowed by the filters written before the first paging or flattening operator. So a client filter that excludes the denied row means there is nothing to report, while `Take(1)` does not — the answer does not depend on where in the result the denied row happened to fall.
+
+For the two navigation positions the question is asked of the relationship rather than of one query: whether any row of the owner source, filtered by its own policies, reaches a denied row that way. A navigation is read per row and which rows those are depends on the whole shape of the query — including filters written over the traversal itself — so narrowing by them would make the answer depend on the question in a way a caller could use to probe it. Erring wide costs a request that would have succeeded; erring narrow returns a row the deployment asked to be told about.
+
+All of this is asked before anything executes, so a denied row never reaches a result and a stream fails before its first byte. A [SQL preview](explorer.md) runs no query and so denies nothing.
+
+> [!WARNING]
+> `Error` is a deliberate existence oracle: a 403 tells a caller that rows it may not see matched its query, which is exactly the signal hiding exists to withhold. Enable it only where "you lack permission" is itself not sensitive — never on a source whose row existence is the secret. See [security.md](security.md).
+
+
 ## Reached through a navigation
 
 A policy filters a *source*, and a navigation into that source is a second way to reach its rows. So a policy applies at the traversal too, not only where the source is the root:
@@ -241,9 +287,20 @@ The predicate row is the one that matters most. A predicate runs in SQL, so with
 
 A value type read through a policied traversal is widened to its nullable form, because the policy can produce a null where the model says there is always a row. A client projecting `_.Department!.Id` therefore receives null rather than an `int` for a hidden department, and should project it as `int?`.
 
-### Collections are refused instead
+### Collections
 
-This applies to reference navigations. A `[QueryableCollection]` of a policied type is a [startup failure](annotations.md#queryablecollection) rather than a rewrite: aggregating a collection cannot apply a policy — a policy filters a source, and a subquery has none — so exposing it would count exactly the rows the policy hides.
+A `[QueryableCollection]` of a policied type is a [startup failure](annotations.md#queryablecollection) by default: aggregating a collection off its owner cannot apply a policy — a policy filters a source, and a subquery has none — so exposing it would count exactly the rows the policy hides. It is refused rather than guessed at, because either answer could be the one a deployment wants.
+
+Saying which unlocks it:
+
+```cs
+options.AddPolicy<OrderLine, BulkLinesOnlyPolicy>(new()
+{
+    CollectionNavigation = DeniedCollectionMode.Hide
+});
+```
+
+`Hide` reads the collection through the same correlated subquery a reference navigation already uses, so `_.Lines.Count()` counts what a direct query of `OrderLine` would have reached, `Sum` totals only those, and `SelectMany` flattens to exactly them. `Error` fails the request instead — see [What a denied row produces](#what-a-denied-row-produces). Any policy in the chain left at `Refuse` refuses the member, since the chain is only as readable as its least permissive link.
 
 ### The startup probe
 
@@ -382,6 +439,82 @@ There is one rather than a chain because the check is a decision, not a filter: 
 **Both still apply.** The fetch resolves its row through the policy-filtered source, so a row a query could not have returned is not one an attachment can be pulled from — the attachment check narrows what is already authorized, exactly as a client filter does. A refusal by either is the same `404` as a row that was never there; see [Security](attachments.md#security).
 
 The check runs **before the database is touched**, so an unauthorized caller learns nothing, not even how long a lookup took. `KeyValues` holds the key it asked for, parsed into the key members' own types — a key, not a row, since the row has not been read and may not exist. A decision needing the row itself can read it through `Db`.
+
+
+## When the decision is too expensive for SQL
+
+Everything above assumes the policy can be written as a filter the database evaluates per row. Some permission logic cannot: it calls into domain code, walks a hierarchy, consults another system. Running it inline would make every query pay for it.
+
+`ICachedRowPolicy<T>` answers one row at a time in C# instead. The server remembers the answers per caller and composes what the query actually carries — a membership test over the keys that caller may see:
+
+<!-- snippet: cachedRowPolicy -->
+<a id='snippet-cachedRowPolicy'></a>
+```cs
+public sealed class CountingRegionPolicy :
+    ICachedRowPolicy<Order>
+{
+    // Who is asking. From the authenticated principal in Services — never from a request header, which
+    // the caller chooses.
+    public string ScopeKey(ScryPolicyContext context) => Scoped;
+
+    // The expensive decision. Runs off the query path, for the rows whose answer is not known yet.
+    public bool Allow(Order row, string scopeKey, ScryPolicyContext context)
+    {
+        Decisions++;
+        return Allowing is null || row.Region == Allowing;
+    }
+```
+<sup><a href='/src/Scry.Tests/CachedPolicyTests.cs#L331-L345' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedRowPolicy' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Registered with the column that says a row has changed:
+
+<!-- snippet: addCachedPolicy -->
+<a id='snippet-addCachedPolicy'></a>
+```cs
+// Revision moves whenever the row does, which is how a new or changed order is decided on
+// its first read without every other order being decided again.
+_.AddCachedPolicy<Order, long, CountingRegionPolicy>(order => order.Revision));
+```
+<sup><a href='/src/Scry.Tests/CachedPolicyTests.cs#L298-L302' title='Snippet source file'>snippet source</a> | <a href='#snippet-addCachedPolicy' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+The adapter is an ordinary `IReturnablePolicy<T>` underneath, so everything on this page still holds: it applies at the root, at a join's inner side, at a narrowing, at a membership test and at a traversal, it narrows alongside any other policy on the chain, and it takes the same `DeniedRowHandling`.
+
+### Keeping it current
+
+A cache that decided too often would not be one; a cache that decided too rarely would hand over a row nobody had ruled on. Three things move it:
+
+- **A new or changed row is decided on its first read.** Each scope remembers how far it has decided — the highest version it has seen — and the rows past that are the ones still owed an answer. An insert by any writer, including one that never went through this server, is therefore correct the first time it is read, and no query rescans the table to establish that. **Index the version column**: every refresh runs one `WHERE version > @watermark` against it.
+- **A grant changing is something no column can see**, so the host says so. `InvalidateRows` re-decides those rows for every caller; `InvalidateScope` forgets one caller entirely. Both take effect on the next read — this is the lag the cache trades for the cost it avoids.
+- **`Prime` decides rows ahead of anyone reading them**, which is what to call right after writing them, so the work does not land on whoever queries next.
+
+```cs
+// the host knows a grant moved; nothing about the rows did
+cache.InvalidateRows<Order>([orderId]);
+
+// this caller's role changed, so nothing decided for them still holds
+cache.InvalidateScope<Order>(tenantId);
+
+// just inserted these; decide them while they are still in hand
+cache.Prime(tenantId, orders, context);
+```
+
+`ScryPolicyCache` is registered as a singleton by `AddScry`, and is also `ScryProcessor.PolicyCache`.
+
+### The scope key
+
+Decisions are remembered per scope and shared by every request naming the same one, so `ScopeKey` must identify the caller's authority and nothing else — two callers given the same key see the same rows. Resolve it from `context.Services`, never from `context.RequestHeaders`: a caller choosing its own scope key is a caller choosing its own permissions.
+
+### Cost and shape
+
+A cold scope decides every row once, serialized per scope so a burst of requests pays it once rather than each. Every allowed key then travels to the database with each query — bound as a single parameter, not written into the SQL — which suits an allow-list bounded per caller and not one that grows with the table. `options.MaxCachedPolicyKeys` turns an allow-list that quietly grew unbounded into a message rather than a slow query.
+
+The rows are decided over the raw set, not through the source's other policies: a decision is shared between callers, so narrowing what it is made over by one caller's view would bake that view into an answer the others go on to read. The other policies still apply to the query itself, where they belong.
+
+Answers live in `MemoryCachedPolicyStore` by default — this process, for as long as it runs, so each server warms its own and a restart decides every row again. A deployment where that costs too much implements `ICachedPolicyStore` and sets `options.CachedPolicyStore`.
+
+The type needs a single-member primary key, derived the way an [attachment's](attachments.md) is and checked against the real one at startup; a POCO source or a keyless view has nowhere to file answers and is refused. The version column need not be exposed to clients — `[QueryIgnore]` it and it stays server-side machinery.
 
 
 ## What a policy is not
