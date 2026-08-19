@@ -294,12 +294,7 @@ public class CachedPolicyTests
     }
 
     static ScryProcessor Cached() =>
-        Build(_ =>
-            // begin-snippet: addCachedPolicy
-            // Revision moves whenever the row does, which is how a new or changed order is decided on
-            // its first read without every other order being decided again.
-            _.AddCachedPolicy<Order, long, CountingRegionPolicy>(order => order.Revision));
-    // end-snippet
+        Build(_ => _.AddCachedPolicy<Order, long, CountingRegionPolicy>(order => order.Revision));
 
     static ScryProcessor Build(Action<ScryOptions> extra) =>
         ScryProcessor.Create<TestContext>(options =>
@@ -328,21 +323,16 @@ public class CachedPolicyTests
 /// Stands in for a decision too expensive to make in SQL by counting how often it is made. What it
 /// answers is trivial; when it is asked is the whole subject.
 /// </summary>
-// begin-snippet: cachedRowPolicy
 public sealed class CountingRegionPolicy :
     ICachedRowPolicy<Order>
 {
-    // Who is asking. From the authenticated principal in Services — never from a request header, which
-    // the caller chooses.
     public string ScopeKey(ScryPolicyContext context) => Scoped;
 
-    // The expensive decision. Runs off the query path, for the rows whose answer is not known yet.
     public bool Allow(Order row, string scopeKey, ScryPolicyContext context)
     {
         Decisions++;
         return Allowing is null || row.Region == Allowing;
     }
-    // end-snippet
 
     public const string Scope = "scope";
 

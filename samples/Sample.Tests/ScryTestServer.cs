@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Sample.Model;
 
@@ -41,11 +42,14 @@ public sealed class ScryTestServer :
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Services.AddDbContext<SampleContext>(_ => _.UseSqlServer(database.ConnectionString));
+        builder.Services.AddSingleton<RegionGrants>();
+        builder.Services.AddSingleton<RegionAccessPolicy>();
         builder.Services.AddScry<SampleContext>(options =>
         {
             options.AddPocoSource(_ => Holiday.Seed());
             options.AddAttachmentPolicy<Department, HandbookPolicy>();
             options.MaxPageSize = 200;
+            options.AddCachedPolicy<Order, long, RegionAccessPolicy>(_ => _.Revision);
             if (conditionalRequests)
             {
                 options.UseDeltaFreshness<SampleContext>();
@@ -55,6 +59,32 @@ public sealed class ScryTestServer :
 
         var app = builder.Build();
         app.MapScry("/api/query");
+
+        // The sample's own endpoints behind the cached row policy, mirrored from Program.cs so the
+        // page under test drives the same two things here as it does in the running app.
+        app.MapGet("/api/grants", (RegionGrants grants) =>
+            new GrantState([.. RegionGrants.Regions], [.. grants.For("sample")], grants.Lookups));
+
+        app.MapPost("/api/grants/{region}", (string region, bool allowed, RegionGrants grants, ScryPolicyCache cache) =>
+        {
+            grants.Set("sample", region, allowed);
+            cache.InvalidateScope<Order>("sample");
+            return Results.NoContent();
+        });
+
+        app.MapPost("/api/orders/{id:int}/touch", async (int id, SampleContext data) =>
+        {
+            var order = await data.Orders.FindAsync(id);
+            if (order is null)
+            {
+                return Results.NotFound();
+            }
+
+            order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
+            await data.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
         await app.StartAsync();
 
         return new(app, database);

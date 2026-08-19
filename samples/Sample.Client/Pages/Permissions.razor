@@ -1,0 +1,77 @@
+@page "/permissions"
+@inject ScryQuery Query
+@inject IHttpClientFactory Clients
+
+<PageTitle>Scry Sample — Cached policy</PageTitle>
+
+<h1>Cached row policy</h1>
+<p><a href="/">← Samples</a> · <a href="/scry">Explorer</a></p>
+<p>
+    Orders are scoped by a policy whose decision is too slow to run per row in SQL — it asks another
+    system which regions this caller may see. So it runs in C# instead, once per row, and the server
+    remembers the answers; the query carries only a membership test over the keys this caller is
+    allowed. The counter below is what that saves: it goes up when a decision is actually made.
+</p>
+
+@if (error is not null)
+{
+    <p class="error" role="alert">@error</p>
+}
+
+<h2>Orders this caller can see</h2>
+@if (orders is null)
+{
+    <p class="loading">Loading…</p>
+}
+else
+{
+    <table>
+        <thead>
+            <tr><th>Region</th><th>Amount</th></tr>
+        </thead>
+        <tbody>
+        @foreach (var order in orders)
+        {
+            <tr><td>@order.Region</td><td>@order.Amount</td></tr>
+        }
+        </tbody>
+    </table>
+}
+
+<p>Expensive decisions made so far: <strong id="decisions">@decisions</strong></p>
+
+<div class="pager">
+    <button id="reload" @onclick="Reload">Run the query again</button>
+    <button id="revise" disabled="@(orders is null or [])" @onclick="Revise">Revise an order</button>
+</div>
+
+<h3>Grants</h3>
+<p>
+    Revoking a region changes nothing about any order, so no version column could notice. The server
+    tells the cache, and the next query decides every row again — without that call the change would
+    never reach a query at all.
+</p>
+@if (grants is not null)
+{
+    <ul>
+        @foreach (var region in grants.Regions)
+        {
+            <li>
+                <label>
+                    <input type="checkbox"
+                           id="@($"grant-{region}")"
+                           checked="@grants.Granted.Contains(region)"
+                           @onchange="_ => Set(region, (bool)_.Value!)"/>
+                    @region
+                </label>
+            </li>
+        }
+    </ul>
+}
+
+<h3>What to try</h3>
+<ul>
+    <li><strong>Run the query again.</strong> The rows come back and the counter does not move: every row was already decided.</li>
+    <li><strong>Revise an order.</strong> Its revision moves past the watermark this caller was decided up to, so the next query decides that one row — the counter goes up by exactly one. A row inserted by any writer is correct on its first read the same way.</li>
+    <li><strong>Revoke a region.</strong> The rows disappear and the counter jumps by the whole set: the caller's answers were thrown away and made again.</li>
+</ul>

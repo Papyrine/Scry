@@ -21,6 +21,13 @@
         builder.Services.AddScoped<ScryQuery>();
         // end-snippet
 
+        // The sample's own endpoints — the grant state behind the cached row policy — are not Scry's,
+        // so they get a client of their own rather than the one below, whose whole job is to answer
+        // repeats without asking. This page asks on purpose.
+        builder.Services.AddHttpClient(
+            "api",
+            _ => _.BaseAddress = new(builder.HostEnvironment.BaseAddress));
+
         // The client half of the server's 304: re-ask with If-None-Match, and answer a 304 from what
         // was kept last time. One handler in the pipeline, invisible above it — see /docs/caching.md.
         // The store is the singleton because the handler is not: the factory rotates handlers, and a

@@ -129,18 +129,21 @@ public sealed class SampleContext(DbContextOptions<SampleContext> options) :
             {
                 Region = "North",
                 Amount = 100m,
+                Revision = 1,
                 Tags = ["urgent", "export"]
             },
             new()
             {
                 Region = "North",
                 Amount = 250m,
+                Revision = 2,
                 Tags = ["export"]
             },
             new()
             {
                 Region = "South",
-                Amount = 75m
+                Amount = 75m,
+                Revision = 3
             });
 
         context.SaveChanges();

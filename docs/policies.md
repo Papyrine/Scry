@@ -445,26 +445,37 @@ The check runs **before the database is touched**, so an unauthorized caller lea
 
 Everything above assumes the policy can be written as a filter the database evaluates per row. Some permission logic cannot: it calls into domain code, walks a hierarchy, consults another system. Running it inline would make every query pay for it.
 
-`ICachedRowPolicy<T>` answers one row at a time in C# instead. The server remembers the answers per caller and composes what the query actually carries — a membership test over the keys that caller may see:
+`ICachedRowPolicy<T>` answers one row at a time in C# instead. The server remembers the answers per caller and composes what the query actually carries — a membership test over the keys that caller may see. The [sample](sample.md#a-policy-too-expensive-to-run-per-row) runs this end to end:
 
 <!-- snippet: cachedRowPolicy -->
 <a id='snippet-cachedRowPolicy'></a>
 ```cs
-public sealed class CountingRegionPolicy :
+/// <summary>
+/// Scopes <see cref="Order"/> to the regions the caller is granted. Written as a cached policy rather
+/// than an ordinary <c>IReturnablePolicy</c> because the decision is a lookup against another system —
+/// far too slow to run per row inside every query, and unchanging often enough to be worth remembering.
+/// </summary>
+public sealed class RegionAccessPolicy(RegionGrants grants) :
     ICachedRowPolicy<Order>
 {
-    // Who is asking. From the authenticated principal in Services — never from a request header, which
-    // the caller chooses.
-    public string ScopeKey(ScryPolicyContext context) => Scoped;
+    /// <summary>
+    /// Which set of answers this call belongs to. The sample has no sign-in, so there is one caller and
+    /// one scope, exactly as <c>CacheScope</c> has one; a real app returns the tenant or the principal
+    /// resolved from <c>context.Services</c>. Never from a request header — decisions are remembered
+    /// per scope, so a caller choosing its own scope key is a caller choosing its own permissions.
+    /// </summary>
+    public string ScopeKey(ScryPolicyContext context) => "sample";
 
-    // The expensive decision. Runs off the query path, for the rows whose answer is not known yet.
-    public bool Allow(Order row, string scopeKey, ScryPolicyContext context)
-    {
-        Decisions++;
-        return Allowing is null || row.Region == Allowing;
-    }
+    /// <summary>
+    /// The expensive part. It runs off the query path — for a row that is new, one whose
+    /// <see cref="Order.Revision"/> has moved, and every row the first time a scope is read — and never
+    /// again just because a query ran.
+    /// </summary>
+    public bool Allow(Order row, string scopeKey, ScryPolicyContext context) =>
+        grants.Allows(scopeKey, row.Region);
+}
 ```
-<sup><a href='/src/Scry.Tests/CachedPolicyTests.cs#L331-L345' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedRowPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/RegionAccessPolicy.cs#L1-L26' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedRowPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Registered with the column that says a row has changed:
@@ -472,11 +483,12 @@ Registered with the column that says a row has changed:
 <!-- snippet: addCachedPolicy -->
 <a id='snippet-addCachedPolicy'></a>
 ```cs
-// Revision moves whenever the row does, which is how a new or changed order is decided on
-// its first read without every other order being decided again.
-_.AddCachedPolicy<Order, long, CountingRegionPolicy>(order => order.Revision));
+// A row policy whose decision is too slow to run per row in SQL, so it runs in C# and
+// the server remembers what it answered. Revision is what tells it a row has changed
+// and needs deciding again — see /docs/policies.md and the /permissions page.
+_.AddCachedPolicy<Order, long, RegionAccessPolicy>(_ => _.Revision);
 ```
-<sup><a href='/src/Scry.Tests/CachedPolicyTests.cs#L298-L302' title='Snippet source file'>snippet source</a> | <a href='#snippet-addCachedPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L45-L50' title='Snippet source file'>snippet source</a> | <a href='#snippet-addCachedPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The adapter is an ordinary `IReturnablePolicy<T>` underneath, so everything on this page still holds: it applies at the root, at a join's inner side, at a narrowing, at a membership test and at a traversal, it narrows alongside any other policy on the chain, and it takes the same `DeniedRowHandling`.
@@ -489,18 +501,53 @@ A cache that decided too often would not be one; a cache that decided too rarely
 - **A grant changing is something no column can see**, so the host says so. `InvalidateRows` re-decides those rows for every caller; `InvalidateScope` forgets one caller entirely. Both take effect on the next read — this is the lag the cache trades for the cost it avoids.
 - **`Prime` decides rows ahead of anyone reading them**, which is what to call right after writing them, so the work does not land on whoever queries next.
 
+Invalidating is the one of the three a host has to remember, because nothing else can notice — the sample's endpoint for it:
+
+<!-- snippet: invalidateCachedPolicy -->
+<a id='snippet-invalidateCachedPolicy'></a>
 ```cs
-// the host knows a grant moved; nothing about the rows did
-cache.InvalidateRows<Order>([orderId]);
-
-// this caller's role changed, so nothing decided for them still holds
-cache.InvalidateScope<Order>(tenantId);
-
-// just inserted these; decide them while they are still in hand
-cache.Prime(tenantId, orders, context);
+// A grant moved. Nothing about any order changed, so no version column could notice and no
+// query would ever decide those rows again — the cache has to be told, and telling it is part
+// of the authorization path rather than a cache optimization.
+app.MapPost("/api/grants/{region}", (string region, bool allowed, RegionGrants grants, ScryPolicyCache cache) =>
+{
+    grants.Set("sample", region, allowed);
+    cache.InvalidateScope<Order>("sample");
+    return Results.NoContent();
+});
 ```
+<sup><a href='/samples/Sample.Server/Program.cs#L88-L98' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
-`ScryPolicyCache` is registered as a singleton by `AddScry`, and is also `ScryProcessor.PolicyCache`.
+Priming is `cache.Prime(scopeKey, rows, context)` alongside the write that produced them. `ScryPolicyCache` is registered as a singleton by `AddScry`, and is also `ScryProcessor.PolicyCache`.
+
+Nothing has to be called for the first of the three. The sample moves a row's version and the next query decides that row and no other:
+
+<!-- snippet: cachedPolicyReadThrough -->
+<a id='snippet-cachedPolicyReadThrough'></a>
+```cs
+// A row changed. Nobody tells the cache anything here: the next query sees a revision past the
+// watermark this scope was decided up to, and decides that one row on the spot. An insert by
+// any writer at all is correct on its first read for the same reason.
+app.MapPost("/api/orders/{id:int}/touch", async (int id, SampleContext data) =>
+{
+    var order = await data.Orders.FindAsync(id);
+    if (order is null)
+    {
+        return Results.NotFound();
+    }
+
+    // Named explicitly: Scry's async terminals and EF's are both in scope here, and they are
+    // not the same method — this one has to run against the database.
+    order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
+    await data.SaveChangesAsync();
+    return Results.NoContent();
+});
+```
+<sup><a href='/samples/Sample.Server/Program.cs#L100-L118' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+`InvalidateRows<T>(keys)` is the narrower form of the second: it re-decides those rows in every scope, rather than emptying one scope entirely.
 
 ### The scope key
 

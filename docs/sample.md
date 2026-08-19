@@ -76,9 +76,17 @@ public class Order
     // spells it from reflection, and the two stamps only agree if they agree about this member.
     [QueryableCollection]
     public List<string> Tags { get; set; } = [];
+
+    // What the cached row policy on this type reads to know a row needs deciding again. Server-side
+    // machinery rather than query surface, so it is hidden from clients like anything else Scry was
+    // not told to expose — a version column need not be one a client can see. A real deployment more
+    // often maps a rowversion as ulong and lets the database move it; this one writes it, so the
+    // sample can show a row being re-decided on demand.
+    [QueryIgnore]
+    public long Revision { get; set; }
 }
 ```
-<sup><a href='/samples/Sample.Model/Entities/Order.cs#L3-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableOrder' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Model/Entities/Order.cs#L3-L25' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableOrder' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: queryableView -->
@@ -172,20 +180,25 @@ builder.Services
         _.AddAttachmentPolicy<Department, HandbookPolicy>();
         _.MaxPageSize = 200;
 
+        // A row policy whose decision is too slow to run per row in SQL, so it runs in C# and
+        // the server remembers what it answered. Revision is what tells it a row has changed
+        // and needs deciding again — see /docs/policies.md and the /permissions page.
+        _.AddCachedPolicy<Order, long, RegionAccessPolicy>(_ => _.Revision);
+
         // Repeat a query while nothing has been written and the answer is a 304 rather than a
         // re-execution. Optional, and off until a freshness source says how to tell — see
         // /docs/caching.md.
         _.UseDeltaFreshness<SampleContext>();
 
-        // What a cached response belongs to. Department.Handbook carries an attachment check,
-        // so this server has a source whose answers depend on who asked, and MapScry refuses
-        // to start without this. The sample has no sign-in, so there is one caller and one
-        // scope; a real app returns its tenant or its principal, and a client signing in as
-        // someone else is then never handed the previous one's rows.
+        // What a cached response belongs to. This server has sources whose answers depend on
+        // who asked — the row policy above, and Department.Handbook's attachment check — and
+        // MapScry refuses to start without this. The sample has no sign-in, so there is one
+        // caller and one scope; a real app returns its tenant or its principal, and a client
+        // signing in as someone else is then never handed the previous one's rows.
         _.CacheScope = _ => "sample";
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L26-L52' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L31-L64' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Holiday` has no table, so its data is registered explicitly — see [POCO sources](server.md#poco-sources). `MaxPageSize` is lowered from the default 1000 to 200.
@@ -195,7 +208,7 @@ builder.Services
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L67-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L79-L81' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: mapExplorer -->
@@ -210,7 +223,7 @@ app.MapScryExplorer(
         _.EnableGuard = _ => true;
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L70-L79' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L119-L128' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The sample always exposes the explorer so it can be browsed without setting an environment. A real app should leave the default Development-only guard in place, or replace it with an authorization check — see [Query explorer](explorer.md).
@@ -329,6 +342,98 @@ fullTimers = await Query
 ```
 <sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L52-L60' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
+
+
+## A policy too expensive to run per row
+
+`Order` is scoped by a [cached row policy](policies.md#when-the-decision-is-too-expensive-for-sql). Which regions a caller may see is a lookup against another system — the sample's `RegionGrants`, standing in for a permissions service — and it sleeps for 25ms to make the point that it is not something a query can afford per row.
+
+<!-- snippet: cachedRowPolicy -->
+<a id='snippet-cachedRowPolicy'></a>
+```cs
+/// <summary>
+/// Scopes <see cref="Order"/> to the regions the caller is granted. Written as a cached policy rather
+/// than an ordinary <c>IReturnablePolicy</c> because the decision is a lookup against another system —
+/// far too slow to run per row inside every query, and unchanging often enough to be worth remembering.
+/// </summary>
+public sealed class RegionAccessPolicy(RegionGrants grants) :
+    ICachedRowPolicy<Order>
+{
+    /// <summary>
+    /// Which set of answers this call belongs to. The sample has no sign-in, so there is one caller and
+    /// one scope, exactly as <c>CacheScope</c> has one; a real app returns the tenant or the principal
+    /// resolved from <c>context.Services</c>. Never from a request header — decisions are remembered
+    /// per scope, so a caller choosing its own scope key is a caller choosing its own permissions.
+    /// </summary>
+    public string ScopeKey(ScryPolicyContext context) => "sample";
+
+    /// <summary>
+    /// The expensive part. It runs off the query path — for a row that is new, one whose
+    /// <see cref="Order.Revision"/> has moved, and every row the first time a scope is read — and never
+    /// again just because a query ran.
+    /// </summary>
+    public bool Allow(Order row, string scopeKey, ScryPolicyContext context) =>
+        grants.Allows(scopeKey, row.Region);
+}
+```
+<sup><a href='/samples/Sample.Server/RegionAccessPolicy.cs#L1-L26' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedRowPolicy' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+So it runs in C# rather than in SQL, and the server remembers what it answered. What a query carries is a membership test over the keys this caller is allowed, which is why the LINQ on the page is what it would be for any other source — nothing about it says the policy is cached.
+
+The `/permissions` page exists to make the remembering visible, since a cache that works looks exactly like one that is not there. It shows how many times the expensive decision has actually run, and three buttons move it:
+
+| Action | Decisions | Why |
+| --- | --- | --- |
+| Run the query again | unchanged | Every row already has an answer. An ordinary policy would have re-filtered them all. |
+| Revise an order | **+1** | Its `Revision` moves past the watermark this caller was decided up to, so that one row is decided again — and nothing tells the cache to do it. An inserted row is correct on its first read the same way. |
+| Revoke a region | **+3** | The grant changed, which no column can see, so the server tells the cache; the caller's answers are thrown away and made again. |
+
+The second and third are the two halves worth understanding. Nothing is called for the first:
+
+<!-- snippet: cachedPolicyReadThrough -->
+<a id='snippet-cachedPolicyReadThrough'></a>
+```cs
+// A row changed. Nobody tells the cache anything here: the next query sees a revision past the
+// watermark this scope was decided up to, and decides that one row on the spot. An insert by
+// any writer at all is correct on its first read for the same reason.
+app.MapPost("/api/orders/{id:int}/touch", async (int id, SampleContext data) =>
+{
+    var order = await data.Orders.FindAsync(id);
+    if (order is null)
+    {
+        return Results.NotFound();
+    }
+
+    // Named explicitly: Scry's async terminals and EF's are both in scope here, and they are
+    // not the same method — this one has to run against the database.
+    order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
+    await data.SaveChangesAsync();
+    return Results.NoContent();
+});
+```
+<sup><a href='/samples/Sample.Server/Program.cs#L100-L118' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+The third has to be, or the change never reaches a query at all:
+
+<!-- snippet: invalidateCachedPolicy -->
+<a id='snippet-invalidateCachedPolicy'></a>
+```cs
+// A grant moved. Nothing about any order changed, so no version column could notice and no
+// query would ever decide those rows again — the cache has to be told, and telling it is part
+// of the authorization path rather than a cache optimization.
+app.MapPost("/api/grants/{region}", (string region, bool allowed, RegionGrants grants, ScryPolicyCache cache) =>
+{
+    grants.Set("sample", region, allowed);
+    cache.InvalidateScope<Order>("sample");
+    return Results.NoContent();
+});
+```
+<sup><a href='/samples/Sample.Server/Program.cs#L88-L98' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+`Order.Revision` is `[QueryIgnore]`d — a version column is server machinery, not query surface, and clients never see it. `Sample.Tests\CachedPolicyPageTests.cs` drives the page and asserts those three counts, so the table above is checked rather than claimed.
 
 
 ## What the traffic looks like
