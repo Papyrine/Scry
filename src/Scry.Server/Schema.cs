@@ -16,6 +16,11 @@ sealed class Schema
     // source with no policy is nothing for that question to find.
     readonly Dictionary<Type, ScrySource> policiedSources = [];
 
+    // Every source keyed by its CLR type, which is how the denied-row probe finds the rows that own a
+    // traversal. Kept apart from the name lookup above: a source answers to previous names too, and a
+    // type is exactly one source.
+    readonly Dictionary<Type, ScrySource> sourcesByType = [];
+
     // Previous wire names still answered to, kept apart from the current surface above so they never
     // leak into introspection or the stamp. Enum values are keyed by enum type, then previous name.
     readonly Dictionary<string, ScrySource> sourcePreviousNames = new(StringComparer.Ordinal);
@@ -42,6 +47,13 @@ sealed class Schema
     /// </summary>
     public bool TryGetPoliciedSource(Type type, [MaybeNullWhen(false)] out ScrySource source) =>
         policiedSources.TryGetValue(type, out source);
+
+    /// <summary>
+    /// The source a CLR type is exposed as, where it is one at all. A complex type is not, which is
+    /// what a caller asking for the rows that own a traversal has to be able to find out.
+    /// </summary>
+    public bool TryGetSourceForType(Type type, [MaybeNullWhen(false)] out ScrySource source) =>
+        sourcesByType.TryGetValue(type, out source);
 
     /// <summary>Every policied source, for the startup probe that translates each one's rewrite.</summary>
     internal IEnumerable<ScrySource> PoliciedSources => policiedSources.Values;
@@ -476,6 +488,7 @@ sealed class Schema
                 AttachmentPolicy = ResolveAttachmentPolicy(schema, type, name, kind, options)
             };
             schema.sources[name] = source;
+            schema.sourcesByType[type] = source;
             if (policies.Count > 0)
             {
                 schema.policiedSources[type] = source;

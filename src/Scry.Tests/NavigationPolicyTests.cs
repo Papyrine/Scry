@@ -272,6 +272,70 @@ public class NavigationPolicyTests
         Assert.That(rows, Is.Empty);
     }
 
+    [Test]
+    public void ATraversalIntoADeniedRowFailsWhereThePolicySaysSo()
+    {
+        using var context = TestContext.CreateSeeded();
+
+        // Bob and Carol are in Sales, which the policy hides. Reading the department reads nothing for
+        // them, and this policy would rather say so than answer with a null.
+        var client = ClientFor(context, Erroring());
+
+        Assert.ThrowsAsync<ScryPermissionException>(
+            () => client.Source<Employee>("Employee")
+                .Select(_ => new {_.Name, Department = _.Department!.Name})
+                .ToListAsync());
+    }
+
+    [Test]
+    public void APredicateOverTheTraversalIsTheSameRead()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context, Erroring());
+
+        // Nothing is projected, but the predicate still runs over rows the policy hides — the oracle
+        // the traversal rewrite closes, and the same read as far as a denial is concerned.
+        Assert.ThrowsAsync<ScryPermissionException>(
+            () => client.Source<Employee>("Employee")
+                .Where(_ => _.Department!.Name == "Sales")
+                .Select(_ => new {_.Name})
+                .ToListAsync());
+    }
+
+    [Test]
+    public void AQueryThatNeverStepsIntoTheSourceIsUnaffected()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context, Erroring());
+
+        // The denial is about the traversal. A query that does not name it reads no policied row and
+        // has nothing to be told about.
+        Assert.DoesNotThrowAsync(
+            () => client.Source<Employee>("Employee")
+                .Select(_ => new {_.Name})
+                .ToListAsync());
+    }
+
+    [Test]
+    public void ShowingTheSqlStepsIntoNothing()
+    {
+        using var context = TestContext.CreateSeeded();
+        var request = QueryRequest.Create(
+            "Employee",
+            [new SelectOp(new([new("Department", new NodeValue(new MemberNode(["Department", "Name"])))]))]);
+
+        // A preview runs no query, so the traversal has read nothing for a policy to have denied.
+        var sql = Erroring().ToQueryString(request, context, EmptyServiceProvider.Instance);
+
+        Assert.That(sql, Does.Contain("SELECT"));
+    }
+
+    static ScryProcessor Erroring() =>
+        Build(_ => _.AddPolicy<Department, EngineeringOnlyPolicy>(new()
+        {
+            Navigation = DeniedRowMode.Error
+        }));
+
     /// <summary>
     /// Filters on something the provider cannot translate. Untranslatable at the root too — what the
     /// probe is proving is that a policy reaches the provider from where a traversal applies it.

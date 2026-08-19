@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 /// <summary>
 /// Applies a source's row policy where a query traverses <em>into</em> that source through a
@@ -10,10 +10,24 @@
 /// The traversal is rewritten into a correlated subquery over the policy-filtered set, keyed on the
 /// navigation's own foreign key. A row the policy hides matches nothing, so the traversal yields null
 /// — indistinguishable from an absent optional navigation, which is the point: the client learns that
-/// there is nothing here to read, not that there is something it may not have.
+/// there is nothing here to read, not that there is something it may not have. A collection navigation
+/// is rewritten the same way and yields the elements the policy allows.
+/// <para>
+/// Where the policy is configured to fail the request instead, the rewrite is unchanged and a probe
+/// runs alongside it — see <see cref="Deny"/>.
+/// </para>
 /// </remarks>
-sealed class NavigationPolicy(Schema schema, IModel model, Func<string, IQueryable> sources)
+sealed class NavigationPolicy(
+    Schema schema,
+    IModel model,
+    Func<string, Func<PolicyUse, bool>?, IQueryable> sources,
+    bool probeDenials = false)
 {
+    // One answer per traversal, however many times a query reads through it: the question is about the
+    // relationship, and a request naming the same member in a filter, an ordering and a projection
+    // would otherwise ask the database the same thing three times.
+    readonly HashSet<(Type Owner, string Member)> probed = [];
+
     /// <summary>Whether stepping into <paramref name="target"/> means stepping into a policied source.</summary>
     public bool Applies(Type target) =>
         schema.TryGetPoliciedSource(target, out _);
@@ -25,12 +39,9 @@ sealed class NavigationPolicy(Schema schema, IModel model, Func<string, IQueryab
     /// </summary>
     public Expression Correlate(Expression owner, Type ownerType, Member navigation, Type target)
     {
-        if (!schema.TryGetPoliciedSource(target, out var source))
-        {
-            throw new($"'{target.Name}' carries no row policy, so a traversal into it needs no rewrite.");
-        }
+        var filtered = Filtered(target, include: null);
+        Deny(ownerType, navigation, target, DeniedPosition.Navigation);
 
-        var filtered = sources(source.Name);
         var row = Expression.Parameter(target, "p");
         var predicate = Expression.Lambda(
             KeyMatch(row, owner, ownerType, navigation, target),
@@ -40,6 +51,96 @@ sealed class NavigationPolicy(Schema schema, IModel model, Func<string, IQueryab
             FirstOrDefault.MakeGenericMethod(target),
             filtered.Expression,
             Expression.Quote(predicate));
+    }
+
+    /// <summary>
+    /// The same for a collection navigation: every row of the policy-filtered target source keyed to
+    /// this owner. An aggregate over it counts what a direct query of that source would have returned,
+    /// which is what makes exposing the collection safe at all.
+    /// </summary>
+    public Expression CorrelateMany(Expression owner, Type ownerType, Member navigation, Type element)
+    {
+        var filtered = Filtered(element, include: null);
+        Deny(ownerType, navigation, element, DeniedPosition.CollectionNavigation);
+
+        var row = Expression.Parameter(element, "p");
+        var predicate = Expression.Lambda(
+            KeyMatch(row, owner, ownerType, navigation, element),
+            row);
+
+        return Expression.Call(
+            Where.MakeGenericMethod(element),
+            filtered.Expression,
+            Expression.Quote(predicate));
+    }
+
+    /// <summary>
+    /// Fails the request where the target's policy denies a row reachable through this navigation and
+    /// says a denial should be reported rather than hidden.
+    /// </summary>
+    /// <remarks>
+    /// Asked of the relationship rather than of one query's rows: the owner rows are the whole owner
+    /// source, policy-filtered, not the ones this query's operators would have kept. A navigation is
+    /// read per row and which rows those are depends on the whole shape of the query — including
+    /// filters written over this very traversal — so narrowing by them would make the answer depend on
+    /// the question in a way a caller could use to probe. Erring wide costs a request that would have
+    /// succeeded; erring narrow returns a row the host asked to be told about.
+    /// </remarks>
+    void Deny(Type ownerType, Member navigation, Type target, DeniedPosition position)
+    {
+        if (!probeDenials ||
+            !schema.TryGetPoliciedSource(target, out var source) ||
+            !source.Policies.Any(_ => _.Errors(position)) ||
+            !probed.Add((ownerType, navigation.Name)) ||
+            !schema.TryGetSourceForType(ownerType, out var owners))
+        {
+            return;
+        }
+
+        // The owner rows this caller can see at all: its own policies apply in full, so a denial is
+        // never reported for a traversal off a row that was never readable.
+        var query = sources(owners.Name, null);
+        var hide = Filtered(target, _ => !_.Errors(position));
+        var full = Filtered(target, null);
+
+        var owner = Expression.Parameter(ownerType, "o");
+        var denied = Expression.GreaterThan(
+            Reachable(hide, owner, ownerType, navigation, target),
+            Reachable(full, owner, ownerType, navigation, target));
+
+        var any = Expression.Call(
+            AnyWithPredicate.MakeGenericMethod(ownerType),
+            query.Expression,
+            Expression.Quote(Expression.Lambda(denied, owner)));
+
+        if ((bool)query.Provider.Execute(any)!)
+        {
+            throw new ScryPermissionException(ScryPermissionException.DeniedMessage);
+        }
+    }
+
+    /// <summary>
+    /// How many rows of <paramref name="target"/> this owner reaches. Counting rather than comparing
+    /// keys covers both kinds of navigation with one shape — a reference reaches nought or one — and
+    /// asks nothing of the target's own key, which may be one EF holds in shadow.
+    /// </summary>
+    Expression Reachable(IQueryable target, Expression owner, Type ownerType, Member navigation, Type element)
+    {
+        var row = Expression.Parameter(element, "p");
+        return Expression.Call(
+            CountWithPredicate.MakeGenericMethod(element),
+            target.Expression,
+            Expression.Quote(Expression.Lambda(KeyMatch(row, owner, ownerType, navigation, element), row)));
+    }
+
+    IQueryable Filtered(Type target, Func<PolicyUse, bool>? include)
+    {
+        if (!schema.TryGetPoliciedSource(target, out var source))
+        {
+            throw new($"'{target.Name}' carries no row policy, so a traversal into it needs no rewrite.");
+        }
+
+        return sources(source.Name, include);
     }
 
     /// <summary>
@@ -58,7 +159,8 @@ sealed class NavigationPolicy(Schema schema, IModel model, Func<string, IQueryab
         var key = found.ForeignKey;
 
         // On the dependent the owner holds the foreign key and the target holds the principal key; on
-        // the principal it is the other way round. Either way the pairing is positional.
+        // the principal it is the other way round — which is also every collection navigation. Either
+        // way the pairing is positional.
         var (ownerKeys, targetKeys) = found.IsOnDependent
             ? (key.Properties, key.PrincipalKey.Properties)
             : (key.PrincipalKey.Properties, key.Properties);
@@ -107,4 +209,18 @@ sealed class NavigationPolicy(Schema schema, IModel model, Func<string, IQueryab
                      _.GetParameters() is {Length: 2} parameters &&
                      parameters[1].ParameterType.IsGenericType &&
                      parameters[1].ParameterType.GetGenericTypeDefinition() == typeof(Expression<>));
+
+    // The row-predicate overloads. Where also has an indexed one, whose predicate takes the row and its
+    // position, so the arity of the delegate is what tells the two apart rather than the parameter count.
+    static readonly MethodInfo Where = RowPredicate(nameof(Queryable.Where));
+    static readonly MethodInfo AnyWithPredicate = RowPredicate(nameof(Queryable.Any));
+    static readonly MethodInfo CountWithPredicate = RowPredicate(nameof(Queryable.Count));
+
+    static MethodInfo RowPredicate(string name) =>
+        typeof(Queryable).GetMethods()
+            .Single(_ => _.Name == name &&
+                         _.GetParameters() is {Length: 2} parameters &&
+                         parameters[1].ParameterType.IsGenericType &&
+                         parameters[1].ParameterType.GetGenericTypeDefinition() == typeof(Expression<>) &&
+                         parameters[1].ParameterType.GenericTypeArguments[0].GenericTypeArguments.Length == 2);
 }

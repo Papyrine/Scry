@@ -947,6 +947,25 @@ sealed class ExpressionBuilder(
                 }
             }
 
+            // A collection of a policied type is read through that source's policy too, so an aggregate
+            // over it counts what a direct query would have returned. Startup refuses the member
+            // outright unless the policy opted into being read this way, so reaching here means it did.
+            if (member.Kind == MemberKind.Collection &&
+                Schema.CollectionElement(member.Type) is { } element)
+            {
+                if (navigations?.Applies(element) == true)
+                {
+                    expression = navigations.CorrelateMany(expression, ownerType, member, element);
+                    continue;
+                }
+
+                if (navigations is null &&
+                    schema.TryGetPoliciedSource(element, out _))
+                {
+                    throw new ScryValidationException($"'{ownerType.Name}.{member.Name}' is a collection of a row-policied source, which cannot be filtered here.");
+                }
+            }
+
             expression = Expression.Property(expression, member.Property);
         }
 

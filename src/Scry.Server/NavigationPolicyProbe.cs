@@ -12,8 +12,10 @@ using Microsoft.EntityFrameworkCore.Metadata;
 /// </remarks>
 static class NavigationPolicyProbe
 {
-    public static void Run(Schema schema, IModel model, Func<string, IQueryable> sources, DbContext db)
+    public static void Run(Schema schema, IModel model, Func<string, Func<PolicyUse, bool>?, IQueryable> sources, DbContext db)
     {
+        // Denials are not probed here: this asks whether each rewrite translates, and running the
+        // reporting query as well would make startup depend on what the data happens to hold.
         var navigations = new NavigationPolicy(schema, model, sources);
         foreach (var meta in schema.Types)
         {
@@ -26,21 +28,25 @@ static class NavigationPolicyProbe
 
             foreach (var member in meta.Members.Values)
             {
-                if (member.Kind != MemberKind.Navigation)
+                // A collection of a policied element is read through the same rewrite, and one that
+                // reached here was legalized by its policy — so it needs the same proof.
+                var target = member.Kind switch
                 {
-                    continue;
-                }
+                    MemberKind.Navigation => Nullable.GetUnderlyingType(member.Type) ?? member.Type,
+                    MemberKind.Collection => Schema.CollectionElement(member.Type),
+                    _ => null
+                };
 
-                var target = Nullable.GetUnderlyingType(member.Type) ?? member.Type;
-                if (navigations.Applies(target))
+                if (target is not null &&
+                    navigations.Applies(target))
                 {
-                    Probe(schema, navigations, db, meta.ClrType, member, target);
+                    Probe(schema, navigations, db, meta.ClrType, member, target, member.Kind);
                 }
             }
         }
     }
 
-    static void Probe(Schema schema, NavigationPolicy navigations, DbContext db, Type ownerType, Member member, Type target)
+    static void Probe(Schema schema, NavigationPolicy navigations, DbContext db, Type ownerType, Member member, Type target, MemberKind kind)
     {
         var owner = Expression.Parameter(ownerType, "o");
 
@@ -49,7 +55,9 @@ static class NavigationPolicyProbe
         Expression correlated;
         try
         {
-            correlated = navigations.Correlate(owner, ownerType, member, target);
+            correlated = kind == MemberKind.Collection
+                ? navigations.CorrelateMany(owner, ownerType, member, target)
+                : navigations.Correlate(owner, ownerType, member, target);
         }
         catch (Exception exception)
         {
@@ -59,7 +67,7 @@ static class NavigationPolicyProbe
         }
 
         var query = SetOf(db, ownerType);
-        var projected = Project(schema, query, owner, correlated, target);
+        var projected = Project(schema, query, owner, correlated, target, kind);
 
         try
         {
@@ -81,9 +89,13 @@ static class NavigationPolicyProbe
     /// The query the probe translates: a scalar read through the traversal, which is the shape a
     /// request produces. Projecting the row itself would translate differently and prove less.
     /// </summary>
-    static IQueryable Project(Schema schema, IQueryable query, ParameterExpression owner, Expression correlated, Type target)
+    static IQueryable Project(Schema schema, IQueryable query, ParameterExpression owner, Expression correlated, Type target, MemberKind kind)
     {
-        var leaf = Leaf(schema, correlated, target);
+        // A collection is only ever aggregated, so counting it is the shape a request produces — and
+        // the one that puts the rewritten subquery where a request would put it.
+        var leaf = kind == MemberKind.Collection
+            ? Expression.Call(Count.MakeGenericMethod(target), correlated)
+            : Leaf(schema, correlated, target);
 
         return query.Provider.CreateQuery(
             Expression.Call(
@@ -118,6 +130,10 @@ static class NavigationPolicyProbe
 
     static IQueryable SetOf(DbContext db, Type entityType) =>
         (IQueryable)Set.MakeGenericMethod(entityType).Invoke(db, [])!;
+
+    static readonly MethodInfo Count = typeof(Queryable)
+        .GetMethods()
+        .Single(_ => _.Name == nameof(Queryable.Count) && _.GetParameters().Length == 1);
 
     static readonly MethodInfo Set = typeof(DbContext)
         .GetMethods()

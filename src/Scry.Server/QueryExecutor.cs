@@ -212,7 +212,14 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             schema,
             options,
             resolve,
-            new NavigationPolicy(schema, db.Model, resolve));
+            // A traversal into a source whose policy reports denials asks the database about it as it
+            // is built, which is before anything this query runs. A SQL preview runs nothing, so it
+            // asks nothing either.
+            new NavigationPolicy(
+                schema,
+                db.Model,
+                (name, include) => ResolveSource(name, db, scope, include),
+                probeDenials: !buildOnly));
 
         var query = source.Resolve(db, scope.Services);
         query = ApplyPolicy(query, source, db, scope);
@@ -668,7 +675,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     internal void ProbeNavigationPolicies(DbContext db, IServiceProvider services)
     {
         var scope = new CallScope(services, new HeaderDictionary(), new HeaderDictionary());
-        NavigationPolicyProbe.Run(schema, db.Model, name => ResolveSource(name, db, scope), db);
+        NavigationPolicyProbe.Run(schema, db.Model, (name, include) => ResolveSource(name, db, scope, include), db);
     }
 
     IQueryable ResolveSource(string name, DbContext db, CallScope scope, Func<PolicyUse, bool>? include = null)
