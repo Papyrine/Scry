@@ -251,6 +251,13 @@ public sealed class ScryProcessor
             recorder.Rejected(exception);
             throw;
         }
+        catch (ScryPermissionException exception)
+        {
+            // Ahead of the catch below so a denial is not counted as the server having broken: the
+            // query was fine, and the rows it asked for were not this caller's to read.
+            recorder.Denied(exception);
+            throw;
+        }
         catch (Exception exception)
         {
             recorder.Failed(exception);
@@ -324,6 +331,11 @@ public sealed class ScryProcessor
         catch (ScryValidationException exception)
         {
             recorder.Rejected(exception);
+            throw;
+        }
+        catch (ScryPermissionException exception)
+        {
+            recorder.Denied(exception);
             throw;
         }
         catch (OperationCanceledException)
@@ -550,6 +562,13 @@ public sealed class ScryProcessor
             ResponseWriter.WriteEntry(json, exception.Message, 400, exception.StaleClient);
             return;
         }
+        catch (ScryPermissionException exception)
+        {
+            // Per entry, like a rejection: one entry's rows being denied says nothing about the
+            // others', and a batch that failed whole would make a denial impossible to attribute.
+            ResponseWriter.WriteEntry(json, exception.Message, 403, stale: false);
+            return;
+        }
         catch (OperationCanceledException)
         {
             // The one place this diverges from ExecuteEntry, which reads its rows synchronously and so
@@ -604,6 +623,14 @@ public sealed class ScryProcessor
                 Error = exception.Message,
                 Status = 400,
                 StaleClient = exception.StaleClient
+            };
+        }
+        catch (ScryPermissionException exception)
+        {
+            return new()
+            {
+                Error = exception.Message,
+                Status = 403
             };
         }
         catch (Exception)
@@ -709,6 +736,13 @@ public sealed class ScryProcessor
         catch (ScryValidationException exception)
         {
             recorder.Rejected(exception);
+            throw;
+        }
+        catch (ScryPermissionException exception)
+        {
+            // Thrown while the stream was being built, which is before its first byte — so a denial
+            // still answers as a status rather than as an error marker mid-response.
+            recorder.Denied(exception);
             throw;
         }
         catch (Exception exception)

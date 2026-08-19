@@ -174,6 +174,13 @@ public static class ScryServiceExtensions
             await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, exception.StaleClient);
             return;
         }
+        catch (ScryPermissionException exception)
+        {
+            // The stream is built before its first byte is written, so a denial found while building
+            // it still answers as a status — the response has not started.
+            await WriteError(context, StatusCodes.Status403Forbidden, exception.Message, staleClient: false);
+            return;
+        }
         catch (Exception)
         {
             await WriteError(context, StatusCodes.Status500InternalServerError, "Query execution failed.", drifted);
@@ -321,6 +328,11 @@ public static class ScryServiceExtensions
         {
             // Envelope-level only: a per-entry rejection never reaches here.
             await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, exception.StaleClient);
+        }
+        catch (ScryPermissionException exception) when (!context.Response.HasStarted)
+        {
+            // Envelope-level only in the same way: an entry's denial is answered in that entry's result.
+            await WriteError(context, StatusCodes.Status403Forbidden, exception.Message, staleClient: false);
         }
         catch (Exception) when (!context.Response.HasStarted && !context.RequestAborted.IsCancellationRequested)
         {
@@ -503,6 +515,10 @@ public static class ScryServiceExtensions
         catch (ScryValidationException exception) when (!context.Response.HasStarted)
         {
             await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, exception.StaleClient, exception.RequiresBody);
+        }
+        catch (ScryPermissionException exception) when (!context.Response.HasStarted)
+        {
+            await WriteError(context, StatusCodes.Status403Forbidden, exception.Message, staleClient: false);
         }
         catch (Exception) when (!context.Response.HasStarted && !context.RequestAborted.IsCancellationRequested)
         {

@@ -396,7 +396,7 @@ sealed class Schema
         }
 
         var schema = new Schema();
-        var discovered = new List<(Type Type, string Name, SourceKind Kind, IReadOnlyList<Type> Policies)>();
+        var discovered = new List<(Type Type, string Name, SourceKind Kind, IReadOnlyList<PolicyUse> Policies)>();
 
         foreach (var type in contextType.Assembly.GetTypes())
         {
@@ -511,22 +511,29 @@ sealed class Schema
             schema.RegisterSourcePreviousNames(type, schema.sources[name]);
         }
 
-        // A row policy filters a source. A subquery over a collection has no source for it to filter,
-        // so aggregating over a policied type would count exactly the rows the policy exists to hide.
-        // Refusing here makes that a startup failure rather than a silent leak at query time.
+        // A row policy filters a source, and a subquery over a collection has none of its own, so an
+        // aggregate over a policied type counts exactly the rows the policy exists to hide unless the
+        // subquery is read through that policy. Which of the two a host wants is its call, and the
+        // default is neither: refuse the member at startup rather than guess at query time.
         var policied = discovered
             .Where(_ => _.Policies.Count > 0)
-            .Select(_ => _.Type)
-            .ToHashSet();
+            .ToDictionary(_ => _.Type, _ => _.Policies);
         foreach (var (owner, member) in schema.types.Values
                      .SelectMany(meta => meta.Members.Values.Select(member => (meta.ClrType, member)))
                      .Where(_ => _.member.Kind == MemberKind.Collection))
         {
             var element = CollectionElement(member.Type)!;
-            if (policied.Contains(element))
+            if (!policied.TryGetValue(element, out var elementPolicies))
+            {
+                continue;
+            }
+
+            // Any one refusal refuses the member: the policies all narrow, so a chain is only as
+            // readable through a collection as its least permissive link says it is.
+            if (elementPolicies.FirstOrDefault(_ => _.Handling.CollectionNavigation == DeniedCollectionMode.Refuse) is { Policy: not null } refusing)
             {
                 throw new(
-                    $"'{owner.Name}.{member.Name}' is a [QueryableCollection] of '{element.Name}', which has a row policy. Aggregating a collection cannot apply that policy — a policy filters a source, and a subquery has none — so exposing it would count rows the policy hides. Remove the attribute, or drop the policy.");
+                    $"'{owner.Name}.{member.Name}' is a [QueryableCollection] of '{element.Name}', which carries row policy '{refusing.Policy.Name}'. Aggregating it would count rows that policy hides. Set CollectionNavigation on the policy — Hide reads the collection through it, Error fails a query that would have skipped a denied row — or remove the attribute.");
             }
         }
 
@@ -814,36 +821,61 @@ sealed class Schema
     /// documents. It does not replace what a base declares — that would let registering a policy
     /// remove one — so both stay in the chain and both narrow.
     /// </remarks>
-    static IReadOnlyList<Type> ResolvePolicies(Type type, string name, ScryOptions options)
+    static IReadOnlyList<PolicyUse> ResolvePolicies(Type type, string name, ScryOptions options)
     {
-        List<Type> policies = [];
+        List<PolicyUse> policies = [];
         for (var candidate = type; candidate is not null; candidate = candidate.BaseType)
         {
             // inherit: false, because the walk is done here. Reading the attribute inheritably would
             // find a base's policy again at every level below it and apply it once per level.
-            var policy = options.Policies.GetValueOrDefault(candidate) ??
-                         candidate.GetCustomAttribute<ReturnableWithAttribute>(inherit: false)?.Policy;
-            if (policy is null)
+            if (DeclaredPolicy(candidate, options) is not { } use)
             {
                 continue;
             }
 
             // The policy filters the type it was written against, which the executor widens the query
             // to. One written against something outside this hierarchy has no rows here to filter.
-            var entityType = RowPolicy.EntityType(policy);
+            var entityType = RowPolicy.EntityType(use.Policy);
             if (!entityType.IsAssignableFrom(type))
             {
                 throw new(
-                    $"Row policy '{policy.Name}' on '{candidate.Name}' filters '{entityType.Name}', which source '{name}' does not derive from. A policy has to be written against the type it is attached to, or one of its bases.");
+                    $"Row policy '{use.Policy.Name}' on '{candidate.Name}' filters '{entityType.Name}', which source '{name}' does not derive from. A policy has to be written against the type it is attached to, or one of its bases.");
             }
 
-            policies.Add(policy);
+            policies.Add(use);
         }
 
         // Collected derived-first and applied base-first, so narrowing to a subclass filters exactly as
         // the base it narrows from would have — the invariant the OfType operator relies on.
         policies.Reverse();
         return policies;
+    }
+
+    /// <summary>
+    /// The policy one type declares for itself, programmatically or by attribute, with what its denied
+    /// rows produce. Nothing where the type declares none — a base's is the caller's walk to make.
+    /// </summary>
+    static PolicyUse? DeclaredPolicy(Type type, ScryOptions options)
+    {
+        if (options.Policies.TryGetValue(type, out var registered))
+        {
+            return new(registered.Policy, registered.Handling);
+        }
+
+        if (type.GetCustomAttribute<ReturnableWithAttribute>(inherit: false) is not { } attribute)
+        {
+            return null;
+        }
+
+        return new(
+            attribute.Policy,
+            new()
+            {
+                RootSingle = attribute.RootSingle,
+                RootList = attribute.RootList,
+                Navigation = attribute.Navigation,
+                CollectionNavigation = attribute.CollectionNavigation
+            });
     }
 
     /// <summary>The attachment members a type exposes, its inherited ones included.</summary>

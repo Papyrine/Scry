@@ -101,6 +101,14 @@ sealed class QueryRecorder(
     public void Rejected(ScryValidationException exception) =>
         Complete(ScryQueryOutcome.Rejected, kind: null, rows: null, exception.Message, exception.StaleClient, exception);
 
+    /// <summary>
+    /// A query a row policy denied, where that policy fails the request rather than hiding the row.
+    /// The message is the fixed one the client saw: it names nothing, and there is nothing more to
+    /// record — which policy answered is the deployment's own configuration.
+    /// </summary>
+    public void Denied(ScryPermissionException exception) =>
+        Complete(ScryQueryOutcome.Denied, kind: null, rows: null, exception.Message, staleClient: false, exception);
+
     public void Failed(Exception exception)
     {
         // A policy filter is invoked through reflection, so its failure arrives wrapped — and the
@@ -261,6 +269,7 @@ sealed class QueryRecorder(
             ScryQueryOutcome.Success => "success",
             ScryQueryOutcome.Rejected => "rejected",
             ScryQueryOutcome.Failed => "failed",
+            ScryQueryOutcome.Denied => "denied",
             _ => "canceled"
         };
 

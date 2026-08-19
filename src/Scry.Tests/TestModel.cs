@@ -460,6 +460,29 @@ public sealed class VisibleAssetsOnlyPolicy :
         source.Where(_ => _.Name != "Trailer");
 }
 
+/// <summary>
+/// Never attached by default. Denies the trailer, which is also the row
+/// <see cref="VisibleAssetsOnlyPolicy"/> hides — so registering both proves a row already hidden is
+/// never one a denial is reported for.
+/// </summary>
+public sealed class FourWheeledVehiclesOnlyPolicy :
+    IReturnablePolicy<Vehicle>
+{
+    public IQueryable<Vehicle> Filter(IQueryable<Vehicle> source, ScryPolicyContext context) =>
+        source.Where(_ => _.Wheels == 4);
+}
+
+/// <summary>
+/// The inverse: denies the van, which <see cref="VisibleAssetsOnlyPolicy"/> allows. The one row left
+/// visible being the one it denies is what makes a denial reportable at all.
+/// </summary>
+public sealed class TwoWheeledVehiclesOnlyPolicy :
+    IReturnablePolicy<Vehicle>
+{
+    public IQueryable<Vehicle> Filter(IQueryable<Vehicle> source, ScryPolicyContext context) =>
+        source.Where(_ => _.Wheels == 2);
+}
+
 public sealed class TestContext(DbContextOptions<TestContext> options) :
     DbContext(options)
 {

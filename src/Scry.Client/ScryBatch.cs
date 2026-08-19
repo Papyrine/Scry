@@ -130,7 +130,9 @@ public sealed class ScryBatch
         completion.SetException(
             result.StaleClient
                 ? new ScryStaleClientException(error)
-                : new ScryRequestException(result.Status, error));
+                : result.Status == 403
+                    ? new ScryPermissionException(error)
+                    : new ScryRequestException(result.Status, error));
     }
 
     void Fault(Exception exception)

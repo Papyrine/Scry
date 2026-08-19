@@ -238,6 +238,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         // after it describe those deduplicated values and are held back with it.
         var distinct = false;
         List<QueryOp> afterDistinct = [];
+        // What the denied-row probe replays over a root carrying only the policies that hide, to ask
+        // whether one that fails the request instead denied a row this query would otherwise have read.
+        var probeSteps = new ProbeSteps();
 
         foreach (var op in request.Pipeline)
         {
@@ -257,7 +260,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                     break;
                 case WhereOp where:
                     tailIsOrdered = false;
-                    query = Apply(query, "Where", builder.BuildPredicate(where.Predicate, elementType));
+                    var filter = builder.BuildPredicate(where.Predicate, elementType);
+                    probeSteps.Where(filter);
+                    query = Apply(query, "Where", filter);
                     break;
                 case ReverseOp:
                     // The declared ordering no longer describes the rows, so a keyset cursor cannot
@@ -272,6 +277,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                     afterDistinct.Add(deduplicated);
                     break;
                 case SkipOp or TakeOp when distinct:
+                    probeSteps.Stop();
                     afterDistinct.Add(op);
                     break;
                 case OrderByOp orderBy:
@@ -287,11 +293,16 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 case SkipOp skip:
                     sawSkipOrTake = true;
                     tailIsOrdered = false;
+                    // Paging selects among the rows that matched, so nothing after it says which rows
+                    // the query asked for: the probe keeps the filters written before it and asks about
+                    // the unpaged set, which is the set a policy denying a row would have hidden from.
+                    probeSteps.Stop();
                     query = ApplyPaging(query, "Skip", skip.Count);
                     break;
                 case TakeOp take:
                     sawSkipOrTake = true;
                     tailIsOrdered = false;
+                    probeSteps.Stop();
                     query = ApplyPaging(query, "Take", take.Count);
                     break;
                 case OfTypeOp narrowed:
@@ -306,6 +317,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
                     // The derived type's own policies apply on top of the base's. Both narrow, so the
                     // rows that survive are those a direct query of either source would have returned.
+                    probeSteps.Narrow(derived, appliedPolicies);
                     query = ApplyPolicies(query, derived, appliedPolicies, db, scope);
                     appliedPolicies = derived.Policies.Count;
                     elementType = derived.ClrType;
@@ -313,6 +325,8 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
                 case SelectManyOp flatten:
                     tailIsOrdered = false;
+                    // The rows are the collection's from here on, not the root's.
+                    probeSteps.Stop();
                     var (collection, child) = builder.BuildCollectionSelector(flatten.Path, elementType);
                     query = query.Provider.CreateQuery(
                         CallQueryable(
@@ -358,7 +372,16 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         // all applied here rather than each terminal repeating it.
         if (TerminalPredicate(terminal) is { } predicate)
         {
-            query = Apply(query, "Where", builder.BuildPredicate(predicate, elementType));
+            var narrowing = builder.BuildPredicate(predicate, elementType);
+            probeSteps.Where(narrowing);
+            query = Apply(query, "Where", narrowing);
+        }
+
+        // Before anything executes: a denied row must not reach a result, and a folding terminal would
+        // leave nothing to inspect after one had. Skipped for a SQL preview, which runs nothing.
+        if (!buildOnly)
+        {
+            ProbeDeniedRows(source, probeSteps, terminal, db, scope);
         }
 
         if (terminal is PageOp paging)
@@ -648,14 +671,14 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         NavigationPolicyProbe.Run(schema, db.Model, name => ResolveSource(name, db, scope), db);
     }
 
-    IQueryable ResolveSource(string name, DbContext db, CallScope scope)
+    IQueryable ResolveSource(string name, DbContext db, CallScope scope, Func<PolicyUse, bool>? include = null)
     {
         if (!schema.TryGetSource(name, out var source))
         {
             throw new ScryValidationException($"Unknown source '{name}'.");
         }
 
-        return ApplyPolicy(source.Resolve(db, scope.Services), source, db, scope);
+        return ApplyPolicy(source.Resolve(db, scope.Services), source, db, scope, include);
     }
 
     /// <summary>
@@ -786,8 +809,8 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// filter are those all of them allow. A policy declared on a base filters that base's rows, so the
     /// query is widened to the type the policy was written against and narrowed back afterwards.
     /// </summary>
-    static IQueryable ApplyPolicy(IQueryable query, ScrySource source, DbContext db, CallScope scope) =>
-        ApplyPolicies(query, source, 0, db, scope);
+    static IQueryable ApplyPolicy(IQueryable query, ScrySource source, DbContext db, CallScope scope, Func<PolicyUse, bool>? include = null) =>
+        ApplyPolicies(query, source, 0, db, scope, include);
 
     /// <summary>
     /// The same, for a query that already carries the first <paramref name="from"/> of the source's
@@ -795,7 +818,18 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// subclass leaves only the levels below the base still to apply — and a policy is a filter to
     /// apply once, not one to repeat per narrowing.
     /// </summary>
-    static IQueryable ApplyPolicies(IQueryable query, ScrySource source, int from, DbContext db, CallScope scope)
+    /// <remarks>
+    /// <paramref name="include"/> selects a subset of the chain, which is how the denied-row probe
+    /// builds the same query minus the policies that fail rather than hide: everything a caller may see
+    /// once the hiding policies have run. Null applies the whole chain, which is every real query.
+    /// </remarks>
+    static IQueryable ApplyPolicies(
+        IQueryable query,
+        ScrySource source,
+        int from,
+        DbContext db,
+        CallScope scope,
+        Func<PolicyUse, bool>? include = null)
     {
         if (source.Policies.Count == from)
         {
@@ -803,19 +837,75 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         }
 
         var context = new ScryPolicyContext(scope.Services, db, scope.RequestHeaders, scope.ResponseHeaders);
-        foreach (var policyType in source.Policies.Skip(from))
+        foreach (var use in source.Policies.Skip(from))
         {
-            var policy = scope.Services.GetService(policyType) ?? Activator.CreateInstance(policyType);
-            if (policy is null)
+            if (include is not null &&
+                !include(use))
             {
-                throw new($"Could not create policy '{policyType.Name}'.");
+                continue;
             }
 
-            var (entityType, filter) = policyFilters.GetOrAdd(policyType, PolicyFilter);
+            var policy = scope.Services.GetService(use.Policy) ?? Activator.CreateInstance(use.Policy);
+            if (policy is null)
+            {
+                throw new($"Could not create policy '{use.Policy.Name}'.");
+            }
+
+            var (entityType, filter) = policyFilters.GetOrAdd(use.Policy, PolicyFilter);
             query = (IQueryable)filter.Invoke(policy, [Retype(query, entityType), context])!;
         }
 
         return Retype(query, source.ClrType);
+    }
+
+    /// <summary>
+    /// Fails the request where a policy configured to error denied a row this query would otherwise
+    /// have read. Costs nothing where no policy in the chain says so, which is every query until a host
+    /// asks for one.
+    /// </summary>
+    static void ProbeDeniedRows(ScrySource source, ProbeSteps steps, QueryOp? terminal, DbContext db, CallScope scope)
+    {
+        // A single-row terminal answers with the row itself; everything else lists rows or folds them,
+        // and a policy can want a denial to fail one and not the other.
+        var position = terminal is FirstOp or SingleOp or LastOp
+            ? DeniedPosition.RootSingle
+            : DeniedPosition.RootList;
+
+        if (!steps.Sources(source).Any(_ => _.Policies.Any(policy => policy.Errors(position))))
+        {
+            return;
+        }
+
+        DeniedRowProbe.Ensure(
+            ProbeRoot(source, steps, use => !use.Errors(position), db, scope),
+            ProbeRoot(source, steps, include: null, db, scope),
+            db);
+    }
+
+    /// <summary>
+    /// Rebuilds the rows the query read over a root carrying only the policies <paramref name="include"/>
+    /// keeps, by replaying what the fold recorded.
+    /// </summary>
+    static IQueryable ProbeRoot(ScrySource source, ProbeSteps steps, Func<PolicyUse, bool>? include, DbContext db, CallScope scope)
+    {
+        var query = ApplyPolicy(source.Resolve(db, scope.Services), source, db, scope, include);
+        foreach (var step in steps.Recorded)
+        {
+            if (step.Where is { } predicate)
+            {
+                query = Apply(query, "Where", predicate);
+                continue;
+            }
+
+            // Narrowed exactly as the fold narrowed it, the same levels of the chain skipped as already
+            // applied, so the two builds differ in nothing but which policies they carry.
+            var derived = step.Narrow!;
+            query = query.Provider.CreateQuery(
+                CallQueryable("OfType", [derived.ClrType], query.Expression));
+            query = ApplyPolicies(query, derived, step.NarrowFrom, db, scope, include);
+        }
+
+        return query;
     }
 
     static (Type EntityType, MethodInfo Filter) PolicyFilter(Type policyType)

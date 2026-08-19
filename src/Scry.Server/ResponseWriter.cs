@@ -235,7 +235,7 @@ static class ResponseWriter
     {
         json.WriteStartObject();
         json.WriteString(error, message);
-        // Always 400 or 500 for a reported entry, so never the default that would omit it.
+        // Always 400, 403 or 500 for a reported entry, so never the default that would omit it.
         json.WriteNumber(status, entryStatus);
         if (stale)
         {

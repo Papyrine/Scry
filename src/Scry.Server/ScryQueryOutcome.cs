@@ -23,5 +23,13 @@ public enum ScryQueryOutcome
     /// A streamed read that ended before every row was delivered: canceled, or its consumer stopped
     /// reading.
     /// </summary>
-    Canceled
+    Canceled,
+
+    /// <summary>
+    /// Validated, but a row policy denied a row the query read and that policy fails the request
+    /// rather than hiding it. Recorded apart from a rejection because nothing about the query was
+    /// wrong — it asked for rows this caller may not have — and because a mode that discloses
+    /// existence is one worth being able to count.
+    /// </summary>
+    Denied
 }

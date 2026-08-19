@@ -5,7 +5,7 @@ public sealed class ScrySource(
     string name,
     Type clrType,
     SourceKind kind,
-    IReadOnlyList<Type> policies,
+    IReadOnlyList<PolicyUse> policies,
     Func<DbContext, IServiceProvider, IQueryable> resolve)
 {
     public string Name { get; } = name;
@@ -17,7 +17,7 @@ public sealed class ScrySource(
     /// policy declared on a base type is in the chain of every opted-in type deriving from it, so a
     /// subclass cannot shed the one its base carries, and where several apply all of them narrow.
     /// </summary>
-    public IReadOnlyList<Type> Policies { get; } = policies;
+    public IReadOnlyList<PolicyUse> Policies { get; } = policies;
 
     /// <summary>
     /// The <c>IAttachmentPolicy&lt;T&gt;</c> authorizing this source's attachment members, or null

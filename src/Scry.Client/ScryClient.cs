@@ -323,12 +323,7 @@ public sealed class ScryClient
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsByteArrayAsync(cancel);
-            if (ScryJson.TryDeserializeError(body) is { StaleClient: true, Error.Length: > 0 } error)
-            {
-                throw new ScryStaleClientException(error.Error);
-            }
-
-            throw new ScryRequestException((int) response.StatusCode, Encoding.UTF8.GetString(body));
+            throw ResponseFailure.Read((int) response.StatusCode, body);
         }
 
         await using var responseStream = await response.Content.ReadAsStreamAsync(cancel);
@@ -566,15 +561,8 @@ public sealed class ScryClient
             return ScryJson.DeserializeResponse(body);
         }
 
-        // A failure the server attributed to this client's schema stamp surfaces as the same exception
-        // the payload reader throws for an unknown enum value, so one catch covers every stale-client
-        // failure and can prompt a reload. SchemaStaleDetected has already been raised above.
-        if (ScryJson.TryDeserializeError(body) is { StaleClient: true, Error.Length: > 0 } error)
-        {
-            throw new ScryStaleClientException(error.Error);
-        }
-
-        throw new ScryRequestException((int) response.StatusCode, Encoding.UTF8.GetString(body));
+        // SchemaStaleDetected has already been raised above.
+        throw ResponseFailure.Read((int) response.StatusCode, body);
     }
 
     // Reached from ScryAttachment.OpenAsync, which a materialized row hands out; the transport is the
@@ -632,12 +620,7 @@ public sealed class ScryClient
             }
 
             var error = await response.Content.ReadAsByteArrayAsync(cancel);
-            if (ScryJson.TryDeserializeError(error) is {StaleClient: true, Error.Length: > 0} stale)
-            {
-                throw new ScryStaleClientException(stale.Error);
-            }
-
-            throw new ScryRequestException((int) response.StatusCode, Encoding.UTF8.GetString(error));
+            throw ResponseFailure.Read((int) response.StatusCode, error);
         }
         finally
         {
@@ -678,11 +661,6 @@ public sealed class ScryClient
             return ScryJson.DeserializeBatchResponse(body);
         }
 
-        if (ScryJson.TryDeserializeError(body) is {StaleClient: true, Error.Length: > 0} error)
-        {
-            throw new ScryStaleClientException(error.Error);
-        }
-
-        throw new ScryRequestException((int) response.StatusCode, Encoding.UTF8.GetString(body));
+        throw ResponseFailure.Read((int) response.StatusCode, body);
     }
 }

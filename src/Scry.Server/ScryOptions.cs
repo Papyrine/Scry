@@ -182,7 +182,7 @@ public sealed class ScryOptions(Type contextType)
 
     internal Dictionary<Type, Func<IServiceProvider, IQueryable>> PocoSources { get; } = [];
 
-    internal Dictionary<Type, Type> Policies { get; } = [];
+    internal Dictionary<Type, (Type Policy, DeniedRowHandling Handling)> Policies { get; } = [];
 
     /// <summary>Registers the data for a <c>[QueryablePoco]</c> source, resolved per request.</summary>
     public void AddPocoSource<T>(Func<IServiceProvider, IEnumerable<T>> factory)
@@ -201,7 +201,15 @@ public sealed class ScryOptions(Type contextType)
     /// </summary>
     public void AddPolicy<TEntity, TPolicy>()
         where TPolicy : IReturnablePolicy<TEntity> =>
-        Policies[typeof(TEntity)] = typeof(TPolicy);
+        AddPolicy<TEntity, TPolicy>(DeniedRowHandling.Default);
+
+    /// <summary>
+    /// The same, saying what the policy's denied rows produce rather than taking the hide-everywhere
+    /// default. The handling travels with this registration only: a base's policy keeps its own.
+    /// </summary>
+    public void AddPolicy<TEntity, TPolicy>(DeniedRowHandling handling)
+        where TPolicy : IReturnablePolicy<TEntity> =>
+        Policies[typeof(TEntity)] = (typeof(TPolicy), handling);
 
     internal Dictionary<Type, Type> AttachmentPolicies { get; } = [];
 
