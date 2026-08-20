@@ -18,7 +18,6 @@ public partial class App
     ScryIntrospection? introspection;
     SnippetExecutor? executor;
     IReadOnlyList<MetadataReference>? scryReferences;
-    IReadOnlyList<string>? completions;
     string? wireJson;
     string? resultJson;
     List<string>? resultColumns;
@@ -40,6 +39,9 @@ public partial class App
     string? error;
     bool editorReady;
     bool registered;
+    // Set once the schema is loaded and the editor's Roslyn providers are registered. Rendered as
+    // data-ready on the shell: the page can answer a completion from this point on.
+    bool ready;
 
     string themeMode = "system";
     bool resolvedDark;
@@ -416,6 +418,7 @@ public partial class App
             error = null;
             sqlText = null;
             var code = await editor.GetValue();
+            await EnsureCompiles(code);
             executor ??= SnippetExecutor.Create(introspection, scryReferences);
             var json = ScryJson.Serialize(executor.Translate(code));
 
@@ -460,6 +463,45 @@ public partial class App
         }
     }
 
+    /// <summary>
+    /// Throws unless the query compiles, so a query the editor has squiggled is refused rather than run.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="SnippetExecutor"/> strips a trailing collection terminal — arguments and all — before it
+    /// compiles anything. That is right for the wire, where a key selector shapes rows client-side and has
+    /// no representation at all, but it leaves nothing written inside <c>.ToDictionaryAsync(…)</c> ever
+    /// compiled: a missing key selector, a member the allow-list excludes, or plain nonsense would be
+    /// squiggled by the editor and then run perfectly happily, returning rows for a query that a real
+    /// client project would not build. Checked here against the text as written, so the two agree.
+    ///
+    /// Diagnosed on demand rather than read off the debounced pass behind the squiggles: that one is
+    /// best-effort by design — it may be mid-flight, superseded, or to have failed silently — and none of
+    /// those should be what decides whether a query runs. For the same reason the buttons stay enabled:
+    /// a refusal that names the error is worth more than one that greys out, and a background pass that
+    /// quietly died must not leave Run dead with it.
+    ///
+    /// Thrown rather than returned so it lands in the caller's existing catch, beside the compile failures
+    /// the executor raises for the code it does compile, and reads identically in the banner.
+    /// </remarks>
+    async Task EnsureCompiles(string code)
+    {
+        if (workspace is null)
+        {
+            return;
+        }
+
+        var errors = (await workspace.DiagnoseAsync(code))
+            .Where(_ => _.IsError)
+            .Select(_ => _.Message)
+            .Take(3)
+            .ToList();
+
+        if (errors.Count > 0)
+        {
+            throw new($"Could not compile the query: {string.Join("; ", errors)}");
+        }
+    }
+
     async Task Run()
     {
         if (introspection is null || scryReferences is null)
@@ -478,7 +520,15 @@ public partial class App
             sqlText = null;
             attachmentLinks = [];
             attachmentNotes.Clear();
+            // Cleared with the rest, so a run that never got as far as translating does not leave the
+            // panes showing the previous query's request and response under the error explaining that
+            // this one produced neither. Both are set again below the moment there is something to show,
+            // which keeps the wire request on screen for a query the *server* rejected — there the
+            // request is what the rejection is about.
+            wireJson = null;
+            resultJson = null;
             var code = await editor.GetValue();
+            await EnsureCompiles(code);
             executor ??= SnippetExecutor.Create(introspection, scryReferences);
             var request = executor.Translate(code);
             var json = ScryJson.Serialize(request);
@@ -547,6 +597,13 @@ public partial class App
     {
         editorReady = true;
 
+        // The dropdown offers what Roslyn resolved against the allow-listed schema, or nothing. Monaco's
+        // own fallback completes from the words already in the editor, which would have a query
+        // completing to its own text — "Query", "Where", "Employee" — wherever Roslyn has nothing to say,
+        // and an explorer whose claim is that completion *is* the allow-list should not mix one in. The
+        // option is set from JS because the typed one does not reach Monaco; see scry.js.
+        await JS.InvokeVoidAsync("scry.disableWordSuggestions");
+
         // Ctrl/Cmd+Enter runs the query from inside the editor.
         await editor.AddAction(new ActionDescriptor
         {
@@ -562,10 +619,9 @@ public partial class App
     }
 
     /// <summary>
-    /// Puts the caret at the end of the query. The completions now describe wherever the caret is, so text
-    /// that arrives without anyone typing it — the sample the page opens on, a shared link, an entry
-    /// picked out of the history — needs a caret put somewhere deliberate, or the list on screen would be
-    /// the one for the start of a query nobody is writing at the start of.
+    /// Puts the caret at the end of the query. Text that arrives without anyone typing it — the sample the
+    /// page opens on, a shared link, an entry picked out of the history — otherwise leaves the caret at the
+    /// very start, which is neither where the writing continues nor where IntelliSense has anything to say.
     /// </summary>
     async Task MoveCaretToEnd()
     {
@@ -627,8 +683,8 @@ public partial class App
         await BlazorMonaco.Languages.Global.RegisterCompletionItemProvider(JS, "csharp", provider);
         await BlazorMonaco.Languages.Global.RegisterHoverProviderAsync(JS, "csharp", ProvideHover);
 
-        // Surface completions immediately (and gives the tests a deterministic hook).
-        await Complete();
+        ready = true;
+        StateHasChanged();
     }
 
     async Task<CompletionList> ProvideCompletions(string modelUri, Position position, CompletionContext context)
@@ -747,144 +803,6 @@ public partial class App
         }
     }
 
-    CancellationTokenSource? completionsCts;
-
-    /// <summary>
-    /// Recomputes the pill list as the caret moves. The list describes the caret rather than the text as a
-    /// whole — that is what makes clicking a pill coherent, since what is offered is what belongs where it
-    /// would go. Debounced like the diagnostics above so holding an arrow key is one Roslyn pass and not
-    /// one per row, and a superseded run is dropped rather than allowed to overwrite a newer one.
-    /// </summary>
-    async Task OnCursorPositionChanged(CursorPositionChangedEvent _)
-    {
-        if (workspace is null)
-        {
-            return;
-        }
-
-        completionsCts?.Cancel();
-        var cts = completionsCts = new();
-
-        try
-        {
-            await Task.Delay(300, cts.Token);
-            await Complete(cts.Token);
-        }
-        catch
-        {
-            // Cancelled by a later move, which is the debounce working rather than a failure.
-        }
-    }
-
-    /// <summary>
-    /// Lists the completions available at the caret. Also the <em>Complete at cursor</em> button, which
-    /// asks for the same list on demand: the automatic path above is debounced and best-effort, so a
-    /// button that answers immediately is worth keeping.
-    /// </summary>
-    async Task Complete(CancellationToken cancel = default)
-    {
-        if (workspace is null)
-        {
-            return;
-        }
-
-        try
-        {
-            var text = await editor.GetValue();
-            var position = await editor.GetPosition();
-            // No caret at all (the editor has never been focused) reads as the end of the text, which is
-            // where a caret that has never been placed would sit once the user starts typing. The text and
-            // the caret are two round trips, so an edit landing between them can put the caret past the end
-            // of what was read — clamped rather than handed to Roslyn as an out-of-range position.
-            var caret = position is null
-                ? text.Length
-                : Math.Clamp(ToOffset(text, position.LineNumber, position.Column), 0, text.Length);
-            var items = await workspace.CompleteAsync(text, caret);
-            if (cancel.IsCancellationRequested)
-            {
-                return;
-            }
-
-            completions = items.Select(_ => _.Label).ToList();
-            StateHasChanged();
-        }
-        catch (Exception exception)
-        {
-            error = exception.Message;
-        }
-    }
-
-    /// <summary>
-    /// Types a completion into the query at the caret. A selection is overwritten; so is the partial word
-    /// the caret is sitting in, so that picking <c>Active</c> after typing <c>_.Ac</c> reads
-    /// <c>_.Active</c> rather than <c>_.AcActive</c>. Focus returns to the editor, because the next thing
-    /// after picking a member is carrying on typing.
-    /// </summary>
-    async Task Insert(string label)
-    {
-        var selection = await editor.GetSelection();
-        if (selection is null)
-        {
-            return;
-        }
-
-        var range = new BlazorMonaco.Range
-        {
-            StartLineNumber = selection.StartLineNumber,
-            StartColumn = selection.StartColumn,
-            EndLineNumber = selection.EndLineNumber,
-            EndColumn = selection.EndColumn
-        };
-
-        await ExtendOverTypedPrefix(range);
-
-        var edit = new IdentifiedSingleEditOperation
-        {
-            Range = range,
-            Text = label,
-            // Leaves the caret after the inserted text rather than in front of it.
-            ForceMoveMarkers = true
-        };
-
-        // The cursor state is left to ForceMoveMarkers above; the cast picks between two overloads that
-        // are both willing to take a null there.
-        await editor.ExecuteEdits("scry-completion", [edit], (List<Selection>?) null);
-        await editor.Focus();
-    }
-
-    /// <summary>
-    /// Widens an insertion point back over the word already typed in front of it, so the completion
-    /// overwrites that word instead of being appended to it.
-    /// </summary>
-    /// <remarks>
-    /// The word comes from Monaco's own <c>getWordUntilPosition</c> rather than from a scan here, so what
-    /// counts as one is whatever the editor already treats as one — the same answer its inline dropdown
-    /// replaces.
-    ///
-    /// Only an empty selection is widened: a selection is an explicit statement of what to replace.
-    /// </remarks>
-    async Task ExtendOverTypedPrefix(BlazorMonaco.Range range)
-    {
-        if (range.StartLineNumber != range.EndLineNumber ||
-            range.StartColumn != range.EndColumn)
-        {
-            return;
-        }
-
-        var model = await editor.GetModel();
-        var word = await model.GetWordUntilPosition(
-            new()
-            {
-                LineNumber = range.StartLineNumber,
-                Column = range.StartColumn
-            });
-
-        if (word is {Word.Length: > 0})
-        {
-            range.StartColumn = word.StartColumn;
-        }
-    }
-
     async Task<List<string>> LoadHistory()
     {
         try
@@ -917,11 +835,24 @@ public partial class App
         }
     }
 
+    // Removal is by text rather than by index: entries are deduped on exactly that, so it identifies
+    // one, and it survives the list having moved under a render the click raced.
+    Task RemoveHistory(string query)
+    {
+        history.Remove(query);
+        return SaveHistory();
+    }
+
+    Task ClearHistory()
+    {
+        history.Clear();
+        return SaveHistory();
+    }
+
     async Task LoadQuery(string query)
     {
         await editor.SetValue(query);
         await MoveCaretToEnd();
-        await Complete();
     }
 
     /// <summary>

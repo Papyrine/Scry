@@ -49,7 +49,12 @@
     </button>
 </header>
 
-<main class="shell">
+@*
+    data-ready lands once the schema has loaded and the editor's Roslyn providers are registered — the
+    point at which the page can answer a completion. Nothing renders differently for it; it is the
+    machine-readable half of the "Loading schema…" hint below, and what a browser test waits on.
+*@
+<main class="shell" data-ready="@(ready ? "true" : null)">
 
 <p class="tagline">
     Write LINQ against the allow-listed sources, run it, and inspect the wire request. Completion is
@@ -72,8 +77,7 @@
 
 <div class="editor-card">
     <StandaloneCodeEditor @ref="editor" Id="scry-editor" CssClass="scry-editor" ConstructionOptions="EditorOptions"
-                          OnDidInit="OnEditorInit" OnDidChangeModelContent="OnContentChanged"
-                          OnDidChangeCursorPosition="OnCursorPositionChanged" />
+                          OnDidInit="OnEditorInit" OnDidChangeModelContent="OnContentChanged" />
     <div class="actions">
         <button class="btn btn-primary" data-testid="run" @onclick="Run" disabled="@(introspection is null)"
                 title="Translate the query to a wire request and run it against the server (Ctrl+Enter).">
@@ -81,8 +85,6 @@
                 <path d="M8 5v14l11-7z" />
             </svg>Run
         </button>
-        <button class="btn" data-testid="complete" @onclick="() => Complete()" disabled="@(workspace is null)"
-                title="Lists every C# completion available at the cursor — the same Roslyn engine as the inline IntelliSense dropdown, shown here as a list. The list follows the cursor on its own; this asks for it now.">Complete at cursor</button>
         @if (introspection?.SqlPreview == true)
         {
             <button class="btn" data-testid="sql-preview" @onclick="ShowSql"
@@ -97,33 +99,26 @@
     </div>
 </div>
 
-@*
-    The completions belong to the editor above them rather than to the output: they describe the caret,
-    they are what typing into that editor changes, and clicking one types into it. So they sit with the
-    query in both layouts — directly under it, and above the history, which is the older thing.
-*@
-@if (completions is not null)
-{
-    <h3>Completions</h3>
-    <ul data-testid="completions">
-        @foreach (var item in completions)
-        {
-            @* Each pill types itself into the editor, so the list is a way into the schema and not only a view of it. *@
-            <li>
-                <button type="button" @onclick="() => Insert(item)"
-                        title="Insert @item into the query at the cursor.">@item</button>
-            </li>
-        }
-    </ul>
-}
-
 @if (history.Count > 0)
 {
-    <h3>History</h3>
+    <div class="pane-head">
+        <h3>History</h3>
+        <button class="icon-btn" data-testid="history-clear" @onclick="ClearHistory"
+                title="Forget every remembered query. The history is this browser's alone — nothing is sent to the server.">Clear</button>
+    </div>
     <ul data-testid="history">
         @foreach (var item in history)
         {
-            <li><a href="#" @onclick:preventDefault @onclick="() => LoadQuery(item)">@item</a></li>
+            @*
+                The remove sits beside the entry rather than on it: the entry is the link that loads the
+                query back into the editor, and a button inside an anchor is not markup a browser has to
+                make sense of.
+            *@
+            <li>
+                <a href="#" @onclick:preventDefault @onclick="() => LoadQuery(item)">@item</a>
+                <button class="icon-btn history-remove" data-testid="history-remove" title="Forget this query."
+                        aria-label="Forget this query" @onclick="() => RemoveHistory(item)">×</button>
+            </li>
         }
     </ul>
 }

@@ -1,5 +1,15 @@
 // Small helpers the explorer calls from C#. Kept tiny and dependency-free.
 window.scry = {
+    // Turn off Monaco's word-based suggestions, so the completion dropdown offers the allow-listed
+    // schema or nothing rather than mixing in the words already sitting in the editor. Set from here
+    // rather than through the editor's construction options because Monaco reads a string enum
+    // ('off' | 'currentDocument' | ...) and BlazorMonaco types the option as a bool, which Monaco's
+    // validator discards in favour of the default — leaving the provider quietly on.
+    disableWordSuggestions: function () {
+        for (const editor of monaco.editor.getEditors()) {
+            editor.updateOptions({ wordBasedSuggestions: 'off' });
+        }
+    },
     // Whether the OS currently prefers a dark color scheme (used to resolve the "system" theme).
     systemDark: function () {
         try {

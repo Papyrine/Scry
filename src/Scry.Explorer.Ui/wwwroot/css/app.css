@@ -358,13 +358,13 @@ pre {
 }
 
 /*
-  The editor renders => as two characters (Monaco ships with ligatures off); the panes and pills that
-  echo the same query must agree, and a ligature font in the mono stack would fuse it into an arrow.
+  The editor renders => as two characters (Monaco ships with ligatures off); the panes and the history
+  entries that echo the same query must agree, and a ligature font in the mono stack would fuse it into
+  an arrow.
 */
 pre,
 .scalar,
-ul[data-testid="history"] a,
-ul[data-testid="completions"] button {
+ul[data-testid="history"] a {
     font-variant-ligatures: none;
 }
 
@@ -429,7 +429,7 @@ table[data-testid="result-table"] tbody tr:hover td {
     border-radius: 8px;
 }
 
-/* History and completions */
+/* History */
 
 ul[data-testid="history"] {
     list-style: none;
@@ -442,6 +442,7 @@ ul[data-testid="history"] {
 
 ul[data-testid="history"] li {
     display: flex;
+    gap: 0.25rem;
     min-width: 0;
 }
 
@@ -465,44 +466,22 @@ ul[data-testid="history"] a:hover {
     border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 
-ul[data-testid="completions"] {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-}
-
-ul[data-testid="completions"] li {
-    display: flex;
-}
-
 /*
-  Each completion is a button: clicking it types its text into the editor. Styled as the pill it was
-  before it became one, and hovers like the history entries above it — the two lists do the same kind
-  of thing, in that both put text into the query.
+  The per-entry remove. Sized to the glyph and unshrinkable, so it stays beside the entry it removes
+  rather than aligning into a column at the right margin, where the cross for a short entry would sit
+  a long way from it. It borrows .icon-btn for the hover and focus treatment and overrides only the
+  glyph's metrics; the hover color has to be redeclared after .icon-btn:hover to win, the two selectors
+  being of equal weight.
 */
-ul[data-testid="completions"] button {
-    padding: 0.18rem 0.62rem;
-    font-family: var(--mono);
-    font-size: 0.76rem;
-    line-height: 1.5;
-    color: var(--text);
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    cursor: pointer;
+.history-remove {
+    flex: none;
+    padding: 0 0.55rem;
+    font-size: 1rem;
+    line-height: 1;
 }
 
-ul[data-testid="completions"] button:hover {
-    color: var(--accent);
-    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-}
-
-ul[data-testid="completions"] button:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
+.history-remove:hover {
+    color: light-dark(#d03a42, #e07777);
 }
 
 /*

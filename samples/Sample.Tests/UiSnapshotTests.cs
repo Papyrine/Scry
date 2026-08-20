@@ -55,24 +55,21 @@ public class UiSnapshotTests :
         await page.WaitForSelectorAsync(".monaco-editor", 30);
 
         // The action buttons carry explanatory tooltips.
-        var completeTooltip = await page.Locator("[data-testid='complete']").GetAttributeAsync("title");
-        Assert.That(completeTooltip, Does.Contain("IntelliSense"));
+        var runTooltip = await page.Locator("[data-testid='run']").GetAttributeAsync("title");
+        Assert.That(runTooltip, Does.Contain("Ctrl+Enter"));
     }
 
     // Snapshots the explorer's own rendered markup (the App.razor chrome: heading, action bar, and
-    // the conditional result panes) as a regression guard on the page structure. Monaco's editor DOM
-    // and the Roslyn completion list are non-deterministic (dynamic ids, engine-ordered items), so
-    // both are reduced to their host element before the snapshot — leaving exactly the markup the
-    // component itself emits.
+    // the conditional result panes) as a regression guard on the page structure. Monaco's editor DOM is
+    // non-deterministic (dynamic ids, measure spans), so it is reduced to its host element before the
+    // snapshot — leaving exactly the markup the component itself emits.
     [Test]
     public async Task ExplorerShellMarkup()
     {
         var page = await NewPageAsync();
-        await page.GotoAsync($"{BaseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
-        // Wait for the schema to load so the fully-initialised shell (enabled buttons, no "Loading
-        // schema…") is what gets captured, then strip the volatile inner content.
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+        // data-ready means the fully-initialised shell (enabled buttons, no "Loading schema…") is what
+        // gets captured, rather than one still filling in.
+        await page.GoToExplorerAsync(BaseUrl);
 
         var markup = await page.EvaluateAsync<string>(
             """
@@ -90,13 +87,6 @@ public class UiSnapshotTests :
                         }
                     }
                     editor.setAttribute('class', 'scry-editor');
-                }
-
-                // The completion list is Roslyn output (engine-ordered); keep the container, drop the
-                // items — the items themselves are asserted by ExplorerCompletion.
-                const completions = app.querySelector("[data-testid='completions']");
-                if (completions) {
-                    completions.textContent = '';
                 }
 
                 return app.innerHTML;
@@ -130,22 +120,56 @@ public class UiSnapshotTests :
         Assert.That(value, Is.EqualTo("Query"), "typed text should reach the editor model");
     }
 
-    // Proves Roslyn runs in the browser and completes against the introspected schema: the explorer
-    // auto-runs completion for "Query.Employee.Where(_ => _." on load and should offer Employee members.
+    // Proves Roslyn runs in the browser and completes against the introspected schema: the explorer opens
+    // on "Query.Employee.Where(_ => _." with the caret at the end of it, so asking for the dropdown there
+    // offers Employee members. Which members are offered is asserted exhaustively, and far faster, by
+    // Scry.Explorer.Tests — what this adds is that the same engine answers inside WASM.
     [Test]
     public async Task ExplorerCompletion()
     {
         var page = await NewPageAsync();
-        await page.GotoAsync($"{BaseUrl}/scry");
+        await page.GoToExplorerAsync(BaseUrl);
 
-        // Roslyn init + first completion in the WASM interpreter is slow on a cold load.
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
-        var items = await page.Locator("[data-testid='completions'] li").AllInnerTextsAsync();
+        // Alphabetically first, so it is on screen whatever the virtualized widget scrolled to.
+        Assert.That(await page.SuggestAsync(), Does.Contain("Active"));
 
-        Assert.That(items, Does.Contain("Active"));
-        Assert.That(items, Does.Contain("Name"));
-        Assert.That(items, Does.Contain("Status"));
-        Assert.That(items, Does.Contain("Manager"));
+        // A member further down the list, reached the way a user reaches it: by typing enough of it that
+        // the dropdown narrows to it. See SuggestAsync for why the list cannot simply be read whole.
+        await page.SetEditorValueAsync("Query.Employee.Where(_ => _.Stat");
+        Assert.That(await page.SuggestAsync(), Does.Contain("Status"));
+    }
+
+    // Word-based suggestions are off, so the dropdown offers the allow-listed schema or nothing. Monaco's
+    // own fallback provider completes from the words already in the editor, which would have the query
+    // completing to its own text wherever Roslyn has nothing to say — a list that looks like a schema and
+    // is not one. Worth a browser test because the option is a bool crossing into a Monaco that now takes
+    // a string enum there: it would stop taking effect silently rather than fail to compile.
+    [Test]
+    public async Task ExplorerOffersNoWordBasedSuggestions()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await page.SetEditorValueAsync("""Query.Employee.Where(_ => _.Name == "Emplo")""");
+
+        // Inside the string literal, just past "Emplo". Roslyn offers nothing there, and "Employee" is in
+        // the text a few characters to the left, so anything offered came from the word-based provider.
+        await page.EvaluateAsync(
+            "() => monaco.editor.getEditors()[0].setPosition({ lineNumber: 1, column: 43 })");
+        await page.EvaluateAsync(
+            """
+            () => {
+                const editor = monaco.editor.getEditors()[0];
+                editor.focus();
+                editor.trigger('test', 'editor.action.triggerSuggest', {});
+            }
+            """);
+
+        // A negative, so it is asserted after giving the dropdown every chance to appear rather than on
+        // the instant the trigger was sent.
+        await Task.Delay(2000);
+
+        Assert.That(await page.SuggestionsAsync(), Is.Empty);
     }
 
     // Regression guard for the class of failure where a Microsoft.CodeAnalysis (Roslyn) or runtime upgrade
@@ -154,7 +178,7 @@ public class UiSnapshotTests :
     // real browser can catch this. Roslyn 5.6.0 regressed here: its completion path tripped a fatal
     // StackOverflowException (infinite System.Threading.Volatile.ReadBarrier recursion) that killed the WASM
     // runtime, so completions never rendered — and every other Explorer test failed only as an opaque 90s
-    // "waiting for completions" timeout. This test watches the browser console for a fatal unhandled exception
+    // timeout on a page that never became ready. This test watches the browser console for a fatal exception
     // and fails FAST with a message that names the cause. See the pin note in src/Directory.Packages.props.
     [Test]
     public async Task ExplorerCompletionDoesNotCrashWasmRuntime()
@@ -191,8 +215,11 @@ public class UiSnapshotTests :
         await page.GotoAsync($"{BaseUrl}/scry");
 
         // Race the two outcomes so a crash is reported in seconds (with a descriptive message) instead of a
-        // blind 90s wait: either the completion list renders (runtime healthy) or a fatal error is logged.
+        // blind 90s wait: either the dropdown renders (runtime healthy) or a fatal error is logged. The
+        // trigger is re-sent every round rather than once, because the page has to boot far enough to have
+        // an editor to send it to — and the crash being watched for can land before it ever does.
         var deadline = DateTime.UtcNow.AddSeconds(90);
+        IReadOnlyList<string> items = [];
         while (DateTime.UtcNow < deadline)
         {
             if (fatal.Count > 0)
@@ -203,7 +230,27 @@ public class UiSnapshotTests :
                     "completion on the mono-wasm interpreter. See the pin note in src/Directory.Packages.props.");
             }
 
-            if (await page.Locator("[data-testid='completions'] li").CountAsync() > 0)
+            await page.EvaluateAsync(
+                """
+                () => {
+                    if (typeof monaco === 'undefined') {
+                        return;
+                    }
+
+                    const editor = monaco.editor.getEditors()[0];
+                    if (!editor) {
+                        return;
+                    }
+
+                    editor.focus();
+                    editor.trigger('test', 'editor.action.triggerSuggest', {});
+                }
+                """);
+
+            // The signal is a member only the schema knows about, rather than merely an open dropdown:
+            // what is being proved is that Roslyn answered, and a widget can open without it having.
+            items = await page.SuggestionsAsync();
+            if (items.Contains("Active"))
             {
                 break;
             }
@@ -212,45 +259,42 @@ public class UiSnapshotTests :
         }
 
         // The runtime is alive AND completion produced results against the introspected schema.
-        var items = await page.Locator("[data-testid='completions'] li").AllInnerTextsAsync();
         Assert.That(fatal, Is.Empty, $"fatal WASM runtime error(s): {string.Join(" || ", fatal)}");
-        Assert.That(items, Does.Contain("Name"), "in-browser Roslyn completion returned no schema members");
+        Assert.That(items, Does.Contain("Active"), "in-browser Roslyn completion returned no schema members");
     }
 
     // Full terminal support: the Scry terminal operators are discoverable via IntelliSense — completing
-    // against the queryable itself (not a lambda member) offers ToListAsync/FirstAsync/etc.
+    // against the queryable itself (not a lambda member) offers ToListAsync/FirstAsync/etc. Each group is
+    // asked for behind the prefix a user would have typed to reach it, which is also what keeps the
+    // asserted names inside the dozen rows the widget actually renders.
     [Test]
     public async Task ExplorerCompletesTerminals()
     {
         var page = await NewPageAsync();
-        await page.GotoAsync($"{BaseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+        await page.GoToExplorerAsync(BaseUrl);
 
-        await page.SetEditorValueAsync("Query.Employee.");
-        await page.Locator("[data-testid='complete']").ClickAsync();
-
-        await page.WaitForFunctionAsync(
-            "() => Array.from(document.querySelectorAll(\"[data-testid='completions'] li\")).some(li => li.textContent === 'ToListAsync')",
-            null, new() { Timeout = 30_000 });
-        var items = await page.Locator("[data-testid='completions'] li").AllInnerTextsAsync();
+        await page.SetEditorValueAsync("Query.Employee.To");
+        var items = await page.SuggestAsync();
 
         Assert.That(items, Does.Contain("ToListAsync"));
         Assert.That(items, Does.Contain("ToArrayAsync"));
         Assert.That(items, Does.Contain("ToDictionaryAsync"));
-        Assert.That(items, Does.Contain("FirstAsync"));
-        Assert.That(items, Does.Contain("CountAsync"));
+
+        await page.SetEditorValueAsync("Query.Employee.First");
+        Assert.That(await page.SuggestAsync(), Does.Contain("FirstAsync"));
+
+        await page.SetEditorValueAsync("Query.Employee.Count");
+        Assert.That(await page.SuggestAsync(), Does.Contain("CountAsync"));
     }
 
-    // The completion pills are buttons, not labels: clicking one types its text into the query at the
-    // caret — which is what makes the list a way into the schema rather than only a view of it.
+    // Accepting a suggestion types it where the caret is. The range Monaco replaces is the one the
+    // provider handed it, computed from the caret offset rather than from the end of the text, so this is
+    // an assertion about our own code and not about Monaco's.
     [Test]
-    public async Task ExplorerInsertsACompletionAtTheCursor()
+    public async Task ExplorerAcceptsASuggestionAtTheCursor()
     {
         var page = await NewPageAsync();
-        await page.GotoAsync($"{BaseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+        await page.GoToExplorerAsync(BaseUrl);
 
         await page.SetEditorValueAsync("Query.Employee.Where(_ => _.)");
 
@@ -259,53 +303,42 @@ public class UiSnapshotTests :
         await page.EvaluateAsync(
             "() => monaco.editor.getEditors()[0].setPosition({ lineNumber: 1, column: 29 })");
 
-        await page.Locator("[data-testid='completions'] button:text-is('Active')").ClickAsync();
+        await page.SuggestAsync();
+        // Whichever member the dropdown focused rather than a named one: what is under test is where the
+        // text lands, not which suggestion Monaco ranks first.
+        var member = await page.FocusedSuggestionAsync();
+        await page.AcceptSuggestionAsync();
 
         var value = await page.EvaluateAsync<string>("() => monaco.editor.getEditors()[0].getValue()");
-        Assert.That(value, Is.EqualTo("Query.Employee.Where(_ => _.Active)"));
+        Assert.That(value, Is.EqualTo($"Query.Employee.Where(_ => _.{member})"));
     }
 
-    // The list is the one for the caret rather than for the end of the text, and it follows the caret as
-    // it moves. Without that the two halves of the panel disagree: it would offer an Employee member while
-    // the caret sat in front of "Query", and clicking it would type that member there.
+    // The completion is the one for the caret rather than for the end of the text — the provider is handed
+    // a line/column and has to resolve it to an offset in the whole document. Getting that wrong would put
+    // the suggestions for one part of the query in front of a caret sitting in another.
     [Test]
     public async Task ExplorerCompletesAtTheCursorRatherThanTheEndOfTheQuery()
     {
         var page = await NewPageAsync();
-        await page.GotoAsync($"{BaseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+        await page.GoToExplorerAsync(BaseUrl);
 
-        // The page opens with the caret at the end of the sample query, which ends mid-expression on an
-        // Employee — so the members are what is offered.
-        var atEnd = await page.Locator("[data-testid='completions'] li").AllInnerTextsAsync();
-        Assert.That(atEnd, Does.Contain("ManagerId"));
-
-        // The start of the query is not a place an Employee member can be written, so the members go away.
-        // ManagerId rather than Status: Status is also an enum type, and a type name is in scope here.
+        // A finished query on both sides of the caret. At the end of this text an Employee member is not
+        // something that can be written at all, so offering one is only possible from the caret's own
+        // offset — which is the whole of what is being asserted.
+        await page.SetEditorValueAsync("Query.Employee.Where(_ => _.).Select(_ => _.Name)");
         await page.EvaluateAsync(
-            "() => monaco.editor.getEditors()[0].setPosition({ lineNumber: 1, column: 1 })");
-        await page.WaitForFunctionAsync(
-            "() => !Array.from(document.querySelectorAll(\"[data-testid='completions'] li\")).some(li => li.textContent === 'ManagerId')",
-            null,
-            new()
-            {
-                Timeout = 30_000
-            });
+            "() => monaco.editor.getEditors()[0].setPosition({ lineNumber: 1, column: 29 })");
 
-        var atStart = await page.Locator("[data-testid='completions'] li").AllInnerTextsAsync();
-        Assert.That(atStart, Does.Not.Contain("ManagerId"));
+        Assert.That(await page.SuggestAsync(), Does.Contain("Active"));
     }
 
-    // The same insert onto a partially typed name. The pill overwrites what was typed rather than being
-    // appended to it — clicking Active after typing "_.Ac" reads "_.Active", not "_.AcActive".
+    // The same accept onto a partially typed name. The replaced range starts at the word the caret is in,
+    // not at the caret, so accepting Active after typing "_.Ac" reads "_.Active" and not "_.AcActive".
     [Test]
-    public async Task ExplorerReplacesATypedPrefixWithTheCompletion()
+    public async Task ExplorerReplacesATypedPrefixWithTheSuggestion()
     {
         var page = await NewPageAsync();
-        await page.GotoAsync($"{BaseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+        await page.GoToExplorerAsync(BaseUrl);
 
         await page.SetEditorValueAsync("Query.Employee.Where(_ => _.Ac)");
 
@@ -313,7 +346,9 @@ public class UiSnapshotTests :
         await page.EvaluateAsync(
             "() => monaco.editor.getEditors()[0].setPosition({ lineNumber: 1, column: 31 })");
 
-        await page.Locator("[data-testid='completions'] button:text-is('Active')").ClickAsync();
+        // The prefix narrows the dropdown to the one member, so what Enter accepts is not in doubt.
+        Assert.That(await page.SuggestAsync(), Does.Contain("Active"));
+        await page.AcceptSuggestionAsync();
 
         var value = await page.EvaluateAsync<string>("() => monaco.editor.getEditors()[0].getValue()");
         Assert.That(value, Is.EqualTo("Query.Employee.Where(_ => _.Active)"));
@@ -325,9 +360,7 @@ public class UiSnapshotTests :
     public async Task ExplorerShowsSql()
     {
         var page = await NewPageAsync();
-        await page.GotoAsync($"{BaseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+        await page.GoToExplorerAsync(BaseUrl);
 
         await page.SetEditorValueAsync(
             """
@@ -352,9 +385,7 @@ public class UiSnapshotTests :
     public async Task ExplorerSharesAQueryByLink()
     {
         var page = await NewPageAsync();
-        await page.GotoAsync($"{BaseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+        await page.GoToExplorerAsync(BaseUrl);
 
         const string query =
             """
@@ -408,9 +439,7 @@ public class UiSnapshotTests :
     public async Task ExplorerExportsResults()
     {
         var page = await NewPageAsync();
-        await page.GotoAsync($"{BaseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+        await page.GoToExplorerAsync(BaseUrl);
 
         await page.SetEditorValueAsync(
             """
@@ -456,9 +485,7 @@ public class UiSnapshotTests :
     public async Task ExplorerOffersCsvOnlyForAFlatResult()
     {
         var page = await NewPageAsync();
-        await page.GotoAsync($"{BaseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+        await page.GoToExplorerAsync(BaseUrl);
 
         await page.SetEditorValueAsync(
             """
@@ -491,9 +518,7 @@ public class UiSnapshotTests :
     public async Task ExplorerFetchesAnAttachment()
     {
         var page = await NewPageAsync();
-        await page.GotoAsync($"{BaseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+        await page.GoToExplorerAsync(BaseUrl);
 
         await page.SetEditorValueAsync("Query.Department.OrderBy(_ => _.Name)");
         await page.Locator("[data-testid='run']").ClickAsync();
@@ -553,10 +578,7 @@ public class UiSnapshotTests :
     public async Task ExplorerInlineSuggestions()
     {
         var page = await NewPageAsync();
-        await page.GotoAsync($"{BaseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
-        // Wait for the schema to load (provider registered) — the auto-run completion list appears.
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+        await page.GoToExplorerAsync(BaseUrl);
 
         // Place the caret at the end (after "e.") and trigger IntelliSense via Monaco's API.
         await page.EvaluateAsync(
@@ -581,9 +603,7 @@ public class UiSnapshotTests :
     public async Task ExplorerRun()
     {
         var page = await NewPageAsync();
-        await page.GotoAsync($"{BaseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+        await page.GoToExplorerAsync(BaseUrl);
 
         // Set a complete query, then run it.
         await page.SetEditorValueAsync(
@@ -616,6 +636,150 @@ public class UiSnapshotTests :
         Assert.That(historyText, Does.Contain(".Where(_ => _.Active)"));
     }
 
+    // The executor strips a trailing collection terminal — arguments and all — before it compiles, so
+    // nothing written inside .ToDictionaryAsync(…) reaches its compiler. Every one of these is squiggled
+    // by the editor, and every one of them used to run: a wire request, rows, and an entry in the
+    // history, for a query a real client project would not build. Salary is the one that stings — it is
+    // [QueryIgnore]d, and the explorer's claim is that what completes is the allow-list.
+    [TestCase("Query.Employee.ToDictionaryAsync()", "takes 0 arguments")]
+    [TestCase("Query.Employee.ToDictionaryAsync(_ => _.Salary)", "'Salary'")]
+    [TestCase("Query.Employee.ToListAsync(totalGarbage, 42)", "'totalGarbage'")]
+    public async Task ExplorerRefusesAQueryThatDoesNotCompile(string query, string expected)
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await page.SetEditorValueAsync(query);
+        await page.Locator("[data-testid='run']").ClickAsync();
+
+        // The refusal names the error rather than grinding to a halt, and reads the same as one raised
+        // for code the executor did compile.
+        var error = page.Locator("[data-testid='error']");
+        await Assertions.Expect(error).ToContainTextAsync(expected, new() {Timeout = 60_000});
+        await Assertions.Expect(error).ToContainTextAsync("Could not compile the query");
+
+        // And it is total: nothing was translated, sent, or remembered.
+        await Assertions.Expect(page.Locator("[data-testid='wire']")).ToHaveCountAsync(0);
+        await Assertions.Expect(page.Locator("[data-testid='history']")).ToHaveCountAsync(0);
+    }
+
+    // Show SQL translates the same query through the same executor, so it is refused on the same terms.
+    [Test]
+    public async Task ExplorerRefusesToShowSqlForAQueryThatDoesNotCompile()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await page.SetEditorValueAsync("Query.Employee.ToDictionaryAsync()");
+        await page.Locator("[data-testid='sql-preview']").ClickAsync();
+
+        await Assertions.Expect(page.Locator("[data-testid='error']"))
+            .ToContainTextAsync("takes 0 arguments", new() {Timeout = 60_000});
+        await Assertions.Expect(page.Locator("[data-testid='sql']")).ToHaveCountAsync(0);
+    }
+
+    // A refused run clears the panes rather than leaving the last query's request and response sitting
+    // under an error saying this one produced neither.
+    [Test]
+    public async Task ExplorerClearsThePanesWhenARunIsRefused()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await RunQueryAsync(page, "Query.Employee.OrderBy(_ => _.Name).Select(_ => new { _.Name })", 1);
+        await Assertions.Expect(page.Locator("[data-testid='wire']")).ToHaveCountAsync(1);
+
+        await page.SetEditorValueAsync("Query.Employee.ToDictionaryAsync()");
+        await page.Locator("[data-testid='run']").ClickAsync();
+
+        await Assertions.Expect(page.Locator("[data-testid='error']"))
+            .ToContainTextAsync("takes 0 arguments", new() {Timeout = 60_000});
+        await Assertions.Expect(page.Locator("[data-testid='wire']")).ToHaveCountAsync(0);
+        await Assertions.Expect(page.Locator("[data-testid='result']")).ToHaveCountAsync(0);
+
+        // The run that did work is still in the history: a refusal forgets nothing.
+        await Assertions.Expect(page.Locator("[data-testid='history'] li")).ToHaveCountAsync(1);
+    }
+
+    // The gate is on compiling, not on the editor having last said so: a query that does compile still
+    // runs, and the added Roslyn pass does not swallow the run.
+    [Test]
+    public async Task ExplorerRunsAQueryThatCompiles()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await RunQueryAsync(page, "Query.Employee.ToDictionaryAsync(_ => _.Name)", 1);
+
+        await Assertions.Expect(page.Locator("[data-testid='error']")).ToHaveCountAsync(0);
+        Assert.That(
+            await page.Locator("[data-testid='wire']").InnerTextAsync(),
+            Does.Contain("\"root\"").And.Contain("Employee"));
+    }
+
+    // The history is the explorer's only state that outlives the tab, so it is the only thing a user can
+    // be stuck with. Removing one entry has to take the one aimed at, which is what a list ordered newest
+    // first and rendered on text alone makes worth proving.
+    [Test]
+    public async Task ExplorerForgetsOneHistoryEntry()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await RunQueryAsync(page, "Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name })", 1);
+        await RunQueryAsync(page, "Query.Department.OrderBy(_ => _.Name).Select(_ => new { _.Name })", 2);
+
+        // Newest first, so the Employee query is the second entry.
+        var entries = page.Locator("[data-testid='history'] li");
+        await entries.Nth(1).Locator("[data-testid='history-remove']").ClickAsync();
+
+        await Assertions.Expect(entries).ToHaveCountAsync(1);
+        Assert.That(await entries.InnerTextAsync(), Does.Contain("Query.Department"));
+        Assert.That(
+            await StoredHistoryAsync(page),
+            Does.Contain("Query.Department").And.Not.Contain("Query.Employee"));
+    }
+
+    [Test]
+    public async Task ExplorerClearsTheHistory()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await RunQueryAsync(page, "Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name })", 1);
+
+        await page.Locator("[data-testid='history-clear']").ClickAsync();
+
+        // The heading and the Clear button go with the last entry: an emptied history renders nothing,
+        // rather than an empty list under a heading offering to clear it again.
+        await Assertions.Expect(page.Locator("[data-testid='history']")).ToHaveCountAsync(0);
+        await Assertions.Expect(page.Locator("[data-testid='history-clear']")).ToHaveCountAsync(0);
+        Assert.That(await StoredHistoryAsync(page), Is.EqualTo("[]"));
+    }
+
+    /// <summary>
+    /// Runs <paramref name="query"/>, waiting until the history holds <paramref name="expectedEntries"/>.
+    /// </summary>
+    /// <remarks>
+    /// The history taking the query is what marks a run as having finished, and finished *successfully* —
+    /// it is written on a 2xx. Waiting on the result table instead would not do for the second run: the
+    /// first run's table is still on screen while this one is in flight, so the selector is satisfied
+    /// before anything has happened. The long timeout is for the first run on a page, which pays for
+    /// Roslyn compiling the snippet in the interpreter.
+    /// </remarks>
+    static async Task RunQueryAsync(IPage page, string query, int expectedEntries)
+    {
+        await page.SetEditorValueAsync(query);
+        await page.Locator("[data-testid='run']").ClickAsync();
+        await Assertions.Expect(page.Locator("[data-testid='history'] li"))
+            .ToHaveCountAsync(expectedEntries, new() {Timeout = 60_000});
+    }
+
+    // Read out of storage rather than off the rendered list, because the two can disagree: a removal
+    // that only dropped the entry from the render looks identical until a reload brings it back.
+    static Task<string> StoredHistoryAsync(IPage page) =>
+        page.EvaluateAsync<string>("() => localStorage.getItem('scry-history')");
+
     // A [BinaryTransfer] member never travels inside the JSON payload: the server diverts it to a raw
     // multipart part and leaves {"$bin":n} behind, which is a response the explorer cannot parse as
     // JSON at all. It reassembles one instead, so a diverted member reads as the base64 the same
@@ -625,9 +789,7 @@ public class UiSnapshotTests :
     public async Task ExplorerRunCarryingBinary()
     {
         var page = await NewPageAsync();
-        await page.GotoAsync($"{BaseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+        await page.GoToExplorerAsync(BaseUrl);
 
         await page.SetEditorValueAsync(
             """
@@ -660,9 +822,7 @@ public class UiSnapshotTests :
     public async Task ExplorerRunToList()
     {
         var page = await NewPageAsync();
-        await page.GotoAsync($"{BaseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+        await page.GoToExplorerAsync(BaseUrl);
 
         await page.SetEditorValueAsync("Query.Employee.ToList()");
         await page.Locator("[data-testid='run']").ClickAsync();
@@ -680,9 +840,7 @@ public class UiSnapshotTests :
     public async Task ExplorerRunCount()
     {
         var page = await NewPageAsync();
-        await page.GotoAsync($"{BaseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+        await page.GoToExplorerAsync(BaseUrl);
 
         await page.SetEditorValueAsync(
             """
@@ -707,9 +865,7 @@ public class UiSnapshotTests :
     public async Task ExplorerRunFirst()
     {
         var page = await NewPageAsync();
-        await page.GotoAsync($"{BaseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+        await page.GoToExplorerAsync(BaseUrl);
 
         await page.SetEditorValueAsync(
             """
@@ -806,9 +962,7 @@ public class UiSnapshotTests :
     public async Task ExplorerRunViaKeyboard()
     {
         var page = await NewPageAsync();
-        await page.GotoAsync($"{BaseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+        await page.GoToExplorerAsync(BaseUrl);
 
         await page.EvaluateAsync(
             """
@@ -830,9 +984,7 @@ public class UiSnapshotTests :
     public async Task ExplorerDiagnostics()
     {
         var page = await NewPageAsync();
-        await page.GotoAsync($"{BaseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
-        await page.WaitForSelectorAsync("[data-testid='completions'] li", 90);
+        await page.GoToExplorerAsync(BaseUrl);
 
         // 'Nope' is not a member of the Employee model → a diagnostic marker should appear.
         await page.SetEditorValueAsync("Query.Employee.Where(_ => _.Nope)");
