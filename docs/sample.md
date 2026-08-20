@@ -192,13 +192,18 @@ builder.Services
 
         // What a cached response belongs to. This server has sources whose answers depend on
         // who asked — the row policy above, and Department.Handbook's attachment check — and
-        // MapScry refuses to start without this. The sample has no sign-in, so there is one
-        // caller and one scope; a real app returns its tenant or its principal, and a client
+        // MapScry refuses to start without this. The sample has no sign-in, so the caller
+        // half is a constant; a real app returns its tenant or its principal, and a client
         // signing in as someone else is then never handed the previous one's rows.
-        _.CacheScope = _ => "sample";
+        //
+        // The grants version is the other half, and is the part worth copying. A response
+        // varies by what the caller is allowed to see, and QueryFreshness only watches the
+        // database — so a grant changing outside it would move nothing, and a cache holding
+        // the old rows would go on answering with rows the caller has since lost.
+        _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L31-L64' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L31-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Holiday` has no table, so its data is registered explicitly — see [POCO sources](server.md#poco-sources). `MaxPageSize` is lowered from the default 1000 to 200.
@@ -208,7 +213,7 @@ builder.Services
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L79-L81' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L84-L86' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: mapExplorer -->
@@ -223,7 +228,7 @@ app.MapScryExplorer(
         _.EnableGuard = _ => true;
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L119-L128' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L124-L133' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The sample always exposes the explorer so it can be browsed without setting an environment. A real app should leave the default Development-only guard in place, or replace it with an authorization check — see [Query explorer](explorer.md).
@@ -412,7 +417,7 @@ app.MapPost("/api/orders/{id:int}/touch", async (int id, SampleContext data) =>
     return Results.NoContent();
 });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L100-L118' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L105-L123' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The third has to be, or the change never reaches a query at all:
@@ -430,10 +435,20 @@ app.MapPost("/api/grants/{region}", (string region, bool allowed, RegionGrants g
     return Results.NoContent();
 });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L88-L98' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L93-L103' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Order.Revision` is `[QueryIgnore]`d — a version column is server machinery, not query surface, and clients never see it. `Sample.Tests\CachedPolicyPageTests.cs` drives the page and asserts those three counts, so the table above is checked rather than claimed.
+
+### It interacts with conditional requests, and the interaction bites
+
+This sample also has [304s](caching.md) turned on, and the two features meet badly unless the host says so. Revoking a grant writes nothing to the database, so Delta's freshness token cannot move; a caller holding an `ETag` is answered `304`, the query never runs, and it keeps rendering the rows it no longer has access to — however promptly `InvalidateScope` was called. So the grants version is part of the cache scope:
+
+```cs
+_.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
+```
+
+`ConditionalQueryTests.RevokingAGrantInvalidatesTheEtagWithoutAWrite` pins it, and fails without that version. The page additionally asks for its own rows with `Cache-Control: no-cache`, since a 304 is the server *not* deciding anything and the counter would never move.
 
 
 ## What the traffic looks like

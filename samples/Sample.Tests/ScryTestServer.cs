@@ -53,7 +53,7 @@ public sealed class ScryTestServer :
             if (conditionalRequests)
             {
                 options.UseDeltaFreshness<SampleContext>();
-                options.CacheScope = _ => "sample";
+                options.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
             }
         });
 

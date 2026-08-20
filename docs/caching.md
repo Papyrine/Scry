@@ -101,13 +101,18 @@ builder.Services
 
         // What a cached response belongs to. This server has sources whose answers depend on
         // who asked — the row policy above, and Department.Handbook's attachment check — and
-        // MapScry refuses to start without this. The sample has no sign-in, so there is one
-        // caller and one scope; a real app returns its tenant or its principal, and a client
+        // MapScry refuses to start without this. The sample has no sign-in, so the caller
+        // half is a constant; a real app returns its tenant or its principal, and a client
         // signing in as someone else is then never handed the previous one's rows.
-        _.CacheScope = _ => "sample";
+        //
+        // The grants version is the other half, and is the part worth copying. A response
+        // varies by what the caller is allowed to see, and QueryFreshness only watches the
+        // database — so a grant changing outside it would move nothing, and a cache holding
+        // the old rows would go on answering with rows the caller has since lost.
+        _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L31-L64' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L31-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `QueryFreshness` is what the rows are current as of. Null — the default — writes no `ETag` and answers nothing conditionally, so a server that never sets it behaves exactly as it did before any of this existed. Returning null from it skips one request rather than turning the feature off, so a source that cannot answer right now degrades to a full response.
@@ -316,6 +321,8 @@ A URL-borne query reads the freshness token before doing anything else. That rea
 **One token invalidates everything.** A write to anything at all moves the freshness token, so it empties the whole cache rather than the entries that write affected. Correct, and the reason the trade collapses on a write-heavy database.
 
 **Anything a response varies by must be in the scope.** A [row policy](policies.md) that scopes rows to a tenant, or an [attachment policy](attachments.md) that answers per principal, makes two identical queries produce different bytes for different callers, and the URL says nothing about which one asked. `CacheScope` is where that goes, and a server carrying such a source will not start without it. For the same reason, a client's own store has to be cleared on sign-in and sign-out.
+
+**The freshness token only watches the database.** A [cached row policy](policies.md#when-the-decision-is-too-expensive-for-sql) is the sharp case: its decisions usually depend on authorization data held somewhere else, so a grant changing moves no token at all. Invalidating the policy is then not enough — a caller holding an `ETag` is answered `304`, the query never runs, and it goes on rendering rows it no longer has access to. Put whatever the decisions depend on into `CacheScope`, as a version that moves when it does. The sample does exactly that, and the failure is worth seeing once: without it, revoking a region leaves the revoked rows on screen.
 
 **A 304 skips the policies.** Nothing runs on a hit — that is the point — so a response header a policy writes is absent on one. A client reading such a header has to treat its absence as "unchanged" rather than as "gone".
 

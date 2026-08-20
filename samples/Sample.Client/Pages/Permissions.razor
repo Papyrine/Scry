@@ -75,3 +75,13 @@ else
     <li><strong>Revise an order.</strong> Its revision moves past the watermark this caller was decided up to, so the next query decides that one row — the counter goes up by exactly one. A row inserted by any writer is correct on its first read the same way.</li>
     <li><strong>Revoke a region.</strong> The rows disappear and the counter jumps by the whole set: the caller's answers were thrown away and made again.</li>
 </ul>
+
+<p>
+    One thing this page does that the others do not: it asks for its rows with <code>Cache-Control:
+    no-cache</code>. Everywhere else a repeat query is answered <code>304</code> and that is the point
+    — but a 304 is the server not running the query, so nothing would be decided and this counter
+    would never move. The server side of the same problem is real rather than cosmetic: revoking a
+    grant writes nothing to the database, so the freshness token cannot notice it, and a caller
+    holding an ETag would keep its revoked rows. That is why the grants version is part of
+    <code>CacheScope</code>.
+</p>

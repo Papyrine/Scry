@@ -74,6 +74,55 @@ public class ConditionalQueryTests
         Assert.That(after, Is.Not.Null.And.Not.EqualTo(before));
     }
 
+    /// <summary>
+    /// The trap a cached row policy sets for conditional requests, and what keeps it shut. Revoking a
+    /// grant writes nothing to the database, so Delta's timestamp cannot move — and if that were all
+    /// the ETag carried, the caller would be answered 304 and go on rendering the rows it had just
+    /// lost, however promptly the policy itself was invalidated. The grants version is in
+    /// <c>CacheScope</c> for exactly this, so the old ETag stops standing for anything.
+    /// </summary>
+    [Test]
+    public async Task RevokingAGrantInvalidatesTheEtagWithoutAWrite()
+    {
+        var query = new ScryQuery(server.CreateScryClient());
+        using var http = server.CreateClient();
+
+        string? before = null;
+        var granted = await Orders(query)
+            .OnResponseHeaders(_ => before = _.ETag?.ToString())
+            .ToListAsync();
+
+        Assert.That(granted.Select(_ => _.Region), Does.Contain("South"));
+
+        using (var revoke = await http.PostAsync("/api/grants/South?allowed=false", content: null))
+        {
+            revoke.EnsureSuccessStatusCode();
+        }
+
+        string? after = null;
+        var revoked = await Orders(query)
+            .WithHeader("If-None-Match", before!)
+            .OnResponseHeaders(_ => after = _.ETag?.ToString())
+            .ToListAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(after, Is.Not.Null.And.Not.EqualTo(before), "the revoked caller's ETag still matched");
+            Assert.That(revoked.Select(_ => _.Region), Does.Not.Contain("South"));
+        });
+
+        // Restored, since this fixture's server outlives the test.
+        using var restore = await http.PostAsync("/api/grants/South?allowed=true", content: null);
+        restore.EnsureSuccessStatusCode();
+    }
+
+    static IQueryable<RegionRow> Orders(ScryQuery query) =>
+        query.Order
+            .OrderBy(_ => _.Region)
+            .Select(_ => new RegionRow(_.Region));
+
+    record RegionRow(string Region);
+
     [Test]
     public async Task DifferentQueriesGetDifferentEtags()
     {

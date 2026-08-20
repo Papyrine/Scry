@@ -559,6 +559,7 @@ app.MapScry("/api/query")
 - [ ] Every position set to `DeniedRowMode.Error` is one where revealing that hidden rows exist is acceptable — hiding is the non-disclosing default.
 - [ ] Every `[QueryableCollection]` opted into `DeniedCollectionMode.Hide` is one whose aggregates are meant to be answerable at all.
 - [ ] Every grant change that a cached row policy would decide differently calls `InvalidateRows` or `InvalidateScope` — nothing else can know.
+- [ ] Where conditional requests are on, whatever a cached policy's decisions depend on is in `CacheScope` — invalidating the policy does not move an `ETag`, so a caller holding one is answered `304` with the rows it no longer has access to.
 - [ ] The query endpoint requires authentication/authorization.
 - [ ] `MaxPageSize` matches what the UI actually needs.
 - [ ] The [explorer](explorer.md) is either unmapped or behind a real guard in production.

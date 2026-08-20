@@ -516,10 +516,21 @@ app.MapPost("/api/grants/{region}", (string region, bool allowed, RegionGrants g
     return Results.NoContent();
 });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L88-L98' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L93-L103' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Priming is `cache.Prime(scopeKey, rows, context)` alongside the write that produced them. `ScryPolicyCache` is registered as a singleton by `AddScry`, and is also `ScryProcessor.PolicyCache`.
+
+> [!WARNING]
+> **Invalidating the policy is not enough if [conditional requests](caching.md) are on.** `QueryFreshness` watches the *database*, and the authorization data behind a cached policy usually does not live there. A grant that changes outside the database moves no freshness token, so a caller holding an `ETag` is answered `304` and keeps rendering the rows it has just lost — the query never runs, and the invalidation never reaches it.
+>
+> Whatever a decision depends on therefore has to be in `CacheScope`, which is the part of the ETag the host controls. The sample folds a version stamp into it that moves whenever a grant does:
+>
+> ```cs
+> _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
+> ```
+>
+> That is the same rule caching.md already states — *anything a response varies by must be in the scope* — and a cached policy is the case where it is easiest to miss, because the thing it varies by is deliberately not in the database.
 
 Nothing has to be called for the first of the three. The sample moves a row's version and the next query decides that row and no other:
 
@@ -544,7 +555,7 @@ app.MapPost("/api/orders/{id:int}/touch", async (int id, SampleContext data) =>
     return Results.NoContent();
 });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L100-L118' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L105-L123' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `InvalidateRows<T>(keys)` is the narrower form of the second: it re-decides those rows in every scope, rather than emptying one scope entirely.

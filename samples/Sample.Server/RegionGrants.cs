@@ -17,6 +17,15 @@ public sealed class RegionGrants
     readonly ConcurrentDictionary<string, HashSet<string>> granted = new(StringComparer.Ordinal);
 
     int lookups;
+    int version;
+
+    /// <summary>
+    /// Moves whenever a grant does. Part of the sample's <c>CacheScope</c>, because a caller whose
+    /// grants changed is not the same caller as far as a cached response is concerned — and this is
+    /// the one thing about them a database change marker can never notice, since none of this is in
+    /// the database.
+    /// </summary>
+    public int Version => Volatile.Read(ref version);
 
     /// <summary>
     /// How many times the expensive lookup has run. Not something a real one would count — it is here
@@ -66,6 +75,8 @@ public sealed class RegionGrants
                 regions.Remove(region);
             }
         }
+
+        Interlocked.Increment(ref version);
     }
 
     // Every caller starts with everything, so the sample's other pages show the orders they always

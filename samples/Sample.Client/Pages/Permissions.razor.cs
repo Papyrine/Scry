@@ -25,8 +25,13 @@ public partial class Permissions
         error = null;
         try
         {
+            // Asked fresh rather than answered conditionally. Everywhere else in this sample a repeat
+            // query is a 304 and that is the point, but this page exists to show what the server
+            // decided — and a 304 is the server not deciding anything, so it would show nothing.
+            // Delta names this the read-after-write escape; see /docs/caching.md.
             orders = await Query
                 .Order
+                .WithHeader("Cache-Control", "no-cache")
                 .OrderBy(_ => _.Region)
                 .ThenBy(_ => _.Amount)
                 .Select(_ => new OrderRow(_.Id, _.Region, _.Amount))

@@ -122,13 +122,18 @@ builder.Services
 
         // What a cached response belongs to. This server has sources whose answers depend on
         // who asked — the row policy above, and Department.Handbook's attachment check — and
-        // MapScry refuses to start without this. The sample has no sign-in, so there is one
-        // caller and one scope; a real app returns its tenant or its principal, and a client
+        // MapScry refuses to start without this. The sample has no sign-in, so the caller
+        // half is a constant; a real app returns its tenant or its principal, and a client
         // signing in as someone else is then never handed the previous one's rows.
-        _.CacheScope = _ => "sample";
+        //
+        // The grants version is the other half, and is the part worth copying. A response
+        // varies by what the caller is allowed to see, and QueryFreshness only watches the
+        // database — so a grant changing outside it would move nothing, and a cache holding
+        // the old rows would go on answering with rows the caller has since lost.
+        _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L31-L64' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L31-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddScry<TContext>` scans `typeof(TContext).Assembly` once at startup, builds the allow-list schema, and registers it as a singleton along with the `ScryProcessor`.
@@ -142,7 +147,7 @@ Then map the endpoint:
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L79-L81' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L84-L86' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 That is a single HTTP endpoint which accepts a serialized query and returns the projected rows. It answers `POST`, where the query is the body, and `GET`, where the query [rides in the URL](wire-format.md#the-url-form) so the response can be cached and revalidated. See [Server](server.md) for all options, and [Row policies](policies.md) for row-level filtering.
