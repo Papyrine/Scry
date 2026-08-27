@@ -15,6 +15,7 @@
     <PackageReference Include="Verify.SourceGenerators" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
+    <PackageReference Include="DiffEngine" />
     <ProjectReference Include="..\Scry.SourceGenerator\Scry.SourceGenerator.csproj" />
     <ProjectReference Include="..\Scry.Annotations\Scry.Annotations.csproj" />
   </ItemGroup>

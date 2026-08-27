@@ -22,6 +22,7 @@
     <!-- Merges snippets from source into the markdown under /docs. Building this project
          regenerates /readme.md and /docs/*.md from their .source.md counterparts. -->
     <PackageReference Include="MarkdownSnippets.MsBuild" PrivateAssets="all" />
+    <PackageReference Include="DiffEngine" />
     <ProjectReference Include="..\Scry.Wire\Scry.Wire.csproj" />
     <ProjectReference Include="..\Scry.Annotations\Scry.Annotations.csproj" />
     <ProjectReference Include="..\Scry.Server\Scry.Server.csproj" />

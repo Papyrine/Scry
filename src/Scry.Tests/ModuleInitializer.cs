@@ -4,6 +4,7 @@ public static class ModuleInitializer
     public static void Init()
     {
         VerifyDiffPlex.Initialize(OutputType.Compact);
+        VerifierSettings.Inline(maxLines: 10, applyMaxLinesToExisting: true);
         VerifierSettings.InitializePlugins();
 
         // Cursors and schema stamps, scrubbed the same way in both test projects — see

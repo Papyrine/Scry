@@ -5,6 +5,7 @@ public static class ModuleInitializer
     {
         VerifySourceGenerators.Initialize();
         VerifyDiffPlex.Initialize(OutputType.Compact);
+        VerifierSettings.Inline(maxLines: 10, applyMaxLinesToExisting: true);
         VerifierSettings.InitializePlugins();
     }
 }

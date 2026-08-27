@@ -24,6 +24,7 @@
     <PackageReference Include="Verify.Bunit" />
     <PackageReference Include="Verify.Playwright" />
     <PackageReference Include="Verify.Http" />
+    <PackageReference Include="DiffEngine" />
     <!-- Reference the whole app: builds the server (which the Playwright test launches) and
          exposes the generated ScryQuery + Index page (which the bUnit tests render). -->
     <ProjectReference Include="..\Sample.Server\Sample.Server.csproj" />

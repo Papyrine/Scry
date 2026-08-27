@@ -17,6 +17,7 @@ public static class ModuleInitializer
         VerifyDiffPlex.Initialize(OutputType.Compact);
         VerifierSettings.UseSsimForPng();
         VerifierSettings.AddScrubber("html", Scrub);
+        VerifierSettings.Inline(maxLines: 10, applyMaxLinesToExisting: true);
         VerifierSettings.InitializePlugins();
 
         // Cursors and schema stamps, scrubbed the same way as in Scry.Tests — see SnapshotScrubbers
