@@ -1,4 +1,0 @@
-﻿SCRY115: An attachment cannot be carried through 'Distinct' — the result's rows no longer correspond to single rows of the source it is fetched from
-    await Query.Contract.Distinct().ToListAsync();
-SCRY115: An attachment cannot be carried through 'Distinct' — the result's rows no longer correspond to single rows of the source it is fetched from
-    await Query.Contract.Select(_ => new {_.Id, _.Document}).Distinct().ToListAsync();

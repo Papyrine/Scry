@@ -20,7 +20,14 @@ public class IndexPageTests
             () => page.FindAll("table").Count == 4,
             TimeSpan.FromSeconds(10));
 
-        await Verify(page);
+        await Verify(page)
+            .Snapshot(
+                """
+                {
+                  Instance: {},
+                  NodeCount: 150
+                }
+                """);
     }
 
     // The page's stale branch: a query failing with ScryStaleClientException (the server attributed
@@ -45,7 +52,14 @@ public class IndexPageTests
             () => page.FindAll("p.stale").Count == 1,
             TimeSpan.FromSeconds(10));
 
-        await Verify(page);
+        await Verify(page)
+            .Snapshot(
+                """
+                {
+                  Instance: {},
+                  NodeCount: 37
+                }
+                """);
     }
 
     [Test]
@@ -67,6 +81,13 @@ public class IndexPageTests
             () => page.FindAll("p.error").Count == 1,
             TimeSpan.FromSeconds(10));
 
-        await Verify(page);
+        await Verify(page)
+            .Snapshot(
+                """
+                {
+                  Instance: {},
+                  NodeCount: 37
+                }
+                """);
     }
 }

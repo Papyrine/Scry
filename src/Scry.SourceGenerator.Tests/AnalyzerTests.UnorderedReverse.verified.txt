@@ -1,2 +1,0 @@
-﻿SCRY110: Reverse requires a preceding OrderBy, as EF does
-    await Query.Order.Reverse().ToListAsync();

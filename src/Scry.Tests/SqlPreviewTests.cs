@@ -18,7 +18,15 @@ public class SqlPreviewTests
             ]);
 
         using var context = TestContext.CreateSeeded();
-        return Verify(SharedProcessor.Instance.ToQueryString(request, context, EmptyServices.Instance));
+        return Verify(SharedProcessor.Instance.ToQueryString(request, context, EmptyServices.Instance))
+            .Snapshot(
+                """
+                SELECT [e].[Name], [d].[Name]
+                FROM [Employees] AS [e]
+                INNER JOIN [Departments] AS [d] ON [e].[DepartmentId] = [d].[Id]
+                WHERE [e].[Active] = CAST(1 AS bit)
+                ORDER BY [e].[Name]
+                """);
     }
 
     [Test]

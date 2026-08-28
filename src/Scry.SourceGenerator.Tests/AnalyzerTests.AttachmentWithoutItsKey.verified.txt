@@ -1,4 +1,0 @@
-﻿SCRY113: Attachment 'Document' needs '_.Id' projected beside it — an attachment is fetched by its row's key, so the key has to come back with the row
-    await Query.Contract.Select(_ => new {_.Name, _.Document}).ToListAsync();
-SCRY113: Attachment 'Document' needs '_.Parent.Id' projected beside it — an attachment is fetched by its row's key, so the key has to come back with the row
-    await Query.Contract.Select(_ => new {_.Name, Parent = new {_.Parent!.Name, _.Parent!.Document}}).ToListAsync();

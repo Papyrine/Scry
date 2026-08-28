@@ -1,4 +1,0 @@
-﻿SCRY105: 'OrderBy' takes a single value as its key — a constructed object has no ordering of its own
-    await Query.Order.OrderBy(_ => new {_.Region, _.Amount}).ToListAsync();
-SCRY105: 'ThenByDescending' takes a single value as its key — a constructed object has no ordering of its own
-    await Query.Order.OrderBy(_ => _.Region).ThenByDescending(_ => new {_.Amount}).ToListAsync();

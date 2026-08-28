@@ -1,8 +1,0 @@
-﻿SCRY103: 'Distinct' with a comparer is not supported by Scry — the comparison happens in the database, which cannot run a client-side comparer
-    await Query.Order.Distinct(null!).Select(_ => new {_.Id}).ToListAsync();
-SCRY103: 'OrderBy' with a comparer is not supported by Scry — the comparison happens in the database, which cannot run a client-side comparer
-    await Query.Order.OrderBy(_ => _.Region, null!).ToListAsync();
-SCRY103: 'Union' with a comparer is not supported by Scry — the comparison happens in the database, which cannot run a client-side comparer
-    await Query.Order.Select(_ => new {_.Id}).Union(Query.Order.Select(_ => new {_.Id}), null!).ToListAsync();
-SCRY103: 'GroupBy' with a comparer is not supported by Scry — the comparison happens in the database, which cannot run a client-side comparer
-    await Query.Order.GroupBy(_ => _.Region, EqualityComparer<string>.Default).Select(_ => new {_.Key}).ToListAsync();

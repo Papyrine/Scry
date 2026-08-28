@@ -19,12 +19,22 @@ public class AnalyzerTests
 
     [Test]
     public Task Cast() =>
-        Verify(Analyze("await Query.Asset.Cast<VehicleQueryModel>().ToListAsync();"));
+        Verify(Analyze("await Query.Asset.Cast<VehicleQueryModel>().ToListAsync();"))
+            .Snapshot(
+                """
+                SCRY101: Cast is not supported by Scry — use OfType<VehicleQueryModel> to narrow by filtering
+                    await Query.Asset.Cast<VehicleQueryModel>().ToListAsync();
+                """);
 
     [Test]
     public Task SelectManyWithResultSelector() =>
         Verify(
-            Analyze("await Query.Order.SelectMany(_ => _.Lines, (order, line) => new {order.Id, line.Price}).ToListAsync();"));
+            Analyze("await Query.Order.SelectMany(_ => _.Lines, (order, line) => new {order.Id, line.Price}).ToListAsync();"))
+            .Snapshot(
+                """
+                SCRY102: SelectMany with a result selector is not supported by Scry — flatten first, then Select
+                    await Query.Order.SelectMany(_ => _.Lines, (order, line) => new {order.Id, line.Price}).ToListAsync();
+                """);
 
     [Test]
     public Task ComparerOverloads() =>
@@ -35,7 +45,18 @@ public class AnalyzerTests
                 await Query.Order.OrderBy(_ => _.Region, null!).ToListAsync();
                 await Query.Order.Select(_ => new {_.Id}).Union(Query.Order.Select(_ => new {_.Id}), null!).ToListAsync();
                 await Query.Order.GroupBy(_ => _.Region, EqualityComparer<string>.Default).Select(_ => new {_.Key}).ToListAsync();
-                """));
+                """))
+                .Snapshot(
+                    """
+                    SCRY103: 'Distinct' with a comparer is not supported by Scry — the comparison happens in the database, which cannot run a client-side comparer
+                        await Query.Order.Distinct(null!).Select(_ => new {_.Id}).ToListAsync();
+                    SCRY103: 'OrderBy' with a comparer is not supported by Scry — the comparison happens in the database, which cannot run a client-side comparer
+                        await Query.Order.OrderBy(_ => _.Region, null!).ToListAsync();
+                    SCRY103: 'Union' with a comparer is not supported by Scry — the comparison happens in the database, which cannot run a client-side comparer
+                        await Query.Order.Select(_ => new {_.Id}).Union(Query.Order.Select(_ => new {_.Id}), null!).ToListAsync();
+                    SCRY103: 'GroupBy' with a comparer is not supported by Scry — the comparison happens in the database, which cannot run a client-side comparer
+                        await Query.Order.GroupBy(_ => _.Region, EqualityComparer<string>.Default).Select(_ => new {_.Key}).ToListAsync();
+                    """);
 
     // The composition rules QueryValidator enforces server-side. A second Select today costs a round
     // trip and a 400 rather than a translation failure, which is the case the analyzer improves most.
@@ -48,7 +69,18 @@ public class AnalyzerTests
                 await Query.Order.Select(_ => new {_.Id}).Distinct().Distinct().ToListAsync();
                 await Query.Order.SelectMany(_ => _.Lines).SelectMany(_ => _.Parts).ToListAsync();
                 await Query.Order.GroupBy(_ => _.Region, (region, orders) => new {Region = region}).Select(_ => new {_.Region}).ToListAsync();
-                """));
+                """))
+                .Snapshot(
+                    """
+                    SCRY104: A Scry query may carry only one Select; this is the second, and the server rejects the request
+                        await Query.Order.Select(_ => new {_.Id, _.Region}).Select(_ => new {_.Region}).ToListAsync();
+                    SCRY104: A Scry query may carry only one Distinct; this is the second, and the server rejects the request
+                        await Query.Order.Select(_ => new {_.Id}).Distinct().Distinct().ToListAsync();
+                    SCRY104: A Scry query may carry only one SelectMany; this is the second, and the server rejects the request
+                        await Query.Order.SelectMany(_ => _.Lines).SelectMany(_ => _.Parts).ToListAsync();
+                    SCRY104: A Scry query may carry only one Select; this is the second, and the server rejects the request
+                        await Query.Order.GroupBy(_ => _.Region, (region, orders) => new {Region = region}).Select(_ => new {_.Region}).ToListAsync();
+                    """);
 
     [Test]
     public Task OrderingKey() =>
@@ -57,7 +89,14 @@ public class AnalyzerTests
                 """
                 await Query.Order.OrderBy(_ => new {_.Region, _.Amount}).ToListAsync();
                 await Query.Order.OrderBy(_ => _.Region).ThenByDescending(_ => new {_.Amount}).ToListAsync();
-                """));
+                """))
+                .Snapshot(
+                    """
+                    SCRY105: 'OrderBy' takes a single value as its key — a constructed object has no ordering of its own
+                        await Query.Order.OrderBy(_ => new {_.Region, _.Amount}).ToListAsync();
+                    SCRY105: 'ThenByDescending' takes a single value as its key — a constructed object has no ordering of its own
+                        await Query.Order.OrderBy(_ => _.Region).ThenByDescending(_ => new {_.Amount}).ToListAsync();
+                    """);
 
     [Test]
     public Task Projection() =>
@@ -66,7 +105,14 @@ public class AnalyzerTests
                 """
                 await Query.Order.Select(_ => _.Region).ToListAsync();
                 await Query.Order.GroupBy(_ => _.Region).Select(_ => _.Key).ToListAsync();
-                """));
+                """))
+                .Snapshot(
+                    """
+                    SCRY106: A Scry projection must construct an object — an anonymous type, a record, or an object initializer
+                        await Query.Order.Select(_ => _.Region).ToListAsync();
+                    SCRY106: A Scry projection must construct an object — an anonymous type, a record, or an object initializer
+                        await Query.Order.GroupBy(_ => _.Region).Select(_ => _.Key).ToListAsync();
+                    """);
 
     [Test]
     public Task UnsupportedFunctions() =>
@@ -78,7 +124,20 @@ public class AnalyzerTests
                 await Query.Order.Where(_ => _.Placed.TimeOfDay.TotalHours > 0).ToListAsync();
                 await Query.Order.Where(_ => Math.Cbrt(_.Rate) > 1).ToListAsync();
                 await Query.Order.Where(_ => _.Region.Trim('x') == "y").ToListAsync();
-                """));
+                """))
+                .Snapshot(
+                    """
+                    SCRY107: 'String.PadLeft' is not one of the functions Scry can carry
+                        await Query.Order.Where(_ => _.Region.PadLeft(5) == "x").ToListAsync();
+                    SCRY107: 'DateTime.Ticks' is not one of the functions Scry can carry
+                        await Query.Order.Where(_ => _.Placed.Ticks > 0).ToListAsync();
+                    SCRY107: 'TimeSpan.TotalHours' is not one of the functions Scry can carry
+                        await Query.Order.Where(_ => _.Placed.TimeOfDay.TotalHours > 0).ToListAsync();
+                    SCRY107: 'Math.Cbrt' is not one of the functions Scry can carry
+                        await Query.Order.Where(_ => Math.Cbrt(_.Rate) > 1).ToListAsync();
+                    SCRY107: 'this overload of String.Trim' is not one of the functions Scry can carry
+                        await Query.Order.Where(_ => _.Region.Trim('x') == "y").ToListAsync();
+                    """);
 
     [Test]
     public Task FormattedText() =>
@@ -88,7 +147,16 @@ public class AnalyzerTests
                 await Query.Order.Select(_ => new {Amount = _.Amount.ToString("N2")}).ToListAsync();
                 await Query.Order.Select(_ => new {Label = $"{_.Amount:N2}"}).ToListAsync();
                 await Query.Order.Select(_ => new {Label = $"{_.Amount,10}"}).ToListAsync();
-                """));
+                """))
+                .Snapshot(
+                    """
+                    SCRY108: ToString with a format is not supported by Scry — format the value after the query returns
+                        await Query.Order.Select(_ => new {Amount = _.Amount.ToString("N2")}).ToListAsync();
+                    SCRY108: ToString with a format is not supported by Scry — format the value after the query returns
+                        await Query.Order.Select(_ => new {Label = $"{_.Amount:N2}"}).ToListAsync();
+                    SCRY108: ToString with a format is not supported by Scry — format the value after the query returns
+                        await Query.Order.Select(_ => new {Label = $"{_.Amount,10}"}).ToListAsync();
+                    """);
 
     [Test]
     public Task SynchronousExecution() =>
@@ -122,7 +190,16 @@ public class AnalyzerTests
                 foreach (var order in projected)
                 {
                 }
-                """));
+                """))
+                .Snapshot(
+                    """
+                    SCRY109: 'foreach' executes the query where it stands, which a Scry source cannot do — await ToListAsync and iterate what it returns
+                        foreach (var order in Query.Order)
+                    SCRY109: 'foreach' executes the query where it stands, which a Scry source cannot do — await ToListAsync and iterate what it returns
+                        foreach (var order in Query.Order.Where(_ => _.Amount > 0))
+                    SCRY109: 'foreach' executes the query where it stands, which a Scry source cannot do — await ToListAsync and iterate what it returns
+                        foreach (var order in projected)
+                    """);
 
     // The streaming idiom, and the one enumeration that is not a mistake: an await foreach reads what a
     // ToAsyncEnumerable terminal returned rather than the provider. A captured query has no
@@ -153,7 +230,12 @@ public class AnalyzerTests
                 """
                 await Query.Order.Reverse().ToListAsync();
                 await Query.Order.OrderBy(_ => _.Region).Reverse().ToListAsync();
-                """));
+                """))
+                .Snapshot(
+                    """
+                    SCRY110: Reverse requires a preceding OrderBy, as EF does
+                        await Query.Order.Reverse().ToListAsync();
+                    """);
 
     [Test]
     public Task ProjectedGroup() =>
@@ -163,7 +245,12 @@ public class AnalyzerTests
                 await Query.Customer
                     .GroupJoin(Query.Order, _ => _.Id, _ => _.CustomerId, (customer, orders) => new {customer.Id, Orders = orders})
                     .ToListAsync();
-                """));
+                """))
+                .Snapshot(
+                    """
+                    SCRY111: A GroupJoin's group can only be folded to a scalar — 'orders' would put a nested collection in the response
+                        .GroupJoin(Query.Order, _ => _.Id, _ => _.CustomerId, (customer, orders) => new {customer.Id, Orders = orders})
+                    """);
 
     // A call outside the callable surface that still reads the row is not an unsupported overload of
     // something carried — it is code that only exists client-side, with nothing on the wire to carry
@@ -178,7 +265,18 @@ public class AnalyzerTests
                 await Query.Order.Where(_ => _.Region.Slugify().Length > 0).ToListAsync();
                 await Query.Order.Where(_ => char.IsDigit(_.Region, 0)).ToListAsync();
                 await Query.Order.Where(_ => tax(_.Amount) > 10).ToListAsync();
-                """));
+                """))
+                .Snapshot(
+                    """
+                    SCRY112: 'Queries.Munge' is client-side code, which a Scry query cannot carry — evaluate it before the query, or apply it to the rows after they return
+                        await Query.Order.Where(_ => Munge(_.Region) == "x").ToListAsync();
+                    SCRY112: 'ClientSideHelpers.Slugify' is client-side code, which a Scry query cannot carry — evaluate it before the query, or apply it to the rows after they return
+                        await Query.Order.Where(_ => _.Region.Slugify().Length > 0).ToListAsync();
+                    SCRY112: 'Char.IsDigit' is client-side code, which a Scry query cannot carry — evaluate it before the query, or apply it to the rows after they return
+                        await Query.Order.Where(_ => char.IsDigit(_.Region, 0)).ToListAsync();
+                    SCRY112: 'Func.Invoke' is client-side code, which a Scry query cannot carry — evaluate it before the query, or apply it to the rows after they return
+                        await Query.Order.Where(_ => tax(_.Amount) > 10).ToListAsync();
+                    """);
 
     // Every operator, function and shape the closed set does carry. A false positive here is worse
     // than a missed rule: it reports code that works, in a build the consumer cannot see past.
@@ -191,7 +289,14 @@ public class AnalyzerTests
                 """
                 await Query.Contract.Select(_ => new {_.Name, _.Document}).ToListAsync();
                 await Query.Contract.Select(_ => new {_.Name, Parent = new {_.Parent!.Name, _.Parent!.Document}}).ToListAsync();
-                """));
+                """))
+                .Snapshot(
+                    """
+                    SCRY113: Attachment 'Document' needs '_.Id' projected beside it — an attachment is fetched by its row's key, so the key has to come back with the row
+                        await Query.Contract.Select(_ => new {_.Name, _.Document}).ToListAsync();
+                    SCRY113: Attachment 'Document' needs '_.Parent.Id' projected beside it — an attachment is fetched by its row's key, so the key has to come back with the row
+                        await Query.Contract.Select(_ => new {_.Name, Parent = new {_.Parent!.Name, _.Parent!.Document}}).ToListAsync();
+                    """);
 
     [Test]
     public Task AttachmentUsedAsValue() =>
@@ -201,7 +306,18 @@ public class AnalyzerTests
                 await Query.Contract.Where(_ => _.Document != null).ToListAsync();
                 await Query.Contract.OrderBy(_ => _.Document).ToListAsync();
                 await Query.Contract.GroupBy(_ => _.Document).Select(_ => new {Rows = _.Count()}).ToListAsync();
-                """));
+                """))
+                .Snapshot(
+                    """
+                    SCRY114: Attachment 'Document' is not a value, so it cannot be filtered, ordered, grouped, or computed on
+                        await Query.Contract.Where(_ => _.Document != null).ToListAsync();
+                    SCRY114: Attachment 'Document' is not a value, so it cannot be filtered, ordered, grouped, or computed on
+                        await Query.Contract.OrderBy(_ => _.Document).ToListAsync();
+                    SCRY115: An attachment cannot be carried through 'GroupBy' — the result's rows no longer correspond to single rows of the source it is fetched from
+                        await Query.Contract.GroupBy(_ => _.Document).Select(_ => new {Rows = _.Count()}).ToListAsync();
+                    SCRY114: Attachment 'Document' is not a value, so it cannot be filtered, ordered, grouped, or computed on
+                        await Query.Contract.GroupBy(_ => _.Document).Select(_ => new {Rows = _.Count()}).ToListAsync();
+                    """);
 
     [Test]
     public Task AttachmentUnderRewritingOperator() =>
@@ -210,7 +326,14 @@ public class AnalyzerTests
                 """
                 await Query.Contract.Distinct().ToListAsync();
                 await Query.Contract.Select(_ => new {_.Id, _.Document}).Distinct().ToListAsync();
-                """));
+                """))
+                .Snapshot(
+                    """
+                    SCRY115: An attachment cannot be carried through 'Distinct' — the result's rows no longer correspond to single rows of the source it is fetched from
+                        await Query.Contract.Distinct().ToListAsync();
+                    SCRY115: An attachment cannot be carried through 'Distinct' — the result's rows no longer correspond to single rows of the source it is fetched from
+                        await Query.Contract.Select(_ => new {_.Id, _.Document}).Distinct().ToListAsync();
+                    """);
 
     [Test]
     public void SupportedQueriesAreClean()
@@ -353,7 +476,12 @@ public class AnalyzerTests
                 var orders = Query.Order.Where(_ => _.Amount > 0);
                 var projected = orders.Select(_ => new {_.Id, _.Region});
                 await projected.Select(_ => new {_.Region}).ToListAsync();
-                """));
+                """))
+                .Snapshot(
+                    """
+                    SCRY104: A Scry query may carry only one Select; this is the second, and the server rejects the request
+                        await projected.Select(_ => new {_.Region}).ToListAsync();
+                    """);
 
     // A hand-built source carries no [ScryModel] — it is opened through the client by name — so it is
     // recognised by the call that opens it instead, and held to the same set.
@@ -364,7 +492,14 @@ public class AnalyzerTests
                 """
                 await client.Source<HandBuilt>("Order").Cast<HandBuilt>().ToListAsync();
                 await client.Source<HandBuilt>("Order").Select(_ => _.Name).ToListAsync();
-                """));
+                """))
+                .Snapshot(
+                    """
+                    SCRY101: Cast is not supported by Scry — use OfType<HandBuilt> to narrow by filtering
+                        await client.Source<HandBuilt>("Order").Cast<HandBuilt>().ToListAsync();
+                    SCRY106: A Scry projection must construct an object — an anonymous type, a record, or an object initializer
+                        await client.Source<HandBuilt>("Order").Select(_ => _.Name).ToListAsync();
+                    """);
 
     // Ordinary LINQ over an ordinary collection is not Scry's business.
     [Test]

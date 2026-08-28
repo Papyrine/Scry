@@ -1,1 +1,0 @@
-﻿{"version":1,"root":"Employee","member":"Photo","keys":[{"value":"7","tag":"Int32"},{"value":"a3f1c0de-0000-4000-8000-000000000001","tag":"Guid"}],"stamp":"{scrubbed stamp}"}

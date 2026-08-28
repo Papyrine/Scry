@@ -1,7 +1,0 @@
-﻿[
-  {
-    Region: North,
-    Quantity: 7,
-    Sku: 18446744073709551615
-  }
-]

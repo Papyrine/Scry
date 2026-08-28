@@ -35,7 +35,11 @@ public class UiSnapshotTests :
         using var http = new HttpClient();
         var json = await http.GetStringAsync($"{BaseUrl}/scry/introspect");
 
-        await Verify(json);
+        // Stays a file. The introspection document is minified, so it is a single line and slips under
+        // the global inline maxLines, but that line is ~4.8k characters — unreadable inlined, and this
+        // is the one snapshot here that records a wire contract worth reviewing as a diff.
+        await Verify(json)
+            .NotInline();
     }
 
     // Verifies the Scry explorer (a separate Blazor WASM app, embedded in and served by the

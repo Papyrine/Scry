@@ -1,2 +1,0 @@
-﻿SCRY101: Cast is not supported by Scry — use OfType<VehicleQueryModel> to narrow by filtering
-    await Query.Asset.Cast<VehicleQueryModel>().ToListAsync();

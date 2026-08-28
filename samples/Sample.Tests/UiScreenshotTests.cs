@@ -186,7 +186,13 @@ public class UiScreenshotTests :
         await page.Locator("[data-testid='sql-preview']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='sql']", 30);
 
-        await Verify(page.Locator("[data-testid='sql']"));
+        await Verify(page.Locator("[data-testid='sql']"))
+            .Snapshot(
+                """
+                <span class="tok-kw">SELECT</span> [e].[Name]
+                <span class="tok-kw">FROM</span> [Employees] <span class="tok-kw">AS</span> [e]
+                <span class="tok-kw">WHERE</span> [e].[Active] = <span class="tok-kw">CAST</span>(<span class="tok-num">1</span> <span class="tok-kw">AS</span> bit)
+                """);
     }
 
     // The captures the docs embed. readme.md and docs/explorer.md point their <img> straight at these

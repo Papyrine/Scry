@@ -1,6 +1,0 @@
-﻿SCRY108: ToString with a format is not supported by Scry — format the value after the query returns
-    await Query.Order.Select(_ => new {Amount = _.Amount.ToString("N2")}).ToListAsync();
-SCRY108: ToString with a format is not supported by Scry — format the value after the query returns
-    await Query.Order.Select(_ => new {Label = $"{_.Amount:N2}"}).ToListAsync();
-SCRY108: ToString with a format is not supported by Scry — format the value after the query returns
-    await Query.Order.Select(_ => new {Label = $"{_.Amount,10}"}).ToListAsync();

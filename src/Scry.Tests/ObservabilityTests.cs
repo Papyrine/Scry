@@ -16,7 +16,19 @@ public class ObservabilityTests
             activity.DisplayName,
             activity.Status,
             Tags = activity.TagObjects.ToDictionary(_ => _.Key, _ => _.Value)
-        });
+        })
+        .Snapshot(
+            """
+            {
+              DisplayName: scry.query Employee,
+              Tags: {
+                scry.operators: 3,
+                scry.result_kind: list,
+                scry.rows: 3,
+                scry.source: Employee
+              }
+            }
+            """);
     }
 
     [Test]
@@ -38,7 +50,20 @@ public class ObservabilityTests
             activity.Status,
             activity.StatusDescription,
             Tags = activity.TagObjects.ToDictionary(_ => _.Key, _ => _.Value)
-        });
+        })
+        .Snapshot(
+            """
+            {
+              DisplayName: scry.query (unknown),
+              Status: Error,
+              StatusDescription: Unknown source 'Missing'.,
+              Tags: {
+                error.type: Scry.ScryValidationException,
+                scry.operators: 1,
+                scry.source: (unknown)
+              }
+            }
+            """);
     }
 
     [Test]

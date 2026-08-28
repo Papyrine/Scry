@@ -1,8 +1,0 @@
-﻿SCRY104: A Scry query may carry only one Select; this is the second, and the server rejects the request
-    await Query.Order.Select(_ => new {_.Id, _.Region}).Select(_ => new {_.Region}).ToListAsync();
-SCRY104: A Scry query may carry only one Distinct; this is the second, and the server rejects the request
-    await Query.Order.Select(_ => new {_.Id}).Distinct().Distinct().ToListAsync();
-SCRY104: A Scry query may carry only one SelectMany; this is the second, and the server rejects the request
-    await Query.Order.SelectMany(_ => _.Lines).SelectMany(_ => _.Parts).ToListAsync();
-SCRY104: A Scry query may carry only one Select; this is the second, and the server rejects the request
-    await Query.Order.GroupBy(_ => _.Region, (region, orders) => new {Region = region}).Select(_ => new {_.Region}).ToListAsync();

@@ -57,7 +57,19 @@ public class ClientRoundTripTests
             .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
             .ToListAsync();
 
-        await Verify(rows);
+        await Verify(rows)
+            .Snapshot(
+                """
+                [
+                  {
+                    Name: Aaron,
+                    ManagerName: Alice
+                  },
+                  {
+                    Name: Alice
+                  }
+                ]
+                """);
     }
 
     [Test]
@@ -86,7 +98,16 @@ public class ClientRoundTripTests
             .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
             .ToListAsync();
 
-        await Verify(rows);
+        await Verify(rows)
+            .Snapshot(
+                """
+                [
+                  {
+                    Name: Carol,
+                    Status: Contractor
+                  }
+                ]
+                """);
     }
 
     [Test]
@@ -105,7 +126,17 @@ public class ClientRoundTripTests
             .Select(_ => new OrderRow(_.Region, _.Quantity, _.Sku))
             .ToListAsync();
 
-        await Verify(rows);
+        await Verify(rows)
+            .Snapshot(
+                """
+                [
+                  {
+                    Region: North,
+                    Quantity: 7,
+                    Sku: 18446744073709551615
+                  }
+                ]
+                """);
     }
 
     [Test]
@@ -135,7 +166,15 @@ public class ClientRoundTripTests
             .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
             .ToListAsync();
 
-        await Verify(rows);
+        await Verify(rows)
+            .Snapshot(
+                """
+                [
+                  {
+                    Name: Alice
+                  }
+                ]
+                """);
     }
 
     [Test]

@@ -1,2 +1,0 @@
-﻿SCRY104: A Scry query may carry only one Select; this is the second, and the server rejects the request
-    await projected.Select(_ => new {_.Region}).ToListAsync();

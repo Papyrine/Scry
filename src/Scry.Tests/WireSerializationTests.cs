@@ -317,7 +317,18 @@ public class WireSerializationTests
             Assert.That(ScryJson.Serialize(roundTripped), Is.EqualTo(serialized), $"terminal {index}");
         }
 
-        return Verify(json);
+        return Verify(json)
+            .Snapshot(
+                """
+                [
+                  {"version":1,"root":"Employees","pipeline":[{"$type":"count","predicate":{"$type":"member","path":"Active"}}]},
+                  {"version":1,"root":"Employees","pipeline":[{"$type":"longCount"}]},
+                  {"version":1,"root":"Employees","pipeline":[{"$type":"all","predicate":{"$type":"member","path":"Active"}}]},
+                  {"version":1,"root":"Employees","pipeline":[{"$type":"last","orDefault":true}]},
+                  {"version":1,"root":"Employees","pipeline":[{"$type":"aggregate","function":"Sum","selector":{"$type":"member","path":"Id"}}]},
+                  {"version":1,"root":"Employees","pipeline":[{"$type":"aggregate","function":"Average","selector":{"$type":"member","path":"Id"}}]}
+                ]
+                """);
     }
 
     [Test]
@@ -337,7 +348,8 @@ public class WireSerializationTests
 
         Assert.That(ScryJson.Serialize(roundTripped), Is.EqualTo(json));
 
-        return Verify(json);
+        return Verify(json)
+            .Snapshot("{\"version\":1,\"root\":\"Employee\",\"member\":\"Photo\",\"keys\":[{\"value\":\"7\",\"tag\":\"Int32\"},{\"value\":\"a3f1c0de-0000-4000-8000-000000000001\",\"tag\":\"Guid\"}],\"stamp\":\"{scrubbed stamp}\"}");
     }
 
     [Test]
