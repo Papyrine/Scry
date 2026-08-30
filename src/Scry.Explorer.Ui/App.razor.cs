@@ -835,6 +835,33 @@ public partial class App
         }
     }
 
+    // The list shows a query on one line; the stored text keeps its formatting for the editor. Lines
+    // are joined by trimming each and appending a continuation (a line starting with '.') directly, so
+    // a multi-line query reads as the fluent chain it is rather than carrying its indentation along as
+    // stray spaces before every operator.
+    static string HistoryLabel(string query)
+    {
+        var builder = new StringBuilder();
+        foreach (var line in query.Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.Length == 0)
+            {
+                continue;
+            }
+
+            if (builder.Length > 0 &&
+                !trimmed.StartsWith('.'))
+            {
+                builder.Append(' ');
+            }
+
+            builder.Append(trimmed);
+        }
+
+        return builder.ToString();
+    }
+
     // Removal is by text rather than by index: entries are deduped on exactly that, so it identifies
     // one, and it survives the list having moved under a render the click raced.
     Task RemoveHistory(string query)

@@ -115,7 +115,7 @@
                 make sense of.
             *@
             <li>
-                <a href="#" @onclick:preventDefault @onclick="() => LoadQuery(item)">@item</a>
+                <a href="#" @onclick:preventDefault @onclick="() => LoadQuery(item)">@HistoryLabel(item)</a>
                 <button class="icon-btn history-remove" data-testid="history-remove" title="Forget this query."
                         aria-label="Forget this query" @onclick="() => RemoveHistory(item)">×</button>
             </li>

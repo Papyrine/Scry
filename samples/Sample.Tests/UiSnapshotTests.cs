@@ -633,7 +633,7 @@ public class UiSnapshotTests :
         Assert.That(table, Does.Contain("FullTime"));
 
         // Stage 3: the executed query is recorded in history. The list renders the multi-line
-        // query whitespace-collapsed, so match fragments rather than the contiguous text.
+        // query joined onto one line, so match fragments rather than the contiguous text.
         await page.WaitForSelectorAsync("[data-testid='history'] li", 10);
         var historyText = await page.Locator("[data-testid='history']").InnerTextAsync();
         Assert.That(historyText, Does.Contain("Query.Employee"));

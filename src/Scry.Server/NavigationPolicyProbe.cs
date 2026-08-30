@@ -94,7 +94,7 @@ static class NavigationPolicyProbe
         // A collection is only ever aggregated, so counting it is the shape a request produces — and
         // the one that puts the rewritten subquery where a request would put it.
         var leaf = kind == MemberKind.Collection
-            ? Expression.Call(Count.MakeGenericMethod(target), correlated)
+            ? Expression.Call(count.MakeGenericMethod(target), correlated)
             : Leaf(schema, correlated, target);
 
         return query.Provider.CreateQuery(
@@ -129,13 +129,13 @@ static class NavigationPolicyProbe
     }
 
     static IQueryable SetOf(DbContext db, Type entityType) =>
-        (IQueryable)Set.MakeGenericMethod(entityType).Invoke(db, [])!;
+        (IQueryable)set.MakeGenericMethod(entityType).Invoke(db, [])!;
 
-    static readonly MethodInfo Count = typeof(Queryable)
+    static readonly MethodInfo count = typeof(Queryable)
         .GetMethods()
         .Single(_ => _.Name == nameof(Queryable.Count) && _.GetParameters().Length == 1);
 
-    static readonly MethodInfo Set = typeof(DbContext)
+    static readonly MethodInfo set = typeof(DbContext)
         .GetMethods()
         .Single(_ => _.Name == nameof(DbContext.Set) &&
                      _.IsGenericMethodDefinition &&
