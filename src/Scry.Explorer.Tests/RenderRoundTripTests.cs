@@ -718,7 +718,9 @@ public class RenderRoundTripTests
                     Order,
                     _ => _.Id,
                     _ => _.Id,
+                    // ReSharper disable PossibleMultipleEnumeration
                     (e, g) => new {e.Name, Total = g.Sum(o => o.Total), Count = g.Count()})
+                // ReSharper restore PossibleMultipleEnumeration
                 .ToScryRequest());
 
     [Test]
