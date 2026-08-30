@@ -8,7 +8,7 @@
 public class StringJoinAggregateTests
 {
     [Test]
-    public async Task JoinsTheGroupsValues()
+    public async Task StringJoinsTheGroupsValues()
     {
         await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
@@ -16,7 +16,34 @@ public class StringJoinAggregateTests
         // North holds codes "40" and "8"; ordered by themselves as text, "40" sorts first.
         var regions = await client.Source<Order>("Order")
             .GroupBy(_ => _.Region)
-            .Select(_ => new {Region = _.Key, Codes = string.Join(",", _.Select(x => x.Code))})
+            .Select(_ => new
+            {
+                Region = _.Key,
+                Codes = string.Join(",", _.Select(_ => _.Code))
+            })
+            .ToListAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(regions.Single(_ => _.Region == "North").Codes, Is.EqualTo("40,8"));
+            Assert.That(regions.Single(_ => _.Region == "South").Codes, Is.EqualTo("17"));
+        });
+    }
+
+    [Test]
+    public async Task CharJoinsTheGroupsValues()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // North holds codes "40" and "8"; ordered by themselves as text, "40" sorts first.
+        var regions = await client.Source<Order>("Order")
+            .GroupBy(_ => _.Region)
+            .Select(_ => new
+            {
+                Region = _.Key,
+                Codes = string.Join(',', _.Select(_ => _.Code))
+            })
             .ToListAsync();
 
         Assert.Multiple(() =>
@@ -35,7 +62,11 @@ public class StringJoinAggregateTests
 
         var regions = await client.Source<Order>("Order")
             .GroupBy(_ => _.Region)
-            .Select(_ => new {Region = _.Key, Codes = string.Concat(_.Select(x => x.Code))})
+            .Select(_ => new
+            {
+                Region = _.Key,
+                Codes = string.Concat(_.Select(_ => _.Code))
+            })
             .ToListAsync();
 
         Assert.Multiple(() =>
@@ -55,7 +86,10 @@ public class StringJoinAggregateTests
         var exception = Assert.ThrowsAsync<NotSupportedException>(() =>
             client.Source<Order>("Order")
                 .GroupBy(_ => _.Region)
-                .Select(_ => new {Codes = string.Concat(_.Where(x => x.Amount > 90).Select(x => x.Code))})
+                .Select(_ => new
+                {
+                    Codes = string.Concat(_.Where(_ => _.Amount > 90).Select(_ => _.Code))
+                })
                 .ToListAsync());
 
         Assert.That(exception!.Message, Does.Contain("folds the whole group"));
@@ -70,7 +104,10 @@ public class StringJoinAggregateTests
         var exception = Assert.ThrowsAsync<NotSupportedException>(() =>
             client.Source<Order>("Order")
                 .GroupBy(_ => _.Region)
-                .Select(_ => new {Codes = string.Concat(_.Select(x => x.Amount))})
+                .Select(_ => new
+                {
+                    Codes = string.Concat(_.Select(x => x.Amount))
+                })
                 .ToListAsync());
 
         Assert.That(exception!.Message, Does.Contain("select a string member"));
@@ -85,7 +122,13 @@ public class StringJoinAggregateTests
         var client = ClientFor(context);
 
         var regions = await client.Source<Order>("Order")
-            .GroupBy(_ => _.Region, (region, orders) => new {Region = region, Codes = string.Join("|", orders.Select(x => x.Code))})
+            .GroupBy(
+                _ => _.Region,
+                (region, orders) => new
+                {
+                    Region = region,
+                    Codes = string.Join("|", orders.Select(x => x.Code))
+                })
             .ToListAsync();
 
         Assert.That(regions.Single(_ => _.Region == "North").Codes, Is.EqualTo("40|8"));
@@ -98,7 +141,13 @@ public class StringJoinAggregateTests
         var client = ClientFor(context);
 
         var regions = await client.Source<Order>("Order")
-            .GroupBy(_ => _.Region, (region, orders) => new {Region = region, Codes = string.Join('|', orders.Select(x => x.Code))})
+            .GroupBy(
+                _ => _.Region,
+                (region, orders) => new
+                {
+                    Region = region,
+                    Codes = string.Join('|', orders.Select(x => x.Code))
+                })
             .ToListAsync();
 
         Assert.That(regions.Single(_ => _.Region == "North").Codes, Is.EqualTo("40|8"));
@@ -112,7 +161,12 @@ public class StringJoinAggregateTests
 
         var regions = await client.Source<Order>("Order")
             .GroupBy(_ => _.Region)
-            .Select(_ => new {Region = _.Key, Codes = string.Join(", ", _.Select(x => x.Code)), Total = _.Sum(x => x.Amount)})
+            .Select(_ => new
+            {
+                Region = _.Key,
+                Codes = string.Join(", ", _.Select(_ => _.Code)),
+                Total = _.Sum(x => x.Amount)
+            })
             .ToListAsync();
 
         var north = regions.Single(_ => _.Region == "North");
@@ -133,7 +187,10 @@ public class StringJoinAggregateTests
         var exception = Assert.ThrowsAsync<NotSupportedException>(() =>
             client.Source<Order>("Order")
                 .GroupBy(_ => _.Region)
-                .Select(_ => new {Amounts = string.Join(',', _.Select(x => x.Amount))})
+                .Select(_ => new
+                {
+                    Amounts = string.Join(',', _.Select(x => x.Amount))
+                })
                 .ToListAsync());
 
         Assert.That(exception!.Message, Does.Contain("joins text"));

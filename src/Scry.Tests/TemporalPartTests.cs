@@ -56,7 +56,8 @@ public class TemporalPartTests
         var client = ClientFor(context);
 
         var count = await client.Source<Order>("Order")
-            .CountAsync(_ => _.Placed.Microsecond == 0 && _.Placed.Nanosecond == 0);
+            .CountAsync(_ => _.Placed.Microsecond == 0 &&
+                             _.Placed.Nanosecond == 0);
 
         Assert.That(count, Is.EqualTo(3));
     }

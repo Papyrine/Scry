@@ -128,6 +128,7 @@ public class SupportedLinqTests
 
         return type
             .GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance)
-            .Any(_ => _.Name == member && _.GetParameters().Length == arity);
+            .Any(_ => _.Name == member &&
+                      _.GetParameters().Length == arity);
     }
 }
