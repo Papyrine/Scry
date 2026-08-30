@@ -26,7 +26,7 @@ public class NavigationPolicyTests
         // begin-snippet: navigationPolicyQuery
         var rows = await client.Source<Employee>("Employee")
             .OrderBy(_ => _.Name)
-            .Select(_ => new {_.Name, Department = _.Department!.Name})
+            .Select(_ => new {_.Name, Department = (string?)_.Department!.Name})
             .ToListAsync();
         // end-snippet
 
@@ -94,7 +94,7 @@ public class NavigationPolicyTests
 
         var rows = await client.Source<Employee>("Employee")
             .GroupBy(_ => _.Department!.Name)
-            .Select(_ => new {Department = _.Key, Count = _.Count()})
+            .Select(_ => new {Department = (string?)_.Key, Count = _.Count()})
             .ToListAsync();
 
         Assert.That(
@@ -110,7 +110,7 @@ public class NavigationPolicyTests
 
         var rows = await client.Source<Employee>("Employee")
             .OrderBy(_ => _.Name)
-            .Select(_ => new {_.Name, Department = new {_.Department!.Name}})
+            .Select(_ => new {_.Name, Department = new {Name = (string?)_.Department!.Name}})
             .ToListAsync();
 
         Assert.That(
@@ -151,8 +151,11 @@ public class NavigationPolicyTests
                 (employee, department) => new {Employee = employee.Name, Traversed = employee.Department!.Name, Joined = department!.Name})
             .ToListAsync();
 
+        // A join projection member is a bare member path, so the (string?) widening the other
+        // projections use has no room here; the members carry the model's non-null annotation while
+        // the policy nulls them anyway, and the display helper is where that reality is admitted.
         Assert.That(
-            rows.Select(_ => $"{_.Employee}:{_.Traversed ?? "<null>"}:{_.Joined ?? "<null>"}").Order(),
+            rows.Select(_ => $"{_.Employee}:{Display(_.Traversed)}:{Display(_.Joined)}").Order(),
             Is.EqualTo(["Aaron:Engineering:Engineering", "Alice:Engineering:Engineering", "Bob:<null>:<null>", "Carol:<null>:<null>"]));
     }
 
@@ -166,7 +169,12 @@ public class NavigationPolicyTests
         // policied source the same way any other path does — through the policy.
         var rows = await client.Source<Order>("Order")
             .OrderBy(_ => _.Region)
-            .Select(_ => new {_.Region, Lines = _.Lines.Count(), Total = _.Lines.Sum(l => l.Order!.Amount)})
+            .Select(_ => new
+            {
+                _.Region,
+                Lines = _.Lines.Count,
+                Total = _.Lines.Sum(_ => _.Order!.Amount)
+            })
             .ToListAsync();
 
         // Only North survives Order's own root policy, and its lines navigate back to a visible order,
@@ -187,7 +195,7 @@ public class NavigationPolicyTests
         // Engineering, so both steps resolve; Alice and Carol have no manager at all.
         var rows = await client.Source<Employee>("Employee")
             .OrderBy(_ => _.Name)
-            .Select(_ => new {_.Name, Manager = _.Manager!.Name, ManagerDepartment = _.Manager!.Department!.Name})
+            .Select(_ => new {_.Name, Manager = (string?)_.Manager!.Name, ManagerDepartment = (string?)_.Manager!.Department!.Name})
             .ToListAsync();
 
         Assert.That(
@@ -362,6 +370,9 @@ public class NavigationPolicyTests
             options.AddPocoSource<Holiday>(_ => Holiday.Seed());
             options.AddPolicy<Department, EngineeringOnlyPolicy>();
         });
+
+    static string Display(string? value) =>
+        value ?? "<null>";
 
     static ScryClient ClientFor(TestContext context) =>
         ClientFor(context, Processor());
