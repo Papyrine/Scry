@@ -1,5 +1,6 @@
 // The operator level: one wire QueryOp rendered back into one snippet operator, inverting
 // QueryTranslator's operator switch.
+// ReSharper disable TailRecursiveCall
 partial class QueryRenderer
 {
     string RenderOp(QueryOp op)
