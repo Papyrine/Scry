@@ -6,6 +6,8 @@ The point is what a query costs. A document or a full-size image transferred wit
 
 Its sibling, [`[BinaryTransfer]`](annotations.md#binarytransfer), makes the opposite trade — the value still travels with the row, and only its encoding improves. The [comparison table](annotations.md#attachment) is the short version of when to reach for which.
 
+The [sample app](sample.md#the-photos-which-the-queries-never-carry) has one end to end: employee photos, drawn on its home page from handles the query brought back, with one employee holding no photo so the empty answer is visible beside the rest.
+
 
 ## The model
 

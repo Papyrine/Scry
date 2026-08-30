@@ -8,6 +8,13 @@ public static class ModuleInitializer
     /// </summary>
     static readonly Regex componentMarkers = new("<!--!-->\\s*", RegexOptions.Compiled);
 
+    /// <summary>
+    /// The base64 of a seeded cartoon face. It is deterministic and would snapshot stably, but it is
+    /// kilobytes of it per employee, and what these snapshots record about an attachment is that one
+    /// was fetched and rendered at all — which the surviving prefix says.
+    /// </summary>
+    static readonly Regex faceData = new("data:image/svg\\+xml;base64,[A-Za-z0-9+/=]+", RegexOptions.Compiled);
+
     [ModuleInitializer]
     public static void Init()
     {
@@ -17,6 +24,7 @@ public static class ModuleInitializer
         VerifyDiffPlex.Initialize(OutputType.Compact);
         VerifierSettings.UseSsimForPng();
         VerifierSettings.AddScrubber("html", Scrub);
+        VerifierSettings.AddScrubber(ScrubFaces);
         VerifierSettings.Inline(maxLines: 10, applyMaxLinesToExisting: true);
         VerifierSettings.InitializePlugins();
 
@@ -31,6 +39,13 @@ public static class ModuleInitializer
     static void Scrub(StringBuilder builder)
     {
         var scrubbed = componentMarkers.Replace(builder.ToString(), "");
+        builder.Clear();
+        builder.Append(scrubbed);
+    }
+
+    static void ScrubFaces(StringBuilder builder)
+    {
+        var scrubbed = faceData.Replace(builder.ToString(), "data:image/svg+xml;base64,{face}");
         builder.Clear();
         builder.Append(scrubbed);
     }

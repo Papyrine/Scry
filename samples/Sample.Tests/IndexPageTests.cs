@@ -16,8 +16,12 @@ public class IndexPageTests
         context.Services.AddSingleton<ScryQuery>();
 
         var page = context.Render<IndexPage>();
+
+        // The tables, and then the attachments: each face is a fetch of its own made after the rows
+        // rendered, so a snapshot taken on the table count alone would catch the page mid-fetch.
         await page.WaitForStateAsync(
-            () => page.FindAll("table").Count == 4,
+            () => page.FindAll("table").Count == 4 &&
+                  page.FindAll("[data-testid='faces'][data-fetched='true']").Count == 1,
             TimeSpan.FromSeconds(10));
 
         await Verify(page)
@@ -25,7 +29,7 @@ public class IndexPageTests
                 """
                 {
                   Instance: {},
-                  NodeCount: 150
+                  NodeCount: 176
                 }
                 """);
     }
@@ -57,7 +61,7 @@ public class IndexPageTests
                 """
                 {
                   Instance: {},
-                  NodeCount: 37
+                  NodeCount: 47
                 }
                 """);
     }
@@ -86,7 +90,7 @@ public class IndexPageTests
                 """
                 {
                   Instance: {},
-                  NodeCount: 37
+                  NodeCount: 47
                 }
                 """);
     }

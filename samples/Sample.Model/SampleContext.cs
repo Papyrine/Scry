@@ -73,7 +73,10 @@ public sealed class SampleContext(DbContextOptions<SampleContext> options) :
             Active = true,
             Created = new(2026, 1, 4),
             Department = engineering,
-            Salary = 200_000
+            Salary = 200_000,
+            // Never travels with a row at all — fetched by this row's key, and only when something
+            // wants to draw it.
+            Photo = CartoonFace.For("Alice")
         };
         context.Employees.Add(alice);
         context.Employees.AddRange(
@@ -85,7 +88,8 @@ public sealed class SampleContext(DbContextOptions<SampleContext> options) :
                 Created = new(2026, 1, 4),
                 Department = engineering,
                 Manager = alice,
-                Salary = 150_000
+                Salary = 150_000,
+                Photo = CartoonFace.For("Aaron")
             },
             new()
             {
@@ -95,7 +99,8 @@ public sealed class SampleContext(DbContextOptions<SampleContext> options) :
                 Created = new(2026, 2, 1),
                 Department = sales,
                 Manager = alice,
-                Salary = 90_000
+                Salary = 90_000,
+                Photo = CartoonFace.For("Bob")
             },
             new()
             {
@@ -104,6 +109,8 @@ public sealed class SampleContext(DbContextOptions<SampleContext> options) :
                 Active = true,
                 Created = new(2026, 3, 1),
                 Department = sales,
+                // Carol keeps a null one: a row that exists holding no value is a distinct answer
+                // from a row that may not be read, and the sample page shows both.
                 Salary = 120_000
             });
 

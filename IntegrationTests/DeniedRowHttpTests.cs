@@ -1,4 +1,4 @@
-// UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
+﻿// UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
 // Core's own ToListAsync/CountAsync IQueryable extensions and collide with the Scry client terminals.
 using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 
@@ -38,6 +38,7 @@ public class DeniedRowHttpTests
         {
             options.AddPocoSource(_ => Sample.Model.Holiday.Seed());
             options.AddAttachmentPolicy<Sample.Model.Department, AllowAttachmentPolicy>();
+            options.AddAttachmentPolicy<Sample.Model.Employee, AllowPhotoAttachmentPolicy>();
             options.AddPolicy<Sample.Model.Order, NorthOrdersOnlyPolicy>(new()
             {
                 RootList = DeniedRowMode.Error

@@ -20,6 +20,10 @@ public class UiSnapshotTests :
         await page.WaitForSelectorAsync("table tbody tr");
         await Assertions.Expect(page.Locator("table")).ToHaveCountAsync(4);
 
+        // And the attachments, which are fetched one at a time after the rows rendered — a snapshot
+        // taken on the tables alone could catch the page mid-fetch.
+        await page.WaitForSelectorAsync("[data-testid='faces'][data-fetched='true']");
+
         // Just the app's own markup, and as text: this is the snapshot that stays readable in a diff
         // and portable across machines. UiScreenshotTests.SampleHomePage captures the same page as a
         // rendering, whole document and pixels included.

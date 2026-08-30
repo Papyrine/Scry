@@ -2,7 +2,7 @@
 <Project>
   <PropertyGroup>
     <NoWarn>CS1591;NU1608;NU1109;SC023;PolyfillTargetsForNuget</NoWarn>
-    <Version>0.1.0-beta.4</Version>
+    <Version>0.1.0-beta.5</Version>
     <LangVersion>14.0</LangVersion>
     <AssemblyVersion>1.0.0</AssemblyVersion>
     <Description>Scry lets a Blazor client write strongly-typed LINQ against a server-side EF Core model, serialize it, and execute it server-side with allow-list enforcement.</Description>

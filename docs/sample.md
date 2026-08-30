@@ -43,6 +43,14 @@ public class Employee
     public int DepartmentId { get; set; }
     public Department? Department { get; set; }
 
+    // A claim check rather than a value: no query reads it, and what a client gets back is a handle
+    // carrying this row's key. A photo is the case the attribute exists for — bytes nothing wants on
+    // every row of every query, fetched by the one thing that actually wants to draw them. The check
+    // that authorizes the fetch is registered by the server; this project references the annotations
+    // alone, so [AttachmentWith] has no policy type to name here.
+    [Attachment]
+    public byte[]? Photo { get; set; }
+
     // Never exposed to clients.
     [QueryIgnore]
     public decimal Salary { get; set; }
@@ -56,7 +64,7 @@ public class Employee
     public string Password { get; set; } = "";
 }
 ```
-<sup><a href='/samples/Sample.Model/Entities/Employee.cs#L3-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableEntity' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Model/Entities/Employee.cs#L3-L39' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableEntity' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Salary` is `[QueryIgnore]`d, so it is absent from the generated client model and rejected if named in a raw request.
@@ -174,10 +182,11 @@ builder.Services
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
         // [QueryablePoco] type must be registered here or AddScry throws at startup.
         _.AddPocoSource(_ => Holiday.Seed());
-        // Department.Handbook is an [Attachment], and one exposed without a check is a startup
-        // failure. Registered here rather than by [AttachmentWith] because the model project
-        // references the annotations alone and has no server type to name.
+        // Department.Handbook and Employee.Photo are [Attachment]s, and one exposed without a
+        // check is a startup failure. Registered here rather than by [AttachmentWith] because
+        // the model project references the annotations alone and has no server type to name.
         _.AddAttachmentPolicy<Department, HandbookPolicy>();
+        _.AddAttachmentPolicy<Employee, PhotoPolicy>();
         _.MaxPageSize = 200;
 
         // A row policy whose decision is too slow to run per row in SQL, so it runs in C# and
@@ -203,7 +212,7 @@ builder.Services
         _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L31-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L31-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Holiday` has no table, so its data is registered explicitly — see [POCO sources](server.md#poco-sources). `MaxPageSize` is lowered from the default 1000 to 200.
@@ -213,7 +222,7 @@ builder.Services
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L84-L86' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L85-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: mapExplorer -->
@@ -228,7 +237,7 @@ app.MapScryExplorer(
         _.EnableGuard = _ => true;
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L124-L133' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L125-L134' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The sample always exposes the explorer so it can be browsed without setting an environment. A real app should leave the default Development-only guard in place, or replace it with an authorization check — see [Query explorer](explorer.md).
@@ -315,7 +324,7 @@ employees = await Query
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L35-L42' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L48-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A group-by with aggregates:
@@ -329,7 +338,7 @@ regions = await Query
     .Select(_ => new RegionSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L44-L50' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L57-L63' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 And a query parameterized by closure-captured locals — the values are evaluated client-side and sent as constants, which is how an app builds a filtered query at runtime:
@@ -345,8 +354,82 @@ fullTimers = await Query
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L52-L60' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L65-L73' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
+
+
+## The photos, which the queries never carry
+
+`Employee.Photo` is an [`[Attachment]`](attachments.md): no query reads it, so what comes back on each row is a handle carrying that row's key. The projection therefore has to keep `Id` beside it — that is the key the bytes are claimed by, and leaving it out is a build error rather than a runtime one.
+
+<!-- snippet: clientAttachmentType -->
+<a id='snippet-clientAttachmentType'></a>
+```cs
+// The photo is not a value this row carries: the query brings back a handle, and Id has to be
+// projected beside it because that is the key the bytes are fetched by.
+record EmployeePhoto(int Id, string Name, ScryAttachment Photo);
+```
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L11-L15' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentType' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+<!-- snippet: clientAttachmentQuery -->
+<a id='snippet-clientAttachmentQuery'></a>
+```cs
+// No bytes travel with this. Every row comes back holding a handle to its photo and the
+// key that handle is redeemed by; the response is the same size whether the photos are
+// eight bytes or eight megabytes.
+photos = await Query
+    .Employee
+    .OrderBy(_ => _.Name)
+    .Select(_ => new EmployeePhoto(_.Id, _.Name, _.Photo))
+    .ToListAsync();
+```
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L88-L97' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentQuery' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+The page renders the names off that response, and only then goes looking for the bytes — one request per face, each authorized by the server's `IAttachmentPolicy` on its own terms:
+
+<!-- snippet: clientAttachmentFetch -->
+<a id='snippet-clientAttachmentFetch'></a>
+```cs
+// One request per face, each authorized on its own terms by the server's IAttachmentPolicy.
+foreach (var photo in photos)
+{
+    if (await FaceAsync(photo.Photo) is { } face)
+    {
+        faces[photo.Id] = face;
+    }
+}
+```
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L103-L112' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentFetch' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+<!-- snippet: clientAttachmentOpen -->
+<a id='snippet-clientAttachmentOpen'></a>
+```cs
+/// <summary>
+/// Redeems one handle for its bytes, or null when the row holds no photo — a readable row with an
+/// empty column, which the server answers with a 204 rather than by refusing. The caller owns the
+/// stream and disposes it; a real photo would stream rather than land in memory whole, which this
+/// one does only because it ends up in an <c>img</c> tag.
+/// </summary>
+static async Task<string?> FaceAsync(ScryAttachment photo)
+{
+    await using var bytes = await photo.OpenAsync();
+    if (bytes is null)
+    {
+        return null;
+    }
+
+    var buffer = new MemoryStream();
+    await bytes.CopyToAsync(buffer);
+    return $"data:image/svg+xml;base64,{Convert.ToBase64String(buffer.ToArray())}";
+}
+```
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L132-L151' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentOpen' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Three of the four employees hold a photo. Carol holds none, and the page draws that as an empty circle rather than as an error: a readable row with nothing in the column is a `204`, which is a different answer from the `404` a refusal gets. Open the [sidecar](sidecar.md) on the running sample and the four fetches are listed as `ATTACHMENT` beside the queries, three `200`s and a `204`.
 
 
 ## A policy too expensive to run per row
@@ -417,7 +500,7 @@ app.MapPost("/api/orders/{id:int}/touch", async (int id, SampleContext data) =>
     return Results.NoContent();
 });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L105-L123' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L106-L124' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The third has to be, or the change never reaches a query at all:
@@ -435,7 +518,7 @@ app.MapPost("/api/grants/{region}", (string region, bool allowed, RegionGrants g
     return Results.NoContent();
 });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L93-L103' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L94-L104' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Order.Revision` is `[QueryIgnore]`d — a version column is server machinery, not query surface, and clients never see it. `Sample.Tests\CachedPolicyPageTests.cs` drives the page and asserts those three counts, so the table above is checked rather than claimed.
@@ -517,5 +600,5 @@ public async Task DisallowedPropertyRejectedWith400()
     Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L341-L368' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L342-L369' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->

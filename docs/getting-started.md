@@ -31,6 +31,14 @@ public class Employee
     public int DepartmentId { get; set; }
     public Department? Department { get; set; }
 
+    // A claim check rather than a value: no query reads it, and what a client gets back is a handle
+    // carrying this row's key. A photo is the case the attribute exists for — bytes nothing wants on
+    // every row of every query, fetched by the one thing that actually wants to draw them. The check
+    // that authorizes the fetch is registered by the server; this project references the annotations
+    // alone, so [AttachmentWith] has no policy type to name here.
+    [Attachment]
+    public byte[]? Photo { get; set; }
+
     // Never exposed to clients.
     [QueryIgnore]
     public decimal Salary { get; set; }
@@ -44,7 +52,7 @@ public class Employee
     public string Password { get; set; } = "";
 }
 ```
-<sup><a href='/samples/Sample.Model/Entities/Employee.cs#L3-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableEntity' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Model/Entities/Employee.cs#L3-L39' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableEntity' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `[Queryable]` opts the type in; nothing is exposed without it. Every public readable property is then exposed unless it carries `[QueryIgnore]`. See [Annotations](annotations.md) for views, POCOs, and the exact member rules.
@@ -104,10 +112,11 @@ builder.Services
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
         // [QueryablePoco] type must be registered here or AddScry throws at startup.
         _.AddPocoSource(_ => Holiday.Seed());
-        // Department.Handbook is an [Attachment], and one exposed without a check is a startup
-        // failure. Registered here rather than by [AttachmentWith] because the model project
-        // references the annotations alone and has no server type to name.
+        // Department.Handbook and Employee.Photo are [Attachment]s, and one exposed without a
+        // check is a startup failure. Registered here rather than by [AttachmentWith] because
+        // the model project references the annotations alone and has no server type to name.
         _.AddAttachmentPolicy<Department, HandbookPolicy>();
+        _.AddAttachmentPolicy<Employee, PhotoPolicy>();
         _.MaxPageSize = 200;
 
         // A row policy whose decision is too slow to run per row in SQL, so it runs in C# and
@@ -133,7 +142,7 @@ builder.Services
         _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L31-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L31-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddScry<TContext>` scans `typeof(TContext).Assembly` once at startup, builds the allow-list schema, and registers it as a singleton along with the `ScryProcessor`.
@@ -147,7 +156,7 @@ Then map the endpoint:
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L84-L86' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L85-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 That is a single HTTP endpoint which accepts a serialized query and returns the projected rows. It answers `POST`, where the query is the body, and `GET`, where the query [rides in the URL](wire-format.md#the-url-form) so the response can be cached and revalidated. See [Server](server.md) for all options, and [Row policies](policies.md) for row-level filtering.
@@ -245,7 +254,7 @@ employees = await Query
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L35-L42' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L48-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 That query is captured — never executed client-side — serialized to the wire AST, sent, validated against the allow-list on the server, rebound to the real `Employee` type, run through EF Core, and returned as exactly the four projected columns.

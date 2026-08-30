@@ -83,10 +83,11 @@ builder.Services
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
         // [QueryablePoco] type must be registered here or AddScry throws at startup.
         _.AddPocoSource(_ => Holiday.Seed());
-        // Department.Handbook is an [Attachment], and one exposed without a check is a startup
-        // failure. Registered here rather than by [AttachmentWith] because the model project
-        // references the annotations alone and has no server type to name.
+        // Department.Handbook and Employee.Photo are [Attachment]s, and one exposed without a
+        // check is a startup failure. Registered here rather than by [AttachmentWith] because
+        // the model project references the annotations alone and has no server type to name.
         _.AddAttachmentPolicy<Department, HandbookPolicy>();
+        _.AddAttachmentPolicy<Employee, PhotoPolicy>();
         _.MaxPageSize = 200;
 
         // A row policy whose decision is too slow to run per row in SQL, so it runs in C# and
@@ -112,7 +113,7 @@ builder.Services
         _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L31-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L31-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `QueryFreshness` is what the rows are current as of. Null — the default — writes no `ETag` and answers nothing conditionally, so a server that never sets it behaves exactly as it did before any of this existed. Returning null from it skips one request rather than turning the feature off, so a source that cannot answer right now degrades to a full response.

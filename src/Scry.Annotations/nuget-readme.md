@@ -27,6 +27,14 @@ public class Employee
     public int DepartmentId { get; set; }
     public Department? Department { get; set; }
 
+    // A claim check rather than a value: no query reads it, and what a client gets back is a handle
+    // carrying this row's key. A photo is the case the attribute exists for — bytes nothing wants on
+    // every row of every query, fetched by the one thing that actually wants to draw them. The check
+    // that authorizes the fetch is registered by the server; this project references the annotations
+    // alone, so [AttachmentWith] has no policy type to name here.
+    [Attachment]
+    public byte[]? Photo { get; set; }
+
     // Never exposed to clients.
     [QueryIgnore]
     public decimal Salary { get; set; }
@@ -40,7 +48,7 @@ public class Employee
     public string Password { get; set; } = "";
 }
 ```
-<sup><a href='/samples/Sample.Model/Entities/Employee.cs#L3-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableEntity' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Model/Entities/Employee.cs#L3-L39' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableEntity' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Nothing is exposed without an opt-in attribute, and the server re-validates every incoming query against the same attributes at runtime.

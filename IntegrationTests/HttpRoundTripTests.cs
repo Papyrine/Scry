@@ -57,6 +57,7 @@ public class HttpRoundTripTests
             // Department.Handbook is an [Attachment], and startup refuses a source whose attachment
             // nothing authorizes. No test here fetches it, so an allow-all satisfies the check.
             options.AddAttachmentPolicy<Sample.Model.Department, AllowAttachmentPolicy>();
+            options.AddAttachmentPolicy<Sample.Model.Employee, AllowPhotoAttachmentPolicy>();
         });
 
         app = builder.Build();
@@ -971,6 +972,17 @@ public sealed class EchoHeaderPolicy :
 /// </summary>
 public sealed class AllowAttachmentPolicy :
     IAttachmentPolicy<Sample.Model.Department>
+{
+    public bool Authorize(ScryAttachmentContext context) => true;
+}
+
+/// <summary>
+/// The same for Employee.Photo. A type of its own rather than a second interface on the one above,
+/// which the server refuses: one policy authorizing two entities leaves it ambiguous which rows it
+/// was answering about.
+/// </summary>
+public sealed class AllowPhotoAttachmentPolicy :
+    IAttachmentPolicy<Sample.Model.Employee>
 {
     public bool Authorize(ScryAttachmentContext context) => true;
 }

@@ -20,7 +20,13 @@
                 <td>Engineering</td></tr><tr><td>Carol</td><!--!-->
                 <td>Contractor</td><!--!-->
                 <td>—</td><!--!-->
-                <td>Sales</td></tr></tbody></table><!--!--><h2>Orders by region</h2><table><!--!--><thead><tr><th>Region</th><th>Total</th><th>Orders</th></tr></thead>
+                <td>Sales</td></tr></tbody></table><!--!--><h2>Employee photos (attachments)</h2>
+<!--!--><p>
+    Each face is an <code>[Attachment]</code>: the query behind this section carried a handle keyed
+    by the row rather than the bytes, so the names render before a single image is asked for. Every
+    face below is then a request of its own, authorized on its own terms. Carol's row holds no photo,
+    which is an answer about that row rather than a refusal — and costs no download.
+</p><div class="faces" data-testid="faces" data-fetched="true"><figure class="face"><img src="data:image/svg+xml;base64,{face}" alt="Aaron" width="64" height="64" data-testid="face"><figcaption>Aaron</figcaption></figure><figure class="face"><img src="data:image/svg+xml;base64,{face}" alt="Alice" width="64" height="64" data-testid="face"><figcaption>Alice</figcaption></figure><figure class="face"><img src="data:image/svg+xml;base64,{face}" alt="Bob" width="64" height="64" data-testid="face"><figcaption>Bob</figcaption></figure><figure class="face"><div class="face-empty" data-testid="face-empty">no photo</div><figcaption>Carol</figcaption></figure></div><!--!--><h2>Orders by region</h2><table><!--!--><thead><tr><th>Region</th><th>Total</th><th>Orders</th></tr></thead>
         <tbody><tr><td>North</td><td>350.00</td><td>2</td></tr><tr><td>South</td><td>75.00</td><td>1</td></tr></tbody></table><h2>FullTime full-timers (top 2)</h2><table><!--!--><thead><tr><th>Name</th><th>Manager</th><th>Department</th></tr></thead>
         <tbody><tr><td>Aaron</td><td>Alice</td><td>Engineering</td></tr><tr><td>Alice</td><td>—</td><td>Engineering</td></tr></tbody></table><!--!--><h2>Employee cards (nested projection)</h2><table><!--!--><thead><tr><th>Name</th><th>Department</th></tr></thead>
         <tbody><tr><td>Aaron</td><td>Engineering</td></tr><tr><td>Alice</td><td>Engineering</td></tr><tr><td>Carol</td><td>Sales</td></tr></tbody></table><!--!-->

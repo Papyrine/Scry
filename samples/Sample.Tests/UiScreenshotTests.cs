@@ -57,10 +57,11 @@ public class UiScreenshotTests :
         var page = await NewSizedPageAsync();
         await page.GotoAsync(BaseUrl);
 
-        // All four tables have rendered, so the capture is of the settled page rather than of one
-        // still filling in.
+        // All four tables have rendered and every attachment has been fetched, so the capture is of the
+        // settled page rather than of one still filling in.
         await page.WaitForSelectorAsync("table tbody tr");
         await Assertions.Expect(page.Locator("table")).ToHaveCountAsync(4);
+        await page.WaitForSelectorAsync("[data-testid='faces'][data-fetched='true']");
 
         await Verify(page)
             .PrettyPrintHtml();
@@ -203,6 +204,10 @@ public class UiScreenshotTests :
         var page = await NewSizedPageAsync(docsViewport);
         await page.GotoAsync(BaseUrl);
         await page.WaitForSelectorAsync("table tbody tr");
+
+        // Including the attachment fetches, which are the last exchanges the page makes and the ones
+        // the panel below lists as ATTACHMENT rather than QUERY.
+        await page.WaitForSelectorAsync("[data-testid='faces'][data-fetched='true']");
 
         await page.Keyboard.PressAsync("Alt+KeyQ");
         await page.WaitForSelectorAsync("[data-testid='sidecar-entries'] li", 10);

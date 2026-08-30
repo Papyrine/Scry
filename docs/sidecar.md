@@ -2,7 +2,7 @@
 
 `Scry.Client` ships an opt-in debug sidecar for Blazor apps: a panel that opens on the right of the running page and lists every Scry exchange the app has made — the wire request decoded and pretty-printed (including GET URLs, whose `q=` parameter is otherwise an opaque base64url blob), the response pretty-printed, and the request and response headers.
 
-<img src="../samples/Sample.Tests/UiScreenshotTests.SampleSidecar.verified.png" border="1" alt="The sidecar open over the sample app: the captured exchanges, and one query's decoded request, response, and headers">
+<img src="../samples/Sample.Tests/UiScreenshotTests.SampleSidecar.verified.png" border="1" alt="The sidecar open over the sample app: the captured exchanges, queries and attachment fetches alike, and one query's decoded request, response, and headers">
 
 Toggle it with <kbd>Alt</kbd>+<kbd>Q</kbd> (configurable), or with the small floating **Scry** button in the page's corner. While closed it renders nothing beyond that button — and with the button turned off, nothing at all.
 

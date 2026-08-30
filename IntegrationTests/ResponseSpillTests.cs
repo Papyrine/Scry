@@ -1,4 +1,4 @@
-// UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
+﻿// UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
 // Core's own ToListAsync/CountAsync IQueryable extensions and collide with the Scry client terminals.
 using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 
@@ -246,6 +246,7 @@ public class ResponseSpillTests
             // Department.Handbook is an [Attachment], and startup refuses a source whose attachment
             // nothing authorizes. No test here fetches it, so an allow-all satisfies the check.
             options.AddAttachmentPolicy<Sample.Model.Department, AllowAttachmentPolicy>();
+            options.AddAttachmentPolicy<Sample.Model.Employee, AllowPhotoAttachmentPolicy>();
         });
 
         var app = builder.Build();

@@ -1,4 +1,4 @@
-class Program
+﻿class Program
 {
     // Back the sample with EfLocalDb: each launch runs against its own LocalDB database, cloned from a
     // seeded template. EfLocalDb manages its own instance and self-heals orphaned files, so the sample
@@ -36,10 +36,11 @@ class Program
                 // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
                 // [QueryablePoco] type must be registered here or AddScry throws at startup.
                 _.AddPocoSource(_ => Holiday.Seed());
-                // Department.Handbook is an [Attachment], and one exposed without a check is a startup
-                // failure. Registered here rather than by [AttachmentWith] because the model project
-                // references the annotations alone and has no server type to name.
+                // Department.Handbook and Employee.Photo are [Attachment]s, and one exposed without a
+                // check is a startup failure. Registered here rather than by [AttachmentWith] because
+                // the model project references the annotations alone and has no server type to name.
                 _.AddAttachmentPolicy<Department, HandbookPolicy>();
+                _.AddAttachmentPolicy<Employee, PhotoPolicy>();
                 _.MaxPageSize = 200;
 
                 // begin-snippet: addCachedPolicy

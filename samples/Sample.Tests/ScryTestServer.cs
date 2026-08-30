@@ -48,6 +48,7 @@ public sealed class ScryTestServer :
         {
             options.AddPocoSource(_ => Holiday.Seed());
             options.AddAttachmentPolicy<Department, HandbookPolicy>();
+            options.AddAttachmentPolicy<Employee, PhotoPolicy>();
             options.MaxPageSize = 200;
             options.AddCachedPolicy<Order, long, RegionAccessPolicy>(_ => _.Revision);
             if (conditionalRequests)

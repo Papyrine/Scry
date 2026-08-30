@@ -1,4 +1,4 @@
-// UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
+﻿// UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
 // Core's own ToListAsync/CountAsync IQueryable extensions and collide with the Scry client terminals.
 using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 
@@ -26,6 +26,7 @@ public class UrlLimitTests
             {
                 options.AddPocoSource(_ => Sample.Model.Holiday.Seed());
                 options.AddAttachmentPolicy<Sample.Model.Department, AllowAttachmentPolicy>();
+                options.AddAttachmentPolicy<Sample.Model.Employee, AllowPhotoAttachmentPolicy>();
                 options.QueryUrlLimit = limit;
             });
 
@@ -133,6 +134,7 @@ public class UrlLimitTests
             {
                 options.AddPocoSource(_ => Sample.Model.Holiday.Seed());
                 options.AddAttachmentPolicy<Sample.Model.Department, AllowAttachmentPolicy>();
+                options.AddAttachmentPolicy<Sample.Model.Employee, AllowPhotoAttachmentPolicy>();
                 options.QueryFreshness = (_, _) => new("now");
             });
 
@@ -157,6 +159,7 @@ public class UrlLimitTests
             {
                 options.AddPocoSource(_ => Sample.Model.Holiday.Seed());
                 options.AddAttachmentPolicy<Sample.Model.Department, AllowAttachmentPolicy>();
+                options.AddAttachmentPolicy<Sample.Model.Employee, AllowPhotoAttachmentPolicy>();
                 options.QueryFreshness = (_, _) => new("now");
                 options.CacheScope = _ => "tenant";
             });

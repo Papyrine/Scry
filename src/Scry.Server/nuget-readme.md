@@ -12,10 +12,11 @@ builder.Services
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
         // [QueryablePoco] type must be registered here or AddScry throws at startup.
         _.AddPocoSource(_ => Holiday.Seed());
-        // Department.Handbook is an [Attachment], and one exposed without a check is a startup
-        // failure. Registered here rather than by [AttachmentWith] because the model project
-        // references the annotations alone and has no server type to name.
+        // Department.Handbook and Employee.Photo are [Attachment]s, and one exposed without a
+        // check is a startup failure. Registered here rather than by [AttachmentWith] because
+        // the model project references the annotations alone and has no server type to name.
         _.AddAttachmentPolicy<Department, HandbookPolicy>();
+        _.AddAttachmentPolicy<Employee, PhotoPolicy>();
         _.MaxPageSize = 200;
 
         // A row policy whose decision is too slow to run per row in SQL, so it runs in C# and
@@ -41,7 +42,7 @@ builder.Services
         _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L31-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L31-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddPocoSource` supplies the rows for a `[QueryablePoco]` type — see [POCO sources](https://github.com/Papyrine/Scry/blob/main/docs/server.md#poco-sources).
@@ -51,7 +52,7 @@ builder.Services
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L84-L86' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L85-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Docs: [Server](https://github.com/Papyrine/Scry/blob/main/docs/server.md) · [Row policies](https://github.com/Papyrine/Scry/blob/main/docs/policies.md) · [Security model](https://github.com/Papyrine/Scry/blob/main/docs/security.md)

@@ -6,6 +6,12 @@
       "runtimeExecutable": "dotnet",
       "runtimeArgs": ["run", "--project", "samples/Sample.Server", "--urls", "http://localhost:5249"],
       "port": 5249
+    },
+    {
+      "name": "blazorql-sample",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "D:/Code/BlazorQL/samples/BlazorQL.Sample", "--urls", "http://localhost:5310"],
+      "port": 5310
     }
   ]
 }
