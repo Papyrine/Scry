@@ -571,7 +571,7 @@ public class RenderRoundTripTests
     public void InSource()
     {
         var departments = Department;
-        RoundTrip(Employee.Where(_ => departments.Select(x => x.Name).Contains(_.Name)).ToScryRequest());
+        RoundTrip(Employee.Where(_ => departments.Select(_ => _.Name).Contains(_.Name)).ToScryRequest());
     }
 
     [Test]
@@ -580,14 +580,14 @@ public class RenderRoundTripTests
         var departments = Department;
         RoundTrip(
             Employee
-                .Where(_ => departments.Where(x => x.Active).Select(x => x.Id).Contains(_.DeptId))
+                .Where(_ => departments.Where(_ => _.Active).Select(_ => _.Id).Contains(_.DeptId))
                 .ToScryRequest());
     }
 
     // Subqueries over collection navigations.
     [Test]
     public void SubqueryAnyWithPredicate() =>
-        RoundTrip(Employee.Where(_ => _.Orders.Any(o => o.Total > 10)).ToScryRequest());
+        RoundTrip(Employee.Where(_ => _.Orders.Any(_ => _.Total > 10)).ToScryRequest());
 
     [Test]
     public void SubqueryCountProperty() =>
@@ -595,11 +595,11 @@ public class RenderRoundTripTests
 
     [Test]
     public void SubquerySumSelector() =>
-        RoundTrip(Employee.Where(_ => _.Orders.Sum(o => o.Total) > 100).ToScryRequest());
+        RoundTrip(Employee.Where(_ => _.Orders.Sum(_ => _.Total) > 100).ToScryRequest());
 
     [Test]
     public void SubqueryFilteredFold() =>
-        RoundTrip(Employee.Where(_ => _.Orders.Where(o => o.Total > 1).Max(o => o.Total) > 50).ToScryRequest());
+        RoundTrip(Employee.Where(_ => _.Orders.Where(_ => _.Total > 1).Max(_ => _.Total) > 50).ToScryRequest());
 
     [Test]
     public void SubqueryContainsOverValues() =>
@@ -624,7 +624,7 @@ public class RenderRoundTripTests
         RoundTrip(
             Employee
                 .GroupBy(_ => _.Status)
-                .Select(g => new {g.Key, Count = g.Count(), Total = g.Sum(x => x.Salary)})
+                .Select(g => new {g.Key, Count = g.Count(), Total = g.Sum(_ => _.Salary)})
                 .ToScryRequest());
 
     [Test]
@@ -657,7 +657,7 @@ public class RenderRoundTripTests
             Employee
                 .GroupBy(_ => _.Status)
                 .Where(g => g.Count() > 1)
-                .Select(g => new {g.Key, Total = g.Sum(x => x.Salary)})
+                .Select(g => new {g.Key, Total = g.Sum(_ => _.Salary)})
                 .ToScryRequest());
 
     [Test]
@@ -668,11 +668,11 @@ public class RenderRoundTripTests
                 .Select(g => new
                 {
                     g.Key,
-                    Actives = g.Count(x => x.Active),
-                    DistinctSalaries = g.Select(x => x.Salary).Distinct().Count(),
-                    DistinctTotal = g.Select(x => x.Salary).Distinct().Sum(),
-                    Filtered = g.Where(x => x.Active).Sum(x => x.Salary),
-                    Names = string.Join(", ", g.Select(x => x.Name))
+                    Actives = g.Count(_ => _.Active),
+                    DistinctSalaries = g.Select(_ => _.Salary).Distinct().Count(),
+                    DistinctTotal = g.Select(_ => _.Salary).Distinct().Sum(),
+                    Filtered = g.Where(_ => _.Active).Sum(_ => _.Salary),
+                    Names = string.Join(", ", g.Select(_ => _.Name))
                 })
                 .ToScryRequest());
 
@@ -719,7 +719,7 @@ public class RenderRoundTripTests
                     _ => _.Id,
                     _ => _.Id,
                     // ReSharper disable PossibleMultipleEnumeration
-                    (e, g) => new {e.Name, Total = g.Sum(o => o.Total), Count = g.Count()})
+                    (e, g) => new {e.Name, Total = g.Sum(_ => _.Total), Count = g.Count()})
                 // ReSharper restore PossibleMultipleEnumeration
                 .ToScryRequest());
 
@@ -741,7 +741,7 @@ public class RenderRoundTripTests
             Employee
                 .Where(_ => _.Active)
                 .Select(_ => new {_.Name})
-                .Union(Employee.Where(x => x.Age > 30).Select(x => new {x.Name}))
+                .Union(Employee.Where(_ => _.Age > 30).Select(_ => new {_.Name}))
                 .ToScryRequest());
 
     [Test]
@@ -749,7 +749,7 @@ public class RenderRoundTripTests
         RoundTrip(
             Employee
                 .Select(_ => new {_.Name})
-                .Concat(Employee.OrderBy(x => x.Name).Take(3).Select(x => new {x.Name}))
+                .Concat(Employee.OrderBy(_ => _.Name).Take(3).Select(_ => new {_.Name}))
                 .ToScryRequest());
 
     [Test]

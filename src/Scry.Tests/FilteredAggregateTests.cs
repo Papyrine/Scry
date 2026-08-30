@@ -20,7 +20,9 @@ public class FilteredAggregateTests
             {
                 _.Key,
                 Big = _.Count(_ => _.Amount > 90),
-                AGraded = _.Where(x => x.Grade == 'A').Sum(x => x.Amount)
+                AGraded = _
+                    .Where(_ => _.Grade == 'A')
+                    .Sum(_ => _.Amount)
             })
             .ToListAsync();
 
@@ -44,7 +46,7 @@ public class FilteredAggregateTests
 
         var regions = await client.Source<Order>("Order")
             .GroupBy(_ => _.Region)
-            .Select(_ => new {_.Key, Big = _.Count(x => x.Amount > 90)})
+            .Select(_ => new {_.Key, Big = _.Count(_ => _.Amount > 90)})
             .ToListAsync();
 
         Assert.Multiple(() =>
@@ -67,7 +69,7 @@ public class FilteredAggregateTests
             .Select(_ => new
             {
                 Rows = _.Count(),
-                Grades = _.Select(x => x.Grade).Distinct().Count()
+                Grades = _.Select(_ => _.Grade).Distinct().Count()
             })
             .ToListAsync();
 
@@ -104,7 +106,7 @@ public class FilteredAggregateTests
 
         var regions = await client.Source<Order>("Order")
             .GroupBy(_ => _.Region)
-            .Select(_ => new {_.Key, Discounts = _.Select(x => x.Discount).Distinct().Count()})
+            .Select(_ => new {_.Key, Discounts = _.Select(_ => _.Discount).Distinct().Count()})
             .ToListAsync();
 
         Assert.Multiple(() =>
@@ -211,7 +213,7 @@ public class FilteredAggregateTests
         var exception = Assert.ThrowsAsync<NotSupportedException>(() =>
             client.Source<Order>("Order")
                 .GroupBy(_ => _.Region)
-                .Select(_ => new {Total = _.Select(x => x.Amount).Where(v => v > 90).Sum()})
+                .Select(_ => new {Total = _.Select(_ => _.Amount).Where(_ => _ > 90).Sum()})
                 .ToListAsync());
 
         Assert.That(exception!.Message, Does.Contain("filter the rows, then select the values"));

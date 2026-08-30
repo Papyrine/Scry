@@ -109,7 +109,7 @@ sealed partial class QueryTranslator
             if (selector is not MemberNode path)
             {
                 throw new NotSupportedException(
-                    "string.Concat over a group joins a text member the rows carry — string.Concat(_.Select(x => x.Code)).");
+                    "string.Concat over a group joins a text member the rows carry — string.Concat(_.Select(_ => _.Code)).");
             }
 
             return new(AggregateFn.Join, path, "");
@@ -218,7 +218,7 @@ sealed partial class QueryTranslator
         {
             throw new NotSupportedException(
                 """
-                string.Join over a group joins the values its selector reads — string.Join(", ", _.Select(x => x.Name)).
+                string.Join over a group joins the values its selector reads — string.Join(", ", _.Select(_ => _.Name)).
                 """);
         }
 

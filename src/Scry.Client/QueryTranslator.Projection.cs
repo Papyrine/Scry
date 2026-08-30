@@ -73,7 +73,7 @@ sealed partial class QueryTranslator
         target ??= [];
         // Over a group the row being read is the grouping itself, which TranslateExpr already knows how
         // to read: its Key is the group key and a call taking it is an aggregate. That leaves the two
-        // free to compose — _.Sum(x => x.Amount) / _.Count(), or _.Key.ToUpper().
+        // free to compose — _.Sum(_ => _.Amount) / _.Count(), or _.Key.ToUpper().
         if (grouped)
         {
             return new NodeValue(TranslateExpr(expression, parameter));

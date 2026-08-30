@@ -42,7 +42,7 @@ public class ComputedGroupKeyTests
 
         var rows = await client.Source<Order>("Order")
             .GroupBy(_ => _.Region.ToUpper())
-            .Select(_ => new {Region = _.Key, Total = _.Sum(o => o.Amount)})
+            .Select(_ => new {Region = _.Key, Total = _.Sum(_ => _.Amount)})
             .ToListAsync();
 
         Assert.That(rows.Select(_ => _.Region).Order(), Is.EqualTo(["NORTH", "SOUTH"]));
@@ -87,7 +87,7 @@ public class ComputedGroupKeyTests
 
         var rows = await client.Source<Order>("Order")
             .GroupBy(_ => _.Region.ToUpper())
-            .Select(_ => new {Label = _.Key + "!", Average = _.Sum(o => o.Amount) / _.Count()})
+            .Select(_ => new {Label = _.Key + "!", Average = _.Sum(_ => _.Amount) / _.Count()})
             .ToListAsync();
 
         Assert.That(rows.Select(_ => _.Label).Order(), Is.EqualTo(["NORTH!", "SOUTH!"]));

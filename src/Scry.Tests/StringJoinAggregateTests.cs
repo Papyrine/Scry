@@ -106,7 +106,7 @@ public class StringJoinAggregateTests
                 .GroupBy(_ => _.Region)
                 .Select(_ => new
                 {
-                    Codes = string.Concat(_.Select(x => x.Amount))
+                    Codes = string.Concat(_.Select(_ => _.Amount))
                 })
                 .ToListAsync());
 
@@ -127,7 +127,7 @@ public class StringJoinAggregateTests
                 (region, orders) => new
                 {
                     Region = region,
-                    Codes = string.Join("|", orders.Select(x => x.Code))
+                    Codes = string.Join("|", orders.Select(_ => _.Code))
                 })
             .ToListAsync();
 
@@ -146,7 +146,7 @@ public class StringJoinAggregateTests
                 (region, orders) => new
                 {
                     Region = region,
-                    Codes = string.Join('|', orders.Select(x => x.Code))
+                    Codes = string.Join('|', orders.Select(_ => _.Code))
                 })
             .ToListAsync();
 
@@ -165,7 +165,7 @@ public class StringJoinAggregateTests
             {
                 Region = _.Key,
                 Codes = string.Join(", ", _.Select(_ => _.Code)),
-                Total = _.Sum(x => x.Amount)
+                Total = _.Sum(_ => _.Amount)
             })
             .ToListAsync();
 
@@ -189,7 +189,7 @@ public class StringJoinAggregateTests
                 .GroupBy(_ => _.Region)
                 .Select(_ => new
                 {
-                    Amounts = string.Join(',', _.Select(x => x.Amount))
+                    Amounts = string.Join(',', _.Select(_ => _.Amount))
                 })
                 .ToListAsync());
 

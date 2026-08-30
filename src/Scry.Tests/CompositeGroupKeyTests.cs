@@ -22,7 +22,7 @@ public class CompositeGroupKeyTests
         // begin-snippet: clientCompositeGroupBy
         var rows = await client.Source<Order>("Order")
             .GroupBy(_ => new {_.Region, _.Grade})
-            .Select(_ => new RegionTotal(_.Key.Region, _.Key.Grade, _.Sum(o => o.Amount)))
+            .Select(_ => new RegionTotal(_.Key.Region, _.Key.Grade, _.Sum(_ => _.Amount)))
             .ToListAsync();
         // end-snippet
 
@@ -57,7 +57,7 @@ public class CompositeGroupKeyTests
 
         var rows = await client.Source<Order>("Order")
             .GroupBy(_ => new {_.Region, _.Grade, _.Quantity})
-            .Select(_ => new {_.Key.Region, _.Key.Quantity, Total = _.Sum(o => o.Amount)})
+            .Select(_ => new {_.Key.Region, _.Key.Quantity, Total = _.Sum(_ => _.Amount)})
             .ToListAsync();
 
         Assert.That(rows, Has.Count.EqualTo(3));
@@ -73,7 +73,7 @@ public class CompositeGroupKeyTests
         var rows = await client.Source<Order>("Order")
             .GroupBy(_ => new {_.Region, _.Grade})
             .Where(_ => _.Key.Region == "North")
-            .Select(_ => new RegionTotal(_.Key.Region, _.Key.Grade, _.Sum(o => o.Amount)))
+            .Select(_ => new RegionTotal(_.Key.Region, _.Key.Grade, _.Sum(_ => _.Amount)))
             .ToListAsync();
 
         Assert.That(rows.Select(_ => _.Grade).Order(), Is.EqualTo(['A', 'B']));

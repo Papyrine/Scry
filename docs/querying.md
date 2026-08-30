@@ -1333,7 +1333,7 @@ The key may be **composite** — up to eight members, grouped on all of them at 
 ```cs
 var rows = await client.Source<Order>("Order")
     .GroupBy(_ => new {_.Region, _.Grade})
-    .Select(_ => new RegionTotal(_.Key.Region, _.Key.Grade, _.Sum(o => o.Amount)))
+    .Select(_ => new RegionTotal(_.Key.Region, _.Key.Grade, _.Sum(_ => _.Amount)))
     .ToListAsync();
 ```
 <sup><a href='/src/Scry.Tests/CompositeGroupKeyTests.cs#L22-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCompositeGroupBy' title='Start of snippet'>anchor</a></sup>
