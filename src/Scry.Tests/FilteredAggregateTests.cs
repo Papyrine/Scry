@@ -19,7 +19,7 @@ public class FilteredAggregateTests
             .Select(_ => new
             {
                 _.Key,
-                Big = _.Where(x => x.Amount > 90).Count(),
+                Big = _.Count(_ => _.Amount > 90),
                 AGraded = _.Where(x => x.Grade == 'A').Sum(x => x.Amount)
             })
             .ToListAsync();
@@ -87,7 +87,7 @@ public class FilteredAggregateTests
 
         var regions = await client.Source<Order>("Order")
             .GroupBy(_ => _.Region)
-            .Where(_ => _.Where(x => x.Amount > 90).Count() == 2)
+            .Where(_ => _.Count(_ => _.Amount > 90) == 2)
             .Select(_ => new {_.Key})
             .ToListAsync();
 

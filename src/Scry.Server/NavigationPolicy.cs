@@ -48,7 +48,7 @@ sealed class NavigationPolicy(
             row);
 
         return Expression.Call(
-            FirstOrDefault.MakeGenericMethod(target),
+            firstOrDefault.MakeGenericMethod(target),
             filtered.Expression,
             Expression.Quote(predicate));
     }
@@ -69,7 +69,7 @@ sealed class NavigationPolicy(
             row);
 
         return Expression.Call(
-            Where.MakeGenericMethod(element),
+            where.MakeGenericMethod(element),
             filtered.Expression,
             Expression.Quote(predicate));
     }
@@ -109,7 +109,7 @@ sealed class NavigationPolicy(
             Reachable(full, owner, ownerType, navigation, target));
 
         var any = Expression.Call(
-            AnyWithPredicate.MakeGenericMethod(ownerType),
+            anyWithPredicate.MakeGenericMethod(ownerType),
             query.Expression,
             Expression.Quote(Expression.Lambda(denied, owner)));
 
@@ -128,7 +128,7 @@ sealed class NavigationPolicy(
     {
         var row = Expression.Parameter(element, "p");
         return Expression.Call(
-            CountWithPredicate.MakeGenericMethod(element),
+            countWithPredicate.MakeGenericMethod(element),
             target.Expression,
             Expression.Quote(Expression.Lambda(KeyMatch(row, owner, ownerType, navigation, element), row)));
     }
@@ -203,24 +203,22 @@ sealed class NavigationPolicy(
 
     // The predicate overload specifically: the other two-parameter one takes a default value, which
     // would bind a row rather than filter to one.
-    static readonly MethodInfo FirstOrDefault = typeof(Queryable)
+    static readonly MethodInfo firstOrDefault = typeof(Queryable)
         .GetMethods()
         .Single(_ => _.Name == nameof(Queryable.FirstOrDefault) &&
-                     _.GetParameters() is {Length: 2} parameters &&
-                     parameters[1].ParameterType.IsGenericType &&
+                     _.GetParameters() is [_, {ParameterType.IsGenericType: true}] parameters &&
                      parameters[1].ParameterType.GetGenericTypeDefinition() == typeof(Expression<>));
 
     // The row-predicate overloads. Where also has an indexed one, whose predicate takes the row and its
     // position, so the arity of the delegate is what tells the two apart rather than the parameter count.
-    static readonly MethodInfo Where = RowPredicate(nameof(Queryable.Where));
-    static readonly MethodInfo AnyWithPredicate = RowPredicate(nameof(Queryable.Any));
-    static readonly MethodInfo CountWithPredicate = RowPredicate(nameof(Queryable.Count));
+    static readonly MethodInfo where = RowPredicate(nameof(Queryable.Where));
+    static readonly MethodInfo anyWithPredicate = RowPredicate(nameof(Queryable.Any));
+    static readonly MethodInfo countWithPredicate = RowPredicate(nameof(Queryable.Count));
 
     static MethodInfo RowPredicate(string name) =>
         typeof(Queryable).GetMethods()
             .Single(_ => _.Name == name &&
-                         _.GetParameters() is {Length: 2} parameters &&
-                         parameters[1].ParameterType.IsGenericType &&
+                         _.GetParameters() is [_, {ParameterType.IsGenericType: true}] parameters &&
                          parameters[1].ParameterType.GetGenericTypeDefinition() == typeof(Expression<>) &&
                          parameters[1].ParameterType.GenericTypeArguments[0].GenericTypeArguments.Length == 2);
 }

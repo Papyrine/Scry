@@ -246,7 +246,7 @@ class EngineeringOnlyPolicy :
 ```cs
 var rows = await client.Source<Employee>("Employee")
     .OrderBy(_ => _.Name)
-    .Select(_ => new {_.Name, Department = _.Department!.Name})
+    .Select(_ => new {_.Name, Department = (string?)_.Department!.Name})
     .ToListAsync();
 ```
 <sup><a href='/src/Scry.Tests/NavigationPolicyTests.cs#L26-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-navigationPolicyQuery' title='Start of snippet'>anchor</a></sup>

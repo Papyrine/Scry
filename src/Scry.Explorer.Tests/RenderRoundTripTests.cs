@@ -64,7 +64,7 @@ public class RenderRoundTripTests
         public bool Active { get; init; }
         public Status Status { get; init; }
         public Perks Perks { get; init; }
-        public DateOnly StartDate { get; init; }
+        public Date StartDate { get; init; }
         public DateTime? When { get; init; }
         public DateTimeOffset Offset { get; init; }
         public TimeSpan Duration { get; init; }
@@ -415,7 +415,7 @@ public class RenderRoundTripTests
 
     [Test]
     public void DateOnlyConstant() =>
-        RoundTrip(Employee.Where(_ => _.StartDate >= new DateOnly(2026, 1, 15)).ToScryRequest());
+        RoundTrip(Employee.Where(_ => _.StartDate >= new Date(2026, 1, 15)).ToScryRequest());
 
     [Test]
     public void GuidConstant() =>
@@ -514,7 +514,7 @@ public class RenderRoundTripTests
 
     [Test]
     public void DateOnlyFromDateTime() =>
-        RoundTrip(Employee.Where(_ => DateOnly.FromDateTime(_.When!.Value) == new DateOnly(2026, 2, 3)).ToScryRequest());
+        RoundTrip(Employee.Where(_ => Date.FromDateTime(_.When!.Value) == new Date(2026, 2, 3)).ToScryRequest());
 
     // Math.
     [Test]
@@ -717,7 +717,7 @@ public class RenderRoundTripTests
                 .GroupJoin(
                     Order,
                     _ => _.Id,
-                    o => o.Id,
+                    _ => _.Id,
                     (e, g) => new {e.Name, Total = g.Sum(o => o.Total), Count = g.Count()})
                 .ToScryRequest());
 

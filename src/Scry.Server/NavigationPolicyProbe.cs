@@ -118,7 +118,7 @@ static class NavigationPolicyProbe
             return correlated;
         }
 
-        var leaf = (Expression)Expression.Property(correlated, scalar.Property);
+        Expression leaf = Expression.Property(correlated, scalar.Property);
         if (leaf.Type.IsValueType &&
             Nullable.GetUnderlyingType(leaf.Type) is null)
         {
@@ -137,7 +137,10 @@ static class NavigationPolicyProbe
 
     static readonly MethodInfo set = typeof(DbContext)
         .GetMethods()
-        .Single(_ => _.Name == nameof(DbContext.Set) &&
-                     _.IsGenericMethodDefinition &&
+        .Single(_ => _ is
+                     {
+                         Name: nameof(DbContext.Set),
+                         IsGenericMethodDefinition: true
+                     } &&
                      _.GetParameters().Length == 0);
 }

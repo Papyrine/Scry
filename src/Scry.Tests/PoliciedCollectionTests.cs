@@ -28,7 +28,11 @@ public class PoliciedCollectionTests
         // is the count a direct query of OrderLine would have reached — not what the owner holds.
         var rows = await client.Source<Order>("Order")
             .OrderBy(_ => _.Amount)
-            .Select(_ => new {_.Region, Lines = _.Lines.Count()})
+            .Select(_ => new
+            {
+                _.Region,
+                Lines = _.Lines.Count
+            })
             .ToListAsync();
 
         Assert.That(rows.Select(_ => _.Lines), Is.EqualTo([0, 1, 1]));
@@ -75,7 +79,10 @@ public class PoliciedCollectionTests
 
         Assert.ThrowsAsync<ScryPermissionException>(
             () => client.Source<Order>("Order")
-                .Select(_ => new {Lines = _.Lines.Count()})
+                .Select(_ => new
+                {
+                    Lines = _.Lines.Count
+                })
                 .ToListAsync());
     }
 

@@ -93,12 +93,12 @@ static class SensitiveModel
     /// enum constant's type. Null for a source this process never opened.
     /// </summary>
     public static Type? ModelFor(string source) =>
-        bySource.TryGetValue(source, out var model) ? model : null;
+        bySource.GetValueOrDefault(source);
 
     /// <summary>The property a member name resolves to on a model, from the same cached description
     /// the sensitivity walk reads. Null where the model does not declare it.</summary>
     public static PropertyInfo? Property(Type model, string name) =>
-        Describe(model).Members.TryGetValue(name, out var property) ? property : null;
+        Describe(model).Members.GetValueOrDefault(name);
 
     /// <summary>The type a path walk steps into after a member: the member's own type, unwrapped of
     /// nullability, or a collection's element.</summary>

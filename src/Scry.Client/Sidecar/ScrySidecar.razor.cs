@@ -174,8 +174,11 @@ public partial class ScrySidecar :
             return request.Root;
         }
 
-        if (entry.Kind == ScrySidecarKind.Attachment &&
-            entry.AttachmentRequestBody is { } body)
+        if (entry is
+            {
+                Kind: ScrySidecarKind.Attachment,
+                AttachmentRequestBody: { } body
+            })
         {
             try
             {

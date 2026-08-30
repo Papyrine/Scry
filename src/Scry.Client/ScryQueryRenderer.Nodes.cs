@@ -123,7 +123,11 @@ partial class QueryRenderer
         }
 
         // Equality under a collation is spelled as the Equals overload that asked for it.
-        if (node.Op == BinaryOp.Equal && node.Left is CollateNode collate)
+        if (node is
+            {
+                Op: BinaryOp.Equal,
+                Left: CollateNode collate
+            })
         {
             var argument = node.Right is ConstNode constant
                 ? RenderConst(constant, typeof(string))

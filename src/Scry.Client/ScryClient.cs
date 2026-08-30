@@ -607,7 +607,7 @@ public sealed class ScryClient
             RecordServerHeaders(response);
 
             // A null value produces no body — the row was readable, the column simply holds nothing.
-            if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
+            if (response.StatusCode == HttpStatusCode.NoContent)
             {
                 return null;
             }

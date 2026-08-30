@@ -219,7 +219,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             // A traversal into a source whose policy reports denials asks the database about it as it
             // is built, which is before anything this query runs. A SQL preview runs nothing, so it
             // asks nothing either.
-            new NavigationPolicy(
+            new(
                 schema,
                 db.Model,
                 (name, include) => ResolveSource(name, db, scope, include),
