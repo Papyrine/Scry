@@ -37,7 +37,7 @@ public class ConditionalQueryTests
 
         // The raw client surfaces the 304 as a failure: on its own, a status with no body is not a
         // result it can materialize. QueryCacheHandler is what turns it into one — see below.
-        Assert.That(exception!.StatusCode, Is.EqualTo(304));
+        Assert.That(exception!.StatusCode, Is.EqualTo(HttpStatusCode.NotModified));
     }
 
     [Test]
