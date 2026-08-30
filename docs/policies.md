@@ -27,7 +27,7 @@ public sealed class ActiveOnlyPolicy :
         source.Where(_ => _.Active);
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L378-L386' title='Snippet source file'>snippet source</a> | <a href='#snippet-returnablePolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L379-L387' title='Snippet source file'>snippet source</a> | <a href='#snippet-returnablePolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The `context` carries the request-scoped service provider, the active `DbContext`, and the call's HTTP headers:
@@ -403,9 +403,22 @@ public sealed class ScryAttachmentContext(
 
     /// <summary>The headers of the response being built. Writes here reach the client.</summary>
     public IHeaderDictionary ResponseHeaders { get; } = responseHeaders;
+
+    /// <summary>
+    /// What this row's bytes will be served as. Starts as what <c>[Attachment(ContentType = ...)]</c>
+    /// declared — null where it declared nothing, which is served as
+    /// <see cref="AttachmentMedia.Default"/> — and assigning here overrides it for this fetch alone.
+    /// </summary>
+    /// <remarks>
+    /// The hook for a column holding more than one kind of thing, where the type belongs to the row
+    /// rather than to the member: read it off a sibling column through <see cref="Db"/>, keyed by
+    /// <see cref="KeyValues"/>. Ignored when the fetch does not reach a 200 — a refused, missing, or
+    /// null value carries no body to label.
+    /// </remarks>
+    public string? ContentType { get; set; }
 }
 ```
-<sup><a href='/src/Scry.Server/ScryAttachmentContext.cs#L7-L51' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentContext' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryAttachmentContext.cs#L7-L64' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentContext' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: attachmentPolicy -->
@@ -421,7 +434,7 @@ public sealed class UnsealedContractsPolicy :
         context.KeyValues is not [SealedId];
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L366-L376' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L367-L377' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Attached with `[AttachmentWith(typeof(...))]` or `ScryOptions.AddAttachmentPolicy<TEntity, TPolicy>()`, and inherited down the base chain exactly as a row policy is, so a subclass cannot shed the check its base carries.

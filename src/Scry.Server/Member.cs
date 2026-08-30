@@ -22,4 +22,12 @@ sealed class Member(string name, PropertyInfo property, MemberKind kind)
     /// type's own attributes and nothing inherited, and the two sides have to agree.
     /// </remarks>
     public bool Sensitive { get; } = property.HasAttribute<SensitiveAttribute>(inherit: false);
+
+    /// <summary>
+    /// What an <c>[Attachment]</c> member's bytes are, as declared by the attribute: the media type
+    /// the fetch is served as, or null for <see cref="AttachmentMedia.Default"/>. Meaningless on any
+    /// other kind of member, where the attribute cannot be.
+    /// </summary>
+    public string? ContentType { get; } =
+        property.GetCustomAttribute<AttachmentAttribute>(inherit: false)?.ContentType;
 }

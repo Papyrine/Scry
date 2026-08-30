@@ -175,6 +175,7 @@
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: true,
+          ContentType: application/pdf,
           IsSensitive: false
         },
         {

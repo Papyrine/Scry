@@ -47,5 +47,18 @@ public sealed class ScryAttachmentContext(
 
     /// <summary>The headers of the response being built. Writes here reach the client.</summary>
     public IHeaderDictionary ResponseHeaders { get; } = responseHeaders;
+
+    /// <summary>
+    /// What this row's bytes will be served as. Starts as what <c>[Attachment(ContentType = ...)]</c>
+    /// declared — null where it declared nothing, which is served as
+    /// <see cref="AttachmentMedia.Default"/> — and assigning here overrides it for this fetch alone.
+    /// </summary>
+    /// <remarks>
+    /// The hook for a column holding more than one kind of thing, where the type belongs to the row
+    /// rather than to the member: read it off a sibling column through <see cref="Db"/>, keyed by
+    /// <see cref="KeyValues"/>. Ignored when the fetch does not reach a 200 — a refused, missing, or
+    /// null value carries no body to label.
+    /// </remarks>
+    public string? ContentType { get; set; }
 }
 // end-snippet

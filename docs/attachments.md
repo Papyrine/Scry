@@ -21,12 +21,13 @@ public class Contract
     public int Id { get; set; }
     public string Name { get; set; } = "";
 
-    // Never read by a query. A client sees a handle and fetches the bytes by this row's key.
-    [Attachment]
+    // Never read by a query. A client sees a handle and fetches the bytes by this row's key, and the
+    // declared content type is what that fetch is served as.
+    [Attachment(ContentType = "application/pdf")]
     public byte[]? Document { get; set; }
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L348-L360' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentMember' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L348-L361' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentMember' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The check that authorizes it:
@@ -44,7 +45,7 @@ public sealed class UnsealedContractsPolicy :
         context.KeyValues is not [SealedId];
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L366-L376' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L367-L377' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Registered by the attribute above, or in code:
@@ -110,6 +111,38 @@ The client is generated from the model assembly's **metadata**, which is read an
 Ordered by name, which is the order the key values travel in — a composite key's declared order is not something metadata exposes, so it cannot be the canonical one.
 
 At startup the server compares what it derived against the **real** EF primary key and refuses to start if they differ, naming `[Key]` as the fix. That check is what makes the convention safe: a fluently configured key cannot silently leave the client fetching by one key and the server keyed on another.
+
+
+## Content type
+
+The fetch is served as whatever the member declares, and `application/octet-stream` where it declares nothing:
+
+```cs
+[Attachment(ContentType = "image/png")]
+public byte[]? Photo { get; set; }
+```
+
+Which matters for one reason: it is what a saved file is named from. The [explorer](explorer.md) and the [debug sidecar](sidecar.md) both offer a download beside a fetched attachment, and both take the extension from this — `.png` rather than `.bin`. Nothing derives it from the bytes; a fixed map turns the declared type into an extension, and a type not in that map is `.bin`, because a wrong extension is worse than a generic one.
+
+A column holding files of differing types decides per row instead, from the attachment policy — which sees the key before the row is read:
+
+```cs
+public bool Authorize(ScryAttachmentContext context)
+{
+    context.ContentType = LookUpMediaType(context.KeyValues);
+    return true;
+}
+```
+
+`ScryAttachmentContext.ContentType` starts as what the member declared, and assigning to it overrides that for this fetch alone. Whichever answered, it comes back on `ScryAttachmentResult.ContentType`, so a transport of its own serves the same type the HTTP endpoint does.
+
+Three things about this are deliberate:
+
+- **The declaration is the server's, never the caller's.** It is written on the model, so no request can influence what a response is labelled.
+- **`200`s are sent `X-Content-Type-Options: nosniff`.** A declared type is a statement about a *column*; the bytes stored under it are whatever was written there. A mislabelled response is then a mislabelled file rather than a browser deciding for itself what it is looking at.
+- **The endpoint answers only `POST`.** There is no way to navigate a browser to one, so a type that would be scriptable as a top-level document — `image/svg+xml`, `text/html` — cannot become one here.
+
+A value that is not a `type/subtype` fails at startup rather than being served.
 
 
 ## Security

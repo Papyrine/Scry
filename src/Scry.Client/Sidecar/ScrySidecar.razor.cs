@@ -137,11 +137,15 @@ public partial class ScrySidecar :
             }
 
             var bytes = await response.Content.ReadAsByteArrayAsync();
+
+            // Saved as whatever the server said it served — the member's declared type, or what its
+            // policy overrode that with for this row. Nothing here re-decides from the bytes.
+            var contentType = response.Content.Headers.ContentType?.ToString() ?? AttachmentMedia.Default;
             await module.InvokeVoidAsync(
                 "downloadBytes",
-                FileName(body),
+                FileName(body, contentType),
                 Convert.ToBase64String(bytes),
-                "application/octet-stream");
+                contentType);
             note = null;
         }
         catch (Exception exception)
@@ -154,16 +158,17 @@ public partial class ScrySidecar :
         }
     }
 
-    static string FileName(byte[] attachmentRequest)
+    static string FileName(byte[] attachmentRequest, string? contentType)
     {
+        var extension = AttachmentMedia.Extension(contentType);
         try
         {
             var request = ScryJson.DeserializeAttachmentRequest(attachmentRequest);
-            return $"{request.Root}.{request.Member}.bin";
+            return $"{request.Root}.{request.Member}{extension}";
         }
         catch (ScryWireException)
         {
-            return "attachment.bin";
+            return $"attachment{extension}";
         }
     }
 

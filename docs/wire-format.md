@@ -941,13 +941,13 @@ The response is not a `QueryResponse`:
 
 | Status | Body |
 | --- | --- |
-| `200` | The raw bytes, `application/octet-stream`, with an advisory `Content-Length`. |
+| `200` | The raw bytes, with an advisory `Content-Length`. The media type is what the member declared, or `application/octet-stream` where it declared nothing — see [Content type](attachments.md#content-type). |
 | `204` | Empty — the row was readable and the value is null. |
 | `404` | Empty — refused, absent, or hidden by a row policy, deliberately indistinguishable. |
 | `400` | A `ScryError`, as elsewhere: a malformed request, an unknown source or member, a wrong key count, or a value that does not parse. |
 | `500` | A `ScryError` carrying the fixed `Attachment fetch failed.` |
 
-Every one of them carries the `Scry-Schema-Stamp` header, including the `404` — a client whose fetch stopped working is exactly the one that wants to know its model drifted.
+Every one of them carries the `Scry-Schema-Stamp` header, including the `404` — a client whose fetch stopped working is exactly the one that wants to know its model drifted. A `200` also carries `X-Content-Type-Options: nosniff`: the declared type is a statement about a column, and the bytes stored under it are whatever was written there.
 
 
 ## Versioning

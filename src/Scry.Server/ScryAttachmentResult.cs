@@ -17,6 +17,16 @@ public sealed record ScryAttachmentResult
     /// </summary>
     public byte[]? Value { get; init; }
 
+    /// <summary>
+    /// What the bytes are: what the member declared, or what the attachment policy overrode it with.
+    /// Null where neither said, which the endpoint serves as <see cref="AttachmentMedia.Default"/>.
+    /// </summary>
+    /// <remarks>
+    /// Carried on the result rather than left to the endpoint so a transport of its own gets the same
+    /// answer the HTTP one does, without re-reading the schema to find it.
+    /// </remarks>
+    public string? ContentType { get; init; }
+
     /// <summary>The answer for everything a caller may not have: refused, missing, or hidden.</summary>
     public static ScryAttachmentResult NotFound { get; } = new()
     {

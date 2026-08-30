@@ -26,6 +26,12 @@ public class AttachmentFetchTests
         });
     }
 
+    // What the member declared, carried back on the result so a transport of its own serves the same
+    // type the HTTP endpoint does.
+    [Test]
+    public void CarriesTheDeclaredContentType() =>
+        Assert.That(Fetch(1).ContentType, Is.EqualTo("application/pdf"));
+
     // A row that is there holding a value that is not. Distinct from the refusals below: the caller
     // may read it, and what it reads is nothing.
     [Test]

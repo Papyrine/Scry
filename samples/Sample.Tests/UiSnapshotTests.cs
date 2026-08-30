@@ -541,12 +541,13 @@ public class UiSnapshotTests :
         var links = page.Locator("[data-testid='attachment']");
         await Assertions.Expect(links).ToHaveCountAsync(2);
 
-        // Engineering orders first, and its bytes arrive as the file the browser would have saved.
+        // Engineering orders first, and its bytes arrive as the file the browser would have saved —
+        // named .txt because the member declared text/plain, not because anything sniffed the bytes.
         await links.Nth(0).ClickAsync();
         await page.WaitForFunctionAsync("() => window.__file !== null", null, new() {Timeout = 30_000});
         Assert.That(
             await page.EvaluateAsync<string>("() => window.__file.name"),
-            Is.EqualTo("Department-Handbook-1.bin"));
+            Is.EqualTo("Department-Handbook-1.txt"));
         Assert.That(
             await page.EvaluateAsync<string>("() => atob(window.__file.base64)"),
             Is.EqualTo("Engineering handbook."));

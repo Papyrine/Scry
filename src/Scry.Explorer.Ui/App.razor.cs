@@ -242,11 +242,16 @@ public partial class App
             }
 
             var bytes = await response.Content.ReadAsByteArrayAsync();
+
+            // What arrived, rather than what introspection predicted: a policy may have overridden the
+            // member's declared type for this row, and the name below is the one prediction the link
+            // had to make before asking.
+            var contentType = response.Content.Headers.ContentType?.ToString() ?? AttachmentMedia.Default;
             await JS.InvokeVoidAsync(
                 "scry.downloadBytes",
-                FileName(link, keys),
+                FileName(link, keys, contentType),
                 Convert.ToBase64String(bytes),
-                ScryBinary.PartContentType);
+                contentType);
         }
         catch (Exception exception)
         {
@@ -281,10 +286,12 @@ public partial class App
             _ => ClrTypeTag.String
         };
 
-    // Named after what it is and which row it came from. The key values are the server's own data, so
-    // every character a file name cannot carry is replaced rather than trusted.
-    static string FileName(AttachmentLink link, IReadOnlyList<AttachmentKey> keys) =>
-        Safe($"{link.Root}-{link.Member}-{string.Join("-", keys.Select(_ => _.Value))}") + ".bin";
+    // Named after what it is and which row it came from, extended for what the bytes turned out to be.
+    // The key values are the server's own data, so every character a file name cannot carry is
+    // replaced rather than trusted; the extension comes from a fixed map and never from the header.
+    static string FileName(AttachmentLink link, IReadOnlyList<AttachmentKey> keys, string? contentType) =>
+        Safe($"{link.Root}-{link.Member}-{string.Join("-", keys.Select(_ => _.Value))}") +
+        AttachmentMedia.Extension(contentType);
 
     static string Safe(string name)
     {

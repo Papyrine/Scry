@@ -15,7 +15,7 @@ The model is **default-deny**: a type that carries none of the opt-in attributes
 | `[PreviousNames("...")]` | class, struct, property, field | Keeps accepting the names a source, member, or enum value used to be exposed under. |
 | `[ReturnableWith(typeof(TPolicy))]` | class, struct | Attaches a server-side row policy, and optionally says [what a row it denies produces](policies.md#what-a-denied-row-produces). |
 | `[BinaryTransfer]` | property, field | Sends a `byte[]` as a raw multipart part instead of base64. |
-| `[Attachment]` | property, field | Makes a `byte[]` a claim check: never carried by a query, fetched on demand by row key. |
+| `[Attachment]` | property, field | Makes a `byte[]` a claim check: never carried by a query, fetched on demand by row key. Optional `ContentType` says what the bytes are. |
 | `[AttachmentWith(typeof(TPolicy))]` | class, struct | Attaches the check authorizing this type's attachments. Required where one is exposed. |
 
 
@@ -44,7 +44,7 @@ public class Employee
     // every row of every query, fetched by the one thing that actually wants to draw them. The check
     // that authorizes the fetch is registered by the server; this project references the annotations
     // alone, so [AttachmentWith] has no policy type to name here.
-    [Attachment]
+    [Attachment(ContentType = "image/svg+xml")]
     public byte[]? Photo { get; set; }
 
     // Never exposed to clients.
@@ -452,7 +452,7 @@ builder.Entity<Employee>()
     .ComplexProperty(_ => _.Address)
     .ToJson();
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L511-L515' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L512-L516' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A complex type is **not a root source**: it produces no property on the generated `ScryQuery` and no server resolver. It is reachable only by traversing into it from an opted-in entity/view/POCO — for example `Employee.Address.City`. Its members follow the same exposure rules as any other type (`[QueryIgnore]` still hides `Zip`), and the traversal is bounded by `MaxNavigationDepth` like any navigation. How EF stores the type — a JSON column or separate columns — is transparent to Scry; the server rebinds the member path onto EF, which translates it either way.
@@ -480,7 +480,7 @@ builder.Entity<Employee>()
     .ComplexCollection(_ => _.PreviousAddresses)
     .ToJson();
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L517-L521' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexCollectionToJson' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L518-L522' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexCollectionToJson' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The element type being a complex type rather than a source changes nothing a client can see: the array is aggregable and flattenable exactly like a collection of entities, and the wire request is indistinguishable from one over a collection navigation. Because a complex type is never a source, it can carry no [row policy](policies.md) — attaching one is refused at startup rather than silently ignored, since a policy that cannot run reads as protection it is not providing:
@@ -579,12 +579,13 @@ public class Contract
     public int Id { get; set; }
     public string Name { get; set; } = "";
 
-    // Never read by a query. A client sees a handle and fetches the bytes by this row's key.
-    [Attachment]
+    // Never read by a query. A client sees a handle and fetches the bytes by this row's key, and the
+    // declared content type is what that fetch is served as.
+    [Attachment(ContentType = "application/pdf")]
     public byte[]? Document { get; set; }
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L348-L360' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentMember' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L348-L361' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentMember' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The other way to expose a `byte[]`, and the opposite trade from `[BinaryTransfer]`: the query never reads the value at all. What the client gets instead is a handle carrying the row's key, exchanged for the bytes by a second request whenever — or if ever — they are wanted. See [Attachments](attachments.md).
@@ -609,6 +610,8 @@ The constraints are checked twice, at the build that writes the model and again 
 - Never alongside `[BinaryTransfer]`, which asks for the value to be both fetched and not fetched (`SCRY006`).
 - The row's key must be derivable: `[Key]` where written, else a member named `Id`, else `{TypeName}Id` (`SCRY007`).
 - The type must have an [attachment policy](policies.md#attachment-policies), or the server refuses to start.
+
+`ContentType` is optional and says what the bytes are — the media type the fetch is served as, and what tooling names a download from. Leaving it unset serves `application/octet-stream`, which says only that they are bytes. A value that is not a `type/subtype` fails at server startup. See [Content type](attachments.md#content-type).
 
 
 ## `[AttachmentWith]`

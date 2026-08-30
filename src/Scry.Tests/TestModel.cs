@@ -353,8 +353,9 @@ public class Contract
     public int Id { get; set; }
     public string Name { get; set; } = "";
 
-    // Never read by a query. A client sees a handle and fetches the bytes by this row's key.
-    [Attachment]
+    // Never read by a query. A client sees a handle and fetches the bytes by this row's key, and the
+    // declared content type is what that fetch is served as.
+    [Attachment(ContentType = "application/pdf")]
     public byte[]? Document { get; set; }
 }
 // end-snippet

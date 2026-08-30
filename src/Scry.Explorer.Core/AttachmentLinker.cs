@@ -7,7 +7,15 @@ namespace Scry;
 /// <param name="KeyColumns">
 /// The result's own property names, in the order an <see cref="AttachmentRequest"/> wants its keys.
 /// </param>
-public sealed record AttachmentLink(string Root, string Member, IReadOnlyList<string> KeyColumns);
+/// <param name="ContentType">
+/// What the model says the bytes are, or null where it says nothing. Known before the fetch, which
+/// is what lets a download be named for what it is rather than <c>.bin</c>.
+/// </param>
+public sealed record AttachmentLink(
+    string Root,
+    string Member,
+    IReadOnlyList<string> KeyColumns,
+    string? ContentType = null);
 
 /// <summary>
 /// Works out which attachments the rows of a result can be fetched by. A generated client learns
@@ -73,7 +81,7 @@ public static class AttachmentLinker
             columns.Add(column);
         }
 
-        return [..attachments.Select(_ => new AttachmentLink(request.Root, _, columns))];
+        return [..attachments.Select(_ => new AttachmentLink(request.Root, _.Name, columns, _.ContentType))];
     }
 
     /// <summary>
@@ -109,18 +117,15 @@ public static class AttachmentLinker
 
     // Declared plus inherited, matching ModelSynthesizer: an attachment declared on a base is the
     // derived row's too.
-    static List<string> Attachments(ScryIntrospection introspection, ScryTypeInfo type)
+    static List<ScryMemberInfo> Attachments(ScryIntrospection introspection, ScryTypeInfo type)
     {
-        var members = new List<string>();
+        var members = new List<ScryMemberInfo>();
         if (Base(introspection, type) is { } baseType)
         {
             members.AddRange(Attachments(introspection, baseType));
         }
 
-        members.AddRange(
-            type.Members
-                .Where(_ => _.IsAttachment)
-                .Select(_ => _.Name));
+        members.AddRange(type.Members.Where(_ => _.IsAttachment));
         return members;
     }
 

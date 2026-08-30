@@ -134,7 +134,8 @@ public partial class Index
     /// Redeems one handle for its bytes, or null when the row holds no photo — a readable row with an
     /// empty column, which the server answers with a 204 rather than by refusing. The caller owns the
     /// stream and disposes it; a real photo would stream rather than land in memory whole, which this
-    /// one does only because it ends up in an <c>img</c> tag.
+    /// one does only because it ends up in an <c>img</c> tag. The media type below is the one
+    /// <c>Employee.Photo</c> declares, and the one the fetch was served as.
     /// </summary>
     static async Task<string?> FaceAsync(ScryAttachment photo)
     {

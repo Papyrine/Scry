@@ -746,7 +746,12 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         // lookup took.
         var policy = source.AttachmentPolicy ??
                      throw new($"Source '{request.Root}' exposes an attachment with no policy to authorize it.");
-        var context = new ScryAttachmentContext(scope.Services, db, member.Name, values, scope.RequestHeaders, scope.ResponseHeaders);
+        var context = new ScryAttachmentContext(scope.Services, db, member.Name, values, scope.RequestHeaders, scope.ResponseHeaders)
+        {
+            // The model's declaration, which the policy may replace where the row rather than the
+            // member decides what its bytes are.
+            ContentType = member.ContentType
+        };
         if (!AttachmentPolicy.Authorize(policy, scope.Services, context))
         {
             return ScryAttachmentResult.NotFound;
@@ -783,7 +788,8 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         return new()
         {
             Found = true,
-            Value = (byte[]?) row[0]
+            Value = (byte[]?) row[0],
+            ContentType = context.ContentType
         };
     }
 

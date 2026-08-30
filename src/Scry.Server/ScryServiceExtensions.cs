@@ -577,7 +577,12 @@ public static class ScryServiceExtensions
                 return;
             }
 
-            context.Response.ContentType = ScryBinary.PartContentType;
+            // What the model said the bytes are, or what the policy said this row's are. Sent nosniff
+            // because a declared type is a statement about a column, and the bytes under it are
+            // whatever was stored: a browser re-deciding from the content is the one way a wrong
+            // label becomes a wrong behaviour.
+            context.Response.ContentType = result.ContentType ?? AttachmentMedia.Default;
+            context.Response.Headers.XContentTypeOptions = "nosniff";
             context.Response.ContentLength = value.Length;
             await context.Response.Body.WriteAsync(value, context.RequestAborted);
         }

@@ -303,7 +303,8 @@ sealed class Schema
         {
             return new(member.Name, "global::Scry.ScryAttachment", NeedsNullDefault: true, IsNavigation: false)
             {
-                IsAttachment = true
+                IsAttachment = true,
+                ContentType = member.ContentType
             };
         }
 
@@ -1140,7 +1141,9 @@ sealed class Schema
                         throw new($"'{type.Name}.{property.Name}' carries both [Attachment] and [BinaryTransfer]. [BinaryTransfer] changes how a value the query read is encoded; [Attachment] means the query never reads it. Keep one.");
                     }
 
-                    meta.Members[property.Name] = new(property.Name, property, MemberKind.Attachment);
+                    var attachment = new Member(property.Name, property, MemberKind.Attachment);
+                    ValidateContentType(type, attachment);
+                    meta.Members[property.Name] = attachment;
                     continue;
                 }
 
@@ -1226,6 +1229,31 @@ sealed class Schema
         {
             throw new($"[BinaryTransfer] on '{type.Name}.{property.Name}', {reason}");
         }
+    }
+
+    /// <summary>
+    /// Checks that a declared content type is one that can be sent. The value reaches a response
+    /// header, so a line break in it would let the model author split the response — not a caller's
+    /// input, but a mistake worth refusing at startup rather than serving.
+    /// </summary>
+    static void ValidateContentType(Type type, Member member)
+    {
+        if (member.ContentType is not { } contentType)
+        {
+            return;
+        }
+
+        var media = contentType.Split(';')[0].Trim();
+        if (media.Length > 0 &&
+            media.Count(_ => _ == '/') == 1 &&
+            media[0] != '/' &&
+            media[^1] != '/' &&
+            !contentType.Any(char.IsControl))
+        {
+            return;
+        }
+
+        throw new($"'{type.Name}.{member.Name}' declares ContentType '{contentType}', which is not a media type. Write one as 'type/subtype' — for example 'image/png' — or leave it unset to serve the bytes as '{AttachmentMedia.Default}'.");
     }
 
     static void EnsureNoAttachment(Type type, PropertyInfo property, string reason)

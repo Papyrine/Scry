@@ -41,6 +41,20 @@ public sealed record ScryMemberInfo(
     public bool IsAttachment { get; init; }
 
     /// <summary>
+    /// What an <c>[Attachment]</c> member's bytes are, as the model declared it: the media type the
+    /// fetch will be served as. Null where nothing was declared, which is served as
+    /// <see cref="AttachmentMedia.Default"/>.
+    /// </summary>
+    /// <remarks>
+    /// Published so tooling can name a download before making the fetch — the explorer offers a link
+    /// per attachment and has no other way to know what it is about to receive. Outside the schema
+    /// stamp, deliberately: the generated member is a handle either way, so restating what the bytes
+    /// are leaves the queryable surface, and every deployed client, exactly as it was.
+    /// </remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ContentType { get; init; }
+
+    /// <summary>
     /// True for a member the model marks <c>[Sensitive]</c>: a query comparing it against a constant
     /// must travel in a body rather than a URL, and a response projecting it is never stored.
     /// </summary>

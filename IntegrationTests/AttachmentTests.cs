@@ -1,4 +1,4 @@
-// UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
+﻿// UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
 // Core's own ToListAsync/CountAsync IQueryable extensions and collide with the Scry client terminals.
 using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 using System.Text.Encodings.Web;
@@ -31,7 +31,7 @@ public class AttachmentTests
         {
             await context.Database.EnsureCreatedAsync();
             context.People.AddRange(
-                new() {Id = 1, Name = "Ada", Photo = managerPayload, Visible = true},
+                new() {Id = 1, Name = "Ada", Photo = managerPayload, Resume = leasePayload, Visible = true},
                 new() {Id = 2, Name = "Grace", Photo = leasePayload, Visible = true, ManagerId = 1},
                 // Readable row, absent value: the 204 case.
                 new() {Id = 3, Name = "Alan", Photo = null, Visible = true},
@@ -49,12 +49,13 @@ public class AttachmentTests
     /// Stands in for the generated model. Written exactly as the generator would emit it: the
     /// attachment is absent from the member list, and the key it is fetched by is named instead.
     /// </summary>
-    [ScryModel("Person", "Id", "Name", Keys = ["Id"], Attachments = ["Photo"])]
+    [ScryModel("Person", "Id", "Name", Keys = ["Id"], Attachments = ["Photo", "Resume"])]
     class PersonModel
     {
         public int Id { get; init; }
         public string Name { get; init; } = "";
         public ScryAttachment Photo { get; init; } = null!;
+        public ScryAttachment Resume { get; init; } = null!;
         public PersonModel? Manager { get; init; }
     }
 
@@ -287,6 +288,60 @@ public class AttachmentTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
 
+    /// <summary>
+    /// What the member declared, served as the fetch's content type — and <c>nosniff</c> beside it,
+    /// because a declared type is a statement about a column while the bytes under it are whatever was
+    /// stored. A browser re-deciding from the content is the one way a wrong label becomes a wrong
+    /// behaviour.
+    /// </summary>
+    [Test]
+    public async Task DeclaredContentTypeIsServed()
+    {
+        using var response = await FetchRaw("Photo", 1);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("image/png"));
+            Assert.That(response.Headers.GetValues("X-Content-Type-Options").Single(), Is.EqualTo("nosniff"));
+        });
+    }
+
+    // An attachment declaring nothing is served as bytes, which is what it was before content types
+    // existed: adding the property to one member changes nothing about the next.
+    [Test]
+    public async Task UndeclaredContentTypeIsOctetStream()
+    {
+        using var response = await FetchRaw("Resume", 1);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo(AttachmentMedia.Default));
+        });
+    }
+
+    // The row's answer wins over the member's: the policy sees the key before the row is read and can
+    // say what this one holds.
+    [Test]
+    public async Task PolicyOverridesTheDeclaredContentType()
+    {
+        using var response = await FetchRaw("Photo", PhotoPolicy.JpegId);
+
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("image/jpeg"));
+    }
+
+    // The response itself rather than its bytes: these assert on headers, which the client's own
+    // OpenAsync path deliberately does not surface.
+    async Task<HttpResponseMessage> FetchRaw(string member, int id)
+    {
+        using var content = new StringContent(
+            ScryJson.Serialize(AttachmentRequest.Create("Person", member, [new(id.ToString(), ClrTypeTag.Int32)])),
+            Encoding.UTF8,
+            "application/json");
+        return await http.PostAsync("/api/query/attachment", content);
+    }
+
     [Test]
     public async Task EveryStatusCarriesTheSchemaStamp()
     {
@@ -387,8 +442,13 @@ public class Person
     public int Id { get; set; }
     public string Name { get; set; } = "";
 
-    [Attachment]
+    [Attachment(ContentType = "image/png")]
     public byte[]? Photo { get; set; }
+
+    // The other half of the pair: an attachment declaring nothing, served as bytes and nothing said
+    // about them.
+    [Attachment]
+    public byte[]? Resume { get; set; }
 
     public bool Visible { get; set; }
 
@@ -412,8 +472,20 @@ public sealed class VisiblePeopleOnlyPolicy :
 public sealed class PhotoPolicy :
     IAttachmentPolicy<Person>
 {
-    public bool Authorize(ScryAttachmentContext context) =>
-        !context.RequestHeaders.ContainsKey("X-Test-Deny");
+    /// <summary>The seeded row whose photo the policy relabels, exercising the per-row override.</summary>
+    public const int JpegId = 2;
+
+    public bool Authorize(ScryAttachmentContext context)
+    {
+        // What this row's bytes are, decided by the row rather than by the member: the declared
+        // image/png stands for every other one. A real model reads it off a sibling column.
+        if (context is {Member: "Photo", KeyValues: [JpegId]})
+        {
+            context.ContentType = "image/jpeg";
+        }
+
+        return !context.RequestHeaders.ContainsKey("X-Test-Deny");
+    }
 }
 
 public sealed class AttachmentContext(Microsoft.EntityFrameworkCore.DbContextOptions<AttachmentContext> options) :

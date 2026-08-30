@@ -48,7 +48,7 @@ public class Employee
     // every row of every query, fetched by the one thing that actually wants to draw them. The check
     // that authorizes the fetch is registered by the server; this project references the annotations
     // alone, so [AttachmentWith] has no policy type to name here.
-    [Attachment]
+    [Attachment(ContentType = "image/svg+xml")]
     public byte[]? Photo { get; set; }
 
     // Never exposed to clients.
@@ -411,7 +411,8 @@ foreach (var photo in photos)
 /// Redeems one handle for its bytes, or null when the row holds no photo — a readable row with an
 /// empty column, which the server answers with a 204 rather than by refusing. The caller owns the
 /// stream and disposes it; a real photo would stream rather than land in memory whole, which this
-/// one does only because it ends up in an <c>img</c> tag.
+/// one does only because it ends up in an <c>img</c> tag. The media type below is the one
+/// <c>Employee.Photo</c> declares, and the one the fetch was served as.
 /// </summary>
 static async Task<string?> FaceAsync(ScryAttachment photo)
 {
@@ -426,8 +427,10 @@ static async Task<string?> FaceAsync(ScryAttachment photo)
     return $"data:image/svg+xml;base64,{Convert.ToBase64String(buffer.ToArray())}";
 }
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L132-L151' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentOpen' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L132-L152' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentOpen' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
+
+`Employee.Photo` declares `ContentType = "image/svg+xml"`, so the fetch is served as that rather than as bytes — which is what lets the [explorer](explorer.md) and the [sidecar](sidecar.md) offer the download as `.svg`. `Department.Handbook` declares `text/plain` and downloads as `.txt`. See [Content type](attachments.md#content-type).
 
 Three of the four employees hold a photo. Carol holds none, and the page draws that as an empty circle rather than as an error: a readable row with nothing in the column is a `204`, which is a different answer from the `404` a refusal gets. Open the [sidecar](sidecar.md) on the running sample and the four fetches are listed as `ATTACHMENT` beside the queries, three `200`s and a `204`.
 

@@ -25,7 +25,8 @@ public class AttachmentLinkerTests
                 new("Name", "string", NeedsNullDefault: true, IsNavigation: false),
                 new("Document", "global::Scry.ScryAttachment", NeedsNullDefault: true, IsNavigation: false)
                 {
-                    IsAttachment = true
+                    IsAttachment = true,
+                    ContentType = "application/pdf"
                 }
             ])
             {
@@ -71,6 +72,9 @@ public class AttachmentLinkerTests
             // Camel-cased: the response is keyed by ScryJson's dictionary policy, and the table's
             // columns are the response's own property names.
             Assert.That(links[0].KeyColumns, Is.EqualTo(["id"]));
+            // Carried off introspection so the download can be named before the fetch is made — the
+            // explorer has to write a file name at the moment the bytes arrive.
+            Assert.That(links[0].ContentType, Is.EqualTo("application/pdf"));
         });
     }
 

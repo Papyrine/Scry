@@ -17,5 +17,20 @@ namespace Scry;
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
 public sealed class AttachmentAttribute :
-    Attribute;
+    Attribute
+{
+    /// <summary>
+    /// What the bytes are, sent as the fetch's <c>Content-Type</c> — <c>image/png</c>,
+    /// <c>application/pdf</c>. Null (the default) sends <c>application/octet-stream</c>, which says
+    /// only that they are bytes.
+    /// </summary>
+    /// <remarks>
+    /// Declared on the model, so it is the server's own statement about its column and never
+    /// something a caller can influence; a value the bytes contradict is a mislabelled response, not
+    /// a vulnerability, because the response is sent <c>nosniff</c> and the endpoint answers only
+    /// <c>POST</c> — there is no way to navigate a browser to one. A row needing its own answer
+    /// overrides this from the attachment policy; see <c>ScryAttachmentContext.ContentType</c>.
+    /// </remarks>
+    public string? ContentType { get; set; }
+}
 // end-snippet

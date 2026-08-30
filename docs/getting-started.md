@@ -36,7 +36,7 @@ public class Employee
     // every row of every query, fetched by the one thing that actually wants to draw them. The check
     // that authorizes the fetch is registered by the server; this project references the annotations
     // alone, so [AttachmentWith] has no policy type to name here.
-    [Attachment]
+    [Attachment(ContentType = "image/svg+xml")]
     public byte[]? Photo { get; set; }
 
     // Never exposed to clients.
