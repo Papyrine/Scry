@@ -267,7 +267,7 @@ public class FastWriterGoldenTests
         queries.Add("""{"version":1,"root":"Nonexistent","pipeline":[]}""");
         queries.Add("""{"version":1,"root":"Nonexistent","pipeline":[],"stamp":"not-this-server"}""");
 
-        var batch = $$"""{"version":1,"queries":[{{string.Join(",", queries)}}]}""";
+        var batch = $$"""{"version":1,"queries":[{{string.Join(',', queries)}}]}""";
         var expected = DirectBatch(batch);
 
         Assert.That(await Post(batch, "/api/query/batch"), Is.EqualTo(expected), "miss");

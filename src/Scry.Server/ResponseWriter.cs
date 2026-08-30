@@ -1,3 +1,5 @@
+using System.Net;
+
 /// <summary>
 /// Writes a list result straight from projected <c>object[]</c> rows to UTF-8 — no per-row
 /// dictionaries, no <see cref="JsonElement"/> round trip, no reflection walk over the envelope — and
@@ -24,6 +26,9 @@ static class ResponseWriter
     static readonly JsonEncodedText error = JsonEncodedText.Encode("error");
     static readonly JsonEncodedText status = JsonEncodedText.Encode("status");
     static readonly JsonEncodedText staleClient = JsonEncodedText.Encode("staleClient");
+    static readonly JsonEncodedText badRequest = JsonEncodedText.Encode(nameof(HttpStatusCode.BadRequest));
+    static readonly JsonEncodedText forbidden = JsonEncodedText.Encode(nameof(HttpStatusCode.Forbidden));
+    static readonly JsonEncodedText internalServerError = JsonEncodedText.Encode(nameof(HttpStatusCode.InternalServerError));
 
     /// <summary>Writes the whole list envelope — version, kind, rows, stamp — returning the row count.</summary>
     /// <remarks>
@@ -231,12 +236,13 @@ static class ResponseWriter
     /// no <c>response</c>, and a <c>staleClient</c> written only when it is true, since the member is
     /// omitted when it is its default.
     /// </summary>
-    public static void WriteEntry(Utf8JsonWriter json, string message, int entryStatus, bool stale)
+    public static void WriteEntry(Utf8JsonWriter json, string message, HttpStatusCode entryStatus, bool stale)
     {
         json.WriteStartObject();
         json.WriteString(error, message);
-        // Always 400, 403 or 500 for a reported entry, so never the default that would omit it.
-        json.WriteNumber(status, entryStatus);
+        // Always 400, 403 or 500 for a reported entry, so never the default that would omit it. The
+        // name, not the number: the shared options write an enum as its name, and this has to match.
+        json.WriteString(status, Name(entryStatus));
         if (stale)
         {
             json.WriteBoolean(staleClient, true);
@@ -244,6 +250,15 @@ static class ResponseWriter
 
         json.WriteEndObject();
     }
+
+    static JsonEncodedText Name(HttpStatusCode entryStatus) =>
+        entryStatus switch
+        {
+            HttpStatusCode.BadRequest => badRequest,
+            HttpStatusCode.Forbidden => forbidden,
+            HttpStatusCode.InternalServerError => internalServerError,
+            _ => throw new ArgumentOutOfRangeException(nameof(entryStatus), entryStatus, null)
+        };
 }
 
 /// <summary>

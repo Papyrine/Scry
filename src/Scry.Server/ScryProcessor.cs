@@ -569,14 +569,14 @@ public sealed class ScryProcessor
         }
         catch (ScryValidationException exception)
         {
-            ResponseWriter.WriteEntry(json, exception.Message, 400, exception.StaleClient);
+            ResponseWriter.WriteEntry(json, exception.Message, HttpStatusCode.BadRequest, exception.StaleClient);
             return;
         }
         catch (ScryPermissionException exception)
         {
             // Per entry, like a rejection: one entry's rows being denied says nothing about the
             // others', and a batch that failed whole would make a denial impossible to attribute.
-            ResponseWriter.WriteEntry(json, exception.Message, 403, stale: false);
+            ResponseWriter.WriteEntry(json, exception.Message, HttpStatusCode.Forbidden, stale: false);
             return;
         }
         catch (OperationCanceledException)
@@ -593,7 +593,7 @@ public sealed class ScryProcessor
             ResponseWriter.WriteEntry(
                 json,
                 "Query execution failed.",
-                500,
+                HttpStatusCode.InternalServerError,
                 query.Stamp is { } stamp && stamp != schema.Stamp);
             return;
         }

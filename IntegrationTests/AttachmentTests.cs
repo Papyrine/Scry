@@ -148,7 +148,7 @@ public class AttachmentTests
 
         var row = rows.Single();
 
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(row.Name, Is.EqualTo("Grace"));
             Assert.That(row.Manager.Id, Is.EqualTo(1));
