@@ -197,14 +197,18 @@ sealed partial class QueryTranslator
             return null;
         }
 
-        // The generic overload is what a non-string selector binds to.
-        if (call.Method.IsGenericMethod)
+        // A non-string selector binds the generic overload. So does a char separator, whatever the
+        // selector reads — there is no non-generic char overload over a sequence — so it is the value
+        // type the overload closed over that answers the question, not the genericity itself.
+        if (call.Method.IsGenericMethod &&
+            call.Method.GetGenericArguments()[0] != typeof(string))
         {
             throw new NotSupportedException("string.Join over a group joins text — select a string member.");
         }
 
+        // The separator is a constant, written as a string or as the char spelling of one.
         if (ReferencesParameter(call.Arguments[0], root) ||
-            Evaluate(call.Arguments[0]) is not string separator)
+            SeparatorText(Evaluate(call.Arguments[0])) is not { } separator)
         {
             throw new NotSupportedException("string.Join over a group takes a constant separator.");
         }
@@ -228,6 +232,16 @@ sealed partial class QueryTranslator
 
         return new(AggregateFn.Join, path, separator);
     }
+
+    // string.Join's separator is a string or, the shorter spelling, a char. Null for anything
+    // else, which is a separator the call did not carry as a constant at all.
+    static string? SeparatorText(object? constant) =>
+        constant switch
+        {
+            string text => text,
+            char character => character.ToString(),
+            _ => null
+        };
 
     static bool IsGrouping(Type type) =>
         type.IsGenericType &&

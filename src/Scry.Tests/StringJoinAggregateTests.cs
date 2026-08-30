@@ -79,13 +79,26 @@ public class StringJoinAggregateTests
     // The result-selector spelling unfolds into the same GroupBy + Select, so the aggregate reads
     // identically through it.
     [Test]
-    public async Task JoinsThroughAResultSelector()
+    public async Task StringJoinsThroughAResultSelector()
     {
         await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var regions = await client.Source<Order>("Order")
             .GroupBy(_ => _.Region, (region, orders) => new {Region = region, Codes = string.Join("|", orders.Select(x => x.Code))})
+            .ToListAsync();
+
+        Assert.That(regions.Single(_ => _.Region == "North").Codes, Is.EqualTo("40|8"));
+    }
+
+    [Test]
+    public async Task CharJoinsThroughAResultSelector()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var regions = await client.Source<Order>("Order")
+            .GroupBy(_ => _.Region, (region, orders) => new {Region = region, Codes = string.Join('|', orders.Select(x => x.Code))})
             .ToListAsync();
 
         Assert.That(regions.Single(_ => _.Region == "North").Codes, Is.EqualTo("40|8"));
@@ -110,7 +123,7 @@ public class StringJoinAggregateTests
         });
     }
 
-    // A non-string selector binds the generic string.Join overload, which is the refusal's cue.
+    // The separator is text either way; it is the values the selector reads that are not.
     [Test]
     public void ANonTextSelectorIsRefusedAtTranslation()
     {
