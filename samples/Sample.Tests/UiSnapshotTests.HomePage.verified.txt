@@ -1,5 +1,8 @@
 ﻿<!--!--><!--!-->
 
+<!--!--><button type="button" class="scry-sidecar-launcher" data-testid="sidecar-toggle" title="Open the Scry sidecar (Alt+Q)" aria-label="Open the Scry debug sidecar">Scry</button><!--!-->
+
+
 <!--!--><!--!--><!--!--><!--!--><!--!--><!--!--><!--!-->
 
 <!--!--><h1 tabindex="-1">Scry Sample</h1>

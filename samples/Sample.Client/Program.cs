@@ -40,6 +40,16 @@
             .AddHttpMessageHandler<QueryCacheHandler>();
         // end-snippet
 
+        // The debug sidecar: records every Scry exchange on the named client and shows them in a
+        // panel toggled by Alt+Q. Registered after the cache handler so what it sees is the real
+        // wire exchange — the If-None-Match request and the raw 304 — rather than the replay.
+        // begin-snippet: sidecarRegistration
+        builder.Services.AddScrySidecar();
+        builder.Services
+            .AddHttpClient("scry")
+            .AddHttpMessageHandler<ScrySidecarHandler>();
+        // end-snippet
+
         return builder.Build().RunAsync();
     }
 }

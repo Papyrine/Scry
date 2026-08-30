@@ -31,11 +31,11 @@ Second, a project reference that exists purely for **build ordering**:
 
 `ReferenceOutputAssembly="false"` means no assembly reference is added — only the ordering constraint. Without it the generator races the model build and reads a stale or missing DLL.
 
-Everything else is supplied by the `buildTransitive/Scry.Client.props` file that ships in the `Scry.Client` package:
+Everything else is supplied by the `buildTransitive/Scry.Client.targets` file that ships in the `Scry.Client` package:
 
 <!-- snippet: buildTransitiveProps -->
 <a id='snippet-buildTransitiveProps'></a>
-```props
+```targets
 <ItemGroup>
   <CompilerVisibleProperty Include="ScryModelDll" />
   <CompilerVisibleProperty Include="ScryModelStamp" />
@@ -57,7 +57,7 @@ Everything else is supplied by the `buildTransitive/Scry.Client.props` file that
 Reference the model project with ReferenceOutputAssembly=&quot;false&quot; so it builds first." />
 </Target>
 ```
-<sup><a href='/src/Scry.Client/buildTransitive/Scry.Client.props#L11-L32' title='Snippet source file'>snippet source</a> | <a href='#snippet-buildTransitiveProps' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Client/buildTransitive/Scry.Client.targets#L11-L32' title='Snippet source file'>snippet source</a> | <a href='#snippet-buildTransitiveProps' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 

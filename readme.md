@@ -233,6 +233,8 @@ app.MapScryExplorer("/scry");
 
 It is off unless mapped, and Development-only by default. See [Query explorer](docs/explorer.md).
 
+The client side has a companion: a [debug sidecar](docs/sidecar.md) that opens over the running app (<kbd>Alt</kbd>+<kbd>Q</kbd>) and shows every Scry exchange the page has made — decoded requests, pretty-printed responses, headers, and a one-click jump into the explorer with the captured query pre-populated.
+
 
 ## Documentation
 
@@ -252,6 +254,7 @@ It is off unless mapped, and Development-only by default. See [Query explorer](d
 - [Wire format](docs/wire-format.md)
 - [Schema versioning](docs/schema-versioning.md)
 - [Query explorer](docs/explorer.md)
+- [Debug sidecar](docs/sidecar.md)
 - [Sample](docs/sample.md)
 
 

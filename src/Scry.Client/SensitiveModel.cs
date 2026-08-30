@@ -87,6 +87,24 @@ static class SensitiveModel
         }
     }
 
+    /// <summary>
+    /// The query model a source name was registered with, for tooling that reads a request back
+    /// against the model it was written from — the renderer resolving an <c>OfType</c> target or an
+    /// enum constant's type. Null for a source this process never opened.
+    /// </summary>
+    public static Type? ModelFor(string source) =>
+        bySource.TryGetValue(source, out var model) ? model : null;
+
+    /// <summary>The property a member name resolves to on a model, from the same cached description
+    /// the sensitivity walk reads. Null where the model does not declare it.</summary>
+    public static PropertyInfo? Property(Type model, string name) =>
+        Describe(model).Members.TryGetValue(name, out var property) ? property : null;
+
+    /// <summary>The type a path walk steps into after a member: the member's own type, unwrapped of
+    /// nullability, or a collection's element.</summary>
+    public static Type Element(Type type) =>
+        Unwrap(type);
+
     static Model Describe(Type model) =>
         models.GetOrAdd(
             model,

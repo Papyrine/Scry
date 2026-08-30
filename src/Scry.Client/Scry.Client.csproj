@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Razor">
   <PropertyGroup>
     <RootNamespace>Scry</RootNamespace>
     <TargetFramework>net10.0</TargetFramework>
@@ -19,6 +19,7 @@
          chooses here and is enforced there, and two copies that drifted would refuse queries a client
          had no way to know about. -->
     <Compile Include="..\Shared\SensitiveWalk.cs" Link="SensitiveWalk.cs" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Polyfill" PrivateAssets="all" />
     <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
@@ -29,8 +30,11 @@
           Pack="true" PackagePath="analyzers/dotnet/roslyn5.0/cs" Visible="false" />
     <None Include="..\Scry.SourceGenerator\bin\$(Configuration)\net10.0\Scry.SourceGenerator.dll"
           Pack="true" PackagePath="analyzers/dotnet/roslyn5.3/cs" Visible="false" />
-    <None Include="buildTransitive\Scry.Client.props" Pack="true" PackagePath="buildTransitive\" />
-    <None Include="buildTransitive\Scry.Client.props" Pack="true" PackagePath="build\" />
+    <!-- Shipped as .targets, not .props: the Razor SDK's static-web-assets pack generates
+         build\Scry.Client.props and buildTransitive\Scry.Client.props itself, and NuGet
+         auto-imports both spellings. The content is targets-shaped (items + targets) either way. -->
+    <None Include="buildTransitive\Scry.Client.targets" Pack="true" PackagePath="buildTransitive\" />
+    <None Include="buildTransitive\Scry.Client.targets" Pack="true" PackagePath="build\" />
     <None Include="nuget-readme.md" Pack="true" PackagePath="\" />
   </ItemGroup>
   <!-- The generator multi-targets (netstandard2.0;net10.0) and we pack both flavours, but the

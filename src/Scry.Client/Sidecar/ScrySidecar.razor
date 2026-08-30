@@ -1,0 +1,123 @@
+@namespace Scry
+@inject ScrySidecarStore Store
+@inject ScrySidecarOptions Options
+@inject IJSRuntime JS
+@inject IServiceProvider Services
+
+@if (!open && toggleButton)
+{
+    <button type="button"
+            class="scry-sidecar-launcher"
+            data-testid="sidecar-toggle"
+            title="Open the Scry sidecar (@Options.ToggleShortcut)"
+            aria-label="Open the Scry debug sidecar"
+            @onclick="Toggle">Scry</button>
+}
+@if (open)
+{
+    <aside class="scry-sidecar" data-testid="sidecar" role="complementary" aria-label="Scry debug sidecar">
+        <header class="scry-sidecar-header">
+            <h2>Scry <span class="scry-sidecar-count" data-testid="sidecar-count">@Store.Entries.Count</span></h2>
+            <button type="button" data-testid="sidecar-clear" title="Forget every captured exchange" @onclick="Clear">Clear</button>
+            <button type="button" data-testid="sidecar-close" title="Hide the sidecar (@Options.ToggleShortcut)" @onclick="Toggle">Close</button>
+        </header>
+        <div class="scry-sidecar-body">
+            @if (Store.Entries.Count == 0)
+            {
+                <p class="scry-sidecar-empty" data-testid="sidecar-empty">No Scry exchanges captured yet.</p>
+            }
+            else
+            {
+                <ol class="scry-sidecar-entries" data-testid="sidecar-entries">
+                    @foreach (var entry in Store.Entries)
+                    {
+                        <li class="@(entry.Id == selectedId ? "scry-sidecar-selected" : null)" @key="entry.Id" @onclick="() => Select(entry.Id)">
+                            <span class="scry-sidecar-kind">@entry.Kind</span>
+                            <span>@entry.Method</span>
+                            <span class="scry-sidecar-name">@Name(entry)</span>
+                            <span class="@(entry.Error is null ? null : "scry-sidecar-status-error")">@(entry.Status?.ToString() ?? "—")</span>
+                            <span class="scry-sidecar-duration">@entry.Duration.TotalMilliseconds.ToString("0") ms</span>
+                        </li>
+                    }
+                </ol>
+                @if (Selected is { } selected)
+                {
+                    <div class="scry-sidecar-detail" data-testid="sidecar-detail">
+                        <h3>URL</h3>
+                        <p class="scry-sidecar-url" data-testid="sidecar-url">@selected.Url</p>
+                        <div class="scry-sidecar-actions">
+                            <button type="button" data-testid="sidecar-copy-url" title="Copy the request URL" @onclick="() => Copy(selected.Url)">Copy URL</button>
+                            @if (selected.RequestJson is { } requestJson)
+                            {
+                                <button type="button" data-testid="sidecar-copy-request" title="Copy the wire request JSON" @onclick="() => Copy(requestJson)">Copy request</button>
+                            }
+                            @if (ExplorerHref(selected) is { } href)
+                            {
+                                <a data-testid="sidecar-explorer-link" href="@href" target="_blank" rel="noopener" title="Open this query in the explorer, in a new tab">Open in explorer</a>
+                            }
+                            @if (selected is {Kind: ScrySidecarKind.Attachment, AttachmentRequestBody: not null})
+                            {
+                                <button type="button" data-testid="sidecar-download" title="Re-send the attachment request and save the bytes" @onclick="() => Download(selected)">Download</button>
+                            }
+                        </div>
+                        @if (note is not null)
+                        {
+                            <p class="scry-sidecar-note" data-testid="sidecar-note">@note</p>
+                        }
+                        @if (selected.Error is { } error)
+                        {
+                            <p class="scry-sidecar-error" data-testid="sidecar-error">@error</p>
+                        }
+                        @if (selected.RequestHeaders.Count > 0)
+                        {
+                            <h3>Request headers</h3>
+                            <table data-testid="sidecar-request-headers">
+                                <tbody>
+                                @foreach (var header in selected.RequestHeaders)
+                                {
+                                    <tr><th>@header.Key</th><td>@header.Value</td></tr>
+                                }
+                                </tbody>
+                            </table>
+                        }
+                        @if (selected.RequestJson is { } request)
+                        {
+                            <h3>Request</h3>
+                            <pre data-testid="sidecar-request">@request</pre>
+                        }
+                        <h3>Response headers</h3>
+                        <table data-testid="sidecar-response-headers">
+                            <tbody>
+                            @foreach (var header in selected.ResponseHeaders)
+                            {
+                                <tr><th>@header.Key</th><td>@header.Value</td></tr>
+                            }
+                            </tbody>
+                        </table>
+                        @if (selected.ResponseJson is { } response)
+                        {
+                            <h3>Response</h3>
+                            <pre data-testid="sidecar-response">@response</pre>
+                        }
+                        else if (selected.Kind is ScrySidecarKind.Stream or ScrySidecarKind.Attachment)
+                        {
+                            <p class="scry-sidecar-note">Body not captured — @(selected.Kind == ScrySidecarKind.Stream ? "streams are read row by row" : "attachment bytes are never cached; use Download").</p>
+                        }
+                        @if (selected.BinaryPartSizes is {Count: > 0} parts)
+                        {
+                            <h3>Binary parts</h3>
+                            <table data-testid="sidecar-binary-parts">
+                                <tbody>
+                                @for (var i = 0; i < parts.Count; i++)
+                                {
+                                    <tr><th>$bin @i</th><td>@parts[i] bytes</td></tr>
+                                }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                }
+            }
+        </div>
+    </aside>
+}

@@ -195,6 +195,51 @@ public class UiScreenshotTests :
                 """);
     }
 
+    // The sidecar open over the sample, with one captured query selected — the capture
+    // docs/sidecar.md embeds.
+    [Test]
+    public async Task SampleSidecar()
+    {
+        var page = await NewSizedPageAsync(docsViewport);
+        await page.GotoAsync(BaseUrl);
+        await page.WaitForSelectorAsync("table tbody tr");
+
+        await page.Keyboard.PressAsync("Alt+KeyQ");
+        await page.WaitForSelectorAsync("[data-testid='sidecar-entries'] li", 10);
+        await page.Locator("[data-testid='sidecar-entries'] li").First.ClickAsync();
+        await page.WaitForSelectorAsync("[data-testid='sidecar-request']", 10);
+
+        // The panel's stylesheet is injected on first open; capture only once it has applied.
+        await page.WaitForFunctionAsync(
+            "() => Array.from(document.styleSheets).some(_ => _.href && _.href.includes('scry-sidecar'))");
+
+        // Durations, the Date header, the ETag, and the schema stamp differ run to run; pin them so
+        // the capture is of the layout rather than of one run's values.
+        await page.EvaluateAsync(
+            """
+            () => {
+                for (const cell of document.querySelectorAll('.scry-sidecar-duration')) {
+                    cell.textContent = '1 ms';
+                }
+
+                for (const row of document.querySelectorAll('[data-testid=sidecar-response-headers] tr')) {
+                    const key = row.querySelector('th')?.textContent?.toLowerCase();
+                    if (key === 'date' || key === 'etag' || key === 'scry-schema-stamp') {
+                        row.querySelector('td').textContent = '…';
+                    }
+                }
+            }
+            """);
+
+        await Verify(page)
+            .PageScreenshotOptions(
+                new()
+                {
+                    FullPage = true
+                },
+                screenshotOnly: true);
+    }
+
     // The captures the docs embed. readme.md and docs/explorer.md point their <img> straight at these
     // verified files, so a published screenshot cannot drift from the UI: a change to the explorer
     // fails the snapshot, and accepting the new baseline is what republishes the image.
