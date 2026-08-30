@@ -12,7 +12,7 @@ static class ResponseFailure
     /// catch covers every stale-client failure and can prompt a reload; a denial surfaces as its own
     /// type, since retrying it will not help and only the caller knows what to tell a user.
     /// </summary>
-    public static Exception Read(int status, byte[] body)
+    public static Exception Read(HttpStatusCode status, byte[] body)
     {
         var error = ScryJson.TryDeserializeError(body);
         if (error is {StaleClient: true, Error.Length: > 0})
@@ -20,7 +20,7 @@ static class ResponseFailure
             return new ScryStaleClientException(error.Error);
         }
 
-        if (status == 403 &&
+        if (status == HttpStatusCode.Forbidden &&
             error is {Error.Length: > 0})
         {
             return new ScryPermissionException(error.Error);

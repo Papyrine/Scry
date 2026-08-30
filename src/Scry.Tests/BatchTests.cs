@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Net;
 
 [TestFixture]
 public class BatchTests
@@ -176,7 +177,7 @@ public class BatchTests
         await batch.SendAsync();
 
         var exception = Assert.ThrowsAsync<ScryRequestException>(async () => await rejected)!;
-        Assert.That(exception.StatusCode, Is.EqualTo(400));
+        Assert.That(exception.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         Assert.That(exception.Body, Does.Contain("Unknown source 'Missing'"));
         Assert.That(await accepted, Is.GreaterThan(0));
     }

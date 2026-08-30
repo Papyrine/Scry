@@ -1,3 +1,5 @@
+using System.Net;
+
 /// <summary>
 /// A row policy hides the rows it denies, which is the only answer that tells a caller nothing. Where
 /// that silence is worse than the disclosure — an internal tool whose users would rather be told than
@@ -110,7 +112,7 @@ public class DeniedRowTests
             With(_ =>
             {
                 _.AddPolicy<Asset, VisibleAssetsOnlyPolicy>();
-                _.AddPolicy<Vehicle, FourWheeledVehiclesOnlyPolicy>(Erroring);
+                _.AddPolicy<Vehicle, FourWheeledVehiclesOnlyPolicy>(erroring);
             }));
 
         var rows = await client.Source<Vehicle>("Vehicle")
@@ -132,7 +134,7 @@ public class DeniedRowTests
             With(_ =>
             {
                 _.AddPolicy<Asset, VisibleAssetsOnlyPolicy>();
-                _.AddPolicy<Vehicle, TwoWheeledVehiclesOnlyPolicy>(Erroring);
+                _.AddPolicy<Vehicle, TwoWheeledVehiclesOnlyPolicy>(erroring);
             }));
 
         Assert.ThrowsAsync<ScryPermissionException>(
@@ -148,7 +150,7 @@ public class DeniedRowTests
 
         // Rooted at Asset, where nothing errors, and narrowed to Vehicle, where something does. The
         // policy the narrowing added is the one that answers.
-        var client = ClientFor(context, With(_ => _.AddPolicy<Vehicle, TwoWheeledVehiclesOnlyPolicy>(Erroring)));
+        var client = ClientFor(context, With(_ => _.AddPolicy<Vehicle, TwoWheeledVehiclesOnlyPolicy>(erroring)));
 
         Assert.ThrowsAsync<ScryPermissionException>(
             () => client.Source<Asset>("Asset")
@@ -187,7 +189,7 @@ public class DeniedRowTests
 
         var response = ErroringOnLists().ExecuteBatch(batch, context);
 
-        Assert.That(response.Results[0].Status, Is.EqualTo(403));
+        Assert.That(response.Results[0].Status, Is.EqualTo(HttpStatusCode.Forbidden));
         Assert.That(response.Results[0].Error, Is.EqualTo(ScryPermissionException.DeniedMessage));
         // The entry that asked for nothing denied is answered as it would have been on its own.
         Assert.That(response.Results[1].Response, Is.Not.Null);
@@ -226,7 +228,7 @@ public class DeniedRowTests
         Assert.That(sql, Does.Contain("SELECT"));
     }
 
-    static readonly DeniedRowHandling Erroring = new()
+    static readonly DeniedRowHandling erroring = new()
     {
         RootList = DeniedRowMode.Error
     };
@@ -234,7 +236,7 @@ public class DeniedRowTests
     // ActiveOnlyPolicy denies the one inactive employee, so every query rooted at Employee that does
     // not filter it out has exactly one denied row to report.
     static ScryProcessor ErroringOnLists() =>
-        With(_ => _.AddPolicy<Employee, ActiveOnlyPolicy>(Erroring));
+        With(_ => _.AddPolicy<Employee, ActiveOnlyPolicy>(erroring));
 
     static ScryProcessor With(Action<ScryOptions> extra) =>
         ScryProcessor.Create<TestContext>(options =>

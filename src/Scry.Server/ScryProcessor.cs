@@ -1,4 +1,6 @@
-﻿namespace Scry;
+﻿using System.Net;
+
+namespace Scry;
 
 /// <summary>
 /// Executes a query request against a <see cref="DbContext"/>, applying validation, allow-list,
@@ -629,7 +631,7 @@ public sealed class ScryProcessor
             return new()
             {
                 Error = exception.Message,
-                Status = 400,
+                Status = HttpStatusCode.BadRequest,
                 StaleClient = exception.StaleClient
             };
         }
@@ -638,7 +640,7 @@ public sealed class ScryProcessor
             return new()
             {
                 Error = exception.Message,
-                Status = 403
+                Status = HttpStatusCode.Forbidden
             };
         }
         catch (Exception)
@@ -646,7 +648,7 @@ public sealed class ScryProcessor
             return new()
             {
                 Error = "Query execution failed.",
-                Status = 500,
+                Status = HttpStatusCode.InternalServerError,
                 // A drifted client faulting the server is far more likely stale than the server broken,
                 // the same attribution the single-query endpoint makes for an execution failure.
                 StaleClient = query.Stamp is { } stamp && stamp != schema.Stamp

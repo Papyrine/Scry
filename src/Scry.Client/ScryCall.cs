@@ -19,12 +19,18 @@ sealed class ScryCall(
     Action<HttpResponseHeaders>? ReadResponse { get; } = readResponse;
 
     /// <summary>Adds a hook that writes onto the outgoing request's headers.</summary>
-    public static ScryCall Configuring(ScryCall? call, Action<HttpRequestHeaders> configure) =>
-        new((call ?? empty).ConfigureRequest + configure, (call ?? empty).ReadResponse);
+    public static ScryCall Configuring(ScryCall? call, Action<HttpRequestHeaders> configure)
+    {
+        var scryCall = call ?? empty;
+        return new(scryCall.ConfigureRequest + configure, scryCall.ReadResponse);
+    }
 
     /// <summary>Adds a hook that reads the response's headers.</summary>
-    public static ScryCall Reading(ScryCall? call, Action<HttpResponseHeaders> read) =>
-        new((call ?? empty).ConfigureRequest, (call ?? empty).ReadResponse + read);
+    public static ScryCall Reading(ScryCall? call, Action<HttpResponseHeaders> read)
+    {
+        var scryCall = call ?? empty;
+        return new(scryCall.ConfigureRequest, scryCall.ReadResponse + read);
+    }
 
     public void Configure(HttpRequestHeaders headers) =>
         ConfigureRequest?.Invoke(headers);

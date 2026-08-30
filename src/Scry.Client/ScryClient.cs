@@ -80,10 +80,15 @@ public sealed class ScryClient
 
     // base64url carries nothing a query string would have to escape, so the encoded request is appended
     // as it stands. An endpoint that already carries parameters of its own keeps them.
-    static string Url(string endpoint, string encoded) =>
-        endpoint.Contains('?')
-            ? $"{endpoint}&{QueryUrl.Parameter}={encoded}"
-            : $"{endpoint}?{QueryUrl.Parameter}={encoded}";
+    static string Url(string endpoint, string encoded)
+    {
+        if (endpoint.Contains('?'))
+        {
+            return $"{endpoint}&{QueryUrl.Parameter}={encoded}";
+        }
+
+        return $"{endpoint}?{QueryUrl.Parameter}={encoded}";
+    }
 
     // A custom transport has nowhere to put a header, so a query that asked for one cannot be honoured.
     // Refusing keeps WithHeader from looking like it worked on a client that never sent it.
@@ -323,7 +328,7 @@ public sealed class ScryClient
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsByteArrayAsync(cancel);
-            throw ResponseFailure.Read((int) response.StatusCode, body);
+            throw ResponseFailure.Read(response.StatusCode, body);
         }
 
         await using var responseStream = await response.Content.ReadAsStreamAsync(cancel);
@@ -562,7 +567,7 @@ public sealed class ScryClient
         }
 
         // SchemaStaleDetected has already been raised above.
-        throw ResponseFailure.Read((int) response.StatusCode, body);
+        throw ResponseFailure.Read(response.StatusCode, body);
     }
 
     // Reached from ScryAttachment.OpenAsync, which a materialized row hands out; the transport is the
@@ -620,7 +625,7 @@ public sealed class ScryClient
             }
 
             var error = await response.Content.ReadAsByteArrayAsync(cancel);
-            throw ResponseFailure.Read((int) response.StatusCode, error);
+            throw ResponseFailure.Read(response.StatusCode, error);
         }
         finally
         {
@@ -661,6 +666,6 @@ public sealed class ScryClient
             return ScryJson.DeserializeBatchResponse(body);
         }
 
-        throw ResponseFailure.Read((int) response.StatusCode, body);
+        throw ResponseFailure.Read(response.StatusCode, body);
     }
 }

@@ -49,7 +49,11 @@ public sealed class ScryBatch
 
         // A batch is one request carrying many queries, so a per-query header has no request of its own
         // to be written onto. Refused rather than dropped, exactly as a custom transport refuses them.
-        if (call is null) return;
+        if (call is null)
+        {
+            return;
+        }
+
         throw new NotSupportedException("Per-query headers cannot be used inside a batch: the batch is a single request, so its queries cannot carry headers of their own. Send the query on its own, or set the header on the HttpClient.");
     }
 
@@ -100,17 +104,18 @@ public sealed class ScryBatch
             throw;
         }
 
-        if (response.Results.Count != entries.Count)
+        var results = response.Results;
+        if (results.Count != entries.Count)
         {
             var mismatch = new ScryWireException(
-                $"The server answered {response.Results.Count} of the batch's {entries.Count} queries.");
+                $"The server answered {results.Count} of the batch's {entries.Count} queries.");
             Fault(mismatch);
             throw mismatch;
         }
 
         for (var i = 0; i < entries.Count; i++)
         {
-            Complete(entries[i].Completion, response.Results[i], response.BinaryParts);
+            Complete(entries[i].Completion, results[i], response.BinaryParts);
         }
     }
 
@@ -128,11 +133,22 @@ public sealed class ScryBatch
         // The same exceptions the single-query path raises, so code that handles a failed query does
         // not have to learn a second shape for one that happened to be batched.
         completion.SetException(
-            result.StaleClient
-                ? new ScryStaleClientException(error)
-                : result.Status == 403
-                    ? new ScryPermissionException(error)
-                    : new ScryRequestException(result.Status, error));
+            GetException(result, error));
+    }
+
+    static Exception GetException(QueryBatchResult result, string error)
+    {
+        if (result.StaleClient)
+        {
+            return new ScryStaleClientException(error);
+        }
+
+        if (result.Status == HttpStatusCode.Forbidden)
+        {
+            return new ScryPermissionException(error);
+        }
+
+        return new ScryRequestException(result.Status, error);
     }
 
     void Fault(Exception exception)

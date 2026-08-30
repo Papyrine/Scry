@@ -74,7 +74,13 @@ sealed partial class QueryTranslator
 
         // These rewrite what a row is — deduplicated, flattened, combined, or built from two sources —
         // so a key projected beside an attachment no longer identifies one row of one source.
-        if (ops.FirstOrDefault(_ => _ is DistinctOp or SelectManyOp or JoinOp or SetOp or GroupByOp) is { } refused)
+        if (ops.FirstOrDefault(_ => _ is
+                DistinctOp or
+                SelectManyOp or
+                JoinOp or
+                SetOp or
+                GroupByOp)
+            is { } refused)
         {
             throw new NotSupportedException(
                 $"An attachment cannot be carried through {refused.GetType().Name.Replace("Op", "")}. The result's rows no longer correspond to single rows of the source the attachment is fetched from.");
@@ -125,7 +131,7 @@ sealed partial class QueryTranslator
                     break;
 
                 case NestedValue nested:
-                    CollectLeaves(nested.Projection, [..memberPrefix, ..nested.Path], leaves, output);
+                    CollectLeaves(nested.Projection, [.. memberPrefix, .. nested.Path], leaves, output);
                     break;
             }
         }

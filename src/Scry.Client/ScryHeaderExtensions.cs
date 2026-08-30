@@ -44,11 +44,11 @@ public static class ScryHeaderExtensions
     /// </summary>
     static IQueryable<T> Rebind<T>(IQueryable<T> source, Func<ScryCall?, ScryCall> add)
     {
-        if (source.Provider is not QueryProvider provider)
+        if (source.Provider is QueryProvider provider)
         {
-            throw new("This IQueryable is not a Scry source.");
+            return new CaptureQueryable<T>(provider.With(add(provider.Call)), source.Expression);
         }
 
-        return new CaptureQueryable<T>(provider.With(add(provider.Call)), source.Expression);
+        throw new("This IQueryable is not a Scry source.");
     }
 }

@@ -1,3 +1,5 @@
+using System.Net;
+
 namespace Scry;
 
 /// <summary>
@@ -31,7 +33,7 @@ public sealed record QueryBatchResult
     /// </summary>
     [JsonPropertyOrder(2)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public int Status { get; init; }
+    public HttpStatusCode Status { get; init; }
 
     /// <summary>
     /// True when this entry's rejection is attributed to a schema stamp differing from the server's.

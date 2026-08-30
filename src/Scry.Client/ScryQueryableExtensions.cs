@@ -24,7 +24,7 @@ public static class ScryQueryableExtensions
 
     /// <summary>Executes the query and returns all rows as an array.</summary>
     public static async Task<T[]> ToArrayAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>
-        [.. await ToListAsync(source, cancel)];
+        [.. await source.ToListAsync(cancel)];
 
     /// <summary>Executes the query and returns all rows in a hash set.</summary>
     public static Task<HashSet<T>> ToHashSetAsync<T>(this IQueryable<T> source, Cancel cancel = default) =>
@@ -32,43 +32,43 @@ public static class ScryQueryableExtensions
 
     /// <summary>Executes the query and returns all rows in a hash set using the given comparer.</summary>
     public static async Task<HashSet<T>> ToHashSetAsync<T>(this IQueryable<T> source, IEqualityComparer<T>? comparer, Cancel cancel = default) =>
-        (await ToListAsync(source, cancel)).ToHashSet(comparer);
+        (await source.ToListAsync(cancel)).ToHashSet(comparer);
 
     /// <summary>Executes the query and returns all rows keyed by <paramref name="keySelector"/>.</summary>
     public static async Task<Dictionary<TKey, T>> ToDictionaryAsync<T, TKey>(this IQueryable<T> source, Func<T, TKey> keySelector, Cancel cancel = default)
         where TKey : notnull =>
-        (await ToListAsync(source, cancel)).ToDictionary(keySelector);
+        (await source.ToListAsync(cancel)).ToDictionary(keySelector);
 
     /// <summary>Executes the query and returns all rows keyed by <paramref name="keySelector"/> using the given comparer.</summary>
     public static async Task<Dictionary<TKey, T>> ToDictionaryAsync<T, TKey>(this IQueryable<T> source, Func<T, TKey> keySelector, IEqualityComparer<TKey>? comparer, Cancel cancel = default)
         where TKey : notnull =>
-        (await ToListAsync(source, cancel)).ToDictionary(keySelector, comparer);
+        (await source.ToListAsync(cancel)).ToDictionary(keySelector, comparer);
 
     /// <summary>Executes the query and returns a dictionary of keys and elements projected from each row.</summary>
     public static async Task<Dictionary<TKey, TValue>> ToDictionaryAsync<T, TKey, TValue>(this IQueryable<T> source, Func<T, TKey> keySelector, Func<T, TValue> elementSelector, Cancel cancel = default)
         where TKey : notnull =>
-        (await ToListAsync(source, cancel)).ToDictionary(keySelector, elementSelector);
+        (await source.ToListAsync(cancel)).ToDictionary(keySelector, elementSelector);
 
     /// <summary>Executes the query and returns a dictionary of keys and elements projected from each row, using the given comparer.</summary>
     public static async Task<Dictionary<TKey, TValue>> ToDictionaryAsync<T, TKey, TValue>(this IQueryable<T> source, Func<T, TKey> keySelector, Func<T, TValue> elementSelector, IEqualityComparer<TKey>? comparer, Cancel cancel = default)
         where TKey : notnull =>
-        (await ToListAsync(source, cancel)).ToDictionary(keySelector, elementSelector, comparer);
+        (await source.ToListAsync(cancel)).ToDictionary(keySelector, elementSelector, comparer);
 
     /// <summary>Executes the query and returns all rows grouped into a lookup by <paramref name="keySelector"/>.</summary>
     public static async Task<ILookup<TKey, T>> ToLookupAsync<T, TKey>(this IQueryable<T> source, Func<T, TKey> keySelector, Cancel cancel = default) =>
-        (await ToListAsync(source, cancel)).ToLookup(keySelector);
+        (await source.ToListAsync(cancel)).ToLookup(keySelector);
 
     /// <summary>Executes the query and returns all rows grouped into a lookup by <paramref name="keySelector"/> using the given comparer.</summary>
     public static async Task<ILookup<TKey, T>> ToLookupAsync<T, TKey>(this IQueryable<T> source, Func<T, TKey> keySelector, IEqualityComparer<TKey>? comparer, Cancel cancel = default) =>
-        (await ToListAsync(source, cancel)).ToLookup(keySelector, comparer);
+        (await source.ToListAsync(cancel)).ToLookup(keySelector, comparer);
 
     /// <summary>Executes the query and returns a lookup of keys and elements projected from each row.</summary>
     public static async Task<ILookup<TKey, TValue>> ToLookupAsync<T, TKey, TValue>(this IQueryable<T> source, Func<T, TKey> keySelector, Func<T, TValue> elementSelector, Cancel cancel = default) =>
-        (await ToListAsync(source, cancel)).ToLookup(keySelector, elementSelector);
+        (await source.ToListAsync(cancel)).ToLookup(keySelector, elementSelector);
 
     /// <summary>Executes the query and returns a lookup of keys and elements projected from each row, using the given comparer.</summary>
     public static async Task<ILookup<TKey, TValue>> ToLookupAsync<T, TKey, TValue>(this IQueryable<T> source, Func<T, TKey> keySelector, Func<T, TValue> elementSelector, IEqualityComparer<TKey>? comparer, Cancel cancel = default) =>
-        (await ToListAsync(source, cancel)).ToLookup(keySelector, elementSelector, comparer);
+        (await source.ToListAsync(cancel)).ToLookup(keySelector, elementSelector, comparer);
 
     /// <summary>
     /// Executes the query and yields rows as they arrive, without the server or the client holding the
@@ -470,10 +470,22 @@ public static class ScryQueryableExtensions
             : provider.DefaultProjection;
 
         if (members is not { Count: > 0 } ||
-            terminal is CountOp or LongCountOp or AnyOp or AllOp or AggregateOp ||
-            terminal is FirstOp { Predicate: not null } or SingleOp { Predicate: not null } or LastOp { Predicate: not null } ||
+            terminal is
+                CountOp or
+                LongCountOp or
+                AnyOp or
+                AllOp or
+                AggregateOp ||
+            terminal is
+                FirstOp { Predicate: not null } or
+                SingleOp { Predicate: not null } or
+                LastOp { Predicate: not null } ||
             // A join carries its own projection, since a member has to name which side it reads.
-            pipeline.Any(_ => _ is SelectOp or GroupByOp or JoinOp or SetOp))
+            pipeline.Any(_ => _ is
+                SelectOp or
+                GroupByOp or
+                JoinOp or
+                SetOp))
         {
             return;
         }
