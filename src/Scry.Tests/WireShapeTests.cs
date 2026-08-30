@@ -110,19 +110,19 @@ public partial class WireShapeTests
 
     static Entry[] GroupingShapes() =>
     [
-        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Total = _.Sum(o => o.Amount), Rows = _.Count()}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Low = _.Min(o => o.Amount), High = _.Max(o => o.Amount), Mean = _.Average(o => o.Amount)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").GroupBy(_ => new {_.Region, _.Grade}).Select(_ => new {_.Key.Region, _.Key.Grade, Total = _.Sum(o => o.Amount)}).ToListAsync()),
+        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Total = _.Sum(_ => _.Amount), Rows = _.Count()}).ToListAsync()),
+        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Low = _.Min(_ => _.Amount), High = _.Max(_ => _.Amount), Mean = _.Average(o => o.Amount)}).ToListAsync()),
+        Wire(client => client.Source<Order>("Order").GroupBy(_ => new {_.Region, _.Grade}).Select(_ => new {_.Key.Region, _.Key.Grade, Total = _.Sum(_ => _.Amount)}).ToListAsync()),
         // A computed key has no member path to name it by, so the projection reads it as the query's
         // Nth key rather than as a member.
         Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Placed.DayOfWeek).Select(_ => new {Day = _.Key, Count = _.Count()}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region.ToUpper()).Select(_ => new {Region = _.Key, Total = _.Sum(o => o.Amount)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region, (region, orders) => new {Region = region, Total = orders.Sum(o => o.Amount)}).ToListAsync()),
+        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region.ToUpper()).Select(_ => new {Region = _.Key, Total = _.Sum(_ => _.Amount)}).ToListAsync()),
+        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region, (region, orders) => new {Region = region, Total = orders.Sum(_ => _.Amount)}).ToListAsync()),
         // A filter reading the group rather than the row is SQL's HAVING.
-        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region).Where(_ => _.Sum(o => o.Amount) > 100m && _.Key != "South").Select(_ => new {_.Key, Total = _.Sum(o => o.Amount)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Big = _.Where(o => o.Amount > 90m).Count(), Graded = _.Count(o => o.Grade == 'A')}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Grades = _.Select(o => o.Grade).Distinct().Count()}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Codes = string.Join(",", _.Select(o => o.Code))}).ToListAsync())
+        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region).Where(_ => _.Sum(o => o.Amount) > 100m && _.Key != "South").Select(_ => new {_.Key, Total = _.Sum(_ => _.Amount)}).ToListAsync()),
+        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Big = _.Count(_ => _.Amount > 90m), Graded = _.Count(_ => _.Grade == 'A')}).ToListAsync()),
+        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Grades = _.Select(_ => _.Grade).Distinct().Count()}).ToListAsync()),
+        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Codes = string.Join(",", _.Select(_ => _.Code))}).ToListAsync())
     ];
 
     [Test]
