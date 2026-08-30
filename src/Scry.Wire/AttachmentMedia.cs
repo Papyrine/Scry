@@ -38,6 +38,11 @@ public static class AttachmentMedia
         {"video/mp4", ".mp4"}
     };
 
+    // Lets the map be probed with the media type sliced off the header, rather than a substring cut
+    // out of it just to be looked up and dropped.
+    static readonly Dictionary<string, string>.AlternateLookup<ReadOnlySpan<char>> lookup =
+        extensions.GetAlternateLookup<ReadOnlySpan<char>>();
+
     /// <summary>
     /// The extension to save <paramref name="contentType"/> under, leading dot included. Anything
     /// unrecognized — including null, and a type the map does not carry — is <c>.bin</c>: a wrong
@@ -53,7 +58,18 @@ public static class AttachmentMedia
 
         // Parameters are part of the header, not of the type: "text/plain; charset=utf-8" names the
         // same thing "text/plain" does.
-        var media = contentType.Split(';')[0].Trim();
-        return extensions.GetValueOrDefault(media, ".bin");
+        var media = contentType.AsSpan();
+        var index = media.IndexOf(';');
+        if (index != -1)
+        {
+            media = media[..index];
+        }
+
+        if (lookup.TryGetValue(media.Trim(), out var extension))
+        {
+            return extension;
+        }
+
+        return ".bin";
     }
 }

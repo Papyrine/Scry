@@ -1243,9 +1243,16 @@ sealed class Schema
             return;
         }
 
-        var media = contentType.Split(';')[0].Trim();
+        var media = contentType.AsSpan();
+        var index = media.IndexOf(';');
+        if (index != -1)
+        {
+            media = media[..index];
+        }
+
+        media = media.Trim();
         if (media.Length > 0 &&
-            media.Count(_ => _ == '/') == 1 &&
+            media.Count('/') == 1 &&
             media[0] != '/' &&
             media[^1] != '/' &&
             !contentType.Any(char.IsControl))
