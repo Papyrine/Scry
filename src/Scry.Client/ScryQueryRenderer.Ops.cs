@@ -31,7 +31,7 @@ partial class QueryRenderer
 
             case SelectManyOp many:
             {
-                var text = $".SelectMany(_ => _.{string.Join(".", many.Path)})";
+                var text = $".SelectMany(_ => _.{string.Join('.', many.Path)})";
                 currentModel = ElementModel(currentModel, many.Path);
                 return text;
             }
@@ -335,7 +335,7 @@ partial class QueryRenderer
             }
 
             var root = member.Side == JoinSide.Outer ? "_" : "x";
-            var text = $"{root}.{string.Join(".", member.Path)}";
+            var text = $"{root}.{string.Join('.', member.Path)}";
             members.Add(member.Path[^1] == member.Name ? text : $"{member.Name} = {text}");
         }
 

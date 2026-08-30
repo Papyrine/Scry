@@ -170,7 +170,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// <summary>Shapes one row of a <see cref="RowSet"/> into its response object.</summary>
     internal static Dictionary<string, object?> ShapeRow(object row, RowSet set) =>
         set.Deduplicated
-            ? Shape(ExpressionBuilder.ReadDistinctRow(row, set.Plan.Shape.Count), set.Plan, set.Binary)
+            ? Shape(ExpressionBuilder.ReadDistinctRow(row), set.Plan, set.Binary)
             : Shape((object[])row, set.Plan, set.Binary);
 
     /// <summary>

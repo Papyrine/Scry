@@ -400,7 +400,7 @@ sealed class ExpressionBuilder(
     /// so the property reads are compiled once per closed row type — bounded by the
     /// <see cref="DistinctRow"/> arities the schema can produce — rather than reflected per value.
     /// </summary>
-    public static object[] ReadDistinctRow(object row, int count) =>
+    public static object[] ReadDistinctRow(object row) =>
         distinctReaders.GetOrAdd(row.GetType(), DistinctReader)(row);
 
     static readonly ConcurrentDictionary<Type, Func<object, object[]>> distinctReaders = new();
@@ -840,7 +840,7 @@ sealed class ExpressionBuilder(
         }
 
         throw new ScryValidationException(
-            $"'{string.Join(".", member.Path)}' is not one of the query's group keys.");
+            $"'{string.Join('.', member.Path)}' is not one of the query's group keys.");
     }
 
     // The same read by position rather than by path, which is how a computed key — one with no path to

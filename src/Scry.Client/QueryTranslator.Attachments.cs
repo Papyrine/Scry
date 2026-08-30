@@ -94,7 +94,7 @@ sealed partial class QueryTranslator
                 if (!leaves.TryGetValue(string.Join(".", wanted), out var source))
                 {
                     throw new NotSupportedException(
-                        $"Attachment '{pending.Member}' needs '_.{string.Join(".", wanted)}' projected beside it: an attachment is fetched by its row's key, so the key has to come back with the row. Add it to the projection.");
+                        $"Attachment '{pending.Member}' needs '_.{string.Join('.', wanted)}' projected beside it: an attachment is fetched by its row's key, so the key has to come back with the row. Add it to the projection.");
                 }
 
                 sources.Add(source);
@@ -121,7 +121,7 @@ sealed partial class QueryTranslator
             switch (member.Value)
             {
                 case NodeValue {Node: MemberNode node}:
-                    leaves[string.Join(".", memberPrefix.Concat(node.Path))] = output;
+                    leaves[string.Join('.', memberPrefix.Concat(node.Path))] = output;
                     break;
 
                 case NestedValue nested:

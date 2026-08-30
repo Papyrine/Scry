@@ -1,5 +1,4 @@
 using Bunit;
-using Microsoft.AspNetCore.Components;
 using PermissionsPage = Sample.Client.Pages.Permissions;
 
 /// <summary>
@@ -65,7 +64,7 @@ public class CachedPolicyPageTests
         // Revoking a region changes no order, so nothing but the host could know the answers are
         // stale. The rows go, which proves the invalidation reached the query.
         before = decisions();
-        await page.Find("#grant-South").ChangeAsync(new ChangeEventArgs {Value = false});
+        await page.Find("#grant-South").ChangeAsync(new() {Value = false});
         await page.WaitForStateAsync(() => page.FindAll("tbody tr").Count == 2, TimeSpan.FromSeconds(10));
 
         Assert.That(regions(), Is.EqualTo(["North", "North"]));

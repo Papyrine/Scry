@@ -166,7 +166,7 @@ static class ResponseWriter
 
     public static object[] Row(object row, QueryExecutor.RowSet set) =>
         set.Deduplicated
-            ? ExpressionBuilder.ReadDistinctRow(row, set.Plan.Shape.Count)
+            ? ExpressionBuilder.ReadDistinctRow(row)
             : (object[])row;
 
     /// <summary>Opens a batch envelope: its version, then the array its entries are written into.</summary>

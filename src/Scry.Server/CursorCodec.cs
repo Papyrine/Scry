@@ -52,7 +52,7 @@ static class CursorCodec
             // Every seek key is a single-segment member (PlanSeek admits nothing else); anything that
             // is not stamps as its node kind, which differs from any member path and so still parts
             // two orderings that are not the same.
-            builder.Append(key is MemberNode member ? string.Join(".", member.Path) : key.GetType().Name);
+            builder.Append(key is MemberNode member ? string.Join('.', member.Path) : key.GetType().Name);
             builder.Append(descending ? " desc\n" : " asc\n");
         }
 

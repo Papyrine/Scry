@@ -98,7 +98,7 @@ partial class QueryRenderer
             throw Refuse(RenderRefusal.UnsupportedShape);
         }
 
-        return $"{scope.Parameter}.{string.Join(".", member.Path)}";
+        return $"{scope.Parameter}.{string.Join('.', member.Path)}";
     }
 
     string RenderGroupKey(GroupKeyNode key, Scope scope)
@@ -231,7 +231,7 @@ partial class QueryRenderer
             throw Refuse(RenderRefusal.UnsupportedShape);
         }
 
-        var collection = $"{scope.Parameter}.{string.Join(".", subquery.Path)}";
+        var collection = $"{scope.Parameter}.{string.Join('.', subquery.Path)}";
         var elementModel = Walk(scope.Model, subquery.Path) is { } property
             ? SensitiveModel.Element(property.PropertyType)
             : null;

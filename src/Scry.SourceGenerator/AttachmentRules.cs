@@ -153,7 +153,7 @@ static class AttachmentRules
             segments.Insert(0, owner.Property.Name);
         }
 
-        return string.Join(".", segments);
+        return string.Join('.', segments);
     }
 
     // Whether the projection reads the named key off the same row. Only plain member reads count: a
