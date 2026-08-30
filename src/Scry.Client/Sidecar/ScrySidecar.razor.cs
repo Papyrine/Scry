@@ -195,9 +195,12 @@ public partial class ScrySidecar :
             }
         }
 
-        return new Uri(entry.Url, UriKind.RelativeOrAbsolute) is {IsAbsoluteUri: true} uri
-            ? uri.AbsolutePath
-            : entry.Url;
+        if (new Uri(entry.Url, UriKind.RelativeOrAbsolute) is {IsAbsoluteUri: true} uri)
+        {
+            return uri.AbsolutePath;
+        }
+
+        return entry.Url;
     }
 
     public async ValueTask DisposeAsync()

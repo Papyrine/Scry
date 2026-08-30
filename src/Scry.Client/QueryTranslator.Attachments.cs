@@ -91,7 +91,7 @@ sealed partial class QueryTranslator
             foreach (var key in pending.Keys)
             {
                 var wanted = pending.Prefix.Append(key).ToList();
-                if (!leaves.TryGetValue(string.Join(".", wanted), out var source))
+                if (!leaves.TryGetValue(string.Join('.', wanted), out var source))
                 {
                     throw new NotSupportedException(
                         $"Attachment '{pending.Member}' needs '_.{string.Join('.', wanted)}' projected beside it: an attachment is fetched by its row's key, so the key has to come back with the row. Add it to the projection.");

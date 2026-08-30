@@ -24,17 +24,18 @@ static class AttachmentShape
 
         foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
-            if (property.PropertyType == typeof(ScryAttachment))
+            var propertyType = property.PropertyType;
+            if (propertyType == typeof(ScryAttachment))
             {
                 return true;
             }
 
             // A generated model's navigations are models of their own, and a projection's nested
             // objects are anonymous types — either can be where the handle actually sits.
-            if (!property.PropertyType.IsPrimitive &&
-                property.PropertyType != typeof(string) &&
-                property.PropertyType.IsClass &&
-                Walk(property.PropertyType, depth + 1))
+            if (!propertyType.IsPrimitive &&
+                propertyType != typeof(string) &&
+                propertyType.IsClass &&
+                Walk(propertyType, depth + 1))
             {
                 return true;
             }

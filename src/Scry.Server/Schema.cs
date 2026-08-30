@@ -175,7 +175,7 @@ sealed class Schema
             .ToList();
         if (type.Keys is { } keys)
         {
-            members.Add(("~keys", string.Join(" ", keys)));
+            members.Add(("~keys", string.Join(' ', keys)));
         }
 
         if (Sensitivity(type) is { Length: > 0 } sensitive)
@@ -208,7 +208,7 @@ sealed class Schema
             names.Insert(0, "*");
         }
 
-        return string.Join(" ", names);
+        return string.Join(' ', names);
     }
 
     (List<ScrySourceInfo> Sources, List<ScryTypeInfo> Types, List<ScryEnumInfo> Enums) DescribeSurface()

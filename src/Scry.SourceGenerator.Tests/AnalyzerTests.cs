@@ -532,7 +532,7 @@ public class AnalyzerTests
         var errors = compilation.GetDiagnostics()
             .Where(_ => _.Severity == DiagnosticSeverity.Error)
             .ToList();
-        Assert.That(errors, Is.Empty, () => string.Join("\n", errors));
+        Assert.That(errors, Is.Empty, () => string.Join('\n', errors));
 
         var diagnostics = compilation
             .WithAnalyzers([new ScryLinqAnalyzer()])

@@ -234,7 +234,7 @@ public sealed class ScrySidecarHandler(ScrySidecarStore store, ScrySidecarOption
 
         foreach (var pair in uri.Query.TrimStart('?').Split('&'))
         {
-            if (pair.StartsWith(QueryUrl.Parameter + "=", StringComparison.Ordinal))
+            if (pair.StartsWith(QueryUrl.Parameter + '=', StringComparison.Ordinal))
             {
                 return Uri.UnescapeDataString(pair[(QueryUrl.Parameter.Length + 1)..]);
             }

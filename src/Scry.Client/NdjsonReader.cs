@@ -51,10 +51,15 @@ sealed class NdjsonReader(Stream stream) :
     }
 
     // A line written by a Windows host may carry the CR the sender's newline pairs with.
-    static ReadOnlyMemory<byte> Trim(ReadOnlyMemory<byte> line) =>
-        line.Length > 0 && line.Span[^1] == (byte) '\r'
-            ? line[..^1]
-            : line;
+    static ReadOnlyMemory<byte> Trim(ReadOnlyMemory<byte> line)
+    {
+        if (line.Length > 0 && line.Span[^1] == (byte) '\r')
+        {
+            return line[..^1];
+        }
+
+        return line;
+    }
 
     async ValueTask Fill(Cancel cancel)
     {

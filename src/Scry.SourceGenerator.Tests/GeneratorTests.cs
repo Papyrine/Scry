@@ -294,7 +294,7 @@ public class GeneratorTests
             .Where(_ => _.Id is "CS0612" or "CS0618" or "CS0619")
             .ToList();
 
-        Assert.That(obsolete, Is.Empty, () => string.Join("\n", obsolete));
+        Assert.That(obsolete, Is.Empty, () => string.Join('\n', obsolete));
     }
 
     // Deprecating something leaves the queryable surface exactly as it was, so the stamp must not move.
@@ -580,7 +580,7 @@ public class GeneratorTests
 
         var dllPath = new TempFile("dll");
         var emit = modelCompilation.Emit(dllPath);
-        Assert.That(emit.Success, Is.True, () => string.Join("\n", emit.Diagnostics));
+        Assert.That(emit.Success, Is.True, () => string.Join('\n', emit.Diagnostics));
 
         var consumer = CSharpCompilation.Create(
             "Consumer",

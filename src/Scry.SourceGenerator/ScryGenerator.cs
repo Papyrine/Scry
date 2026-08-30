@@ -450,7 +450,7 @@ public class ScryGenerator :
             .ToList();
         if (source.Keys.Length > 0)
         {
-            members.Add(("~keys", string.Join(" ", source.Keys)));
+            members.Add(("~keys", string.Join(' ', source.Keys)));
         }
 
         if (Sensitivity(source) is { Length: > 0 } sensitive)
@@ -483,7 +483,7 @@ public class ScryGenerator :
             names.Insert(0, "*");
         }
 
-        return string.Join(" ", names);
+        return string.Join(' ', names);
     }
 
     static StringBuilder Header()

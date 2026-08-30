@@ -120,7 +120,7 @@ public class StringJoinAggregateTests
         var exception = Assert.ThrowsAsync<NotSupportedException>(() =>
             client.Source<Order>("Order")
                 .GroupBy(_ => _.Region)
-                .Select(_ => new {Amounts = string.Join(",", _.Select(x => x.Amount))})
+                .Select(_ => new {Amounts = string.Join(',', _.Select(x => x.Amount))})
                 .ToListAsync());
 
         Assert.That(exception!.Message, Does.Contain("joins text"));
