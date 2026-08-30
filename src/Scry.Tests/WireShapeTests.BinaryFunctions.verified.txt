@@ -1,4 +1,4 @@
-﻿client.Source<Shift>("Shift").Select(_ => new {V = _.Signature.Length}).ToListAsync()
+﻿_ => _.Source<Shift>("Shift").Select(_ => new {V = _.Signature.Length}).ToListAsync()
 {
   "version": 1,
   "root": "Shift",
@@ -28,7 +28,7 @@
   ]
 }
 
-client.Source<Shift>("Shift").Select(_ => new {V = _.Signature.Contains((byte) 0x0B)}).ToListAsync()
+_ => _.Source<Shift>("Shift").Select(_ => new {V = _.Signature.Contains((byte) 0x0B)}).ToListAsync()
 {
   "version": 1,
   "root": "Shift",
@@ -64,7 +64,7 @@ client.Source<Shift>("Shift").Select(_ => new {V = _.Signature.Contains((byte) 0
   ]
 }
 
-client.Source<Shift>("Shift").Select(_ => new {V = _.Signature.ElementAt(1)}).ToListAsync()
+_ => _.Source<Shift>("Shift").Select(_ => new {V = _.Signature.ElementAt(1)}).ToListAsync()
 {
   "version": 1,
   "root": "Shift",

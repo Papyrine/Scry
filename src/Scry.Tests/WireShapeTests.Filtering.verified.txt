@@ -1,4 +1,4 @@
-﻿client.Source<Employee>("Employee").Where(_ => _.Active).Select(_ => new NameRow(_.Name)).ToListAsync()
+﻿_ => _.Source<Employee>("Employee").Where(_ => _.Active).Select(_ => new NameRow(_.Name)).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -21,7 +21,7 @@
   ]
 }
 
-client.Source<Employee>("Employee").Where(_ => !_.Active).Select(_ => new NameRow(_.Name)).ToListAsync()
+_ => _.Source<Employee>("Employee").Where(_ => !_.Active).Select(_ => new NameRow(_.Name)).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -48,7 +48,7 @@ client.Source<Employee>("Employee").Where(_ => !_.Active).Select(_ => new NameRo
   ]
 }
 
-client.Source<Employee>("Employee").Where(_ => _.Status == wanted && _.Name.StartsWith(prefix)).Select(_ => new NameRow(_.Name)).ToListAsync()
+_ => _.Source<Employee>("Employee").Where(_ => _.Status == wanted && _.Name.StartsWith(prefix)).Select(_ => new NameRow(_.Name)).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -99,7 +99,7 @@ client.Source<Employee>("Employee").Where(_ => _.Status == wanted && _.Name.Star
   ]
 }
 
-client.Source<Employee>("Employee").Where(_ => _.Status != Status.FullTime || _.Name == "Bob").Select(_ => new NameRow(_.Name)).ToListAsync()
+_ => _.Source<Employee>("Employee").Where(_ => _.Status != Status.FullTime || _.Name == "Bob").Select(_ => new NameRow(_.Name)).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -148,7 +148,7 @@ client.Source<Employee>("Employee").Where(_ => _.Status != Status.FullTime || _.
   ]
 }
 
-client.Source<Employee>("Employee").Where(_ => _.ManagerId == null).Select(_ => new NameRow(_.Name)).ToListAsync()
+_ => _.Source<Employee>("Employee").Where(_ => _.ManagerId == null).Select(_ => new NameRow(_.Name)).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -179,7 +179,7 @@ client.Source<Employee>("Employee").Where(_ => _.ManagerId == null).Select(_ => 
   ]
 }
 
-client.Source<Employee>("Employee").Where(_ => _.ManagerId.HasValue).Select(_ => new NameRow(_.Name)).ToListAsync()
+_ => _.Source<Employee>("Employee").Where(_ => _.ManagerId.HasValue).Select(_ => new NameRow(_.Name)).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -210,7 +210,7 @@ client.Source<Employee>("Employee").Where(_ => _.ManagerId.HasValue).Select(_ =>
   ]
 }
 
-client.Source<Employee>("Employee").Where(_ => _.Avatar == avatar).Select(_ => new NameRow(_.Name)).ToListAsync()
+_ => _.Source<Employee>("Employee").Where(_ => _.Avatar == avatar).Select(_ => new NameRow(_.Name)).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -242,7 +242,7 @@ client.Source<Employee>("Employee").Where(_ => _.Avatar == avatar).Select(_ => n
   ]
 }
 
-client.Source<Employee>("Employee").Where(_ => _.Address.Country == "UK").Select(_ => new NameRow(_.Name)).ToListAsync()
+_ => _.Source<Employee>("Employee").Where(_ => _.Address.Country == "UK").Select(_ => new NameRow(_.Name)).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -277,7 +277,7 @@ client.Source<Employee>("Employee").Where(_ => _.Address.Country == "UK").Select
   ]
 }
 
-client.Source<Employee>("Employee").Where(_ => _.Manager!.Name == "Alice").Select(_ => new NameRow(_.Name)).ToListAsync()
+_ => _.Source<Employee>("Employee").Where(_ => _.Manager!.Name == "Alice").Select(_ => new NameRow(_.Name)).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -312,7 +312,7 @@ client.Source<Employee>("Employee").Where(_ => _.Manager!.Name == "Alice").Selec
   ]
 }
 
-client.Source<Employee>("Employee").Where(_ => _.Perks.HasFlag(Perks.Parking | Perks.Gym)).Select(_ => new NameRow(_.Name)).ToListAsync()
+_ => _.Source<Employee>("Employee").Where(_ => _.Perks.HasFlag(Perks.Parking | Perks.Gym)).Select(_ => new NameRow(_.Name)).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -346,7 +346,7 @@ client.Source<Employee>("Employee").Where(_ => _.Perks.HasFlag(Perks.Parking | P
   ]
 }
 
-client.Source<Order>("Order").Where(_ => regions.Contains(_.Region)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
+_ => _.Source<Order>("Order").Where(_ => regions.Contains(_.Region)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -386,7 +386,7 @@ client.Source<Order>("Order").Where(_ => regions.Contains(_.Region)).Select(_ =>
   ]
 }
 
-client.Source<Order>("Order").Where(_ => _.Amount >= 100m && _.Amount < 250m).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
+_ => _.Source<Order>("Order").Where(_ => _.Amount >= 100m && _.Amount < 250m).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -436,7 +436,7 @@ client.Source<Order>("Order").Where(_ => _.Amount >= 100m && _.Amount < 250m).Se
   ]
 }
 
-client.Source<Order>("Order").Where(_ => _.Amount - (_.Discount ?? 0m) > 90m).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
+_ => _.Source<Order>("Order").Where(_ => _.Amount - (_.Discount ?? 0m) > 90m).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -486,7 +486,7 @@ client.Source<Order>("Order").Where(_ => _.Amount - (_.Discount ?? 0m) > 90m).Se
   ]
 }
 
-client.Source<Order>("Order").Where(_ => _.Amount * 2m / 4m + 1m <= 100m).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
+_ => _.Source<Order>("Order").Where(_ => _.Amount * 2m / 4m + 1m <= 100m).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -546,7 +546,7 @@ client.Source<Order>("Order").Where(_ => _.Amount * 2m / 4m + 1m <= 100m).Select
   ]
 }
 
-client.Source<Order>("Order").Where(_ => _.Region.Length % 2 == 0).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
+_ => _.Source<Order>("Order").Where(_ => _.Region.Length % 2 == 0).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -593,7 +593,7 @@ client.Source<Order>("Order").Where(_ => _.Region.Length % 2 == 0).Select(_ => n
   ]
 }
 
-client.Source<Order>("Order").Where(_ => -_.Amount < 0m).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
+_ => _.Source<Order>("Order").Where(_ => -_.Amount < 0m).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -630,7 +630,7 @@ client.Source<Order>("Order").Where(_ => -_.Amount < 0m).Select(_ => new OrderRo
   ]
 }
 
-client.Source<Order>("Order").Where(_ => _.Grade == 'A').Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
+_ => _.Source<Order>("Order").Where(_ => _.Grade == 'A').Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -663,7 +663,7 @@ client.Source<Order>("Order").Where(_ => _.Grade == 'A').Select(_ => new OrderRo
   ]
 }
 
-client.Source<Order>("Order").Where(_ => _.Quantity == 7u && _.Sku == ulong.MaxValue).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
+_ => _.Source<Order>("Order").Where(_ => _.Quantity == 7u && _.Sku == ulong.MaxValue).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -713,7 +713,7 @@ client.Source<Order>("Order").Where(_ => _.Quantity == 7u && _.Sku == ulong.MaxV
   ]
 }
 
-client.Source<Order>("Order").Where(_ => _.Placed > new DateTime(2026, 1, 1)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
+_ => _.Source<Order>("Order").Where(_ => _.Placed > new DateTime(2026, 1, 1)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -746,7 +746,7 @@ client.Source<Order>("Order").Where(_ => _.Placed > new DateTime(2026, 1, 1)).Se
   ]
 }
 
-client.Source<Employee>("Employee").Where(_ => _.Name.Contains("LIC", StringComparison.OrdinalIgnoreCase)).Select(_ => new NameRow(_.Name)).ToListAsync()
+_ => _.Source<Employee>("Employee").Where(_ => _.Name.Contains("LIC", StringComparison.OrdinalIgnoreCase)).Select(_ => new NameRow(_.Name)).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -784,7 +784,7 @@ client.Source<Employee>("Employee").Where(_ => _.Name.Contains("LIC", StringComp
   ]
 }
 
-client.Source<Employee>("Employee").Where(_ => _.Name.Equals("Alice", StringComparison.Ordinal)).Select(_ => new NameRow(_.Name)).ToListAsync()
+_ => _.Source<Employee>("Employee").Where(_ => _.Name.Equals("Alice", StringComparison.Ordinal)).Select(_ => new NameRow(_.Name)).ToListAsync()
 {
   "version": 1,
   "root": "Employee",

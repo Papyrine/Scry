@@ -1,4 +1,4 @@
-﻿client.Source<Order>("Order").Select(_ => new {V = Math.Abs(_.Amount)}).ToListAsync()
+﻿_ => _.Source<Order>("Order").Select(_ => new {V = Math.Abs(_.Amount)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -28,7 +28,7 @@
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = Math.Ceiling(_.Amount)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = Math.Ceiling(_.Amount)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -58,7 +58,7 @@ client.Source<Order>("Order").Select(_ => new {V = Math.Ceiling(_.Amount)}).ToLi
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = Math.Floor(_.Amount)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = Math.Floor(_.Amount)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -88,7 +88,7 @@ client.Source<Order>("Order").Select(_ => new {V = Math.Floor(_.Amount)}).ToList
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = Math.Round(_.Amount)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = Math.Round(_.Amount)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -118,7 +118,7 @@ client.Source<Order>("Order").Select(_ => new {V = Math.Round(_.Amount)}).ToList
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = Math.Round(_.Amount, 1)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = Math.Round(_.Amount, 1)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -154,7 +154,7 @@ client.Source<Order>("Order").Select(_ => new {V = Math.Round(_.Amount, 1)}).ToL
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = Math.Truncate(_.Amount)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = Math.Truncate(_.Amount)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -184,7 +184,7 @@ client.Source<Order>("Order").Select(_ => new {V = Math.Truncate(_.Amount)}).ToL
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = Math.Sign(_.Amount - 100m)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = Math.Sign(_.Amount - 100m)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -223,7 +223,7 @@ client.Source<Order>("Order").Select(_ => new {V = Math.Sign(_.Amount - 100m)}).
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = Math.Sqrt((double) _.Amount)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = Math.Sqrt((double) _.Amount)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -253,7 +253,7 @@ client.Source<Order>("Order").Select(_ => new {V = Math.Sqrt((double) _.Amount)}
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = Math.Pow((double) _.Amount, 2d)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = Math.Pow((double) _.Amount, 2d)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -289,7 +289,7 @@ client.Source<Order>("Order").Select(_ => new {V = Math.Pow((double) _.Amount, 2
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = Math.Exp((double) _.Amount)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = Math.Exp((double) _.Amount)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -319,7 +319,7 @@ client.Source<Order>("Order").Select(_ => new {V = Math.Exp((double) _.Amount)})
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = Math.Log((double) _.Amount)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = Math.Log((double) _.Amount)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -349,7 +349,7 @@ client.Source<Order>("Order").Select(_ => new {V = Math.Log((double) _.Amount)})
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = Math.Log((double) _.Amount, 10d)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = Math.Log((double) _.Amount, 10d)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -385,7 +385,7 @@ client.Source<Order>("Order").Select(_ => new {V = Math.Log((double) _.Amount, 1
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = Math.Log10((double) _.Amount)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = Math.Log10((double) _.Amount)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -415,7 +415,7 @@ client.Source<Order>("Order").Select(_ => new {V = Math.Log10((double) _.Amount)
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {A = Math.Sin((double) _.Amount), B = Math.Cos((double) _.Amount), C = Math.Tan((double) _.Amount)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {A = Math.Sin((double) _.Amount), B = Math.Cos((double) _.Amount), C = Math.Tan((double) _.Amount)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -475,7 +475,7 @@ client.Source<Order>("Order").Select(_ => new {A = Math.Sin((double) _.Amount), 
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {A = Math.Asin((double) _.Amount), B = Math.Acos((double) _.Amount), C = Math.Atan((double) _.Amount)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {A = Math.Asin((double) _.Amount), B = Math.Acos((double) _.Amount), C = Math.Atan((double) _.Amount)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -535,7 +535,7 @@ client.Source<Order>("Order").Select(_ => new {A = Math.Asin((double) _.Amount),
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = Math.Atan2((double) _.Amount, 2d)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = Math.Atan2((double) _.Amount, 2d)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -571,7 +571,7 @@ client.Source<Order>("Order").Select(_ => new {V = Math.Atan2((double) _.Amount,
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {A = Math.Max(_.Amount, 100m), B = Math.Min(_.Amount, 100m)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {A = Math.Max(_.Amount, 100m), B = Math.Min(_.Amount, 100m)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -628,7 +628,7 @@ client.Source<Order>("Order").Select(_ => new {A = Math.Max(_.Amount, 100m), B =
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = double.DegreesToRadians((double) _.Amount)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = double.DegreesToRadians((double) _.Amount)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -658,7 +658,7 @@ client.Source<Order>("Order").Select(_ => new {V = double.DegreesToRadians((doub
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = double.RadiansToDegrees((double) _.Amount)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = double.RadiansToDegrees((double) _.Amount)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",

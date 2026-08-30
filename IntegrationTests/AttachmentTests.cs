@@ -192,7 +192,7 @@ public class AttachmentTests
         try
         {
             var exception = Assert.ThrowsAsync<ScryRequestException>(() => Read(row!.Photo));
-            Assert.That(exception!.StatusCode, Is.EqualTo(404));
+            Assert.That(exception!.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
         }
         finally
         {
@@ -206,7 +206,7 @@ public class AttachmentTests
         var exception = Assert.ThrowsAsync<ScryRequestException>(
             () => PostAttachment(AttachmentRequest.Create("Person", "Photo", [new("404", ClrTypeTag.Int32)])));
 
-        Assert.That(exception!.StatusCode, Is.EqualTo(404));
+        Assert.That(exception!.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
 
     // The row exists and holds a value, but the row policy hides it — so the attachment is as
@@ -217,7 +217,7 @@ public class AttachmentTests
         var exception = Assert.ThrowsAsync<ScryRequestException>(
             () => PostAttachment(AttachmentRequest.Create("Person", "Photo", [new("4", ClrTypeTag.Int32)])));
 
-        Assert.That(exception!.StatusCode, Is.EqualTo(404));
+        Assert.That(exception!.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
 
     [Test]
@@ -228,7 +228,7 @@ public class AttachmentTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(exception!.StatusCode, Is.EqualTo(400));
+            Assert.That(exception!.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
             Assert.That(exception.Body, Does.Contain("is not an attachment member"));
         });
     }
@@ -242,7 +242,7 @@ public class AttachmentTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(exception!.StatusCode, Is.EqualTo(400));
+            Assert.That(exception!.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
             Assert.That(exception.Body, Does.Contain("keyed by 1 value"));
         });
     }
@@ -255,7 +255,7 @@ public class AttachmentTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(exception!.StatusCode, Is.EqualTo(400));
+            Assert.That(exception!.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
             Assert.That(exception.Body, Does.Contain("not a valid Int32"));
         });
     }
@@ -419,7 +419,7 @@ public class AttachmentTests
         var body = await response.Content.ReadAsStringAsync();
         if (!response.IsSuccessStatusCode)
         {
-            throw new ScryRequestException((int) response.StatusCode, body);
+            throw new ScryRequestException(response.StatusCode, body);
         }
     }
 

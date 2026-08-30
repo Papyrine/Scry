@@ -273,7 +273,7 @@ public class HttpRoundTripTests
                 }
             });
 
-        Assert.That(exception!.StatusCode, Is.EqualTo(400));
+        Assert.That(exception!.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
 
     [Test]
@@ -893,7 +893,7 @@ public class HttpRoundTripTests
         await batch.SendAsync();
 
         var exception = Assert.ThrowsAsync<ScryRequestException>(async () => await rejected)!;
-        Assert.That(exception.StatusCode, Is.EqualTo(400));
+        Assert.That(exception.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         Assert.That(await accepted, Is.EqualTo(2));
     }
 

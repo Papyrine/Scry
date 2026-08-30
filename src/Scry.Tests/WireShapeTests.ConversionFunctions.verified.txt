@@ -1,4 +1,4 @@
-﻿client.Source<Order>("Order").Select(_ => new {V = int.Parse(_.Code)}).ToListAsync()
+﻿_ => _.Source<Order>("Order").Select(_ => new {V = int.Parse(_.Code)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -28,7 +28,7 @@
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = long.Parse(_.Code)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = long.Parse(_.Code)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -58,7 +58,7 @@ client.Source<Order>("Order").Select(_ => new {V = long.Parse(_.Code)}).ToListAs
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = decimal.Parse(_.Code)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = decimal.Parse(_.Code)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -88,7 +88,7 @@ client.Source<Order>("Order").Select(_ => new {V = decimal.Parse(_.Code)}).ToLis
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = double.Parse(_.Code)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = double.Parse(_.Code)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -118,7 +118,7 @@ client.Source<Order>("Order").Select(_ => new {V = double.Parse(_.Code)}).ToList
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = short.Parse(_.Code)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = short.Parse(_.Code)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -148,7 +148,7 @@ client.Source<Order>("Order").Select(_ => new {V = short.Parse(_.Code)}).ToListA
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = byte.Parse(_.Code)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = byte.Parse(_.Code)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -178,7 +178,7 @@ client.Source<Order>("Order").Select(_ => new {V = byte.Parse(_.Code)}).ToListAs
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = float.Parse(_.Code)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = float.Parse(_.Code)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -208,7 +208,7 @@ client.Source<Order>("Order").Select(_ => new {V = float.Parse(_.Code)}).ToListA
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = bool.Parse(_.Audited)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = bool.Parse(_.Audited)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -238,7 +238,7 @@ client.Source<Order>("Order").Select(_ => new {V = bool.Parse(_.Audited)}).ToLis
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = Convert.ToInt32(_.Code)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = Convert.ToInt32(_.Code)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -268,7 +268,7 @@ client.Source<Order>("Order").Select(_ => new {V = Convert.ToInt32(_.Code)}).ToL
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = Convert.ToString(_.Amount)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = Convert.ToString(_.Amount)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",

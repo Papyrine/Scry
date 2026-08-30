@@ -47,29 +47,29 @@ public partial class WireShapeTests
 
         return
         [
-            Wire(client => client.Source<Employee>("Employee").Where(_ => _.Active).Select(_ => new NameRow(_.Name)).ToListAsync()),
-            Wire(client => client.Source<Employee>("Employee").Where(_ => !_.Active).Select(_ => new NameRow(_.Name)).ToListAsync()),
-            Wire(client => client.Source<Employee>("Employee").Where(_ => _.Status == wanted && _.Name.StartsWith(prefix)).Select(_ => new NameRow(_.Name)).ToListAsync()),
-            Wire(client => client.Source<Employee>("Employee").Where(_ => _.Status != Status.FullTime || _.Name == "Bob").Select(_ => new NameRow(_.Name)).ToListAsync()),
-            Wire(client => client.Source<Employee>("Employee").Where(_ => _.ManagerId == null).Select(_ => new NameRow(_.Name)).ToListAsync()),
-            Wire(client => client.Source<Employee>("Employee").Where(_ => _.ManagerId.HasValue).Select(_ => new NameRow(_.Name)).ToListAsync()),
-            Wire(client => client.Source<Employee>("Employee").Where(_ => _.Avatar == avatar).Select(_ => new NameRow(_.Name)).ToListAsync()),
-            Wire(client => client.Source<Employee>("Employee").Where(_ => _.Address.Country == "UK").Select(_ => new NameRow(_.Name)).ToListAsync()),
-            Wire(client => client.Source<Employee>("Employee").Where(_ => _.Manager!.Name == "Alice").Select(_ => new NameRow(_.Name)).ToListAsync()),
-            Wire(client => client.Source<Employee>("Employee").Where(_ => _.Perks.HasFlag(Perks.Parking | Perks.Gym)).Select(_ => new NameRow(_.Name)).ToListAsync()),
-            Wire(client => client.Source<Order>("Order").Where(_ => regions.Contains(_.Region)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
-            Wire(client => client.Source<Order>("Order").Where(_ => _.Amount >= 100m && _.Amount < 250m).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
-            Wire(client => client.Source<Order>("Order").Where(_ => _.Amount - (_.Discount ?? 0m) > 90m).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
-            Wire(client => client.Source<Order>("Order").Where(_ => _.Amount * 2m / 4m + 1m <= 100m).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
-            Wire(client => client.Source<Order>("Order").Where(_ => _.Region.Length % 2 == 0).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
-            Wire(client => client.Source<Order>("Order").Where(_ => -_.Amount < 0m).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
-            Wire(client => client.Source<Order>("Order").Where(_ => _.Grade == 'A').Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
-            Wire(client => client.Source<Order>("Order").Where(_ => _.Quantity == 7u && _.Sku == ulong.MaxValue).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
-            Wire(client => client.Source<Order>("Order").Where(_ => _.Placed > new DateTime(2026, 1, 1)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
+            Wire(_ => _.Source<Employee>("Employee").Where(_ => _.Active).Select(_ => new NameRow(_.Name)).ToListAsync()),
+            Wire(_ => _.Source<Employee>("Employee").Where(_ => !_.Active).Select(_ => new NameRow(_.Name)).ToListAsync()),
+            Wire(_ => _.Source<Employee>("Employee").Where(_ => _.Status == wanted && _.Name.StartsWith(prefix)).Select(_ => new NameRow(_.Name)).ToListAsync()),
+            Wire(_ => _.Source<Employee>("Employee").Where(_ => _.Status != Status.FullTime || _.Name == "Bob").Select(_ => new NameRow(_.Name)).ToListAsync()),
+            Wire(_ => _.Source<Employee>("Employee").Where(_ => _.ManagerId == null).Select(_ => new NameRow(_.Name)).ToListAsync()),
+            Wire(_ => _.Source<Employee>("Employee").Where(_ => _.ManagerId.HasValue).Select(_ => new NameRow(_.Name)).ToListAsync()),
+            Wire(_ => _.Source<Employee>("Employee").Where(_ => _.Avatar == avatar).Select(_ => new NameRow(_.Name)).ToListAsync()),
+            Wire(_ => _.Source<Employee>("Employee").Where(_ => _.Address.Country == "UK").Select(_ => new NameRow(_.Name)).ToListAsync()),
+            Wire(_ => _.Source<Employee>("Employee").Where(_ => _.Manager!.Name == "Alice").Select(_ => new NameRow(_.Name)).ToListAsync()),
+            Wire(_ => _.Source<Employee>("Employee").Where(_ => _.Perks.HasFlag(Perks.Parking | Perks.Gym)).Select(_ => new NameRow(_.Name)).ToListAsync()),
+            Wire(_ => _.Source<Order>("Order").Where(_ => regions.Contains(_.Region)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
+            Wire(_ => _.Source<Order>("Order").Where(_ => _.Amount >= 100m && _.Amount < 250m).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
+            Wire(_ => _.Source<Order>("Order").Where(_ => _.Amount - (_.Discount ?? 0m) > 90m).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
+            Wire(_ => _.Source<Order>("Order").Where(_ => _.Amount * 2m / 4m + 1m <= 100m).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
+            Wire(_ => _.Source<Order>("Order").Where(_ => _.Region.Length % 2 == 0).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
+            Wire(_ => _.Source<Order>("Order").Where(_ => -_.Amount < 0m).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
+            Wire(_ => _.Source<Order>("Order").Where(_ => _.Grade == 'A').Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
+            Wire(_ => _.Source<Order>("Order").Where(_ => _.Quantity == 7u && _.Sku == ulong.MaxValue).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
+            Wire(_ => _.Source<Order>("Order").Where(_ => _.Placed > new DateTime(2026, 1, 1)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
             // A comparison asking for a case sensitivity names the intent; the collation implementing
             // it is the server's, so no request can put a collation of its own choosing into the SQL.
-            Wire(client => client.Source<Employee>("Employee").Where(_ => _.Name.Contains("LIC", StringComparison.OrdinalIgnoreCase)).Select(_ => new NameRow(_.Name)).ToListAsync()),
-            Wire(client => client.Source<Employee>("Employee").Where(_ => _.Name.Equals("Alice", StringComparison.Ordinal)).Select(_ => new NameRow(_.Name)).ToListAsync())
+            Wire(_ => _.Source<Employee>("Employee").Where(_ => _.Name.Contains("LIC", StringComparison.OrdinalIgnoreCase)).Select(_ => new NameRow(_.Name)).ToListAsync()),
+            Wire(_ => _.Source<Employee>("Employee").Where(_ => _.Name.Equals("Alice", StringComparison.Ordinal)).Select(_ => new NameRow(_.Name)).ToListAsync())
         ];
     }
 
@@ -78,13 +78,13 @@ public partial class WireShapeTests
 
     static Entry[] OrderingShapes() =>
     [
-        Wire(client => client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()),
-        Wire(client => client.Source<Employee>("Employee").OrderByDescending(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()),
-        Wire(client => client.Source<Employee>("Employee").OrderBy(_ => _.Status).ThenBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()),
-        Wire(client => client.Source<Employee>("Employee").OrderBy(_ => _.Status).ThenByDescending(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()),
-        Wire(client => client.Source<Employee>("Employee").OrderBy(_ => _.Name).Reverse().Select(_ => new NameRow(_.Name)).ToListAsync()),
-        Wire(client => client.Source<Employee>("Employee").OrderBy(_ => _.Name).Skip(2).Take(1).Select(_ => new NameRow(_.Name)).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").OrderBy(_ => int.Parse(_.Code)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync())
+        Wire(_ => _.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()),
+        Wire(_ => _.Source<Employee>("Employee").OrderByDescending(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()),
+        Wire(_ => _.Source<Employee>("Employee").OrderBy(_ => _.Status).ThenBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()),
+        Wire(_ => _.Source<Employee>("Employee").OrderBy(_ => _.Status).ThenByDescending(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()),
+        Wire(_ => _.Source<Employee>("Employee").OrderBy(_ => _.Name).Reverse().Select(_ => new NameRow(_.Name)).ToListAsync()),
+        Wire(_ => _.Source<Employee>("Employee").OrderBy(_ => _.Name).Skip(2).Take(1).Select(_ => new NameRow(_.Name)).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").OrderBy(_ => int.Parse(_.Code)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync())
     ];
 
     [Test]
@@ -94,15 +94,15 @@ public partial class WireShapeTests
     [
         // No Select at all: the generated entry point's member list becomes an explicit projection, so
         // the response stays keyed by the names the client was generated with.
-        Wire(client => client.Source<Employee>("Employee", ["Name", "Status"]).ToListAsync()),
-        Wire(client => client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).ToListAsync()),
-        Wire(client => client.Source<Employee>("Employee").Select(_ => new {_.Name, Manager = _.Manager!.Name}).ToListAsync()),
-        Wire(client => client.Source<Employee>("Employee").Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name))).ToListAsync()),
-        Wire(client => client.Source<Employee>("Employee").Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name.ToUpper()))).ToListAsync()),
-        Wire(client => client.Source<Employee>("Employee").Select(_ => new {_.Name, _.Address.City, _.Address.Country}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new OrderRow(_.Region == "North" ? "N" : "S", _.Amount - (_.Discount ?? 0m))).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {Label = $"{_.Region}-{_.Quantity}"}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {_.Region}).Distinct().ToListAsync())
+        Wire(_ => _.Source<Employee>("Employee", ["Name", "Status"]).ToListAsync()),
+        Wire(_ => _.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).ToListAsync()),
+        Wire(_ => _.Source<Employee>("Employee").Select(_ => new {_.Name, Manager = _.Manager!.Name}).ToListAsync()),
+        Wire(_ => _.Source<Employee>("Employee").Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name))).ToListAsync()),
+        Wire(_ => _.Source<Employee>("Employee").Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name.ToUpper()))).ToListAsync()),
+        Wire(_ => _.Source<Employee>("Employee").Select(_ => new {_.Name, _.Address.City, _.Address.Country}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new OrderRow(_.Region == "North" ? "N" : "S", _.Amount - (_.Discount ?? 0m))).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {Label = $"{_.Region}-{_.Quantity}"}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {_.Region}).Distinct().ToListAsync())
     ];
 
     [Test]
@@ -110,19 +110,19 @@ public partial class WireShapeTests
 
     static Entry[] GroupingShapes() =>
     [
-        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Total = _.Sum(_ => _.Amount), Rows = _.Count()}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Low = _.Min(_ => _.Amount), High = _.Max(_ => _.Amount), Mean = _.Average(o => o.Amount)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").GroupBy(_ => new {_.Region, _.Grade}).Select(_ => new {_.Key.Region, _.Key.Grade, Total = _.Sum(_ => _.Amount)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Total = _.Sum(_ => _.Amount), Rows = _.Count()}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Low = _.Min(_ => _.Amount), High = _.Max(_ => _.Amount), Mean = _.Average(o => o.Amount)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").GroupBy(_ => new {_.Region, _.Grade}).Select(_ => new {_.Key.Region, _.Key.Grade, Total = _.Sum(_ => _.Amount)}).ToListAsync()),
         // A computed key has no member path to name it by, so the projection reads it as the query's
         // Nth key rather than as a member.
-        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Placed.DayOfWeek).Select(_ => new {Day = _.Key, Count = _.Count()}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region.ToUpper()).Select(_ => new {Region = _.Key, Total = _.Sum(_ => _.Amount)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region, (region, orders) => new {Region = region, Total = orders.Sum(_ => _.Amount)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").GroupBy(_ => _.Placed.DayOfWeek).Select(_ => new {Day = _.Key, Count = _.Count()}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").GroupBy(_ => _.Region.ToUpper()).Select(_ => new {Region = _.Key, Total = _.Sum(_ => _.Amount)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").GroupBy(_ => _.Region, (region, orders) => new {Region = region, Total = orders.Sum(_ => _.Amount)}).ToListAsync()),
         // A filter reading the group rather than the row is SQL's HAVING.
-        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region).Where(_ => _.Sum(o => o.Amount) > 100m && _.Key != "South").Select(_ => new {_.Key, Total = _.Sum(_ => _.Amount)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Big = _.Count(_ => _.Amount > 90m), Graded = _.Count(_ => _.Grade == 'A')}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Grades = _.Select(_ => _.Grade).Distinct().Count()}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Codes = string.Join(",", _.Select(_ => _.Code))}).ToListAsync())
+        Wire(_ => _.Source<Order>("Order").GroupBy(_ => _.Region).Where(_ => _.Sum(o => o.Amount) > 100m && _.Key != "South").Select(_ => new {_.Key, Total = _.Sum(_ => _.Amount)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Big = _.Count(_ => _.Amount > 90m), Graded = _.Count(_ => _.Grade == 'A')}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Grades = _.Select(_ => _.Grade).Distinct().Count()}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Codes = string.Join(",", _.Select(_ => _.Code))}).ToListAsync())
     ];
 
     [Test]
@@ -164,16 +164,16 @@ public partial class WireShapeTests
     [
         // A flatten replaces the row every later operator reads; an aggregate folds the collection to
         // a scalar and leaves the row alone.
-        Wire(client => client.Source<Order>("Order").SelectMany(_ => _.Lines).Select(_ => new LineRow(_.Sku, _.Quantity)).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Where(_ => _.Region == "North").SelectMany(_ => _.Lines).Where(_ => _.Quantity > 1).Select(_ => new LineRow(_.Sku, _.Quantity)).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Where(_ => _.Lines.Any(l => l.Price == 25m)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Where(_ => _.Lines.All(l => l.Quantity > 0)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {_.Region, Lines = _.Lines.Count(l => l.Quantity > 1)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Lines.Sum(l => l.Price), Mean = _.Lines.Average(l => l.Price), Low = _.Lines.Min(l => l.Price), High = _.Lines.Max(l => l.Price)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").SelectMany(_ => _.Lines).Select(_ => new LineRow(_.Sku, _.Quantity)).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Where(_ => _.Region == "North").SelectMany(_ => _.Lines).Where(_ => _.Quantity > 1).Select(_ => new LineRow(_.Sku, _.Quantity)).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Where(_ => _.Lines.Any(l => l.Price == 25m)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Where(_ => _.Lines.All(l => l.Quantity > 0)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {_.Region, Lines = _.Lines.Count(l => l.Quantity > 1)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Lines.Sum(l => l.Price), Mean = _.Lines.Average(l => l.Price), Low = _.Lines.Min(l => l.Price), High = _.Lines.Max(l => l.Price)}).ToListAsync()),
         // A collection of values reads the element itself rather than a member of it.
-        Wire(client => client.Source<Order>("Order").Where(_ => _.Tags.Contains("urgent")).Select(_ => new {_.Region}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Scores.Sum(), High = _.Scores.Max()}).ToListAsync()),
-        Wire(client => client.Source<Employee>("Employee").Where(_ => _.PreviousAddresses.Any(address => address.City == "Berlin")).Select(_ => new NameRow(_.Name)).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Where(_ => _.Tags.Contains("urgent")).Select(_ => new {_.Region}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Scores.Sum(), High = _.Scores.Max()}).ToListAsync()),
+        Wire(_ => _.Source<Employee>("Employee").Where(_ => _.PreviousAddresses.Any(address => address.City == "Berlin")).Select(_ => new NameRow(_.Name)).ToListAsync()),
         // Membership of a set drawn from another source, which is resolved and policy-filtered before
         // the test.
         Wire(client => client.Source<Employee>("Employee").Where(_ => client.Source<Department>("Department").Where(_ => _.Name == "Sales").Select(_ => _.Id).Contains(_.DepartmentId)).Select(_ => new NameRow(_.Name)).ToListAsync())
@@ -184,8 +184,8 @@ public partial class WireShapeTests
 
     static Entry[] HierarchyShapes() =>
     [
-        Wire(client => client.Source<Asset>("Asset").OfType<Vehicle>().Select(_ => new {_.Name, _.Wheels}).ToListAsync()),
-        Wire(client => client.Source<Asset>("Asset").OfType<Building>().Where(_ => _.Floors > 1).Select(_ => new {_.Name, _.Floors}).ToListAsync())
+        Wire(_ => _.Source<Asset>("Asset").OfType<Vehicle>().Select(_ => new {_.Name, _.Wheels}).ToListAsync()),
+        Wire(_ => _.Source<Asset>("Asset").OfType<Building>().Where(_ => _.Floors > 1).Select(_ => new {_.Name, _.Floors}).ToListAsync())
     ];
 
     [Test]
@@ -193,30 +193,30 @@ public partial class WireShapeTests
 
     static Entry[] TerminalShapes() =>
     [
-        Wire(client => client.Source<Employee>("Employee").CountAsync()),
-        Wire(client => client.Source<Employee>("Employee").CountAsync(_ => _.Active)),
-        Wire(client => client.Source<Employee>("Employee").LongCountAsync()),
-        Wire(client => client.Source<Employee>("Employee").LongCountAsync(_ => _.Active)),
-        Wire(client => client.Source<Employee>("Employee").AnyAsync()),
-        Wire(client => client.Source<Employee>("Employee").AnyAsync(_ => _.Active)),
-        Wire(client => client.Source<Employee>("Employee").AllAsync(_ => _.Active)),
-        Wire(client => client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).FirstAsync()),
-        Wire(client => client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).FirstOrDefaultAsync(_ => _.Name == "Alice")),
-        Wire(client => client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).SingleAsync()),
-        Wire(client => client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).SingleOrDefaultAsync()),
-        Wire(client => client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).LastAsync()),
-        Wire(client => client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).LastOrDefaultAsync()),
+        Wire(_ => _.Source<Employee>("Employee").CountAsync()),
+        Wire(_ => _.Source<Employee>("Employee").CountAsync(_ => _.Active)),
+        Wire(_ => _.Source<Employee>("Employee").LongCountAsync()),
+        Wire(_ => _.Source<Employee>("Employee").LongCountAsync(_ => _.Active)),
+        Wire(_ => _.Source<Employee>("Employee").AnyAsync()),
+        Wire(_ => _.Source<Employee>("Employee").AnyAsync(_ => _.Active)),
+        Wire(_ => _.Source<Employee>("Employee").AllAsync(_ => _.Active)),
+        Wire(_ => _.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).FirstAsync()),
+        Wire(_ => _.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).FirstOrDefaultAsync(_ => _.Name == "Alice")),
+        Wire(_ => _.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).SingleAsync()),
+        Wire(_ => _.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).SingleOrDefaultAsync()),
+        Wire(_ => _.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).LastAsync()),
+        Wire(_ => _.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).LastOrDefaultAsync()),
         // ElementAt is the Skip + First it abbreviates, and MaxBy the OrderBy + First.
-        Wire(client => client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ElementAtAsync(1)),
-        Wire(client => client.Source<Order>("Order").MaxByAsync(_ => _.Amount)),
-        Wire(client => client.Source<Order>("Order").MinByAsync(_ => _.Amount)),
-        Wire(client => client.Source<Order>("Order").SumAsync(_ => _.Amount)),
-        Wire(client => client.Source<Order>("Order").AverageAsync(_ => _.Amount)),
-        Wire(client => client.Source<Order>("Order").MinAsync(_ => _.Amount)),
-        Wire(client => client.Source<Order>("Order").MaxAsync(_ => _.Amount)),
-        Wire(client => client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToPageAsync()),
-        Wire(client => client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToPageAsync(2)),
-        Wire(client => client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToPageAsync(2, "eyJrIjpbXX0.c2ln"))
+        Wire(_ => _.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ElementAtAsync(1)),
+        Wire(_ => _.Source<Order>("Order").MaxByAsync(_ => _.Amount)),
+        Wire(_ => _.Source<Order>("Order").MinByAsync(_ => _.Amount)),
+        Wire(_ => _.Source<Order>("Order").SumAsync(_ => _.Amount)),
+        Wire(_ => _.Source<Order>("Order").AverageAsync(_ => _.Amount)),
+        Wire(_ => _.Source<Order>("Order").MinAsync(_ => _.Amount)),
+        Wire(_ => _.Source<Order>("Order").MaxAsync(_ => _.Amount)),
+        Wire(_ => _.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToPageAsync()),
+        Wire(_ => _.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToPageAsync(2)),
+        Wire(_ => _.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToPageAsync(2, "eyJrIjpbXX0.c2ln"))
     ];
 
     [Test]
@@ -224,30 +224,30 @@ public partial class WireShapeTests
 
     static Entry[] StringShapes() =>
     [
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = _.Region.Contains("or")}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = _.Region.StartsWith("No")}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = _.Region.EndsWith("th")}).ToListAsync()),
+        Wire(_ =>_.Source<Order>("Order").Select(_ => new {V = _.Region.Contains("or")}).ToListAsync()),
+        Wire(_ =>_.Source<Order>("Order").Select(_ => new {V = _.Region.StartsWith("No")}).ToListAsync()),
+        Wire(_ =>_.Source<Order>("Order").Select(_ => new {V = _.Region.EndsWith("th")}).ToListAsync()),
         // The char overloads reach the same wire functions as their string forms — a char constant
         // travels under the String tag — so what pins them is the constant rather than the function.
-        Wire(client => client.Source<Order>("Order").Select(_ => new {A = _.Region.StartsWith('N'), B = _.Region.EndsWith('h'), C = _.Region.Contains('o')}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = _.Region.ToLower()}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = _.Region.ToUpper()}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = string.IsNullOrEmpty(_.Region)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = string.IsNullOrWhiteSpace(_.Region)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = _.Region.Length}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = _.Region.Trim()}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = _.Region.TrimStart()}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = _.Region.TrimEnd()}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = _.Region.Substring(1)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = _.Region.Substring(1, 2)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = _.Region.IndexOf('o')}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = _.Region.Replace("o", "0")}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = _.Region.FirstOrDefault()}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = _.Region.LastOrDefault()}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = _.Amount.ToString()}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = _.Region.CompareTo("South")}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = string.Compare(_.Region, "South")}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = _.Amount.CompareTo(100m)}).ToListAsync())
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {A = _.Region.StartsWith('N'), B = _.Region.EndsWith('h'), C = _.Region.Contains('o')}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.ToLower()}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.ToUpper()}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = string.IsNullOrEmpty(_.Region)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = string.IsNullOrWhiteSpace(_.Region)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.Length}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.Trim()}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.TrimStart()}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.TrimEnd()}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.Substring(1)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.Substring(1, 2)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.IndexOf('o')}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.Replace("o", "0")}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.FirstOrDefault()}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.LastOrDefault()}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = _.Amount.ToString()}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.CompareTo("South")}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = string.Compare(_.Region, "South")}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = _.Amount.CompareTo(100m)}).ToListAsync())
     ];
 
     [Test]
@@ -255,21 +255,21 @@ public partial class WireShapeTests
 
     static Entry[] TemporalShapes() =>
     [
-        Wire(client => client.Source<Order>("Order").Select(_ => new {_.Placed.Year, _.Placed.Month, _.Placed.Day, _.Placed.DayOfYear}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {_.Placed.Hour, _.Placed.Minute, _.Placed.Second, _.Placed.Millisecond}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {_.Placed.Microsecond, _.Placed.Nanosecond}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {_.Placed.DayOfWeek, _.Placed.Date, _.Placed.TimeOfDay}).ToListAsync()),
-        Wire(client => client.Source<Shift>("Shift").Select(_ => new {_.Day.DayNumber}).ToListAsync()),
-        Wire(client => client.Source<Shift>("Shift").Select(_ => new {_.Duration.Hours, _.Duration.Minutes, _.Duration.Seconds}).ToListAsync()),
-        Wire(client => client.Source<Shift>("Shift").Select(_ => new {_.Duration.Milliseconds, _.Duration.Microseconds, _.Duration.Nanoseconds}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {_.Placed.Year, _.Placed.Month, _.Placed.Day, _.Placed.DayOfYear}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {_.Placed.Hour, _.Placed.Minute, _.Placed.Second, _.Placed.Millisecond}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {_.Placed.Microsecond, _.Placed.Nanosecond}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {_.Placed.DayOfWeek, _.Placed.Date, _.Placed.TimeOfDay}).ToListAsync()),
+        Wire(_ => _.Source<Shift>("Shift").Select(_ => new {_.Day.DayNumber}).ToListAsync()),
+        Wire(_ => _.Source<Shift>("Shift").Select(_ => new {_.Duration.Hours, _.Duration.Minutes, _.Duration.Seconds}).ToListAsync()),
+        Wire(_ => _.Source<Shift>("Shift").Select(_ => new {_.Duration.Milliseconds, _.Duration.Microseconds, _.Duration.Nanoseconds}).ToListAsync()),
         // Reading one temporal type as another, which the database performs — so the answer does not
         // depend on the client's calendar or its clock.
-        Wire(client => client.Source<Order>("Order").Select(_ => new {D = Date.FromDateTime(_.Placed), T = Time.FromDateTime(_.Placed)}).ToListAsync()),
-        Wire(client => client.Source<Shift>("Shift").Select(_ => new {T = Time.FromTimeSpan(_.Duration), Stamp = _.Day.ToDateTime(_.Start)}).ToListAsync()),
-        Wire(client => client.Source<Shift>("Shift").Select(_ => new {S = _.Stamped.ToUnixTimeSeconds(), Ms = _.Stamped.ToUnixTimeMilliseconds()}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {A = _.Placed.AddYears(1), B = _.Placed.AddMonths(1), C = _.Placed.AddDays(1), D = _.Placed.AddHours(1)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {A = _.Placed.AddMinutes(1), B = _.Placed.AddSeconds(1), C = _.Placed.AddMilliseconds(1)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = _.Placed.CompareTo(new(2026, 1, 1))}).ToListAsync())
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {D = Date.FromDateTime(_.Placed), T = Time.FromDateTime(_.Placed)}).ToListAsync()),
+        Wire(_ => _.Source<Shift>("Shift").Select(_ => new {T = Time.FromTimeSpan(_.Duration), Stamp = _.Day.ToDateTime(_.Start)}).ToListAsync()),
+        Wire(_ => _.Source<Shift>("Shift").Select(_ => new {S = _.Stamped.ToUnixTimeSeconds(), Ms = _.Stamped.ToUnixTimeMilliseconds()}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {A = _.Placed.AddYears(1), B = _.Placed.AddMonths(1), C = _.Placed.AddDays(1), D = _.Placed.AddHours(1)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {A = _.Placed.AddMinutes(1), B = _.Placed.AddSeconds(1), C = _.Placed.AddMilliseconds(1)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = _.Placed.CompareTo(new(2026, 1, 1))}).ToListAsync())
     ];
 
     [Test]
@@ -277,25 +277,25 @@ public partial class WireShapeTests
 
     static Entry[] MathShapes() =>
     [
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = Math.Abs(_.Amount)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = Math.Ceiling(_.Amount)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = Math.Floor(_.Amount)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = Math.Round(_.Amount)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = Math.Round(_.Amount, 1)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = Math.Truncate(_.Amount)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = Math.Sign(_.Amount - 100m)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = Math.Sqrt((double) _.Amount)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = Math.Pow((double) _.Amount, 2d)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = Math.Exp((double) _.Amount)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = Math.Log((double) _.Amount)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = Math.Log((double) _.Amount, 10d)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = Math.Log10((double) _.Amount)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {A = Math.Sin((double) _.Amount), B = Math.Cos((double) _.Amount), C = Math.Tan((double) _.Amount)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {A = Math.Asin((double) _.Amount), B = Math.Acos((double) _.Amount), C = Math.Atan((double) _.Amount)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = Math.Atan2((double) _.Amount, 2d)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {A = Math.Max(_.Amount, 100m), B = Math.Min(_.Amount, 100m)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = double.DegreesToRadians((double) _.Amount)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = double.RadiansToDegrees((double) _.Amount)}).ToListAsync())
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = Math.Abs(_.Amount)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = Math.Ceiling(_.Amount)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = Math.Floor(_.Amount)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = Math.Round(_.Amount)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = Math.Round(_.Amount, 1)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = Math.Truncate(_.Amount)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = Math.Sign(_.Amount - 100m)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = Math.Sqrt((double) _.Amount)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = Math.Pow((double) _.Amount, 2d)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = Math.Exp((double) _.Amount)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = Math.Log((double) _.Amount)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = Math.Log((double) _.Amount, 10d)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = Math.Log10((double) _.Amount)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {A = Math.Sin((double) _.Amount), B = Math.Cos((double) _.Amount), C = Math.Tan((double) _.Amount)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {A = Math.Asin((double) _.Amount), B = Math.Acos((double) _.Amount), C = Math.Atan((double) _.Amount)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = Math.Atan2((double) _.Amount, 2d)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {A = Math.Max(_.Amount, 100m), B = Math.Min(_.Amount, 100m)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = double.DegreesToRadians((double) _.Amount)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = double.RadiansToDegrees((double) _.Amount)}).ToListAsync())
     ];
 
     [Test]
@@ -303,18 +303,18 @@ public partial class WireShapeTests
 
     static Entry[] ConversionShapes() =>
     [
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = int.Parse(_.Code)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = long.Parse(_.Code)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = decimal.Parse(_.Code)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = double.Parse(_.Code)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = short.Parse(_.Code)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = byte.Parse(_.Code)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = float.Parse(_.Code)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = bool.Parse(_.Audited)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = int.Parse(_.Code)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = long.Parse(_.Code)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = decimal.Parse(_.Code)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = double.Parse(_.Code)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = short.Parse(_.Code)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = byte.Parse(_.Code)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = float.Parse(_.Code)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = bool.Parse(_.Audited)}).ToListAsync()),
         // The Convert spellings reach the same functions as Parse, and Convert.ToString is StringFrom
         // by another name.
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = Convert.ToInt32(_.Code)}).ToListAsync()),
-        Wire(client => client.Source<Order>("Order").Select(_ => new {V = Convert.ToString(_.Amount)}).ToListAsync())
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = Convert.ToInt32(_.Code)}).ToListAsync()),
+        Wire(_ => _.Source<Order>("Order").Select(_ => new {V = Convert.ToString(_.Amount)}).ToListAsync())
     ];
 
     [Test]
@@ -322,9 +322,9 @@ public partial class WireShapeTests
 
     static Entry[] BinaryShapes() =>
     [
-        Wire(client => client.Source<Shift>("Shift").Select(_ => new {V = _.Signature.Length}).ToListAsync()),
-        Wire(client => client.Source<Shift>("Shift").Select(_ => new {V = _.Signature.Contains((byte) 0x0B)}).ToListAsync()),
-        Wire(client => client.Source<Shift>("Shift").Select(_ => new {V = _.Signature.ElementAt(1)}).ToListAsync())
+        Wire(_ => _.Source<Shift>("Shift").Select(_ => new {V = _.Signature.Length}).ToListAsync()),
+        Wire(_ => _.Source<Shift>("Shift").Select(_ => new {V = _.Signature.Contains((byte) 0x0B)}).ToListAsync()),
+        Wire(_ => _.Source<Shift>("Shift").Select(_ => new {V = _.Signature.ElementAt(1)}).ToListAsync())
     ];
 
     /// <summary>
@@ -463,9 +463,12 @@ public partial class WireShapeTests
             .Trim();
 
         const string parameter = "client => ";
-        return collapsed.StartsWith(parameter, StringComparison.Ordinal)
-            ? collapsed[parameter.Length..]
-            : collapsed;
+        if (collapsed.StartsWith(parameter, StringComparison.Ordinal))
+        {
+            return collapsed[parameter.Length..];
+        }
+
+        return collapsed;
     }
 
     sealed class StopBeforeSending :

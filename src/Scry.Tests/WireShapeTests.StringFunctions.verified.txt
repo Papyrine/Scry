@@ -1,4 +1,4 @@
-﻿client.Source<Order>("Order").Select(_ => new {V = _.Region.Contains("or")}).ToListAsync()
+﻿_ =>_.Source<Order>("Order").Select(_ => new {V = _.Region.Contains("or")}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -34,7 +34,7 @@
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = _.Region.StartsWith("No")}).ToListAsync()
+_ =>_.Source<Order>("Order").Select(_ => new {V = _.Region.StartsWith("No")}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -70,7 +70,7 @@ client.Source<Order>("Order").Select(_ => new {V = _.Region.StartsWith("No")}).T
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = _.Region.EndsWith("th")}).ToListAsync()
+_ =>_.Source<Order>("Order").Select(_ => new {V = _.Region.EndsWith("th")}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -106,7 +106,7 @@ client.Source<Order>("Order").Select(_ => new {V = _.Region.EndsWith("th")}).ToL
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {A = _.Region.StartsWith('N'), B = _.Region.EndsWith('h'), C = _.Region.Contains('o')}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {A = _.Region.StartsWith('N'), B = _.Region.EndsWith('h'), C = _.Region.Contains('o')}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -184,7 +184,7 @@ client.Source<Order>("Order").Select(_ => new {A = _.Region.StartsWith('N'), B =
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = _.Region.ToLower()}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.ToLower()}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -214,7 +214,7 @@ client.Source<Order>("Order").Select(_ => new {V = _.Region.ToLower()}).ToListAs
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = _.Region.ToUpper()}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.ToUpper()}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -244,7 +244,7 @@ client.Source<Order>("Order").Select(_ => new {V = _.Region.ToUpper()}).ToListAs
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = string.IsNullOrEmpty(_.Region)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = string.IsNullOrEmpty(_.Region)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -274,7 +274,7 @@ client.Source<Order>("Order").Select(_ => new {V = string.IsNullOrEmpty(_.Region
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = string.IsNullOrWhiteSpace(_.Region)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = string.IsNullOrWhiteSpace(_.Region)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -304,7 +304,7 @@ client.Source<Order>("Order").Select(_ => new {V = string.IsNullOrWhiteSpace(_.R
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = _.Region.Length}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.Length}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -334,7 +334,7 @@ client.Source<Order>("Order").Select(_ => new {V = _.Region.Length}).ToListAsync
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = _.Region.Trim()}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.Trim()}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -364,7 +364,7 @@ client.Source<Order>("Order").Select(_ => new {V = _.Region.Trim()}).ToListAsync
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = _.Region.TrimStart()}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.TrimStart()}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -394,7 +394,7 @@ client.Source<Order>("Order").Select(_ => new {V = _.Region.TrimStart()}).ToList
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = _.Region.TrimEnd()}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.TrimEnd()}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -424,7 +424,7 @@ client.Source<Order>("Order").Select(_ => new {V = _.Region.TrimEnd()}).ToListAs
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = _.Region.Substring(1)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.Substring(1)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -460,7 +460,7 @@ client.Source<Order>("Order").Select(_ => new {V = _.Region.Substring(1)}).ToLis
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = _.Region.Substring(1, 2)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.Substring(1, 2)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -501,7 +501,7 @@ client.Source<Order>("Order").Select(_ => new {V = _.Region.Substring(1, 2)}).To
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = _.Region.IndexOf('o')}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.IndexOf('o')}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -537,7 +537,7 @@ client.Source<Order>("Order").Select(_ => new {V = _.Region.IndexOf('o')}).ToLis
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = _.Region.Replace("o", "0")}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.Replace("o", "0")}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -578,7 +578,7 @@ client.Source<Order>("Order").Select(_ => new {V = _.Region.Replace("o", "0")}).
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = _.Region.FirstOrDefault()}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.FirstOrDefault()}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -608,7 +608,7 @@ client.Source<Order>("Order").Select(_ => new {V = _.Region.FirstOrDefault()}).T
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = _.Region.LastOrDefault()}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.LastOrDefault()}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -638,7 +638,7 @@ client.Source<Order>("Order").Select(_ => new {V = _.Region.LastOrDefault()}).To
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = _.Amount.ToString()}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = _.Amount.ToString()}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -668,7 +668,7 @@ client.Source<Order>("Order").Select(_ => new {V = _.Amount.ToString()}).ToListA
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = _.Region.CompareTo("South")}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = _.Region.CompareTo("South")}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -704,7 +704,7 @@ client.Source<Order>("Order").Select(_ => new {V = _.Region.CompareTo("South")})
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = string.Compare(_.Region, "South")}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = string.Compare(_.Region, "South")}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -740,7 +740,7 @@ client.Source<Order>("Order").Select(_ => new {V = string.Compare(_.Region, "Sou
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = _.Amount.CompareTo(100m)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = _.Amount.CompareTo(100m)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",

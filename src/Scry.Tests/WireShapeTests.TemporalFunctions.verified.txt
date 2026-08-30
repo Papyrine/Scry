@@ -1,4 +1,4 @@
-﻿client.Source<Order>("Order").Select(_ => new {_.Placed.Year, _.Placed.Month, _.Placed.Day, _.Placed.DayOfYear}).ToListAsync()
+﻿_ => _.Source<Order>("Order").Select(_ => new {_.Placed.Year, _.Placed.Month, _.Placed.Day, _.Placed.DayOfYear}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -73,7 +73,7 @@
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {_.Placed.Hour, _.Placed.Minute, _.Placed.Second, _.Placed.Millisecond}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {_.Placed.Hour, _.Placed.Minute, _.Placed.Second, _.Placed.Millisecond}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -148,7 +148,7 @@ client.Source<Order>("Order").Select(_ => new {_.Placed.Hour, _.Placed.Minute, _
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {_.Placed.Microsecond, _.Placed.Nanosecond}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {_.Placed.Microsecond, _.Placed.Nanosecond}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -193,7 +193,7 @@ client.Source<Order>("Order").Select(_ => new {_.Placed.Microsecond, _.Placed.Na
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {_.Placed.DayOfWeek, _.Placed.Date, _.Placed.TimeOfDay}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {_.Placed.DayOfWeek, _.Placed.Date, _.Placed.TimeOfDay}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -253,7 +253,7 @@ client.Source<Order>("Order").Select(_ => new {_.Placed.DayOfWeek, _.Placed.Date
   ]
 }
 
-client.Source<Shift>("Shift").Select(_ => new {_.Day.DayNumber}).ToListAsync()
+_ => _.Source<Shift>("Shift").Select(_ => new {_.Day.DayNumber}).ToListAsync()
 {
   "version": 1,
   "root": "Shift",
@@ -283,7 +283,7 @@ client.Source<Shift>("Shift").Select(_ => new {_.Day.DayNumber}).ToListAsync()
   ]
 }
 
-client.Source<Shift>("Shift").Select(_ => new {_.Duration.Hours, _.Duration.Minutes, _.Duration.Seconds}).ToListAsync()
+_ => _.Source<Shift>("Shift").Select(_ => new {_.Duration.Hours, _.Duration.Minutes, _.Duration.Seconds}).ToListAsync()
 {
   "version": 1,
   "root": "Shift",
@@ -343,7 +343,7 @@ client.Source<Shift>("Shift").Select(_ => new {_.Duration.Hours, _.Duration.Minu
   ]
 }
 
-client.Source<Shift>("Shift").Select(_ => new {_.Duration.Milliseconds, _.Duration.Microseconds, _.Duration.Nanoseconds}).ToListAsync()
+_ => _.Source<Shift>("Shift").Select(_ => new {_.Duration.Milliseconds, _.Duration.Microseconds, _.Duration.Nanoseconds}).ToListAsync()
 {
   "version": 1,
   "root": "Shift",
@@ -403,7 +403,7 @@ client.Source<Shift>("Shift").Select(_ => new {_.Duration.Milliseconds, _.Durati
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {D = Date.FromDateTime(_.Placed), T = Time.FromDateTime(_.Placed)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {D = Date.FromDateTime(_.Placed), T = Time.FromDateTime(_.Placed)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -448,7 +448,7 @@ client.Source<Order>("Order").Select(_ => new {D = Date.FromDateTime(_.Placed), 
   ]
 }
 
-client.Source<Shift>("Shift").Select(_ => new {T = Time.FromTimeSpan(_.Duration), Stamp = _.Day.ToDateTime(_.Start)}).ToListAsync()
+_ => _.Source<Shift>("Shift").Select(_ => new {T = Time.FromTimeSpan(_.Duration), Stamp = _.Day.ToDateTime(_.Start)}).ToListAsync()
 {
   "version": 1,
   "root": "Shift",
@@ -498,7 +498,7 @@ client.Source<Shift>("Shift").Select(_ => new {T = Time.FromTimeSpan(_.Duration)
   ]
 }
 
-client.Source<Shift>("Shift").Select(_ => new {S = _.Stamped.ToUnixTimeSeconds(), Ms = _.Stamped.ToUnixTimeMilliseconds()}).ToListAsync()
+_ => _.Source<Shift>("Shift").Select(_ => new {S = _.Stamped.ToUnixTimeSeconds(), Ms = _.Stamped.ToUnixTimeMilliseconds()}).ToListAsync()
 {
   "version": 1,
   "root": "Shift",
@@ -543,7 +543,7 @@ client.Source<Shift>("Shift").Select(_ => new {S = _.Stamped.ToUnixTimeSeconds()
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {A = _.Placed.AddYears(1), B = _.Placed.AddMonths(1), C = _.Placed.AddDays(1), D = _.Placed.AddHours(1)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {A = _.Placed.AddYears(1), B = _.Placed.AddMonths(1), C = _.Placed.AddDays(1), D = _.Placed.AddHours(1)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -642,7 +642,7 @@ client.Source<Order>("Order").Select(_ => new {A = _.Placed.AddYears(1), B = _.P
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {A = _.Placed.AddMinutes(1), B = _.Placed.AddSeconds(1), C = _.Placed.AddMilliseconds(1)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {A = _.Placed.AddMinutes(1), B = _.Placed.AddSeconds(1), C = _.Placed.AddMilliseconds(1)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -720,7 +720,7 @@ client.Source<Order>("Order").Select(_ => new {A = _.Placed.AddMinutes(1), B = _
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {V = _.Placed.CompareTo(new(2026, 1, 1))}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {V = _.Placed.CompareTo(new(2026, 1, 1))}).ToListAsync()
 {
   "version": 1,
   "root": "Order",

@@ -1,4 +1,4 @@
-﻿client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Total = _.Sum(_ => _.Amount), Rows = _.Count()}).ToListAsync()
+﻿_ => _.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Total = _.Sum(_ => _.Amount), Rows = _.Count()}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -56,7 +56,7 @@
   ]
 }
 
-client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Low = _.Min(_ => _.Amount), High = _.Max(_ => _.Amount), Mean = _.Average(o => o.Amount)}).ToListAsync()
+_ => _.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Low = _.Min(_ => _.Amount), High = _.Max(_ => _.Amount), Mean = _.Average(o => o.Amount)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -132,7 +132,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Low
   ]
 }
 
-client.Source<Order>("Order").GroupBy(_ => new {_.Region, _.Grade}).Select(_ => new {_.Key.Region, _.Key.Grade, Total = _.Sum(_ => _.Amount)}).ToListAsync()
+_ => _.Source<Order>("Order").GroupBy(_ => new {_.Region, _.Grade}).Select(_ => new {_.Key.Region, _.Key.Grade, Total = _.Sum(_ => _.Amount)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -176,7 +176,7 @@ client.Source<Order>("Order").GroupBy(_ => new {_.Region, _.Grade}).Select(_ => 
   ]
 }
 
-client.Source<Order>("Order").GroupBy(_ => _.Placed.DayOfWeek).Select(_ => new {Day = _.Key, Count = _.Count()}).ToListAsync()
+_ => _.Source<Order>("Order").GroupBy(_ => _.Placed.DayOfWeek).Select(_ => new {Day = _.Key, Count = _.Count()}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -225,7 +225,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Placed.DayOfWeek).Select(_ => new {
   ]
 }
 
-client.Source<Order>("Order").GroupBy(_ => _.Region.ToUpper()).Select(_ => new {Region = _.Key, Total = _.Sum(_ => _.Amount)}).ToListAsync()
+_ => _.Source<Order>("Order").GroupBy(_ => _.Region.ToUpper()).Select(_ => new {Region = _.Key, Total = _.Sum(_ => _.Amount)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -278,7 +278,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region.ToUpper()).Select(_ => new {
   ]
 }
 
-client.Source<Order>("Order").GroupBy(_ => _.Region, (region, orders) => new {Region = region, Total = orders.Sum(_ => _.Amount)}).ToListAsync()
+_ => _.Source<Order>("Order").GroupBy(_ => _.Region, (region, orders) => new {Region = region, Total = orders.Sum(_ => _.Amount)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -317,7 +317,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region, (region, orders) => new {Re
   ]
 }
 
-client.Source<Order>("Order").GroupBy(_ => _.Region).Where(_ => _.Sum(o => o.Amount) > 100m && _.Key != "South").Select(_ => new {_.Key, Total = _.Sum(_ => _.Amount)}).ToListAsync()
+_ => _.Source<Order>("Order").GroupBy(_ => _.Region).Where(_ => _.Sum(o => o.Amount) > 100m && _.Key != "South").Select(_ => new {_.Key, Total = _.Sum(_ => _.Amount)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -402,7 +402,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Where(_ => _.Sum(o => o.Amo
   ]
 }
 
-client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Big = _.Count(_ => _.Amount > 90m), Graded = _.Count(_ => _.Grade == 'A')}).ToListAsync()
+_ => _.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Big = _.Count(_ => _.Amount > 90m), Graded = _.Count(_ => _.Grade == 'A')}).ToListAsync()
 {
   "version": 2,
   "root": "Order",
@@ -482,7 +482,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Big
   ]
 }
 
-client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Grades = _.Select(_ => _.Grade).Distinct().Count()}).ToListAsync()
+_ => _.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Grades = _.Select(_ => _.Grade).Distinct().Count()}).ToListAsync()
 {
   "version": 2,
   "root": "Order",
@@ -531,7 +531,7 @@ client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Gra
   ]
 }
 
-client.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Codes = string.Join(",", _.Select(_ => _.Code))}).ToListAsync()
+_ => _.Source<Order>("Order").GroupBy(_ => _.Region).Select(_ => new {_.Key, Codes = string.Join(",", _.Select(_ => _.Code))}).ToListAsync()
 {
   "version": 1,
   "root": "Order",

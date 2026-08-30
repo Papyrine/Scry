@@ -1,4 +1,4 @@
-﻿client.Source<Employee>("Employee").CountAsync()
+﻿_ => _.Source<Employee>("Employee").CountAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -9,7 +9,7 @@
   ]
 }
 
-client.Source<Employee>("Employee").CountAsync(_ => _.Active)
+_ => _.Source<Employee>("Employee").CountAsync(_ => _.Active)
 {
   "version": 1,
   "root": "Employee",
@@ -24,7 +24,7 @@ client.Source<Employee>("Employee").CountAsync(_ => _.Active)
   ]
 }
 
-client.Source<Employee>("Employee").LongCountAsync()
+_ => _.Source<Employee>("Employee").LongCountAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -35,7 +35,7 @@ client.Source<Employee>("Employee").LongCountAsync()
   ]
 }
 
-client.Source<Employee>("Employee").LongCountAsync(_ => _.Active)
+_ => _.Source<Employee>("Employee").LongCountAsync(_ => _.Active)
 {
   "version": 1,
   "root": "Employee",
@@ -50,7 +50,7 @@ client.Source<Employee>("Employee").LongCountAsync(_ => _.Active)
   ]
 }
 
-client.Source<Employee>("Employee").AnyAsync()
+_ => _.Source<Employee>("Employee").AnyAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -61,7 +61,7 @@ client.Source<Employee>("Employee").AnyAsync()
   ]
 }
 
-client.Source<Employee>("Employee").AnyAsync(_ => _.Active)
+_ => _.Source<Employee>("Employee").AnyAsync(_ => _.Active)
 {
   "version": 1,
   "root": "Employee",
@@ -76,7 +76,7 @@ client.Source<Employee>("Employee").AnyAsync(_ => _.Active)
   ]
 }
 
-client.Source<Employee>("Employee").AllAsync(_ => _.Active)
+_ => _.Source<Employee>("Employee").AllAsync(_ => _.Active)
 {
   "version": 1,
   "root": "Employee",
@@ -91,7 +91,7 @@ client.Source<Employee>("Employee").AllAsync(_ => _.Active)
   ]
 }
 
-client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).FirstAsync()
+_ => _.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).FirstAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -111,7 +111,7 @@ client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).FirstAsync(
   ]
 }
 
-client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).FirstOrDefaultAsync(_ => _.Name == "Alice")
+_ => _.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).FirstOrDefaultAsync(_ => _.Name == "Alice")
 {
   "version": 1,
   "root": "Employee",
@@ -144,7 +144,7 @@ client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).FirstOrDefa
   ]
 }
 
-client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).SingleAsync()
+_ => _.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).SingleAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -164,7 +164,7 @@ client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).SingleAsync
   ]
 }
 
-client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).SingleOrDefaultAsync()
+_ => _.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).SingleOrDefaultAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -184,7 +184,7 @@ client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).SingleOrDef
   ]
 }
 
-client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).LastAsync()
+_ => _.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).LastAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -212,7 +212,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
   ]
 }
 
-client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).LastOrDefaultAsync()
+_ => _.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).LastOrDefaultAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -240,7 +240,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
   ]
 }
 
-client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ElementAtAsync(1)
+_ => _.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ElementAtAsync(1)
 {
   "version": 1,
   "root": "Employee",
@@ -272,7 +272,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
   ]
 }
 
-client.Source<Order>("Order").MaxByAsync(_ => _.Amount)
+_ => _.Source<Order>("Order").MaxByAsync(_ => _.Amount)
 {
   "version": 1,
   "root": "Order",
@@ -292,7 +292,7 @@ client.Source<Order>("Order").MaxByAsync(_ => _.Amount)
   ]
 }
 
-client.Source<Order>("Order").MinByAsync(_ => _.Amount)
+_ => _.Source<Order>("Order").MinByAsync(_ => _.Amount)
 {
   "version": 1,
   "root": "Order",
@@ -312,7 +312,7 @@ client.Source<Order>("Order").MinByAsync(_ => _.Amount)
   ]
 }
 
-client.Source<Order>("Order").SumAsync(_ => _.Amount)
+_ => _.Source<Order>("Order").SumAsync(_ => _.Amount)
 {
   "version": 1,
   "root": "Order",
@@ -328,7 +328,7 @@ client.Source<Order>("Order").SumAsync(_ => _.Amount)
   ]
 }
 
-client.Source<Order>("Order").AverageAsync(_ => _.Amount)
+_ => _.Source<Order>("Order").AverageAsync(_ => _.Amount)
 {
   "version": 1,
   "root": "Order",
@@ -344,7 +344,7 @@ client.Source<Order>("Order").AverageAsync(_ => _.Amount)
   ]
 }
 
-client.Source<Order>("Order").MinAsync(_ => _.Amount)
+_ => _.Source<Order>("Order").MinAsync(_ => _.Amount)
 {
   "version": 1,
   "root": "Order",
@@ -360,7 +360,7 @@ client.Source<Order>("Order").MinAsync(_ => _.Amount)
   ]
 }
 
-client.Source<Order>("Order").MaxAsync(_ => _.Amount)
+_ => _.Source<Order>("Order").MaxAsync(_ => _.Amount)
 {
   "version": 1,
   "root": "Order",
@@ -376,7 +376,7 @@ client.Source<Order>("Order").MaxAsync(_ => _.Amount)
   ]
 }
 
-client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToPageAsync()
+_ => _.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToPageAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -403,7 +403,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
   ]
 }
 
-client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToPageAsync(2)
+_ => _.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToPageAsync(2)
 {
   "version": 1,
   "root": "Employee",
@@ -431,7 +431,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow
   ]
 }
 
-client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToPageAsync(2, "eyJrIjpbXX0.c2ln")
+_ => _.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToPageAsync(2, "eyJrIjpbXX0.c2ln")
 {
   "version": 1,
   "root": "Employee",

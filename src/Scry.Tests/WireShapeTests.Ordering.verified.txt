@@ -1,4 +1,4 @@
-﻿client.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()
+﻿_ => _.Source<Employee>("Employee").OrderBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -22,7 +22,7 @@
   ]
 }
 
-client.Source<Employee>("Employee").OrderByDescending(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()
+_ => _.Source<Employee>("Employee").OrderByDescending(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -46,7 +46,7 @@ client.Source<Employee>("Employee").OrderByDescending(_ => _.Name).Select(_ => n
   ]
 }
 
-client.Source<Employee>("Employee").OrderBy(_ => _.Status).ThenBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()
+_ => _.Source<Employee>("Employee").OrderBy(_ => _.Status).ThenBy(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -78,7 +78,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Status).ThenBy(_ => _.Name).S
   ]
 }
 
-client.Source<Employee>("Employee").OrderBy(_ => _.Status).ThenByDescending(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()
+_ => _.Source<Employee>("Employee").OrderBy(_ => _.Status).ThenByDescending(_ => _.Name).Select(_ => new NameRow(_.Name)).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -110,7 +110,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Status).ThenByDescending(_ =>
   ]
 }
 
-client.Source<Employee>("Employee").OrderBy(_ => _.Name).Reverse().Select(_ => new NameRow(_.Name)).ToListAsync()
+_ => _.Source<Employee>("Employee").OrderBy(_ => _.Name).Reverse().Select(_ => new NameRow(_.Name)).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -137,7 +137,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Reverse().Select(_ => n
   ]
 }
 
-client.Source<Employee>("Employee").OrderBy(_ => _.Name).Skip(2).Take(1).Select(_ => new NameRow(_.Name)).ToListAsync()
+_ => _.Source<Employee>("Employee").OrderBy(_ => _.Name).Skip(2).Take(1).Select(_ => new NameRow(_.Name)).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -169,7 +169,7 @@ client.Source<Employee>("Employee").OrderBy(_ => _.Name).Skip(2).Take(1).Select(
   ]
 }
 
-client.Source<Order>("Order").OrderBy(_ => int.Parse(_.Code)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
+_ => _.Source<Order>("Order").OrderBy(_ => int.Parse(_.Code)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
 {
   "version": 1,
   "root": "Order",

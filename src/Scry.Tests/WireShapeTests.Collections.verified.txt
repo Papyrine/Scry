@@ -1,4 +1,4 @@
-﻿client.Source<Order>("Order").SelectMany(_ => _.Lines).Select(_ => new LineRow(_.Sku, _.Quantity)).ToListAsync()
+﻿_ => _.Source<Order>("Order").SelectMany(_ => _.Lines).Select(_ => new LineRow(_.Sku, _.Quantity)).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -19,7 +19,7 @@
   ]
 }
 
-client.Source<Order>("Order").Where(_ => _.Region == "North").SelectMany(_ => _.Lines).Where(_ => _.Quantity > 1).Select(_ => new LineRow(_.Sku, _.Quantity)).ToListAsync()
+_ => _.Source<Order>("Order").Where(_ => _.Region == "North").SelectMany(_ => _.Lines).Where(_ => _.Quantity > 1).Select(_ => new LineRow(_.Sku, _.Quantity)).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -72,7 +72,7 @@ client.Source<Order>("Order").Where(_ => _.Region == "North").SelectMany(_ => _.
   ]
 }
 
-client.Source<Order>("Order").Where(_ => _.Lines.Any(l => l.Price == 25m)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
+_ => _.Source<Order>("Order").Where(_ => _.Lines.Any(l => l.Price == 25m)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -110,7 +110,7 @@ client.Source<Order>("Order").Where(_ => _.Lines.Any(l => l.Price == 25m)).Selec
   ]
 }
 
-client.Source<Order>("Order").Where(_ => _.Lines.All(l => l.Quantity > 0)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
+_ => _.Source<Order>("Order").Where(_ => _.Lines.All(l => l.Quantity > 0)).Select(_ => new OrderRow(_.Region, _.Amount)).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -148,7 +148,7 @@ client.Source<Order>("Order").Where(_ => _.Lines.All(l => l.Quantity > 0)).Selec
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {_.Region, Lines = _.Lines.Count(l => l.Quantity > 1)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {_.Region, Lines = _.Lines.Count(l => l.Quantity > 1)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -188,7 +188,7 @@ client.Source<Order>("Order").Select(_ => new {_.Region, Lines = _.Lines.Count(l
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Lines.Sum(l => l.Price), Mean = _.Lines.Average(l => l.Price), Low = _.Lines.Min(l => l.Price), High = _.Lines.Max(l => l.Price)}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Lines.Sum(l => l.Price), Mean = _.Lines.Average(l => l.Price), Low = _.Lines.Min(l => l.Price), High = _.Lines.Max(l => l.Price)}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -264,7 +264,7 @@ client.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Lines.Sum(l =
   ]
 }
 
-client.Source<Order>("Order").Where(_ => _.Tags.Contains("urgent")).Select(_ => new {_.Region}).ToListAsync()
+_ => _.Source<Order>("Order").Where(_ => _.Tags.Contains("urgent")).Select(_ => new {_.Region}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -300,7 +300,7 @@ client.Source<Order>("Order").Where(_ => _.Tags.Contains("urgent")).Select(_ => 
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Scores.Sum(), High = _.Scores.Max()}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Scores.Sum(), High = _.Scores.Max()}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -344,7 +344,7 @@ client.Source<Order>("Order").Select(_ => new {_.Region, Total = _.Scores.Sum(),
   ]
 }
 
-client.Source<Employee>("Employee").Where(_ => _.PreviousAddresses.Any(address => address.City == "Berlin")).Select(_ => new NameRow(_.Name)).ToListAsync()
+_ => _.Source<Employee>("Employee").Where(_ => _.PreviousAddresses.Any(address => address.City == "Berlin")).Select(_ => new NameRow(_.Name)).ToListAsync()
 {
   "version": 1,
   "root": "Employee",

@@ -1,4 +1,4 @@
-﻿client.Source<Employee>("Employee", ["Name", "Status"]).ToListAsync()
+﻿_ => _.Source<Employee>("Employee", ["Name", "Status"]).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -15,7 +15,7 @@
   ]
 }
 
-client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).ToListAsync()
+_ => _.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -31,7 +31,7 @@ client.Source<Employee>("Employee").Select(_ => new NameRow(_.Name)).ToListAsync
   ]
 }
 
-client.Source<Employee>("Employee").Select(_ => new {_.Name, Manager = _.Manager!.Name}).ToListAsync()
+_ => _.Source<Employee>("Employee").Select(_ => new {_.Name, Manager = _.Manager!.Name}).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -60,7 +60,7 @@ client.Source<Employee>("Employee").Select(_ => new {_.Name, Manager = _.Manager
   ]
 }
 
-client.Source<Employee>("Employee").Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name))).ToListAsync()
+_ => _.Source<Employee>("Employee").Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name))).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -88,7 +88,7 @@ client.Source<Employee>("Employee").Select(_ => new EmployeeCard(_.Name, new(_.D
   ]
 }
 
-client.Source<Employee>("Employee").Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name.ToUpper()))).ToListAsync()
+_ => _.Source<Employee>("Employee").Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name.ToUpper()))).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -130,7 +130,7 @@ client.Source<Employee>("Employee").Select(_ => new EmployeeCard(_.Name, new(_.D
   ]
 }
 
-client.Source<Employee>("Employee").Select(_ => new {_.Name, _.Address.City, _.Address.Country}).ToListAsync()
+_ => _.Source<Employee>("Employee").Select(_ => new {_.Name, _.Address.City, _.Address.Country}).ToListAsync()
 {
   "version": 1,
   "root": "Employee",
@@ -172,7 +172,7 @@ client.Source<Employee>("Employee").Select(_ => new {_.Name, _.Address.City, _.A
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new OrderRow(_.Region == "North" ? "N" : "S", _.Amount - (_.Discount ?? 0m))).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new OrderRow(_.Region == "North" ? "N" : "S", _.Amount - (_.Discount ?? 0m))).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -246,7 +246,7 @@ client.Source<Order>("Order").Select(_ => new OrderRow(_.Region == "North" ? "N"
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {Label = $"{_.Region}-{_.Quantity}"}).ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {Label = $"{_.Region}-{_.Quantity}"}).ToListAsync()
 {
   "version": 1,
   "root": "Order",
@@ -292,7 +292,7 @@ client.Source<Order>("Order").Select(_ => new {Label = $"{_.Region}-{_.Quantity}
   ]
 }
 
-client.Source<Order>("Order").Select(_ => new {_.Region}).Distinct().ToListAsync()
+_ => _.Source<Order>("Order").Select(_ => new {_.Region}).Distinct().ToListAsync()
 {
   "version": 1,
   "root": "Order",

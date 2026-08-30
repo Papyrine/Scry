@@ -1,4 +1,4 @@
-﻿client.Source<Asset>("Asset").OfType<Vehicle>().Select(_ => new {_.Name, _.Wheels}).ToListAsync()
+﻿_ => _.Source<Asset>("Asset").OfType<Vehicle>().Select(_ => new {_.Name, _.Wheels}).ToListAsync()
 {
   "version": 1,
   "root": "Asset",
@@ -19,7 +19,7 @@
   ]
 }
 
-client.Source<Asset>("Asset").OfType<Building>().Where(_ => _.Floors > 1).Select(_ => new {_.Name, _.Floors}).ToListAsync()
+_ => _.Source<Asset>("Asset").OfType<Building>().Where(_ => _.Floors > 1).Select(_ => new {_.Name, _.Floors}).ToListAsync()
 {
   "version": 1,
   "root": "Asset",
