@@ -235,6 +235,8 @@ It is off unless mapped, and Development-only by default. See [Query explorer](d
 
 The client side has a companion: a [debug sidecar](docs/sidecar.md) that opens over the running app (<kbd>Alt</kbd>+<kbd>Q</kbd>) and shows every Scry exchange the page has made — decoded requests, pretty-printed responses, headers, and a one-click jump into the explorer with the captured query pre-populated.
 
+<img src="samples/Sample.Tests/UiScreenshotTests.SampleSidecar.verified.png" border="1" alt="The sidecar open over the sample app: the captured exchanges, and one query's decoded request, response, and headers">
+
 
 ## Documentation
 
