@@ -72,6 +72,11 @@ dotnet_diagnostic.CA2254.severity = error
 # Potentially misleading parameter name in lambda or local function
 resharper_all_underscore_local_parameter_name_highlighting = none
 
+# Tail recursive call can be replaced with loop. Fires on whichever branch of a recursive tree
+# walker happens to sit last in its case; looping that one branch would make it structurally
+# different from its sibling recursive calls, and the recursion depth is expression nesting.
+resharper_tail_recursive_call_highlighting = none
+
 # Redundant explicit collection creation in argument of 'params' parameter
 resharper_redundant_explicit_params_array_creation_highlighting = error
 
