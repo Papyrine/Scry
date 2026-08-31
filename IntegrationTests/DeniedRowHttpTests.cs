@@ -104,18 +104,16 @@ public class DeniedRowHttpTests
     }
 
     [Test]
-    public void AStreamIsDeniedBeforeItStarts()
-    {
+    public void AStreamIsDeniedBeforeItStarts() =>
         // The rows are built before the first byte is written, so a denial still answers as a status
         // rather than as an error marker part-way through a response that already looked successful.
         Assert.ThrowsAsync<ScryPermissionException>(
             async () =>
             {
-                await foreach (var _ in query.Order.Select(order => new {order.Region}).ToAsyncEnumerable())
+                await foreach (var _ in query.Order.Select(_ => new {_.Region}).ToAsyncEnumerable())
                 {
                 }
             });
-    }
 }
 
 /// <summary>Scopes orders to one region, so the seeded rows outside it are ones a query loses.</summary>
