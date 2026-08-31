@@ -52,6 +52,6 @@
     <PackageVersion Include="MarkdownSnippets.MsBuild" Version="28.4.2" />
     <PackageVersion Include="NaughtyStrings" Version="3.0.0" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
-    <PackageVersion Include="DiffEngine" Version="20.1.2" />
+    <PackageVersion Include="DiffEngine" Version="20.2.0" />
   </ItemGroup>
 </Project>
