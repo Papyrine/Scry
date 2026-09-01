@@ -18,10 +18,9 @@ static class MultipartResponse
             return false;
         }
 
-        boundary = contentType!.Parameters
-            .FirstOrDefault(_ => string.Equals(_.Name, "boundary", StringComparison.OrdinalIgnoreCase))
-            ?.Value;
-        if (string.IsNullOrEmpty(boundary))
+        // The media type says multipart, so a missing boundary is a malformed response rather than a
+        // response of some other shape — which is why this throws where the extension returns false.
+        if (!response.Content.TryGetMultipartBoundary(out boundary))
         {
             throw new ScryWireException("A multipart response arrived without a boundary.");
         }
@@ -43,7 +42,7 @@ static class MultipartResponse
         Cancel cancel)
     {
         await using var body = await response.Content.ReadAsStreamAsync(cancel);
-        var reader = new MultipartReader(boundary, body);
+        using var reader = new MultipartReader(boundary, body);
         var parts = new List<byte[]>();
         byte[]? envelope = null;
         while (await reader.ReadNextSectionAsync(cancel) is { } section)
@@ -69,13 +68,6 @@ static class MultipartResponse
     public static bool IsBinary(MultipartSection section) =>
         string.Equals(section.ContentType, ScryBinary.PartContentType, StringComparison.OrdinalIgnoreCase);
 
-    public static async Task<byte[]> ReadPartBytes(MultipartSection section, Cancel cancel)
-    {
-        // Content-Length is advisory — used to size the buffer, never trusted for the read itself.
-        using var memory = section.ContentLength is { } length
-            ? new MemoryStream(length)
-            : new MemoryStream();
-        await section.Body.CopyToAsync(memory, cancel);
-        return memory.ToArray();
-    }
+    public static Task<byte[]> ReadPartBytes(MultipartSection section, Cancel cancel) =>
+        section.ReadAsBytesAsync(cancel);
 }

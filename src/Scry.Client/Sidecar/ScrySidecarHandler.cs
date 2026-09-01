@@ -153,7 +153,7 @@ public sealed class ScrySidecarHandler(ScrySidecarStore store, ScrySidecarOption
         {
             if (MultipartResponse.TryGetBoundary(response, out var boundary))
             {
-                var reader = new MultipartReader(boundary, new MemoryStream(body));
+                using var reader = new MultipartReader(boundary, new MemoryStream(body));
                 var sizes = new List<int>();
                 byte[]? envelope = null;
                 while (await reader.ReadNextSectionAsync(cancel) is { } section)

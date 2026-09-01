@@ -193,7 +193,7 @@ public static class ScryServiceExtensions
         // decision is the plan's, not the data's, so an all-null result still wraps. Sections of
         // ndjson lines alternate with each row's binary parts, and every part precedes the line that
         // references it; a reader therefore holds at most one row's parts. Markers are ordinary lines.
-        var multipart = diverting ? MultipartWriter.Create(context.Response.Body) : null;
+        var multipart = diverting ? ScryMultipart.Create(context.Response.Body) : null;
         context.Response.ContentType = multipart?.ContentType ?? ScryStream.ContentType;
         if (multipart is not null)
         {
@@ -311,7 +311,7 @@ public static class ScryServiceExtensions
             // the parts are numbered globally and the batch envelope arrives last, referencing them.
             if (collector.Count > 0)
             {
-                var multipart = MultipartWriter.Create(context.Response.Body);
+                var multipart = ScryMultipart.Create(context.Response.Body);
                 context.Response.ContentType = multipart.ContentType;
                 foreach (var part in collector.Parts)
                 {
@@ -499,7 +499,7 @@ public static class ScryServiceExtensions
             // plain JSON, byte for byte.
             if (collector.Count > 0)
             {
-                var multipart = MultipartWriter.Create(context.Response.Body);
+                var multipart = ScryMultipart.Create(context.Response.Body);
                 context.Response.ContentType = multipart.ContentType;
                 foreach (var part in collector.Parts)
                 {

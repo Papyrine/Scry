@@ -341,7 +341,7 @@ public sealed class ScryClient
         // line belong to the next one, and to it only — so the reader holds at most one row's parts.
         if (MultipartResponse.TryGetBoundary(response, out var boundary))
         {
-            var multipart = new MultipartReader(boundary, responseStream);
+            using var multipart = new MultipartReader(boundary, responseStream);
             var pending = new List<byte[]>();
             while (await multipart.ReadNextSectionAsync(cancel) is { } section)
             {

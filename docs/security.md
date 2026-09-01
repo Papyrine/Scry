@@ -545,7 +545,7 @@ app.MapScry("/api/query")
 
 **Cache or range-serve an [attachment](attachments.md).** Every fetch is authorized afresh, and there is no `ETag`, `Cache-Control`, or `Range` support — a cached attachment is one the policy no longer sees. Add caching in middleware only where that trade is acceptable.
 
-**Widen anything for [binary transfer](wire-format.md#binary-transfer).** `[BinaryTransfer]` changes how an already-allow-listed `byte[]` value is *encoded in the response* — a raw multipart part instead of base64 — and nothing about what a request may ask for: it adds no request-side input at all, and validation, policies, and limits are untouched. The response side is server-to-client and outside the hostile-client model; the client still bounds what it reads (the vendored multipart reader keeps its header count/length limits), so a compromised or misbehaving server cannot make it buffer unbounded headers.
+**Widen anything for [binary transfer](wire-format.md#binary-transfer).** `[BinaryTransfer]` changes how an already-allow-listed `byte[]` value is *encoded in the response* — a raw multipart part instead of base64 — and nothing about what a request may ask for: it adds no request-side input at all, and validation, policies, and limits are untouched. The response side is server-to-client and outside the hostile-client model; the client still bounds what it reads (the multipart reader, from the HttpMultipart package, keeps its header count/length limits), so a compromised or misbehaving server cannot make it buffer unbounded headers.
 
 
 ## Review checklist
