@@ -88,6 +88,26 @@ app.MapScryExplorer(options =>
 When the guard returns false every explorer route returns **404**, not 403 — a disabled explorer is indistinguishable from one that was never mapped.
 
 
+## Variables
+
+The editor takes a query expression, and — ahead of it — the variables that query reads:
+
+```cs
+var since = new DateOnly(2026, 1, 1);
+var wanted = new[] { "Aaron", "Carol" };
+
+Query.Employee
+    .Where(_ => _.Created >= since && wanted.Contains(_.Name))
+    .Select(_ => new { _.Name, _.Created })
+```
+
+A variable is [captured state](querying.md#constants-and-captured-values), exactly as it is in a compiled client: nothing declared here travels under its own name, and whatever the query reads from one folds into the constant it stood for before the request is built. The request above is the one the same query would have produced with both values written inline — `since` as a [dated constant](wire-format.md#temporal-spellings), `wanted` as the values of a SQL `IN`.
+
+Which makes them a convenience of the query rather than a feature of the wire: a value used in three places is named once, a long list of ids gets a line of its own, and the expression a value came from is written where it can be read instead of buried mid-predicate.
+
+Only declarations may come before the query. Anything else — a loop, a call, an assignment — would run in the browser without changing the request it produced, and one the single-threaded runtime never returned from would take the page with it. The editor squiggles it and *Run* refuses it, the same way both report a query that will not compile.
+
+
 ## Working with a query
 
 Three things the explorer does with the query in the editor, beyond running it.
@@ -1013,8 +1033,8 @@ sequenceDiagram
 
 1. On load the UI fetches `{Route}/introspect`.
 2. `ModelSynthesizer` turns that contract into the same C# the design-time generator would emit — the enums, one query model per type, and a `ScryQuery` facade.
-3. `RoslynWorkspace` compiles that source in-browser and wraps the user's expression in a method body, so the C# completion service offers members, and diagnostics are real compiler diagnostics.
-4. `SnippetExecutor` compiles the expression, runs it against a capturing client to build the LINQ expression tree, and calls the production `ToScryRequest` — so the wire request shown is produced by exactly the same translation the real client performs.
+3. `RoslynWorkspace` compiles that source in-browser and wraps the user's snippet in a method body — the variables ahead of the query, then the query as what the body returns — so the C# completion service offers members, and diagnostics are real compiler diagnostics.
+4. `SnippetExecutor` compiles the same snippet, runs it against a capturing client to build the LINQ expression tree, and calls the production `ToScryRequest` — so the wire request shown is produced by exactly the same translation the real client performs.
 5. The request is sent to `QueryEndpoint` — [as a URL](wire-format.md#the-url-form) where it fits in one, as a body where it does not, the same choice `ScryClient` makes — and validated like any other.
 
 A trailing terminal (`.ToListAsync()`, `.FirstAsync()`, `.CountAsync()`, or a plain `.ToList()`) is recognised and folded into the wire request as its terminal operator.

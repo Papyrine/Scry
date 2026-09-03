@@ -1,13 +1,14 @@
 namespace Scry;
 
 /// <summary>
-/// An in-browser Roslyn workspace over the synthesized query models. The user's query expression is
-/// wrapped in a method body so the C# <see cref="CompletionService"/> can offer members against the
-/// allow-listed surface (e.g. <c>Query.Employee.Where(e =&gt; e.</c> → Active, Name, Status, ...).
+/// An in-browser Roslyn workspace over the synthesized query models. The user's snippet — the query
+/// expression, and any variables declared ahead of it — is wrapped in a method body so the C#
+/// <see cref="CompletionService"/> can offer members against the allow-listed surface (e.g.
+/// <c>Query.Employee.Where(e =&gt; e.</c> → Active, Name, Status, ...).
 /// </summary>
 public sealed class RoslynWorkspace
 {
-    // The user's expression is spliced between these so it is a legal method body. The usings make
+    // The user's snippet is spliced between these so it is a legal method body. The usings make
     // LINQ operators (System.Linq), the synthesized models/enums (Scry.Generated), and the Scry
     // terminal operators (Scry: ToListAsync/FirstAsync/CountAsync/...) resolve —
     // so completion offers them and diagnostics do not falsely flag them.
@@ -23,8 +24,12 @@ public sealed class RoslynWorkspace
         {
             static object Run(global::Scry.Generated.ScryQuery Query)
             {
-                return 
+
         """;
+
+    // Goes between the snippet's declarations and its query, which is why the snippet is not one run
+    // of text in the document: an offset past the split sits this much further along than one before it.
+    const string middle = "        return ";
 
     const string footer =
         """
@@ -33,6 +38,49 @@ public sealed class RoslynWorkspace
         }
 
         """;
+
+    /// <summary>
+    /// The snippet spliced into a compilable document, with the arithmetic to get back out of it.
+    /// Roslyn answers in document coordinates while the editor asks and reads in the snippet's own,
+    /// and the two differ by a different amount either side of the <see cref="middle"/>.
+    /// </summary>
+    readonly record struct Splice(SnippetLayout Layout, string Text)
+    {
+        public static Splice Of(string code)
+        {
+            var layout = SnippetLayout.Of(code);
+            return new(layout, header + layout.Preamble + middle + layout.Expression + footer);
+        }
+
+        public int ToDocument(int offset) =>
+            offset < Layout.Split
+                ? header.Length + offset
+                : header.Length + middle.Length + offset;
+
+        public int ToSnippet(int offset)
+        {
+            var body = offset - header.Length;
+            return Math.Clamp(
+                body <= Layout.Split ? body : body - middle.Length,
+                0,
+                Layout.Code.Length);
+        }
+
+        /// <summary>Whether an offset lands in the snippet rather than in the wrapper spliced around it.</summary>
+        /// <remarks>
+        /// Two regions, not one: between them sits the inserted <see cref="middle"/>, which is nobody's
+        /// code. An empty editor is the case that makes the distinction worth drawing — the compiler
+        /// anchors its complaint about the returned nothing on the inserted keyword, and reporting that
+        /// would squiggle a snippet that has not been written yet.
+        /// </remarks>
+        public bool Covers(int offset)
+        {
+            var body = offset - header.Length;
+            return body >= 0 && body < Layout.Split ||
+                   body >= Layout.Split + middle.Length &&
+                   body <= Layout.Code.Length + middle.Length;
+        }
+    }
 
     readonly AdhocWorkspace workspace;
     readonly DocumentId editorDocumentId;
@@ -63,7 +111,7 @@ public sealed class RoslynWorkspace
 
         var project = workspace.AddProject(projectInfo);
         workspace.AddDocument(project.Id, "Generated.cs", SourceText.From(generatedSource));
-        var editor = workspace.AddDocument(project.Id, "Editor.cs", SourceText.From(header + footer));
+        var editor = workspace.AddDocument(project.Id, "Editor.cs", SourceText.From(Splice.Of("").Text));
 
         return new(workspace, editor.Id);
     }
@@ -71,9 +119,10 @@ public sealed class RoslynWorkspace
     /// <summary>Returns the completions offered at <paramref name="caret"/> within <paramref name="code"/>.</summary>
     public async Task<List<ScryCompletion>> CompleteAsync(string code, int caret)
     {
+        var splice = Splice.Of(code);
         var solution = workspace.CurrentSolution.WithDocumentText(
             editorDocumentId,
-            SourceText.From(header + code + footer));
+            SourceText.From(splice.Text));
 
         var document = solution.GetDocument(editorDocumentId)!;
         var service = CompletionService.GetService(document);
@@ -82,7 +131,7 @@ public sealed class RoslynWorkspace
             return [];
         }
 
-        var completions = await service.GetCompletionsAsync(document, header.Length + caret);
+        var completions = await service.GetCompletionsAsync(document, splice.ToDocument(caret));
 
         // The range to replace is the identifier currently being typed (empty right after a '.').
         var start = caret;
@@ -104,9 +153,10 @@ public sealed class RoslynWorkspace
         // "return <code>;" as an empty, unreachable statement and surface a spurious warning.
         code = code.TrimEnd().TrimEnd(';').TrimEnd();
 
+        var splice = Splice.Of(code);
         var solution = workspace.CurrentSolution.WithDocumentText(
             editorDocumentId,
-            SourceText.From(header + code + footer));
+            SourceText.From(splice.Text));
 
         var document = solution.GetDocument(editorDocumentId)!;
         var model = await document.GetSemanticModelAsync();
@@ -115,9 +165,16 @@ public sealed class RoslynWorkspace
             return [];
         }
 
-        var userStart = header.Length;
-        var userEnd = userStart + code.Length;
         var diagnostics = new List<ScryDiagnostic>();
+
+        // A preamble holding more than declarations is still a legal method body, so the compiler has
+        // nothing to say about it. Reported here instead, which puts it under the same squiggle and
+        // through the same refusal every other error already travels by.
+        if (splice.Layout.Problem is { } problem)
+        {
+            diagnostics.Add(problem);
+        }
+
         foreach (var diagnostic in model.GetDiagnostics())
         {
             if (diagnostic.Severity is not (DiagnosticSeverity.Error or DiagnosticSeverity.Warning))
@@ -126,16 +183,16 @@ public sealed class RoslynWorkspace
             }
 
             var span = diagnostic.Location.SourceSpan;
-            // Only surface diagnostics anchored in the user's expression, not the generated wrapper.
-            if (span.Start < userStart || span.Start > userEnd)
+            // Only surface diagnostics anchored in the user's snippet, not the generated wrapper.
+            if (!splice.Covers(span.Start))
             {
                 continue;
             }
 
             diagnostics.Add(new(
                 diagnostic.GetMessage(),
-                Math.Clamp(span.Start - userStart, 0, code.Length),
-                Math.Clamp(span.End - userStart, 0, code.Length),
+                splice.ToSnippet(span.Start),
+                splice.ToSnippet(span.End),
                 diagnostic.Severity == DiagnosticSeverity.Error));
         }
 
@@ -149,9 +206,10 @@ public sealed class RoslynWorkspace
     /// </summary>
     public async Task<ScryHover?> GetHoverAsync(string code, int caret)
     {
+        var splice = Splice.Of(code);
         var solution = workspace.CurrentSolution.WithDocumentText(
             editorDocumentId,
-            SourceText.From(header + code + footer));
+            SourceText.From(splice.Text));
 
         var document = solution.GetDocument(editorDocumentId)!;
         var root = await document.GetSyntaxRootAsync();
@@ -161,7 +219,7 @@ public sealed class RoslynWorkspace
             return null;
         }
 
-        var token = root.FindToken(header.Length + caret);
+        var token = root.FindToken(splice.ToDocument(caret));
         if (token.Parent is not { } node)
         {
             return null;
@@ -178,8 +236,8 @@ public sealed class RoslynWorkspace
 
         return new(
             symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
-            Math.Clamp(token.SpanStart - header.Length, 0, code.Length),
-            Math.Clamp(token.Span.End - header.Length, 0, code.Length));
+            splice.ToSnippet(token.SpanStart),
+            splice.ToSnippet(token.Span.End));
     }
 
     static MefHostServices CreateHost()

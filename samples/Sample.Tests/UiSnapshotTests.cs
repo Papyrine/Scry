@@ -895,6 +895,54 @@ public class UiSnapshotTests :
         Assert.That(table, Does.Contain("Aaron"));
     }
 
+    // Variables declared ahead of the query, proved inside WASM rather than only on the desktop host.
+    // What the query read from one is in the wire request as the constants it stood for, and the name
+    // is nowhere: a variable is captured state, and captured state has never been a thing the wire
+    // could carry.
+    [Test]
+    public async Task ExplorerRunWithVariables()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await page.SetEditorValueAsync(
+            """
+            var wanted = new[] { "Aaron", "Carol" };
+            Query.Employee
+                .Where(_ => wanted.Contains(_.Name))
+                .Select(_ => new { _.Name })
+            """);
+        await page.Locator("[data-testid='run']").ClickAsync();
+
+        await page.WaitForSelectorAsync("[data-testid='result-table']", 60);
+        var wire = await page.Locator("[data-testid='wire']").InnerTextAsync();
+        var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
+
+        Assert.That(wire, Does.Contain("Aaron").And.Contain("Carol").And.Not.Contain("wanted"));
+        // Alice is active and was left out, so the set is what narrowed the rows.
+        Assert.That(table, Does.Contain("Aaron").And.Contain("Carol").And.Not.Contain("Alice"));
+    }
+
+    // Only a declaration may come ahead of the query. Nothing else there could change the request, and
+    // a loop the single-threaded runtime never returns from would take the page with it — so it is
+    // refused, by the same banner every other reason a query will not run is reported in.
+    [Test]
+    public async Task ExplorerRefusesAStatementThatIsNotAVariable()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await page.SetEditorValueAsync(
+            """
+            Console.WriteLine("hi");
+            Query.Employee
+            """);
+        await page.Locator("[data-testid='run']").ClickAsync();
+
+        await Assertions.Expect(page.Locator("[data-testid='error']"))
+            .ToContainTextAsync("Only a variable declaration can come before the query.", new() {Timeout = 60_000});
+    }
+
     // Dark mode: the toggle retints Monaco (vs-dark class) + the page (data-theme), and the choice
     // persists across a reload (localStorage + the pre-paint data-theme script + the editor option).
     [Test]

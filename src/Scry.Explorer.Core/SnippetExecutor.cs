@@ -1,9 +1,11 @@
 namespace Scry;
 
 /// <summary>
-/// Compiles a user's query expression in the browser, runs it against a capturing client to build
-/// the LINQ expression tree, and reuses <see cref="ScryQueryableExtensions.ToScryRequest{T}"/> to
-/// produce the wire <see cref="QueryRequest"/> — the same translation the production client performs.
+/// Compiles a user's snippet in the browser, runs it against a capturing client to build the LINQ
+/// expression tree, and reuses <see cref="ScryQueryableExtensions.ToScryRequest{T}"/> to produce the
+/// wire <see cref="QueryRequest"/> — the same translation the production client performs. A snippet
+/// is a query expression, optionally preceded by variables it reads; those are captured state like
+/// any other, so the translator folds what the query takes from them into constants.
 /// A trailing terminal operator (e.g. <c>.ToListAsync()</c>, <c>.FirstAsync()</c>,
 /// <c>.CountAsync()</c>, or plain LINQ <c>.ToList()</c>) is recognised and folded into the wire
 /// request as its <see cref="QueryOp"/> terminal.
@@ -43,15 +45,24 @@ public sealed class SnippetExecutor
             [.. Net100.References.All, .. scryReferences],
             ModelSynthesizer.Synthesize(introspection, executable: true));
 
-    public QueryRequest Translate(string userExpression)
+    public QueryRequest Translate(string snippet)
     {
-        var (expression, terminal) = Rewrite(userExpression);
+        var layout = SnippetLayout.Of(snippet);
+
+        // The editor squiggles this too, but the executor is reachable without one — and a preamble
+        // it refuses would otherwise compile and run, which is the whole of what the rule is against.
+        if (layout.Problem is { } problem)
+        {
+            throw new(problem.Message);
+        }
+
+        var (expression, terminal) = Rewrite(layout.Expression);
 
         var compilation = CSharpCompilation.Create(
             "ScrySnippet",
             [
                 CSharpSyntaxTree.ParseText(generatedSource),
-                CSharpSyntaxTree.ParseText(Wrap(expression, terminal))
+                CSharpSyntaxTree.ParseText(Wrap(layout.Preamble, expression, terminal))
             ],
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary).WithConcurrentBuild(false));
@@ -156,7 +167,7 @@ public sealed class SnippetExecutor
         return (expression.ToString(), "");
     }
 
-    static string Wrap(string expression, string terminal) =>
+    static string Wrap(string preamble, string expression, string terminal) =>
         $$"""
           using System;
           using System.Linq;
@@ -167,7 +178,10 @@ public sealed class SnippetExecutor
           public static class Runner
           {
               public static global::Scry.QueryRequest Run(global::Scry.Generated.ScryQuery Query)
-                  => ({{expression}}).ToScryRequest({{terminal}});
+              {
+                  {{preamble}}
+                  return ({{expression}}).ToScryRequest({{terminal}});
+              }
           }
 
           """;
