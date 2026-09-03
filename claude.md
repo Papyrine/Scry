@@ -28,6 +28,8 @@ dotnet run -c Release --project Benchmarks -- --filter '*'
 
 ⚠️ **Never build or test two trees concurrently.** They share the `src/*/obj` directories, and the global usings that most files rely on (`System.Reflection`, `System.Runtime.CompilerServices`, `System.Text`, …) are materialized there by the ProjectDefaults package's `contentFiles`. A concurrent — or cross-tree `-t:Rebuild` — build deletes that `Usings.cs` without regenerating it, and the src projects then fail with a storm of CS0246s for BCL types. Recovery is `dotnet build src/Scry.slnx`, not adding usings.
 
+⚠️ **Nor publish a single-TFM `src` project ad hoc.** `dotnet publish src/Scry.Explorer.Ui/…` sets `TargetFramework=net10.0` as a **global** property, and its implicit restore carries that down every `ProjectReference` — reaching `Scry.SourceGenerator`, which multi-targets `netstandard2.0;net10.0`, and rewriting its `project.assets.json` with only `net10.0`. The failure surfaces in the *next samples build*, as `NETSDK1005: Assets file … doesn't have a target for 'netstandard2.0'`. Recovery is `dotnet restore src/Scry.slnx` — a plain build will not re-restore, the assets file existing and looking current. `EmbedExplorerUi` does the same publish safely by running `Restore` without the property and pinning `TargetFramework` only on the `Publish` call.
+
 Run one test (NUnit + `dotnet test`):
 
 ```bash
