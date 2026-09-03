@@ -52,17 +52,24 @@ SQL preview is available, and the schema stamp.
 
 A model's page lists its members with the type each is declared as, and a badge for whatever else the
 [introspection contract](#introspection) says about it: a key column, a navigation, a collection, an
-[attachment](attachments.md) with its content type, a [sensitive](annotations.md) member the server
-will refuse as a constant, and one inherited from a base model. The types link, so a projection can
-be followed from `Employee` to `Department` and back.
+[attachment](attachments.md) with its content type, a [sensitive](annotations.md) member, and one
+inherited from a base model. The types link, so a projection can be followed from `Employee` to
+`Department` and back.
 
 It is a schema *browser* rather than a documentation explorer, because there is nothing to document:
 the contract carries a member's name, its type, and those flags. No descriptions travel, and none are
 invented here.
 
-Each source carries a button that opens a query selecting every scalar member of it — navigations,
-attachments and sensitive members left out, being the three a projection cannot or may not carry. It
-fills a blank tab, or opens a new one.
+Each source carries a button that opens a query selecting every scalar member of it, in a blank tab
+or a new one.
+
+Four kinds are left out, and for two different reasons. A navigation, a collection and an
+[attachment](attachments.md) are rows or handles rather than values, and [a projection carries only
+scalars](querying.md) — a collection in particular is aggregable but neither traversable nor
+projectable, and it is published with its navigation flag *false*, so it has to be recognised on its
+own terms. A [sensitive](annotations.md) member is left out by choice rather than by rule: the server
+projects one happily, answering `no-store`, but a suggested query should not put a password on screen
+by default. Naming one explicitly still works.
 
 
 ## Mapping it

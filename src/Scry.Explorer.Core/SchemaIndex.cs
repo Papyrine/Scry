@@ -143,15 +143,28 @@ public sealed class SchemaIndex
     }
 
     /// <summary>
-    /// A starter query for a source: every scalar member it can project. Navigations, attachments and
-    /// sensitive members are left out — the first two are not values a projection can carry, and the
-    /// third the server would refuse.
+    /// A starter query for a source: every scalar member it can project.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Three kinds are left out because a projection cannot carry them. A navigation and a collection
+    /// are both rows rather than values — a collection is aggregable but, in the server's words,
+    /// "neither traversable nor projectable" — and an attachment has no value in a result at all.
+    /// Note that a collection is published as <c>IsCollection</c> with <c>IsNavigation</c> false, so
+    /// it has to be excluded on its own terms; missing that is a query the editor compiles and the
+    /// server then rejects.
+    /// </para>
+    /// <para>
+    /// A sensitive member is left out by choice rather than by rule: the server projects one happily,
+    /// answering with <c>no-store</c>. But a starter query is a suggestion, and suggesting one that
+    /// puts a password on screen is not a good default. Anyone who wants it can name it.
+    /// </para>
+    /// </remarks>
     public string StarterQuery(ScrySourceInfo source)
     {
         var members = AllMembers(source.Model)
             .Select(_ => _.Member)
-            .Where(_ => !_.IsNavigation && !_.IsAttachment && !_.IsSensitive)
+            .Where(_ => !_.IsNavigation && !_.IsCollection && !_.IsAttachment && !_.IsSensitive)
             .Select(_ => _.Name)
             .ToList();
 

@@ -1232,17 +1232,22 @@ public class UiSnapshotTests :
             .ToContainTextAsync("DepartmentQueryModel");
     }
 
-    // The starter query a source offers has to be one the server will actually run.
-    [Test]
-    public async Task ExplorerRunsTheQueryTheSchemaOffers()
+    // The starter query a source offers has to be one the server will actually run — which is more
+    // than "it compiles". Order carries a collection of values and Department a collection of rows
+    // and an attachment, none of which a projection may carry; a query naming one reaches the server
+    // and comes back "Projection member must reference a scalar value."
+    [TestCase("Holiday")]
+    [TestCase("Order")]
+    [TestCase("Department")]
+    public async Task ExplorerRunsTheQueryTheSchemaOffers(string source)
     {
         var page = await NewPageAsync();
         await page.GoToExplorerAsync(BaseUrl);
 
-        await page.Locator("[data-testid='schema-source']", new() {HasTextString = "Holiday"}).First.ClickAsync();
+        await page.Locator("[data-testid='schema-source']", new() {HasTextString = source}).First.ClickAsync();
         await page.Locator("[data-testid='schema-insert']").First.ClickAsync();
 
-        Assert.That(await EditorValueAsync(page), Does.StartWith("Query.Holiday"));
+        Assert.That(await EditorValueAsync(page), Does.StartWith($"Query.{source}"));
 
         await page.Locator("[data-testid='run']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);

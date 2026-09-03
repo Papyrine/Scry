@@ -130,8 +130,9 @@ public class SchemaIndexTests
     public void SearchesNothingForABlankTerm(string? term) =>
         Assert.That(Build().Search(term), Is.Empty);
 
-    // Navigations, attachments and sensitive members are the three a projection cannot or may not
-    // carry, so a starter query leaves them out.
+    // A starter query has to be one the server will run: a projection carries scalars, and nothing
+    // else. Navigation, collection and attachment members are all rejected by the validator, and a
+    // sensitive one is left out by choice.
     [Test]
     public void BuildsAStarterQueryOverScalarsOnly()
     {
@@ -142,9 +143,34 @@ public class SchemaIndexTests
         Assert.That(query, Does.StartWith("Query.Employee"));
         Assert.That(query, Does.Contain("_.Name"));
         Assert.That(query, Does.Contain("_.Status"));
-        Assert.That(query, Does.Not.Contain("_.Department)").And.Not.Contain("_.Department,"));
+        Assert.That(query, Does.Not.Contain("_.Department"));
         Assert.That(query, Does.Not.Contain("_.Photo"));
         Assert.That(query, Does.Not.Contain("_.Password"));
+    }
+
+    // A collection is published with IsNavigation false, so it needs excluding on its own terms.
+    // Missing that produced a query the editor compiled and the server rejected with "Projection
+    // member must reference a scalar value."
+    [Test]
+    public void LeavesACollectionOfValuesOutOfAStarterQuery()
+    {
+        var index = Build();
+
+        var query = index.StarterQuery(index.SourceFor("OrderQueryModel")!);
+
+        Assert.That(query, Does.Contain("_.Name"));
+        Assert.That(query, Does.Not.Contain("_.Tags"));
+    }
+
+    [Test]
+    public void LeavesACollectionOfRowsOutOfAStarterQuery()
+    {
+        var index = Build();
+
+        var query = index.StarterQuery(index.SourceFor("DepartmentQueryModel")!);
+
+        Assert.That(query, Does.Contain("_.Name"));
+        Assert.That(query, Does.Not.Contain("_.Employees"));
     }
 
     [Test]
