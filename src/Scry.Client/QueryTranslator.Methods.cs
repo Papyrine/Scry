@@ -6,6 +6,17 @@ sealed partial class QueryTranslator
     {
         var declaring = call.Method.DeclaringType;
 
+        // A call that reads nothing from the row is closure state, whatever it was called on, and is
+        // evaluated here into the constant it stands for. Checked before the dispatch below rather
+        // than after it: each branch there commits to a declaring type and then refuses a name that
+        // type has no function for — the right answer only for a call the database would have had to
+        // run. The analyzer already reads the rule this way, and reports nothing for a call that
+        // touches neither the row nor anything reached from it.
+        if (!ReferencesParameter(call, root))
+        {
+            return ConstantOf(Evaluate(call));
+        }
+
         // Reads a value as text, whatever its type. Only the argument-less form: an overload taking a
         // format is refused, since no provider translates it — see the note on StringFrom.
         if (call is {Method.Name: "ToString", Object: { } instance, Arguments.Count: 0})
@@ -16,8 +27,7 @@ sealed partial class QueryTranslator
         // Convert.ToString is the same read spelled statically — checked before the format refusal
         // below, whose pattern its one argument would otherwise match.
         if (call is {Method.Name: "ToString", Object: null, Arguments: [var toText]} &&
-            declaring == typeof(Convert) &&
-            ReferencesParameter(call, root))
+            declaring == typeof(Convert))
         {
             return new CallNode(KnownFunction.StringFrom, TranslateExpr(toText, root), []);
         }
@@ -33,8 +43,7 @@ sealed partial class QueryTranslator
         if (call is {Method.Name: "CompareTo", Object: { } compared, Arguments.Count: 1} &&
             declaring is not null &&
             call.Method.GetParameters()[0].ParameterType == declaring &&
-            IsThreeWayComparable(declaring) &&
-            ReferencesParameter(call, root))
+            IsThreeWayComparable(declaring))
         {
             return new CallNode(KnownFunction.CompareTo, TranslateExpr(compared, root), [TranslateExpr(call.Arguments[0], root)]);
         }
@@ -47,12 +56,7 @@ sealed partial class QueryTranslator
             !TakesComparison(call) &&
             EqualityOperands(call) is (var equated, var against))
         {
-            // One that reads nothing from the row is closure state, evaluated here as any other
-            // constant expression is — the string dispatch below would otherwise reach it first and
-            // refuse it for having no function to become.
-            return ReferencesParameter(call, root)
-                ? new BinaryNode(BinaryOp.Equal, TranslateExpr(equated, root), TranslateExpr(against, root))
-                : ConstantOf(Evaluate(call));
+            return new BinaryNode(BinaryOp.Equal, TranslateExpr(equated, root), TranslateExpr(against, root));
         }
 
         if (declaring == typeof(string))
@@ -63,8 +67,7 @@ sealed partial class QueryTranslator
         // GetValueOrDefault abbreviates the coalesce it stands for: the value, or — with no
         // argument — the type's default, which travels as an ordinary constant.
         if (call is {Method.Name: "GetValueOrDefault", Object: { } optional} &&
-            Nullable.GetUnderlyingType(optional.Type) is { } underlying &&
-            ReferencesParameter(call, root))
+            Nullable.GetUnderlyingType(optional.Type) is { } underlying)
         {
             var fallback = call.Arguments.Count == 1
                 ? TranslateExpr(call.Arguments[0], root)
@@ -75,8 +78,7 @@ sealed partial class QueryTranslator
         // HasFlag reads the row's enum member; the flag travels as an ordinary enum constant, a
         // combined value spelled the way Enum.ToString spells it.
         if (call is {Method.Name: "HasFlag", Object: { } flagged} &&
-            declaring == typeof(Enum) &&
-            ReferencesParameter(call, root))
+            declaring == typeof(Enum))
         {
             return new CallNode(KnownFunction.EnumHasFlag, TranslateExpr(flagged, root), [TranslateExpr(call.Arguments[0], root)]);
         }
@@ -85,8 +87,7 @@ sealed partial class QueryTranslator
         // direction is carried: a numeric member is already a value, which arithmetic and comparison
         // promote without a cast, and SQL's numeric conversions truncate where the CLR's round.
         if (call is {Object: null, Arguments: [var text]} &&
-            declaring is not null &&
-            ReferencesParameter(call, root))
+            declaring is not null)
         {
             var conversion = call.Method.Name == "Parse" && parseTargets.TryGetValue(declaring, out var byType)
                 ? byType
@@ -109,8 +110,7 @@ sealed partial class QueryTranslator
         // The statics that read one temporal type as another. Each takes the value being read as its
         // argument, so the wire's target is that argument rather than an instance.
         if (IsTemporal(declaring) &&
-            call is {Object: null, Arguments: [var read]} &&
-            ReferencesParameter(call, root))
+            call is {Object: null, Arguments: [var read]})
         {
             var conversion = call.Method.Name switch
             {
@@ -165,8 +165,7 @@ sealed partial class QueryTranslator
             call is {
                 Object: null,
                 Arguments.Count: 1,
-                Method.Name: "DegreesToRadians" or "RadiansToDegrees"} &&
-            ReferencesParameter(call, root))
+                Method.Name: "DegreesToRadians" or "RadiansToDegrees"})
         {
             var angle = call.Method.Name == "DegreesToRadians"
                 ? KnownFunction.MathDegreesToRadians
@@ -237,12 +236,6 @@ sealed partial class QueryTranslator
         if (IsSetContains(call, root, out var set, out var value))
         {
             return new CallNode(KnownFunction.In, TranslateExpr(value, root), [..SetConstants(set)]);
-        }
-
-        // A call that does not touch the parameter is a closure value — evaluate it.
-        if (!ReferencesParameter(call, root))
-        {
-            return ConstantOf(Evaluate(call));
         }
 
         // The call reads the row, so it cannot be evaluated into a constant — and it is not on the
