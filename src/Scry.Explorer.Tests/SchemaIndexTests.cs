@@ -130,47 +130,141 @@ public class SchemaIndexTests
     public void SearchesNothingForABlankTerm(string? term) =>
         Assert.That(Build().Search(term), Is.Empty);
 
-    // A starter query has to be one the server will run: a projection carries scalars, and nothing
-    // else. Navigation, collection and attachment members are all rejected by the validator, and a
-    // sensitive one is left out by choice.
+    // A starter query has to be one the server will run, which is more than "it compiles": a
+    // projection carries scalars and objects projected into navigations, and nothing else.
     [Test]
-    public void BuildsAStarterQueryOverScalarsOnly()
+    public void BuildsAStarterQueryOverScalarsAndNavigations() =>
+        Assert.That(
+            Build().StarterQuery(Build().SourceFor("EmployeeQueryModel")!),
+            Is.EqualTo(
+                """
+                Query.Employee
+                    .Select(_ =>
+                        new
+                        {
+                            _.Id,
+                            _.Name,
+                            _.Status,
+                            Department =
+                                new
+                                {
+                                    _.Department!.Id,
+                                    _.Department!.Name
+                                }
+                        })
+                """));
+
+    // Password is sensitive and Photo is an attachment; neither belongs in a suggested query, for
+    // different reasons.
+    [Test]
+    public void LeavesSensitiveAndAttachmentMembersOutOfAStarterQuery()
     {
-        var index = Build();
+        var query = Build().StarterQuery(Build().SourceFor("EmployeeQueryModel")!);
 
-        var query = index.StarterQuery(index.SourceFor("EmployeeQueryModel")!);
-
-        Assert.That(query, Does.StartWith("Query.Employee"));
-        Assert.That(query, Does.Contain("_.Name"));
-        Assert.That(query, Does.Contain("_.Status"));
-        Assert.That(query, Does.Not.Contain("_.Department"));
-        Assert.That(query, Does.Not.Contain("_.Photo"));
-        Assert.That(query, Does.Not.Contain("_.Password"));
+        Assert.That(query, Does.Not.Contain("Password"));
+        Assert.That(query, Does.Not.Contain("Photo"));
     }
 
     // A collection is published with IsNavigation false, so it needs excluding on its own terms.
     // Missing that produced a query the editor compiled and the server rejected with "Projection
     // member must reference a scalar value."
     [Test]
-    public void LeavesACollectionOfValuesOutOfAStarterQuery()
-    {
-        var index = Build();
-
-        var query = index.StarterQuery(index.SourceFor("OrderQueryModel")!);
-
-        Assert.That(query, Does.Contain("_.Name"));
-        Assert.That(query, Does.Not.Contain("_.Tags"));
-    }
+    public void LeavesACollectionOfValuesOutOfAStarterQuery() =>
+        Assert.That(
+            Build().StarterQuery(Build().SourceFor("OrderQueryModel")!),
+            Is.EqualTo(
+                """
+                Query.Order
+                    .Select(_ =>
+                        new
+                        {
+                            _.Name
+                        })
+                """));
 
     [Test]
-    public void LeavesACollectionOfRowsOutOfAStarterQuery()
+    public void LeavesACollectionOfRowsOutOfAStarterQuery() =>
+        Assert.That(
+            Build().StarterQuery(Build().SourceFor("DepartmentQueryModel")!),
+            Is.EqualTo(
+                """
+                Query.Department
+                    .Select(_ =>
+                        new
+                        {
+                            _.Id,
+                            _.Name
+                        })
+                """));
+
+    // The navigation is declared nullable, so reading through it warns without the suppression. A
+    // model reached through a non-nullable one takes no '!'.
+    [Test]
+    public void SuppressesTheNullWarningOnANullableNavigation() =>
+        Assert.That(
+            Build().StarterQuery(Build().SourceFor("EmployeeQueryModel")!),
+            Does.Contain("_.Department!.Name"));
+
+    // One level, so a self-navigation terminates rather than recurring.
+    [Test]
+    public void NestsOnlyOneLevel()
     {
-        var index = Build();
+        var index = new SchemaIndex(
+            new(
+                1,
+                200,
+                [new("Employee", "Entity", "EmployeeQueryModel")],
+                [
+                    new("EmployeeQueryModel",
+                    [
+                        new("Name", "string", true, false),
+                        new("Manager", "EmployeeQueryModel?", false, true)
+                    ])
+                ],
+                []));
 
-        var query = index.StarterQuery(index.SourceFor("DepartmentQueryModel")!);
+        Assert.That(
+            index.StarterQuery(index.Sources[0]),
+            Is.EqualTo(
+                """
+                Query.Employee
+                    .Select(_ =>
+                        new
+                        {
+                            _.Name,
+                            Manager =
+                                new
+                                {
+                                    _.Manager!.Name
+                                }
+                        })
+                """));
+    }
 
-        Assert.That(query, Does.Contain("_.Name"));
-        Assert.That(query, Does.Not.Contain("_.Employees"));
+    // An empty `new { }` is not a projection the server would accept, so a navigation whose model has
+    // no scalar to carry is left out rather than nested empty.
+    [Test]
+    public void LeavesOutANavigationWithNothingToCarry()
+    {
+        var index = new SchemaIndex(
+            new(
+                1,
+                200,
+                [new("Employee", "Entity", "EmployeeQueryModel")],
+                [
+                    new("EmployeeQueryModel",
+                    [
+                        new("Name", "string", true, false),
+                        new("Photos", "PhotoQueryModel?", false, true)
+                    ]),
+                    new("PhotoQueryModel",
+                    [
+                        new("Image", "global::Scry.ScryAttachment", true, false) {IsAttachment = true}
+                    ])
+                ],
+                []));
+
+        Assert.That(index.StarterQuery(index.Sources[0]), Does.Not.Contain("Photos"));
     }
 
     [Test]

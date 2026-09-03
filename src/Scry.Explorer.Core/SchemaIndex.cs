@@ -143,37 +143,85 @@ public sealed class SchemaIndex
     }
 
     /// <summary>
-    /// A starter query for a source: every scalar member it can project.
+    /// A starter query for a source: every scalar member it can project, and a nested object for each
+    /// navigation carrying that model's scalars in turn.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Three kinds are left out because a projection cannot carry them. A navigation and a collection
-    /// are both rows rather than values — a collection is aggregable but, in the server's words,
-    /// "neither traversable nor projectable" — and an attachment has no value in a result at all.
-    /// Note that a collection is published as <c>IsCollection</c> with <c>IsNavigation</c> false, so
-    /// it has to be excluded on its own terms; missing that is a query the editor compiles and the
-    /// server then rejects.
+    /// A navigation is projected *into* rather than named as a leaf, which is the only way a query can
+    /// carry one — and the shape a reader is most likely to want next, since a row's own foreign key
+    /// says less than the row it points at.
     /// </para>
     /// <para>
-    /// A sensitive member is left out by choice rather than by rule: the server projects one happily,
-    /// answering with <c>no-store</c>. But a starter query is a suggestion, and suggesting one that
-    /// puts a password on screen is not a good default. Anyone who wants it can name it.
+    /// Three kinds never appear. A collection is aggregable but, in the server's words, "neither
+    /// traversable nor projectable"; an attachment has no value in a result at all; and both are
+    /// published with <c>IsNavigation</c> false, so each has to be recognised on its own terms.
+    /// Missing that is a query the editor compiles and the server then rejects. A sensitive member is
+    /// left out by choice rather than by rule: the server projects one happily, answering
+    /// <c>no-store</c>, but a suggested query should not put a password on screen by default.
+    /// </para>
+    /// <para>
+    /// One level deep, so a self-navigation terminates and a model reached two ways is not spelled out
+    /// twice.
     /// </para>
     /// </remarks>
     public string StarterQuery(ScrySourceInfo source)
     {
-        var members = AllMembers(source.Model)
-            .Select(_ => _.Member)
-            .Where(_ => !_.IsNavigation && !_.IsCollection && !_.IsAttachment && !_.IsSensitive)
-            .Select(_ => _.Name)
-            .ToList();
+        // Scalars first, then the navigations. A nested object is several lines tall, and burying the
+        // row's own columns between two of them makes the shorter half the harder to read.
+        var scalars = new List<string>();
+        var nested = new List<string>();
+        foreach (var indexed in AllMembers(source.Model))
+        {
+            var member = indexed.Member;
+            if (member.IsCollection || member.IsAttachment || member.IsSensitive)
+            {
+                continue;
+            }
 
+            if (!member.IsNavigation)
+            {
+                scalars.Add($"_.{member.Name}");
+            }
+            else if (Nested(member) is { } projection)
+            {
+                nested.Add(projection);
+            }
+        }
+
+        var members = scalars.Concat(nested).ToList();
         if (members.Count == 0)
         {
             return $"Query.{source.Name}";
         }
 
-        return $"Query.{source.Name}{Environment.NewLine}    .Select(_ => new {{ {string.Join(", ", members.Select(_ => $"_.{_}"))} }})";
+        // Composed compactly and printed, so what this offers and what the format button produces are
+        // the same shape by construction.
+        return QueryPrinter.Format($"Query.{source.Name}.Select(_ => new {{ {string.Join(", ", members)} }})");
+    }
+
+    // The navigation as an object of its own, or null when the model it points at has no scalar worth
+    // carrying — an empty `new { }` is not a projection the server would accept.
+    string? Nested(ScryMemberInfo member)
+    {
+        var reference = Resolve(member.TypeDisplay);
+        if (reference.LinkTarget is not { } model ||
+            Type(model) is null)
+        {
+            return null;
+        }
+
+        // The navigation is declared nullable, so reading through it warns without this. The generated
+        // client spells it the same way.
+        var access = $"_.{member.Name}{(member.TypeDisplay.EndsWith('?') ? "!" : "")}";
+
+        var scalars = AllMembers(model)
+            .Select(_ => _.Member)
+            .Where(_ => !_.IsNavigation && !_.IsCollection && !_.IsAttachment && !_.IsSensitive)
+            .Select(_ => $"{access}.{_.Name}")
+            .ToList();
+
+        return scalars.Count == 0 ? null : $"{member.Name} = new {{ {string.Join(", ", scalars)} }}";
     }
 
     void Collect(string model, List<IndexedMember> members, HashSet<string> seen)

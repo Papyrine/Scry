@@ -557,6 +557,15 @@ public partial class App
 
         await editor.AddAction(new ActionDescriptor
         {
+            Id = "scry-prettify",
+            Label = "Format Scry query",
+            ContextMenuGroupId = "navigation",
+            Keybindings = [(int) KeyMod.CtrlCmd | (int) KeyMod.Shift | (int) BlazorMonaco.KeyCode.KeyP],
+            Run = _ => InvokeAsync(Prettify)
+        });
+
+        await editor.AddAction(new ActionDescriptor
+        {
             Id = "scry-copy",
             Label = "Copy Scry query",
             ContextMenuGroupId = "navigation",
@@ -612,6 +621,31 @@ public partial class App
         }
 
         await BlazorMonaco.Editor.Global.SetTheme(JS, resolvedDark ? "vs-dark" : "vs");
+    }
+
+    /// <summary>
+    /// Rewrites the query in the explorer's house style. Text that does not parse is reported rather
+    /// than rewritten — a formatter that guesses at a half-typed query produces a differently
+    /// half-typed one, and the caret would land somewhere neither of them explains.
+    /// </summary>
+    async Task Prettify()
+    {
+        var code = await editor.GetValue();
+        if (!QueryPrinter.TryFormat(code, out var formatted, out var problem))
+        {
+            error = problem;
+            StateHasChanged();
+            return;
+        }
+
+        error = null;
+        if (formatted != code)
+        {
+            await editor.SetValue(formatted);
+            await MoveCaretToEnd();
+        }
+
+        StateHasChanged();
     }
 
     Task CopyQuery() =>

@@ -1362,6 +1362,113 @@ public class UiSnapshotTests :
         Assert.That(double.Parse(stored, CultureInfo.InvariantCulture), Is.GreaterThan(0.5));
     }
 
+    // Formatting rewrites the query in the house style: the chain down the page, the projection down
+    // the page after it, and a predicate left on the one line it reads as.
+    [Test]
+    public async Task ExplorerFormatsAFlatQuery()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await page.SetEditorValueAsync(
+            "Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name, _.Status })");
+        await page.Locator("[data-testid='prettify']").ClickAsync();
+
+        Assert.That(
+            await EditorValueAsync(page),
+            Is.EqualTo(
+                """
+                Query.Employee
+                    .Where(_ => _.Active)
+                    .Select(_ =>
+                        new
+                        {
+                            _.Name,
+                            _.Status
+                        })
+                """));
+    }
+
+    [Test]
+    public async Task ExplorerFormatsANestedQuery()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await page.SetEditorValueAsync(
+            "Query.Employee.Select(_ => new { _.Name, Department = new { _.Department!.Name } })");
+        await page.Locator("[data-testid='prettify']").ClickAsync();
+
+        Assert.That(
+            await EditorValueAsync(page),
+            Is.EqualTo(
+                """
+                Query.Employee
+                    .Select(_ =>
+                        new
+                        {
+                            _.Name,
+                            Department =
+                                new
+                                {
+                                    _.Department!.Name
+                                }
+                        })
+                """));
+    }
+
+    // A formatted query still has to be one the server runs — the point of the button is the shape,
+    // not a rewrite that changes what is asked.
+    [Test]
+    public async Task ExplorerRunsAFormattedQuery()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await page.SetEditorValueAsync(
+            "Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name, Department = new { _.Department!.Name } })");
+        await page.Locator("[data-testid='prettify']").ClickAsync();
+        await page.Locator("[data-testid='run']").ClickAsync();
+
+        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);
+        await Assertions.Expect(page.Locator("[data-testid='error']")).ToHaveCountAsync(0);
+        await Assertions.Expect(page.Locator("[data-testid='result-table']")).ToContainTextAsync("Engineering");
+    }
+
+    // Reported rather than rewritten: a formatter guessing at a half-typed query produces a
+    // differently half-typed one.
+    [Test]
+    public async Task ExplorerReportsAQueryItCannotFormat()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await page.SetEditorValueAsync("Query.Employee.Where(_ => ");
+        await page.Locator("[data-testid='prettify']").ClickAsync();
+
+        await Assertions.Expect(page.Locator("[data-testid='error']")).ToContainTextAsync("does not parse");
+
+        // And the text is left exactly as typed.
+        Assert.That(await EditorValueAsync(page), Is.EqualTo("Query.Employee.Where(_ => "));
+    }
+
+    // The schema pane offers a query already in the house style, so formatting it changes nothing.
+    [Test]
+    public async Task ExplorerOffersAQueryThatIsAlreadyFormatted()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await page.Locator("[data-testid='schema-source']", new() {HasTextString = "Employee"}).First.ClickAsync();
+        await page.Locator("[data-testid='schema-insert']").First.ClickAsync();
+
+        var offered = await EditorValueAsync(page);
+        Assert.That(offered, Does.Contain("Department ="));
+
+        await page.Locator("[data-testid='prettify']").ClickAsync();
+        Assert.That(await EditorValueAsync(page), Is.EqualTo(offered));
+    }
+
     // The document-level shortcuts, which reach the commands Monaco's own keymap cannot. Worth a test
     // of its own because the failure is silent on both sides: C# serializes a shape JS reads by name,
     // and a mismatch leaves a listener that matches nothing and reports nothing.

@@ -287,14 +287,20 @@ public class UiScreenshotTests :
         var page = await NewSizedPageAsync(explorerDocsViewport);
         await GoToExplorer(page);
 
-        // Broken across lines so it sits inside the editor's width unwrapped: this is the capture that
-        // shows the LINQ a caller writes, and a horizontal scrollbar over it shows nothing.
+        // In the house style the format button and the schema pane both produce, since this is the
+        // capture that shows the LINQ a caller writes. Also what keeps it inside the editor's width
+        // unwrapped — a horizontal scrollbar over it would show nothing.
         await page.SetEditorValueAsync(
             """
             Query.Employee
                 .Where(_ => _.Active)
                 .OrderBy(_ => _.Name)
-                .Select(_ => new { _.Name, _.Status })
+                .Select(_ =>
+                    new
+                    {
+                        _.Name,
+                        _.Status
+                    })
             """);
         await page.Locator("[data-testid='run']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);

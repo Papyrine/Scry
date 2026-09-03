@@ -61,15 +61,36 @@ the contract carries a member's name, its type, and those flags. No descriptions
 invented here.
 
 Each source carries a button that opens a query selecting every scalar member of it, in a blank tab
-or a new one.
+or a new one — with a nested object for each navigation, carrying that model's scalars in turn:
 
-Four kinds are left out, and for two different reasons. A navigation, a collection and an
-[attachment](attachments.md) are rows or handles rather than values, and [a projection carries only
-scalars](querying.md) — a collection in particular is aggregable but neither traversable nor
-projectable, and it is published with its navigation flag *false*, so it has to be recognised on its
-own terms. A [sensitive](annotations.md) member is left out by choice rather than by rule: the server
-projects one happily, answering `no-store`, but a suggested query should not put a password on screen
-by default. Naming one explicitly still works.
+```cs
+Query.Employee
+    .Select(_ =>
+        new
+        {
+            _.Id,
+            _.Name,
+            _.Status,
+            Department =
+                new
+                {
+                    _.Department!.Id,
+                    _.Department!.Name
+                }
+        })
+```
+
+A navigation is projected *into* rather than named as a leaf, which is the only way a query can carry
+one, and it stops after one level so a self-navigation terminates. Scalars come first: a nested object
+is several lines tall, and burying the row's own columns between two of them makes the shorter half
+the harder to read.
+
+Three kinds never appear. A collection is aggregable but neither traversable nor projectable; an
+[attachment](attachments.md) has no value in a result at all; and both are published with their
+navigation flag *false*, so each has to be recognised on its own terms. A
+[sensitive](annotations.md) member is left out by choice rather than by rule: the server projects one
+happily, answering `no-store`, but a suggested query should not put a password on screen by default.
+Naming one explicitly still works.
 
 
 ## Mapping it
@@ -193,6 +214,23 @@ The column appears only where a row is identifiable: the source has to declare a
 
 **Read a binary member.** A [`[BinaryTransfer]`](annotations.md) `byte[]` does not travel inside the JSON payload — the server sends it as a raw multipart part and leaves a `{"$bin":n}` placeholder where the value was ([Binary transfer](wire-format.md#binary-transfer)). The explorer reassembles that response and folds the parts back in as base64, so a diverted member tables, exports, and copies exactly as the same `byte[]` would without the attribute — which is the whole of what the attribute claims. The *Response* pane shows the reassembled envelope rather than the multipart body it arrived as.
 
+**Format it.** *Format* rewrites the query in the style above: the chain down the page, and a
+projection down the page after it. A line is broken only where breaking it says something — the chain
+because each operator is a step, a projection because each member is a column — so a predicate stays
+on the one line it reads as:
+
+```cs
+Query.Employee
+    .Where(_ => _.Created >= since && wanted.Contains(_.Name))
+```
+
+The declarations ahead of the query are left as written, comments and all; reindenting a caller's own
+code is not what the button is for. Text that does not parse is reported rather than rewritten, since
+a formatter guessing at a half-typed query produces a differently half-typed one.
+
+It is the same printer the schema pane composes its starter query through, so what the pane offers is
+already formatted and the two shapes cannot drift apart.
+
 **See the SQL.** Covered next.
 
 
@@ -202,6 +240,7 @@ The column appears only where a row is identifiable: the source has to declare a
 | --- | --- |
 | `Ctrl+Enter` | Run the query |
 | `Shift+Ctrl+Q` | Show the SQL the query would run |
+| `Shift+Ctrl+P` | Format the query |
 | `Shift+Ctrl+C` | Copy the query |
 | `Ctrl+Alt+S` | Schema pane |
 | `Ctrl+Alt+K` | Search the schema |
