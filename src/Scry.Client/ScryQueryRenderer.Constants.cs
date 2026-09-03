@@ -143,7 +143,15 @@ partial class QueryRenderer
             case KnownFunction.TimeOnlyFromTimeSpan:
                 return $"TimeOnly.FromTimeSpan({ValueTarget()})";
             case KnownFunction.DateTimeFromDateAndTime:
-                return $"{ValueTarget()}.ToDateTime({ValueArgument(0)})";
+            {
+                // The time of day travels under the String tag, having none of its own, so rendering
+                // it needs the type it composes with — without that it spells as text, which is not
+                // what ToDateTime takes.
+                var moment = arguments is [ConstNode time, ..]
+                    ? RenderConst(time, typeof(Time))
+                    : ValueArgument(0);
+                return $"{ValueTarget()}.ToDateTime({moment})";
+            }
 
             case KnownFunction.UnixSecondsFromOffset:
                 return $"{ValueTarget()}.ToUnixTimeSeconds()";
@@ -338,10 +346,10 @@ partial class QueryRenderer
                     _ => value.AsSpan().ContainsAny('.', 'e', 'E') ? value : $"{value}d"
                 };
 
-            // Spelled as the constructor rather than ParseExact: a temporal static outside the
-            // translator's closed map refuses even as closure state, where a constructed value
-            // evaluates. The parse happens here instead, and only a text the constructed value
-            // re-serializes to exactly is rendered.
+            // Spelled as the constructor rather than ParseExact: it names the ticks and the Kind
+            // outright, where a rendered parse would hand the reader a text to take on trust. The
+            // parse happens here instead, and only a text the constructed value re-serializes to
+            // exactly is rendered.
             case ClrTypeTag.DateTime:
             {
                 if (value is null ||
@@ -464,11 +472,13 @@ partial class QueryRenderer
         }
 
         // The temporal types are spelled as constructors — see the DateTime case — after verifying
-        // the constructed value re-serializes to the wire's exact text.
+        // the constructed value re-serializes to the wire's exact text. Round-trip format on both
+        // sides of that check: ValueTag writes one, so a default spelling here would read every one
+        // of them as a text no constructed value reproduces, and refuse the render.
         if (type == typeof(Time))
         {
             if (!Time.TryParse(text, CultureInfo.InvariantCulture, out var time) ||
-                Convert.ToString(time, CultureInfo.InvariantCulture) != text)
+                time.ToString("o", CultureInfo.InvariantCulture) != text)
             {
                 throw Refuse(RenderRefusal.UnsupportedShape);
             }
@@ -478,8 +488,8 @@ partial class QueryRenderer
 
         if (type == typeof(DateTimeOffset))
         {
-            if (!DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var offset) ||
-                offset.ToString(CultureInfo.InvariantCulture) != text)
+            if (!DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var offset) ||
+                offset.ToString("o", CultureInfo.InvariantCulture) != text)
             {
                 throw Refuse(RenderRefusal.UnsupportedShape);
             }

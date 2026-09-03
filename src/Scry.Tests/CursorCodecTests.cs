@@ -29,6 +29,29 @@ public class CursorCodecTests
         });
     }
 
+    // An ordering key is spelled the way the client spells the same value as a constant, and for the
+    // same reason: it is parsed back against the member's own type. The default text of a time of day
+    // stops at the minute and that of an offset at the second, so a key encoded through either would
+    // seek from a boundary the page did not end on — the rows between the two are then repeated or
+    // skipped, silently, with the cursor's signature still valid.
+    [TestCase("05:06:07.1230000")]
+    public void ATimeOfDayKeyKeepsItsSeconds(string expected) =>
+        Assert.That(CursorCodec.TagValue(new Time(5, 6, 7, 123)).Value, Is.EqualTo(expected));
+
+    [TestCase("2026-03-04T05:06:07.1230000+02:00")]
+    public void AnOffsetKeyKeepsItsSubSecondPart(string expected) =>
+        Assert.That(
+            CursorCodec.TagValue(new DateTimeOffset(2026, 3, 4, 5, 6, 7, 123, TimeSpan.FromHours(2))).Value,
+            Is.EqualTo(expected));
+
+    // Two servers of one deployment can sit in different zones, so the encoding side's offset is not
+    // something the decoding side can read. The wall clock the provider binds is carried instead.
+    [TestCase("2026-09-03T00:00:00.0000000")]
+    public void ALocalTimestampKeyCarriesNoOffset(string expected) =>
+        Assert.That(
+            CursorCodec.TagValue(new DateTime(2026, 9, 3, 0, 0, 0, DateTimeKind.Local)).Value,
+            Is.EqualTo(expected));
+
     // Base64url, so a cursor is safe in a query string or a path segment without further escaping.
     [Test]
     public void ProducesOnlyUrlSafeCharacters()

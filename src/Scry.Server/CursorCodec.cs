@@ -138,6 +138,13 @@ static class CursorCodec
     /// each value against the ordering member's real CLR type, so the tag is only a hint (matching the
     /// client's constant encoding).
     /// </summary>
+    /// <remarks>
+    /// The server's half of the mapping <c>ValueTag</c> makes on the client, which the two packages
+    /// cannot share: a key spelled here differently from the constant the same value becomes there is
+    /// a key the seek predicate compares against something else. The temporal spellings in particular
+    /// are round-trip forms rather than default ones — a key truncated to the second or the minute
+    /// seeks from a row boundary that is not the one the page ended on, which repeats or skips rows.
+    /// </remarks>
     public static (string? Value, ClrTypeTag Tag) TagValue(object? value)
     {
         var culture = CultureInfo.InvariantCulture;
@@ -150,8 +157,13 @@ static class CursorCodec
             long number => (number.ToString(culture), ClrTypeTag.Int64),
             decimal number => (number.ToString(culture), ClrTypeTag.Decimal),
             double number => (number.ToString(culture), ClrTypeTag.Double),
+            // A local Kind is flattened to the wall clock the provider binds anyway, so a fleet whose
+            // servers sit in different zones decodes a cursor to the row the encoding one ended on.
+            DateTime {Kind: DateTimeKind.Local} local => (local.ToString("yyyy-MM-ddTHH:mm:ss.fffffff", culture), ClrTypeTag.DateTime),
             DateTime date => (date.ToString("O", culture), ClrTypeTag.DateTime),
             Date date => (date.ToString("O", culture), ClrTypeTag.DateOnly),
+            DateTimeOffset stamped => (stamped.ToString("O", culture), ClrTypeTag.String),
+            Time time => (time.ToString("O", culture), ClrTypeTag.String),
             Guid guid => (guid.ToString(), ClrTypeTag.Guid),
             byte[] bytes => (Convert.ToBase64String(bytes), ClrTypeTag.Bytes),
             Enum enumeration => (enumeration.ToString(), ClrTypeTag.Enum),

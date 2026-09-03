@@ -319,6 +319,26 @@ public enum ClrTypeTag
 
 The tag is a hint, not an instruction. The server parses the value into the **member's** type at the comparison site, so `tag` never dictates what CLR type is constructed. Types with no dedicated tag (`TimeOnly`, `TimeSpan`, `DateTimeOffset`, `char`) travel as `String` and are reconciled the same way. A `Bytes` value carries a `byte[]` as a base64 string.
 
+#### Temporal spellings
+
+Every temporal value travels in a **round-trip** form, so the text carries the whole value rather than whatever a default `ToString` would print:
+
+| CLR type | `tag` | wire text |
+| --- | --- | --- |
+| `DateTime` (`Utc`) | `DateTime` | `2026-09-03T00:00:00.0000000Z` |
+| `DateTime` (`Unspecified`) | `DateTime` | `2026-09-03T00:00:00.0000000` |
+| `DateTime` (`Local`) | `DateTime` | `2026-09-03T00:00:00.0000000` — see below |
+| `DateOnly` | `DateOnly` | `2026-09-03` |
+| `TimeOnly` | `String` | `05:06:07.1230000` |
+| `TimeSpan` | `String` | `01:02:03.4560000` |
+| `DateTimeOffset` | `String` | `2026-03-04T05:06:07.1230000+02:00` |
+
+A `DateTimeOffset` keeps its own offset: the offset is part of the value, and the server parses it back whole.
+
+A `DateTime` does **not** carry one. A `Local` kind is flattened to the wall clock it names, and the `Local`/`Unspecified` distinction is not on the wire. An offset would otherwise be read back against the *server's* zone — `DateTime.Parse(…, RoundtripKind)` resolves an offset-bearing text into local time — and the provider binds the resulting wall clock, so one request would name a different moment on two deployments. That is the same environment dependency [`DayOfWeek`](querying.md#functions) is composed by hand to avoid and the `LocalDateTime` reading of an offset is not carried for, and a constant may not smuggle it in. Flattened, what the client wrote as its wall clock reaches SQL as that wall clock, identically wherever the server runs.
+
+The same spellings encode a [paging cursor's](paging.md) ordering-key values, for the same reason: a key that travelled differently from the constant the same value becomes is a key the seek predicate compares against something else.
+
 
 ### `binary` and `unary`
 

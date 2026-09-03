@@ -433,6 +433,19 @@ public class RenderRoundTripTests
     public void DateTimeOffsetConstant() =>
         RoundTrip(Employee.Where(_ => _.Offset > new DateTimeOffset(2026, 3, 4, 5, 6, 7, TimeSpan.Zero)).ToScryRequest());
 
+    // The sub-second part and the offset are both on the wire, so the constructed value the renderer
+    // spells has to reproduce the text exactly — a default spelling on either side drops one of them
+    // and the render is refused instead.
+    [Test]
+    public void SubSecondDateTimeOffsetConstant() =>
+        RoundTrip(Employee.Where(_ => _.Offset > new DateTimeOffset(2026, 3, 4, 5, 6, 7, 123, TimeSpan.FromHours(2))).ToScryRequest());
+
+    // A time of day reaches the renderer as the argument that composes a timestamp, and carries its
+    // seconds there for the same reason.
+    [Test]
+    public void TimeOfDayConstant() =>
+        RoundTrip(Employee.Where(_ => _.StartDate.ToDateTime(new Time(5, 6, 7, 123)) > new DateTime(2026, 1, 1)).ToScryRequest());
+
     [Test]
     public void EnumConstant() =>
         RoundTrip(Employee.Where(_ => _.Status == Status.PartTime).ToScryRequest());

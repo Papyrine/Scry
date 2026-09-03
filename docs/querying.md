@@ -1133,6 +1133,23 @@ A `char` has no tag of its own: C# promotes it to an `int` to compare it, so its
 
 A constant is carried as an invariant-culture string plus a type tag, and reconciled against the member type at the comparison site on the server. Enums travel as their **name**, not their numeric value.
 
+#### Dates and times
+
+A temporal constant travels in a round-trip form that carries the whole value — a `TimeOnly`'s seconds, a `DateTimeOffset`'s fractional second, and its offset. See [temporal spellings](wire-format.md#temporal-spellings) for the exact texts.
+
+A `DateTime` is the one exception: it travels as the **wall clock** it names, plus the `Z` that marks a UTC one. A `DateTimeKind.Local` value does not carry its offset:
+
+```cs
+// midnight, wherever the client is
+.Where(_ => _.Placed > DateTime.Today)
+```
+
+reaches the server as `2026-09-03T00:00:00.0000000` and binds that wall clock, whatever zone the server runs in. Carrying the client's offset instead would have the server resolve it against *its own* zone, and the same request would then name a different moment on two deployments — the environment dependency [`DayOfWeek`](#functions) is composed by hand to avoid, and the one the `LocalDateTime` reading of a `DateTimeOffset` is not carried for.
+
+That makes `DateTime.Now` and `DateTime.Today` mean what they would in an in-process query on the client machine — the client's own wall clock, taken literally. An *instant* is a different thing, and has to be spelled as one: `DateTime.UtcNow` travels with its `Z` and is read back as the same UTC wall clock everywhere, and a `DateTimeOffset` member takes a `DateTimeOffset` constant, which keeps its offset. Both are unambiguous wherever the server sits. A bare `DateTime.Now` compared against a column holding UTC is not, and no wire encoding can make it so.
+
+Note that all of this is evaluated on the **client**, at translation time — `DateTime.UtcNow` is the browser's or the process's clock, not the database's. Nothing on the wire reads the server's clock.
+
 
 ### Composing a query at runtime
 
