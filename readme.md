@@ -238,7 +238,7 @@ An opt-in, GraphiQL-style explorer ships in `Scry.Server.Explorer`. It runs Rosl
 app.MapScryExplorer("/scry");
 ```
 
-<img src="samples/Sample.Tests/UiScreenshotTests.ExplorerRun.verified.png" border="1" alt="The Scry explorer: LINQ, the serialized wire request, the result table, and the raw response">
+<img src="samples/Sample.Tests/UiScreenshotTests.ExplorerRun.verified.png" border="1" alt="The Scry explorer: the schema pane, the LINQ, the wire request it translated to, and the rows the server returned">
 
 It is off unless mapped, and Development-only by default. See [Query explorer](docs/explorer.md).
 

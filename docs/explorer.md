@@ -4,10 +4,65 @@
 
 It is off unless mapped, and Development-only by default.
 
-<img src="../samples/Sample.Tests/UiScreenshotTests.ExplorerRun.verified.png" border="1" alt="The explorer after running a query: the LINQ, the serialized wire request, the result table, and the raw response">
+<img src="../samples/Sample.Tests/UiScreenshotTests.ExplorerRun.verified.png" border="1" alt="The explorer after running a query: the schema pane, the LINQ, the wire request it translated to, and the rows the server returned">
 
 
-One screen shows the whole pipeline: the LINQ as written, the wire request it translated to, the rows the server returned, and the raw response envelope. On a window wide enough for it the query sits beside its output rather than above it; narrower than that, the page stacks as shown here.
+One screen shows the whole pipeline: the LINQ as written, the wire request it translated to, and the rows the server returned.
+
+
+## Layout
+
+The explorer fills the window rather than flowing down it, and every region scrolls inside itself.
+
+**The rail**, down the left edge, opens one pane at a time: the [schema](#schema-pane) and the
+[history](#working-with-a-query). Under them sit re-fetch, the theme toggle, the shortcut list, and
+settings.
+
+**Tabs** hold a query each. A tab takes its name from the source the query reads — `Query.Employee`
+becomes *Employee* — until it is renamed by double-clicking it. Tabs, the open pane, the theme and
+every pane size persist across a reload; a response never does, because a response is a fact about
+a moment and restoring one later would be showing something that may no longer be true.
+
+**The query** sits on the left with its commands in a strip beside it, and the **wire request** in a
+strip beneath it — the request is derived from the query rather than returned by the server, so it
+belongs with the query rather than among the results.
+
+**The output** is tabbed: the rows, the response envelope, and the SQL where the server offers it. A
+tab appears only when there is something behind it, so a refused run leaves the column empty rather
+than offering three empty panes. Under it, a status line reports the outcome, the transport the
+request took, how many rows came back, and how long it took:
+
+```
+200 · GET · 3 rows · 34 ms
+```
+
+The `GET` is worth a word. A short request travels [in the URL and a long one in a
+body](wire-format.md), decided by the server's own published limit, and which one a given query took
+has never been visible anywhere else.
+
+Every divider between panes drags, and double-clicking one restores its default. Dragging the schema
+pane almost shut closes it, rather than leaving a sliver too narrow to read and too narrow to grab.
+
+
+## Schema pane
+
+The queryable surface, as the server publishes it: the sources grouped by kind, every model they
+reach, the enums they use, and the contract's own facts — the page-size cap, the URL limit, whether
+SQL preview is available, and the schema stamp.
+
+A model's page lists its members with the type each is declared as, and a badge for whatever else the
+[introspection contract](#introspection) says about it: a key column, a navigation, a collection, an
+[attachment](attachments.md) with its content type, a [sensitive](annotations.md) member the server
+will refuse as a constant, and one inherited from a base model. The types link, so a projection can
+be followed from `Employee` to `Department` and back.
+
+It is a schema *browser* rather than a documentation explorer, because there is nothing to document:
+the contract carries a member's name, its type, and those flags. No descriptions travel, and none are
+invented here.
+
+Each source carries a button that opens a query selecting every scalar member of it — navigations,
+attachments and sensitive members left out, being the three a projection cannot or may not carry. It
+fills a blank tab, or opens a new one.
 
 
 ## Mapping it
@@ -110,7 +165,14 @@ Only declarations may come before the query. Anything else — a loop, a call, a
 
 ## Working with a query
 
-Three things the explorer does with the query in the editor, beyond running it.
+Four things the explorer does with the query in the editor, beyond running it.
+
+**Remember it.** Every query that runs is recorded in the history pane, newest first, deduplicated by
+its text. Twenty are kept — but a favorite sits outside the cap and is never evicted, so a query
+worth keeping is kept by starring it. An entry can be named, and the search box matches both the name
+and the query text. All of it is this browser's alone: nothing here is ever sent to the server, and
+*Clear* forgets the rest while leaving the favorites, losing one of those being the thing there is no
+way back from.
 
 **Share a link.** *Share* puts the query in the URL and copies the link. It is placed in the **fragment** (`/scry/#q=…`), which browsers never send to the server — so a shared query cannot land in an access log, a proxy trace, or a referrer header on the way. Opening the link loads the query into the editor; a fragment that does not decode is ignored, and the explorer opens on its sample query rather than on an error.
 
@@ -125,6 +187,23 @@ The column appears only where a row is identifiable: the source has to declare a
 **Read a binary member.** A [`[BinaryTransfer]`](annotations.md) `byte[]` does not travel inside the JSON payload — the server sends it as a raw multipart part and leaves a `{"$bin":n}` placeholder where the value was ([Binary transfer](wire-format.md#binary-transfer)). The explorer reassembles that response and folds the parts back in as base64, so a diverted member tables, exports, and copies exactly as the same `byte[]` would without the attribute — which is the whole of what the attribute claims. The *Response* pane shows the reassembled envelope rather than the multipart body it arrived as.
 
 **See the SQL.** Covered next.
+
+
+### Shortcuts
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+Enter` | Run the query |
+| `Shift+Ctrl+Q` | Show the SQL the query would run |
+| `Shift+Ctrl+C` | Copy the query |
+| `Ctrl+Alt+S` | Schema pane |
+| `Ctrl+Alt+K` | Search the schema |
+| `Ctrl+Alt+H` | History pane |
+| `Ctrl+,` | Settings |
+
+The rail's keyboard button lists these in-app as well. The editor is Monaco, so its own keymap
+applies on top of them — `Ctrl+F` to find, `F1` for the command palette, and multi-cursor, folding
+and comment toggling as in VS Code.
 
 
 ## SQL preview
@@ -1059,8 +1138,10 @@ dotnet test samples/Scry.Samples.slnx --filter "FullyQualifiedName~UiScreenshotT
 
 Accepting the received file — move `*.received.png` over `*.verified.png`, or accept it from the Verify diff tool — is what republishes the image. The fixture is `[Category("Browser")]` so a run can opt out, and pixel output is environment sensitive: a first run on a new OS or CI image is expected to need reseeding.
 
-These two are laid out at **800** wide rather than at the width the fixture's other captures use, because a doc renderer shows them at native size and resampling a wider capture would soften every glyph of the small monospace text they are mostly made of. The run capture's query is broken across lines to fit that width unscrolled, so the LINQ reads in full.
+These two are laid out at their own widths rather than the fixture's default. A shell divided into a rail, a schema pane, an editor and an output column has a width below which the capture is a picture of the shell coping rather than of the layout, so the run capture takes **1400** and pays for it in the softening a doc renderer's downscale costs. The IntelliSense capture takes **1200** and puts the schema pane and most of the output column out of the way first — through the same stored pane sizes the shell restores from — because the suggest widget is wider than the editor gets once they have had their share, and neither is what that image is showing. The run capture's query is broken across lines so it reads in full without a horizontal scrollbar over it.
 
 Two things in Monaco move on their own and would otherwise put a column of different pixels between two identical runs, so both are settled before the shutter falls: the caret is pinned solid, and the scrollbar fade-out is waited for.
+
+The shell fills the viewport and scrolls inside its panes, so these are viewport captures rather than full-page ones — there is no page below the fold left to stitch.
 
 The frame around each image comes from an `<img border="1">` in the markdown rather than from the pixels. Note that a `style` attribute would not work here: GitHub's markdown sanitizer strips `style`, while `border` is on its allowed-attribute list.

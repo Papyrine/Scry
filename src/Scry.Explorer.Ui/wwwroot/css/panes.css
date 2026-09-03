@@ -1,0 +1,429 @@
+/* The two plugin panes and the dialogs. Layout skeleton is shell.css; palette is app.css. */
+
+.pane-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.pane-search {
+    flex: 1;
+    min-width: 0;
+    padding: 0.3rem 0.5rem;
+    font: inherit;
+    font-size: 0.8rem;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+}
+
+.pane-search:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: -1px;
+}
+
+.pane-back {
+    flex: none;
+    padding: 0.3rem 0.5rem;
+    font: inherit;
+    font-size: 0.8rem;
+    color: var(--accent);
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.pane-empty {
+    margin: 0.9rem;
+    font-size: 0.82rem;
+}
+
+/* History */
+
+.history-pane,
+.schema-pane {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1;
+}
+
+.history-list {
+    flex: 1;
+    list-style: none;
+    margin: 0;
+    padding: 0.4rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.history-row {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+    min-width: 0;
+    border-radius: 6px;
+}
+
+.history-row:hover {
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.history-item {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0.32rem 0.5rem;
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 0.76rem;
+    color: var(--text);
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.history-item:hover {
+    color: var(--accent);
+}
+
+/*
+  The actions appear on hover, so a list of queries reads as a list of queries rather than as three
+  columns of buttons. They stay put for the row being edited and for a favorite, whose star is state
+  rather than an offer.
+*/
+.history-actions {
+    display: flex;
+    flex: none;
+    gap: 0.1rem;
+    opacity: 0;
+}
+
+.history-row:hover .history-actions,
+.history-row:focus-within .history-actions,
+.history-row.favorite .history-actions {
+    opacity: 1;
+}
+
+.history-row.favorite .icon-btn.active {
+    color: var(--accent);
+}
+
+.history-remove:hover {
+    color: var(--danger);
+}
+
+.history-label-input {
+    flex: 1;
+    min-width: 0;
+    margin: 0.15rem 0.3rem;
+    padding: 0.25rem 0.45rem;
+    font: inherit;
+    font-size: 0.78rem;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--accent);
+    border-radius: 5px;
+}
+
+/* Schema */
+
+.schema-body {
+    flex: 1;
+    padding: 0.6rem 0.8rem 1.2rem;
+    overflow-y: auto;
+    font-size: 0.82rem;
+}
+
+.schema-body h4 {
+    margin: 1rem 0 0.4rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.schema-body h4:first-child {
+    margin-top: 0;
+}
+
+.schema-group {
+    margin: 0.5rem 0 0.2rem;
+    font-size: 0.72rem;
+}
+
+.schema-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.schema-list li {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+    padding: 0.1rem 0;
+}
+
+.schema-link,
+.schema-result {
+    padding: 0.15rem 0.25rem;
+    font: inherit;
+    font-size: 0.82rem;
+    font-family: var(--mono);
+    color: var(--accent);
+    background: none;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: left;
+}
+
+.schema-link:hover,
+.schema-result:hover {
+    text-decoration: underline;
+}
+
+.schema-enum {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+}
+
+/* Revealed on hover, like the history row's actions. */
+.schema-insert {
+    opacity: 0;
+}
+
+.schema-list li:hover .schema-insert,
+.schema-list li:focus-within .schema-insert,
+.schema-type-head .schema-insert {
+    opacity: 1;
+}
+
+.schema-results {
+    flex: 1;
+    list-style: none;
+    margin: 0;
+    padding: 0.3rem;
+    overflow-y: auto;
+}
+
+.schema-type-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.schema-type-head h4 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-family: var(--mono);
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--text);
+}
+
+.schema-members {
+    width: 100%;
+    margin-top: 0.6rem;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+}
+
+/* The member names are short and known; the type column takes whatever is left. */
+.schema-members th:first-child,
+.schema-members td:first-child {
+    width: 1%;
+    white-space: nowrap;
+    padding-right: 0.8rem;
+}
+
+.schema-members th {
+    padding: 0.25rem 0.3rem;
+    text-align: left;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+}
+
+.schema-members td {
+    padding: 0.25rem 0.3rem;
+    vertical-align: top;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+    font-family: var(--mono);
+    overflow-wrap: anywhere;
+}
+
+/*
+  Inline with the type rather than in a column of their own: in a pane this narrow a third column
+  costs the type more width than the badges need, and a model name is as long as the consumer made it.
+*/
+.schema-badges {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.2rem;
+    margin-left: 0.3rem;
+    vertical-align: 1px;
+}
+
+.badge {
+    padding: 0.02rem 0.35rem;
+    font-family: system-ui, sans-serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.badge-sensitive {
+    color: var(--danger);
+    border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+}
+
+.badge-obsolete {
+    color: light-dark(#8a6d1f, #d8b45a);
+    border-color: color-mix(in srgb, light-dark(#8a6d1f, #d8b45a) 40%, var(--border));
+}
+
+.schema-facts {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.15rem 0.7rem;
+    margin: 0;
+    font-size: 0.78rem;
+}
+
+.schema-facts dt {
+    color: var(--muted);
+}
+
+.schema-facts dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+/* Dialogs */
+
+.dialog-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: light-dark(rgb(24 30 41 / 0.35), rgb(0 0 0 / 0.55));
+    z-index: 10;
+}
+
+.dialog {
+    width: min(30rem, calc(100vw - 2rem));
+    max-height: calc(100vh - 4rem);
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    box-shadow: 0 10px 40px light-dark(rgb(24 30 41 / 0.18), rgb(0 0 0 / 0.5));
+    overflow: hidden;
+}
+
+.dialog:focus-visible {
+    outline: none;
+}
+
+.dialog-head {
+    display: flex;
+    align-items: center;
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.dialog-head h2 {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.dialog-head .icon-btn {
+    margin-left: auto;
+}
+
+.dialog-body {
+    padding: 1rem;
+    overflow-y: auto;
+}
+
+.setting + .setting {
+    margin-top: 1.4rem;
+}
+
+.setting h3 {
+    margin: 0 0 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.setting-choices {
+    display: flex;
+    gap: 0.35rem;
+}
+
+.choice {
+    padding: 0.35rem 0.8rem;
+    font: inherit;
+    font-size: 0.84rem;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--border-strong);
+    border-radius: 7px;
+    cursor: pointer;
+}
+
+.choice.active {
+    color: #fff;
+    background: var(--accent-strong);
+    border-color: var(--accent-strong);
+}
+
+.setting-note {
+    margin: 0.5rem 0 0;
+    font-size: 0.78rem;
+}
+
+.shortkeys {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.84rem;
+}
+
+.shortkeys th {
+    width: 9rem;
+    padding: 0.25rem 0.5rem 0.25rem 0;
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--accent);
+    white-space: nowrap;
+}
+
+.shortkeys td {
+    padding: 0.25rem 0;
+}

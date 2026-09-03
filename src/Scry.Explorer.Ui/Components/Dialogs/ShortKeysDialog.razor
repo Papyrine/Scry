@@ -1,0 +1,53 @@
+@namespace Scry
+
+<DialogShell Title="Keyboard shortcuts" TestId="shortkeys-dialog" OnClose="OnClose">
+    <table class="shortkeys">
+        <tbody>
+            <tr>
+                <th>Ctrl+Enter</th>
+                <td>Run the query</td>
+            </tr>
+            @if (SqlPreview)
+            {
+                <tr>
+                    <th>Shift+Ctrl+Q</th>
+                    <td>Show the SQL the query would run</td>
+                </tr>
+            }
+            <tr>
+                <th>Shift+Ctrl+C</th>
+                <td>Copy the query</td>
+            </tr>
+            <tr>
+                <th>Ctrl+Alt+S</th>
+                <td>Schema pane</td>
+            </tr>
+            <tr>
+                <th>Ctrl+Alt+K</th>
+                <td>Search the schema</td>
+            </tr>
+            <tr>
+                <th>Ctrl+Alt+H</th>
+                <td>History pane</td>
+            </tr>
+            <tr>
+                <th>Ctrl+,</th>
+                <td>Settings</td>
+            </tr>
+        </tbody>
+    </table>
+    <p class="setting-note muted">
+        The editor is Monaco, so its own keymap applies on top of these — Ctrl+F to find, F1 for the
+        command palette, and multi-cursor, folding and comment toggling as in VS Code.
+    </p>
+</DialogShell>
+
+@code
+{
+    /// <summary>Whether this server offers the SQL preview, which decides if its shortcut is listed.</summary>
+    [Parameter]
+    public bool SqlPreview { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+}

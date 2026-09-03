@@ -1,0 +1,115 @@
+@namespace Scry
+
+<div class="tabs" role="tablist" data-testid="tabs" aria-label="Query tabs">
+    @for (var index = 0; index < Store.Tabs.Count; index++)
+    {
+        var current = index;
+        var tab = Store.Tabs[current];
+        var active = current == Store.ActiveIndex;
+        <div class="tab @(active ? "active" : null)" role="tab" aria-selected="@(active ? "true" : "false")" @key="tab.Id">
+            @if (renaming == current)
+            {
+                <input class="tab-rename"
+                       data-testid="tab-rename"
+                       @ref="renameInput"
+                       @bind="renameText"
+                       @bind:event="oninput"
+                       @onkeydown="_ => OnRenameKey(_, current)"
+                       @onblur="CancelRename" />
+            }
+            else
+            {
+                <button type="button"
+                        class="tab-button"
+                        data-testid="tab"
+                        title="@Store.Title(tab)"
+                        @onclick="() => OnActivate.InvokeAsync(current)"
+                        @ondblclick="() => StartRename(current)">@Store.Title(tab)</button>
+                @* The close goes with the second tab: an explorer with no tab has nowhere to type. *@
+                @if (Store.Tabs.Count > 1)
+                {
+                    <button type="button"
+                            class="tab-close"
+                            data-testid="tab-close"
+                            aria-label="Close tab"
+                            title="Close tab"
+                            @onclick="() => OnClose.InvokeAsync(current)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                             stroke-linecap="round" aria-hidden="true" focusable="false">
+                            <path d="M6 6l12 12M18 6L6 18" />
+                        </svg>
+                    </button>
+                }
+            }
+        </div>
+    }
+    <button type="button" class="tab-add" data-testid="tab-add" aria-label="New tab" title="New tab"
+            @onclick="() => OnAdd.InvokeAsync()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+             stroke-linecap="round" aria-hidden="true" focusable="false">
+            <path d="M12 5v14M5 12h14" />
+        </svg>
+    </button>
+</div>
+
+@code
+{
+    [Parameter]
+    [EditorRequired]
+    public TabStore Store { get; set; } = null!;
+
+    [Parameter]
+    public EventCallback<int> OnActivate { get; set; }
+
+    [Parameter]
+    public EventCallback<int> OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback OnAdd { get; set; }
+
+    [Parameter]
+    public EventCallback<(int Index, string Title)> OnRename { get; set; }
+
+    ElementReference renameInput;
+    int? renaming;
+    string renameText = "";
+    bool focusPending;
+
+    void StartRename(int index)
+    {
+        renaming = index;
+        renameText = Store.Title(Store.Tabs[index]);
+        focusPending = true;
+    }
+
+    // Escape cancels and Enter commits. Blur cancels too, so clicking away from a rename leaves the
+    // title alone rather than committing a half-typed one.
+    async Task OnRenameKey(KeyboardEventArgs args, int index)
+    {
+        if (args.Key == "Enter")
+        {
+            renaming = null;
+            await OnRename.InvokeAsync((index, renameText));
+            return;
+        }
+
+        if (args.Key == "Escape")
+        {
+            CancelRename();
+        }
+    }
+
+    void CancelRename() =>
+        renaming = null;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!focusPending)
+        {
+            return;
+        }
+
+        focusPending = false;
+        await renameInput.FocusAsync();
+    }
+}

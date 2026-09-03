@@ -1,11 +1,13 @@
 /*
+  Palette, boot screen, and the primitives every pane shares. The layout itself is shell.css.
+
   Theming: color-scheme drives both the browser's built-in widgets (buttons, scrollbars, the Monaco
   chrome) and the CSS light-dark() function below. The <html data-theme> attribute is set before first
   paint (inline script in index.html) and updated by the theme toggle; "system" follows the OS.
 
   The palette lives in the custom properties here. light-dark() resolves where a property is *used*,
   so every rule below stays theme-agnostic. The panel color deliberately matches Monaco's own editor
-  background (#ffffff in vs, #1e1e1e in vs-dark) so the editor card reads as one surface.
+  background (#ffffff in vs, #1e1e1e in vs-dark) so the editor reads as one surface with its pane.
 */
 :root {
     color-scheme: light dark;
@@ -20,19 +22,30 @@
     --accent: light-dark(#6d28d9, #a78bfa);
     --accent-strong: #7c3aed;
     --accent-strong-hover: light-dark(#6d28d9, #8b5cf6);
+    --danger: light-dark(#d03a42, #e07777);
     --mono: ui-monospace, "Cascadia Code", "Cascadia Mono", Consolas, monospace;
 }
 
 html[data-theme="light"] { color-scheme: light; }
 html[data-theme="dark"] { color-scheme: dark; }
 
+/*
+  The shell fills the viewport and every pane scrolls inside itself, so the document never does. Both
+  elements need the height for the flex chain below them to have something to divide up.
+*/
 html, body {
+    height: 100%;
     margin: 0;
+    overflow: hidden;
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     font-size: 15px;
     line-height: 1.5;
     background: var(--bg);
     color: var(--text);
+}
+
+#app {
+    height: 100%;
 }
 
 a {
@@ -64,6 +77,19 @@ a {
     to { transform: rotate(1turn); }
 }
 
+.loading-hint::before {
+    content: "";
+    display: inline-block;
+    width: 11px;
+    height: 11px;
+    margin-right: 0.45rem;
+    vertical-align: -1px;
+    border: 2px solid var(--border-strong);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
 .error {
     margin: 0 0 1rem;
     padding: 0.65rem 0.95rem;
@@ -71,7 +97,7 @@ a {
     color: light-dark(#8f2026, #f4a9a9);
     background: light-dark(#fdf3f4, #382225);
     border: 1px solid light-dark(#f2c6c9, #62363a);
-    border-left: 3px solid light-dark(#d03a42, #e07777);
+    border-left: 3px solid var(--danger);
     border-radius: 8px;
 }
 
@@ -79,126 +105,20 @@ a {
     color: var(--muted);
 }
 
-/* Header */
-
-.app-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.6rem 1.4rem;
-    background: var(--panel);
-    border-bottom: 1px solid var(--border);
+.mono {
+    font-family: var(--mono);
 }
 
-.brand {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-}
-
-.brand-mark {
-    width: 25px;
-    height: 25px;
-    color: var(--accent);
-}
-
-.app-header h1 {
-    margin: 0;
-    font-size: 1.15rem;
-    font-weight: 700;
-    letter-spacing: 0.01em;
-}
-
-.brand-accent {
-    color: var(--accent);
-}
-
-/* Content column */
-
-.shell {
-    max-width: 1080px;
-    margin: 0 auto;
-    padding: 1.2rem 1.4rem 3.5rem;
-}
-
-.tagline {
-    margin: 0 0 1.1rem;
-    color: var(--muted);
-    font-size: 0.92rem;
-    max-width: 78ch;
-}
-
-/*
-  Two columns once there is room for them: the query on the left, everything it produced on the right.
-  The breakpoint is where two columns still each hold a line of the sample LINQ without wrapping —
-  narrower than that, side by side is worse than stacked, so the sections stay plain blocks and the
-  single-column rules above apply unchanged.
-
-  The shell widens with the split, because the column that reads well at 1080px on its own needs about
-  twice that to sit next to a second one. minmax(0, 1fr) rather than 1fr: a grid track's automatic
-  minimum is its content, so a wide <pre> or table would otherwise push its column past half and take
-  the page's horizontal scrollbar with it.
-*/
-@media (min-width: 1200px) {
-    .shell {
-        max-width: 1600px;
-    }
-
-    .workspace {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-        gap: 1.6rem;
-        /* Each column is only as tall as its own content — the short one must not stretch to the tall one. */
-        align-items: start;
-    }
-
-    /*
-      The pane headings carry a top margin that separates them from the pane above. The first heading in
-      the output column has nothing above it, so that margin would drop the column below the editor's top
-      edge instead.
-    */
-    .pane-output > :first-child {
-        margin-top: 0;
-    }
-
-    .pane-output > :first-child h3 {
-        margin-top: 0;
-    }
-}
-
-/* Editor card */
-
-/*
-  Monaco does not size itself — its host element must have an explicit height or it lays out into a
-  ~0-height box (you see a clipped sliver and cannot click/type into it). StandaloneCodeEditor renders
-  this element with the CssClass we pass, so the height belongs here, not on a wrapper div.
-*/
-.scry-editor {
-    height: 360px;
-}
-
-.editor-card {
-    background: var(--panel);
-    border: 1px solid var(--border-strong);
-    border-radius: 10px;
+/* Present to a screen reader, absent to a sighted one: the icon buttons carry their label this way. */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
     overflow: hidden;
-    box-shadow: 0 1px 3px light-dark(rgb(24 30 41 / 0.06), rgb(0 0 0 / 0.4));
-}
-
-.editor-card:focus-within {
-    border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong));
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-strong) 15%, transparent);
-}
-
-.actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.6rem 0.7rem;
-    background: var(--panel-2);
-    border-top: 1px solid var(--border);
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 /* Buttons */
@@ -206,151 +126,73 @@ a {
 .btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.45em;
-    padding: 0.42rem 0.9rem;
-    font-family: inherit;
-    font-size: 0.85rem;
-    font-weight: 600;
-    line-height: 1.2;
+    gap: 0.4rem;
+    padding: 0.4rem 0.9rem;
+    font: inherit;
+    font-size: 0.86rem;
     color: var(--text);
     background: var(--panel);
     border: 1px solid var(--border-strong);
-    border-radius: 7px;
+    border-radius: 8px;
     cursor: pointer;
 }
 
 .btn:enabled:hover {
-    border-color: color-mix(in srgb, var(--accent) 45%, var(--border-strong));
-    background: color-mix(in srgb, var(--accent) 5%, var(--panel));
+    border-color: var(--accent);
+    color: var(--accent);
 }
 
 .btn:disabled {
-    opacity: 0.45;
+    opacity: 0.55;
     cursor: default;
 }
 
-.btn-primary {
-    color: #ffffff;
-    background: var(--accent-strong);
-    border-color: transparent;
-}
-
-.btn-primary:enabled:hover {
-    background: var(--accent-strong-hover);
-    border-color: transparent;
-}
-
-/* Sized in em so an icon tracks its button's font-size rather than a pixel box beside it. */
-.btn-icon {
-    width: 0.75em;
-    height: 0.75em;
-}
-
-.theme-icon {
-    width: 1em;
-    height: 1em;
-}
-
-/* A small, unobtrusive secondary button (copy, theme). Inherits color-scheme for light/dark. */
 .icon-btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.35em;
-    padding: 0.25rem 0.6rem;
-    font-family: inherit;
+    gap: 0.3rem;
+    padding: 0.2rem 0.45rem;
+    font: inherit;
     font-size: 0.78rem;
     color: var(--muted);
-    background: transparent;
+    background: none;
     border: 1px solid transparent;
     border-radius: 6px;
     cursor: pointer;
 }
 
-.icon-btn:hover {
-    color: var(--text);
-    background: var(--panel-2);
-    border-color: var(--border);
+.icon-btn svg {
+    width: 15px;
+    height: 15px;
 }
 
-.theme-toggle {
-    padding: 0.3rem 0.75rem;
-    color: var(--text);
-    background: var(--panel);
-    border-color: var(--border-strong);
-    border-radius: 999px;
+.icon-btn:enabled:hover {
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.icon-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.icon-btn.active {
+    color: var(--accent);
 }
 
 .btn:focus-visible,
 .icon-btn:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--accent-strong);
     outline-offset: 1px;
 }
 
-.loading-hint {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5em;
-    font-size: 0.85rem;
-}
-
-.loading-hint::before {
-    content: "";
-    width: 0.85em;
-    height: 0.85em;
-    border: 2px solid var(--border-strong);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-}
-
-/* Output panes */
-
-h3 {
-    margin: 1.7rem 0 0.55rem;
-    font-size: 0.73rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--muted);
-}
-
-.pane-head {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin: 1.7rem 0 0.55rem;
-}
-
-.pane-head h3 {
-    margin: 0;
-}
-
-.pane-head .icon-btn {
-    margin-left: auto;
-}
-
-/* The export formats: right-aligned in the Result heading row, as one compact list. */
-.exports {
-    margin: 0 0 0 auto;
-    font-size: 0.8rem;
-    color: var(--muted);
-}
-
-.exports a {
-    text-decoration: none;
-}
-
-.exports a:hover {
-    text-decoration: underline;
-}
+/* Highlighted panes */
 
 pre {
     margin: 0;
     padding: 0.85rem 1.05rem;
     background: var(--panel);
     color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 10px;
     font-family: var(--mono);
     font-size: 0.8rem;
     line-height: 1.6;
@@ -364,7 +206,7 @@ pre {
 */
 pre,
 .scalar,
-ul[data-testid="history"] a {
+.history-item {
     font-variant-ligatures: none;
 }
 
@@ -377,8 +219,8 @@ ul[data-testid="history"] a {
 /* Result */
 
 /*
-  The result table's scroll box. A table sizes to its content, so a row wider than the column it is in
-  overflows — and without this, out of the page rather than inside the pane.
+  The result table's scroll box. A table sizes to its content, so a row wider than the pane it is in
+  overflows — and without this, out of the shell rather than inside the pane.
 */
 .table-scroll {
     overflow-x: auto;
@@ -429,59 +271,34 @@ table[data-testid="result-table"] tbody tr:hover td {
     border-radius: 8px;
 }
 
-/* History */
-
-ul[data-testid="history"] {
-    list-style: none;
-    margin: 0;
-    padding: 0;
+.pane-head {
     display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.35rem 0.9rem;
 }
 
-ul[data-testid="history"] li {
-    display: flex;
-    gap: 0.25rem;
-    min-width: 0;
+.pane-head .icon-btn {
+    margin-left: auto;
 }
 
-ul[data-testid="history"] a {
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    padding: 0.32rem 0.75rem;
-    font-family: var(--mono);
-    font-size: 0.78rem;
-    color: var(--text);
+/* The export formats: right-aligned in the Result heading row, as one compact list. */
+.exports {
+    margin: 0 0 0 auto;
+    font-size: 0.8rem;
+    color: var(--muted);
+}
+
+.exports a {
     text-decoration: none;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 7px;
 }
 
-ul[data-testid="history"] a:hover {
-    color: var(--accent);
-    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+.exports a:hover {
+    text-decoration: underline;
 }
 
-/*
-  The per-entry remove. Sized to the glyph and unshrinkable, so it stays beside the entry it removes
-  rather than aligning into a column at the right margin, where the cross for a short entry would sit
-  a long way from it. It borrows .icon-btn for the hover and focus treatment and overrides only the
-  glyph's metrics; the hover color has to be redeclared after .icon-btn:hover to win, the two selectors
-  being of equal weight.
-*/
-.history-remove {
-    flex: none;
-    padding: 0 0.55rem;
-    font-size: 1rem;
-    line-height: 1;
-}
-
-.history-remove:hover {
-    color: light-dark(#d03a42, #e07777);
+.attachment-note {
+    font-size: 0.78rem;
 }
 
 /*

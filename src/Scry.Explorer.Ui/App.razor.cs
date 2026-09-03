@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Text;
 using System.Text.Json;
 using BlazorMonaco;
@@ -20,11 +20,10 @@ public partial class App
     IReadOnlyList<MetadataReference>? scryReferences;
     string? wireJson;
     string? resultJson;
-    List<string>? resultColumns;
-    List<List<string>>? resultRows;
-    // The same rows unflattened, as the server sent them — what the exports that keep a nested
-    // projection nested are written from, and what an attachment reads its row's key out of.
-    List<JsonElement>? payloadRows;
+    // The rows as a grid: the columns, the cells as rendered, and the server's own rows kept
+    // alongside them — what the exports that keep a nested projection nested are written from, and
+    // what an attachment reads its row's key out of.
+    ResultTable? result;
     // The attachments these rows can be fetched by, one extra column each. Empty for every result
     // whose source declares none, which is every result in a model without attachments.
     IReadOnlyList<AttachmentLink> attachmentLinks = [];
@@ -32,9 +31,6 @@ public partial class App
     // than raised as a page error: an attachment holding nothing, or one this caller may not have,
     // is an answer about that row and not a failure of the query.
     readonly Dictionary<(int Row, string Member), string> attachmentNotes = [];
-    // Whether the result is a flat grid: every cell a scalar. Projecting into a navigation nests an
-    // object inside the row instead, and a tree has no faithful CSV.
-    bool resultFlat;
     string? scalarResult;
     string? error;
     bool editorReady;
@@ -49,9 +45,37 @@ public partial class App
     string? sqlText;
     string? initialCode;
 
-    const string HistoryKey = "scry-history";
-    const string SharePrefix = "#q=";
-    List<string> history = [];
+    const string ThemeKey = "scry-theme";
+    const string TabsKey = "tabs";
+    const string PluginKey = "plugin";
+    const string PluginFlexKey = "pluginFlex";
+    const string SessionFlexKey = "sessionFlex";
+    const string WireFlexKey = "wireFlex";
+
+    readonly HistoryStore history = new();
+    readonly TabStore tabs = new(Sample);
+
+    // The three splits, as the first pane's share of its container. Defaults chosen so the schema
+    // reads without wrapping, the query and its output get half the width each, and the wire request
+    // is a strip rather than a second editor.
+    readonly PaneState pluginPane = new(0.24, 0.15, 0.6);
+    readonly PaneState sessionPane = new(0.5, 0.2, 0.85);
+    readonly PaneState wirePane = new(0.62, 0.2, 0.9);
+
+    PluginKind? visiblePlugin = PluginKind.Schema;
+    OutputTab activeOutput = OutputTab.Result;
+    bool wireExpanded = true;
+    bool refetching;
+    bool settingsOpen;
+    bool shortKeysOpen;
+    string? status;
+
+    ScryCallbacks callbacks = null!;
+    DotNetObjectReference<ScryCallbacks>? callbackReference;
+    Debouncer? persist;
+    // Assigned in OnInitialized, which runs before anything reads it. Only a host without an
+    // in-process runtime would leave it null, and Blazor WebAssembly always has one.
+    StorageService storage = null!;
 
     // Resolve the saved theme and any shared query synchronously, before the editor is created: the
     // theme has to be right at construction (no light-flash) and the editor takes its initial value
@@ -60,47 +84,46 @@ public partial class App
     {
         if (JS is IJSInProcessRuntime js)
         {
-            themeMode = js.Invoke<string?>("localStorage.getItem", "scry-theme") ?? "system";
+            storage = new(new JsStorageBackend(js));
+            // Outside the namespace: the inline script in index.html reads this literal key before
+            // first paint, which is what keeps a dark session from flashing light on the way in.
+            themeMode = storage.RawGet(ThemeKey) ?? "system";
             resolvedDark = ResolveDark(js);
             js.InvokeVoid("scry.setDataTheme", themeMode);
-            initialCode = SharedQuery(js.Invoke<string?>("scry.hash"));
+            initialCode = ShareLinkCodec.Decode(js.Invoke<string?>("scry.hash"));
+            LoadHistory();
+            RestoreShell();
+            persist = new();
+        }
+
+        // A shared link wins over the restored tabs: following one is a request to see that query,
+        // not to resume where this browser left off.
+        if (initialCode is not null)
+        {
+            tabs.Active.Query = initialCode;
         }
     }
 
-    /// <summary>
-    /// The query carried by a <c>#q=</c> fragment, or null. A shared link is untrusted input like any
-    /// other URL, so anything that does not decode is ignored rather than surfaced — the explorer opens
-    /// on its sample query instead of on an error.
-    /// </summary>
-    static string? SharedQuery(string? hash)
+    // The pane drag bars and the document-level shortcuts are wired once, after the first render has
+    // put them in the DOM. Every bar is always rendered — hidden by CSS when its pane is closed — so
+    // one pass here covers all three.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (hash is null ||
-            !hash.StartsWith(SharePrefix, StringComparison.Ordinal))
+        if (!firstRender)
         {
-            return null;
+            return;
         }
 
-        try
-        {
-            var encoded = Uri.UnescapeDataString(hash[SharePrefix.Length..]);
-            var padded = encoded.Replace('-', '+').Replace('_', '/');
-            // base64url drops the padding; Convert requires it.
-            padded = padded.PadRight(padded.Length + (3 - ((padded.Length + 3) % 4)), '=');
-            var code = Encoding.UTF8.GetString(Convert.FromBase64String(padded));
-            return code.Length == 0 ? null : code;
-        }
-        catch
-        {
-            return null;
-        }
+        callbacks = new();
+        callbacks.PaneResize += OnPaneResize;
+        callbacks.GlobalShortcut += OnGlobalShortcut;
+        callbackReference = DotNetObjectReference.Create(callbacks);
+        await JS.InvokeVoidAsync("scry.init", callbackReference);
+        await JS.InvokeVoidAsync("scry.registerGlobalShortcuts", Shortcut.Serialize(shortcuts));
+        await JS.InvokeVoidAsync("scry.trackPointer", "plugin-resizer", "plugin-resizer", "x");
+        await JS.InvokeVoidAsync("scry.trackPointer", "session-resizer", "session-resizer", "x");
+        await JS.InvokeVoidAsync("scry.trackPointer", "wire-resizer", "wire-resizer", "y");
     }
-
-    // base64url of the UTF-8 text: URL-safe, unpadded, and stable across the round trip above.
-    static string Encode(string code) =>
-        Convert.ToBase64String(Encoding.UTF8.GetBytes(code))
-            .Replace('+', '-')
-            .Replace('/', '_')
-            .TrimEnd('=');
 
     /// <summary>
     /// Writes the current query into the URL fragment and copies the resulting link. The query is placed in
@@ -110,7 +133,7 @@ public partial class App
     async Task Share()
     {
         var code = await editor.GetValue();
-        var url = await JS.InvokeAsync<string>("scry.setHash", SharePrefix + Encode(code));
+        var url = await JS.InvokeAsync<string>("scry.setHash", ShareLinkCodec.Encode(code));
         await Copy(url, "share");
     }
 
@@ -118,27 +141,23 @@ public partial class App
     /// Whether there is anything to export. The exports are of the rows the result table is showing,
     /// so an empty result offers none of them — and CSV additionally needs <see cref="resultFlat"/>.
     /// </summary>
-    bool CanExport => resultRows is { Count: > 0 };
+    bool CanExport => result is { Rows.Count: > 0 };
 
     /// <summary>Downloads the result table as CSV — the rows as rendered, in their displayed order.</summary>
     async Task DownloadCsv()
     {
-        if (resultColumns is null ||
-            resultRows is null)
+        if (result is null)
         {
             return;
         }
 
-        var builder = new StringBuilder();
-        builder.AppendLine(string.Join(",", resultColumns.Select(Csv)));
-        foreach (var row in resultRows)
-        {
-            builder.AppendLine(string.Join(",", row.Select(Csv)));
-        }
-
         // The BOM is what makes Excel read the UTF-8 as UTF-8 rather than as the local codepage, which
         // otherwise mangles any non-ASCII value in an exported column.
-        await Download("csv", "text/csv;charset=utf-8", builder.ToString(), bom: true);
+        await Download(
+            "csv",
+            "text/csv;charset=utf-8",
+            ResultExporter.Csv(result.Columns, result.Rows),
+            bom: true);
     }
 
     /// <summary>
@@ -147,13 +166,13 @@ public partial class App
     /// </summary>
     async Task DownloadJson()
     {
-        if (payloadRows is null)
+        if (result is null)
         {
             return;
         }
 
         // No BOM: a leading U+FEFF is not valid JSON, and strict parsers reject it.
-        await Download("json", "application/json", JsonSerializer.Serialize(payloadRows, indented), bom: false);
+        await Download("json", "application/json", ResultExporter.Json(result.PayloadRows), bom: false);
     }
 
     /// <summary>
@@ -162,21 +181,12 @@ public partial class App
     /// </summary>
     async Task DownloadXml()
     {
-        if (payloadRows is null)
+        if (result is null)
         {
             return;
         }
 
-        var builder = new StringBuilder();
-        builder.AppendLine("""<?xml version="1.0" encoding="utf-8"?>""");
-        builder.AppendLine("<results>");
-        foreach (var row in payloadRows)
-        {
-            WriteXml(builder, "row", row, depth: 1);
-        }
-
-        builder.Append("</results>");
-        await Download("xml", "application/xml", builder.ToString(), bom: false);
+        await Download("xml", "application/xml", ResultExporter.Xml(result.PayloadRows), bom: false);
     }
 
     Task Download(string extension, string type, string text, bool bom) =>
@@ -191,7 +201,7 @@ public partial class App
     async Task FetchAttachment(int row, AttachmentLink link)
     {
         if (introspection is null ||
-            payloadRows is null)
+            result is null)
         {
             return;
         }
@@ -203,7 +213,7 @@ public partial class App
         {
             // The linker only offers a member whose keys are columns of the result, so a row missing
             // one is a row the server shaped differently than its schema describes.
-            if (!payloadRows[row].TryGetProperty(column, out var value))
+            if (!result.PayloadRows[row].TryGetProperty(column, out var value))
             {
                 attachmentNotes[(row, link.Member)] = "no key";
                 return;
@@ -304,110 +314,6 @@ public partial class App
         return builder.ToString();
     }
 
-    // RFC 4180: a field containing a comma, a quote, or a newline is quoted, and quotes inside it are
-    // doubled. Everything else is written as-is.
-    static string Csv(string value)
-    {
-        if (value.IndexOfAny([',', '"', '\n', '\r']) < 0)
-        {
-            return value;
-        }
-
-        return $"\"{value.Replace("\"", "\"\"")}\"";
-    }
-
-    static void WriteXml(StringBuilder builder, string name, JsonElement value, int depth)
-    {
-        var indent = new string(' ', depth * 2);
-
-        // An absent value stays an empty element rather than being dropped, so every row keeps the
-        // same shape.
-        if (value.ValueKind == JsonValueKind.Null)
-        {
-            builder.Append(indent).Append('<').Append(name).AppendLine(" />");
-            return;
-        }
-
-        if (value.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array))
-        {
-            builder.Append(indent).Append('<').Append(name).Append('>')
-                .Append(Xml(value.ToString()))
-                .Append("</").Append(name).AppendLine(">");
-            return;
-        }
-
-        builder.Append(indent).Append('<').Append(name).AppendLine(">");
-        if (value.ValueKind == JsonValueKind.Object)
-        {
-            foreach (var property in value.EnumerateObject())
-            {
-                WriteXml(builder, XmlName(property.Name), property.Value, depth + 1);
-            }
-        }
-        else
-        {
-            foreach (var item in value.EnumerateArray())
-            {
-                WriteXml(builder, "item", item, depth + 1);
-            }
-        }
-
-        builder.Append(indent).Append("</").Append(name).AppendLine(">");
-    }
-
-    // Text content: the three characters that cannot appear literally are escaped, and the control
-    // characters XML 1.0 forbids outright are dropped — a value that came out of a column should not
-    // be able to produce a document no parser will open.
-    static string Xml(string value)
-    {
-        var builder = new StringBuilder(value.Length);
-        foreach (var character in value)
-        {
-            switch (character)
-            {
-                case '&':
-                    builder.Append("&amp;");
-                    break;
-                case '<':
-                    builder.Append("&lt;");
-                    break;
-                case '>':
-                    builder.Append("&gt;");
-                    break;
-                default:
-                    if (character is '\t' or '\n' or '\r' ||
-                        character >= ' ')
-                    {
-                        builder.Append(character);
-                    }
-
-                    break;
-            }
-        }
-
-        return builder.ToString();
-    }
-
-    // Member names come from the caller's own C# identifiers, so they already are valid XML names —
-    // but the rows are the server's response, and an export should never be able to emit a name that
-    // does not parse. Anything outside a name character becomes '_'.
-    static string XmlName(string name)
-    {
-        if (name.Length == 0)
-        {
-            return "_";
-        }
-
-        var builder = new StringBuilder(name.Length);
-        builder.Append(char.IsLetter(name[0]) || name[0] == '_' ? name[0] : '_');
-        foreach (var character in name.AsSpan(1))
-        {
-            builder.Append(char.IsLetterOrDigit(character) || character is '_' or '-' or '.' ? character : '_');
-        }
-
-        return builder.ToString();
-    }
-
     /// <summary>
     /// Asks the server for the SQL the current query would run. The same translation Run uses produces
     /// the request, so the SQL shown belongs to the query as written — and the server validates and
@@ -444,6 +350,8 @@ public partial class App
                     ? message.GetString()
                     : body;
             }
+
+            ShowOutput(OutputTab.Sql);
         }
         catch (Exception exception)
         {
@@ -455,7 +363,6 @@ public partial class App
 
     protected override async Task OnInitializedAsync()
     {
-        history = await LoadHistory();
         try
         {
             var json = await Http.GetStringAsync("introspect");
@@ -519,10 +426,7 @@ public partial class App
         try
         {
             error = null;
-            resultColumns = null;
-            resultRows = null;
-            payloadRows = null;
-            resultFlat = false;
+            result = null;
             scalarResult = null;
             sqlText = null;
             attachmentLinks = [];
@@ -541,7 +445,10 @@ public partial class App
             var json = ScryJson.Serialize(request);
             wireJson = Prettify(json);
 
-            using var response = await SendQuery(json, ScryClient.RequiresBody(request));
+            var started = Stopwatch.GetTimestamp();
+            var (response, method) = await SendQuery(json, ScryClient.RequiresBody(request));
+            using var owned = response;
+            var elapsed = Stopwatch.GetElapsedTime(started);
 
             // Not read as a string: a result carrying [BinaryTransfer] values arrives as multipart,
             // and the reader folds its parts back into the envelope as base64 — so a diverted member
@@ -551,8 +458,8 @@ public partial class App
 
             if (response.IsSuccessStatusCode)
             {
-                AddHistory(code);
-                await SaveHistory();
+                history.Add(code);
+                SaveHistory();
                 var parsed = ScryJson.DeserializeResponse(body);
                 switch (parsed.Kind)
                 {
@@ -571,11 +478,16 @@ public partial class App
                 }
 
                 // Rows only: a folded terminal has one value rather than a row to fetch by.
-                if (resultRows is not null)
+                if (result is not null)
                 {
                     attachmentLinks = AttachmentLinker.Link(introspection, request);
                 }
             }
+
+            status = Status((int) response.StatusCode, method, elapsed);
+            // A run that returned no rows still returned something; the response is what there is to
+            // read, so it is what the column opens on.
+            ShowOutput(result is not null || scalarResult is not null ? OutputTab.Result : OutputTab.Response);
         }
         catch (Exception exception)
         {
@@ -585,10 +497,30 @@ public partial class App
         StateHasChanged();
     }
 
+    // The outcome, the transport it took, how many rows came back, and how long it took. The method
+    // is worth a word of its own: a short query goes as a URL and a long one as a body, and which one
+    // a request took has never been visible anywhere else.
+    string Status(int statusCode, string method, TimeSpan elapsed)
+    {
+        var parts = new List<string>(4)
+        {
+            statusCode.ToString(CultureInfo.InvariantCulture),
+            method
+        };
+
+        if (result is not null)
+        {
+            parts.Add(result.Rows.Count == 1 ? "1 row" : $"{result.Rows.Count} rows");
+        }
+
+        parts.Add($"{elapsed.TotalMilliseconds:F0} ms");
+        return string.Join(" · ", parts);
+    }
+
     StandaloneEditorConstructionOptions EditorOptions(StandaloneCodeEditor _) => new()
     {
         Language = "csharp",
-        Value = initialCode ?? Sample,
+        Value = tabs.Active.Query,
         AutomaticLayout = true,
         Theme = resolvedDark ? "vs-dark" : "vs",
         Minimap = new EditorMinimapOptions { Enabled = false },
@@ -611,7 +543,9 @@ public partial class App
         // option is set from JS because the typed one does not reach Monaco; see scry.js.
         await JS.InvokeVoidAsync("scry.disableWordSuggestions");
 
-        // Ctrl/Cmd+Enter runs the query from inside the editor.
+        // The commands that belong to the editor, so they follow its focus and appear in its context
+        // menu. The ones that do not — the panes, the dialogs — are document-level instead; see
+        // App.Shell.cs.
         await editor.AddAction(new ActionDescriptor
         {
             Id = "scry-run",
@@ -620,6 +554,16 @@ public partial class App
             Keybindings = [(int)KeyMod.CtrlCmd | (int)BlazorMonaco.KeyCode.Enter],
             Run = _ => InvokeAsync(Run)
         });
+
+        await editor.AddAction(new ActionDescriptor
+        {
+            Id = "scry-copy",
+            Label = "Copy Scry query",
+            ContextMenuGroupId = "navigation",
+            Keybindings = [(int)KeyMod.CtrlCmd | (int)KeyMod.Shift | (int)BlazorMonaco.KeyCode.KeyC],
+            Run = _ => InvokeAsync(CopyQuery)
+        });
+
 
         await MoveCaretToEnd();
         await TryRegister();
@@ -650,18 +594,28 @@ public partial class App
         themeMode == "dark" || (themeMode != "light" && js.Invoke<bool>("scry.systemDark"));
 
     // Cycle System → Light → Dark, persist, and retint both the page (data-theme) and Monaco (global).
-    async Task CycleTheme()
+    Task CycleTheme()
     {
         themeMode = themeMode switch { "system" => "light", "light" => "dark", _ => "system" };
+        return ApplyTheme();
+    }
+
+    // Retints the page and the editor together: the page follows data-theme, Monaco follows its own
+    // registered theme, and the two have to be set from the same decision or they disagree.
+    async Task ApplyTheme()
+    {
         if (JS is IJSInProcessRuntime js)
         {
-            js.InvokeVoid("localStorage.setItem", "scry-theme", themeMode);
+            storage.RawSet(ThemeKey, themeMode);
             js.InvokeVoid("scry.setDataTheme", themeMode);
             resolvedDark = ResolveDark(js);
         }
 
         await BlazorMonaco.Editor.Global.SetTheme(JS, resolvedDark ? "vs-dark" : "vs");
     }
+
+    Task CopyQuery() =>
+        editor.GetValue().ContinueWith(_ => Copy(_.Result, "query"), TaskScheduler.Current).Unwrap();
 
     async Task Copy(string text, string key)
     {
@@ -689,6 +643,22 @@ public partial class App
         var provider = new CompletionItemProvider(["."], ProvideCompletions);
         await BlazorMonaco.Languages.Global.RegisterCompletionItemProvider(JS, "csharp", provider);
         await BlazorMonaco.Languages.Global.RegisterHoverProviderAsync(JS, "csharp", ProvideHover);
+
+        // Registered here rather than with the other editor actions because it depends on both halves
+        // this method waits for: the editor to attach to, and the contract to say whether the server
+        // offers the preview at all. The editor does not carry a keybinding for a button that is not
+        // there.
+        if (introspection?.SqlPreview == true)
+        {
+            await editor.AddAction(new ActionDescriptor
+            {
+                Id = "scry-sql",
+                Label = "Show Scry SQL",
+                ContextMenuGroupId = "navigation",
+                Keybindings = [(int) KeyMod.CtrlCmd | (int) KeyMod.Shift | (int) BlazorMonaco.KeyCode.KeyQ],
+                Run = _ => InvokeAsync(ShowSql)
+            });
+        }
 
         ready = true;
         StateHasChanged();
@@ -762,6 +732,12 @@ public partial class App
     // keystrokes coalesces into a single Roslyn pass, and a superseded run is dropped.
     async Task OnContentChanged(ModelContentChangedEvent _)
     {
+        if (editorReady)
+        {
+            tabs.Active.Query = await editor.GetValue();
+            SchedulePersist();
+        }
+
         if (workspace is null)
         {
             return;
@@ -810,77 +786,54 @@ public partial class App
         }
     }
 
-    async Task<List<string>> LoadHistory()
+    // A value under the legacy key is a plain array of query strings from before entries carried
+    // labels and favorites. It is adopted once and then rewritten in the current shape, so an upgrade
+    // does not discard anyone's history.
+    void LoadHistory()
     {
-        try
+        var json = storage.Get(HistoryStore.Key);
+        if (json is not null)
         {
-            var json = await JS.InvokeAsync<string?>("localStorage.getItem", HistoryKey);
-            return string.IsNullOrEmpty(json) ? [] : JsonSerializer.Deserialize<List<string>>(json) ?? [];
+            history.Load(json);
+            return;
         }
-        catch
-        {
-            return [];
-        }
-    }
 
-    Task SaveHistory() =>
-        JS.InvokeVoidAsync("localStorage.setItem", HistoryKey, JsonSerializer.Serialize(history)).AsTask();
-
-    void AddHistory(string query)
-    {
-        query = query.Trim();
-        if (query.Length == 0)
+        var legacy = storage.RawGet(HistoryStore.LegacyKey);
+        if (legacy is null)
         {
             return;
         }
 
-        history.Remove(query);
-        history.Insert(0, query);
-        if (history.Count > 10)
-        {
-            history.RemoveRange(10, history.Count - 10);
-        }
+        history.LoadLegacy(legacy);
+        SaveHistory();
+        storage.RawRemove(HistoryStore.LegacyKey);
     }
 
-    // The list shows a query on one line; the stored text keeps its formatting for the editor. Lines
-    // are joined by trimming each and appending a continuation (a line starting with '.') directly, so
-    // a multi-line query reads as the fluent chain it is rather than carrying its indentation along as
-    // stray spaces before every operator.
-    static string HistoryLabel(string query)
+    void SaveHistory() =>
+        storage.Set(HistoryStore.Key, history.Serialize());
+
+    void LabelHistory((string Query, string Label) edit)
     {
-        var builder = new StringBuilder();
-        foreach (var line in query.Split('\n'))
-        {
-            var trimmed = line.Trim();
-            if (trimmed.Length == 0)
-            {
-                continue;
-            }
-
-            if (builder.Length > 0 &&
-                !trimmed.StartsWith('.'))
-            {
-                builder.Append(' ');
-            }
-
-            builder.Append(trimmed);
-        }
-
-        return builder.ToString();
+        history.SetLabel(edit.Query, edit.Label);
+        SaveHistory();
     }
 
-    // Removal is by text rather than by index: entries are deduped on exactly that, so it identifies
-    // one, and it survives the list having moved under a render the click raced.
-    Task RemoveHistory(string query)
+    void FavoriteHistory((string Query, bool Favorite) edit)
+    {
+        history.SetFavorite(edit.Query, edit.Favorite);
+        SaveHistory();
+    }
+
+    void RemoveHistory(string query)
     {
         history.Remove(query);
-        return SaveHistory();
+        SaveHistory();
     }
 
-    Task ClearHistory()
+    void ClearHistory()
     {
         history.Clear();
-        return SaveHistory();
+        SaveHistory();
     }
 
     async Task LoadQuery(string query)
@@ -902,7 +855,7 @@ public partial class App
     /// because this app is built and embedded when Scry is: it can carry no per-deployment value of its
     /// own, and it has the whole contract in hand before it sends anything.
     /// </remarks>
-    Task<HttpResponseMessage> SendQuery(string json, bool requiresBody)
+    async Task<(HttpResponseMessage Response, string Method)> SendQuery(string json, bool requiresBody)
     {
         var utf8 = Encoding.UTF8.GetBytes(json);
         var encoded = QueryUrl.Encode(utf8);
@@ -910,11 +863,11 @@ public partial class App
         if (requiresBody ||
             !QueryUrl.WithinLimit(encoded, introspection.QueryUrlLimit))
         {
-            return Http.PostAsync(endpoint, new StringContent(json, Encoding.UTF8, "application/json"));
+            return (await Http.PostAsync(endpoint, new StringContent(json, Encoding.UTF8, "application/json")), "POST");
         }
 
         var separator = endpoint.Contains('?') ? '&' : '?';
-        return Http.GetAsync($"{endpoint}{separator}{QueryUrl.Parameter}={encoded}");
+        return (await Http.GetAsync($"{endpoint}{separator}{QueryUrl.Parameter}={encoded}"), "GET");
     }
 
     static readonly JsonSerializerOptions indented = new() { WriteIndented = true };
@@ -932,32 +885,8 @@ public partial class App
         }
     }
 
-    void BuildTable(JsonElement payload)
-    {
-        if (payload.ValueKind != JsonValueKind.Array)
-        {
-            return;
-        }
-
-        var columns = new List<string>();
-        var payloads = new List<JsonElement>();
-        foreach (var row in payload.EnumerateArray())
-        {
-            if (row.ValueKind != JsonValueKind.Object)
-            {
-                continue;
-            }
-
-            if (columns.Count == 0)
-            {
-                columns.AddRange(row.EnumerateObject().Select(_ => _.Name));
-            }
-
-            payloads.Add(row);
-        }
-
-        Publish(columns, payloads);
-    }
+    void BuildTable(JsonElement payload) =>
+        result = ResultTable.FromList(payload);
 
     // A Single result is one projected object (or null) — render it as a one-row table, reusing the
     // list-result markup; null / a bare scalar falls back to the scalar line.
@@ -975,21 +904,7 @@ public partial class App
             return;
         }
 
-        Publish(payload.EnumerateObject().Select(_ => _.Name).ToList(), [payload]);
-    }
-
-    // Renders the rows for display and classifies them. A cell that is itself an object or an array
-    // came from a projection into a navigation: the result is a tree rather than a grid, which is
-    // what decides whether CSV is on offer.
-    void Publish(List<string> columns, List<JsonElement> rows)
-    {
-        resultColumns = columns;
-        payloadRows = rows;
-        resultRows = rows
-            .Select(_ => _.EnumerateObject().Select(property => property.Value.ToString()).ToList())
-            .ToList();
-        resultFlat = rows.All(row => row.EnumerateObject()
-            .All(_ => _.Value.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array)));
+        result = ResultTable.FromRow(payload);
     }
 
     static int ToOffset(string text, int line, int column)
