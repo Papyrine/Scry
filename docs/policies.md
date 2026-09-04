@@ -585,6 +585,8 @@ The rows are decided over the raw set, not through the source's other policies: 
 
 Answers live in `MemoryCachedPolicyStore` by default — this process, for as long as it runs, so each server warms its own and a restart decides every row again. A deployment where that costs too much implements `ICachedPolicyStore` and sets `options.CachedPolicyStore`.
 
+A store of its own has one rule past atomicity to keep. Deciding takes long enough for the host to speak meanwhile, so a scope carries a `Generation` that moves on every invalidation, and a round of deciding hands back the generation it read at the start. An update against an older one is a round the host overtook: where the scope was forgotten since, the decisions describe rows the host said to forget and are dropped whole; where rows were invalidated since, the decisions stand but resolve nothing pending, since the keys the host re-pended are among the ones the round claims to have answered. The adapter then decides again, so the answer a query gets already reflects what the host said during it. The shipped store does exactly this, and `MemoryCachedPolicyStoreTests` spells the cases out.
+
 The type needs a single-member primary key, derived the way an [attachment's](attachments.md) is and checked against the real one at startup; a POCO source or a keyless view has nowhere to file answers and is refused. The version column need not be exposed to clients — `[QueryIgnore]` it and it stays server-side machinery.
 
 

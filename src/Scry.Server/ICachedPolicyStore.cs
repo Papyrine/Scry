@@ -23,6 +23,15 @@ public interface ICachedPolicyStore
     /// atomic per scope: a reader takes the whole state, and one assembled from halves of two updates
     /// would answer with rows that were never true together.
     /// </summary>
+    /// <remarks>
+    /// The update names the <see cref="CachedPolicyScope.Generation"/> it was decided against, and
+    /// deciding takes long enough for the host to speak meanwhile. A store must honour what it said:
+    /// where the scope was forgotten since (<see cref="InvalidateScope"/>), the decisions describe
+    /// rows the host told it to forget and are dropped whole; where rows were invalidated since
+    /// (<see cref="InvalidateRows"/>), the decisions stand but nothing pending is resolved by them,
+    /// since the keys the host re-pended are among the ones this round claims to have answered.
+    /// Only an update against the current generation resolves what it decided.
+    /// </remarks>
     void Apply(string policy, string scope, CachedPolicyUpdate update);
 
     /// <summary>Forgets a scope, so the next read of it decides every row again.</summary>
@@ -52,6 +61,14 @@ public sealed record CachedPolicyScope(
 {
     /// <summary>A scope nothing is known about: no keys allowed, no watermark, nothing pending.</summary>
     public static CachedPolicyScope Empty { get; } = new([], null, []);
+
+    /// <summary>
+    /// Moves every time the host invalidates something in this scope — rows or the whole of it — and
+    /// never otherwise. A round of deciding reads it first and hands it back with its
+    /// <see cref="CachedPolicyUpdate"/>, which is how the store tells a round decided before an
+    /// invalidation from one decided after. Zero for a scope nothing has ever been said about.
+    /// </summary>
+    public long Generation { get; init; }
 }
 
 /// <summary>What one round of deciding produced.</summary>
@@ -64,4 +81,12 @@ public sealed record CachedPolicyScope(
 public sealed record CachedPolicyUpdate(
     IReadOnlyList<(object Key, bool Allowed)> Decisions,
     object? Watermark,
-    IReadOnlyCollection<object> Resolved);
+    IReadOnlyCollection<object> Resolved)
+{
+    /// <summary>
+    /// The <see cref="CachedPolicyScope.Generation"/> the decisions were made against — what
+    /// <see cref="ICachedPolicyStore.Get"/> returned when the round began, or zero where it returned
+    /// nothing. See <see cref="ICachedPolicyStore.Apply"/> for what a store does with a stale one.
+    /// </summary>
+    public long Generation { get; init; }
+}
