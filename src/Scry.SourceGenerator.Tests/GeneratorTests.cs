@@ -632,6 +632,41 @@ public class GeneratorTests
         Assert.That(GeneratedSources(annotated), Is.EqualTo(GeneratedSources(bare)));
     }
 
+    // Refused rather than classified as whichever attribute the reader met last: the server reads
+    // them in an order of its own, and the two would disagree about what the type is.
+    [Test]
+    public void ATypeOptedInTwiceIsRefused()
+    {
+        const string model =
+            """
+            using Scry;
+
+            namespace Sample.Model;
+
+            [Queryable]
+            [QueryableComplex]
+            public class Both
+            {
+                public int Id { get; set; }
+            }
+
+            [Queryable]
+            public class Fine
+            {
+                public int Id { get; set; }
+            }
+            """;
+
+        var result = RunGenerator(model).GetRunResult();
+
+        var diagnostic = result.Diagnostics.Single(_ => _.Id == "SCRY008");
+        Assert.Multiple(() =>
+        {
+            Assert.That(diagnostic.GetMessage(), Does.StartWith("'Both' carries [Queryable] and [QueryableComplex]."));
+            Assert.That(result.Results.SelectMany(_ => _.GeneratedSources), Is.Empty);
+        });
+    }
+
     static List<string> GeneratedSources(string modelSource) =>
         RunGenerator(modelSource)
             .GetRunResult()

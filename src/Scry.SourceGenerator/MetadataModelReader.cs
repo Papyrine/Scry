@@ -34,10 +34,20 @@ static class MetadataModelReader
 
             var decoder = new SignatureDecoder();
             var discovered = new List<Discovered>();
+            var conflicts = ImmutableArray.CreateBuilder<string>();
             foreach (var handle in reader.TypeDefinitions)
             {
                 var type = reader.GetTypeDefinition(handle);
-                if (TryClassify(reader, type, decoder, out var kind, out var sourceName))
+                if (!TryClassify(reader, type, decoder, out var kind, out var sourceName, out var conflict))
+                {
+                    if (conflict is not null)
+                    {
+                        conflicts.Add($"'{reader.GetString(type.Name)}' carries {conflict}");
+                    }
+
+                    continue;
+                }
+
                 {
                     var simpleName = reader.GetString(type.Name);
                     var fullName = FullName(reader, type);
@@ -74,11 +84,11 @@ static class MetadataModelReader
                         IsSensitive: entry.IsSensitive));
             }
 
-            return new(null, new(DeriveKeys(WithoutInheritedMembers(sources))), new(enums.Values.ToImmutableArray()));
+            return new(null, new(DeriveKeys(WithoutInheritedMembers(sources))), new(enums.Values.ToImmutableArray()), new(conflicts.ToImmutable()));
         }
         catch (Exception exception)
         {
-            return new($"Failed to read model assembly '{dllPath}': {exception.Message}", new([]), new([]));
+            return new($"Failed to read model assembly '{dllPath}': {exception.Message}", new([]), new([]), new([]));
         }
     }
 
@@ -465,14 +475,17 @@ static class MetadataModelReader
         TypeDefinition type,
         SignatureDecoder decoder,
         out SourceKind kind,
-        out string sourceName)
+        out string sourceName,
+        out string? conflict)
     {
         kind = default;
         sourceName = reader.GetString(type.Name);
+        conflict = null;
 
         SourceKind? found = null;
         var keyless = false;
         string? configuredName = null;
+        List<string>? optIns = null;
 
         foreach (var attributeHandle in type.GetCustomAttributes())
         {
@@ -480,20 +493,24 @@ static class MetadataModelReader
             switch (AttributeTypeName(reader, attribute))
             {
                 case queryableAttribute:
-                    found ??= SourceKind.Entity;
-                    configuredName ??= NameArgument(attribute, decoder);
+                    found = SourceKind.Entity;
+                    configuredName = NameArgument(attribute, decoder);
+                    (optIns ??= []).Add("[Queryable]");
                     break;
                 case queryableViewAttribute:
                     found = SourceKind.View;
-                    configuredName = NameArgument(attribute, decoder) ?? configuredName;
+                    configuredName = NameArgument(attribute, decoder);
+                    (optIns ??= []).Add("[QueryableView]");
                     break;
                 case queryablePocoAttribute:
                     found = SourceKind.Poco;
-                    configuredName = NameArgument(attribute, decoder) ?? configuredName;
+                    configuredName = NameArgument(attribute, decoder);
+                    (optIns ??= []).Add("[QueryablePoco]");
                     break;
                 case queryableComplexAttribute:
                     // A complex type has no Name (it is not a source); its model name is the type name.
                     found = SourceKind.Complex;
+                    (optIns ??= []).Add("[QueryableComplex]");
                     break;
                 case keylessAttribute:
                     keyless = true;
@@ -503,6 +520,15 @@ static class MetadataModelReader
 
         if (found is not { } sourceKind)
         {
+            return false;
+        }
+
+        // A type opts in as exactly one thing. Read as nothing rather than as whichever attribute
+        // came last: the server reads them in an order of its own, and the two would disagree about
+        // what the type is, with a stale stamp as the only symptom. Reported by the generator instead.
+        if (optIns!.Count > 1)
+        {
+            conflict = string.Join(" and ", optIns);
             return false;
         }
 

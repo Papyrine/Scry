@@ -449,6 +449,7 @@ sealed class Schema
 
         foreach (var type in contextType.Assembly.GetTypes())
         {
+            EnsureOneOptIn(type);
             if (TryClassify(type, out var kind, out var name))
             {
                 EnsureNameIsIdentifier(type, name);
@@ -828,6 +829,38 @@ sealed class Schema
         }
 
         return false;
+    }
+
+    // A type opts in as exactly one thing. TryClassify reads the attributes in an order of its own and
+    // the generator in another, so a type carrying two would be one kind here and another there, with
+    // every client reporting itself stale as the only symptom. The generator refuses it as SCRY008.
+    internal static void EnsureOneOptIn(Type type)
+    {
+        List<string>? optIns = null;
+        if (type.HasAttribute<QueryableAttribute>(inherit: false))
+        {
+            (optIns ??= []).Add("[Queryable]");
+        }
+
+        if (type.HasAttribute<QueryableViewAttribute>(inherit: false))
+        {
+            (optIns ??= []).Add("[QueryableView]");
+        }
+
+        if (type.HasAttribute<QueryablePocoAttribute>(inherit: false))
+        {
+            (optIns ??= []).Add("[QueryablePoco]");
+        }
+
+        if (type.HasAttribute<QueryableComplexAttribute>(inherit: false))
+        {
+            (optIns ??= []).Add("[QueryableComplex]");
+        }
+
+        if (optIns is {Count: > 1})
+        {
+            throw new($"'{type.Name}' carries {string.Join(" and ", optIns)}. A type opts in as exactly one of [Queryable], [QueryableView], [QueryablePoco], or [QueryableComplex].");
+        }
     }
 
     // A blank Name is treated as unset, matching the generator.

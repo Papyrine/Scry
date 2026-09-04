@@ -96,11 +96,31 @@ public class ScryGenerator :
         DiagnosticSeverity.Error,
         true);
 
+    static readonly DiagnosticDescriptor conflictingOptIn = new(
+        "SCRY008",
+        "A type opts in more than once",
+        "{0}. A type opts in as exactly one of [Queryable], [QueryableView], [QueryablePoco], or [QueryableComplex].",
+        "Scry",
+        DiagnosticSeverity.Error,
+        true);
+
     static void Emit(SourceProductionContext context, ModelExtract extract)
     {
         if (extract.Error is { } error)
         {
             context.ReportDiagnostic(Diagnostic.Create(readFailed, Location.None, error));
+            return;
+        }
+
+        // Refused at startup by the server too, and nothing is emitted: the surface would be one the
+        // server does not agree with, which a client would only learn as a stale stamp.
+        if (extract.Conflicts.Length > 0)
+        {
+            foreach (var conflict in extract.Conflicts)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(conflictingOptIn, Location.None, conflict));
+            }
+
             return;
         }
 

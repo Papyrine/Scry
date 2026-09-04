@@ -1,3 +1,5 @@
+using System.Reflection.Emit;
+
 /// <summary>
 /// The generator reads a model as metadata and the server reads it by reflection, and the two must
 /// describe the same surface: a client generated from one is validated by the other, and the stamp
@@ -55,6 +57,22 @@ public class LockstepTests
 
     // What the server refuses because the generator could not read it. Plain fixture types, opted
     // into nothing, so they poison no schema built over this assembly.
+    // Built at runtime rather than declared here: a type carrying an opt-in attribute in this assembly
+    // would be swept into every schema built over it, and this one is refused on sight.
+    [Test]
+    public void RefusesATypeOptedInTwice()
+    {
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(new("OptedInTwice"), AssemblyBuilderAccess.Run);
+        var builder = assembly.DefineDynamicModule("OptedInTwice").DefineType("Both", TypeAttributes.Public);
+        builder.SetCustomAttribute(new(typeof(QueryableAttribute).GetConstructor([])!, []));
+        builder.SetCustomAttribute(new(typeof(QueryableComplexAttribute).GetConstructor([])!, []));
+        var type = builder.CreateType();
+
+        var exception = Assert.Throws<Exception>(() => Schema.EnsureOneOptIn(type));
+
+        Assert.That(exception!.Message, Does.Contain("'Both' carries [Queryable] and [QueryableComplex]"));
+    }
+
     [Test]
     public void RefusesAMemberInheritedFromAnotherAssembly()
     {

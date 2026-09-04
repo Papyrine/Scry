@@ -2,7 +2,7 @@
 
 `Scry.Annotations` (namespace `Scry`, targeting `netstandard2.0`) holds the attributes that define the allow-list. They are applied to the **server** model. Both the source generator and the server runtime read the same attributes and derive the same surface from them.
 
-The model is **default-deny**: a type that carries none of the opt-in attributes is invisible to clients, and a request naming it is rejected as an unknown source.
+The model is **default-deny**: a type that carries none of the opt-in attributes is invisible to clients, and a request naming it is rejected as an unknown source. A type opts in as exactly one of them: carrying two is refused by the generator (`SCRY008`) and at server startup, since the two sides would otherwise classify the type differently.
 
 | Attribute | Target | Effect |
 | --- | --- | --- |

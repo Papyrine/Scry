@@ -3,12 +3,18 @@
 /// (via <see cref="EquatableArray{T}"/>) lets the incremental pipeline skip regeneration when an
 /// unrelated change to the DLL leaves the queryable surface unchanged.
 /// </summary>
+/// <param name="Conflicts">
+/// One line per type that opted in more than once, naming the type and the attributes it carries.
+/// Such a type is read as nothing: the two sides would otherwise classify it differently, so it is
+/// reported instead of guessed at.
+/// </param>
 record struct ModelExtract(
     string? Error,
     EquatableArray<SourceInfo> Sources,
-    EquatableArray<EnumInfo> Enums)
+    EquatableArray<EnumInfo> Enums,
+    EquatableArray<string> Conflicts)
 {
-    public static readonly ModelExtract Empty = new(null, new([]), new([]));
+    public static readonly ModelExtract Empty = new(null, new([]), new([]), new([]));
 }
 
 /// <summary>A queryable source: its wire name, the generated model name, and its members.</summary>
