@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.Http;
-
 /// <summary>
 /// A row policy whose decision is too expensive to make in SQL. The answers are remembered and the
 /// query carries a membership test over them; what the tests here pin is when a decision is actually
