@@ -17,5 +17,5 @@ public sealed record InSourceNode(
     Node Value,
     string Root,
     Node Selector,
-    Node? Predicate) :
+    Node? Predicate = null) :
     Node;

@@ -20,6 +20,20 @@ public sealed record JoinOp(
     IReadOnlyList<JoinMember> Result) :
     QueryOp
 {
+    // The wire's constructor: only the members a request has to carry. The inner predicate may be absent, and
+    // reaches the reader through its init accessor instead, since an optional parameter would have to
+    // trail and the declared order is the one callers write.
+    [JsonConstructor]
+    public JoinOp(
+        string root,
+        JoinKind kind,
+        Node outerKey,
+        Node innerKey,
+        IReadOnlyList<JoinMember> result) :
+        this(root, kind, outerKey, innerKey, null, result)
+    {
+    }
+
     /// <summary>
     /// The inner side's own pipeline, present when it carries more than a predicate: filters, then an
     /// ordering bounded by Skip/Take. Replaces <see cref="InnerPredicate"/> — a request carries one

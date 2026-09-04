@@ -6,7 +6,7 @@ namespace Scry;
 /// <see cref="AggregateFn.Join"/> alone. Only valid inside a projection that follows a group
 /// operator.
 /// </summary>
-public sealed record AggregateNode(AggregateFn Function, Node? Selector, string? Separator = null) :
+public sealed record AggregateNode(AggregateFn Function, Node? Selector = null, string? Separator = null) :
     Node
 {
     /// <summary>

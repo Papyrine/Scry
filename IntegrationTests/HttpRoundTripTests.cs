@@ -569,6 +569,35 @@ public class HttpRoundTripTests
         Assert.That(response.Headers.GetValues("Scry-Schema-Stamp").Single(), Is.EqualTo(ScryQuery.SchemaStamp));
     }
 
+    // A body missing a member an operator requires is refused where an unparseable one is: a 400
+    // naming the member, never a server fault a validator reached by dereferencing the default.
+    [Test]
+    public async Task IncompleteBodyIsRejected()
+    {
+        var json =
+            """
+            {
+              "version": 1,
+              "root": "Employee",
+              "pipeline": [
+                {
+                  "$type": "where"
+                }
+              ]
+            }
+            """;
+
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var response = await http.PostAsync("/api/query", content);
+
+        var error = ScryJson.TryDeserializeError(await response.Content.ReadAsByteArrayAsync());
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+            Assert.That(error!.Error, Does.Contain("predicate"));
+        });
+    }
+
     [Test]
     public async Task UrlQueryWithoutTheParameterIsRejected()
     {

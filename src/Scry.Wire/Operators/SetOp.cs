@@ -36,6 +36,15 @@ public sealed record SetOp(
     Projection Projection) :
     QueryOp
 {
+    // The wire's constructor: only the members a request has to carry. The predicate may be absent, and
+    // reaches the reader through its init accessor instead, since an optional parameter would have to
+    // trail and the declared order is the one callers write.
+    [JsonConstructor]
+    public SetOp(SetKind kind, string root, Projection projection) :
+        this(kind, root, null, projection)
+    {
+    }
+
     /// <summary>
     /// The operand's own pipeline, present when it carries more than a predicate: filters, then an
     /// ordering bounded by Skip/Take. Replaces <see cref="Predicate"/> — a request carries one

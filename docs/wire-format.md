@@ -14,7 +14,7 @@ All (de)serialization goes through `ScryJson`, whose options are part of the con
 - Enums are written as **names**, never numbers, with no naming policy applied.
 - Null-valued **properties** are omitted — so optional AST members such as `predicate` or a null constant's `value` do not appear. Result rows are dictionaries, not properties, so an explicit `null` column is still written.
 - Polymorphic types use a `$type` discriminator.
-- Deserialization is **fail-closed**: unknown discriminators and malformed JSON throw `ScryWireException`, they are not skipped.
+- Deserialization is **fail-closed**: unknown discriminators and malformed JSON throw `ScryWireException`, they are not skipped. So does a member the vocabulary requires being absent or null — a `where` with no `predicate`, a request whose `root` is `null` — rather than reading as its default.
 
 
 ### The vocabulary is source-generated
@@ -932,9 +932,19 @@ public sealed record AttachmentRequest(int Version, string Root, string Member, 
 /// Keys are positional, ordered by member name ordinal — the order the generator and the server both
 /// derive independently, since a composite key's declared order is not visible to the metadata reader.
 /// </remarks>
-public sealed record AttachmentKey(string? Value, ClrTypeTag Tag);
+public sealed record AttachmentKey(string? Value, ClrTypeTag Tag)
+{
+    // The wire's constructor: only the members a request has to carry. The value may be absent, and
+    // reaches the reader through its init accessor instead, since an optional parameter would have to
+    // trail and the declared order is the one callers write.
+    [JsonConstructor]
+    public AttachmentKey(ClrTypeTag tag) :
+        this(null, tag)
+    {
+    }
+}
 ```
-<sup><a href='/src/Scry.Wire/AttachmentRequest.cs#L8-L39' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireAttachmentRequest' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/AttachmentRequest.cs#L8-L49' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireAttachmentRequest' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ```json

@@ -35,5 +35,15 @@ public sealed record AttachmentRequest(int Version, string Root, string Member, 
 /// Keys are positional, ordered by member name ordinal — the order the generator and the server both
 /// derive independently, since a composite key's declared order is not visible to the metadata reader.
 /// </remarks>
-public sealed record AttachmentKey(string? Value, ClrTypeTag Tag);
+public sealed record AttachmentKey(string? Value, ClrTypeTag Tag)
+{
+    // The wire's constructor: only the members a request has to carry. The value may be absent, and
+    // reaches the reader through its init accessor instead, since an optional parameter would have to
+    // trail and the declared order is the one callers write.
+    [JsonConstructor]
+    public AttachmentKey(ClrTypeTag tag) :
+        this(null, tag)
+    {
+    }
+}
 // end-snippet

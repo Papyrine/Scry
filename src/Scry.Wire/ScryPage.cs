@@ -5,4 +5,4 @@ namespace Scry;
 /// opaque cursor to resume from. The cursor is null until keyset paging lands; offset paging advances
 /// with <c>Skip</c> and relies on <see cref="HasMore"/>.
 /// </summary>
-public sealed record ScryPage<T>(IReadOnlyList<T> Items, bool HasMore, string? Cursor);
+public sealed record ScryPage<T>(IReadOnlyList<T> Items, bool HasMore, string? Cursor = null);

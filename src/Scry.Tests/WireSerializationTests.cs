@@ -174,6 +174,148 @@ public class WireSerializationTests
     public void MalformedJsonFailsClosed() =>
         Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest("{ not json"));
 
+    // A member the vocabulary requires, left out: refused as malformed rather than read as its
+    // default, which is a null the validator would dereference into a server fault.
+    [Test]
+    public void AnOmittedRequiredMemberFailsClosed()
+    {
+        var json =
+            """
+            {
+              "version": 1,
+              "root": "Employees",
+              "pipeline": [
+                {
+                  "$type": "where"
+                }
+              ]
+            }
+            """;
+
+        var exception = Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest(json));
+        Assert.That(exception!.Message, Does.Contain("predicate"));
+    }
+
+    // The same member spelled as an explicit null: the absence's twin, and refused the same way.
+    [Test]
+    public void AnExplicitNullForARequiredMemberFailsClosed()
+    {
+        var json =
+            """
+            {
+              "version": 1,
+              "root": "Employees",
+              "pipeline": [
+                {
+                  "$type": "where",
+                  "predicate": null
+                }
+              ]
+            }
+            """;
+
+        var exception = Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest(json));
+        Assert.That(exception!.Message, Does.Contain("predicate"));
+    }
+
+    [Test]
+    public void ANullRootFailsClosed()
+    {
+        var json =
+            """
+            {
+              "version": 1,
+              "root": null,
+              "pipeline": []
+            }
+            """;
+
+        var exception = Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest(json));
+        Assert.That(exception!.Message, Does.Contain("root"));
+    }
+
+    [Test]
+    public void AnOmittedRootFailsClosed()
+    {
+        var json =
+            """
+            {
+              "version": 1,
+              "pipeline": []
+            }
+            """;
+
+        var exception = Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest(json));
+        Assert.That(exception!.Message, Does.Contain("root"));
+    }
+
+    [Test]
+    public void AnAttachmentRequestWithoutKeysFailsClosed()
+    {
+        var json =
+            """
+            {
+              "version": 1,
+              "root": "Employee",
+              "member": "Photo"
+            }
+            """;
+
+        var exception = Assert.Throws<ScryWireException>(() => ScryJson.DeserializeAttachmentRequest(json));
+        Assert.That(exception!.Message, Does.Contain("keys"));
+    }
+
+    // The other half of that rule: every member the writer leaves out when null has to read back as
+    // null, or a request this side wrote would be refused by the other. One of each such shape.
+    [Test]
+    public Task OmittedOptionalMembersReadBack()
+    {
+        var request = QueryRequest.Create(
+            "Employees",
+            [
+                new WhereOp(
+                    new BinaryNode(
+                        BinaryOp.Equal,
+                        new MemberNode(["Name"]),
+                        new ConstNode(null, ClrTypeTag.String))),
+                new WhereOp(new SubqueryNode(["Orders"], SubqueryFn.Any, null, null)),
+                new WhereOp(new InSourceNode(new MemberNode(["Id"]), "Managers", new MemberNode(["Id"]), null)),
+                new JoinOp(
+                    "Department",
+                    JoinKind.Inner,
+                    new MemberNode(["DepartmentId"]),
+                    new MemberNode(["Id"]),
+                    null,
+                    [new("Name", JoinSide.Outer, ["Name"])]),
+                new SetOp(SetKind.Union, "Contractors", null, new([new("Name", new NodeValue(new MemberNode(["Name"])))])),
+                new GroupByOp([new MemberNode(["Name"])]),
+                new SelectOp(new([new("Total", new NodeValue(new AggregateNode(AggregateFn.Count, null)))])),
+                new AnyOp(null),
+                new FirstOp(true, null),
+                new LastOp(true, null),
+                new SingleOp(true, null),
+                new PageOp(null)
+            ]);
+
+        return VerifyRoundTrip(request);
+    }
+
+    [Test]
+    public void AnAttachmentKeyWithoutAValueReadsBack()
+    {
+        var request = AttachmentRequest.Create("Employee", "Photo", [new AttachmentKey(null, ClrTypeTag.String)]);
+
+        var json = ScryJson.Serialize(request);
+        var roundTripped = ScryJson.DeserializeAttachmentRequest(json);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(json, Does.Not.Contain("value"));
+            Assert.That(roundTripped.Keys.Single().Value, Is.Null);
+            Assert.That(roundTripped.Keys.Single().Tag, Is.EqualTo(ClrTypeTag.String));
+        });
+    }
+
     [Test]
     public void PathNamingOneMemberTravelsAsAString()
     {

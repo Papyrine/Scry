@@ -5,5 +5,5 @@ namespace Scry;
 /// ordered query — the server resolves "last" by reversing the ordering, so an unordered query has
 /// no defined last row and is rejected.
 /// </summary>
-public sealed record LastOp(bool OrDefault, Node? Predicate) :
+public sealed record LastOp(bool OrDefault, Node? Predicate = null) :
     QueryOp;

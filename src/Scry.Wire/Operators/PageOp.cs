@@ -7,5 +7,5 @@ namespace Scry;
 /// from a previous page's response; when set the server seeks past it (keyset paging) instead of
 /// starting from the beginning. Clients must not parse or synthesize a cursor.
 /// </summary>
-public sealed record PageOp(int? Size, string? Cursor = null) :
+public sealed record PageOp(int? Size = null, string? Cursor = null) :
     QueryOp;

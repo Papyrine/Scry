@@ -18,7 +18,10 @@ public static class ScryJson
             // naming so the client materializes them. Case-insensitive matching is belt-and-braces.
             DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
             PropertyNameCaseInsensitive = true,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            // A null where the vocabulary declares a value is refused on read. Options-wide, which is
+            // wider than wanted — see RelaxAnnotations for where it is taken back.
+            RespectNullableAnnotations = true
         };
         // No naming policy on enums: names are part of the wire contract and must stay stable. The
         // tolerant wrapper is byte-identical to JsonStringEnumConverter except when a payload read
@@ -32,9 +35,43 @@ public static class ScryJson
         // without reflecting over a type. A payload's type is the one thing this assembly cannot know
         // — it is the consumer's generated query model, an anonymous projection, or a DTO of theirs —
         // so reflection sits behind the generated set and only ever sees what the wire does not name.
-        options.TypeInfoResolverChain.Add(WireJsonContext.Default);
-        options.TypeInfoResolverChain.Add(new DefaultJsonTypeInfoResolver());
+        options.TypeInfoResolverChain.Add(WireJsonContext.Default.WithAddedModifier(RequireWhatTheWriterAlwaysWrites));
+        options.TypeInfoResolverChain.Add(new DefaultJsonTypeInfoResolver {Modifiers = {RelaxAnnotations}});
         return options;
+    }
+
+    // A member the vocabulary requires — a where's predicate, a request's root — is a deserialization
+    // failure when absent, rather than its default handed to a validator that then dereferences it.
+    // The members the writer omits when null are the ones declared optional, so a request this side
+    // writes always reads back. Together with the nullability switch above, a required member is
+    // present and holds a value: an explicit null is the absence's twin, and is refused the same way.
+    static void RequireWhatTheWriterAlwaysWrites(JsonTypeInfo type)
+    {
+        foreach (var property in type.Properties)
+        {
+            if (property.AssociatedParameter is {HasDefaultValue: false, IsMemberInitializer: false})
+            {
+                property.IsRequired = true;
+            }
+        }
+    }
+
+    // Everything the vocabulary does not name reads and writes null as it always did. The switch
+    // above is options-wide, but a consumer's row type is theirs: a member declared non-null is
+    // handed a null where a policy hid the row behind a navigation, and an attachment handle is
+    // filled in by the client after the read rather than carried by the payload. Only a member that
+    // can hold a null is touched — the serializer refuses to relax a value type.
+    static void RelaxAnnotations(JsonTypeInfo type)
+    {
+        foreach (var property in type.Properties)
+        {
+            if (!property.PropertyType.IsValueType ||
+                Nullable.GetUnderlyingType(property.PropertyType) is not null)
+            {
+                property.IsGetNullable = true;
+                property.IsSetNullable = true;
+            }
+        }
     }
 
     // Resolved once, through Options, so each carries the shared policies and converters and every

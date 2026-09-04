@@ -14,6 +14,6 @@ namespace Scry;
 public sealed record SubqueryNode(
     [property: JsonConverter(typeof(PathConverter))] IReadOnlyList<string> Path,
     SubqueryFn Function,
-    Node? Predicate,
-    Node? Selector) :
+    Node? Predicate = null,
+    Node? Selector = null) :
     Node;
