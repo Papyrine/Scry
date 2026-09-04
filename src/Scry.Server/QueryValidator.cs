@@ -219,6 +219,12 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     }
 
                     sawDistinct = true;
+
+                    // An ordering written before the deduplication described the rows that fed it. EF
+                    // drops it under DISTINCT unless every ordered column is projected, so it neither
+                    // defines a slice of the deduplicated values nor seeds a cursor over them: only an
+                    // ordering of those values, written after the Distinct, counts.
+                    sawOrdering = false;
                     break;
 
                 case ReverseOp:

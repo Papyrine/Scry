@@ -258,6 +258,26 @@ public class ExpandedOperatorTests
         Assert.That(exception!.Message, Does.Contain("requires an OrderBy"));
     }
 
+    // An ordering written before the deduplication described the rows that fed it, and EF drops it
+    // under DISTINCT unless every ordered column is projected — so it leaves the slice as undefined
+    // as no ordering at all.
+    [Test]
+    public void PagingADeduplicatedQueryOrderedBeforeTheDistinctIsRejected()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var exception = Assert.ThrowsAsync<ScryValidationException>(
+            () => client.Source<Order>("Order")
+                .OrderBy(_ => _.Placed)
+                .Select(_ => new RegionRow(_.Region))
+                .Distinct()
+                .Take(1)
+                .ToListAsync());
+
+        Assert.That(exception!.Message, Does.Contain("requires an OrderBy"));
+    }
+
     [Test]
     public void OrderingADeduplicatedQueryByAnotherMemberIsRejected()
     {
