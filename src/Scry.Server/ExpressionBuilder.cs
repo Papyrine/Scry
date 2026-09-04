@@ -204,7 +204,53 @@ sealed class ExpressionBuilder(
             right = Expression.Convert(right, underlying);
         }
 
+        // A type with no relational operator of its own — a Guid, a bool — is compared through its
+        // CompareTo, which the provider translates to the same relational comparison the ORDER BY
+        // uses. Expression.GreaterThan would refuse the type outright.
+        if (!HasRelationalOperators(left.Type))
+        {
+            var compareTo = left.Type.GetMethod(nameof(IComparable.CompareTo), [left.Type]) ??
+                            throw new ScryValidationException($"'{left.Type.Name}' cannot be a paging key.");
+            var comparison = Expression.Call(left, compareTo, right);
+            var zero = Expression.Constant(0);
+            return greater ? Expression.GreaterThan(comparison, zero) : Expression.LessThan(comparison, zero);
+        }
+
         return greater ? Expression.GreaterThan(left, right) : Expression.LessThan(left, right);
+    }
+
+    /// <summary>
+    /// Whether a cursor can seek past a key of this type — that is, whether <see cref="CompareKey"/>
+    /// can express "greater than" for it. Asked before a cursor is issued, so a page never hands out
+    /// a cursor the next page could not honour.
+    /// </summary>
+    public static bool CanSeek(Type type)
+    {
+        var underlying = Nullable.GetUnderlyingType(type) ?? type;
+        if (underlying == typeof(string) ||
+            underlying.IsEnum ||
+            HasRelationalOperators(underlying))
+        {
+            return true;
+        }
+
+        // The CompareTo route needs the value itself: a lifted call has no translation, and a seek
+        // key is non-nullable in the model anyway.
+        return underlying == type &&
+               type.GetMethod(nameof(IComparable.CompareTo), [type]) is not null;
+    }
+
+    // The types Expression.GreaterThan accepts: the numeric primitives and char, which have the
+    // operator built in, and the structs that define it themselves (DateTime, decimal, TimeSpan, …).
+    static bool HasRelationalOperators(Type type)
+    {
+        var underlying = Nullable.GetUnderlyingType(type) ?? type;
+        if (underlying.IsPrimitive && underlying != typeof(bool))
+        {
+            return true;
+        }
+
+        return underlying.GetMethod("op_GreaterThan", [underlying, underlying]) is not null;
     }
 
     /// <summary>

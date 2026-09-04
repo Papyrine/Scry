@@ -254,6 +254,11 @@ public class Ticket
     public int Id { get; set; }
     public string Name { get; set; } = "";
     public bool IsOpen { get; set; }
+
+    // A Guid ordering key. Guid defines no relational operator, so a cursor seeking past one has to
+    // compare it another way — which ClientRoundTripTests pins by paging through this on a real
+    // database.
+    public Guid Token { get; set; }
 }
 
 // begin-snippet: namedSource
@@ -808,21 +813,25 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
                 Medium = "Paint"
             });
 
+        // Tokens fixed rather than generated, so a snapshot ordered by one holds still.
         context.Tickets.AddRange(
             new()
             {
                 Name = "Login bug",
-                IsOpen = true
+                IsOpen = true,
+                Token = new("11111111-1111-1111-1111-111111111111")
             },
             new()
             {
                 Name = "Signup crash",
-                IsOpen = true
+                IsOpen = true,
+                Token = new("22222222-2222-2222-2222-222222222222")
             },
             new()
             {
                 Name = "Old typo",
-                IsOpen = false
+                IsOpen = false,
+                Token = new("33333333-3333-3333-3333-333333333333")
             });
 
         // Each announcement fails a different one of the two policies, so which of them ran shows in

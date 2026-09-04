@@ -290,6 +290,80 @@ public class ClientRoundTripTests
         });
     }
 
+    // Guid and bool define no relational operator, so the seek past a cursor cannot be written as a
+    // plain comparison. Each is exercised on the database, since the answer is the provider's.
+    [Test]
+    public async Task KeysetPagingOverAGuidKey()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        IQueryable<TicketName> Ordered() => client.Source<Ticket>("Ticket")
+            .OrderBy(_ => _.Token)
+            .Select(_ => new TicketName(_.Name));
+
+        var first = await Ordered().ToPageAsync(1);
+        var second = await Ordered().ToPageAsync(1, first.Cursor);
+
+        // The policy hides the closed ticket, so the two open ones are the whole result.
+        string[] open = ["Login bug", "Signup crash"];
+        Assert.Multiple(() =>
+        {
+            Assert.That(first.Cursor, Is.Not.Null);
+            Assert.That(first.HasMore, Is.True);
+            Assert.That(second.HasMore, Is.False);
+            Assert.That(first.Items.Concat(second.Items).Select(_ => _.Name), Is.EquivalentTo(open));
+        });
+    }
+
+    [Test]
+    public async Task KeysetPagingOverABoolKey()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // Ordered by Active alone; the primary key is appended as the tiebreaker, so every page seeks
+        // past a bool and an int together.
+        IQueryable<EmployeeRow> Ordered() => client.Source<Employee>("Employee")
+            .OrderBy(_ => _.Active)
+            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name));
+
+        var names = new List<string>();
+        var page = await Ordered().ToPageAsync(2);
+        names.AddRange(page.Items.Select(_ => _.Name));
+        while (page.HasMore)
+        {
+            page = await Ordered().ToPageAsync(2, page.Cursor);
+            names.AddRange(page.Items.Select(_ => _.Name));
+        }
+
+        string[] all = ["Aaron", "Alice", "Bob", "Carol"];
+        Assert.That(names, Is.EquivalentTo(all));
+    }
+
+    [Test]
+    public async Task PagingOverAByteArrayKeyIssuesNoCursor()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // No comparison can seek past a byte[], so the page is answered without a cursor rather than
+        // with one the next page would fault on.
+        var page = await client.Source<Employee>("Employee")
+            .OrderBy(_ => _.Avatar)
+            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
+            .ToPageAsync(2);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(page.Items, Has.Count.EqualTo(2));
+            Assert.That(page.HasMore, Is.True);
+            Assert.That(page.Cursor, Is.Null);
+        });
+    }
+
+    record TicketName(string Name);
+
     [Test]
     public async Task KeysetPagingMultiKeyVisitsEveryRowOnce()
     {

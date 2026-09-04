@@ -761,6 +761,15 @@
           IsCollection: false,
           IsAttachment: false,
           IsSensitive: false
+        },
+        {
+          Name: Token,
+          TypeDisplay: global::System.Guid,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
         }
       ],
       IsSensitive: false
@@ -811,5 +820,5 @@
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: QXFfswLTFnDBeTv3
+  SchemaStamp: fe-JX0apjyRGkUkR
 }

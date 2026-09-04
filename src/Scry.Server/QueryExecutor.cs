@@ -1197,15 +1197,6 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             return (false, orderings);
         }
 
-        foreach (var (key, _) in orderings)
-        {
-            if (key is not MemberNode { Path: [var single] } ||
-                !IsNonNullableScalar(db, elementType, single))
-            {
-                return (false, orderings);
-            }
-        }
-
         var primaryKey = db.Model.FindEntityType(elementType)?.FindPrimaryKey();
         if (primaryKey is null ||
             !schema.TryGetType(elementType, out var meta))
@@ -1213,12 +1204,26 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             return (false, orderings);
         }
 
+        // Every key, the tiebreaker included, has to be one the next page can seek past: a cursor
+        // over a key the seek predicate cannot compare would be issued whole and fault on its return.
+        foreach (var (key, _) in orderings)
+        {
+            if (key is not MemberNode { Path: [var single] } ||
+                !IsNonNullableScalar(db, elementType, single) ||
+                !meta.Members.TryGetValue(single, out var ordered) ||
+                !ExpressionBuilder.CanSeek(ordered.Type))
+            {
+                return (false, orderings);
+            }
+        }
+
         var pkKeys = new List<(Node, bool)>(primaryKey.Properties.Count);
         foreach (var property in primaryKey.Properties)
         {
             // The key must be an exposable scalar to build a member node for the tiebreaker/cursor.
             if (!meta.Members.TryGetValue(property.Name, out var member) ||
-                member.Kind != MemberKind.Scalar)
+                member.Kind != MemberKind.Scalar ||
+                !ExpressionBuilder.CanSeek(member.Type))
             {
                 return (false, orderings);
             }
