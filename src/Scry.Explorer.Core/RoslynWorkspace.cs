@@ -52,10 +52,15 @@ public sealed class RoslynWorkspace
             return new(layout, header + layout.Preamble + middle + layout.Expression + footer);
         }
 
-        public int ToDocument(int offset) =>
-            offset < Layout.Split
-                ? header.Length + offset
-                : header.Length + middle.Length + offset;
+        public int ToDocument(int offset)
+        {
+            if (offset < Layout.Split)
+            {
+                return header.Length + offset;
+            }
+
+            return header.Length + middle.Length + offset;
+        }
 
         public int ToSnippet(int offset)
         {
@@ -82,8 +87,8 @@ public sealed class RoslynWorkspace
         }
     }
 
-    readonly AdhocWorkspace workspace;
-    readonly DocumentId editorDocumentId;
+    AdhocWorkspace workspace;
+    DocumentId editorDocumentId;
 
     RoslynWorkspace(AdhocWorkspace workspace, DocumentId editorDocumentId)
     {

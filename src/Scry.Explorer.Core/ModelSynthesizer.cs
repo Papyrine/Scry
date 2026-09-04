@@ -180,8 +180,15 @@ public static class ModelSynthesizer
     /// Only where the models are executable. The completion-only facade names no Scry.Client type at
     /// all — it exists to give the editor a shape, and it never sends anything.
     /// </remarks>
-    static string Sensitive(bool sensitive, bool executable, string indent = "") =>
-        sensitive && executable ? $"{indent}[global::Scry.ScrySensitive]{Environment.NewLine}" : "";
+    static string Sensitive(bool sensitive, bool executable, string indent = "")
+    {
+        if (sensitive && executable)
+        {
+            return $"{indent}[global::Scry.ScrySensitive]{Environment.NewLine}";
+        }
+
+        return "";
+    }
 
     /// <summary>
     /// Mirrors the generator's <c>[Obsolete]</c> emission, so a snippet written in the explorer warns

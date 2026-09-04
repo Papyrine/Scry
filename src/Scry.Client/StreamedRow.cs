@@ -44,8 +44,13 @@ readonly struct StreamedRow
     public IReadOnlyList<byte[]>? Parts { get; init; }
 
     /// <summary>Reads the row into the client's generated model.</summary>
-    public T? Materialize<T>() =>
-        fromBytes
-            ? ScryJson.DeserializeRow<T>(utf8.Span, Aliases, Parts)
-            : ScryJson.DeserializeRow<T>(element, Aliases, Parts);
+    public T? Materialize<T>()
+    {
+        if (fromBytes)
+        {
+            return ScryJson.DeserializeRow<T>(utf8.Span, Aliases, Parts);
+        }
+
+        return ScryJson.DeserializeRow<T>(element, Aliases, Parts);
+    }
 }

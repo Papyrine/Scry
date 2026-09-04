@@ -61,10 +61,15 @@ partial class QueryRenderer
         return $"{scope.Parameter} => {RenderNode(body, scope)}";
     }
 
-    Scope CurrentScope() =>
-        grouped
-            ? new("g", currentModel, Grouped: true, Depth: 0)
-            : new("_", currentModel, Grouped: false, Depth: 0);
+    Scope CurrentScope()
+    {
+        if (grouped)
+        {
+            return new("g", currentModel, Grouped: true, Depth: 0);
+        }
+
+        return new("_", currentModel, Grouped: false, Depth: 0);
+    }
 
     string RenderGroupBy(GroupByOp op)
     {

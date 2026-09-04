@@ -61,10 +61,10 @@ public sealed record ResultTable(
             columns,
             rows
                 .Select(IReadOnlyList<string> (_) => _.EnumerateObject()
-                    .Select(property => property.Value.ToString())
+                    .Select(_ => _.Value.ToString())
                     .ToList())
                 .ToList(),
             rows,
-            rows.All(row => row.EnumerateObject()
+            rows.All(_ => _.EnumerateObject()
                 .All(_ => _.Value.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array))));
 }
