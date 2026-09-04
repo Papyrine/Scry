@@ -957,7 +957,7 @@ var rows = await client.Source<Employee>("Employee")
 
 The named source is resolved and [policy-filtered](policies.md) before the test, exactly as a [join](#joins) resolves its second side. Membership is therefore only ever of rows the caller could have queried directly: a row the source's policy hides is not in the set, so the test cannot be used to learn that it exists.
 
-Only a `Where` and the `Select` naming the compared value cross into the other source — anything else would describe rows the test has already consumed — and a membership test may not appear inside another. Each side is validated against its own allow-list, so a `[QueryIgnore]`d member stays hidden on both.
+Only a `Where` and the `Select` naming the compared value cross into the other source — anything else would describe rows the test has already consumed — and a membership test may not appear inside another, nor inside a [collection subquery](#collection-subqueries), where its cost would compound per element. Each side is validated against its own allow-list, so a `[QueryIgnore]`d member stays hidden on both.
 
 The `Select` here names a **bare value** rather than constructing an object, unlike an ordinary projection: it is the single value being compared, not a row shape.
 
@@ -987,7 +987,7 @@ var rows = await client.Source<Order>("Order")
 
 A `Where` may precede any of them — `_.Items.Where(i => i.Active).Count()` — and folds into the subquery's own filter.
 
-The result is always a **scalar**, so a subquery can appear anywhere a value can: a predicate, an ordering key, a projection leaf, an aggregate selector. What it cannot do is return rows. A collection is never projectable, never traversable in a member path (`_.Items.Name` is rejected), and a subquery may not appear inside another subquery — the cost is per-row and would compound. Inside the subquery, the predicate and selector read the collection's *element*, against that type's own allow-list.
+The result is always a **scalar**, so a subquery can appear anywhere a value can: a predicate, an ordering key, a projection leaf, an aggregate selector. What it cannot do is return rows. A collection is never projectable, never traversable in a member path (`_.Items.Name` is rejected), and a subquery may not appear inside another subquery or inside a [membership test](#membership-of-another-source) — the cost is per-row and would compound. Inside the subquery, the predicate and selector read the collection's *element*, against that type's own allow-list.
 
 A collection of a [`[QueryableComplex]`](annotations.md#queryablecomplex) type — a **JSON array of value objects** — is asked the same questions in the same way:
 

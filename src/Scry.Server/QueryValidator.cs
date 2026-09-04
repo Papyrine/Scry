@@ -607,9 +607,9 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
     void ValidatePredicate(Node expr, Type elementType) =>
         ValidateExpr(expr, elementType, depth: 0);
 
-    void ValidateScalar(Node node, Type elementType, string what)
+    void ValidateScalar(Node node, Type elementType, string what, int depth = 0)
     {
-        ValidateExpr(node, elementType, depth: 0);
+        ValidateExpr(node, elementType, depth);
         if (node is MemberNode member)
         {
             ResolvePath(member.Path, elementType, requireScalar: true, what);
@@ -1093,50 +1093,14 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
         if (subquery.Predicate is { } predicate)
         {
-            EnsureNoNestedSubquery(predicate);
+            EnsureUncorrelated(predicate, Host.Subquery);
             ValidateExpr(predicate, target, depth + 1);
         }
 
         if (subquery.Selector is { } selector)
         {
-            EnsureNoNestedSubquery(selector);
-            ValidateScalar(selector, target, "Subquery selector");
-        }
-    }
-
-    // A subquery costs a correlated query per row; one inside another multiplies that per element, and
-    // the depth limit alone does not bound it meaningfully. One level is the whole allowance.
-    static void EnsureNoNestedSubquery(Node node)
-    {
-        while (true)
-        {
-            switch (node)
-            {
-                case SubqueryNode:
-                    throw Reject("A subquery may not appear inside another subquery.");
-                case BinaryNode binary:
-                    EnsureNoNestedSubquery(binary.Left);
-                    node = binary.Right;
-                    continue;
-                case UnaryNode unary:
-                    node = unary.Operand;
-                    continue;
-                case ConditionalNode conditional:
-                    EnsureNoNestedSubquery(conditional.Test);
-                    EnsureNoNestedSubquery(conditional.IfTrue);
-                    node = conditional.IfFalse;
-                    continue;
-                case CallNode call:
-                    EnsureNoNestedSubquery(call.Target);
-                    foreach (var argument in call.Arguments)
-                    {
-                        EnsureNoNestedSubquery(argument);
-                    }
-
-                    break;
-            }
-
-            break;
+            EnsureUncorrelated(selector, Host.Subquery);
+            ValidateScalar(selector, target, "Subquery selector", depth + 1);
         }
     }
 
@@ -1152,49 +1116,108 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             throw Reject($"Unknown source '{inSource.Root}'.");
         }
 
-        ValidateScalar(inSource.Value, elementType, "Membership value");
-        ValidateScalar(inSource.Selector, inner.ClrType, "Membership selector");
-        EnsureNoNestedSource(inSource.Selector);
+        // The value reads the row being tested, so a subquery there costs what it would anywhere else
+        // on that row and is allowed; the subquery's own expressions are guarded when it is validated.
+        EnsureUncorrelated(inSource.Value, Host.Membership, refuseSubquery: false);
+        ValidateScalar(inSource.Value, elementType, "Membership value", depth + 1);
+
+        EnsureUncorrelated(inSource.Selector, Host.Membership);
+        ValidateScalar(inSource.Selector, inner.ClrType, "Membership selector", depth + 1);
 
         if (inSource.Predicate is { } predicate)
         {
-            EnsureNoNestedSource(predicate);
+            EnsureUncorrelated(predicate, Host.Membership);
             ValidateExpr(predicate, inner.ClrType, depth + 1);
         }
     }
 
-    // ReSharper disable TailRecursiveCall
-    // One level only. A membership test costs a subquery; nesting them multiplies that per row, and
-    // the depth limit alone does not bound it meaningfully — the same reasoning as for subqueries.
-    static void EnsureNoNestedSource(Node node)
+    // What a correlated expression hangs off, named in the message that refuses one inside another.
+    enum Host
     {
-        switch (node)
-        {
-            case InSourceNode:
-                throw Reject("A membership test against another source may not appear inside another.");
-            case BinaryNode binary:
-                EnsureNoNestedSource(binary.Left);
-                EnsureNoNestedSource(binary.Right);
-                break;
-            case UnaryNode unary:
-                EnsureNoNestedSource(unary.Operand);
-                break;
-            case ConditionalNode conditional:
-                EnsureNoNestedSource(conditional.Test);
-                EnsureNoNestedSource(conditional.IfTrue);
-                EnsureNoNestedSource(conditional.IfFalse);
-                break;
-            case CallNode call:
-                EnsureNoNestedSource(call.Target);
-                foreach (var argument in call.Arguments)
-                {
-                    EnsureNoNestedSource(argument);
-                }
+        Subquery,
+        Membership
+    }
 
-                break;
+    // A subquery and a membership test each cost a correlated query per row; either inside the other's
+    // expressions multiplies that per element, and the depth limit alone does not bound it
+    // meaningfully. One level is the whole allowance, whichever of the two it is. Every node kind is
+    // walked, so nothing a value can be wrapped in — a collation, a conditional, a call — can hide one.
+    static void EnsureUncorrelated(Node node, Host host, bool refuseSubquery = true)
+    {
+        while (true)
+        {
+            switch (node)
+            {
+                case SubqueryNode when refuseSubquery:
+                    throw Reject(host == Host.Subquery
+                        ? "A subquery may not appear inside another subquery."
+                        : "A subquery may not appear inside a membership test against another source.");
+
+                case SubqueryNode:
+                    return;
+
+                case InSourceNode:
+                    throw Reject(host == Host.Subquery
+                        ? "A membership test against another source may not appear inside a subquery."
+                        : "A membership test against another source may not appear inside another.");
+
+                case BinaryNode binary:
+                    EnsureUncorrelated(binary.Left, host, refuseSubquery);
+                    node = binary.Right;
+                    continue;
+
+                case UnaryNode unary:
+                    node = unary.Operand;
+                    continue;
+
+                case ConditionalNode conditional:
+                    EnsureUncorrelated(conditional.Test, host, refuseSubquery);
+                    EnsureUncorrelated(conditional.IfTrue, host, refuseSubquery);
+                    node = conditional.IfFalse;
+                    continue;
+
+                case CallNode call:
+                    EnsureUncorrelated(call.Target, host, refuseSubquery);
+                    foreach (var argument in call.Arguments)
+                    {
+                        EnsureUncorrelated(argument, host, refuseSubquery);
+                    }
+
+                    return;
+
+                case CollateNode collate:
+                    node = collate.Target;
+                    continue;
+
+                case AggregateNode aggregate:
+                    if (aggregate.Selector is { } selector)
+                    {
+                        EnsureUncorrelated(selector, host, refuseSubquery);
+                    }
+
+                    if (aggregate.Predicate is { } predicate)
+                    {
+                        EnsureUncorrelated(predicate, host, refuseSubquery);
+                    }
+
+                    return;
+
+                case CompositeKeyNode composite:
+                    foreach (var part in composite.Parts)
+                    {
+                        EnsureUncorrelated(part, host, refuseSubquery);
+                    }
+
+                    return;
+
+                case MemberNode or ConstNode or ElementNode or GroupKeyNode:
+                    return;
+
+                default:
+                    throw Reject($"Unsupported expression '{node.GetType().Name}'.");
+            }
         }
     }
-    // ReSharper restore TailRecursiveCall
 
     string? Collation(StringMatch match) =>
         match switch

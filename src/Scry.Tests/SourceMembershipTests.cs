@@ -137,6 +137,77 @@ public class SourceMembershipTests
     }
 
     [Test]
+    public void ASubqueryInsideAMembershipTestIsRejected()
+    {
+        using var context = TestContext.CreateSeeded();
+
+        // The filter reads a row of the other source, so a subquery there runs once per row of the set.
+        var request = QueryRequest.Create(
+            "Employee",
+            [
+                new WhereOp(
+                    new InSourceNode(
+                        new MemberNode(["DepartmentId"]),
+                        "Order",
+                        new MemberNode(["Id"]),
+                        new SubqueryNode(["Lines"], SubqueryFn.Any, null, null)))
+            ]);
+
+        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+
+        Assert.That(exception!.Message, Does.Contain("inside a membership test"));
+    }
+
+    [Test]
+    public void ASubqueryMayBeTheMembershipValue()
+    {
+        using var context = TestContext.CreateSeeded();
+
+        // The value reads the row being tested, so a subquery there is one correlated query per row —
+        // the same cost it has in any other predicate.
+        var request = QueryRequest.Create(
+            "Order",
+            [
+                new WhereOp(
+                    new InSourceNode(
+                        new SubqueryNode(["Lines"], SubqueryFn.Count, null, null),
+                        "Order",
+                        new MemberNode(["Id"]),
+                        null)),
+                new CountOp()
+            ]);
+
+        Assert.DoesNotThrow(() => SharedProcessor.Instance.Execute(request, context));
+    }
+
+    [Test]
+    public void AMembershipTestInsideASubqueryInTheValueIsRejected()
+    {
+        using var context = TestContext.CreateSeeded();
+
+        // The one place a subquery may sit inside a membership test is the value; its own expressions
+        // are still guarded, so the two cannot be chained through it.
+        var request = QueryRequest.Create(
+            "Order",
+            [
+                new WhereOp(
+                    new InSourceNode(
+                        new SubqueryNode(
+                            ["Lines"],
+                            SubqueryFn.Count,
+                            new InSourceNode(new MemberNode(["OrderId"]), "Order", new MemberNode(["Id"]), null),
+                            null),
+                        "Order",
+                        new MemberNode(["Id"]),
+                        null))
+            ]);
+
+        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+
+        Assert.That(exception!.Message, Does.Contain("inside a subquery"));
+    }
+
+    [Test]
     public void AnUnsupportedOperatorOnTheOtherSourceIsRejected()
     {
         using var context = TestContext.CreateSeeded();
