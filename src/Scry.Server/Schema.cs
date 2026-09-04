@@ -334,7 +334,12 @@ sealed class Schema
         if (actual.IsEnum)
         {
             enums.TryAdd(actual.Name, DescribeEnum(actual));
-            return nullable ? $"{actual.Name}?" : actual.Name;
+            if (nullable)
+            {
+                return $"{actual.Name}?";
+            }
+
+            return actual.Name;
         }
 
         var display = ScalarDisplay(actual);
@@ -343,7 +348,12 @@ sealed class Schema
             return display;
         }
 
-        return nullable ? $"{display}?" : display;
+        if (nullable)
+        {
+            return $"{display}?";
+        }
+
+        return display;
     }
 
     /// <summary>
