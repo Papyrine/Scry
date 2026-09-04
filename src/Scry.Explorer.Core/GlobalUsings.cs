@@ -11,5 +11,3 @@ global using Microsoft.CodeAnalysis.Host.Mef;
 global using Microsoft.CodeAnalysis.Text;
 global using Microsoft.CodeAnalysis.CSharp.Syntax;
 global using Scry;
-global using Cancel = System.Threading.CancellationToken;
-global using CancelSource = System.Threading.CancellationTokenSource;

@@ -19,12 +19,12 @@ namespace Scry;
 /// </remarks>
 public static class QueryPrinter
 {
-    const int Step = 4;
+    const int step = 4;
 
     // LF rather than Environment.NewLine. The snippet lives in a Monaco model the explorer reads with
     // EndOfLinePreference.LF, and a printer whose output followed the host would have the schema pane
     // offer different bytes on Windows than on CI.
-    const char NewLine = '\n';
+    const char newLine = '\n';
 
     /// <summary>
     /// Formats <paramref name="snippet"/>, or reports why it could not be. Anything that does not
@@ -111,10 +111,10 @@ public static class QueryPrinter
 
         foreach (var line in lines)
         {
-            builder.Append(line).Append(NewLine);
+            builder.Append(line).Append(newLine);
         }
 
-        builder.Append(NewLine);
+        builder.Append(newLine);
     }
 
     static void AppendExpression(StringBuilder builder, ExpressionSyntax expression, int indent)
@@ -135,8 +135,8 @@ public static class QueryPrinter
         builder.Append(' ', indent).Append(Inline(root));
         foreach (var call in calls)
         {
-            builder.Append(NewLine);
-            AppendCall(builder, call, indent + Step);
+            builder.Append(newLine);
+            AppendCall(builder, call, indent + step);
         }
     }
 
@@ -146,22 +146,28 @@ public static class QueryPrinter
         builder.Append(' ', indent).Append('.').Append(Inline(name));
 
         // The one argument shape worth breaking: a projection, whose members are the result's columns.
-        if (call.ArgumentList.Arguments is [{Expression: SimpleLambdaExpressionSyntax lambda}] &&
-            lambda.Body is AnonymousObjectCreationExpressionSyntax anonymous)
+        var argumentList = call.ArgumentList;
+        if (argumentList.Arguments is [
+            {
+                Expression: SimpleLambdaExpressionSyntax
+                {
+                    Body: AnonymousObjectCreationExpressionSyntax anonymous
+                } lambda
+            }])
         {
-            builder.Append('(').Append(Inline(lambda.Parameter)).Append(" =>").Append(NewLine);
-            AppendAnonymous(builder, anonymous, indent + Step);
+            builder.Append('(').Append(Inline(lambda.Parameter)).Append(" =>").Append(newLine);
+            AppendAnonymous(builder, anonymous, indent + step);
             builder.Append(')');
             return;
         }
 
-        builder.Append(Inline(call.ArgumentList));
+        builder.Append(Inline(argumentList));
     }
 
     static void AppendAnonymous(StringBuilder builder, AnonymousObjectCreationExpressionSyntax anonymous, int indent)
     {
-        builder.Append(' ', indent).Append("new").Append(NewLine);
-        builder.Append(' ', indent).Append('{').Append(NewLine);
+        builder.Append(' ', indent).Append("new").Append(newLine);
+        builder.Append(' ', indent).Append('{').Append(newLine);
 
         for (var index = 0; index < anonymous.Initializers.Count; index++)
         {
@@ -176,12 +182,12 @@ public static class QueryPrinter
                     Expression: AnonymousObjectCreationExpressionSyntax nested
                 })
             {
-                builder.Append(' ', indent + Step).Append(Inline(nameEquals.Name)).Append(" =").Append(NewLine);
-                AppendAnonymous(builder, nested, indent + Step + Step);
+                builder.Append(' ', indent + step).Append(Inline(nameEquals.Name)).Append(" =").Append(newLine);
+                AppendAnonymous(builder, nested, indent + step + step);
             }
             else
             {
-                builder.Append(' ', indent + Step).Append(Inline(member));
+                builder.Append(' ', indent + step).Append(Inline(member));
             }
 
             if (!last)
@@ -189,7 +195,7 @@ public static class QueryPrinter
                 builder.Append(',');
             }
 
-            builder.Append(NewLine);
+            builder.Append(newLine);
         }
 
         builder.Append(' ', indent).Append('}');

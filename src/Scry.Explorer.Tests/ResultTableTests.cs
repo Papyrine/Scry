@@ -8,9 +8,9 @@ public class ResultTableTests
     {
         var table = ResultTable.FromList(Payload("""[{"name":"Aaron","status":"FullTime"}]"""));
 
-        Assert.That(table!.Columns, Is.EqualTo(new[] { "name", "status" }));
+        Assert.That(table!.Columns, Is.EqualTo(["name", "status"]));
         Assert.That(table.Rows, Has.Count.EqualTo(1));
-        Assert.That(table.Rows[0], Is.EqualTo(new[] { "Aaron", "FullTime" }));
+        Assert.That(table.Rows[0], Is.EqualTo(["Aaron", "FullTime"]));
     }
 
     [Test]
@@ -18,7 +18,7 @@ public class ResultTableTests
     {
         var table = ResultTable.FromList(Payload("""[{"name":"Aaron"},{"name":"Carol"}]"""));
 
-        Assert.That(table!.Rows.Select(_ => _[0]), Is.EqualTo(new[] { "Aaron", "Carol" }));
+        Assert.That(table!.Rows.Select(_ => _[0]), Is.EqualTo(["Aaron", "Carol"]));
     }
 
     [Test]
@@ -87,7 +87,7 @@ public class ResultTableTests
     {
         var table = ResultTable.FromList(Payload("""[1,{"name":"Aaron"},"x"]"""));
 
-        Assert.That(table!.Columns, Is.EqualTo(new[] { "name" }));
+        Assert.That(table!.Columns, Is.EqualTo(["name"]));
         Assert.That(table.Rows, Has.Count.EqualTo(1));
     }
 
@@ -101,9 +101,9 @@ public class ResultTableTests
     {
         var table = ResultTable.FromRow(Payload("""{"name":"Aaron","status":"FullTime"}"""));
 
-        Assert.That(table.Columns, Is.EqualTo(new[] { "name", "status" }));
+        Assert.That(table.Columns, Is.EqualTo(["name", "status"]));
         Assert.That(table.Rows, Has.Count.EqualTo(1));
-        Assert.That(table.Rows[0], Is.EqualTo(new[] { "Aaron", "FullTime" }));
+        Assert.That(table.Rows[0], Is.EqualTo(["Aaron", "FullTime"]));
         Assert.That(table.IsFlat);
     }
 

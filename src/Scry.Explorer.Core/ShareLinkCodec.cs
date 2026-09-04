@@ -32,7 +32,7 @@ public static class ShareLinkCodec
             var encoded = Uri.UnescapeDataString(hash[Prefix.Length..]);
             var padded = encoded.Replace('-', '+').Replace('_', '/');
             // base64url drops the padding; Convert requires it.
-            padded = padded.PadRight(padded.Length + (3 - ((padded.Length + 3) % 4)), '=');
+            padded = padded.PadRight(padded.Length + (3 - (padded.Length + 3) % 4), '=');
             var code = Encoding.UTF8.GetString(Convert.FromBase64String(padded));
             return code.Length == 0 ? null : code;
         }

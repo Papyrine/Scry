@@ -10,7 +10,7 @@ public class HistoryStoreTests
         store.Add("one");
         store.Add("two");
 
-        Assert.That(store.Items.Select(_ => _.Query), Is.EqualTo(new[] { "two", "one" }));
+        Assert.That(store.Items.Select(_ => _.Query), Is.EqualTo(["two", "one"]));
     }
 
     [Test]
@@ -110,7 +110,7 @@ public class HistoryStoreTests
 
         store.Clear();
 
-        Assert.That(store.Items.Select(_ => _.Query), Is.EqualTo(new[] { "keeper" }));
+        Assert.That(store.Items.Select(_ => _.Query), Is.EqualTo(["keeper"]));
     }
 
     [Test]
@@ -122,7 +122,7 @@ public class HistoryStoreTests
 
         store.Remove("one");
 
-        Assert.That(store.Items.Select(_ => _.Query), Is.EqualTo(new[] { "two" }));
+        Assert.That(store.Items.Select(_ => _.Query), Is.EqualTo(["two"]));
     }
 
     [Test]
@@ -224,7 +224,7 @@ public class HistoryStoreTests
         var store = new HistoryStore();
         store.LoadLegacy("""["two","one"]""");
 
-        Assert.That(store.Items.Select(_ => _.Query), Is.EqualTo(new[] { "two", "one" }));
+        Assert.That(store.Items.Select(_ => _.Query), Is.EqualTo(["two", "one"]));
         Assert.That(store.Items.All(_ => _.Label is null));
         Assert.That(store.Items.All(_ => !_.Favorite));
     }
