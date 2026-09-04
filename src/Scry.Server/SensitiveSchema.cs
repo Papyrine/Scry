@@ -49,7 +49,10 @@ sealed class SensitiveSchema(Schema schema)
                 return true;
             }
 
-            var next = CollectionElement(member.Type) ?? member.Type;
+            // An optional struct complex member is a Nullable<T>, and the schema keys its type by T:
+            // the same unwrap every other reader of the path applies, or the walk would stop here and
+            // answer that nothing beneath the member is marked.
+            var next = CollectionElement(member.Type) ?? Nullable.GetUnderlyingType(member.Type) ?? member.Type;
             if (!schema.TryGetType(next, out var following))
             {
                 // A scalar leaf, which is where a path ends anyway.

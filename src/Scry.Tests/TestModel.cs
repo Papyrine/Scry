@@ -76,6 +76,10 @@ public class Employee
     public List<Address> PreviousAddresses { get; set; } = [];
     // end-snippet
 
+    // An optional struct complex type: a Nullable<Workstation>, which every reader of a member path
+    // unwraps to reach the struct's own members. Alice and Bob have one; the others read as null.
+    public Workstation? Workstation { get; set; }
+
     [QueryIgnore]
     public decimal Salary { get; set; }
 }
@@ -156,6 +160,20 @@ public class Address
     public string Zip { get; set; } = "";
 }
 // end-snippet
+
+/// <summary>
+/// A complex type declared as a struct, mapped to JSON and optional on <see cref="Employee"/>. Its
+/// extension reaches a person directly, so it is marked: a reader that lost the struct behind the
+/// Nullable it travels in would let a constant compared against it into a URL.
+/// </summary>
+[QueryableComplex]
+public struct Workstation
+{
+    public string Room { get; set; }
+
+    [Sensitive]
+    public string Extension { get; set; }
+}
 
 /// <summary>
 /// The root of a TPH hierarchy. Opting the base in exposes its own members; a derived type is only
@@ -564,6 +582,10 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
             .ToJson();
         // end-snippet
 
+        builder.Entity<Employee>()
+            .ComplexProperty(_ => _.Workstation)
+            .ToJson();
+
         // The attachment tests fetch by key and the policy refuses one row by id, so the ids are seeded
         // explicitly rather than handed out by the identity column. The key itself stays the convention
         // one — only who assigns its value changes.
@@ -633,6 +655,11 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
             Department = engineering,
             Salary = 200_000,
             Avatar = [0x01, 0x02, 0x03],
+            Workstation = new()
+            {
+                Room = "3.14",
+                Extension = "4471"
+            },
             Address = new()
             {
                 City = "London",
@@ -683,6 +710,11 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
                 Manager = alice,
                 Salary = 90_000,
                 Avatar = [0xFF],
+                Workstation = new()
+                {
+                    Room = "1.02",
+                    Extension = "4482"
+                },
                 Address = new()
                 {
                     City = "Berlin",

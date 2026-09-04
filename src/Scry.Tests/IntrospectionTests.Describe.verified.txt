@@ -366,6 +366,15 @@
           IsCollection: false,
           IsAttachment: false,
           IsSensitive: false
+        },
+        {
+          Name: Workstation,
+          TypeDisplay: WorkstationQueryModel?,
+          NeedsNullDefault: false,
+          IsNavigation: true,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
         }
       ],
       IsSensitive: false
@@ -854,6 +863,30 @@
       ],
       Base: AssetQueryModel,
       IsSensitive: false
+    },
+    {
+      Model: WorkstationQueryModel,
+      Members: [
+        {
+          Name: Extension,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: true
+        },
+        {
+          Name: Room,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        }
+      ],
+      IsSensitive: false
     }
   ],
   Enums: [
@@ -906,5 +939,5 @@
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: qwPBC1rKusKBcd7j
+  SchemaStamp: 32VEDu7rkT1xWEj-
 }
