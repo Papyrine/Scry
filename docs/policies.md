@@ -27,7 +27,7 @@ public sealed class ActiveOnlyPolicy :
         source.Where(_ => _.Active);
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L379-L387' title='Snippet source file'>snippet source</a> | <a href='#snippet-returnablePolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L421-L429' title='Snippet source file'>snippet source</a> | <a href='#snippet-returnablePolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The `context` carries the request-scoped service provider, the active `DbContext`, and the call's HTTP headers:
@@ -434,7 +434,7 @@ public sealed class UnsealedContractsPolicy :
         context.KeyValues is not [SealedId];
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L367-L377' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L409-L419' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Attached with `[AttachmentWith(typeof(...))]` or `ScryOptions.AddAttachmentPolicy<TEntity, TPolicy>()`, and inherited down the base chain exactly as a row policy is, so a subclass cannot shed the check its base carries.
@@ -584,6 +584,8 @@ A cold scope decides every row once, serialized per scope so a burst of requests
 The rows are decided over the raw set, not through the source's other policies: a decision is shared between callers, so narrowing what it is made over by one caller's view would bake that view into an answer the others go on to read. The other policies still apply to the query itself, where they belong.
 
 Answers live in `MemoryCachedPolicyStore` by default — this process, for as long as it runs, so each server warms its own and a restart decides every row again. A deployment where that costs too much implements `ICachedPolicyStore` and sets `options.CachedPolicyStore`.
+
+A store of its own has one rule past atomicity to keep. Deciding takes long enough for the host to speak meanwhile, so a scope carries a `Generation` that moves on every invalidation, and a round of deciding hands back the generation it read at the start. An update against an older one is a round the host overtook: where the scope was forgotten since, the decisions describe rows the host said to forget and are dropped whole; where rows were invalidated since, the decisions stand but resolve nothing pending, since the keys the host re-pended are among the ones the round claims to have answered. The adapter then decides again, so the answer a query gets already reflects what the host said during it. The shipped store does exactly this, and `MemoryCachedPolicyStoreTests` spells the cases out.
 
 The type needs a single-member primary key, derived the way an [attachment's](attachments.md) is and checked against the real one at startup; a POCO source or a keyless view has nowhere to file answers and is refused. The version column need not be exposed to clients — `[QueryIgnore]` it and it stays server-side machinery.
 

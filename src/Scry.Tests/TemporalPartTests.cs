@@ -14,6 +14,76 @@ public class TemporalPartTests
 
     // ReSharper restore NotAccessedPositionalProperty.Local
 
+    // An elapsed time is a value in its own right, not only a bag of parts: a constant compares against
+    // the member, a set holds several, and a cursor carries one as an ordering key. The two shifts last
+    // 7:30:15 and 9:45:50.
+    [Test]
+    public async Task AnElapsedTimeConstantCompares()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+        var atLeast = TimeSpan.FromHours(8);
+        TimeSpan[] durations = [new(7, 30, 15), new(1, 0, 0)];
+
+        var longer = await client.Source<Shift>("Shift")
+            .CountAsync(_ => _.Duration > atLeast);
+        var listed = await client.Source<Shift>("Shift")
+            .CountAsync(_ => durations.Contains(_.Duration));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(longer, Is.EqualTo(1));
+            Assert.That(listed, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public async Task AnElapsedTimeIsAPagingKey()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // The cursor spells the key the way a constant is spelled, and the seek reads it back the same way.
+        IQueryable<DurationRow> Ordered() => client.Source<Shift>("Shift")
+            .OrderBy(_ => _.Duration)
+            .Select(_ => new DurationRow(_.Duration));
+
+        var first = await Ordered().ToPageAsync(1);
+        var second = await Ordered().ToPageAsync(1, first.Cursor);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(first.Cursor, Is.Not.Null);
+            Assert.That(first.Items.Single().Duration, Is.EqualTo(new TimeSpan(7, 30, 15)));
+            Assert.That(second.Items.Single().Duration, Is.EqualTo(new TimeSpan(9, 45, 50)));
+            Assert.That(second.HasMore, Is.False);
+        });
+    }
+
+    [Test]
+    public void AnElapsedTimeConstantParsesOnTheServer()
+    {
+        using var context = TestContext.CreateSeeded();
+
+        // Hand-built, as another client would send it: the round-trip spelling, tagged as text.
+        var request = QueryRequest.Create(
+            "Shift",
+            [
+                new WhereOp(
+                    new BinaryNode(
+                        BinaryOp.GreaterThan,
+                        new MemberNode(["Duration"]),
+                        new ConstNode("08:00:00", ClrTypeTag.String))),
+                new CountOp()
+            ]);
+
+        var response = SharedProcessor.Instance.Execute(request, context);
+
+        Assert.That(response.Payload.GetInt32(), Is.EqualTo(1));
+    }
+
+    record DurationRow(TimeSpan Duration);
+
     [Test]
     public async Task ElapsedTimeParts()
     {

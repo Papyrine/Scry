@@ -75,26 +75,17 @@ sealed class SignatureDecoder :
 
     // The one-argument collection shapes an EF navigation is declared as. Matched by name because the
     // model assembly is read as metadata — there is no type system here to ask about assignability.
-    static readonly HashSet<string> collectionTypes =
-    [
-        "System.Collections.Generic.ICollection`1",
-        "System.Collections.Generic.IEnumerable`1",
-        "System.Collections.Generic.IList`1",
-        "System.Collections.Generic.IReadOnlyCollection`1",
-        "System.Collections.Generic.IReadOnlyList`1",
-        "System.Collections.Generic.ISet`1",
-        "System.Collections.Generic.List`1",
-        "System.Collections.Generic.HashSet`1",
-        "System.Collections.ObjectModel.Collection`1",
-        "System.Collections.ObjectModel.ObservableCollection`1"
-    ];
+    // Shared with the server, which refuses any other shape so the two never disagree about a member.
+    static readonly HashSet<string> collectionTypes = CollectionShapes.GenericDefinitions;
 
+    // byte[] is the one array that is a value in its own right; every other one-dimensional array is
+    // a collection of its element, exactly as the server reads it.
     public DecodedType GetSZArrayType(DecodedType elementType) =>
         elementType switch
         {
             PrimitiveDecoded { Code: PrimitiveTypeCode.Byte } => bytes,
-            NamedDecoded => new CollectionDecoded(elementType),
-            _ => other
+            OtherDecoded => other,
+            _ => new CollectionDecoded(elementType)
         };
 
     public DecodedType GetArrayType(DecodedType elementType, ArrayShape shape) => other;

@@ -393,6 +393,20 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         IReadOnlyList<Node>? groupKeys,
         int depth)
     {
+        var members = 0;
+        ValidateProjection(projection, rootType, grouped, groupKeys, depth, ref members);
+    }
+
+    // The member count runs across every level of nesting: a nested object is one name that carries
+    // several members, and each of them is a column the query returns.
+    void ValidateProjection(
+        Projection projection,
+        Type rootType,
+        bool grouped,
+        IReadOnlyList<Node>? groupKeys,
+        int depth,
+        ref int members)
+    {
         if (depth > options.MaxNavigationDepth)
         {
             throw Reject("Projection nesting is too deep.");
@@ -405,6 +419,11 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
         foreach (var member in projection.Members)
         {
+            if (++members > options.MaxProjectionMembers)
+            {
+                throw Reject($"The projection exceeds the maximum of {options.MaxProjectionMembers} members.");
+            }
+
             switch (member.Value)
             {
                 case NodeValue {Node: AggregateNode aggregate}:
@@ -472,7 +491,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     }
 
                     var target = ResolveNavigation(nested.Path, rootType);
-                    ValidateProjection(nested.Projection, target, grouped: false, groupKeys: null, depth + 1);
+                    ValidateProjection(nested.Projection, target, grouped: false, groupKeys: null, depth + 1, ref members);
                     break;
 
                 default:
@@ -567,13 +586,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     continue;
 
                 case CallNode call:
-                    var (min, max) = Arity(call.Function);
-                    if (call.Arguments.Count < min ||
-                        call.Arguments.Count > max)
-                    {
-                        throw Reject($"Function '{call.Function}' does not take {call.Arguments.Count} argument(s).");
-                    }
-
+                    EnsureCallShape(call);
                     ValidateHaving(call.Target, elementType, groupKeys, depth + 1);
                     foreach (var argument in call.Arguments)
                     {
@@ -607,9 +620,9 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
     void ValidatePredicate(Node expr, Type elementType) =>
         ValidateExpr(expr, elementType, depth: 0);
 
-    void ValidateScalar(Node node, Type elementType, string what)
+    void ValidateScalar(Node node, Type elementType, string what, int depth = 0)
     {
-        ValidateExpr(node, elementType, depth: 0);
+        ValidateExpr(node, elementType, depth);
         if (node is MemberNode member)
         {
             ResolvePath(member.Path, elementType, requireScalar: true, what);
@@ -723,6 +736,19 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
     /// </summary>
     void ValidateCall(CallNode call, Type elementType, int depth)
     {
+        EnsureCallShape(call);
+        ValidateExpr(call.Target, elementType, depth + 1);
+        foreach (var argument in call.Arguments)
+        {
+            ValidateExpr(argument, elementType, depth + 1);
+        }
+    }
+
+    // What a call is held to wherever it appears — over a row or over a group, which differ only in
+    // what its target and arguments may read. Kept in one place so the set-membership cap and the
+    // constants-only rule cannot be enforced on one vocabulary and forgotten on the other.
+    void EnsureCallShape(CallNode call)
+    {
         var (min, max) = Arity(call.Function);
         var count = call.Arguments.Count;
         if (count < min ||
@@ -731,23 +757,19 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             throw Reject($"Function '{call.Function}' does not take {count} argument(s).");
         }
 
-        if (call.Function == KnownFunction.In)
+        if (call.Function != KnownFunction.In)
         {
-            if (count > options.MaxInValues)
-            {
-                throw Reject($"A Contains set of {count} values exceeds the maximum of {options.MaxInValues}.");
-            }
-
-            if (call.Arguments.Any(_ => _ is not ConstNode))
-            {
-                throw Reject("Every value in a Contains set must be a constant.");
-            }
+            return;
         }
 
-        ValidateExpr(call.Target, elementType, depth + 1);
-        foreach (var argument in call.Arguments)
+        if (count > options.MaxInValues)
         {
-            ValidateExpr(argument, elementType, depth + 1);
+            throw Reject($"A Contains set of {count} values exceeds the maximum of {options.MaxInValues}.");
+        }
+
+        if (call.Arguments.Any(_ => _ is not ConstNode))
+        {
+            throw Reject("Every value in a Contains set must be a constant.");
         }
     }
 
@@ -811,6 +833,12 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         if (ops.Count == 0)
         {
             throw Reject($"Empty ops on {side} — omit them instead.");
+        }
+
+        // A pipeline of its own, so it is held to the same length as the one that carries it.
+        if (ops.Count > options.MaxPipelineLength)
+        {
+            throw Reject($"The pipeline on {side} exceeds the maximum length of {options.MaxPipelineLength}.");
         }
 
         var stage = 0;
@@ -981,6 +1009,11 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             throw Reject("A join must project at least one member.");
         }
 
+        if (join.Result.Count > options.MaxProjectionMembers)
+        {
+            throw Reject($"A join projecting {join.Result.Count} members exceeds the maximum of {options.MaxProjectionMembers}.");
+        }
+
         var grouped = join.Kind == JoinKind.Group;
         var sawAggregate = false;
 
@@ -1093,50 +1126,14 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
         if (subquery.Predicate is { } predicate)
         {
-            EnsureNoNestedSubquery(predicate);
+            EnsureUncorrelated(predicate, Host.Subquery);
             ValidateExpr(predicate, target, depth + 1);
         }
 
         if (subquery.Selector is { } selector)
         {
-            EnsureNoNestedSubquery(selector);
-            ValidateScalar(selector, target, "Subquery selector");
-        }
-    }
-
-    // A subquery costs a correlated query per row; one inside another multiplies that per element, and
-    // the depth limit alone does not bound it meaningfully. One level is the whole allowance.
-    static void EnsureNoNestedSubquery(Node node)
-    {
-        while (true)
-        {
-            switch (node)
-            {
-                case SubqueryNode:
-                    throw Reject("A subquery may not appear inside another subquery.");
-                case BinaryNode binary:
-                    EnsureNoNestedSubquery(binary.Left);
-                    node = binary.Right;
-                    continue;
-                case UnaryNode unary:
-                    node = unary.Operand;
-                    continue;
-                case ConditionalNode conditional:
-                    EnsureNoNestedSubquery(conditional.Test);
-                    EnsureNoNestedSubquery(conditional.IfTrue);
-                    node = conditional.IfFalse;
-                    continue;
-                case CallNode call:
-                    EnsureNoNestedSubquery(call.Target);
-                    foreach (var argument in call.Arguments)
-                    {
-                        EnsureNoNestedSubquery(argument);
-                    }
-
-                    break;
-            }
-
-            break;
+            EnsureUncorrelated(selector, Host.Subquery);
+            ValidateScalar(selector, target, "Subquery selector", depth + 1);
         }
     }
 
@@ -1152,49 +1149,108 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             throw Reject($"Unknown source '{inSource.Root}'.");
         }
 
-        ValidateScalar(inSource.Value, elementType, "Membership value");
-        ValidateScalar(inSource.Selector, inner.ClrType, "Membership selector");
-        EnsureNoNestedSource(inSource.Selector);
+        // The value reads the row being tested, so a subquery there costs what it would anywhere else
+        // on that row and is allowed; the subquery's own expressions are guarded when it is validated.
+        EnsureUncorrelated(inSource.Value, Host.Membership, refuseSubquery: false);
+        ValidateScalar(inSource.Value, elementType, "Membership value", depth + 1);
+
+        EnsureUncorrelated(inSource.Selector, Host.Membership);
+        ValidateScalar(inSource.Selector, inner.ClrType, "Membership selector", depth + 1);
 
         if (inSource.Predicate is { } predicate)
         {
-            EnsureNoNestedSource(predicate);
+            EnsureUncorrelated(predicate, Host.Membership);
             ValidateExpr(predicate, inner.ClrType, depth + 1);
         }
     }
 
-    // ReSharper disable TailRecursiveCall
-    // One level only. A membership test costs a subquery; nesting them multiplies that per row, and
-    // the depth limit alone does not bound it meaningfully — the same reasoning as for subqueries.
-    static void EnsureNoNestedSource(Node node)
+    // What a correlated expression hangs off, named in the message that refuses one inside another.
+    enum Host
     {
-        switch (node)
-        {
-            case InSourceNode:
-                throw Reject("A membership test against another source may not appear inside another.");
-            case BinaryNode binary:
-                EnsureNoNestedSource(binary.Left);
-                EnsureNoNestedSource(binary.Right);
-                break;
-            case UnaryNode unary:
-                EnsureNoNestedSource(unary.Operand);
-                break;
-            case ConditionalNode conditional:
-                EnsureNoNestedSource(conditional.Test);
-                EnsureNoNestedSource(conditional.IfTrue);
-                EnsureNoNestedSource(conditional.IfFalse);
-                break;
-            case CallNode call:
-                EnsureNoNestedSource(call.Target);
-                foreach (var argument in call.Arguments)
-                {
-                    EnsureNoNestedSource(argument);
-                }
+        Subquery,
+        Membership
+    }
 
-                break;
+    // A subquery and a membership test each cost a correlated query per row; either inside the other's
+    // expressions multiplies that per element, and the depth limit alone does not bound it
+    // meaningfully. One level is the whole allowance, whichever of the two it is. Every node kind is
+    // walked, so nothing a value can be wrapped in — a collation, a conditional, a call — can hide one.
+    static void EnsureUncorrelated(Node node, Host host, bool refuseSubquery = true)
+    {
+        while (true)
+        {
+            switch (node)
+            {
+                case SubqueryNode when refuseSubquery:
+                    throw Reject(host == Host.Subquery
+                        ? "A subquery may not appear inside another subquery."
+                        : "A subquery may not appear inside a membership test against another source.");
+
+                case SubqueryNode:
+                    return;
+
+                case InSourceNode:
+                    throw Reject(host == Host.Subquery
+                        ? "A membership test against another source may not appear inside a subquery."
+                        : "A membership test against another source may not appear inside another.");
+
+                case BinaryNode binary:
+                    EnsureUncorrelated(binary.Left, host, refuseSubquery);
+                    node = binary.Right;
+                    continue;
+
+                case UnaryNode unary:
+                    node = unary.Operand;
+                    continue;
+
+                case ConditionalNode conditional:
+                    EnsureUncorrelated(conditional.Test, host, refuseSubquery);
+                    EnsureUncorrelated(conditional.IfTrue, host, refuseSubquery);
+                    node = conditional.IfFalse;
+                    continue;
+
+                case CallNode call:
+                    EnsureUncorrelated(call.Target, host, refuseSubquery);
+                    foreach (var argument in call.Arguments)
+                    {
+                        EnsureUncorrelated(argument, host, refuseSubquery);
+                    }
+
+                    return;
+
+                case CollateNode collate:
+                    node = collate.Target;
+                    continue;
+
+                case AggregateNode aggregate:
+                    if (aggregate.Selector is { } selector)
+                    {
+                        EnsureUncorrelated(selector, host, refuseSubquery);
+                    }
+
+                    if (aggregate.Predicate is { } predicate)
+                    {
+                        EnsureUncorrelated(predicate, host, refuseSubquery);
+                    }
+
+                    return;
+
+                case CompositeKeyNode composite:
+                    foreach (var part in composite.Parts)
+                    {
+                        EnsureUncorrelated(part, host, refuseSubquery);
+                    }
+
+                    return;
+
+                case MemberNode or ConstNode or ElementNode or GroupKeyNode:
+                    return;
+
+                default:
+                    throw Reject($"Unsupported expression '{node.GetType().Name}'.");
+            }
         }
     }
-    // ReSharper restore TailRecursiveCall
 
     string? Collation(StringMatch match) =>
         match switch

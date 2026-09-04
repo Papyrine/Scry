@@ -81,7 +81,17 @@ record struct PropertyInfo(
     bool IsSensitive = false);
 
 /// <summary>An enum referenced by a model, re-emitted so the client needs no server reference.</summary>
-record struct EnumInfo(string Name, EquatableArray<string> Members);
+/// <summary>
+/// A re-emitted enum. <see cref="Values"/> pairs positionally with <see cref="Members"/>, each the
+/// invariant-culture decimal the declaration spells; <see cref="Underlying"/> is the C# keyword of
+/// the integral type behind it.
+/// </summary>
+record struct EnumInfo(
+    string Name,
+    string Underlying,
+    bool IsFlags,
+    EquatableArray<string> Members,
+    EquatableArray<string> Values);
 
 enum SourceKind
 {

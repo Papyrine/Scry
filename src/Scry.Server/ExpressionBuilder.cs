@@ -204,7 +204,53 @@ sealed class ExpressionBuilder(
             right = Expression.Convert(right, underlying);
         }
 
+        // A type with no relational operator of its own — a Guid, a bool — is compared through its
+        // CompareTo, which the provider translates to the same relational comparison the ORDER BY
+        // uses. Expression.GreaterThan would refuse the type outright.
+        if (!HasRelationalOperators(left.Type))
+        {
+            var compareTo = left.Type.GetMethod(nameof(IComparable.CompareTo), [left.Type]) ??
+                            throw new ScryValidationException($"'{left.Type.Name}' cannot be a paging key.");
+            var comparison = Expression.Call(left, compareTo, right);
+            var zero = Expression.Constant(0);
+            return greater ? Expression.GreaterThan(comparison, zero) : Expression.LessThan(comparison, zero);
+        }
+
         return greater ? Expression.GreaterThan(left, right) : Expression.LessThan(left, right);
+    }
+
+    /// <summary>
+    /// Whether a cursor can seek past a key of this type — that is, whether <see cref="CompareKey"/>
+    /// can express "greater than" for it. Asked before a cursor is issued, so a page never hands out
+    /// a cursor the next page could not honour.
+    /// </summary>
+    public static bool CanSeek(Type type)
+    {
+        var underlying = Nullable.GetUnderlyingType(type) ?? type;
+        if (underlying == typeof(string) ||
+            underlying.IsEnum ||
+            HasRelationalOperators(underlying))
+        {
+            return true;
+        }
+
+        // The CompareTo route needs the value itself: a lifted call has no translation, and a seek
+        // key is non-nullable in the model anyway.
+        return underlying == type &&
+               type.GetMethod(nameof(IComparable.CompareTo), [type]) is not null;
+    }
+
+    // The types Expression.GreaterThan accepts: the numeric primitives and char, which have the
+    // operator built in, and the structs that define it themselves (DateTime, decimal, TimeSpan, …).
+    static bool HasRelationalOperators(Type type)
+    {
+        var underlying = Nullable.GetUnderlyingType(type) ?? type;
+        if (underlying.IsPrimitive && underlying != typeof(bool))
+        {
+            return true;
+        }
+
+        return underlying.GetMethod("op_GreaterThan", [underlying, underlying]) is not null;
     }
 
     /// <summary>
@@ -1714,21 +1760,36 @@ sealed class ExpressionBuilder(
     /// would yield a number where the client expects a name.
     /// </remarks>
     /// <summary>
-    /// Reads text as a value — the inverse of <see cref="BuildStringFrom"/>. Only a string target is
-    /// accepted: a numeric member is already a value, and SQL's numeric-to-numeric conversions
-    /// truncate where the CLR's round, so carrying those would answer differently per source. Emitted
-    /// as the Convert call EF translates to CONVERT; text that does not parse faults at execution,
-    /// exactly as it would in memory.
+    /// Reads text as a value — the inverse of <see cref="BuildStringFrom"/> — or widens a number to a
+    /// wider numeric type, which is the cast the client wrote. Text is emitted as the Convert call EF
+    /// translates to CONVERT, and faults at execution where it does not parse, exactly as it would in
+    /// memory. A number is emitted as the conversion EF translates to CAST, and only a widening one:
+    /// SQL's numeric-to-numeric conversions truncate where the CLR's round, so a narrowing one would
+    /// answer differently per source and is refused, as the client already refuses to send it.
     /// </summary>
     static Expression BuildFromText(KnownFunction function, Expression target, MethodInfo method)
     {
         var value = NonNullable(target);
-        if (value.Type != typeof(string))
+        if (value.Type == typeof(string))
+        {
+            return Expression.Call(method, value);
+        }
+
+        var result = method.ReturnType;
+        if (Rank(value.Type) is not { } from ||
+            Rank(result) is not { } to)
         {
             throw new ScryValidationException($"'{function}' reads text as a value, and '{value.Type.Name}' is already one.");
         }
 
-        return Expression.Call(method, value);
+        if (to <= from)
+        {
+            throw new ScryValidationException($"'{function}' over a '{value.Type.Name}' would narrow it, which is not carried: the database truncates where the CLR rounds.");
+        }
+
+        // Converted as the nullable it may be, so a null widens to a null rather than faulting.
+        var lifted = Nullable.GetUnderlyingType(target.Type) is not null;
+        return Expression.Convert(target, lifted ? typeof(Nullable<>).MakeGenericType(result) : result);
     }
 
     static Expression BuildStringFrom(Expression target)
@@ -2337,6 +2398,13 @@ sealed class ExpressionBuilder(
         if (underlying == typeof(DateTimeOffset))
         {
             return DateTimeOffset.Parse(value, culture, DateTimeStyles.RoundtripKind);
+        }
+
+        // An elapsed time travels as its constant spelling — 01:02:03.4560000 — which is also how a
+        // cursor spells one; Convert.ChangeType has no reading of it and would refuse every one.
+        if (underlying == typeof(TimeSpan))
+        {
+            return TimeSpan.Parse(value, culture);
         }
 
         if (underlying == typeof(Guid))

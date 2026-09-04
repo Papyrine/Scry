@@ -11,3 +11,4 @@ nugets/
 *.received.*
 *.trx
 BenchmarkDotNet.Artifacts/
+*.lnk

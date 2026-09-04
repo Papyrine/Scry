@@ -1,6 +1,6 @@
 # Sample
 
-`/samples` contains a complete, runnable three-project solution: `Scry.Samples.slnx`.
+`/samples` contains a complete, runnable solution: `Scry.Samples.slnx`.
 
 | Project | Role |
 | --- | --- |
@@ -8,6 +8,9 @@
 | `Sample.Server` | ASP.NET Core host: `DbContext`, `MapScry`, `MapScryExplorer`, and the Blazor host page. |
 | `Sample.Client` | Blazor WebAssembly UI that writes LINQ against the generated models. |
 | `Sample.Tests` | Snapshot tests over the rendered UI, the wire traffic, and the explorer endpoint. |
+| `Sample.QueryModels` | A C# class library holding the generator's output for the sample model, for clients in other languages. |
+| `Sample.FSharp` | An F# client writing queries through `Sample.QueryModels`. See [F#](fsharp.md). |
+| `Sample.FSharp.Tests` | The F# queries run through the server, hosted in-process, with the requests and rows snapshotted. |
 
 
 ## Running it

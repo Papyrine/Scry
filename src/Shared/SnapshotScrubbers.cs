@@ -1,3 +1,5 @@
+
+
 /// <summary>
 /// The scrubbers every snapshot in this repository shares. Compiled into both test projects rather
 /// than written once per project: they exist to keep unrelated churn out of verified files, and two
@@ -71,9 +73,14 @@ static partial class SnapshotScrubbers
             {
                 try
                 {
-                    var utf8 = System.Buffers.Text.Base64Url.DecodeFromChars(_.Value);
+                    var utf8 = Base64Url.DecodeFromChars(_.Value);
                     var json = Encoding.UTF8.GetString(utf8);
-                    return json.StartsWith("{\"version\":", StringComparison.Ordinal) ? json : _.Value;
+                    if (json.StartsWith("{\"version\":", StringComparison.Ordinal))
+                    {
+                        return json;
+                    }
+
+                    return _.Value;
                 }
                 catch (FormatException)
                 {

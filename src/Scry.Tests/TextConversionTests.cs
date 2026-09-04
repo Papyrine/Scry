@@ -159,8 +159,10 @@ public class TextConversionTests
 
     // The same refusal server-side, for a request that did not come through the translator.
     [Test]
-    public void ANumericMemberIsRefusedByTheServer()
+    public void ANarrowingOfANumericMemberIsRefusedByTheServer()
     {
+        // Over a number the function is a cast, and only a widening one is carried: reading a decimal
+        // as an int would truncate in the database where the CLR rounds.
         using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
@@ -170,6 +172,51 @@ public class TextConversionTests
                     new BinaryNode(
                         BinaryOp.GreaterThan,
                         new CallNode(KnownFunction.Int32From, new MemberNode(["Amount"]), []),
+                        new ConstNode("10", ClrTypeTag.Int32))),
+                new CountOp()
+            ]);
+
+        var exception = Assert.Throws<ScryValidationException>(
+            () => SharedProcessor.Instance.Execute(request, context));
+
+        Assert.That(exception!.Message, Does.Contain("would narrow"));
+    }
+
+    [Test]
+    public void AWideningOfANumericMemberIsACast()
+    {
+        // The same function over a narrower member is the cast a client writes as (double)_.Quantity.
+        // Quantities are 3, 7 and 1, so two are above 2.5 once compared as doubles.
+        using var context = TestContext.CreateSeeded();
+
+        var request = QueryRequest.Create(
+            "Order",
+            [
+                new WhereOp(
+                    new BinaryNode(
+                        BinaryOp.GreaterThan,
+                        new CallNode(KnownFunction.DoubleFrom, new MemberNode(["Quantity"]), []),
+                        new ConstNode("2.5", ClrTypeTag.Double))),
+                new CountOp()
+            ]);
+
+        var response = SharedProcessor.Instance.Execute(request, context);
+
+        Assert.That(response.Payload.GetInt32(), Is.EqualTo(2));
+    }
+
+    [Test]
+    public void AValueThatIsNeitherTextNorANumberIsRefusedByTheServer()
+    {
+        using var context = TestContext.CreateSeeded();
+
+        var request = QueryRequest.Create(
+            "Order",
+            [
+                new WhereOp(
+                    new BinaryNode(
+                        BinaryOp.GreaterThan,
+                        new CallNode(KnownFunction.Int32From, new MemberNode(["Placed"]), []),
                         new ConstNode("10", ClrTypeTag.Int32))),
                 new CountOp()
             ]);

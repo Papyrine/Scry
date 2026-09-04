@@ -216,6 +216,55 @@ public class CollectionSubqueryTests
     }
 
     [Test]
+    public void AMembershipTestInsideASubqueryIsRejected()
+    {
+        using var context = TestContext.CreateSeeded();
+
+        // A membership test is a correlated query too, so inside a subquery it would run per element.
+        var request = QueryRequest.Create(
+            "Order",
+            [
+                new WhereOp(new SubqueryNode(
+                    ["Lines"],
+                    SubqueryFn.Any,
+                    new InSourceNode(new MemberNode(["OrderId"]), "Order", new MemberNode(["Id"]), null),
+                    null))
+            ]);
+
+        var exception = Assert.Throws<ScryValidationException>(
+            () => SharedProcessor.Instance.Execute(request, context));
+
+        Assert.That(exception!.Message, Does.Contain("inside a subquery"));
+    }
+
+    [Test]
+    public void ASubqueryWrappedInACollationIsStillNested()
+    {
+        using var context = TestContext.CreateSeeded();
+
+        // The guard walks every node kind, so a wrapper the walker once skipped cannot hide the nesting.
+        var request = QueryRequest.Create(
+            "Order",
+            [
+                new WhereOp(new SubqueryNode(
+                    ["Lines"],
+                    SubqueryFn.Any,
+                    new BinaryNode(
+                        BinaryOp.Equal,
+                        new CollateNode(
+                            new SubqueryNode(["Lines"], SubqueryFn.Max, null, new MemberNode(["Sku"])),
+                            StringMatch.CaseInsensitive),
+                        new ConstNode("x", ClrTypeTag.String)),
+                    null))
+            ]);
+
+        var exception = Assert.Throws<ScryValidationException>(
+            () => SharedProcessor.Instance.Execute(request, context));
+
+        Assert.That(exception!.Message, Does.Contain("inside another subquery"));
+    }
+
+    [Test]
     public void AnIgnoredMemberStaysHiddenInsideASubquery()
     {
         using var context = TestContext.CreateSeeded();

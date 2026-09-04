@@ -12,10 +12,10 @@ public class ScryMultipartTests
         using var body = new MemoryStream();
         var writer = ScryMultipart.Create(body);
 
-        await writer.WriteBinary([1, 2, 3], default);
-        await writer.OpenPart("application/json", default);
+        await writer.WriteBinary([1, 2, 3], Cancel.None);
+        await writer.OpenPart("application/json", Cancel.None);
         await body.WriteAsync("""{"ok":true}"""u8.ToArray());
-        await writer.Terminate(default);
+        await writer.Terminate(Cancel.None);
 
         // The three content bytes are named and interpolated rather than left in the expectation as
         // unreadable control characters.

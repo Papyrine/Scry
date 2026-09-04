@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.Http;
-
 /// <summary>
 /// A row policy whose decision is too expensive to make in SQL. The answers are remembered and the
 /// query carries a membership test over them; what the tests here pin is when a decision is actually
@@ -156,6 +154,45 @@ public class CachedPolicyTests
             Assert.That(policy.Decisions, Is.EqualTo(before + 1));
             Assert.That(rows.Select(_ => _.Region), Is.EqualTo(["North", "North", "South"]));
         }
+    }
+
+    [Test]
+    public async Task AGrantRevokedWhileARowIsBeingDecidedDoesNotStand()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var policy = new CountingRegionPolicy
+        {
+            Allowing = null
+        };
+        var processor = Cached();
+        var client = ClientFor(context, processor, policy);
+
+        // The round decides the South row under the grant of the moment — allowed — and, before the
+        // round is applied, the host revokes South and says so. The stale answer must not be the one
+        // the query is served: the row is decided again, under the grant that now holds.
+        policy.Decided = row =>
+        {
+            if (row.Region != "South")
+            {
+                return;
+            }
+
+            policy.Decided = null;
+            policy.Allowing = "North";
+            processor.PolicyCache.InvalidateRows<Order>([row.Id]);
+        };
+
+        var rows = await client.Source<Order>("Order")
+            .OrderBy(_ => _.Region)
+            .Select(_ => new {_.Region})
+            .ToListAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rows.Select(_ => _.Region), Is.EqualTo(["North", "North"]));
+            // Three rows, then the one the host re-pended, decided once more.
+            Assert.That(policy.Decisions, Is.EqualTo(4));
+        });
     }
 
     [Test]
@@ -331,8 +368,16 @@ public sealed class CountingRegionPolicy :
     public bool Allow(Order row, string scopeKey, ScryPolicyContext context)
     {
         Decisions++;
-        return Allowing is null || row.Region == Allowing;
+        var allowed = Allowing is null || row.Region == Allowing;
+
+        // After the answer is made and before it is handed back — the window in which a host that
+        // changes a grant and says so is racing the round that is deciding under the old one.
+        Decided?.Invoke(row);
+        return allowed;
     }
+
+    /// <summary>What a test wants to happen while a decision is being made, once the answer is fixed.</summary>
+    public Action<Order>? Decided { get; set; }
 
     public const string Scope = "scope";
 

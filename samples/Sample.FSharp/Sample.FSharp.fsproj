@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Queries.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Explicit because the samples use central package management, which turns the SDK's
+         implicit reference off. -->
+    <PackageReference Include="FSharp.Core" />
+  </ItemGroup>
+
+  <!-- begin-snippet: fsharpProjectReference -->
+  <ItemGroup>
+    <!-- The generated query models, and through them Scry.Client. The model itself is not referenced. -->
+    <ProjectReference Include="..\Sample.QueryModels\Sample.QueryModels.csproj" />
+  </ItemGroup>
+  <!-- end-snippet -->
+</Project>

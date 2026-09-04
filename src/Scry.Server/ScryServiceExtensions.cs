@@ -348,13 +348,13 @@ public static class ScryServiceExtensions
     /// and the bytes are what a caller fingerprinting the request would hash.
     /// </summary>
     /// <remarks>
-    /// A declared length only sizes the buffer; it is never trusted as the amount to read. A body shorter
-    /// than its Content-Length stays what it is today — a short buffer, so a parse failure and a 400 —
-    /// rather than an exhausted read surfacing as a 500.
+    /// A declared length only sizes the buffer, and only up to <see cref="PresizeCeiling"/>; it is never
+    /// trusted as the amount to read. A body shorter than its Content-Length stays what it is today — a
+    /// short buffer, so a parse failure and a 400 — rather than an exhausted read surfacing as a 500.
     /// </remarks>
-    static async Task<byte[]> ReadBody(HttpContext context)
+    internal static async Task<byte[]> ReadBody(HttpContext context)
     {
-        if (context.Request.ContentLength is > 0 and <= int.MaxValue)
+        if (context.Request.ContentLength is > 0 and <= PresizeCeiling)
         {
             var declared = (int) context.Request.ContentLength;
             var exact = new byte[declared];
@@ -370,11 +370,22 @@ public static class ScryServiceExtensions
             return read == declared ? exact : exact[..read];
         }
 
-        // No declared length (a chunked body). Nothing to size from, so it grows and is copied out once.
+        // No usable length: none was declared (a chunked body), or the one declared is more than is
+        // taken on trust. The buffer grows with what actually arrives and is copied out once.
         using var buffer = new MemoryStream();
         await context.Request.Body.CopyToAsync(buffer, context.RequestAborted);
         return buffer.ToArray();
     }
+
+    /// <summary>
+    /// The most a declared Content-Length is allowed to pre-size the body buffer. A length is a claim
+    /// the client makes before sending a byte, and the host checks it against its own limit only on
+    /// the first read — after this method has already sized to it. Sizing to the claim would let a
+    /// request that declares gigabytes and then sends nothing hold that much memory for as long as
+    /// the host keeps the connection open. Above the ceiling the buffer grows with the bytes that
+    /// arrive, so a body costs memory in proportion to what was actually sent.
+    /// </summary>
+    internal const int PresizeCeiling = 64 * 1024;
 
     static Task WriteLine(HttpContext context, ScryStreamMarker marker) =>
         WriteLine(context, ScryJson.Serialize(marker));

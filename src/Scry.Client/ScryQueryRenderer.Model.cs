@@ -68,7 +68,16 @@ partial class QueryRenderer(Type? rootModel)
     }
 
     static bool IsTerminal(QueryOp op) =>
-        op is CountOp or LongCountOp or AnyOp or AllOp or FirstOp or SingleOp or LastOp or AggregateOp or PageOp;
+        op is
+            CountOp or
+            LongCountOp or
+            AnyOp or
+            AllOp or
+            FirstOp or
+            SingleOp or
+            LastOp or
+            AggregateOp or
+            PageOp;
 
     // Only terminals the explorer folds back into the identical wire op are spelled. A
     // predicate-carrying terminal has no such spelling: `.Where(p).FirstAsync()` produces different

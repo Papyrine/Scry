@@ -43,6 +43,11 @@
       Model: HolidayQueryModel
     },
     {
+      Name: Invoice,
+      Kind: Entity,
+      Model: InvoiceQueryModel
+    },
+    {
       Name: Order,
       Kind: Entity,
       Model: OrderQueryModel
@@ -383,6 +388,66 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        }
+      ],
+      IsSensitive: false
+    },
+    {
+      Model: InvoiceQueryModel,
+      Members: [
+        {
+          Name: CreatedBy,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Notes,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Number,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Tags,
+          TypeDisplay: global::System.Collections.Generic.IReadOnlyList<string>,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: true,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Weights,
+          TypeDisplay: global::System.Collections.Generic.IReadOnlyList<int>,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: true,
           IsAttachment: false,
           IsSensitive: false
         }
@@ -761,6 +826,15 @@
           IsCollection: false,
           IsAttachment: false,
           IsSensitive: false
+        },
+        {
+          Name: Token,
+          TypeDisplay: global::System.Guid,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
         }
       ],
       IsSensitive: false
@@ -790,14 +864,28 @@
         Parking,
         Gym,
         Remote
-      ]
+      ],
+      Constants: [
+        0,
+        1,
+        2,
+        4
+      ],
+      IsFlags: true,
+      Underlying: int
     },
     {
       Name: Priority,
       Values: [
         Low,
         High
-      ]
+      ],
+      Constants: [
+        0,
+        1
+      ],
+      IsFlags: false,
+      Underlying: int
     },
     {
       Name: Status,
@@ -805,11 +893,18 @@
         FullTime,
         PartTime,
         Contractor
-      ]
+      ],
+      Constants: [
+        0,
+        1,
+        2
+      ],
+      IsFlags: false,
+      Underlying: int
     }
   ],
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: QXFfswLTFnDBeTv3
+  SchemaStamp: qwPBC1rKusKBcd7j
 }

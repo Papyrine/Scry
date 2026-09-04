@@ -28,14 +28,20 @@ public static class ModelSynthesizer
 
         foreach (var enumeration in introspection.Enums)
         {
-            builder.AppendLine(
-                $$"""
-                public enum {{enumeration.Name}}
-                {
-                """);
-            foreach (var value in enumeration.Values)
+            // Mirrors ScryGenerator.EmitEnums: the values, the underlying type and [Flags] decide
+            // what a member means, so a snippet's constants have to resolve as generated code's do.
+            if (enumeration.IsFlags)
             {
-                builder.AppendLine($"    {value},");
+                builder.AppendLine("[global::System.Flags]");
+            }
+
+            var underlying = enumeration.Underlying == "int" ? "" : $" : {enumeration.Underlying}";
+            builder.AppendLine($"public enum {enumeration.Name}{underlying}");
+            builder.AppendLine("{");
+            for (var i = 0; i < enumeration.Values.Count; i++)
+            {
+                var value = enumeration.Constants is { } constants ? $" = {constants[i]}" : "";
+                builder.AppendLine($"    {enumeration.Values[i]}{value},");
             }
 
             builder.AppendLine("}");
@@ -180,8 +186,15 @@ public static class ModelSynthesizer
     /// Only where the models are executable. The completion-only facade names no Scry.Client type at
     /// all — it exists to give the editor a shape, and it never sends anything.
     /// </remarks>
-    static string Sensitive(bool sensitive, bool executable, string indent = "") =>
-        sensitive && executable ? $"{indent}[global::Scry.ScrySensitive]{Environment.NewLine}" : "";
+    static string Sensitive(bool sensitive, bool executable, string indent = "")
+    {
+        if (sensitive && executable)
+        {
+            return $"{indent}[global::Scry.ScrySensitive]{Environment.NewLine}";
+        }
+
+        return "";
+    }
 
     /// <summary>
     /// Mirrors the generator's <c>[Obsolete]</c> emission, so a snippet written in the explorer warns

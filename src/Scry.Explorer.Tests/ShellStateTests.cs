@@ -192,7 +192,7 @@ public class ShellStateTests
     public void StoresUnderTheNamespace()
     {
         var backend = new InMemoryStorageBackend();
-        var storage = new StorageService(backend, "scry");
+        var storage = new StorageService(backend);
 
         storage.Set("tabs", "value");
 
@@ -204,7 +204,7 @@ public class ShellStateTests
     public void RemovesAKeySetToEmpty()
     {
         var backend = new InMemoryStorageBackend();
-        var storage = new StorageService(backend, "scry");
+        var storage = new StorageService(backend);
         storage.Set("plugin", "Schema");
 
         storage.Set("plugin", "");
@@ -219,7 +219,7 @@ public class ShellStateTests
     {
         var backend = new InMemoryStorageBackend();
         backend.Set("scry:tabs", stored);
-        var storage = new StorageService(backend, "scry");
+        var storage = new StorageService(backend);
 
         Assert.That(storage.Get("tabs"), Is.Null);
         Assert.That(backend.Get("scry:tabs"), Is.Null);
@@ -229,7 +229,7 @@ public class ShellStateTests
     public void ClearsOnlyItsOwnNamespace()
     {
         var backend = new InMemoryStorageBackend();
-        var storage = new StorageService(backend, "scry");
+        var storage = new StorageService(backend);
         storage.Set("tabs", "value");
         storage.Set("plugin", "Schema");
         backend.Set("someone-elses-key", "keep me");
@@ -250,7 +250,7 @@ public class ShellStateTests
     public void ReadsAndWritesOutsideTheNamespace()
     {
         var backend = new InMemoryStorageBackend();
-        var storage = new StorageService(backend, "scry");
+        var storage = new StorageService(backend);
 
         storage.RawSet("scry-theme", "dark");
 

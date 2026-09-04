@@ -205,7 +205,7 @@ public static class QueryPrinter
     // join then flattens the few constructs it still spreads over lines.
     static string Inline(SyntaxNode node) =>
         string.Join(
-            " ",
+            ' ',
             node.NormalizeWhitespace()
                 .ToFullString()
                 .ReplaceLineEndings("\n")

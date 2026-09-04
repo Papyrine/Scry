@@ -1,3 +1,4 @@
+global using System.Buffers;
 global using System.Diagnostics.Metrics;
 global using System.Globalization;
 global using System.Text.Json;
@@ -10,3 +11,5 @@ global using NUnit.Framework;
 global using Scry;
 global using VerifyTests.DiffPlex;
 global using static VerifyNUnit.Verifier;
+global using System.Buffers.Text;
+global using Microsoft.AspNetCore.Http;

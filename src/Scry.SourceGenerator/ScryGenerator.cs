@@ -285,7 +285,7 @@ public class ScryGenerator :
     /// and the reason — unlike <c>[BinaryTransfer]</c> — that it moves the schema stamp.
     /// </summary>
     /// <remarks>Mirrored by <c>Schema.DescribeMember</c>, which the schema stamp requires to agree.</remarks>
-    static string Display(PropertyInfo property) =>
+    internal static string Display(PropertyInfo property) =>
         property.IsAttachment ? "global::Scry.ScryAttachment" : property.TypeDisplay;
 
     // The scalar members a query written against this model projects when it writes no Select: the
@@ -346,14 +346,22 @@ public class ScryGenerator :
         var builder = Header();
         foreach (var enumeration in enums)
         {
-            builder.AppendLine(
-                $$"""
-                public enum {{enumeration.Name}}
-                {
-                """);
-            foreach (var member in enumeration.Members)
+            // Values, the underlying type and [Flags] are carried across so a member means on the
+            // client exactly what it means on the server — a combined flag travels by name, and the
+            // name it resolves to is decided by these.
+            if (enumeration.IsFlags)
             {
-                builder.AppendLine($"    {member},");
+                builder.AppendLine("[global::System.Flags]");
+            }
+
+            var underlying = enumeration.Underlying == "int" ? "" : $" : {enumeration.Underlying}";
+            builder.AppendLine($"public enum {enumeration.Name}{underlying}");
+            builder.AppendLine("{");
+            var members = enumeration.Members.ToList();
+            var values = enumeration.Values.ToList();
+            for (var i = 0; i < members.Count; i++)
+            {
+                builder.AppendLine($"    {members[i]} = {values[i]},");
             }
 
             builder.AppendLine("}");
@@ -418,7 +426,7 @@ public class ScryGenerator :
     // Deprecation is deliberately absent: marking something [Obsolete] leaves the queryable surface
     // exactly as it was, and folding it in would report every deployed client as stale for what is
     // only a note to whoever next rebuilds one.
-    static string ComputeStamp(ModelExtract extract)
+    internal static string ComputeStamp(ModelExtract extract)
     {
         var sources = extract.Sources
             .Where(_ => _.Kind != SourceKind.Complex)
@@ -428,7 +436,11 @@ public class ScryGenerator :
             .Select(_ => (_.ModelName, _.BaseModelName, StampMembers(_)))
             .ToList();
         var enums = extract.Enums
-            .Select(_ => (_.Name, _.Members.ToList()))
+            .Select(_ => (
+                _.Name,
+                _.Underlying,
+                _.IsFlags,
+                _.Members.ToList().Zip(_.Values.ToList(), (name, value) => (name, value)).ToList()))
             .ToList();
         return SchemaStamp.Compute(sources, types, enums);
     }

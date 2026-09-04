@@ -27,7 +27,7 @@ A type is invisible unless it carries `[Queryable]`, `[QueryableView]`, `[Querya
 
 Adding an entity to the `DbContext` does not expose it. Adding a property to an exposed entity does expose it — that is the one direction where the default is open, and it is why the surface should be reviewed alongside model changes.
 
-**Collection navigations are the exception to that**: they are invisible even on an exposed type until the *member itself* carries `[QueryableCollection]`, so adding one to a model never widens a surface by accident. An exposed collection is **aggregable, not projectable** — a client can ask `Any`, `All`, `Count`, `Sum`, `Average`, `Min`, or `Max` about it, evaluated as a correlated subquery, but can never enumerate its rows. Every answer is a scalar, so no request can return an unbounded nested collection and the page bounds are unchanged. Inside the subquery the element type's own allow-list applies, a `[QueryIgnore]`d member stays hidden, and a subquery may not appear inside another subquery.
+**Collection navigations are the exception to that**: they are invisible even on an exposed type until the *member itself* carries `[QueryableCollection]`, so adding one to a model never widens a surface by accident. An exposed collection is **aggregable, not projectable** — a client can ask `Any`, `All`, `Count`, `Sum`, `Average`, `Min`, or `Max` about it, evaluated as a correlated subquery, but can never enumerate its rows. Every answer is a scalar, so no request can return an unbounded nested collection and the page bounds are unchanged. Inside the subquery the element type's own allow-list applies, a `[QueryIgnore]`d member stays hidden, and a subquery may not appear inside another subquery or inside a membership test against another source.
 
 A collection whose element type carries a [row policy](policies.md) is **refused at startup**. A policy filters a source; a subquery has none, so aggregating a policied collection would count exactly the rows the policy exists to hide. A reference navigation into a policied type is not refused but [rewritten](policies.md#reached-through-a-navigation): it is read through that type's policy, so a hidden row reads as null. A `[QueryableComplex]` type carrying a policy is refused for the same reason and at the same point: it has no source of its own for one to filter, so the policy could never run.
 
@@ -271,9 +271,11 @@ public enum KnownFunction
 
     /// <summary>
     /// Reads text as a value — <c>int.Parse</c> / <c>Convert.ToInt32</c> and their siblings; the
-    /// inverse of <see cref="StringFrom"/>. Only that direction exists: a numeric member is already a
-    /// value, and SQL's numeric-to-numeric conversions truncate where the CLR's round, so those are
-    /// not carried. Text that does not parse faults at execution, exactly as it would in memory.
+    /// inverse of <see cref="StringFrom"/> — or, over a number, widens it to the named type, which
+    /// is how a cast such as <c>(double)member</c> travels. Only a widening conversion is carried: SQL's
+    /// numeric-to-numeric conversions truncate where the CLR's round, so a narrowing one would answer
+    /// differently per source. Text that does not parse faults at execution, exactly as it would in
+    /// memory.
     /// </summary>
     Int32From,
     Int64From,
@@ -305,7 +307,7 @@ public enum KnownFunction
     BytesElementAt
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L210' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L212' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Unknown discriminators fail deserialization rather than being ignored, so a request that names anything outside these sets is rejected at the JSON layer.
@@ -404,11 +406,25 @@ public int DefaultPageSize { get; set; } = 100;
 /// <summary>Maximum navigation-path length allowed in a member expression. Default 4.</summary>
 public int MaxNavigationDepth { get; set; } = 4;
 
-/// <summary>Maximum number of operators in a query pipeline. Default 32.</summary>
+/// <summary>
+/// Maximum number of operators in a query pipeline. The pipeline a join's inner side or a set
+/// operand carries is bounded by the same number. Default 32.
+/// </summary>
 public int MaxPipelineLength { get; set; } = 32;
 
 /// <summary>Maximum expression nesting depth in a predicate. Default 32.</summary>
 public int MaxExpressionDepth { get; set; } = 32;
+
+/// <summary>
+/// Maximum number of members a projection may name, nested members included, and the same for
+/// the members a join projects. Default 256.
+/// </summary>
+/// <remarks>
+/// Every member is an expression the provider compiles and a column the query returns, so the
+/// width of a projection is work a request asks for, exactly as the length of its pipeline is. A
+/// query writing no <c>Select</c> is unaffected: its projection is the model's own members.
+/// </remarks>
+public int MaxProjectionMembers { get; set; } = 256;
 
 /// <summary>
 /// Maximum number of values a client may supply to a set-membership test (<c>Contains</c>, which
@@ -466,10 +482,10 @@ public int? MaxStreamRows { get; set; }
 /// </remarks>
 public int QueryUrlLimit { get; set; } = QueryUrl.MaxLength;
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L83' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L97' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-These bound the work a single request can ask for: how many rows, how deep a join chain, how long a pipeline, how deeply nested an expression.
+These bound the work a single request can ask for: how many rows, how deep a join chain, how long a pipeline — a join's inner side and a set operand each carry one of their own, held to the same length — how deeply nested an expression, and how wide a projection.
 
 All but one are **per query**, which is what makes `MaxBatchSize` load-bearing: a [batch](batching.md) is the only request that carries more than one query, so without it every other limit would apply to an arbitrary number of them at once. Each entry is otherwise validated, policy-filtered, and audited exactly as it would be sent alone — batching is a transport concern, and reaches nothing else on this page.
 

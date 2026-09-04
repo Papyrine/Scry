@@ -1,5 +1,3 @@
-using System.Buffers.Text;
-
 /// <summary>
 /// The debug sidecar over the running sample: toggled by its shortcut, populated by the page's own
 /// queries, and linking into the explorer with the captured query pre-populated.

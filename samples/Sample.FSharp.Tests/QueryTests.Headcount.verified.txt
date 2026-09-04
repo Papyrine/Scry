@@ -1,0 +1,10 @@
+﻿[
+  {
+    Department: Engineering,
+    Headcount: 2
+  },
+  {
+    Department: Sales,
+    Headcount: 2
+  }
+]

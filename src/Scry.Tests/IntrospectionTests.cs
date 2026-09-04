@@ -21,6 +21,26 @@ public class IntrospectionTests
     }
     // end-snippet
 
+    // A re-emitted enum carries its values, so a client resolves a combined flag to the member the
+    // server meant. Perks is [Flags] with explicit powers of two; a copy numbered by position would
+    // hold 3 for Remote. The spellings here are the ones the generator reads from metadata, which is
+    // what makes the two stamps agree.
+    [Test]
+    public void EnumsCarryTheirValuesAndFlags()
+    {
+        var perks = SharedProcessor.Instance.Describe().Enums.Single(_ => _.Name == "Perks");
+
+        string[] names = ["None", "Parking", "Gym", "Remote"];
+        string[] values = ["0", "1", "2", "4"];
+        Assert.Multiple(() =>
+        {
+            Assert.That(perks.Values, Is.EqualTo(names));
+            Assert.That(perks.Constants, Is.EqualTo(values));
+            Assert.That(perks.IsFlags, Is.True);
+            Assert.That(perks.Underlying, Is.EqualTo("int"));
+        });
+    }
+
     [Test]
     public void QueryableViewIsClassifiedAsView()
     {

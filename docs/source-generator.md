@@ -3,6 +3,11 @@
 The generator lives in `Scry.SourceGenerator`. It is not a standalone package — it is packed inside `Scry.Client` as an analyzer, so a client project that references `Scry.Client` already has it.
 
 
+## Other languages
+
+The generator is a Roslyn generator, so only a C# project runs it. A client written in another language references a C# project that hosts the output and nothing else. See [F#](fsharp.md) for the F# client in the sample.
+
+
 ## The path-not-reference design
 
 The generator reads the server model's **built DLL from disk** using `System.Reflection.Metadata`. The assembly is never referenced by the client project, never loaded into the compiler, and never executed. Only the allow-listed surface is extracted from its metadata tables.
@@ -166,9 +171,9 @@ namespace Scry.Generated;
 
 public enum Status
 {
-    FullTime,
-    PartTime,
-    Contractor,
+    FullTime = 0,
+    PartTime = 1,
+    Contractor = 2,
 }
 ```
 <sup><a href='/src/Scry.SourceGenerator.Tests/GeneratorTests.EntitiesViewPocoAndEnum%23ScryEnums.g.verified.cs#L1-L13' title='Snippet source file'>snippet source</a> | <a href='#snippet-GeneratorTests.EntitiesViewPocoAndEnum#ScryEnums.g.verified.cs' title='Start of snippet'>anchor</a></sup>
@@ -197,7 +202,7 @@ public sealed class ScryQuery
     /// A hash of the queryable surface this client was generated against. Attached to each
     /// request so the server can identify a client generated against a different model.
     /// </summary>
-    public const string SchemaStamp = "2iosRX6CXtpmJbM0";
+    public const string SchemaStamp = "zzQQ3191-q-LlvCa";
 
     readonly global::Scry.ScryClient client;
 
@@ -248,7 +253,7 @@ builder.Services.AddScoped<ScryQuery>();
 | `byte[]` | `byte[]` (with ` = null!;`) |
 | `decimal` | `decimal` |
 | `DateTime`, `DateOnly`, `TimeOnly`, `DateTimeOffset`, `TimeSpan`, `Guid` | `global::System.X` |
-| an `enum` | the enum name, re-emitted into `ScryEnums.g.cs` |
+| an `enum` | the enum name, its members with their values, its underlying type, and `[Flags]`, re-emitted into `ScryEnums.g.cs` |
 | another opted-in type | `{Type}QueryModel?` |
 | a nullable value type | the above with `?` |
 | anything else | omitted |

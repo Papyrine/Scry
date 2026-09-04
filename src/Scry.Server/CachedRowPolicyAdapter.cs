@@ -90,34 +90,53 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
     {
         lock (registration.Gate(scopeKey))
         {
-            var current = registration.Store.Get(registration.Name, scopeKey);
-            var rows = Undecided(current, context);
-            if (rows.Count == 0)
+            // Decided against the state read at the start, and applied under that state's generation.
+            // Deciding is the one long window here, and the host may invalidate rows or the whole
+            // scope while it runs; the store then keeps what was re-pended pending, or drops the
+            // round where the scope was forgotten, and the generation it hands back says so. Another
+            // round picks those up, so the answer returned already reflects what the host said
+            // meanwhile. Bounded, for a host that never stops saying it.
+            for (var attempt = 0;; attempt++)
             {
-                return current ?? CachedPolicyScope.Empty;
-            }
-
-            var watermark = current?.Watermark;
-            foreach (var row in rows)
-            {
-                // The watermark only ever moves forward, so a row decided out of order cannot pull it
-                // back and leave the rows between it as already answered.
-                var read = readVersion(row);
-                if (watermark is not TVersion known ||
-                    Comparer<TVersion>.Default.Compare(read, known) > 0)
+                var current = registration.Store.Get(registration.Name, scopeKey) ?? Reserve(scopeKey);
+                var generation = current.Generation;
+                var rows = Undecided(current, context);
+                if (rows.Count == 0)
                 {
-                    watermark = read;
+                    return current;
+                }
+
+                var watermark = current.Watermark;
+                foreach (var row in rows)
+                {
+                    // The watermark only ever moves forward, so a row decided out of order cannot pull it
+                    // back and leave the rows between it as already answered.
+                    var read = readVersion(row);
+                    if (watermark is not TVersion known ||
+                        Comparer<TVersion>.Default.Compare(read, known) > 0)
+                    {
+                        watermark = read;
+                    }
+                }
+
+                // Every key that was pending has now been decided or found gone, so none of them is
+                // still waiting for an answer — unless the host re-pended some meanwhile, which the
+                // generation tells the store.
+                registration.Store.Apply(
+                    registration.Name,
+                    scopeKey,
+                    new(Decide(policy, rows, scopeKey, context), watermark, current.PendingKeys)
+                    {
+                        Generation = generation
+                    });
+
+                var applied = registration.Store.Get(registration.Name, scopeKey) ?? CachedPolicyScope.Empty;
+                if (applied.Generation == generation ||
+                    attempt == 2)
+                {
+                    return applied;
                 }
             }
-
-            // Every key that was pending has now been decided or found gone, so none of them is still
-            // waiting for an answer.
-            registration.Store.Apply(
-                registration.Name,
-                scopeKey,
-                new(Decide(policy, rows, scopeKey, context), watermark, current?.PendingKeys ?? []));
-
-            return registration.Store.Get(registration.Name, scopeKey) ?? CachedPolicyScope.Empty;
         }
     }
 
@@ -134,12 +153,26 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
         lock (registration.Gate(scopeKey))
         {
             // No watermark and nothing resolved: these are rows the caller chose rather than every row
-            // up to a version, so neither claim would be true of anything but them.
+            // up to a version, so neither claim would be true of anything but them. Applied under the
+            // generation read first, so a scope the host forgets meanwhile is not re-seeded with them.
+            var generation = (registration.Store.Get(registration.Name, scopeKey) ?? Reserve(scopeKey)).Generation;
             registration.Store.Apply(
                 registration.Name,
                 scopeKey,
-                new(Decide(policy, primed, scopeKey, context), Watermark: null, Resolved: []));
+                new(Decide(policy, primed, scopeKey, context), Watermark: null, Resolved: [])
+                {
+                    Generation = generation
+                });
         }
+    }
+
+    // A scope nothing has been said about yet, written to the store as exactly that before a round
+    // decides against it: an invalidation the host raises during the round needs a scope to land in,
+    // and one the store does not hold has no generation to move.
+    CachedPolicyScope Reserve(string scopeKey)
+    {
+        registration.Store.Apply(registration.Name, scopeKey, new([], Watermark: null, Resolved: []));
+        return registration.Store.Get(registration.Name, scopeKey) ?? CachedPolicyScope.Empty;
     }
 
     List<(object, bool)> Decide(ICachedRowPolicy<TEntity> policy, IReadOnlyList<TEntity> rows, string scopeKey, ScryPolicyContext context)

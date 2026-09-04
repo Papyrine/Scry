@@ -85,6 +85,43 @@ public class Employee
 /// Each maps to a column of its own on SQL Server, so the functions over them are exercised as
 /// translated SQL rather than in memory. Carries a plain binary member for the same reason.
 /// </summary>
+/// <summary>
+/// A base that never opted in. Its members are exposed on the derived type that did, as if declared
+/// there: the generator reads a base in the model assembly whether or not it opted in, and the server
+/// reads the same members by reflection. Not a source, and never an <c>OfType</c> target.
+/// </summary>
+public abstract class Audited
+{
+    public string CreatedBy { get; set; } = "";
+
+    // Overridden below, so the member is declared twice in metadata and once in reflection; both
+    // sides have to describe it once.
+    public virtual string Notes { get; set; } = "";
+}
+
+/// <summary>
+/// Every shape the generator and the server once described differently, on one type, so
+/// <c>LockstepTests</c> catches a divergence in any of them: an unannotated base, an override, an
+/// indexer, and collections declared as arrays.
+/// </summary>
+[Queryable]
+public class Invoice :
+    Audited
+{
+    public int Id { get; set; }
+    public string Number { get; set; } = "";
+    public override string Notes { get; set; } = "";
+
+    // An indexer is a property with parameters, which no query names and neither side exposes.
+    public string this[int index] => Number;
+
+    [QueryableCollection]
+    public string[] Tags { get; set; } = [];
+
+    [QueryableCollection]
+    public int[] Weights { get; set; } = [];
+}
+
 [Queryable]
 public class Shift
 {
@@ -254,6 +291,11 @@ public class Ticket
     public int Id { get; set; }
     public string Name { get; set; } = "";
     public bool IsOpen { get; set; }
+
+    // A Guid ordering key. Guid defines no relational operator, so a cursor seeking past one has to
+    // compare it another way — which ClientRoundTripTests pins by paging through this on a real
+    // database.
+    public Guid Token { get; set; }
 }
 
 // begin-snippet: namedSource
@@ -502,6 +544,7 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
     public DbSet<Post> Posts => Set<Post>();
     public DbSet<Contract> Contracts => Set<Contract>();
     public DbSet<Shift> Shifts => Set<Shift>();
+    public DbSet<Invoice> Invoices => Set<Invoice>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder builder) =>
         builder.Properties<decimal>().HavePrecision(18, 2);
@@ -808,21 +851,25 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
                 Medium = "Paint"
             });
 
+        // Tokens fixed rather than generated, so a snapshot ordered by one holds still.
         context.Tickets.AddRange(
             new()
             {
                 Name = "Login bug",
-                IsOpen = true
+                IsOpen = true,
+                Token = new("11111111-1111-1111-1111-111111111111")
             },
             new()
             {
                 Name = "Signup crash",
-                IsOpen = true
+                IsOpen = true,
+                Token = new("22222222-2222-2222-2222-222222222222")
             },
             new()
             {
                 Name = "Old typo",
-                IsOpen = false
+                IsOpen = false,
+                Token = new("33333333-3333-3333-3333-333333333333")
             });
 
         // Each announcement fails a different one of the two policies, so which of them ran shows in

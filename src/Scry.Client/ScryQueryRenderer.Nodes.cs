@@ -218,10 +218,15 @@ partial class QueryRenderer
             _ => true
         };
 
-    static string Comparison(StringMatch match) =>
-        match == StringMatch.CaseSensitive
-            ? "StringComparison.Ordinal"
-            : "StringComparison.OrdinalIgnoreCase";
+    static string Comparison(StringMatch match)
+    {
+        if (match == StringMatch.CaseSensitive)
+        {
+            return "StringComparison.Ordinal";
+        }
+
+        return "StringComparison.OrdinalIgnoreCase";
+    }
 
     string RenderSubquery(SubqueryNode subquery, Scope scope)
     {
@@ -237,10 +242,15 @@ partial class QueryRenderer
             : null;
         var inner = new Scope(scope.NestedParameter, elementModel, Grouped: false, Depth: scope.Depth + 1);
 
-        string Fold(string name, Node? body) =>
-            body is null
-                ? $"{collection}.{name}()"
-                : $"{collection}.{name}({inner.Parameter} => {RenderNode(body, inner)})";
+        string Fold(string name, Node? body)
+        {
+            if (body is null)
+            {
+                return $"{collection}.{name}()";
+            }
+
+            return $"{collection}.{name}({inner.Parameter} => {RenderNode(body, inner)})";
+        }
 
         switch (subquery.Function)
         {
@@ -355,8 +365,11 @@ partial class QueryRenderer
 
         var fold = aggregate.Function.ToString();
         var selector = RenderNode(aggregate.Selector, inner);
-        return aggregate.Distinct
-            ? $"{source}.Select({inner.Parameter} => {selector}).Distinct().{fold}()"
-            : $"{source}.{fold}({inner.Parameter} => {selector})";
+        if (aggregate.Distinct)
+        {
+            return $"{source}.Select({inner.Parameter} => {selector}).Distinct().{fold}()";
+        }
+
+        return $"{source}.{fold}({inner.Parameter} => {selector})";
     }
 }

@@ -48,6 +48,80 @@ public class GeneratorTests
     }
 
     [Test]
+    public Task EnumValuesUnderlyingTypeAndFlags()
+    {
+        // Re-emitted with the values the model declares, its underlying type, and [Flags]: numbered by
+        // position instead, Remote would be 3, and a combined flag — which travels by name — would
+        // resolve to the wrong member on one side.
+        const string model = """
+            using System;
+            using Scry;
+
+            namespace Sample.Model;
+
+            [Flags]
+            public enum Perks : byte
+            {
+                None = 0,
+                Parking = 1,
+                Gym = 2,
+                Remote = 4
+            }
+
+            public enum Priority
+            {
+                Low = 10,
+                High = 20
+            }
+
+            [Queryable]
+            public class Employee
+            {
+                public int Id { get; set; }
+                public Perks Perks { get; set; }
+                public Priority? Priority { get; set; }
+            }
+            """;
+
+        return VerifyGenerated(model);
+    }
+
+    [Test]
+    public Task UnannotatedBaseOverrideIndexerAndArrays()
+    {
+        // The unannotated base's members are the derived model's own; the override is emitted once
+        // and carries the base declaration's attributes; the indexer is not a member; an array is a
+        // collection of its element. Each is what the server reads by reflection.
+        const string model = """
+            using Scry;
+
+            namespace Sample.Model;
+
+            public abstract class Audited
+            {
+                public string CreatedBy { get; set; } = "";
+                public virtual string Notes { get; set; } = "";
+                [QueryIgnore] public virtual string Secret { get; set; } = "";
+            }
+
+            [Queryable]
+            public class Invoice : Audited
+            {
+                public int Id { get; set; }
+                public string Number { get; set; } = "";
+                public override string Notes { get; set; } = "";
+                public override string Secret { get; set; } = "";
+                public string this[int index] => Number;
+                [QueryableCollection] public string[] Tags { get; set; } = [];
+                [QueryableCollection] public int[] Weights { get; set; } = [];
+                public string[] Hidden { get; set; } = [];
+            }
+            """;
+
+        return VerifyGenerated(model);
+    }
+
+    [Test]
     public Task Hierarchy()
     {
         // Vehicle opts in and so inherits the base model, declaring only its own members. Artwork

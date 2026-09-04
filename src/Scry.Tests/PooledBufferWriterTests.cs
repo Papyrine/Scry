@@ -1,5 +1,3 @@
-using System.Buffers;
-
 /// <summary>
 /// The buffer a buffered response is written into. It hands out spans of a rented array and swaps
 /// that array as it grows, so what matters is that everything written survives the swaps in order and

@@ -16,7 +16,9 @@ sealed partial class QueryTranslator
     {
         var translator = new QueryTranslator();
         var ops = new List<QueryOp>();
-        translator.Visit(expression, ops);
+        // A variable a lambda binds is substituted before anything is read, so every reader below sees
+        // the one expression the lambda stands for — see LetInliner.
+        translator.Visit(LetInliner.Inline(expression), ops);
         attachments = translator.ResolveAttachments(ops);
         return ops;
     }
@@ -25,8 +27,11 @@ sealed partial class QueryTranslator
     /// Translates a standalone lambda body — a predicate or an aggregate selector supplied to a
     /// terminal rather than captured in the query expression.
     /// </summary>
-    public static Node TranslateLambda(LambdaExpression lambda) =>
-        new QueryTranslator().TranslateExpr(lambda.Body, lambda.Parameters[0]);
+    public static Node TranslateLambda(LambdaExpression lambda)
+    {
+        var inlined = (LambdaExpression) LetInliner.Inline(lambda);
+        return new QueryTranslator().TranslateExpr(inlined.Body, inlined.Parameters[0]);
+    }
 
     void Visit(Expression expression, List<QueryOp> ops)
     {

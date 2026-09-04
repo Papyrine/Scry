@@ -38,7 +38,7 @@ public sealed class ScryQuery
     /// A hash of the queryable surface this client was generated against. Attached to each
     /// request so the server can identify a client generated against a different model.
     /// </summary>
-    public const string SchemaStamp = "2iosRX6CXtpmJbM0";
+    public const string SchemaStamp = "zzQQ3191-q-LlvCa";
 
     readonly global::Scry.ScryClient client;
 
@@ -642,9 +642,11 @@ public enum KnownFunction
 
     /// <summary>
     /// Reads text as a value — <c>int.Parse</c> / <c>Convert.ToInt32</c> and their siblings; the
-    /// inverse of <see cref="StringFrom"/>. Only that direction exists: a numeric member is already a
-    /// value, and SQL's numeric-to-numeric conversions truncate where the CLR's round, so those are
-    /// not carried. Text that does not parse faults at execution, exactly as it would in memory.
+    /// inverse of <see cref="StringFrom"/> — or, over a number, widens it to the named type, which
+    /// is how a cast such as <c>(double)member</c> travels. Only a widening conversion is carried: SQL's
+    /// numeric-to-numeric conversions truncate where the CLR's round, so a narrowing one would answer
+    /// differently per source. Text that does not parse faults at execution, exactly as it would in
+    /// memory.
     /// </summary>
     Int32From,
     Int64From,
@@ -676,7 +678,7 @@ public enum KnownFunction
     BytesElementAt
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L210' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L212' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Mapped from:
@@ -758,7 +760,7 @@ var rows = await client.Source<Shift>("Shift")
     .Select(_ => new ShiftRow(_.Name))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/TemporalPartTests.cs#L23-L30' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientTimeSpanParts' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TemporalPartTests.cs#L93-L100' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientTimeSpanParts' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Each is the part within the unit above it, so `Hours` of a two-day span is 0 to 23 and not 48. The whole totals — `TotalHours` and its siblings — are absent: each is a division rather than a part and no provider translates one, so they are [left out](linq-coverage.md#room-to-grow) rather than shipped as a query that fails at execution.
@@ -771,7 +773,7 @@ The string functions take a `char` argument as readily as a string one — `Cont
 
 `HasFlag` reads a `[Flags]` enum member; a combined flag — `_.Perks.HasFlag(Perks.Parking | Perks.Gym)` — folds into one constant and travels by name, exactly as `Enum.ToString` spells it.
 
-The parsing functions read **text only** — the inverse of `ToString`. A numeric member is already a value, which arithmetic and comparison promote without a cast, and SQL's numeric-to-numeric conversions truncate where the CLR's round — so that direction is refused rather than answered differently per source. Text that does not parse faults the query at execution, exactly as it would in memory. `Convert.ToSingle` is the one spelling left out: the provider translates `float.Parse` but carries no `ToSingle` conversion.
+The parsing functions read **text** — the inverse of `ToString` — and, written as a cast, **widen a number**: `(double)_.Quantity` travels as the same function over the member, and the provider makes it a `CAST`. Only a widening cast is carried, because dropping it would change the answer — `(double)a / b` over two integer members would otherwise divide as integers. A narrowing cast is refused: SQL's numeric-to-numeric conversions truncate where the CLR's round, so the two would answer differently per source; compute over the wider type, or round first. A cast that reads an enum or a `char` as a number is refused too — an enum travels by name and a `char` as itself — where the conversions C# writes into a *comparison* of either (`_.Status == Status.Active` compares their numbers underneath) are dropped, since the wire compares the values as written. Text that does not parse faults the query at execution, exactly as it would in memory. `Convert.ToSingle` is the one spelling left out: the provider translates `float.Parse` but carries no `ToSingle` conversion.
 
 Every function past `Math.Sqrt` is defined over `double` alone, so an integer or decimal member is widened to reach it — which is also the type the provider computes it in. `Math.Log` is the natural logarithm with no second argument and a logarithm to that base with one. The angle conversions are statics on the floating types rather than on `Math` — the `float` spellings mean the same functions — and translate to SQL's `RADIANS` / `DEGREES`.
 
@@ -957,7 +959,7 @@ var rows = await client.Source<Employee>("Employee")
 
 The named source is resolved and [policy-filtered](policies.md) before the test, exactly as a [join](#joins) resolves its second side. Membership is therefore only ever of rows the caller could have queried directly: a row the source's policy hides is not in the set, so the test cannot be used to learn that it exists.
 
-Only a `Where` and the `Select` naming the compared value cross into the other source — anything else would describe rows the test has already consumed — and a membership test may not appear inside another. Each side is validated against its own allow-list, so a `[QueryIgnore]`d member stays hidden on both.
+Only a `Where` and the `Select` naming the compared value cross into the other source — anything else would describe rows the test has already consumed — and a membership test may not appear inside another, nor inside a [collection subquery](#collection-subqueries), where its cost would compound per element. Each side is validated against its own allow-list, so a `[QueryIgnore]`d member stays hidden on both.
 
 The `Select` here names a **bare value** rather than constructing an object, unlike an ordinary projection: it is the single value being compared, not a row shape.
 
@@ -987,7 +989,7 @@ var rows = await client.Source<Order>("Order")
 
 A `Where` may precede any of them — `_.Items.Where(i => i.Active).Count()` — and folds into the subquery's own filter.
 
-The result is always a **scalar**, so a subquery can appear anywhere a value can: a predicate, an ordering key, a projection leaf, an aggregate selector. What it cannot do is return rows. A collection is never projectable, never traversable in a member path (`_.Items.Name` is rejected), and a subquery may not appear inside another subquery — the cost is per-row and would compound. Inside the subquery, the predicate and selector read the collection's *element*, against that type's own allow-list.
+The result is always a **scalar**, so a subquery can appear anywhere a value can: a predicate, an ordering key, a projection leaf, an aggregate selector. What it cannot do is return rows. A collection is never projectable, never traversable in a member path (`_.Items.Name` is rejected), and a subquery may not appear inside another subquery or inside a [membership test](#membership-of-another-source) — the cost is per-row and would compound. Inside the subquery, the predicate and selector read the collection's *element*, against that type's own allow-list.
 
 A collection of a [`[QueryableComplex]`](annotations.md#queryablecomplex) type — a **JSON array of value objects** — is asked the same questions in the same way:
 
@@ -1191,12 +1193,13 @@ Nothing executes client-side, so an operator appended inside an `if` is part of 
 
 ## Projections
 
-A `Select` must construct an object. Anonymous types, records, and object initializers all work:
+A `Select` must construct an object. Anonymous types, records, and object initializers all work, and a constructor call with an initializer projects both halves:
 
 ```cs
 .Select(_ => new { _.Name, Manager = _.Manager!.Name })
 .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
 .Select(_ => new EmployeeRow { Name = _.Name, Department = _.Department!.Name })
+.Select(_ => new EmployeeRow(_.Name) { Department = _.Department!.Name })
 ```
 
 Projecting a bare value does not work:
@@ -1210,6 +1213,8 @@ A projection must construct an object (anonymous type, record, or object initial
 ```
 
 For a record or constructor call, member names come from the constructor parameter names, capitalized — `new EmployeeRow(name: ...)` produces the member `Name`.
+
+A variable the lambda binds and reads — F#'s `let`, which C# cannot write inside an expression — is inlined, so the projection reads what was bound to it. See [F#](fsharp.md).
 
 Every projection leaf must resolve to an allow-listed **scalar**. A navigation cannot be projected whole; project a scalar out of it (`_.Department!.Name`).
 

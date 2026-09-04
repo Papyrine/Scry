@@ -6,4 +6,7 @@
   <Project Path="Sample.Server/Sample.Server.csproj" />
   <Project Path="Sample.Client/Sample.Client.csproj" />
   <Project Path="Sample.Tests/Sample.Tests.csproj" />
+  <Project Path="Sample.QueryModels/Sample.QueryModels.csproj" />
+  <Project Path="Sample.FSharp/Sample.FSharp.fsproj" />
+  <Project Path="Sample.FSharp.Tests/Sample.FSharp.Tests.fsproj" />
 </Solution>

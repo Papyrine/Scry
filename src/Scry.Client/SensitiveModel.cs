@@ -138,7 +138,10 @@ static class SensitiveModel
     {
         var unwrapped = Nullable.GetUnderlyingType(type) ?? type;
         if (unwrapped.IsGenericType &&
-            unwrapped.GetInterfaces().Append(unwrapped).FirstOrDefault(_ => _.IsGenericType && _.GetGenericTypeDefinition() == typeof(IEnumerable<>)) is { } enumerable)
+            unwrapped.GetInterfaces()
+                .Append(unwrapped)
+                .FirstOrDefault(_ => _.IsGenericType &&
+                                     _.GetGenericTypeDefinition() == typeof(IEnumerable<>)) is { } enumerable)
         {
             return enumerable.GetGenericArguments()[0];
         }

@@ -1,12 +1,14 @@
 using System.Linq.Expressions;
 
 /// <summary>
-/// Numeric promotion: the widening the server reapplies to an expression's operands. The client's own
-/// conversions never reach the wire — the translator drops every Convert node, since nearly all of them
-/// are nullable lifting or enum boxing the server reproduces anyway — so an expression written as
+/// Numeric promotion: the widening the server reapplies to an expression's operands. The client's
+/// implicit conversions never reach the wire — the translator drops the Convert nodes that are
+/// nullable lifting or enum boxing, which the server reproduces anyway — so an expression written as
 /// 'decimal member > int member' arrives as two bare members of different types and has to be widened
-/// again before it is rebound. Each case here is written as client LINQ and executed against LocalDB,
-/// so the drop, the rebind and the SQL EF produces are all covered by the same assertion.
+/// again before it is rebound. A cast the client wrote is another matter: a widening one is carried,
+/// since dropping it would change the answer, and a narrowing one is refused. Each case here is
+/// written as client LINQ and executed against LocalDB, so the drop, the rebind and the SQL EF
+/// produces are all covered by the same assertion.
 /// </summary>
 [TestFixture]
 public class NumericPromotionTests
@@ -74,6 +76,99 @@ public class NumericPromotionTests
         var ids = await Ids(_ => _.Id == _.Quantity);
 
         Assert.That(ids, Is.Empty);
+    }
+
+    // A cast the client wrote is carried where dropping it would change the answer: in arithmetic,
+    // where two integers would otherwise divide as integers. Quantities are 3, 7 and 1.
+    [Test]
+    public async Task AWideningCastMakesTheDivisionFloatingPoint()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var rows = await client.Source<Order>("Order")
+            .OrderBy(_ => _.Id)
+            .Select(_ => new {Half = (double)_.Quantity / 2, PerId = (double)_.Quantity / _.Id})
+            .ToListAsync();
+
+        double[] halves = [1.5, 3.5, 0.5];
+        double[] perId = [3, 3.5, 1d / 3];
+        Assert.Multiple(() =>
+        {
+            Assert.That(rows.Select(_ => _.Half), Is.EqualTo(halves));
+            Assert.That(rows.Select(_ => _.PerId), Is.EqualTo(perId).Within(1e-12));
+        });
+    }
+
+    [Test]
+    public Task TheCarriedCastIsAWideningFunction()
+    {
+        // The cast travels as the function that reads its target type, over the member — the same
+        // function that parses text, which the server tells apart by what it is given.
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var request = client.Source<Order>("Order")
+            .Select(_ => new {Half = (double)_.Quantity / 2})
+            .ToScryRequest();
+
+        return Verify(request);
+    }
+
+    // What is not carried is refused rather than dropped: reading an enum or a char as a number,
+    // and narrowing, which the database and the CLR do differently.
+    [Test]
+    public void ReadingAnEnumAsANumberIsRefused()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var exception = Assert.Throws<NotSupportedException>(() => client.Source<Employee>("Employee")
+            .Select(_ => new {Code = (int)_.Status})
+            .ToScryRequest());
+
+        Assert.That(exception!.Message, Does.Contain("reads an enum as a number"));
+    }
+
+    [Test]
+    public void ANarrowingCastIsRefused()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var exception = Assert.Throws<NotSupportedException>(() => client.Source<Order>("Order")
+            .Where(_ => (int)_.Amount > 5)
+            .ToScryRequest());
+
+        Assert.That(exception!.Message, Does.Contain("narrows"));
+    }
+
+    // The conversions C# writes into a comparison — an enum to its number, a narrower operand to the
+    // wider one's type — are not casts the client wrote, and are dropped: the wire compares an enum
+    // by name and leaves promoting a comparison to the server. A captured value rather than a
+    // literal, since the compiler folds a literal enum to its number before there is a tree at all.
+    [Test]
+    public void AComparisonStillTravelsAsWritten()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+        var wanted = Status.FullTime;
+
+        var request = client.Source<Employee>("Employee")
+            .Where(_ => _.Status == wanted && _.Id > _.DepartmentId)
+            .ToScryRequest();
+        var promoted = client.Source<Order>("Order")
+            .Where(_ => _.Amount > _.Id)
+            .ToScryRequest();
+
+        var json = ScryJson.Serialize(request);
+        var promotedJson = ScryJson.Serialize(promoted);
+        Assert.Multiple(() =>
+        {
+            Assert.That(json, Does.Contain("\"value\":\"FullTime\",\"tag\":\"Enum\""));
+            Assert.That(json, Does.Not.Contain("From"));
+            Assert.That(promotedJson, Does.Not.Contain("From"));
+        });
     }
 
     [Test]

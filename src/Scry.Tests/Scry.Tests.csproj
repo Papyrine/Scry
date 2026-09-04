@@ -1,13 +1,9 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <!-- The closed LINQ surface the analyzer reports against, compiled here as well so it can be
-         pinned against KnownFunction and against Queryable itself — neither of which the analyzer's
-         own assembly can see. -->
-    <Compile Include="..\Shared\SupportedLinq.cs" Link="SupportedLinq.cs" />
     <!-- The snapshot scrubbers, shared with Sample.Tests: they keep the same unrelated churn out of
          both projects' verified files, and two copies would eventually stop agreeing on what churn is. -->
     <Compile Include="..\Shared\SnapshotScrubbers.cs" Link="SnapshotScrubbers.cs" />
@@ -27,5 +23,11 @@
     <ProjectReference Include="..\Scry.Annotations\Scry.Annotations.csproj" />
     <ProjectReference Include="..\Scry.Server\Scry.Server.csproj" />
     <ProjectReference Include="..\Scry.Client\Scry.Client.csproj" />
+    <!-- Referenced as a library, not as an analyzer: LockstepTests runs its metadata reader over this
+         project's own model assembly and compares the stamp it computes with the server's. It also
+         supplies SupportedLinq, the closed LINQ surface the analyzer reports against, which
+         SupportedLinqTests pins against KnownFunction and against Queryable itself — neither of
+         which the analyzer's own assembly can see. -->
+    <ProjectReference Include="..\Scry.SourceGenerator\Scry.SourceGenerator.csproj" />
   </ItemGroup>
 </Project>

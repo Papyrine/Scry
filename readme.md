@@ -22,6 +22,11 @@ It also assumes the front end and the back end are built by the **same team** an
 "Same team" is about coupling, not trust. The client is still treated as hostile — the generated code, the LINQ, and the wire request are all attacker-controlled — and every guarantee is re-enforced server-side at runtime. See [docs/security.md](docs/security.md).
 
 
+## Compared to other approaches
+
+Scry sits in a narrow slot beside hand-written endpoints, schema-language query APIs, URL query conventions, expression-tree serializers, and database-generated APIs. [Comparisons](docs/comparisons.md) places each by type and by name, and lists when Scry is the wrong choice.
+
+
 ## How it works
 
 The build-time and runtime flows are deliberately independent. Nothing is referenced across the client/server boundary: the only things that cross it are the model dll *by path* (build time) and the serialized wire AST (run time).
@@ -95,7 +100,7 @@ See [docs/security.md](docs/security.md) for the full threat model.
 | [Scry.Client](https://nuget.org/packages/Scry.Client/) | Client-side `IQueryable` provider (no EF dependency). Ships the source generator. |
 | [Scry.Server](https://nuget.org/packages/Scry.Server/) | Server-side validation + execution against EF Core. |
 | [Scry.Server.Explorer](https://nuget.org/packages/Scry.Server.Explorer/) | Opt-in, GraphiQL-style query explorer. |
-| [Scry.Server.Delta](https://nuget.org/packages/Scry.Server.Delta/) | Opt-in `304 Not Modified`, backed by Delta. |
+| [Scry.Server.Delta](https://nuget.org/packages/Scry.Server.Delta/) | Opt-in `304 Not Modified`, backed by [Delta](https://github.com/SimonCropp/Delta). |
 
 `Scry.SourceGenerator` is packed inside `Scry.Client` rather than published separately.
 
@@ -253,6 +258,7 @@ The client side has a companion: a [debug sidecar](docs/sidecar.md) that opens o
 - [Comparisons](docs/comparisons.md)
 - [Annotations](docs/annotations.md)
 - [Source generator](docs/source-generator.md)
+- [F#](docs/fsharp.md)
 - [Writing queries](docs/querying.md)
 - [Server](docs/server.md)
 - [Row policies](docs/policies.md)
