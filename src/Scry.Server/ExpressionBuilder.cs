@@ -876,24 +876,21 @@ sealed class ExpressionBuilder(
 
         var value = Build(inSource.Value, row, null);
         var selector = ElementLambda(inSource.Selector, element, null);
-        var candidates = inner.Provider.CreateQuery(
-            Expression.Call(
-                typeof(Queryable),
-                "Select",
-                [element, selector.ReturnType],
-                inner.Expression,
-                Expression.Quote(selector)));
 
-        // The tested value and the candidates must agree on type for Contains to bind.
-        var candidateValues = candidates.Expression;
+        // The tested value and the candidates must agree on type for Contains to bind, and either
+        // side may be the optional one. An optional member tested against required keys is the only
+        // way C# lets that be written — the lifting cast on the selector is dropped by the client —
+        // and a required member against optional candidates is its mirror image. Whichever side is
+        // narrower is lifted to the other.
         if (selector.ReturnType != value.Type)
         {
-            var target = Nullable.GetUnderlyingType(selector.ReturnType) == value.Type
-                ? selector.ReturnType
-                : value.Type;
-            if (target != value.Type)
+            if (Nullable.GetUnderlyingType(selector.ReturnType) == value.Type)
             {
-                value = Expression.Convert(value, target);
+                value = Expression.Convert(value, selector.ReturnType);
+            }
+            else if (Nullable.GetUnderlyingType(value.Type) == selector.ReturnType)
+            {
+                selector = Expression.Lambda(Expression.Convert(selector.Body, value.Type), selector.Parameters[0]);
             }
             else
             {
@@ -902,9 +899,17 @@ sealed class ExpressionBuilder(
             }
         }
 
+        var candidates = inner.Provider.CreateQuery(
+            Expression.Call(
+                typeof(Queryable),
+                "Select",
+                [element, selector.ReturnType],
+                inner.Expression,
+                Expression.Quote(selector)));
+
         return Expression.Call(
             queryableContains.MakeGenericMethod(value.Type),
-            candidateValues,
+            candidates.Expression,
             value);
     }
 

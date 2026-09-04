@@ -32,6 +32,26 @@ public class SourceMembershipTests
         Assert.That(count, Is.EqualTo(4));
     }
 
+    // An optional member tested against required keys. C# only lets this be written with the keys
+    // lifted — Select(e => (int?)e.Id) — and the client drops that cast as lifting, so the server
+    // meets an int? value against int candidates and has to lift the candidates itself.
+    [Test]
+    public async Task AnOptionalValueAgainstRequiredCandidates()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // Aaron and Bob report to Alice; the other two have no manager, and a null is in no set.
+        var count = await client.Source<Employee>("Employee")
+            .CountAsync(_ =>
+                client
+                    .Source<Employee>("Employee")
+                    .Select(_ => (int?)_.Id)
+                    .Contains(_.ManagerId));
+
+        Assert.That(count, Is.EqualTo(2));
+    }
+
     [Test]
     public async Task MembershipNarrowedByAFilterOnTheOtherSource()
     {

@@ -954,7 +954,7 @@ var rows = await client.Source<Employee>("Employee")
     .Select(_ => new NameRow(_.Name))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/SourceMembershipTests.cs#L41-L50' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientSourceMembership' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/SourceMembershipTests.cs#L61-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientSourceMembership' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The named source is resolved and [policy-filtered](policies.md) before the test, exactly as a [join](#joins) resolves its second side. Membership is therefore only ever of rows the caller could have queried directly: a row the source's policy hides is not in the set, so the test cannot be used to learn that it exists.
