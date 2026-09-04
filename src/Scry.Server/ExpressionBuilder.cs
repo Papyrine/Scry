@@ -20,7 +20,19 @@ sealed class ExpressionBuilder(
     {
         var parameter = Expression.Parameter(type, "e");
         var body = Build(predicate, parameter, typeof(bool));
-        return Expression.Lambda(body, parameter);
+        return Expression.Lambda(EnsureCondition(body), parameter);
+    }
+
+    // A predicate that is not a condition — a bare text member as a Where — would fail only when the
+    // executor binds Queryable.Where over it, as a fault rather than a rejection.
+    static Expression EnsureCondition(Expression body)
+    {
+        if (body.Type != typeof(bool))
+        {
+            throw new ScryValidationException($"A predicate must be a condition; this one is a '{body.Type.Name}'.");
+        }
+
+        return body;
     }
 
     /// <summary>
@@ -672,25 +684,43 @@ sealed class ExpressionBuilder(
     /// aggregate folds the group's rows. Both are read off the row's own type, so nothing has to be
     /// threaded through the recursion.
     /// </summary>
-    Expression Build(Node node, Expression row, Type? expected) =>
-        node switch
+    Expression Build(Node node, Expression row, Type? expected)
+    {
+        try
         {
-            GroupKeyNode key when IsGrouping(row.Type) => BuildGroupKeyAt(key.Index, row),
-            MemberNode member when IsGrouping(row.Type) => BuildGroupKey(member, row),
-            AggregateNode aggregate when IsGrouping(row.Type) =>
-                BuildAggregate(aggregate, (ParameterExpression)row, row.Type.GetGenericArguments()[1]),
-            MemberNode member => BuildMemberAccess(row, member.Path),
-            ElementNode => BuildElement(row),
-            ConstNode constant => BuildConstant(constant, expected),
-            BinaryNode binary => BuildBinary(binary, row),
-            UnaryNode unary => BuildUnary(unary, row),
-            CallNode call => BuildCall(call, row),
-            ConditionalNode conditional => BuildConditional(conditional, row),
-            SubqueryNode subquery => BuildSubquery(subquery, row),
-            CollateNode collate => BuildCollate(collate, row),
-            InSourceNode inSource => BuildInSource(inSource, row),
-            _ => throw new ScryValidationException($"Unsupported expression '{node.GetType().Name}'.")
-        };
+            return node switch
+            {
+                GroupKeyNode key when IsGrouping(row.Type) => BuildGroupKeyAt(key.Index, row),
+                MemberNode member when IsGrouping(row.Type) => BuildGroupKey(member, row),
+                AggregateNode aggregate when IsGrouping(row.Type) =>
+                    BuildAggregate(aggregate, (ParameterExpression)row, row.Type.GetGenericArguments()[1]),
+                MemberNode member => BuildMemberAccess(row, member.Path),
+                ElementNode => BuildElement(row),
+                ConstNode constant => BuildConstant(constant, expected),
+                BinaryNode binary => BuildBinary(binary, row),
+                UnaryNode unary => BuildUnary(unary, row),
+                CallNode call => BuildCall(call, row),
+                ConditionalNode conditional => BuildConditional(conditional, row),
+                SubqueryNode subquery => BuildSubquery(subquery, row),
+                CollateNode collate => BuildCollate(collate, row),
+                InSourceNode inSource => BuildInSource(inSource, row),
+                _ => throw new ScryValidationException($"Unsupported expression '{node.GetType().Name}'.")
+            };
+        }
+        // The validator resolves every member and checks every shape, but not every pairing of types:
+        // an AndAlso over text, a Not over a number, a condition whose test is a name, a coalesce of a
+        // number with text. Those the expression tree refuses as it is built, with one of these two.
+        // The query is the client's, so each is a rejection, never a fault — and caught here, at the
+        // one place every node passes through, rather than at each operator that could raise it.
+        catch (InvalidOperationException exception)
+        {
+            throw new ScryValidationException($"The expression cannot be built as written: {exception.Message}");
+        }
+        catch (ArgumentException exception)
+        {
+            throw new ScryValidationException($"The expression cannot be built as written: {exception.Message}");
+        }
+    }
 
     /// <summary>
     /// Reads the row itself, which is what an element node names inside a subquery over a collection of
@@ -947,7 +977,7 @@ sealed class ExpressionBuilder(
     public LambdaExpression BuildGroupPredicate(Node predicate, Type element, Type key)
     {
         var parameter = Expression.Parameter(typeof(IGrouping<,>).MakeGenericType(key, element), "g");
-        return Expression.Lambda(Build(predicate, parameter, typeof(bool)), parameter);
+        return Expression.Lambda(EnsureCondition(Build(predicate, parameter, typeof(bool))), parameter);
     }
 
     Expression BuildConditional(ConditionalNode conditional, Expression row)
