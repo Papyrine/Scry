@@ -23,8 +23,8 @@ module Queries =
     /// leaves is the one the C# spelling sends.
     let activeEmployees (query: ScryQuery) =
         query.Employee
-            .Where(fun e -> e.Active)
-            .OrderBy(fun e -> e.Name)
+            .Where(_.Active)
+            .OrderBy(_.Name)
             .Select(fun e ->
                 { Name = e.Name
                   Status = e.Status
@@ -37,7 +37,7 @@ module Queries =
     /// sorts them by name, and the query is the same either way.
     let headcount (query: ScryQuery) =
         query.Employee
-            .GroupBy(fun e -> e.Department.Name)
+            .GroupBy(_.Department.Name)
             .Select(fun g -> {| Headcount = g.Count(); Department = g.Key |})
     // end-snippet
 
@@ -48,7 +48,7 @@ module Queries =
     let reportsTo (query: ScryQuery) (managerId: int) (top: int) =
         query.Employee
             .Where(fun e -> e.ManagerId ?= managerId)
-            .OrderBy(fun e -> e.Name)
+            .OrderBy(_.Name)
             .Take(top)
             .Select(fun e -> {| Name = e.Name; Status = e.Status |})
     // end-snippet
@@ -61,7 +61,7 @@ module Queries =
             .Where(fun e ->
                 let name = e.Name.ToLower()
                 name.Contains fragment && name.Length > 2)
-            .OrderBy(fun e -> e.Name)
+            .OrderBy(_.Name)
             .Select(fun e -> {| Id = e.Id; Name = e.Name |})
     // end-snippet
 
@@ -75,5 +75,5 @@ module Queries =
 
     /// A terminal that takes a predicate of its own translates it the same way.
     let activeCountAsync (query: ScryQuery) =
-        query.Employee.CountAsync(fun e -> e.Active)
+        query.Employee.CountAsync(_.Active)
     // end-snippet

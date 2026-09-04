@@ -53,7 +53,7 @@ One F#-specific note: under central package management the F# SDK turns its impl
 
 ## Writing queries
 
-Queries are the LINQ extension methods with F# lambdas. A projection is a record, named or anonymous, whose fields name the members the response comes back keyed by:
+Queries are the LINQ extension methods with F# lambdas. Where the body is a member chain, the `_.Member` shorthand is the whole lambda; a body that constructs a record or applies an operator names its parameter. A projection is a record, named or anonymous, whose fields name the members the response comes back keyed by:
 
 <!-- snippet: fsharpProjectionType -->
 <a id='snippet-fsharpProjectionType'></a>
@@ -77,8 +77,8 @@ type EmployeeRow =
 /// leaves is the one the C# spelling sends.
 let activeEmployees (query: ScryQuery) =
     query.Employee
-        .Where(fun e -> e.Active)
-        .OrderBy(fun e -> e.Name)
+        .Where(_.Active)
+        .OrderBy(_.Name)
         .Select(fun e ->
             { Name = e.Name
               Status = e.Status
@@ -99,7 +99,7 @@ An anonymous record declares nothing:
 /// sorts them by name, and the query is the same either way.
 let headcount (query: ScryQuery) =
     query.Employee
-        .GroupBy(fun e -> e.Department.Name)
+        .GroupBy(_.Department.Name)
         .Select(fun g -> {| Headcount = g.Count(); Department = g.Key |})
 ```
 <sup><a href='/samples/Sample.FSharp/Queries.fs#L35-L42' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpAnonymousRecord' title='Start of snippet'>anchor</a></sup>
@@ -117,7 +117,7 @@ let namedLike (query: ScryQuery) (fragment: string) =
         .Where(fun e ->
             let name = e.Name.ToLower()
             name.Contains fragment && name.Length > 2)
-        .OrderBy(fun e -> e.Name)
+        .OrderBy(_.Name)
         .Select(fun e -> {| Id = e.Id; Name = e.Name |})
 ```
 <sup><a href='/samples/Sample.FSharp/Queries.fs#L56-L66' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpLet' title='Start of snippet'>anchor</a></sup>
@@ -134,7 +134,7 @@ Values captured from the enclosing scope are evaluated on the client and sent as
 let reportsTo (query: ScryQuery) (managerId: int) (top: int) =
     query.Employee
         .Where(fun e -> e.ManagerId ?= managerId)
-        .OrderBy(fun e -> e.Name)
+        .OrderBy(_.Name)
         .Take(top)
         .Select(fun e -> {| Name = e.Name; Status = e.Status |})
 ```
@@ -155,7 +155,7 @@ let activeEmployeesAsync (query: ScryQuery) =
 
 /// A terminal that takes a predicate of its own translates it the same way.
 let activeCountAsync (query: ScryQuery) =
-    query.Employee.CountAsync(fun e -> e.Active)
+    query.Employee.CountAsync(_.Active)
 ```
 <sup><a href='/samples/Sample.FSharp/Queries.fs#L68-L79' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpTerminals' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
