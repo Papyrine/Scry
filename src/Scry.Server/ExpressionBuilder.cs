@@ -2400,6 +2400,13 @@ sealed class ExpressionBuilder(
             return DateTimeOffset.Parse(value, culture, DateTimeStyles.RoundtripKind);
         }
 
+        // An elapsed time travels as its constant spelling — 01:02:03.4560000 — which is also how a
+        // cursor spells one; Convert.ChangeType has no reading of it and would refuse every one.
+        if (underlying == typeof(TimeSpan))
+        {
+            return TimeSpan.Parse(value, culture);
+        }
+
         if (underlying == typeof(Guid))
         {
             return Guid.Parse(value);

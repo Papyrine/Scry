@@ -760,7 +760,7 @@ var rows = await client.Source<Shift>("Shift")
     .Select(_ => new ShiftRow(_.Name))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/TemporalPartTests.cs#L23-L30' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientTimeSpanParts' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TemporalPartTests.cs#L93-L100' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientTimeSpanParts' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Each is the part within the unit above it, so `Hours` of a two-day span is 0 to 23 and not 48. The whole totals — `TotalHours` and its siblings — are absent: each is a division rather than a part and no provider translates one, so they are [left out](linq-coverage.md#room-to-grow) rather than shipped as a query that fails at execution.
