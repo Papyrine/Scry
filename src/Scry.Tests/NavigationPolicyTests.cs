@@ -119,6 +119,27 @@ public class NavigationPolicyTests
     }
 
     [Test]
+    public async Task NestedValueTypedLeafWidensRatherThanFaulting()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // The same widening as the flat read, one level down: the nested object's leaves are read off
+        // the policy-filtered navigation, so a value-typed one has to carry the null a hidden target
+        // produces — the flat form already did, and the nested form faulted the shaper instead.
+        var rows = await client.Source<Employee>("Employee")
+            .OrderBy(_ => _.Name)
+            .Select(_ => new {_.Name, Department = new {Id = (int?)_.Department!.Id, Name = (string?)_.Department.Name}})
+            .ToListAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rows.Select(_ => _.Department.Id is null), Is.EqualTo([false, false, true, true]));
+            Assert.That(rows.Select(_ => _.Department.Name ?? "<null>"), Is.EqualTo(["Engineering", "Engineering", "<null>", "<null>"]));
+        });
+    }
+
+    [Test]
     public async Task UnpolicedNavigationIsUnaffected()
     {
         await using var context = TestContext.CreateSeeded();

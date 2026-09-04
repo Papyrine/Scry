@@ -530,7 +530,8 @@ sealed class ExpressionBuilder(
         IReadOnlyList<string> jsonPrefix,
         List<Expression> leaves,
         List<IReadOnlyList<string>> shape,
-        List<bool>? binary = null)
+        List<bool>? binary = null,
+        bool policied = false)
     {
         foreach (var member in projection.Members)
         {
@@ -539,16 +540,19 @@ sealed class ExpressionBuilder(
             {
                 // A leaf is any validated scalar expression, not only a member path — the same
                 // vocabulary a predicate is built from, rooted at whatever part of the row this
-                // projection level describes.
+                // projection level describes. Under a navigation read through a policy the row it
+                // describes may be absent, so a value-typed leaf is widened to carry that null,
+                // exactly as a flat path through the same navigation is.
                 case NodeValue value:
-                    leaves.Add(Build(value.Node, root, null));
+                    var leaf = Build(value.Node, root, null);
+                    leaves.Add(policied ? Widened(leaf) : leaf);
                     shape.Add(jsonPath);
                     binary?.Add(value.Node is MemberNode memberNode && IsBinaryPath(memberNode.Path, root.Type));
                     break;
 
                 case NestedValue nested:
-                    var navTarget = BuildMemberAccess(root, nested.Path);
-                    Flatten(nested.Projection, navTarget, jsonPath, leaves, shape, binary);
+                    var navTarget = BuildMemberAccess(root, nested.Path, out var throughPolicy);
+                    Flatten(nested.Projection, navTarget, jsonPath, leaves, shape, binary, policied || throughPolicy);
                     break;
 
                 default:
@@ -944,13 +948,18 @@ sealed class ExpressionBuilder(
         return Expression.Condition(test, ifTrue, ifFalse);
     }
 
-    Expression BuildMemberAccess(Expression root, IReadOnlyList<string> path)
+    Expression BuildMemberAccess(Expression root, IReadOnlyList<string> path) =>
+        BuildMemberAccess(root, path, out _);
+
+    // Also says whether the path stepped through a policy, for a caller that goes on reading members
+    // off what it returns — a nested projection — and has to widen those the same way.
+    Expression BuildMemberAccess(Expression root, IReadOnlyList<string> path, out bool policied)
     {
         var expression = root;
 
         // Whether the path stepped into a source whose rows are policy-filtered. Such a step can yield
         // no row where a plain navigation would have yielded one, which is what the widening below is for.
-        var policied = false;
+        policied = false;
         foreach (var segment in path)
         {
             // Traversing into an optional struct complex member (Nullable<T>): resolve against the
@@ -1018,15 +1027,15 @@ sealed class ExpressionBuilder(
         // A policied traversal yields SQL NULL for a row the policy hides, so a non-nullable value read
         // through one is widened; without that the shaper faults materializing the null. Mirrors the
         // same widening on the unmatched side of an outer join.
-        if (policied &&
-            expression.Type.IsValueType &&
-            Nullable.GetUnderlyingType(expression.Type) is null)
-        {
-            expression = Expression.Convert(expression, typeof(Nullable<>).MakeGenericType(expression.Type));
-        }
-
-        return expression;
+        return policied ? Widened(expression) : expression;
     }
+
+    // A value able to carry a null: the expression as it is where it already can, and lifted to its
+    // nullable where it cannot.
+    static Expression Widened(Expression expression) =>
+        expression.Type.IsValueType && Nullable.GetUnderlyingType(expression.Type) is null
+            ? Expression.Convert(expression, typeof(Nullable<>).MakeGenericType(expression.Type))
+            : expression;
 
     Expression BuildBinary(BinaryNode binary, Expression row)
     {
