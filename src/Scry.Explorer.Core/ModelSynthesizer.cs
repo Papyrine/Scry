@@ -7,6 +7,7 @@
 /// </summary>
 public static class ModelSynthesizer
 {
+    /// <param name="introspection">The allow-listed surface the server published.</param>
     /// <param name="executable">
     /// When true, emit a real client-backed <c>ScryQuery</c> (for compiling + running a query); when
     /// false, emit a shape-only facade sufficient for completion (no Scry.Client dependency).

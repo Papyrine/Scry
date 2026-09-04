@@ -91,6 +91,9 @@ public sealed class RoslynWorkspace
         this.editorDocumentId = editorDocumentId;
     }
 
+    /// <param name="generatedSource">
+    /// The synthesized query models, as <see cref="ModelSynthesizer"/> emitted them.
+    /// </param>
     /// <param name="scryReferences">
     /// Scry.Client + Scry.Wire metadata references, so the terminal operators (extension methods on
     /// <see cref="IQueryable{T}"/>) resolve for completion and diagnostics.

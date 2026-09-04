@@ -444,7 +444,7 @@ public class RenderRoundTripTests
     // seconds there for the same reason.
     [Test]
     public void TimeOfDayConstant() =>
-        RoundTrip(Employee.Where(_ => _.StartDate.ToDateTime(new Time(5, 6, 7, 123)) > new DateTime(2026, 1, 1)).ToScryRequest());
+        RoundTrip(Employee.Where(_ => _.StartDate.ToDateTime(new(5, 6, 7, 123)) > new DateTime(2026, 1, 1)).ToScryRequest());
 
     [Test]
     public void EnumConstant() =>

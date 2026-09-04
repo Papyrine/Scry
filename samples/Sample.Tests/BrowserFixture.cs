@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// Launches the real Sample.Server — the same DLL <c>dotnet run</c> would execute — and a headless
 /// Chromium, for fixtures that drive the live WebAssembly UI.
 /// </summary>
@@ -19,6 +19,14 @@ public abstract class BrowserFixture
     // concurrent collection rather than a List.
     readonly ConcurrentQueue<string> console = new();
 
+    // Every page the current test opened. A page holds a fully booted WASM runtime — Roslyn included,
+    // untrimmed and interpreted, because the explorer needs the interpreter — and the browser keeps
+    // one alive until it is closed. Left open, a suite this size walks the agent out of memory: the
+    // failure lands as "MONO_WASM: sbrk failed to allocate", tens of tests after the one that spent
+    // the memory, and everything after it fails to boot at all. A bag rather than a field because a
+    // test may open a second page (a shared link opens one).
+    readonly ConcurrentBag<IPage> pages = [];
+
     /// <summary>The origin the sample server is listening on, with no trailing slash.</summary>
     protected string BaseUrl { get; private set; } = null!;
 
@@ -32,6 +40,7 @@ public abstract class BrowserFixture
     protected async Task<IPage> NewPageAsync(BrowserNewPageOptions? options = null)
     {
         var page = await browser.NewPageAsync(options);
+        pages.Add(page);
         page.Console += (_, message) => console.Enqueue($"[{message.Type}] {message.Text}");
         page.PageError += (_, error) => console.Enqueue($"[pageerror] {error}");
         return page;
@@ -53,7 +62,26 @@ public abstract class BrowserFixture
     /// before, which made a whole suite of timeouts say nothing about which of those it was.
     /// </remarks>
     [TearDown]
-    public void ReportConsoleOnFailure()
+    public async Task EndTest()
+    {
+        ReportConsoleOnFailure();
+
+        // After the reporting, which reads what the page logged.
+        while (pages.TryTake(out var page))
+        {
+            try
+            {
+                await page.CloseAsync();
+            }
+            catch (PlaywrightException)
+            {
+                // A page the test already closed, or one whose browser is going away. Neither is a
+                // failure of the test that just ran.
+            }
+        }
+    }
+
+    void ReportConsoleOnFailure()
     {
         if (TestContext.CurrentContext.Result.Outcome.Status != TestStatus.Failed ||
             console.IsEmpty)

@@ -1,0 +1,139 @@
+@namespace Scry
+
+@*
+    The fixed rail down the left edge. Every icon is an inline SVG path rather than an emoji or an icon
+    font, for the same reason the brand mark is: a glyph resolves out of whatever font the OS ships, so
+    the same button paints differently on a dev machine than on a CI image — and not at all on one
+    carrying no emoji font. A path has no such dependency, which is what lets a screenshot baseline
+    hold on a machine other than the one that seeded it.
+*@
+<nav class="rail" aria-label="Explorer panes">
+    <div class="rail-group">
+        <button type="button"
+                class="rail-button @(Visible == PluginKind.Schema ? "active" : null)"
+                data-testid="rail-schema"
+                title="Show the queryable schema"
+                aria-label="Show the queryable schema"
+                aria-pressed="@(Visible == PluginKind.Schema ? "true" : "false")"
+                @onclick="() => OnToggle.InvokeAsync(PluginKind.Schema)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H19v18H7.5A2.5 2.5 0 0 0 5 22z" />
+                <path d="M5 19.5A2.5 2.5 0 0 1 7.5 17H19" />
+            </svg>
+        </button>
+        <button type="button"
+                class="rail-button @(Visible == PluginKind.History ? "active" : null)"
+                data-testid="rail-history"
+                title="Show the queries this browser remembers"
+                aria-label="Show the queries this browser remembers"
+                aria-pressed="@(Visible == PluginKind.History ? "true" : "false")"
+                @onclick="() => OnToggle.InvokeAsync(PluginKind.History)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 7v5l3.5 2" />
+            </svg>
+        </button>
+    </div>
+    <div class="rail-group">
+        <button type="button"
+                class="rail-button @(Refetching ? "spin" : null)"
+                data-testid="rail-refetch"
+                title="Re-read the schema from the server"
+                aria-label="Re-read the schema from the server"
+                disabled="@Refetching"
+                @onclick="OnRefetch">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+                <path d="M20 3v4h-4" />
+            </svg>
+        </button>
+        <button type="button"
+                class="rail-button"
+                data-testid="theme-toggle"
+                title="Cycle theme: System → Light → Dark"
+                aria-label="Switch theme (currently @ThemeLabel)"
+                @onclick="OnThemeToggle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                @if (Theme == "light")
+                {
+                    <circle cx="12" cy="12" r="5" />
+                    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                }
+                else if (Theme == "dark")
+                {
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                }
+                else
+                {
+                    @* Half the dial filled: the theme is half this page's choice and half the OS's. *@
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none" />
+                }
+            </svg>
+        </button>
+        <button type="button"
+                class="rail-button"
+                data-testid="rail-shortkeys"
+                title="Keyboard shortcuts"
+                aria-label="Keyboard shortcuts"
+                @onclick="OnOpenShortKeys">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <rect x="2" y="6" width="20" height="12" rx="2" />
+                <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6" />
+            </svg>
+        </button>
+        <button type="button"
+                class="rail-button"
+                data-testid="rail-settings"
+                title="Settings"
+                aria-label="Settings"
+                @onclick="OnOpenSettings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.36a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.64 15a1.7 1.7 0 0 0-1.55-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.64 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.64a1.7 1.7 0 0 0 1.03-1.55V3a2 2 0 1 1 4 0v.09c0 .68.4 1.29 1.03 1.55a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87c.26.62.87 1.03 1.55 1.03H21a2 2 0 1 1 0 4h-.09c-.68 0-1.29.4-1.51 1.03z" />
+            </svg>
+        </button>
+    </div>
+</nav>
+
+@code
+{
+    /// <summary>Which pane is open, or null when the plugin column is closed.</summary>
+    [Parameter]
+    public PluginKind? Visible { get; set; }
+
+    [Parameter]
+    public EventCallback<PluginKind> OnToggle { get; set; }
+
+    [Parameter]
+    public bool Refetching { get; set; }
+
+    [Parameter]
+    public EventCallback OnRefetch { get; set; }
+
+    /// <summary>"system", "light" or "dark".</summary>
+    [Parameter]
+    public string Theme { get; set; } = "system";
+
+    [Parameter]
+    public EventCallback OnThemeToggle { get; set; }
+
+    [Parameter]
+    public EventCallback OnOpenShortKeys { get; set; }
+
+    [Parameter]
+    public EventCallback OnOpenSettings { get; set; }
+
+    string ThemeLabel => Theme switch
+    {
+        "light" => "Light",
+        "dark" => "Dark",
+        _ => "System"
+    };
+}

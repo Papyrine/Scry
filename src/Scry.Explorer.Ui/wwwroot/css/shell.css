@@ -1,0 +1,501 @@
+/*
+  The shell's skeleton: a viewport-filling flex tree divided by three drag bars.
+
+  Every split is one number — the first pane's share of its container — applied as an inline
+  `flex: {ratio} 1 0%` by PaneState.Grow(). Nothing here sets a width, so the panes divide whatever
+  the window gives them.
+
+  min-height: 0 and min-width: 0 appear on every flex ancestor of the editor, and are load-bearing
+  rather than decorative. A flex item's automatic minimum is its content, so without them a pane
+  refuses to shrink below whatever Monaco last measured itself at — and Monaco, which sizes to its
+  host, then has no height to size to. One missing link brings back the ~0-height editor: a clipped
+  sliver that cannot be clicked into.
+*/
+
+.shell {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* The rail */
+
+.rail {
+    flex: 0 0 52px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 0.55rem 0;
+    background: var(--panel-2);
+    border-right: 1px solid var(--border);
+}
+
+.rail-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.rail-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    color: var(--muted);
+    background: none;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.rail-button svg {
+    width: 19px;
+    height: 19px;
+}
+
+.rail-button:enabled:hover {
+    color: var(--text);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.rail-button.active {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.rail-button:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: -2px;
+}
+
+.rail-button.spin svg {
+    animation: spin 0.9s linear infinite;
+}
+
+/* Columns */
+
+.workspace {
+    flex: 1;
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+}
+
+.plugin-pane {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    background: var(--panel-2);
+    overflow: hidden;
+}
+
+.plugin-title {
+    padding: 0.55rem 0.9rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+}
+
+.session {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.session-header {
+    display: flex;
+    align-items: stretch;
+    gap: 1rem;
+    min-height: 2.4rem;
+    background: var(--panel-2);
+    border-bottom: 1px solid var(--border);
+}
+
+.session-header .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-left: auto;
+    padding: 0 0.9rem;
+}
+
+.brand-mark {
+    width: 18px;
+    height: 18px;
+    color: var(--accent);
+}
+
+.session-header h1 {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.brand-accent {
+    color: var(--accent);
+}
+
+.panes {
+    flex: 1;
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+}
+
+.editor-column {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+/* The editor and its command strip, side by side. */
+.editor-section {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    background: var(--panel);
+}
+
+.editor-host {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+}
+
+/*
+  Monaco does not size itself — it lays out into whatever its host element measures. The host is a
+  flex child here rather than a fixed height, which is what lets the pane be dragged; the minimums
+  above are what let it shrink as well as grow. StandaloneCodeEditor renders this element with the
+  CssClass we pass, so the sizing belongs on this class.
+*/
+.scry-editor {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+}
+
+/* Tabs */
+
+.tabs {
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.tab {
+    display: flex;
+    align-items: center;
+    padding-right: 0.2rem;
+    border-right: 1px solid var(--border);
+}
+
+.tab.active {
+    background: var(--panel);
+    box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.tab-button {
+    max-width: 12rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0.45rem 0.85rem;
+    font: inherit;
+    font-size: 0.82rem;
+    color: var(--muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.tab.active .tab-button {
+    color: var(--text);
+}
+
+.tab-close,
+.tab-add {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    color: var(--muted);
+    background: none;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.tab-close svg,
+.tab-add svg {
+    width: 13px;
+    height: 13px;
+}
+
+.tab-close:hover,
+.tab-add:hover {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.tab-add {
+    flex: none;
+    align-self: center;
+    margin-left: 0.3rem;
+}
+
+.tab-rename {
+    width: 9rem;
+    margin: 0.2rem 0.3rem;
+    padding: 0.2rem 0.4rem;
+    font: inherit;
+    font-size: 0.82rem;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--accent);
+    border-radius: 5px;
+}
+
+/* The command strip beside the editor */
+
+.toolbar {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.7rem 0.5rem;
+    background: var(--panel-2);
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+}
+
+.run-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.3rem;
+    height: 2.3rem;
+    color: #fff;
+    background: var(--accent-strong);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.run-button svg {
+    width: 17px;
+    height: 17px;
+    margin-left: 2px;
+}
+
+.run-button:enabled:hover {
+    background: var(--accent-strong-hover);
+}
+
+.run-button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.tool-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    color: var(--muted);
+    background: none;
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+}
+
+.tool-button svg {
+    width: 16px;
+    height: 16px;
+}
+
+.tool-button:hover {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.run-button:focus-visible,
+.tool-button:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 2px;
+}
+
+.copied-note {
+    font-size: 0.85rem;
+    color: var(--accent);
+}
+
+/* The wire strip under the editor */
+
+.wire-pane {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    overflow: hidden;
+}
+
+.wire-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.15rem 0.6rem;
+    background: var(--panel-2);
+}
+
+.wire-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.2rem;
+    font: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.wire-toggle:hover {
+    color: var(--text);
+}
+
+.wire-toggle svg {
+    width: 14px;
+    height: 14px;
+}
+
+.chevron-up {
+    transform: rotate(180deg);
+}
+
+.wire-head .icon-btn {
+    margin-left: auto;
+}
+
+/* Collapsed leaves the header as the handle that reopens it. */
+.wire-pane.collapsed .pane-body {
+    display: none;
+}
+
+.pane-body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+/* The output column */
+
+.output-column {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    background: var(--panel);
+}
+
+.output-tabs {
+    display: flex;
+    align-items: stretch;
+    background: var(--panel-2);
+    border-bottom: 1px solid var(--border);
+}
+
+.output-tab {
+    padding: 0.45rem 0.95rem;
+    font: inherit;
+    font-size: 0.78rem;
+    color: var(--muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.output-tab:hover {
+    color: var(--text);
+}
+
+.output-tab.active {
+    color: var(--text);
+    background: var(--panel);
+    box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.output-body {
+    flex: 1;
+    min-height: 0;
+    padding: 0.6rem;
+    overflow: auto;
+}
+
+.output-body > .error {
+    margin: 0.3rem;
+}
+
+.empty-hint {
+    margin: 0.6rem 0.3rem;
+    max-width: 46ch;
+    font-size: 0.85rem;
+}
+
+.status-line {
+    padding: 0.35rem 0.9rem;
+    font-size: 0.76rem;
+    font-family: var(--mono);
+    color: var(--muted);
+    background: var(--panel-2);
+    border-top: 1px solid var(--border);
+}
+
+/* Drag bars */
+
+/*
+  Always in the DOM. scry.trackPointer attaches to each of these once at boot, so a bar that came and
+  went with its pane would never get wired — .hidden takes it off screen instead.
+*/
+.resizer {
+    flex: 0 0 5px;
+    background: var(--border);
+    touch-action: none;
+}
+
+.resizer:hover,
+.resizer:active {
+    background: var(--accent);
+}
+
+.resizer-x {
+    cursor: col-resize;
+}
+
+.resizer-y {
+    cursor: row-resize;
+}
+
+.resizer.hidden {
+    display: none;
+}

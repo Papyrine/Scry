@@ -1,0 +1,63 @@
+@namespace Scry
+
+<DialogShell Title="Settings" TestId="settings-dialog" OnClose="OnClose">
+    <section class="setting">
+        <h3>Theme</h3>
+        <div class="setting-choices">
+            @foreach (var mode in new[] { "system", "light", "dark" })
+            {
+                var current = mode;
+                <button type="button"
+                        class="choice @(Theme == current ? "active" : null)"
+                        data-testid="@($"theme-{current}")"
+                        aria-pressed="@(Theme == current ? "true" : "false")"
+                        @onclick="() => OnThemeSelected.InvokeAsync(current)">@Label(current)</button>
+            }
+        </div>
+        <p class="setting-note muted">System follows the browser's own light/dark preference.</p>
+    </section>
+
+    <section class="setting">
+        <h3>Stored data</h3>
+        <button type="button" class="btn" data-testid="settings-clear" @onclick="Clear">@clearLabel</button>
+        <p class="setting-note muted">
+            Forgets this browser's tabs, history, pane sizes and theme. Nothing here was ever sent to
+            the server, and nothing outside the explorer's own keys is touched.
+        </p>
+    </section>
+</DialogShell>
+
+@code
+{
+    [Parameter]
+    public string Theme { get; set; } = "system";
+
+    [Parameter]
+    public EventCallback<string> OnThemeSelected { get; set; }
+
+    [Parameter]
+    public EventCallback OnClear { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    string clearLabel = "Clear data";
+
+    static string Label(string mode) => mode switch
+    {
+        "light" => "Light",
+        "dark" => "Dark",
+        _ => "System"
+    };
+
+    // The label reports what happened and then goes back, so the button says whether the click landed
+    // without a dialog of its own.
+    async Task Clear()
+    {
+        await OnClear.InvokeAsync();
+        clearLabel = "Cleared";
+        StateHasChanged();
+        await Task.Delay(2000);
+        clearLabel = "Clear data";
+    }
+}

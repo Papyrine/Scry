@@ -1,0 +1,243 @@
+@namespace Scry
+
+@*
+    The queryable surface, as the server publishes it. This is a schema browser rather than a
+    documentation explorer: the introspection contract carries a member's name, its type and a handful
+    of flags, and nothing else — there are no descriptions to render, because a Scry server publishes
+    none.
+*@
+<div class="schema-pane" data-testid="schema-pane">
+    <div class="pane-toolbar">
+        @if (stack.Count > 0)
+        {
+            <button type="button" class="pane-back" data-testid="schema-back"
+                    title="Back to @Previous" aria-label="Back to @Previous"
+                    @onclick="Pop">‹ @Previous</button>
+        }
+        <input class="pane-search"
+               id="schema-search"
+               data-testid="schema-search"
+               type="search"
+               placeholder="@(current is null ? "Search the schema…" : $"Search {current}…")"
+               aria-label="Search the schema"
+               @bind="search"
+               @bind:event="oninput" />
+    </div>
+
+    @if (Matches is { Count: > 0 })
+    {
+        <ul class="schema-results" role="listbox" data-testid="schema-results">
+            @foreach (var match in Matches)
+            {
+                var hit = match;
+                <li>
+                    <button type="button" role="option" aria-selected="false" class="schema-result"
+                            @onclick="() => Go(hit.Model)">
+                        @hit.Model@(hit.Member is null ? "" : $" · {hit.Member}")
+                    </button>
+                </li>
+            }
+        </ul>
+    }
+    else if (current is null)
+    {
+        <div class="schema-body">
+            <h4>Sources</h4>
+            @foreach (var group in Index.Sources.GroupBy(_ => _.Kind).OrderBy(_ => _.Key, StringComparer.Ordinal))
+            {
+                <p class="schema-group muted">@group.Key</p>
+                <ul class="schema-list">
+                    @foreach (var source in group.OrderBy(_ => _.Name, StringComparer.Ordinal))
+                    {
+                        var current = source;
+                        <li>
+                            <button type="button" class="schema-link" data-testid="schema-source"
+                                    @onclick="() => Go(current.Model)">@current.Name</button>
+                            @if (current.Obsolete is not null)
+                            {
+                                <span class="badge badge-obsolete" title="@current.Obsolete">obsolete</span>
+                            }
+                            <button type="button" class="icon-btn schema-insert" data-testid="schema-insert"
+                                    title="Open a query selecting every scalar member of @current.Name"
+                                    aria-label="Open a query for @current.Name"
+                                    @onclick="() => OnInsertQuery.InvokeAsync(Index.StarterQuery(current))">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                                    <path d="M12 5v14M5 12h14" />
+                                </svg>
+                            </button>
+                        </li>
+                    }
+                </ul>
+            }
+
+            @if (Index.Enums.Count > 0)
+            {
+                <h4>Enums</h4>
+                <ul class="schema-list">
+                    @foreach (var enumInfo in Index.Enums.OrderBy(_ => _.Name, StringComparer.Ordinal))
+                    {
+                        <li>
+                            <span class="schema-enum">@enumInfo.Name</span>
+                            <span class="muted">@string.Join(", ", enumInfo.Values)</span>
+                        </li>
+                    }
+                </ul>
+            }
+
+            <h4>Contract</h4>
+            <dl class="schema-facts">
+                <dt>Max page size</dt>
+                <dd>@Index.Introspection.MaxPageSize</dd>
+                <dt>Query endpoint</dt>
+                <dd>@Index.Introspection.QueryEndpoint</dd>
+                <dt>URL limit</dt>
+                <dd>@(Index.Introspection.QueryUrlLimit == 0 ? "no GET route" : $"{Index.Introspection.QueryUrlLimit} chars")</dd>
+                <dt>SQL preview</dt>
+                <dd>@(Index.Introspection.SqlPreview ? "available" : "off")</dd>
+                <dt>Schema stamp</dt>
+                <dd class="mono">@Index.Introspection.SchemaStamp</dd>
+            </dl>
+        </div>
+    }
+    else if (Index.Type(current) is { } type)
+    {
+        <div class="schema-body" data-testid="schema-type">
+            <div class="schema-type-head">
+                <h4>@current</h4>
+                @if (Index.SourceFor(current) is { } source)
+                {
+                    <span class="muted">queryable as <code>Query.@source.Name</code></span>
+                    <button type="button" class="icon-btn schema-insert" data-testid="schema-insert"
+                            title="Open a query selecting every scalar member of @source.Name"
+                            aria-label="Open a query for @source.Name"
+                            @onclick="() => OnInsertQuery.InvokeAsync(Index.StarterQuery(source))">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                            <path d="M12 5v14M5 12h14" />
+                        </svg>
+                    </button>
+                }
+            </div>
+
+            @if (type.Obsolete is not null)
+            {
+                <p class="badge badge-obsolete">obsolete — @type.Obsolete</p>
+            }
+
+            @if (type.Base is not null)
+            {
+                <p class="muted">
+                    inherits
+                    <button type="button" class="schema-link" @onclick="() => Go(type.Base)">@type.Base</button>
+                </p>
+            }
+
+            @if (Index.Derived(current) is { Count: > 0 } derived)
+            {
+                <p class="muted">
+                    inherited by
+                    @foreach (var model in derived)
+                    {
+                        var target = model;
+                        <button type="button" class="schema-link" @onclick="() => Go(target)">@target</button>
+                    }
+                </p>
+            }
+
+            <table class="schema-members">
+                <thead>
+                    <tr>
+                        <th>Member</th>
+                        <th>Type</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var indexed in Index.AllMembers(current))
+                {
+                    var member = indexed.Member;
+                    var reference = Index.Resolve(member.TypeDisplay);
+                    <tr data-testid="schema-member">
+                        <td>@member.Name</td>
+                        <td>
+                            @if (reference.LinkTarget is { } target)
+                            {
+                                <button type="button" class="schema-link" @onclick="() => Go(target)">@reference.Display</button>
+                            }
+                            else
+                            {
+                                <span class="mono">@reference.Display</span>
+                            }
+                            <span class="schema-badges">
+                            @if (type.Keys?.Contains(member.Name) == true)
+                            {
+                                <span class="badge" title="Part of the key an attachment is fetched by">key</span>
+                            }
+                            @if (member.IsNavigation)
+                            {
+                                <span class="badge" title="A related source; project into it to nest its members">nav</span>
+                            }
+                            @if (member.IsCollection)
+                            {
+                                <span class="badge">many</span>
+                            }
+                            @if (member.IsAttachment)
+                            {
+                                <span class="badge" title="Fetched by its own request, keyed by the row. @member.ContentType">attachment</span>
+                            }
+                            @if (member.IsSensitive)
+                            {
+                                <span class="badge badge-sensitive" title="Comparing against this sends the request as a body rather than a URL, and projecting it answers no-store">sensitive</span>
+                            }
+                            @if (indexed.DeclaringModel != current)
+                            {
+                                <span class="badge muted" title="Declared by @indexed.DeclaringModel">inherited</span>
+                            }
+                            @if (member.Obsolete is not null)
+                            {
+                                <span class="badge badge-obsolete" title="@member.Obsolete">obsolete</span>
+                            }
+                            </span>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code
+{
+    [Parameter]
+    [EditorRequired]
+    public SchemaIndex Index { get; set; } = null!;
+
+    [Parameter]
+    public EventCallback<string> OnInsertQuery { get; set; }
+
+    readonly List<string?> stack = [];
+    string? current;
+    string? search;
+
+    IReadOnlyList<SchemaMatch> Matches =>
+        Index.Search(search, current);
+
+    string Previous =>
+        stack[^1] ?? "Sources";
+
+    void Go(string model)
+    {
+        // The search box is what got you here; clearing it puts the page you navigated to on screen
+        // rather than leaving the result list over it.
+        search = null;
+        stack.Add(current);
+        current = model;
+    }
+
+    void Pop()
+    {
+        current = stack[^1];
+        stack.RemoveAt(stack.Count - 1);
+    }
+}

@@ -1,4 +1,4 @@
-/// <summary>Playwright conveniences for the browser tests.</summary>
+﻿/// <summary>Playwright conveniences for the browser tests.</summary>
 static class PageExtensions
 {
     /// <summary>
@@ -82,6 +82,30 @@ static class PageExtensions
     /// evaluated JS, so a long query is never wrapped into a (syntactically invalid) multi-line JS string
     /// literal by the formatter.
     /// </summary>
+    /// <summary>
+    /// Selects one of the output column's tabs. The panes are mutually exclusive now, and only the
+    /// selected one is in the DOM, so a test reading the response has to ask for it first.
+    /// </summary>
+    public static async Task SelectOutputTabAsync(this IPage page, string tab)
+    {
+        var button = page.Locator($"[data-testid='output-tab-{tab}']");
+        await button.WaitForAsync(new() {Timeout = 60_000});
+        await button.ClickAsync();
+    }
+
+    /// <summary>
+    /// Opens the history pane if it is not already showing. The rail's panes are one at a time and the
+    /// explorer opens on the schema, so anything asserting about the history has to ask for it — and
+    /// idempotently, because a test may run several queries.
+    /// </summary>
+    public static async Task ShowHistoryAsync(this IPage page)
+    {
+        if (await page.Locator("[data-testid='history-pane']").CountAsync() == 0)
+        {
+            await page.Locator("[data-testid='rail-history']").ClickAsync();
+        }
+    }
+
     public static Task SetEditorValueAsync(this IPage page, string query) =>
         page.EvaluateAsync(
             """

@@ -1,4 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+  <!-- Drops the Monaco assets no C# editor can reach: the locale bundles and the ts/css/html workers.
+       Two thirds of what Scry.Server.Explorer embeds. -->
+  <Import Project="..\MonacoAssets.targets" />
   <PropertyGroup>
     <RootNamespace>Scry</RootNamespace>
     <TargetFramework>net10.0</TargetFramework>

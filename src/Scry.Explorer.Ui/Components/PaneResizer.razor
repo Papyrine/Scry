@@ -1,0 +1,31 @@
+@namespace Scry
+
+@*
+    The drag bar between two panes. Always rendered — hidden by CSS when the pane beside it is closed —
+    because scry.trackPointer attaches to it once at boot, and a conditionally-rendered bar would never
+    get wired. Double-click restores the default split.
+*@
+<div id="@Id"
+     class="resizer resizer-@Direction @(Hidden ? "hidden" : null)"
+     data-testid="@Id"
+     role="separator"
+     aria-orientation="@(Direction == "x" ? "vertical" : "horizontal")"
+     @ondblclick="OnReset"></div>
+
+@code
+{
+    [Parameter]
+    [EditorRequired]
+    public string Id { get; set; } = "";
+
+    /// <summary>"x" for a bar between side-by-side panes, "y" for one between stacked panes.</summary>
+    [Parameter]
+    [EditorRequired]
+    public string Direction { get; set; } = "x";
+
+    [Parameter]
+    public bool Hidden { get; set; }
+
+    [Parameter]
+    public EventCallback OnReset { get; set; }
+}

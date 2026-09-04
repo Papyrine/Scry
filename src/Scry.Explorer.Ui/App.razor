@@ -1,227 +1,296 @@
-@inject HttpClient Http
+﻿@inject HttpClient Http
 @inject IJSRuntime JS
 @using BlazorMonaco.Editor
 
 <PageTitle>Scry Explorer</PageTitle>
 
-<header class="app-header">
-    <div class="brand">
-        @*
-            Drawn rather than written, for the same reason as the theme icon below: an inline path has
-            no font dependency, so it renders identically on every machine a baseline is compared on.
-        *@
-        <svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-            <circle cx="12" cy="10" r="6.5" />
-            <path d="M8 20h8" />
-            @* The sparkle the crystal ball is scried through. *@
-            <path d="M9.3 6.6c.35.9.55 1.1 1.45 1.45-.9.35-1.1.55-1.45 1.45-.35-.9-.55-1.1-1.45-1.45.9-.35 1.1-.55 1.45-1.45z"
-                  fill="currentColor" stroke="none" />
-        </svg>
-        <h1 data-testid="explorer-title"><span class="brand-accent">Scry</span> Explorer</h1>
-    </div>
-    @*
-        The icon is drawn rather than written. A moon emoji resolves out of whatever emoji font the OS
-        ships, so the same button painted a different glyph on Windows 11 than on a Windows Server CI
-        image — and none at all on a box carrying no emoji font. An inline path has no such dependency,
-        which is what lets a screenshot baseline hold on a machine other than the one that seeded it.
-    *@
-    <button class="theme-toggle icon-btn" data-testid="theme-toggle" @onclick="CycleTheme"
-            title="Cycle theme: System → Light → Dark">
-        <svg class="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-            @if (themeMode == "light")
-            {
-                <circle cx="12" cy="12" r="5" />
-                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-            }
-            else if (themeMode == "dark")
-            {
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-            }
-            else
-            {
-                @* Half the dial filled: the theme is half this page's choice and half the OS's. *@
-                <circle cx="12" cy="12" r="9" />
-                <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none" />
-            }
-        </svg>@ThemeLabel
-    </button>
-</header>
-
 @*
+    The shell fills the viewport rather than flowing down the page: the editor, the panes it produced,
+    and the schema beside them are resizable regions of one screen, so none of them is the one that
+    pushes the rest below the fold.
+
     data-ready lands once the schema has loaded and the editor's Roslyn providers are registered — the
     point at which the page can answer a completion. Nothing renders differently for it; it is the
-    machine-readable half of the "Loading schema…" hint below, and what a browser test waits on.
+    machine-readable half of the "Loading schema…" hint, and what a browser test waits on.
 *@
 <main class="shell" data-ready="@(ready ? "true" : null)">
+    <Rail Visible="visiblePlugin"
+          OnToggle="TogglePlugin"
+          Refetching="refetching"
+          OnRefetch="RefetchSchema"
+          Theme="@themeMode"
+          OnThemeToggle="CycleTheme"
+          OnOpenShortKeys="() => shortKeysOpen = true"
+          OnOpenSettings="() => settingsOpen = true" />
 
-<p class="tagline">
-    Write LINQ against the allow-listed sources, run it, and inspect the wire request. Completion is
-    powered by Roslyn running in the browser against the server's introspected schema.
-</p>
-
-@if (error is not null)
-{
-    <p class="error" role="alert" data-testid="error">@error</p>
-}
-
-@*
-    Query on the left, everything the query produced on the right — but only once the viewport is wide
-    enough for two columns to each hold a line of LINQ unwrapped. Below that breakpoint the two sections
-    are plain blocks and the page reads top to bottom, so the split lives entirely in app.css.
-*@
-<div class="workspace">
-
-<section class="pane-query">
-
-<div class="editor-card">
-    <StandaloneCodeEditor @ref="editor" Id="scry-editor" CssClass="scry-editor" ConstructionOptions="EditorOptions"
-                          OnDidInit="OnEditorInit" OnDidChangeModelContent="OnContentChanged" />
-    <div class="actions">
-        <button class="btn btn-primary" data-testid="run" @onclick="Run" disabled="@(introspection is null)"
-                title="Translate the query to a wire request and run it against the server (Ctrl+Enter).">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
-                <path d="M8 5v14l11-7z" />
-            </svg>Run
-        </button>
-        @if (introspection?.SqlPreview == true)
+    <div class="workspace">
+        @if (visiblePlugin is not null)
         {
-            <button class="btn" data-testid="sql-preview" @onclick="ShowSql"
-                    title="Show the SQL this query would run, without running it. Validated and policy-filtered exactly as a real query is.">Show SQL</button>
+            <PluginPane Kind="visiblePlugin.Value"
+                        Style="@pluginPane.Grow()"
+                        Introspection="introspection"
+                        History="history"
+                        OnHistorySelect="LoadQuery"
+                        OnHistoryRemove="RemoveHistory"
+                        OnHistoryClear="ClearHistory"
+                        OnHistoryLabel="LabelHistory"
+                        OnHistoryFavorite="FavoriteHistory"
+                        OnInsertQuery="InsertQuery" />
         }
-        <button class="btn" data-testid="share" @onclick="Share"
-                title="Put this query in the URL and copy the link. The query is placed in the fragment, so it is never sent to the server.">@(copied == "share" ? "✓ Link copied" : "Share")</button>
-        @if (workspace is null && error is null)
-        {
-            <span class="muted loading-hint">Loading schema…</span>
-        }
-    </div>
-</div>
+        @* Always rendered, hidden by CSS: scry.trackPointer attaches to it once at boot. *@
+        <PaneResizer Id="plugin-resizer" Direction="x" Hidden="visiblePlugin is null"
+                     OnReset="() => ResetPane(pluginPane)" />
 
-@if (history.Count > 0)
-{
-    <div class="pane-head">
-        <h3>History</h3>
-        <button class="icon-btn" data-testid="history-clear" @onclick="ClearHistory"
-                title="Forget every remembered query. The history is this browser's alone — nothing is sent to the server.">Clear</button>
-    </div>
-    <ul data-testid="history">
-        @foreach (var item in history)
-        {
-            @*
-                The remove sits beside the entry rather than on it: the entry is the link that loads the
-                query back into the editor, and a button inside an anchor is not markup a browser has to
-                make sense of.
-            *@
-            <li>
-                <a href="#" @onclick:preventDefault @onclick="() => LoadQuery(item)">@HistoryLabel(item)</a>
-                <button class="icon-btn history-remove" data-testid="history-remove" title="Forget this query."
-                        aria-label="Forget this query" @onclick="() => RemoveHistory(item)">×</button>
-            </li>
-        }
-    </ul>
-}
+        <div class="session" style="@PaneState.Grow(visiblePlugin is null ? 1 : 1 - pluginPane.Ratio)">
+            <header class="session-header">
+                <TabBar Store="tabs" OnActivate="ActivateTab" OnClose="CloseTab" OnAdd="AddTab" OnRename="RenameTab" />
+                <div class="brand">
+                    @*
+                        Drawn rather than written, for the same reason as the rail's icons: an inline
+                        path has no font dependency, so it renders identically on every machine a
+                        baseline is compared on.
+                    *@
+                    <svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <circle cx="12" cy="10" r="6.5" />
+                        <path d="M8 20h8" />
+                        @* The sparkle the crystal ball is scried through. *@
+                        <path d="M9.3 6.6c.35.9.55 1.1 1.45 1.45-.9.35-1.1.55-1.45 1.45-.35-.9-.55-1.1-1.45-1.45.9-.35 1.1-.55 1.45-1.45z"
+                              fill="currentColor" stroke="none" />
+                    </svg>
+                    <h1 data-testid="explorer-title"><span class="brand-accent">Scry</span> Explorer</h1>
+                </div>
+            </header>
 
-</section>
+            <div class="panes">
+                <div class="editor-column" style="@sessionPane.Grow()">
+                    <div class="editor-section" style="@(wireJson is not null && wireExpanded ? wirePane.Grow() : "flex: 1 1 0%")">
+                        <div class="editor-host">
+                            <StandaloneCodeEditor @ref="editor" Id="scry-editor" CssClass="scry-editor"
+                                                  ConstructionOptions="EditorOptions"
+                                                  OnDidInit="OnEditorInit"
+                                                  OnDidChangeModelContent="OnContentChanged" />
+                        </div>
+                        @*
+                            The commands sit in a strip beside the editor rather than under it, so the
+                            editor keeps the full height of its pane whatever the window is doing.
+                        *@
+                        <div class="toolbar" role="toolbar" aria-label="Query commands">
+                            <button class="run-button" data-testid="run" @onclick="Run" disabled="@(introspection is null)"
+                                    title="Translate the query to a wire request and run it against the server (Ctrl+Enter).">
+                                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                                    <path d="M8 5v14l11-7z" />
+                                </svg>
+                                <span class="visually-hidden">Run</span>
+                            </button>
+                            @if (introspection?.SqlPreview == true)
+                            {
+                                <button class="tool-button" data-testid="sql-preview" @onclick="ShowSql"
+                                        title="Show the SQL this query would run, without running it. Validated and policy-filtered exactly as a real query is.">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                                        <ellipse cx="12" cy="6" rx="8" ry="3" />
+                                        <path d="M4 6v12c0 1.66 3.58 3 8 3s8-1.34 8-3V6" />
+                                        <path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3" />
+                                    </svg>
+                                    <span class="visually-hidden">Show SQL</span>
+                                </button>
+                            }
+                            <button class="tool-button" data-testid="prettify" @onclick="Prettify"
+                                    title="Format the query: the chain down the page, and a projection down the page after it (Shift+Ctrl+P).">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                                    <path d="M4 6h16M4 12h10M4 18h13" />
+                                </svg>
+                                <span class="visually-hidden">Format query</span>
+                            </button>
+                            <button class="tool-button" data-testid="copy-query" @onclick="CopyQuery"
+                                    title="Copy the query (Shift+Ctrl+C).">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                                    <rect x="9" y="9" width="12" height="12" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg>
+                                <span class="visually-hidden">Copy query</span>
+                            </button>
+                            <button class="tool-button" data-testid="share" @onclick="Share"
+                                    title="Put this query in the URL and copy the link. The query is placed in the fragment, so it is never sent to the server.">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                                    <circle cx="18" cy="5" r="3" />
+                                    <circle cx="6" cy="12" r="3" />
+                                    <circle cx="18" cy="19" r="3" />
+                                    <path d="M8.6 10.7l6.8-3.9M8.6 13.3l6.8 3.9" />
+                                </svg>
+                                <span class="visually-hidden">Share</span>
+                            </button>
+                            @if (copied is not null)
+                            {
+                                <span class="copied-note" role="status" title="Copied">✓</span>
+                            }
+                        </div>
+                    </div>
 
-<section class="pane-output">
+                    @*
+                        The wire request sits under the query rather than in the output tabs: it is
+                        derived from the query rather than returned by the server, and keeping it here
+                        is what puts the LINQ, the request it became, and the rows it returned on one
+                        screen together.
+                    *@
+                    <PaneResizer Id="wire-resizer" Direction="y" Hidden="wireJson is null"
+                                 OnReset="() => ResetPane(wirePane)" />
+                    @if (wireJson is not null)
+                    {
+                        <section class="wire-pane @(wireExpanded ? null : "collapsed")"
+                                 style="@(wireExpanded ? PaneState.Grow(1 - wirePane.Ratio) : "flex: 0 0 auto")"
+                                 aria-label="Wire request">
+                            <div class="wire-head">
+                                <button type="button" class="wire-toggle" data-testid="wire-toggle"
+                                        aria-expanded="@(wireExpanded ? "true" : "false")"
+                                        title="@(wireExpanded ? "Hide the wire request" : "Show the wire request")"
+                                        @onclick="() => wireExpanded = !wireExpanded">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+                                         class="@(wireExpanded ? "chevron-down" : "chevron-up")" focusable="false">
+                                        <path d="M6 9l6 6 6-6" />
+                                    </svg>
+                                    Wire request
+                                </button>
+                                <button class="icon-btn" @onclick='() => Copy(wireJson!, "wire")'>@(copied == "wire" ? "✓ Copied" : "Copy")</button>
+                            </div>
+                            <pre class="pane-body" data-testid="wire">@Highlight.Json(wireJson)</pre>
+                        </section>
+                    }
+                </div>
 
-@if (wireJson is not null)
-{
-    <div class="pane-head">
-        <h3>Wire request</h3>
-        <button class="icon-btn" @onclick='() => Copy(wireJson!, "wire")'>@(copied == "wire" ? "✓ Copied" : "Copy")</button>
-    </div>
-    <pre data-testid="wire">@Highlight.Json(wireJson)</pre>
-}
+                <PaneResizer Id="session-resizer" Direction="x" OnReset="() => ResetPane(sessionPane)" />
 
-@if (sqlText is not null)
-{
-    <div class="pane-head">
-        <h3>SQL</h3>
-        <button class="icon-btn" @onclick='() => Copy(sqlText!, "sql")'>@(copied == "sql" ? "✓ Copied" : "Copy")</button>
-    </div>
-    <pre data-testid="sql">@Highlight.Sql(sqlText)</pre>
-}
+                <div class="output-column" style="@PaneState.Grow(1 - sessionPane.Ratio)">
+                    @if (OpenTabs.Count > 0)
+                    {
+                        <OutputTabs Available="OpenTabs" Active="activeOutput" OnSelect="_ => activeOutput = _" />
+                    }
 
-@if (resultColumns is not null)
-{
-    <div class="pane-head">
-        <h3>Result</h3>
-        @if (CanExport)
-        {
-            @* csv is the only conditional format, and it comes first, so the separators need no loop. *@
-            <p class="exports">
-                Export:
-                @if (resultFlat)
-                {
-                    <a href="#" data-testid="csv" @onclick:preventDefault @onclick="DownloadCsv"
-                       title="Download these rows as CSV — same columns, same order, RFC 4180 quoted.">csv</a><text>, </text>
-                }
-                <a href="#" data-testid="xml" @onclick:preventDefault @onclick="DownloadXml"
-                   title="Download these rows as XML — a row element each, nesting and all.">xml</a><text>, </text>
-                <a href="#" data-testid="json" @onclick:preventDefault @onclick="DownloadJson"
-                   title="Download these rows as JSON, exactly as the server sent them.">json</a>
-            </p>
-        }
-    </div>
-    @*
-        A table is as wide as its widest row wants to be, and in a column half the page wide that is
-        routinely wider than the column. It scrolls inside this element rather than pushing a horizontal
-        scrollbar onto the whole page.
-    *@
-    <div class="table-scroll">
-    <table data-testid="result-table">
-        <thead>
-            <tr>
-                @foreach (var column in resultColumns) { <th>@column</th> }
-                @* One column per attachment: never a value, always a claim to exchange for one. *@
-                @foreach (var link in attachmentLinks) { <th>@link.Member</th> }
-            </tr>
-        </thead>
-        <tbody>
-        @for (var index = 0; index < resultRows!.Count; index++)
-        {
-            @* Copied out of the loop variable: the handlers below outlive this iteration. *@
-            var row = index;
-            <tr>
-                @foreach (var cell in resultRows[row]) { <td>@cell</td> }
-                @foreach (var link in attachmentLinks)
-                {
-                    <td>
-                        <a href="#" data-testid="attachment" @onclick:preventDefault @onclick="() => FetchAttachment(row, link)"
-                           title="Fetch this row's @link.Member. A request of its own, keyed by the row and authorized on its own terms — the query never carries the bytes.">fetch</a>
-                        @if (AttachmentNote(row, link) is { } note)
+                    <div class="output-body">
+                        @if (error is not null)
                         {
-                            <span class="muted attachment-note" data-testid="attachment-note"> @note</span>
+                            <p class="error" role="alert" data-testid="error">@error</p>
                         }
-                    </td>
-                }
-            </tr>
-        }
-        </tbody>
-    </table>
+
+                        @if (activeOutput == OutputTab.Result && result is not null)
+                        {
+                            @if (CanExport)
+                            {
+                                <div class="pane-head">
+                                    @* csv is the only conditional format, and it comes first, so the separators need no loop. *@
+                                    <p class="exports">
+                                        Export:
+                                        @if (result.IsFlat)
+                                        {
+                                            <a href="#" data-testid="csv" @onclick:preventDefault @onclick="DownloadCsv"
+                                               title="Download these rows as CSV — same columns, same order, RFC 4180 quoted.">csv</a><text>, </text>
+                                        }
+                                        <a href="#" data-testid="xml" @onclick:preventDefault @onclick="DownloadXml"
+                                           title="Download these rows as XML — a row element each, nesting and all.">xml</a><text>, </text>
+                                        <a href="#" data-testid="json" @onclick:preventDefault @onclick="DownloadJson"
+                                           title="Download these rows as JSON, exactly as the server sent them.">json</a>
+                                    </p>
+                                </div>
+                            }
+                            @*
+                                A table is as wide as its widest row wants to be, and in a pane half the
+                                screen wide that is routinely wider than the pane. It scrolls inside this
+                                element rather than pushing a scrollbar onto the shell.
+                            *@
+                            <div class="table-scroll">
+                                <table data-testid="result-table">
+                                    <thead>
+                                        <tr>
+                                            @foreach (var column in result.Columns) { <th>@column</th> }
+                                            @* One column per attachment: never a value, always a claim to exchange for one. *@
+                                            @foreach (var link in attachmentLinks) { <th>@link.Member</th> }
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    @for (var index = 0; index < result.Rows.Count; index++)
+                                    {
+                                        @* Copied out of the loop variable: the handlers below outlive this iteration. *@
+                                        var row = index;
+                                        <tr>
+                                            @foreach (var cell in result.Rows[row]) { <td>@cell</td> }
+                                            @foreach (var link in attachmentLinks)
+                                            {
+                                                <td>
+                                                    <a href="#" data-testid="attachment" @onclick:preventDefault @onclick="() => FetchAttachment(row, link)"
+                                                       title="Fetch this row's @link.Member. A request of its own, keyed by the row and authorized on its own terms — the query never carries the bytes.">fetch</a>
+                                                    @if (AttachmentNote(row, link) is { } note)
+                                                    {
+                                                        <span class="muted attachment-note" data-testid="attachment-note"> @note</span>
+                                                    }
+                                                </td>
+                                            }
+                                        </tr>
+                                    }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+
+                        @if (activeOutput == OutputTab.Result && scalarResult is not null)
+                        {
+                            <p class="scalar" data-testid="result-scalar">@scalarResult</p>
+                        }
+
+                        @if (activeOutput == OutputTab.Response && resultJson is not null)
+                        {
+                            <div class="pane-head">
+                                <button class="icon-btn" @onclick='() => Copy(resultJson!, "response")'>@(copied == "response" ? "✓ Copied" : "Copy")</button>
+                            </div>
+                            <pre class="pane-body" data-testid="result">@Highlight.Json(resultJson)</pre>
+                        }
+
+                        @if (activeOutput == OutputTab.Sql && sqlText is not null)
+                        {
+                            <div class="pane-head">
+                                <button class="icon-btn" @onclick='() => Copy(sqlText!, "sql")'>@(copied == "sql" ? "✓ Copied" : "Copy")</button>
+                            </div>
+                            <pre class="pane-body" data-testid="sql">@Highlight.Sql(sqlText)</pre>
+                        }
+
+                        @if (OpenTabs.Count == 0 && error is null)
+                        {
+                            <p class="empty-hint muted">
+                                @if (workspace is null)
+                                {
+                                    <span class="loading-hint">Loading schema…</span>
+                                }
+                                else
+                                {
+                                    <text>
+                                        Write LINQ against the allow-listed sources and run it. Completion is powered by
+                                        Roslyn running in the browser against the server's introspected schema.
+                                    </text>
+                                }
+                            </p>
+                        }
+                    </div>
+
+                    @if (status is not null)
+                    {
+                        <div class="status-line" data-testid="status-line">@status</div>
+                    }
+                </div>
+            </div>
+        </div>
     </div>
-}
 
-@if (scalarResult is not null)
-{
-    <h3>Result</h3>
-    <p class="scalar" data-testid="result-scalar">@scalarResult</p>
-}
-
-@if (resultJson is not null)
-{
-    <div class="pane-head">
-        <h3>Response</h3>
-        <button class="icon-btn" @onclick='() => Copy(resultJson!, "response")'>@(copied == "response" ? "✓ Copied" : "Copy")</button>
-    </div>
-    <pre data-testid="result">@Highlight.Json(resultJson)</pre>
-}
-
-</section>
-
-</div>
-
+    @if (settingsOpen)
+    {
+        <SettingsDialog Theme="@themeMode" OnThemeSelected="SelectTheme" OnClear="ClearStorage"
+                        OnClose="() => settingsOpen = false" />
+    }
+    @if (shortKeysOpen)
+    {
+        <ShortKeysDialog SqlPreview="introspection?.SqlPreview == true" OnClose="() => shortKeysOpen = false" />
+    }
 </main>
