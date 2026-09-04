@@ -1,0 +1,9 @@
+﻿[
+  {
+    Name: Aaron
+  },
+  {
+    Name: Bob,
+    Status: PartTime
+  }
+]

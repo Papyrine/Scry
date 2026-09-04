@@ -119,8 +119,7 @@ public static class ResultExporter
                     builder.Append("&gt;");
                     break;
                 default:
-                    if (character is '\t' or '\n' or '\r' ||
-                        character >= ' ')
+                    if (character is '\t' or '\n' or '\r' or >= ' ')
                     {
                         builder.Append(character);
                     }

@@ -3,6 +3,11 @@
 The generator lives in `Scry.SourceGenerator`. It is not a standalone package — it is packed inside `Scry.Client` as an analyzer, so a client project that references `Scry.Client` already has it.
 
 
+## Other languages
+
+The generator is a Roslyn generator, so only a C# project runs it. A client written in another language references a C# project that hosts the output and nothing else. See [F#](fsharp.md) for the F# client in the sample.
+
+
 ## The path-not-reference design
 
 The generator reads the server model's **built DLL from disk** using `System.Reflection.Metadata`. The assembly is never referenced by the client project, never loaded into the compiler, and never executed. Only the allow-listed surface is extracted from its metadata tables.

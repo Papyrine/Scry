@@ -1211,6 +1211,8 @@ A projection must construct an object (anonymous type, record, or object initial
 
 For a record or constructor call, member names come from the constructor parameter names, capitalized — `new EmployeeRow(name: ...)` produces the member `Name`.
 
+A variable the lambda binds and reads — F#'s `let`, which C# cannot write inside an expression — is inlined, so the projection reads what was bound to it. See [F#](fsharp.md).
+
 Every projection leaf must resolve to an allow-listed **scalar**. A navigation cannot be projected whole; project a scalar out of it (`_.Department!.Name`).
 
 

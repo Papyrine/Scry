@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="ScryServer.fs" />
+    <Compile Include="Setup.fs" />
+    <Compile Include="QueryTests.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="FSharp.Core" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NUnit" />
+    <PackageReference Include="NUnit3TestAdapter" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="EfLocalDb" />
+    <PackageReference Include="Verify.NUnit" />
+    <PackageReference Include="Verify.DiffPlex" />
+    <!-- The queries under test, and the server they are sent to, hosted in-process against the
+         sample model. Sample.Server is not referenced: it carries the Blazor client, whose own copy
+         of the generated models would collide with the one Sample.FSharp reads. -->
+    <ProjectReference Include="..\Sample.FSharp\Sample.FSharp.fsproj" />
+    <ProjectReference Include="..\Sample.Model\Sample.Model.csproj" />
+    <ProjectReference Include="..\..\src\Scry.Server\Scry.Server.csproj" />
+  </ItemGroup>
+</Project>

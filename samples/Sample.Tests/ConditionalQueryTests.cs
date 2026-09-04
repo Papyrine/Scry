@@ -1,5 +1,3 @@
-using Delta;
-using Sample.Client;
 using Sample.Model;
 
 /// <summary>

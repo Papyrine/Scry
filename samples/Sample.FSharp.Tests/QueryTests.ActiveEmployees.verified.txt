@@ -1,0 +1,16 @@
+﻿[
+  {
+    Name: Aaron,
+    Manager: Alice,
+    Department: Engineering
+  },
+  {
+    Name: Alice,
+    Department: Engineering
+  },
+  {
+    Name: Carol,
+    Status: Contractor,
+    Department: Sales
+  }
+]

@@ -241,7 +241,7 @@ public sealed class QueryCacheHandler(QueryCache cache) :
         return WithBody(request, response, body, "application/json");
     }
 ```
-<sup><a href='/samples/Sample.Client/QueryCacheHandler.cs#L15-L60' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCacheHandler' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/QueryCacheHandler.cs#L13-L58' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCacheHandler' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Registered into the named client's pipeline, with the store held apart from it — the factory rotates handlers every couple of minutes, and a cache that rotated with them would forget everything:

@@ -258,6 +258,7 @@ The client side has a companion: a [debug sidecar](docs/sidecar.md) that opens o
 - [Comparisons](docs/comparisons.md)
 - [Annotations](docs/annotations.md)
 - [Source generator](docs/source-generator.md)
+- [F#](docs/fsharp.md)
 - [Writing queries](docs/querying.md)
 - [Server](docs/server.md)
 - [Row policies](docs/policies.md)
