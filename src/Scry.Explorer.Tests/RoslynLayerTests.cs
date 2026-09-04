@@ -210,7 +210,7 @@ public class RoslynLayerTests
             """);
 
         var predicate = (BinaryNode) ((WhereOp) request.Pipeline[0]).Predicate;
-        Assert.That(((MemberNode) predicate.Left).Path, Is.EqualTo(new[] {"Name"}));
+        Assert.That(((MemberNode) predicate.Left).Path, Is.EqualTo(["Name"]));
         Assert.That(predicate.Right, Is.EqualTo(new ConstNode("Ada", ClrTypeTag.String)));
     }
 

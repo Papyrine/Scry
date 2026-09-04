@@ -4,6 +4,8 @@ namespace Scry;
 /// One fetchable attachment of a result: the source and member the bytes are claimed from, and where
 /// in each row the key they are claimed by landed.
 /// </summary>
+/// <param name="Root">The source the bytes are claimed from, as the wire request names it.</param>
+/// <param name="Member">The member on that source holding them.</param>
 /// <param name="KeyColumns">
 /// The result's own property names, in the order an <see cref="AttachmentRequest"/> wants its keys.
 /// </param>

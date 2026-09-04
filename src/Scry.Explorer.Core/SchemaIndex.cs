@@ -24,11 +24,11 @@ public sealed record SchemaMatch(string Model, string? Member);
 /// </remarks>
 public sealed class SchemaIndex
 {
-    const string ListPrefix = "global::System.Collections.Generic.IReadOnlyList<";
+    const string listPrefix = "global::System.Collections.Generic.IReadOnlyList<";
 
-    readonly Dictionary<string, ScryTypeInfo> types;
-    readonly Dictionary<string, ScryEnumInfo> enums;
-    readonly Dictionary<string, ScrySourceInfo> sourcesByModel;
+    Dictionary<string, ScryTypeInfo> types;
+    Dictionary<string, ScryEnumInfo> enums;
+    Dictionary<string, ScrySourceInfo> sourcesByModel;
 
     public ScryIntrospection Introspection { get; }
 
@@ -88,10 +88,10 @@ public sealed class SchemaIndex
         var display = typeDisplay;
         var suffix = "";
 
-        if (display.StartsWith(ListPrefix, StringComparison.Ordinal) &&
+        if (display.StartsWith(listPrefix, StringComparison.Ordinal) &&
             display.EndsWith('>'))
         {
-            display = display[ListPrefix.Length..^1];
+            display = display[listPrefix.Length..^1];
             suffix = "[]";
         }
 
@@ -237,9 +237,12 @@ public sealed class SchemaIndex
     /// has no reason to: both are bulk bytes, and the inline one is the worse of the two to open with.
     /// </remarks>
     static bool Suggestable(ScryMemberInfo member) =>
-        !member.IsCollection &&
-        !member.IsAttachment &&
-        !member.IsSensitive &&
+        member is
+        {
+            IsCollection: false,
+            IsAttachment: false,
+            IsSensitive: false
+        } &&
         member.TypeDisplay.TrimEnd('?') != "byte[]";
 
     void Collect(string model, List<IndexedMember> members, HashSet<string> seen)

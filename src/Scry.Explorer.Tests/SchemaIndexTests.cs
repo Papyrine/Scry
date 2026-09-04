@@ -31,7 +31,7 @@ public class SchemaIndexTests
 
         var members = index.AllMembers("BuildingQueryModel");
 
-        Assert.That(members.Select(_ => _.Member.Name), Is.EqualTo(new[] { "Id", "Name", "Floors" }));
+        Assert.That(members.Select(_ => _.Member.Name), Is.EqualTo(["Id", "Name", "Floors"]));
         Assert.That(members[0].DeclaringModel, Is.EqualTo("AssetQueryModel"));
         Assert.That(members[2].DeclaringModel, Is.EqualTo("BuildingQueryModel"));
     }
@@ -41,7 +41,7 @@ public class SchemaIndexTests
     {
         var index = Build();
 
-        Assert.That(index.Derived("AssetQueryModel"), Is.EqualTo(new[] { "BuildingQueryModel", "VehicleQueryModel" }));
+        Assert.That(index.Derived("AssetQueryModel"), Is.EqualTo(["BuildingQueryModel", "VehicleQueryModel"]));
     }
 
     [Test]
@@ -108,7 +108,7 @@ public class SchemaIndexTests
         var matches = Build().Search("Depart");
 
         Assert.That(matches.Select(_ => $"{_.Model}.{_.Member}"), Does.Contain("EmployeeQueryModel.Department"));
-        Assert.That(matches.Any(_ => _.Model == "DepartmentQueryModel" && _.Member is null));
+        Assert.That(matches.Any(_ => _ is {Model: "DepartmentQueryModel", Member: null}));
     }
 
     [Test]

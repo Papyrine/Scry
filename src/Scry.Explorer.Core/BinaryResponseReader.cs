@@ -24,7 +24,7 @@ public static class BinaryResponseReader
     /// The response body as JSON. A plain response is returned as it arrived; a multipart one is
     /// reassembled. Error responses are never multipart, so a failure reads as its own body either way.
     /// </summary>
-    public static async Task<string> ReadAsync(HttpResponseMessage response, CancellationToken cancel = default)
+    public static async Task<string> ReadAsync(HttpResponseMessage response, Cancel cancel = default)
     {
         if (!MultipartResponse.TryGetBoundary(response, out var boundary))
         {
