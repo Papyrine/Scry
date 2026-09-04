@@ -1,5 +1,4 @@
 using System.Net;
-using Microsoft.AspNetCore.Http;
 
 /// <summary>
 /// Headers are attached to one query rather than to the client, and they are a transport concern

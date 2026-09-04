@@ -1,6 +1,3 @@
-using System.Buffers;
-using Microsoft.AspNetCore.Http;
-
 /// <summary>
 /// The point at which a buffered response stops being one. What matters is that an envelope small
 /// enough to be answered whole still is — declaring its length, with nothing sent early — and that one

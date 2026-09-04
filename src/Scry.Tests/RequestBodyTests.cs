@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.Http;
-
 /// <summary>
 /// How the endpoints read a request body. A declared Content-Length is a hint for sizing the buffer
 /// and nothing more: the host enforces its body limit only once the body is read, so what this
@@ -84,11 +82,13 @@ public class RequestBodyTests
 
     // Every read completes synchronously off a MemoryStream, so the whole read runs on the calling
     // thread and its allocations are the calling thread's to measure.
-    static DefaultHttpContext Context(byte[] body, long? declared)
-    {
-        var context = new DefaultHttpContext();
-        context.Request.Body = new MemoryStream(body);
-        context.Request.ContentLength = declared;
-        return context;
-    }
+    static DefaultHttpContext Context(byte[] body, long? declared) =>
+        new()
+        {
+            Request =
+            {
+                Body = new MemoryStream(body),
+                ContentLength = declared
+            }
+        };
 }
