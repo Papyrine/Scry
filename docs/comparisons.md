@@ -26,6 +26,20 @@ Ways for a client to query a server differ on two axes.
 | **Two type systems** — a contract or schema between the sides | An endpoint or method per use case, with DTOs written twice or generated from the contract | A query language of its own against a schema in its own definition language, or query options in a URL parsed onto the model |
 | **One type system** — client types derived from the server's | A procedure per use case, with the client's types inferred from or shared with the server's code (tRPC) | **Scry** — and, for peers that trust each other, a serialized expression tree over a shared model assembly |
 
+The same grid as sets. Everything outside both circles is an endpoint per use case:
+
+```mermaid
+venn-beta
+  set Client["Query shaped on the client"]
+    text C1["A query language of its own"]
+    text C2["Query options in the URL"]
+    text C3["An API generated from the database"]
+  set One["One type system"]
+    text O1["A procedure per use case, types inferred from the server"]
+  union Client,One["Scry"]
+    text CO1["Serialized expression trees, between trusting peers"]
+```
+
 Scry is the cell where the query is written on the client, the compiler checking it is the one the UI already uses, and the client is still not trusted. What follows from that, against each type of approach:
 
 | Approach | Examples | Query written in | Client types come from | A wrong query fails |
