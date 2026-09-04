@@ -15,6 +15,92 @@ public class NumericPromotionTests
 {
     record IdRow(int Id);
 
+    // ReSharper disable NotAccessedPositionalProperty.Local
+    record QuantityRow(string Region, long Quantity);
+
+    record UnitsRow(int Id, int Units);
+    // ReSharper restore NotAccessedPositionalProperty.Local
+
+    // Sum and Average have overloads for a handful of numeric types, and a member narrower than any of
+    // them has to widen to one: a terminal always did, and the folds inside a group or over a
+    // collection once looked the overload up by the member's own type and faulted.
+    [Test]
+    public async Task AGroupedSumWidensANarrowMember()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // Quantity is uint. C# binds the long overload through an implicit conversion the client
+        // drops, so the server widens again. North: 3 + 7; South: 1.
+        var rows = await client.Source<Order>("Order")
+            .GroupBy(_ => _.Region)
+            .Select(_ => new QuantityRow(_.Key, _.Sum(_ => _.Quantity)))
+            .ToListAsync();
+
+        Assert.That(
+            rows.OrderBy(_ => _.Region).Select(_ => (_.Region, _.Quantity)),
+            Is.EqualTo([("North", 10L), ("South", 1L)]));
+    }
+
+    [Test]
+    public async Task ACollectionSumWidensANarrowMember()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        // Units is short. Order 1 has 12 + 30, order 2 has 7, and order 3 has no lines at all.
+        var rows = await client.Source<Order>("Order")
+            .OrderBy(_ => _.Id)
+            .Select(_ => new UnitsRow(_.Id, _.Lines.Sum(l => l.Units)))
+            .ToListAsync();
+
+        Assert.That(rows.Select(_ => _.Units), Is.EqualTo([42, 7, 0]));
+    }
+
+    // The distinct fold takes its values through a selector-less overload, of which there are the
+    // same few. Hand-built: a client cannot write Sum over a uint sequence at all.
+    [Test]
+    public void ADistinctGroupedSumWidensANarrowMember()
+    {
+        using var context = TestContext.CreateSeeded();
+        var request = QueryRequest.Create(
+            "Order",
+            [
+                new GroupByOp([new MemberNode(["Region"])]),
+                new SelectOp(
+                    new(
+                    [
+                        new("Region", new NodeValue(new MemberNode(["Region"]))),
+                        new("Total", new NodeValue(new AggregateNode(AggregateFn.Sum, new MemberNode(["Quantity"])) {Distinct = true}))
+                    ]))
+            ]);
+
+        var response = SharedProcessor.Instance.Execute(request, context);
+
+        var totals = response.Payload.EnumerateArray()
+            .ToDictionary(_ => _.GetProperty("region").GetString()!, _ => _.GetProperty("total").GetInt64());
+        Assert.That(totals, Is.EqualTo(new Dictionary<string, long> {["North"] = 10, ["South"] = 1}));
+    }
+
+    // A member that is not numeric at all has no fold, and is refused as such rather than left to
+    // fail the overload lookup as a server fault.
+    [Test]
+    public void ASumOverANonNumericMemberIsRefused()
+    {
+        using var context = TestContext.CreateSeeded();
+        var request = QueryRequest.Create(
+            "Employee",
+            [
+                new GroupByOp([new MemberNode(["DepartmentId"])]),
+                new SelectOp(
+                    new([new("Total", new NodeValue(new AggregateNode(AggregateFn.Sum, new MemberNode(["Status"]))))]))
+            ]);
+
+        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+
+        Assert.That(exception!.Message, Does.Contain("'Sum' is not supported over 'Status'"));
+    }
+
     [Test]
     public async Task ComparisonPromotesToTheWiderOperand()
     {

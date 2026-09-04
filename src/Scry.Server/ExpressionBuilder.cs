@@ -611,16 +611,21 @@ sealed class ExpressionBuilder(
         }
         else
         {
-            var promoted = PromoteNumeric(body.Type) ??
-                           throw new ScryValidationException(
-                               $"'{function}' is not supported over '{body.Type.Name}'.");
-            if (promoted != body.Type)
-            {
-                body = Expression.Convert(body, promoted);
-            }
+            body = PromoteForFold(body, function.ToString());
         }
 
         return Expression.Lambda(body, parameter);
+    }
+
+    // Sum and Average fold as the numeric types the LINQ overloads exist for, and no others: a
+    // narrower member widens to the smallest that holds every value, and one that is not numeric at
+    // all — an enum, a char — is refused rather than left to fail the overload lookup. The same
+    // widening whether the fold is a terminal, a grouped aggregate, or one over a collection.
+    static Expression PromoteForFold(Expression body, string function)
+    {
+        var promoted = PromoteNumeric(body.Type) ??
+                       throw new ScryValidationException($"'{function}' is not supported over '{body.Type.Name}'.");
+        return promoted == body.Type ? body : Expression.Convert(body, promoted);
     }
 
     // The numeric types Queryable.Sum/Average have overloads for. Narrower members widen to the
@@ -629,6 +634,13 @@ sealed class ExpressionBuilder(
     {
         var underlying = Nullable.GetUnderlyingType(type);
         var value = underlying ?? type;
+
+        // An enum reports its underlying number's type code, and is not a number: it travels by name,
+        // and a total of its values would answer nothing anyone asked.
+        if (value.IsEnum)
+        {
+            return null;
+        }
 
         var promoted = Type.GetTypeCode(value) switch
         {
@@ -742,11 +754,17 @@ sealed class ExpressionBuilder(
 
         // Min/Max over an empty collection is SQL NULL, so the selected value is made nullable rather
         // than faulting when a row has no elements.
-        if (subquery.Function is SubqueryFn.Min or SubqueryFn.Max &&
-            body.Type.IsValueType &&
-            Nullable.GetUnderlyingType(body.Type) is null)
+        if (subquery.Function is SubqueryFn.Min or SubqueryFn.Max)
         {
-            body = Expression.Convert(body, typeof(Nullable<>).MakeGenericType(body.Type));
+            if (body.Type.IsValueType &&
+                Nullable.GetUnderlyingType(body.Type) is null)
+            {
+                body = Expression.Convert(body, typeof(Nullable<>).MakeGenericType(body.Type));
+            }
+        }
+        else
+        {
+            body = PromoteForFold(body, subquery.Function.ToString());
         }
 
         var selector = Expression.Lambda(body, parameter);
@@ -1913,13 +1931,15 @@ sealed class ExpressionBuilder(
         // so the fold runs bare over the values rather than through a selector.
         if (aggregate.Distinct)
         {
-            if (aggregate.Selector is not MemberNode distinctMember)
+            if (aggregate.Selector is not { } distinctSelector)
             {
-                throw new ScryValidationException("A distinct aggregate requires a member selector.");
+                throw new ScryValidationException("A distinct aggregate requires a selector.");
             }
 
+            // Any expression over the row, not only a member: a narrow member arrives under the
+            // widening C# bound the fold's overload through, which the client carries as a cast.
             var valueParameter = Expression.Parameter(element, "x");
-            var valueBody = BuildMemberAccess(valueParameter, distinctMember.Path);
+            var valueBody = Build(distinctSelector, valueParameter, null);
 
             // SQL's distinct aggregates skip nulls where Distinct() keeps one, so a row whose value
             // is absent is filtered first — the same normalization the text aggregate applies, in the
@@ -1932,6 +1952,11 @@ sealed class ExpressionBuilder(
                     Expression.NotEqual(valueBody, Expression.Constant(null, valueBody.Type)),
                     valueParameter);
                 source = Expression.Call(enumerableWhere.MakeGenericMethod(element), source, notNull);
+            }
+
+            if (aggregate.Function is AggregateFn.Sum or AggregateFn.Average)
+            {
+                valueBody = PromoteForFold(valueBody, aggregate.Function.ToString());
             }
 
             var values = Expression.Call(
@@ -1956,13 +1981,18 @@ sealed class ExpressionBuilder(
             return Expression.Call(enumerableCount.MakeGenericMethod(element), source);
         }
 
-        if (aggregate.Selector is not MemberNode member)
+        if (aggregate.Selector is not { } selected)
         {
-            throw new ScryValidationException($"Aggregate '{aggregate.Function}' requires a member selector.");
+            throw new ScryValidationException($"Aggregate '{aggregate.Function}' requires a selector.");
         }
 
         var selectorParameter = Expression.Parameter(element, "x");
-        var selectorBody = BuildMemberAccess(selectorParameter, member.Path);
+        var selectorBody = Build(selected, selectorParameter, null);
+        if (aggregate.Function is AggregateFn.Sum or AggregateFn.Average)
+        {
+            selectorBody = PromoteForFold(selectorBody, aggregate.Function.ToString());
+        }
+
         var selector = Expression.Lambda(selectorBody, selectorParameter);
         var returnType = selectorBody.Type;
 
@@ -1974,7 +2004,7 @@ sealed class ExpressionBuilder(
         {
             if (returnType != typeof(string))
             {
-                throw new ScryValidationException($"Join aggregates text; '{string.Join('.', member.Path)}' is not text.");
+                throw new ScryValidationException($"Join aggregates text; its selector reads a '{returnType.Name}'.");
             }
 
             if (aggregate.Separator is not { } separator)

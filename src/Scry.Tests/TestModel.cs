@@ -292,6 +292,10 @@ public class OrderLine
     public int Quantity { get; set; }
     public decimal Price { get; set; }
 
+    // A narrow numeric on a collection element: no Sum or Average overload takes a short, so a fold
+    // over it is what the server has to widen.
+    public short Units { get; set; }
+
     public int OrderId { get; set; }
     public Order? Order { get; set; }
 }
@@ -782,13 +786,15 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
                     {
                         Sku = "A-1",
                         Quantity = 2,
-                        Price = 25m
+                        Price = 25m,
+                        Units = 12
                     },
                     new()
                     {
                         Sku = "A-2",
                         Quantity = 1,
-                        Price = 50m
+                        Price = 50m,
+                        Units = 30
                     }
                 ],
                 Tags = ["urgent", "export"],
@@ -816,7 +822,8 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
                     {
                         Sku = "B-1",
                         Quantity = 5,
-                        Price = 50m
+                        Price = 50m,
+                        Units = 7
                     }
                 ],
                 Tags = ["export"],

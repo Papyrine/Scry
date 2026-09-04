@@ -651,6 +651,15 @@
           IsCollection: false,
           IsAttachment: false,
           IsSensitive: false
+        },
+        {
+          Name: Units,
+          TypeDisplay: short,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
         }
       ],
       IsSensitive: false
@@ -939,5 +948,5 @@
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: 32VEDu7rkT1xWEj-
+  SchemaStamp: cWWFkBW6wyn_SdLT
 }
