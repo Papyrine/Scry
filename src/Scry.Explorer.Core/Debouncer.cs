@@ -9,7 +9,15 @@ public sealed class Debouncer(int delayMs = 500) :
 {
     CancelSource? pending;
 
-    public void Run(Func<Task> action)
+    public void Run(Func<Task> action) =>
+        Run(_ => action());
+
+    /// <summary>
+    /// As <see cref="Run(Func{Task})"/>, but hands the action the token for its own run. An action
+    /// that outlasts the window can check it on the way back and drop a result a later call has
+    /// already superseded.
+    /// </summary>
+    public void Run(Func<Cancel, Task> action)
     {
         pending?.Cancel();
         pending?.Dispose();
@@ -17,7 +25,7 @@ public sealed class Debouncer(int delayMs = 500) :
         _ = RunAfterDelay(action, pending.Token);
     }
 
-    async Task RunAfterDelay(Func<Task> action, Cancel token)
+    async Task RunAfterDelay(Func<Cancel, Task> action, Cancel token)
     {
         try
         {
@@ -35,7 +43,7 @@ public sealed class Debouncer(int delayMs = 500) :
 
         try
         {
-            await action();
+            await action(token);
         }
         catch (OperationCanceledException)
         {

@@ -760,7 +760,9 @@ public partial class App
         }
     }
 
-    CancellationTokenSource? diagnosticsCts;
+    // A Roslyn pass costs far more than a keystroke, so this window is much shorter than the persist
+    // one: long enough to coalesce a burst of typing, short enough that squiggles still feel live.
+    readonly Debouncer diagnose = new(300);
 
     // Re-run diagnostics on edit and surface them as editor squiggles. Debounced so a burst of
     // keystrokes coalesces into a single Roslyn pass, and a superseded run is dropped.
@@ -772,21 +774,20 @@ public partial class App
             SchedulePersist();
         }
 
-        if (workspace is null)
+        diagnose.Run(async cancel =>
         {
-            return;
-        }
-
-        diagnosticsCts?.Cancel();
-        var cts = diagnosticsCts = new CancellationTokenSource();
-
-        try
-        {
-            await Task.Delay(300, cts.Token);
+            // Read once the window has closed rather than before it opened, so a workspace that
+            // finished loading during a burst of typing still gets to diagnose it.
+            if (workspace is not { } loaded)
+            {
+                return;
+            }
 
             var text = await editor.GetValue();
-            var diagnostics = await workspace.DiagnoseAsync(text);
-            if (cts.Token.IsCancellationRequested)
+            var diagnostics = await loaded.DiagnoseAsync(text);
+            // The pass outlasts the window it started in, so the last run to begin is not the last to
+            // finish. Only the run that is still current may write markers.
+            if (cancel.IsCancellationRequested)
             {
                 return;
             }
@@ -813,11 +814,7 @@ public partial class App
 
             var model = await editor.GetModel();
             await BlazorMonaco.Editor.Global.SetModelMarkers(JS, model, "scry", markers);
-        }
-        catch
-        {
-            // Diagnostics are best-effort; never disrupt typing.
-        }
+        });
     }
 
     // A value under the legacy key is a plain array of query strings from before entries carried
