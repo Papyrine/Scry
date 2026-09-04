@@ -17,6 +17,7 @@
     explorer's Web Worker host.
   -->
   <ItemGroup>
+    <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Features" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />
     <PackageReference Include="Basic.Reference.Assemblies.Net100" />

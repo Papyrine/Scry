@@ -1,0 +1,46 @@
+@namespace Scry
+
+@*
+    The output column's tab strip. A tab exists only when there is something behind it, so a refused
+    run leaves no tabs at all rather than three empty panes — which is also what keeps the "clears the
+    panes" assertions meaningful.
+*@
+<div class="output-tabs" role="tablist" data-testid="output-tabs" aria-label="Result views">
+    @foreach (var tab in Available)
+    {
+        var current = tab;
+        <button type="button"
+                class="output-tab @(Active == current ? "active" : null)"
+                data-testid="@($"output-tab-{Slug(current)}")"
+                role="tab"
+                aria-selected="@(Active == current ? "true" : "false")"
+                @onclick="() => OnSelect.InvokeAsync(current)">@Label(current)</button>
+    }
+</div>
+
+@code
+{
+    [Parameter]
+    [EditorRequired]
+    public IReadOnlyList<OutputTab> Available { get; set; } = [];
+
+    [Parameter]
+    public OutputTab Active { get; set; }
+
+    [Parameter]
+    public EventCallback<OutputTab> OnSelect { get; set; }
+
+    static string Label(OutputTab tab) => tab switch
+    {
+        OutputTab.Result => "Result",
+        OutputTab.Response => "Response",
+        _ => "SQL"
+    };
+
+    static string Slug(OutputTab tab) => tab switch
+    {
+        OutputTab.Result => "result",
+        OutputTab.Response => "response",
+        _ => "sql"
+    };
+}

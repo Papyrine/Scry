@@ -1,0 +1,108 @@
+name: release
+on:
+  push:
+    tags: ['*']
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  publish:
+    # Windows for the same two reasons ci is: the SQL-backed suites need LocalDB, and the screenshot
+    # baselines were rasterized there.
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      # Lets the job mint the OIDC token nuget.org trades for a short-lived publishing key.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Check LocalDB
+        shell: pwsh
+        run: |
+          $info = sqllocaldb info
+          if ($LASTEXITCODE -ne 0) {
+            throw "SQL Server LocalDB is not on this image. Scry.Tests and IntegrationTests need it (EfLocalDb)."
+          }
+          $info
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\ms-playwright
+          key: playwright-${{ hashFiles('samples/Directory.Packages.props') }}
+
+      # The tag is the version: tag 1.2.3 (or v1.2.3) publishes 1.2.3. The Version in
+      # src/Directory.Build.props is only what local builds get.
+      - name: Resolve the version from the tag
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      # This is the pack. ProjectDefaults packs the src projects on any Release build, so the six
+      # packages land in nugets/ from the build itself rather than from a later dotnet pack — which
+      # is also why the version has to be passed here and nowhere else.
+      - name: Build src
+        run: dotnet build src/Scry.slnx -c Release -p:Version=${{ env.version }}
+
+      # One tree at a time: they share the src projects' obj directories, and a concurrent build
+      # deletes the global usings ProjectDefaults materializes there. These two carry no version
+      # because they pack nothing — the nupkgs are already written and zipped by the step above, so
+      # rebuilding the src assemblies underneath them cannot reach inside one.
+      - name: Build integration tests
+        run: dotnet build IntegrationTests/IntegrationTests.slnx -c Release -p:GeneratePackageOnBuild=false
+      - name: Build samples
+        id: build
+        run: dotnet build samples/Scry.Samples.slnx -c Release -p:GeneratePackageOnBuild=false
+
+      # A release runs the suites rather than trusting the ci run on the same commit: a tag is the
+      # last point at which finding out is cheap. The browser suite is most of the half hour.
+      - name: Test src
+        run: dotnet test src/Scry.slnx -c Release --no-build --logger trx
+      - name: Test integration
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: dotnet test IntegrationTests/IntegrationTests.slnx -c Release --no-build --logger trx
+      - name: Test samples
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: dotnet test samples/Scry.Samples.slnx -c Release --no-build --logger trx
+
+      - name: Upload received snapshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: received
+          path: '**/*.received.*'
+          if-no-files-found: ignore
+
+      # Kept even when a suite failed: the packages are what the tag was cut to produce, and being
+      # able to look at them is half of working out why they were not published.
+      - name: Upload packages
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: nugets/*.nupkg
+          if-no-files-found: error
+
+      # Trusted publishing: no stored API key. nuget.org validates GitHub's OIDC token against the
+      # policy naming this repository and this workflow file, and returns a key good for an hour — so
+      # this stays immediately before the push. Reached only when every step above succeeded.
+      - name: NuGet login
+        id: login
+        uses: NuGet/login@v1
+        with:
+          # The nuget.org account the trusted publishing policy belongs to.
+          user: SimonCropp
+
+      - name: Push to nuget.org
+        shell: bash
+        run: >
+          dotnet nuget push nugets/*.nupkg
+          --api-key ${{ steps.login.outputs.NUGET_API_KEY }}
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate

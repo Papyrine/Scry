@@ -1,17 +1,47 @@
 ﻿<!--!--><!--!--><!--!-->
 
-<header class="app-header"><!--!--><div class="brand"><svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="10" r="6.5"></circle>
-            <path d="M8 20h8"></path>
-            <path d="M9.3 6.6c.35.9.55 1.1 1.45 1.45-.9.35-1.1.55-1.45 1.45-.35-.9-.55-1.1-1.45-1.45.9-.35 1.1-.55 1.45-1.45z" fill="currentColor" stroke="none"></path></svg>
-        <h1 data-testid="explorer-title"><span class="brand-accent">Scry</span> Explorer</h1></div>
-    <button class="theme-toggle icon-btn" data-testid="theme-toggle" title="Cycle theme: System → Light → Dark"><svg class="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><!--!--><circle cx="12" cy="12" r="9"></circle>
-                <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"></path></svg>System</button></header><!--!-->
+<main class="shell" data-ready="true"><!--!--><nav class="rail" aria-label="Explorer panes"><div class="rail-group"><button type="button" class="rail-button active" data-testid="rail-schema" title="Show the queryable schema" aria-label="Show the queryable schema" aria-pressed="true"><!--!--><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H19v18H7.5A2.5 2.5 0 0 0 5 22z"></path>
+                <path d="M5 19.5A2.5 2.5 0 0 1 7.5 17H19"></path></svg></button><!--!-->
+        <button type="button" class="rail-button " data-testid="rail-history" title="Show the queries this browser remembers" aria-label="Show the queries this browser remembers" aria-pressed="false"><!--!--><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"></circle>
+                <path d="M12 7v5l3.5 2"></path></svg></button></div><!--!-->
+    <div class="rail-group"><button type="button" class="rail-button " data-testid="rail-refetch" title="Re-read the schema from the server" aria-label="Re-read the schema from the server"><!--!--><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.34-5.66"></path>
+                <path d="M20 3v4h-4"></path></svg></button><!--!-->
+        <button type="button" class="rail-button" data-testid="theme-toggle" title="Cycle theme: System → Light → Dark" aria-label="Switch theme (currently System)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><!--!--><circle cx="12" cy="12" r="9"></circle>
+                    <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"></path></svg></button><!--!-->
+        <button type="button" class="rail-button" data-testid="rail-shortkeys" title="Keyboard shortcuts" aria-label="Keyboard shortcuts"><!--!--><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="6" width="20" height="12" rx="2"></rect>
+                <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6"></path></svg></button><!--!-->
+        <button type="button" class="rail-button" data-testid="rail-settings" title="Settings" aria-label="Settings"><!--!--><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.36a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.64 15a1.7 1.7 0 0 0-1.55-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.64 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.64a1.7 1.7 0 0 0 1.03-1.55V3a2 2 0 1 1 4 0v.09c0 .68.4 1.29 1.03 1.55a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87c.26.62.87 1.03 1.55 1.03H21a2 2 0 1 1 0 4h-.09c-.68 0-1.29.4-1.51 1.03z"></path></svg></button></div></nav><!--!-->
 
-<main class="shell" data-ready="true"><!--!--><p class="tagline">
-    Write LINQ against the allow-listed sources, run it, and inspect the wire request. Completion is
-    powered by Roslyn running in the browser against the server's introspected schema.
-</p><div class="workspace"><section class="pane-query"><div class="editor-card"><!--!--><div id="scry-editor" class="scry-editor"></div><!--!-->
-    <div class="actions"><button class="btn btn-primary" data-testid="run" title="Translate the query to a wire request and run it against the server (Ctrl+Enter)."><!--!--><svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M8 5v14l11-7z"></path></svg>Run
-        </button><button class="btn" data-testid="sql-preview" title="Show the SQL this query would run, without running it. Validated and policy-filtered exactly as a real query is.">Show SQL</button><button class="btn" data-testid="share" title="Put this query in the URL and copy the link. The query is placed in the fragment, so it is never sent to the server.">Share</button></div></div></section><!--!-->
+    <div class="workspace"><!--!--><aside class="plugin-pane" style="flex: 0.24 1 0%" data-testid="plugin-pane" aria-label="Schema"><div class="plugin-title">Schema</div><!--!--><div class="schema-pane" data-testid="schema-pane"></div></aside><!--!--><div id="plugin-resizer" class="resizer resizer-x " data-testid="plugin-resizer" role="separator" aria-orientation="vertical"></div><!--!-->
 
-<section class="pane-output"></section></div></main>
+        <div class="session" style="flex: 0.76 1 0%"><header class="session-header"><!--!--><div class="tabs" role="tablist" data-testid="tabs" aria-label="Query tabs"><div class="tab active" role="tab" aria-selected="true"><button type="button" class="tab-button" data-testid="tab" title="Employee">Employee</button></div><button type="button" class="tab-add" data-testid="tab-add" aria-label="New tab" title="New tab"><!--!--><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"></path></svg></button></div><!--!-->
+                <!--!--><div class="brand"><svg class="brand-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="10" r="6.5"></circle>
+                        <path d="M8 20h8"></path>
+                        <path d="M9.3 6.6c.35.9.55 1.1 1.45 1.45-.9.35-1.1.55-1.45 1.45-.35-.9-.55-1.1-1.45-1.45.9-.35 1.1-.55 1.45-1.45z" fill="currentColor" stroke="none"></path></svg>
+                    <h1 data-testid="explorer-title"><span class="brand-accent">Scry</span> Explorer</h1></div></header><!--!-->
+
+            <div class="panes"><div class="editor-column" style="flex: 0.5 1 0%"><div class="editor-section" style="flex: 1 1 0%"><div class="editor-host"><!--!--><div id="scry-editor" class="scry-editor"></div></div><!--!-->
+                        <div class="toolbar" role="toolbar" aria-label="Query commands"><button class="run-button" data-testid="run" title="Translate the query to a wire request and run it against the server (Ctrl+Enter)."><!--!--><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M8 5v14l11-7z"></path></svg>
+                                <!--!--><span class="visually-hidden">Run</span></button><button class="tool-button" data-testid="sql-preview" title="Show the SQL this query would run, without running it. Validated and policy-filtered exactly as a real query is."><!--!--><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><ellipse cx="12" cy="6" rx="8" ry="3"></ellipse>
+                                        <path d="M4 6v12c0 1.66 3.58 3 8 3s8-1.34 8-3V6"></path>
+                                        <path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"></path></svg>
+                                    <!--!--><span class="visually-hidden">Show SQL</span></button><button class="tool-button" data-testid="prettify" title="Format the query: the chain down the page, and a projection down the page after it (Shift+Ctrl+P)."><!--!--><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 6h16M4 12h10M4 18h13"></path></svg>
+                                <!--!--><span class="visually-hidden">Format query</span></button><!--!-->
+                            <button class="tool-button" data-testid="copy-query" title="Copy the query (Shift+Ctrl+C)."><!--!--><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"></rect>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                <!--!--><span class="visually-hidden">Copy query</span></button><!--!-->
+                            <button class="tool-button" data-testid="share" title="Put this query in the URL and copy the link. The query is placed in the fragment, so it is never sent to the server."><!--!--><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="18" cy="5" r="3"></circle>
+                                    <circle cx="6" cy="12" r="3"></circle>
+                                    <circle cx="18" cy="19" r="3"></circle>
+                                    <path d="M8.6 10.7l6.8-3.9M8.6 13.3l6.8 3.9"></path></svg>
+                                <!--!--><span class="visually-hidden">Share</span></button></div></div><!--!-->
+
+                    <!--!--><div id="wire-resizer" class="resizer resizer-y hidden" data-testid="wire-resizer" role="separator" aria-orientation="horizontal"></div></div><!--!-->
+
+                <!--!--><div id="session-resizer" class="resizer resizer-x " data-testid="session-resizer" role="separator" aria-orientation="vertical"></div><!--!-->
+
+                <div class="output-column" style="flex: 0.5 1 0%"><div class="output-body"><p class="empty-hint muted"><!--!-->
+                                        Write LINQ against the allow-listed sources and run it. Completion is powered by
+                                        Roslyn running in the browser against the server's introspected schema.
+                                    </p></div></div></div></div></div></main>

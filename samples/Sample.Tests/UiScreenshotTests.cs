@@ -1,4 +1,4 @@
-// Verify.Playwright snapshots of the two UIs the sample ships: the Blazor WASM client on /, and the
+﻿// Verify.Playwright snapshots of the two UIs the sample ships: the Blazor WASM client on /, and the
 // Scry explorer on /scry. Verifying an IPage or an ILocator captures the rendered markup *and* a
 // screenshot, so these guard what the UI looks like rather than only what it contains — the
 // behavioural assertions live in UiSnapshotTests. Two of them are also the images readme.md and
@@ -16,39 +16,48 @@
 public class UiScreenshotTests :
     BrowserFixture
 {
-    // Tall enough that the sample's four tables and the explorer's panes are captured without the
-    // full-page stitching that a short viewport forces.
+    // Tall enough that the sample's four tables are captured without the full-page stitching a short
+    // viewport forces. The explorer no longer stitches at all — it fills the viewport and scrolls
+    // inside its panes — but the sample page still flows, so this stays sized for that.
     static ViewportSize viewport = new()
     {
         Width = 1000,
         Height = 1200
     };
 
-    // The two captures at the bottom of this file are the images the docs embed, and they are laid out
-    // at 800 rather than the width above: a doc renderer shows them at native size, and scaling a wider
-    // capture down to fit softens every glyph in it.
+    // The explorer's own captures. A shell divided into a rail, a plugin pane, an editor column and an
+    // output column has a width below which it is not showing what it looks like, only that it copes;
+    // this is the narrowest that reads honestly.
+    static ViewportSize shellViewport = new()
+    {
+        Width = 1400,
+        Height = 860
+    };
+
+    // The sidecar capture the docs embed, laid out at 800 rather than the default width above: a doc
+    // renderer shows it at native size, and scaling a wider capture down to fit softens every glyph
+    // in it. The sample page flows, so it reads perfectly well this narrow.
     static ViewportSize docsViewport = new()
     {
         Width = 800,
         Height = 1000
     };
 
-    // Past the breakpoint in app.css the query and everything it produced sit side by side rather than
-    // stacked. Every other capture here is narrower than that breakpoint, so this is the only one the
-    // two-column layout appears in.
-    static ViewportSize wideViewport = new()
+    // The explorer's own docs capture. It cannot take the width above: a shell narrowed to 800px is a
+    // picture of a shell coping with 800px, and what the docs are showing is the layout. The cost is
+    // some sharpness to the renderer's downscaling.
+    static ViewportSize explorerDocsViewport = new()
     {
-        Width = 1500,
-        Height = 1000
+        Width = 1400,
+        Height = 780
     };
 
-    // The IntelliSense capture is of the viewport rather than of the full page, so this height is its
-    // crop — sized to the editor card and the dropdown over it, because a screen of empty space beneath
-    // them is not what the doc is showing.
+    // The IntelliSense capture is cropped to the editor and the dropdown over it, because the rail and
+    // the schema beside them are not what that doc is showing.
     static ViewportSize intelliSenseViewport = new()
     {
-        Width = 800,
-        Height = 660
+        Width = 1200,
+        Height = 560
     };
 
     [Test]
@@ -86,16 +95,12 @@ public class UiScreenshotTests :
     [Test]
     public async Task ExplorerShell()
     {
-        var page = await NewSizedPageAsync();
+        var page = await NewSizedPageAsync(shellViewport);
         await GoToExplorer(page);
+        await SettleScrollbarsAsync(page);
 
         await Verify(page)
-            .PageScreenshotOptions(
-                new()
-                {
-                    FullPage = true
-                },
-                screenshotOnly: true);
+            .PageScreenshotOptions(new(), screenshotOnly: true);
     }
 
     // The same shell in dark mode: the toggle retints Monaco and the page together, and a screenshot
@@ -103,7 +108,7 @@ public class UiScreenshotTests :
     [Test]
     public async Task ExplorerDarkMode()
     {
-        var page = await NewSizedPageAsync();
+        var page = await NewSizedPageAsync(shellViewport);
         await GoToExplorer(page);
 
         // System → Light → Dark, so the result does not depend on the machine's own preference.
@@ -111,42 +116,26 @@ public class UiScreenshotTests :
         await toggle.ClickAsync();
         await toggle.ClickAsync();
         await page.WaitForSelectorAsync(".monaco-editor.vs-dark", 10);
-
-        await Verify(page)
-            .PageScreenshotOptions(
-                new()
-                {
-                    FullPage = true
-                },
-                screenshotOnly: true);
-    }
-
-    // The shell wide enough for the split layout, with a query run so that both columns have something
-    // in them: the editor and its history on the left, the wire request, rows and response on the right.
-    [Test]
-    public async Task ExplorerSideBySide()
-    {
-        var page = await NewSizedPageAsync(wideViewport);
-        await GoToExplorer(page);
-
-        await page.SetEditorValueAsync(
-            """
-            Query.Employee
-                .Where(_ => _.Active)
-                .OrderBy(_ => _.Name)
-                .Select(_ => new { _.Name, _.Status })
-            """);
-        await page.Locator("[data-testid='run']").ClickAsync();
-        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);
         await SettleScrollbarsAsync(page);
 
         await Verify(page)
-            .PageScreenshotOptions(
-                new()
-                {
-                    FullPage = true
-                },
-                screenshotOnly: true);
+            .PageScreenshotOptions(new(), screenshotOnly: true);
+    }
+
+    // The schema pane on a type page: the members the server publishes, their types, and the badges
+    // that carry the rest of what the introspection contract says about them.
+    [Test]
+    public async Task ExplorerSchemaPane()
+    {
+        var page = await NewSizedPageAsync(shellViewport);
+        await GoToExplorer(page);
+
+        await page.Locator("[data-testid='schema-source']", new() {HasTextString = "Employee"}).First.ClickAsync();
+        await page.WaitForSelectorAsync("[data-testid='schema-type']", 10);
+        await SettleScrollbarsAsync(page);
+
+        await Verify(page)
+            .PageScreenshotOptions(new(), screenshotOnly: true);
     }
 
     // A query run end to end, captured as the table the explorer renders from the server's response.
@@ -257,6 +246,19 @@ public class UiScreenshotTests :
         var page = await NewSizedPageAsync(intelliSenseViewport);
         await GoToExplorer(page);
 
+        // Neither the schema pane nor the output column is what this capture is showing, and the
+        // suggest widget is wider than the editor gets once they have had their share. Both are put
+        // out of the way through the same storage the shell restores from, then reloaded into.
+        await page.EvaluateAsync(
+            """
+            () => {
+                localStorage.setItem('scry:plugin', '');
+                localStorage.setItem('scry:sessionFlex', '0.66');
+            }
+            """);
+        await page.ReloadAsync();
+        await page.WaitForSelectorAsync("main[data-ready]", 90);
+
         // The caret goes to the end of the sample query ("…Where(_ => _."), which is where the member
         // list is worth showing, and is pinned solid first: a blinking caret is two different images
         // depending on when the shutter falls.
@@ -282,17 +284,23 @@ public class UiScreenshotTests :
     [Test]
     public async Task ExplorerRun()
     {
-        var page = await NewSizedPageAsync(docsViewport);
+        var page = await NewSizedPageAsync(explorerDocsViewport);
         await GoToExplorer(page);
 
-        // Broken across lines so it sits inside the editor's width unwrapped: this is the capture that
-        // shows the LINQ a caller writes, and a horizontal scrollbar over it shows nothing.
+        // In the house style the format button and the schema pane both produce, since this is the
+        // capture that shows the LINQ a caller writes. Also what keeps it inside the editor's width
+        // unwrapped — a horizontal scrollbar over it would show nothing.
         await page.SetEditorValueAsync(
             """
             Query.Employee
                 .Where(_ => _.Active)
                 .OrderBy(_ => _.Name)
-                .Select(_ => new { _.Name })
+                .Select(_ =>
+                    new
+                    {
+                        _.Name,
+                        _.Status
+                    })
             """);
         await page.Locator("[data-testid='run']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);
@@ -300,12 +308,7 @@ public class UiScreenshotTests :
         await SettleScrollbarsAsync(page);
 
         await Verify(page)
-            .PageScreenshotOptions(
-                new()
-                {
-                    FullPage = true
-                },
-                screenshotOnly: true);
+            .PageScreenshotOptions(new(), screenshotOnly: true);
     }
 
     // Monaco fades a scrollbar out once whatever it belongs to stops being touched — the editor's after

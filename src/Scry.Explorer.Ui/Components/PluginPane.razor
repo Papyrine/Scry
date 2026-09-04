@@ -1,0 +1,76 @@
+@namespace Scry
+
+<aside class="plugin-pane" style="@Style" data-testid="plugin-pane"
+       aria-label="@(Kind == PluginKind.Schema ? "Schema" : "History")">
+    <div class="plugin-title">@(Kind == PluginKind.Schema ? "Schema" : "History")</div>
+    @if (Kind == PluginKind.Schema)
+    {
+        @if (Introspection is null)
+        {
+            <p class="pane-empty muted">Loading schema…</p>
+        }
+        else
+        {
+            <SchemaPane Index="index!" OnInsertQuery="OnInsertQuery" />
+        }
+    }
+    else
+    {
+        <HistoryPane Store="History"
+                     OnSelect="OnHistorySelect"
+                     OnRemove="OnHistoryRemove"
+                     OnClear="OnHistoryClear"
+                     OnLabel="OnHistoryLabel"
+                     OnFavorite="OnHistoryFavorite" />
+    }
+</aside>
+
+@code
+{
+    [Parameter]
+    public PluginKind Kind { get; set; }
+
+    [Parameter]
+    public string? Style { get; set; }
+
+    [Parameter]
+    public ScryIntrospection? Introspection { get; set; }
+
+    [Parameter]
+    [EditorRequired]
+    public HistoryStore History { get; set; } = null!;
+
+    [Parameter]
+    public EventCallback<string> OnHistorySelect { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnHistoryRemove { get; set; }
+
+    [Parameter]
+    public EventCallback OnHistoryClear { get; set; }
+
+    [Parameter]
+    public EventCallback<(string Query, string Label)> OnHistoryLabel { get; set; }
+
+    [Parameter]
+    public EventCallback<(string Query, bool Favorite)> OnHistoryFavorite { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnInsertQuery { get; set; }
+
+    SchemaIndex? index;
+    ScryIntrospection? indexed;
+
+    // The index is derived from the contract, so it is rebuilt only when the contract itself changes —
+    // a refetch — rather than on every render of the pane.
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(indexed, Introspection))
+        {
+            return;
+        }
+
+        indexed = Introspection;
+        index = Introspection is null ? null : new(Introspection);
+    }
+}

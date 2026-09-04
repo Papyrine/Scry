@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Xml.Linq;
 
 // Drives the live WebAssembly UI in a headless browser, asserting behaviour and snapshotting the
@@ -95,6 +95,14 @@ public class UiSnapshotTests :
                         }
                     }
                     editor.setAttribute('class', 'scry-editor');
+                }
+
+                // The schema pane renders the whole model surface, which is the sample's data rather
+                // than the shell's markup: leaving it in would reseed this snapshot on every change
+                // to Sample.Model. Its own coverage is the schema tests.
+                const schema = app.querySelector('[data-testid="schema-pane"]');
+                if (schema) {
+                    schema.textContent = '';
                 }
 
                 return app.innerHTML;
@@ -625,20 +633,26 @@ public class UiSnapshotTests :
         await page.Locator("[data-testid='run']").ClickAsync();
 
         await page.WaitForSelectorAsync("[data-testid='result-table']", 60);
+
+        // The wire request is beside the query rather than behind a tab, so it reads without one.
         var wire = await page.Locator("[data-testid='wire']").InnerTextAsync();
+
+        // Stage 3: results render as a table too.
+        var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
+
+        await page.SelectOutputTabAsync("response");
         var result = await page.Locator("[data-testid='result']").InnerTextAsync();
 
         Assert.That(wire, Does.Contain("\"root\": \"Employee\"").Or.Contain("\"root\":\"Employee\""));
         Assert.That(result, Does.Contain("Aaron"));
         Assert.That(result, Does.Contain("Carol"));
 
-        // Stage 3: results render as a table too.
-        var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
         Assert.That(table, Does.Contain("Aaron"));
         Assert.That(table, Does.Contain("FullTime"));
 
         // Stage 3: the executed query is recorded in history. The list renders the multi-line
         // query joined onto one line, so match fragments rather than the contiguous text.
+        await page.ShowHistoryAsync();
         await page.WaitForSelectorAsync("[data-testid='history'] li", 10);
         var historyText = await page.Locator("[data-testid='history']").InnerTextAsync();
         Assert.That(historyText, Does.Contain("Query.Employee"));
@@ -669,6 +683,7 @@ public class UiSnapshotTests :
 
         // And it is total: nothing was translated, sent, or remembered.
         await Assertions.Expect(page.Locator("[data-testid='wire']")).ToHaveCountAsync(0);
+        await page.ShowHistoryAsync();
         await Assertions.Expect(page.Locator("[data-testid='history']")).ToHaveCountAsync(0);
     }
 
@@ -759,10 +774,11 @@ public class UiSnapshotTests :
 
         await page.Locator("[data-testid='history-clear']").ClickAsync();
 
-        // The heading and the Clear button go with the last entry: an emptied history renders nothing,
-        // rather than an empty list under a heading offering to clear it again.
+        // The list goes with the last entry, leaving the pane's empty state. The pane's own toolbar
+        // stays — it is a pane the rail opens rather than a section that appears with content — so
+        // Clear is disabled rather than removed, which is what says there is nothing left to clear.
         await Assertions.Expect(page.Locator("[data-testid='history']")).ToHaveCountAsync(0);
-        await Assertions.Expect(page.Locator("[data-testid='history-clear']")).ToHaveCountAsync(0);
+        await Assertions.Expect(page.Locator("[data-testid='history-clear']")).ToBeDisabledAsync();
         Assert.That(await StoredHistoryAsync(page), Is.EqualTo("[]"));
     }
 
@@ -778,6 +794,7 @@ public class UiSnapshotTests :
     /// </remarks>
     static async Task RunQueryAsync(IPage page, string query, int expectedEntries)
     {
+        await page.ShowHistoryAsync();
         await page.SetEditorValueAsync(query);
         await page.Locator("[data-testid='run']").ClickAsync();
         await Assertions.Expect(page.Locator("[data-testid='history'] li"))
@@ -787,7 +804,7 @@ public class UiSnapshotTests :
     // Read out of storage rather than off the rendered list, because the two can disagree: a removal
     // that only dropped the entry from the render looks identical until a reload brings it back.
     static Task<string> StoredHistoryAsync(IPage page) =>
-        page.EvaluateAsync<string>("() => localStorage.getItem('scry-history')");
+        page.EvaluateAsync<string>("() => localStorage.getItem('scry:queries')");
 
     // A [BinaryTransfer] member never travels inside the JSON payload: the server diverts it to a raw
     // multipart part and leaves {"$bin":n} behind, which is a response the explorer cannot parse as
@@ -810,6 +827,12 @@ public class UiSnapshotTests :
 
         await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);
         var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
+
+        // A base64 cell is a scalar, so the result is still a grid and CSV stays on offer. Read before
+        // the tab moves, since the exports belong to the result view.
+        var csv = await page.Locator("[data-testid='csv']").CountAsync();
+
+        await page.SelectOutputTabAsync("response");
         var result = await page.Locator("[data-testid='result']").InnerTextAsync();
 
         // Engineering's seeded PNG signature, base64 — the encoding an undiverted byte[] arrives in.
@@ -821,8 +844,7 @@ public class UiSnapshotTests :
         // multipart body it arrived as.
         Assert.That(result, Does.Not.Contain("$bin"));
         Assert.That(result, Does.Not.Contain("Content-Type"));
-        // A base64 cell is a scalar, so the result is still a grid and CSV stays on offer.
-        Assert.That(await page.Locator("[data-testid='csv']").CountAsync(), Is.EqualTo(1));
+        Assert.That(csv, Is.EqualTo(1));
     }
 
     // Terminal support: a plain LINQ '.ToList()' (the habitual way to ask for all rows) is folded into
@@ -1056,4 +1078,368 @@ public class UiSnapshotTests :
         var count = await page.EvaluateAsync<int>("() => monaco.editor.getModelMarkers({}).length");
         Assert.That(count, Is.GreaterThan(0));
     }
+
+    // The shell. Everything below is about the app frame rather than about the query pipeline: the
+    // panes it divides into, the tabs it holds, and what survives a reload.
+    //
+    // These are grouped by feature rather than split one assertion per test, and deliberately: every
+    // [Test] here pays for a fresh page, and a page here means booting Blazor WebAssembly and the
+    // in-browser Roslyn — around nineteen seconds on a CI agent against under four on a developer
+    // machine. Splitting these back out costs about four minutes of CI for isolation that a linear
+    // sequence of assertions against one screen does not need. Where a test does need its own page —
+    // because it reloads, or clears the stored state, or drags a pane — it still has one.
+
+    [Test]
+    public async Task ExplorerManagesTabs()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        var tabs = page.Locator("[data-testid='tab']");
+
+        // A tab takes its name from the source the query reads, which is what distinguishes two of
+        // them in practice.
+        await page.SetEditorValueAsync("Query.Department.Select(_ => new { _.Name })");
+        await Assertions.Expect(tabs.First).ToHaveTextAsync("Department");
+
+        // The close button appears with the second tab: an explorer with no tab has nowhere to type.
+        await Assertions.Expect(page.Locator("[data-testid='tab-close']")).ToHaveCountAsync(0);
+
+        await page.Locator("[data-testid='tab-add']").ClickAsync();
+        await Assertions.Expect(tabs).ToHaveCountAsync(2);
+
+        // Each tab holds its own query, and switching between them does not carry one into the other.
+        await page.SetEditorValueAsync("Query.Order");
+        await tabs.First.ClickAsync();
+        await Assertions.Expect(tabs.First).ToHaveTextAsync("Department");
+        Assert.That(await EditorValueAsync(page), Is.EqualTo("Query.Department.Select(_ => new { _.Name })"));
+
+        await tabs.Last.ClickAsync();
+        Assert.That(await EditorValueAsync(page), Is.EqualTo("Query.Order"));
+
+        await page.Locator("[data-testid='tab-close']").Last.ClickAsync();
+        await Assertions.Expect(tabs).ToHaveCountAsync(1);
+    }
+
+    // Tabs and pane sizes are this browser's, so they come back; a response does not, being a fact
+    // about a moment rather than about the query. Its own page, because it reloads.
+    [Test]
+    public async Task ExplorerRestoresItsTabsAcrossAReload()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await page.SetEditorValueAsync("Query.Department");
+        await page.Locator("[data-testid='tab-add']").ClickAsync();
+        await page.SetEditorValueAsync("Query.Holiday");
+
+        // Past the persist debounce, which is what actually writes them.
+        await page.WaitForFunctionAsync(
+            "() => (localStorage.getItem('scry:tabs') ?? '').includes('Query.Holiday')",
+            null,
+            new() {Timeout = 10_000});
+
+        await page.ReloadAsync();
+        await page.WaitForSelectorAsync("main[data-ready]", 90);
+
+        await Assertions.Expect(page.Locator("[data-testid='tab']")).ToHaveCountAsync(2);
+        Assert.That(await EditorValueAsync(page), Is.EqualTo("Query.Holiday"));
+    }
+
+    // The frame around the query: which pane the rail is showing, the dialogs, and the document-level
+    // shortcuts that reach the commands Monaco's own keymap cannot.
+    [Test]
+    public async Task ExplorerDrivesItsChrome()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        var schema = page.Locator("[data-testid='schema-pane']");
+        var history = page.Locator("[data-testid='history-pane']");
+
+        // It opens on the schema, which is the pane worth seeing first.
+        await Assertions.Expect(schema).ToHaveCountAsync(1);
+
+        // One pane at a time, and clicking the open one closes it.
+        await page.Locator("[data-testid='rail-history']").ClickAsync();
+        await Assertions.Expect(history).ToHaveCountAsync(1);
+        await Assertions.Expect(schema).ToHaveCountAsync(0);
+
+        await page.Locator("[data-testid='rail-history']").ClickAsync();
+        await Assertions.Expect(page.Locator("[data-testid='plugin-pane']")).ToHaveCountAsync(0);
+
+        // The shortcuts reach the same commands. Worth asserting because the failure is silent on
+        // both sides: C# serializes a shape JS reads by name, and a mismatch leaves a listener that
+        // matches nothing and reports nothing.
+        await page.Keyboard.PressAsync("Control+Alt+KeyH");
+        await Assertions.Expect(history).ToHaveCountAsync(1);
+
+        await page.Keyboard.PressAsync("Control+Alt+KeyS");
+        await Assertions.Expect(schema).ToHaveCountAsync(1);
+
+        var settings = page.Locator("[data-testid='settings-dialog']");
+        await page.Keyboard.PressAsync("Control+Comma");
+        await Assertions.Expect(settings).ToHaveCountAsync(1);
+
+        // Focused on first render, so Escape closes without a click landing inside it first.
+        await page.Keyboard.PressAsync("Escape");
+        await Assertions.Expect(settings).ToHaveCountAsync(0);
+
+        await page.Locator("[data-testid='rail-settings']").ClickAsync();
+        await Assertions.Expect(settings).ToHaveCountAsync(1);
+        await page.Keyboard.PressAsync("Escape");
+        await Assertions.Expect(settings).ToHaveCountAsync(0);
+
+        await page.Locator("[data-testid='rail-shortkeys']").ClickAsync();
+        await Assertions.Expect(page.Locator("[data-testid='shortkeys-dialog']")).ToContainTextAsync("Ctrl+Enter");
+    }
+
+    // The schema pane reads the introspection contract: the sources, each model's members with the
+    // flags the contract carries about them, the navigations between them, and the starter query a
+    // source offers.
+    [Test]
+    public async Task ExplorerBrowsesTheSchema()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        var type = page.Locator("[data-testid='schema-type']");
+
+        await page.Locator("[data-testid='schema-source']", new() {HasTextString = "Employee"}).First.ClickAsync();
+        await page.WaitForSelectorAsync("[data-testid='schema-type']", 10);
+
+        var members = await type.InnerTextAsync();
+        Assert.That(members, Does.Contain("EmployeeQueryModel"));
+        Assert.That(members, Does.Contain("queryable as"));
+
+        // The badges are the rest of what the contract says: a key, a navigation, an attachment, and
+        // a member marked sensitive.
+        Assert.That(members, Does.Contain("key"));
+        Assert.That(members, Does.Contain("nav"));
+        Assert.That(members, Does.Contain("attachment"));
+        Assert.That(members, Does.Contain("sensitive"));
+
+        // [QueryIgnore]d, so it is not in the contract and cannot be here either.
+        Assert.That(members, Does.Not.Contain("Salary"));
+
+        // A navigation is a link, and the stack walks back out of it.
+        await page.Locator("[data-testid='schema-type'] .schema-link", new() {HasTextString = "DepartmentQueryModel"})
+            .First.ClickAsync();
+        await Assertions.Expect(type).ToContainTextAsync("DepartmentQueryModel");
+
+        await page.Locator("[data-testid='schema-back']").ClickAsync();
+        await Assertions.Expect(type).ToContainTextAsync("EmployeeQueryModel");
+
+        // Search reaches a member of a model other than the one open.
+        await page.Locator("[data-testid='schema-search']").FillAsync("Handbook");
+        await Assertions.Expect(page.Locator("[data-testid='schema-results']"))
+            .ToContainTextAsync("DepartmentQueryModel");
+        await page.Locator("[data-testid='schema-search']").FillAsync("");
+
+        // What the pane offers is already in the house style, so formatting it changes nothing.
+        await page.Locator("[data-testid='schema-insert']").First.ClickAsync();
+        var offered = await EditorValueAsync(page);
+        Assert.That(offered, Does.Contain("Department ="));
+
+        await page.Locator("[data-testid='prettify']").ClickAsync();
+        Assert.That(await EditorValueAsync(page), Is.EqualTo(offered));
+    }
+
+    // The starter query a source offers has to be one the server will actually run — which is more
+    // than "it compiles". Order carries a collection of values, and Department a collection of rows,
+    // an attachment and a byte[]; none of those may appear in a projection, and a query naming one
+    // reaches the server and comes back "Projection member must reference a scalar value."
+    [Test]
+    public async Task ExplorerRunsTheQueriesTheSchemaOffers()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        foreach (var source in new[] {"Holiday", "Order", "Department"})
+        {
+            // Back to the source list: the pane is left on whichever type the previous source opened.
+            if (await page.Locator("[data-testid='schema-back']").CountAsync() == 1)
+            {
+                await page.Locator("[data-testid='schema-back']").ClickAsync();
+            }
+
+            await page.Locator("[data-testid='schema-source']", new() {HasTextString = source}).First.ClickAsync();
+            await page.Locator("[data-testid='schema-insert']").First.ClickAsync();
+
+            Assert.That(await EditorValueAsync(page), Does.StartWith($"Query.{source}"), $"starter query for {source}");
+
+            await page.Locator("[data-testid='run']").ClickAsync();
+            await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);
+            await Assertions.Expect(page.Locator("[data-testid='error']")).ToHaveCountAsync(0);
+        }
+    }
+
+    // What the history pane does with what it remembers. One page for both because the expensive half
+    // is the two runs that fill it.
+    [Test]
+    public async Task ExplorerCuratesTheHistory()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await RunQueryAsync(page, "Query.Employee.OrderBy(_ => _.Name).Select(_ => new { _.Name })", 1);
+        await RunQueryAsync(page, "Query.Department.OrderBy(_ => _.Name).Select(_ => new { _.Name })", 2);
+
+        var entries = page.Locator("[data-testid='history'] li");
+
+        // The search box matches the query text.
+        await page.Locator("[data-testid='history-search']").FillAsync("Department");
+        await Assertions.Expect(entries).ToHaveCountAsync(1);
+        await Assertions.Expect(page.Locator("[data-testid='history-item']")).ToContainTextAsync("Query.Department");
+
+        await page.Locator("[data-testid='history-search']").FillAsync("");
+        await Assertions.Expect(entries).ToHaveCountAsync(2);
+
+        // A favorite sits outside the cap, so Clear leaves it: losing one is the thing there is no
+        // way back from.
+        await page.Locator("[data-testid='history-favorite']").First.ClickAsync();
+        await page.Locator("[data-testid='history-clear']").ClickAsync();
+        await Assertions.Expect(entries).ToHaveCountAsync(1);
+    }
+
+    // The status line reports the transport a request took, which is the one thing about the run that
+    // has no other surface.
+    [Test]
+    public async Task ExplorerReportsTheOutcomeAndTheTransport()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await page.SetEditorValueAsync("Query.Employee.Select(_ => new { _.Name })");
+        await page.Locator("[data-testid='run']").ClickAsync();
+        await page.WaitForSelectorAsync("[data-testid='status-line']", 60);
+
+        var status = await page.Locator("[data-testid='status-line']").InnerTextAsync();
+        Assert.That(status, Does.Contain("200"));
+        Assert.That(status, Does.Contain("GET").Or.Contain("POST"));
+        Assert.That(status, Does.Contain("rows"));
+        Assert.That(status, Does.Contain("ms"));
+    }
+
+    // The settings dialog's Clear removes the explorer's own keys and nothing else on the origin. Its
+    // own page, because it empties the storage every other test is reading.
+    [Test]
+    public async Task ExplorerClearsOnlyItsOwnStoredData()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await page.EvaluateAsync("() => localStorage.setItem('someone-elses-key', 'keep me')");
+        await RunQueryAsync(page, "Query.Employee.OrderBy(_ => _.Name).Select(_ => new { _.Name })", 1);
+
+        await page.Locator("[data-testid='rail-settings']").ClickAsync();
+        await page.Locator("[data-testid='settings-clear']").ClickAsync();
+
+        Assert.That(await StoredHistoryAsync(page), Is.Null);
+        Assert.That(
+            await page.EvaluateAsync<string>("() => localStorage.getItem('someone-elses-key')"),
+            Is.EqualTo("keep me"));
+    }
+
+    // The drag bars are wired once at boot, and the ratio they produce is persisted. Its own page,
+    // because a dragged split is the layout every other test is reading.
+    [Test]
+    public async Task ExplorerResizesAndRemembersItsPanes()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        var bar = page.Locator("[data-testid='session-resizer']");
+        var box = await bar.BoundingBoxAsync();
+        await page.Mouse.MoveAsync(box!.X + 2, box.Y + 20);
+        await page.Mouse.DownAsync();
+        await page.Mouse.MoveAsync(box.X + 200, box.Y + 20, new() {Steps = 8});
+        await page.Mouse.UpAsync();
+
+        await page.WaitForFunctionAsync(
+            "() => localStorage.getItem('scry:sessionFlex') !== null",
+            null,
+            new() {Timeout = 10_000});
+
+        var stored = await page.EvaluateAsync<string>("() => localStorage.getItem('scry:sessionFlex')");
+        Assert.That(double.Parse(stored, CultureInfo.InvariantCulture), Is.GreaterThan(0.5));
+    }
+
+    // Formatting rewrites the query in the house style: the chain down the page, the projection down
+    // the page after it, and a predicate left on the one line it reads as.
+    [Test]
+    public async Task ExplorerFormatsTheQuery()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await page.SetEditorValueAsync(
+            "Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name, _.Status })");
+        await page.Locator("[data-testid='prettify']").ClickAsync();
+
+        Assert.That(
+            await EditorValueAsync(page),
+            Is.EqualTo(
+                """
+                Query.Employee
+                    .Where(_ => _.Active)
+                    .Select(_ =>
+                        new
+                        {
+                            _.Name,
+                            _.Status
+                        })
+                """));
+
+        await page.SetEditorValueAsync(
+            "Query.Employee.Select(_ => new { _.Name, Department = new { _.Department!.Name } })");
+        await page.Locator("[data-testid='prettify']").ClickAsync();
+
+        Assert.That(
+            await EditorValueAsync(page),
+            Is.EqualTo(
+                """
+                Query.Employee
+                    .Select(_ =>
+                        new
+                        {
+                            _.Name,
+                            Department =
+                                new
+                                {
+                                    _.Department!.Name
+                                }
+                        })
+                """));
+
+        // Reported rather than rewritten: a formatter guessing at a half-typed query produces a
+        // differently half-typed one.
+        await page.SetEditorValueAsync("Query.Employee.Where(_ => ");
+        await page.Locator("[data-testid='prettify']").ClickAsync();
+
+        await Assertions.Expect(page.Locator("[data-testid='error']")).ToContainTextAsync("does not parse");
+        Assert.That(await EditorValueAsync(page), Is.EqualTo("Query.Employee.Where(_ => "));
+    }
+
+    // A formatted query still has to be one the server runs — the point of the button is the shape,
+    // not a rewrite that changes what is asked.
+    [Test]
+    public async Task ExplorerRunsAFormattedQuery()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await page.SetEditorValueAsync(
+            "Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name, Department = new { _.Department!.Name } })");
+        await page.Locator("[data-testid='prettify']").ClickAsync();
+        await page.Locator("[data-testid='run']").ClickAsync();
+
+        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);
+        await Assertions.Expect(page.Locator("[data-testid='error']")).ToHaveCountAsync(0);
+        await Assertions.Expect(page.Locator("[data-testid='result-table']")).ToContainTextAsync("Engineering");
+    }
+
+    static Task<string> EditorValueAsync(IPage page) =>
+        page.EvaluateAsync<string>("() => monaco.editor.getEditors()[0].getValue()");
 }
+

@@ -1,0 +1,82 @@
+<Project>
+
+  <!--
+    Monaco ships 122 static web assets and the explorer loads 15 of them, but "unused" and "unreachable"
+    are not the same thing here, so this drops only what no schema can reach.
+
+    The trap is that grammar loading is driven by the content being displayed, not by the languages
+    put on the models. Monaco resolves a grammar lazily, by name, when something asks to tokenize
+    text as it - and the explorer's own panes are not the only thing that can ask. Enumerating the
+    reachable set means proving nothing ever will, which is not a thing this file can know. Every
+    basic-languages grammar therefore stays.
+
+    What does not depend on schema content:
+
+      - The 14 nls.messages.* locale bundles. nls.messages-loader.js only requires one when
+        require.config({'vs/nls':{availableLanguages:...}}) has been set, and nothing sets it.
+
+      - The typescript, css and html workers. A worker is spawned by a language service running
+        against a model of that language, and the explorer only ever creates a csharp model.
+        Roslyn answers for that one, in C#, in this process - there is no TypeScript, CSS or HTML
+        language service to spawn a worker for.
+
+    That is 9.96 MiB of the 15.01, and ts.worker alone is 6.69 of it.
+
+    Deliberately a denylist rather than an allowlist. An allowlist that misses a renamed chunk
+    silently drops a file that turns into a 404 inside the editor; a denylist that misses one
+    silently keeps it, which only costs bytes. The count check below turns either into a build
+    error, but the direction of the failure still matters.
+  -->
+
+  <PropertyGroup>
+    <MonacoDropPattern>^lib/monaco-editor/min/vs/(nls\.messages\.[^/]*\.js|assets/(ts|css|html)\.worker-[^/]+\.js)$</MonacoDropPattern>
+    <MonacoExpectedDropCount>17</MonacoExpectedDropCount>
+  </PropertyGroup>
+
+  <!--
+    Build time, not publish time. LoadStaticWebAssetsBuildManifest removes every StaticWebAsset and
+    StaticWebAssetEndpoint and re-hydrates them from staticwebassets.build.json, so a filter applied
+    during publish is discarded. Filtering here also means dotnet run and dotnet publish agree.
+
+    For Scry the saving does not land on a served site but on a NuGet package: Scry.Server.Explorer's
+    EmbedExplorerUi target globs this project's publish output into manifest resources, so a file
+    pruned here is a file that never reaches the package. 9.96 MiB of 15.01 is two thirds of what the
+    explorer embeds.
+  -->
+  <Target Name="PruneBlazorMonacoStaticWebAssets"
+          AfterTargets="ResolveCoreStaticWebAssets"
+          BeforeTargets="GenerateComputedBuildStaticWebAssets">
+
+    <ItemGroup>
+      <_MonacoAsset Include="@(StaticWebAsset)"
+                    Condition="'%(StaticWebAsset.SourceId)' == 'BlazorMonaco'" />
+      <_MonacoDrop Include="@(_MonacoAsset)"
+                   Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(RelativePath)', '$(MonacoDropPattern)'))" />
+      <!--
+        Endpoints join to their asset on AssetFile, and one asset has several endpoints
+        (fingerprinted, label, and one per content encoding). Carrying the asset path across under
+        that metadata name removes an asset and all of its endpoints with one predicate; an endpoint
+        left behind would advertise a route to a file that is no longer published.
+      -->
+      <_MonacoDropKey Include="@(_MonacoDrop)">
+        <AssetFile>%(Identity)</AssetFile>
+      </_MonacoDropKey>
+    </ItemGroup>
+
+    <Error Condition="'@(_MonacoAsset->Count())' == '0'"
+           Text="No BlazorMonaco static web assets were found. The package no longer sets SourceId=BlazorMonaco, so MonacoAssets.targets is silently doing nothing." />
+    <Error Condition="'@(_MonacoDrop->Count())' != '$(MonacoExpectedDropCount)'"
+           Text="Monaco pruning dropped @(_MonacoDrop->Count()) assets, expected $(MonacoExpectedDropCount). BlazorMonaco's asset layout changed - review MonacoDropPattern in MonacoAssets.targets against the new version, then update MonacoExpectedDropCount." />
+
+    <ItemGroup>
+      <StaticWebAsset Remove="@(_MonacoDrop)" />
+      <StaticWebAssetEndpoint Remove="@(_MonacoDropKey)"
+                              MatchOnMetadata="AssetFile"
+                              MatchOnMetadataOptions="PathLike" />
+    </ItemGroup>
+
+    <Message Importance="normal"
+             Text="Monaco assets: dropped @(_MonacoDrop->Count()) of @(_MonacoAsset->Count())." />
+  </Target>
+
+</Project>

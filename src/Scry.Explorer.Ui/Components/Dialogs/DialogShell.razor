@@ -1,0 +1,50 @@
+@namespace Scry
+
+@*
+    The overlay every dialog sits in. It takes focus on first render so Escape closes without a click
+    first, and a click inside the panel stops there rather than reaching the overlay's own dismiss.
+*@
+<div class="dialog-overlay" @onclick="OnClose">
+    <div class="dialog" role="dialog" aria-modal="true" aria-label="@Title" tabindex="-1"
+         data-testid="@TestId" @ref="panel" @onclick:stopPropagation @onkeydown="OnKeyDown">
+        <div class="dialog-head">
+            <h2>@Title</h2>
+            <button type="button" class="icon-btn" aria-label="Close" title="Close" @onclick="OnClose">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                     stroke-linecap="round" aria-hidden="true" focusable="false">
+                    <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+            </button>
+        </div>
+        <div class="dialog-body">@ChildContent</div>
+    </div>
+</div>
+
+@code
+{
+    [Parameter]
+    [EditorRequired]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public string? TestId { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    ElementReference panel;
+
+    Task OnKeyDown(KeyboardEventArgs args) =>
+        args.Key == "Escape" ? OnClose.InvokeAsync() : Task.CompletedTask;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await panel.FocusAsync();
+        }
+    }
+}
