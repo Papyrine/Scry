@@ -26,20 +26,6 @@ Ways for a client to query a server differ on two axes.
 | **Two type systems** — a contract or schema between the sides | An endpoint or method per use case, with DTOs written twice or generated from the contract | A query language of its own against a schema in its own definition language, or query options in a URL parsed onto the model |
 | **One type system** — client types derived from the server's | A procedure per use case, with the client's types inferred from or shared with the server's code (tRPC) | **Scry** — and, for peers that trust each other, a serialized expression tree over a shared model assembly |
 
-The same grid as sets. Everything outside both circles is an endpoint per use case:
-
-```mermaid
-venn-beta
-  set Client["Query shaped on the client"]
-    text C1["A query language of its own"]
-    text C2["Query options in the URL"]
-    text C3["An API generated from the database"]
-  set One["One type system"]
-    text O1["A procedure per use case, types inferred from the server"]
-  union Client,One["Scry"]
-    text CO1["Serialized expression trees, between trusting peers"]
-```
-
 Scry is the cell where the query is written on the client, the compiler checking it is the one the UI already uses, and the client is still not trusted. What follows from that, against each type of approach:
 
 | Approach | Examples | Query written in | Client types come from | A wrong query fails |
@@ -56,7 +42,7 @@ Most of the Scry row is one fact seen from different sides: there is one type sy
 Two more sit outside the table:
 
 - **A hand-rolled criteria object** — property names as strings, an operator enum, a value, a sort column — is the client-shaped cell built by hand, and structurally a small serialized query AST. Its vocabulary stops where the reflection code rebuilding expressions stops, its names are strings the compiler cannot check, and its allow-list has to be added afterwards. Scry is that design carried to completion.
-- **No boundary at all.** If the UI runs on the server, inject the context and write LINQ against it directly. Scry exists because a WebAssembly client is a separate process that an attacker controls.
+- **No boundary at all.** Blazor Server, MVC, Razor Pages, and any other UI that renders on the server. Inject the context and write LINQ against it directly. Scry exists because a WebAssembly client is a separate process that an attacker controls.
 
 
 ## At a glance
@@ -64,7 +50,7 @@ Two more sit outside the table:
 | | Scry | GraphQL | OData | Hand-written endpoints | gRPC |
 | --- | --- | --- | --- | --- | --- |
 | Query language | C# LINQ | GraphQL documents against an SDL schema | `$filter`/`$select`/`$expand` in a URL | none — the endpoint *is* the query | none — the method *is* the query |
-| Client types come from | the server model dll, read by path at build time | schema introspection + codegen (StrawberryShake) | `$metadata` + connected-service codegen, or untyped | hand-written DTOs, or OpenAPI codegen | `.proto` codegen |
+| Client types come from | the server model dll, read by path at build time | schema introspection + codegen (StrawberryShake, ZeroQL, GraphQL Code Generator) | `$metadata` + connected-service codegen, or untyped | hand-written DTOs, or OpenAPI codegen | `.proto` codegen |
 | Type systems to keep in sync | one (C#) | two (C# ↔ SDL) | two (C# ↔ EDM) | two (server DTO ↔ client DTO) | two (C# ↔ proto) |
 | New query shape for a new screen | client-only | free if the fields exist, else a new field + resolver | free if the option is enabled | new endpoint + DTO + test + deploy | new method + messages |
 | Exposure default | deny — opt in per type and member | the schema is the allow-list, by construction | the convention model builder exposes every property of a registered entity set | whatever the DTO carries | whatever the message carries |
@@ -192,7 +178,7 @@ The consequence is a trust boundary. These libraries are built for expressivenes
 
 ## Hand-rolled filter DTOs
 
-The other roll-your-own answer: a serializable criteria object, posted to an endpoint that rebuilds expressions from it by reflection. The object carries property names as strings, an operator enum, a value, and a sort column. Teams land here after concluding that expression trees cannot cross the wire. Structurally the object *is* a serialized query AST — a very small one — which is why it works at all.
+The other roll-your-own answer: a serializable criteria object, posted to an endpoint that rebuilds expressions from it by reflection. The object carries property names as strings, an operator enum, a value, and a sort column. Structurally the object *is* a serialized query AST — a very small one — which is why it works at all.
 
 The costs are the vocabulary and the strings. Coverage stops where the hand-written expression builder stops; each operator, type, and nesting level is another case to write. Property names are strings the compiler cannot check, so a rename fails at runtime. And each name arriving on the wire is a reach into the model, unbounded until an allow-list is added by hand.
 
@@ -217,7 +203,7 @@ Scry exists because a WebAssembly client is a separate process that an attacker 
 
 ## A note on tRPC
 
-Readers coming from TypeScript will spot the family resemblance to tRPC, and it is the intended one: one language on both sides, client types **derived** from the server rather than declared twice, and no schema language in between. Scry differs in what the client sends — a *query* the server validates and translates, rather than a call to a named procedure — but the motivation is the same, and so is the constraint that makes it work: both ends are one team's code, shipped together.
+tRPC, from the TypeScript world, is the closest relative: one language on both sides, client types **derived** from the server rather than declared twice, and no schema language in between. Scry differs in what the client sends — a *query* the server validates and translates, rather than a call to a named procedure — but the motivation is the same, and so is the constraint that makes it work: both ends are one team's code, shipped together.
 
 
 ## When Scry is the wrong choice
