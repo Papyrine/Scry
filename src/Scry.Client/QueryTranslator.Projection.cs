@@ -15,11 +15,22 @@ sealed partial class QueryTranslator
         };
     }
 
-    Projection FromNew(NewExpression construction, ParameterExpression parameter, bool grouped)
+    Projection FromNew(NewExpression construction, ParameterExpression parameter, bool grouped) =>
+        Built(Constructed(construction, parameter, grouped));
+
+    // The members a constructor call contributes, named by the anonymous type's members or the
+    // constructor's parameters. A call taking nothing contributes nothing, and is not asked for names
+    // it may not have — a struct's default construction records no constructor at all.
+    List<ProjectionMember> Constructed(NewExpression construction, ParameterExpression parameter, bool grouped)
     {
-        var names = ProjectionNames(construction);
         var arguments = construction.Arguments;
         var members = new List<ProjectionMember>(arguments.Count);
+        if (arguments.Count == 0)
+        {
+            return members;
+        }
+
+        var names = ProjectionNames(construction);
         for (var i = 0; i < arguments.Count; i++)
         {
             if (TryAttachment(arguments[i], parameter, grouped, [names[i]], prefix: []))
@@ -30,12 +41,15 @@ sealed partial class QueryTranslator
             members.Add(new(names[i], ProjectionValue(arguments[i], parameter, grouped, [names[i]])));
         }
 
-        return Built(members);
+        return members;
     }
 
+    // An initializer's members are its constructor's arguments and then its assignments: new
+    // Row(_.Id) { Name = _.Name } names both. Reading the assignments alone once dropped the
+    // arguments, and the row came back with its Id at default and no error.
     Projection FromMemberInit(MemberInitExpression init, ParameterExpression parameter, bool grouped)
     {
-        var members = new List<ProjectionMember>(init.Bindings.Count);
+        var members = Constructed(init.NewExpression, parameter, grouped);
         foreach (var binding in init.Bindings)
         {
             if (binding is not MemberAssignment assignment)
@@ -43,16 +57,25 @@ sealed partial class QueryTranslator
                 throw new NotSupportedException("Only simple member assignments are supported in a projection.");
             }
 
-            if (TryAttachment(assignment.Expression, parameter, grouped, [assignment.Member.Name], prefix: []))
+            var name = assignment.Member.Name;
+            if (members.Any(_ => _.Name == name))
+            {
+                throw ProjectedTwice(name);
+            }
+
+            if (TryAttachment(assignment.Expression, parameter, grouped, [name], prefix: []))
             {
                 continue;
             }
 
-            members.Add(new(assignment.Member.Name, ProjectionValue(assignment.Expression, parameter, grouped, [assignment.Member.Name])));
+            members.Add(new(name, ProjectionValue(assignment.Expression, parameter, grouped, [name])));
         }
 
         return Built(members);
     }
+
+    static NotSupportedException ProjectedTwice(string name) =>
+        new($"'{name}' is projected twice, as a constructor argument and as an initializer assignment. Set it once.");
 
     // An attachment leaves the wire projection entirely, so a projection of nothing else would reach
     // the server empty. Reported here rather than as the server's own "empty projection", which would
@@ -149,11 +172,29 @@ sealed partial class QueryTranslator
                 break;
 
             case MemberInitExpression init:
+                // The constructor's arguments first, then the assignments — the same two halves the
+                // top-level initializer projection reads.
+                var assigned = new HashSet<string>(StringComparer.Ordinal);
+                if (init.NewExpression.Arguments.Count > 0)
+                {
+                    var argumentNames = ProjectionNames(init.NewExpression);
+                    for (var i = 0; i < init.NewExpression.Arguments.Count; i++)
+                    {
+                        assigned.Add(argumentNames[i]);
+                        yield return (argumentNames[i], init.NewExpression.Arguments[i]);
+                    }
+                }
+
                 foreach (var binding in init.Bindings)
                 {
                     if (binding is not MemberAssignment assignment)
                     {
                         throw new NotSupportedException("Only simple member assignments are supported in a projection.");
+                    }
+
+                    if (!assigned.Add(assignment.Member.Name))
+                    {
+                        throw ProjectedTwice(assignment.Member.Name);
                     }
 
                     yield return (assignment.Member.Name, assignment.Expression);

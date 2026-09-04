@@ -1193,12 +1193,13 @@ Nothing executes client-side, so an operator appended inside an `if` is part of 
 
 ## Projections
 
-A `Select` must construct an object. Anonymous types, records, and object initializers all work:
+A `Select` must construct an object. Anonymous types, records, and object initializers all work, and a constructor call with an initializer projects both halves:
 
 ```cs
 .Select(_ => new { _.Name, Manager = _.Manager!.Name })
 .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
 .Select(_ => new EmployeeRow { Name = _.Name, Department = _.Department!.Name })
+.Select(_ => new EmployeeRow(_.Name) { Department = _.Department!.Name })
 ```
 
 Projecting a bare value does not work:
