@@ -41,7 +41,12 @@ public static class ScryDeltaExtensions
 
             // A marker that says nothing identifies nothing, so the request is answered in full rather
             // than with an ETag that has a hole where its freshness should be.
-            return timeStamp.Length == 0 ? null : timeStamp;
+            if (timeStamp.Length == 0)
+            {
+                return null;
+            }
+
+            return timeStamp;
         };
 
         return options;

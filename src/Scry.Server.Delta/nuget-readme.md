@@ -51,13 +51,18 @@ public static ScryOptions UseDeltaFreshness<TContext>(this ScryOptions options)
 
         // A marker that says nothing identifies nothing, so the request is answered in full rather
         // than with an ETag that has a hole where its freshness should be.
-        return timeStamp.Length == 0 ? null : timeStamp;
+        if (timeStamp.Length == 0)
+        {
+            return null;
+        }
+
+        return timeStamp;
     };
 
     return options;
 }
 ```
-<sup><a href='/src/Scry.Server.Delta/ScryDeltaExtensions.cs#L9-L49' title='Snippet source file'>snippet source</a> | <a href='#snippet-useDeltaFreshness' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.Delta/ScryDeltaExtensions.cs#L9-L54' title='Snippet source file'>snippet source</a> | <a href='#snippet-useDeltaFreshness' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Where a source carries a [row policy](https://github.com/Papyrine/Scry/blob/main/docs/policies.md), its rows depend on who asked, so `ScryOptions.CacheScope` has to say what a cached response belongs to — `MapScry` refuses to start otherwise.

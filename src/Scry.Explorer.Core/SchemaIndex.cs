@@ -225,7 +225,12 @@ public sealed class SchemaIndex
             .Select(_ => $"{access}.{_.Name}")
             .ToList();
 
-        return scalars.Count == 0 ? null : $"{member.Name} = new {{ {string.Join(", ", scalars)} }}";
+        if (scalars.Count == 0)
+        {
+            return null;
+        }
+
+        return $"{member.Name} = new {{ {string.Join(", ", scalars)} }}";
     }
 
     /// <summary>Whether a starter query should offer this member. See <see cref="StarterQuery"/>.</summary>

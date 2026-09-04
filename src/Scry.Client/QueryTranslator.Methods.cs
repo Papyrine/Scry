@@ -54,7 +54,7 @@ sealed partial class QueryTranslator
         // left for it.
         if (call.Method.Name == "Equals" &&
             !TakesComparison(call) &&
-            EqualityOperands(call) is (var equated, var against))
+            EqualityOperands(call) is var (equated, against))
         {
             return new BinaryNode(BinaryOp.Equal, TranslateExpr(equated, root), TranslateExpr(against, root));
         }

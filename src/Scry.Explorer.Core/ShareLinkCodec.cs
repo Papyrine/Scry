@@ -34,7 +34,12 @@ public static class ShareLinkCodec
             // base64url drops the padding; Convert requires it.
             padded = padded.PadRight(padded.Length + (3 - (padded.Length + 3) % 4), '=');
             var code = Encoding.UTF8.GetString(Convert.FromBase64String(padded));
-            return code.Length == 0 ? null : code;
+            if (code.Length == 0)
+            {
+                return null;
+            }
+
+            return code;
         }
         catch
         {
