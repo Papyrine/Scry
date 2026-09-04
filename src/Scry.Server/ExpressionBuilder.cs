@@ -983,8 +983,23 @@ sealed class ExpressionBuilder(
     Expression BuildConditional(ConditionalNode conditional, Expression row)
     {
         var test = Build(conditional.Test, row, typeof(bool));
-        var ifTrue = Build(conditional.IfTrue, row, null);
-        var ifFalse = Build(conditional.IfFalse, row, ifTrue.Type);
+
+        // The first branch built decides the type the other is built against. A bare null has no
+        // type to decide with — built first it would read as text and mismatch a number on the other
+        // side — so when the true branch is one, the false branch goes first.
+        Expression ifTrue;
+        Expression ifFalse;
+        if (conditional.IfTrue is ConstNode {Tag: ClrTypeTag.Null})
+        {
+            ifFalse = Build(conditional.IfFalse, row, null);
+            ifTrue = Build(conditional.IfTrue, row, ifFalse.Type);
+        }
+        else
+        {
+            ifTrue = Build(conditional.IfTrue, row, null);
+            ifFalse = Build(conditional.IfFalse, row, ifTrue.Type);
+        }
+
         Coerce(ref ifTrue, ref ifFalse);
 
         if (ifTrue.Type != ifFalse.Type)
