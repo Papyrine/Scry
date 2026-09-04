@@ -75,7 +75,16 @@ sealed partial class QueryTranslator
         Expression? current = member;
         while (current is MemberExpression inner)
         {
-            path.Add(inner.Member.Name);
+            // A nullable's Value is the member it wraps, wherever in the path it sits — an optional
+            // struct complex member is read through one — and is dropped for the reason the Value
+            // case in TranslateExpr drops it at the leaf.
+            if (inner.Member.Name != "Value" ||
+                inner.Expression is not { } owner ||
+                !IsOptional(owner))
+            {
+                path.Add(inner.Member.Name);
+            }
+
             current = inner.Expression;
         }
 

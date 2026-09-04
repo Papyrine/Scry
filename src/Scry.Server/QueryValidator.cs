@@ -1451,7 +1451,9 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         var member = ResolvePath(path, rootType, requireScalar: false, "Navigation");
         if (member.Kind == MemberKind.Navigation)
         {
-            return member.Type;
+            // Unwrap Nullable<T>, as ResolvePath does for an intermediate segment: a nested projection
+            // into an optional struct complex member is validated against the struct.
+            return Nullable.GetUnderlyingType(member.Type) ?? member.Type;
         }
 
         throw Reject($"'{string.Join('.', path)}' is not a navigation property.");

@@ -1,0 +1,24 @@
+﻿[
+  {
+    Name: Aaron,
+    Desk: {}
+  },
+  {
+    Name: Alice,
+    Desk: {
+      Room: 3.14,
+      Extension: 4471
+    }
+  },
+  {
+    Name: Bob,
+    Desk: {
+      Room: 1.02,
+      Extension: 4482
+    }
+  },
+  {
+    Name: Carol,
+    Desk: {}
+  }
+]
