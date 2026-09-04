@@ -15,10 +15,6 @@
     <!-- RS1035: the generator deliberately reads the model DLL from disk (the path-not-reference
          design). RS1041: target-framework guidance for analyzers. -->
     <NoWarn>$(NoWarn);RS1041;RS1035</NoWarn>
-    <!-- An analyzer's XML docs have no consumer: it is never referenced, so no IDE ever surfaces
-         them. Skipping the file also drops the CS1573/CS1591 doc-completeness rules, which would
-         otherwise force full param tags on internal records. -->
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
     <!-- The stamp must be byte-identical between generated clients and the server; both compile the

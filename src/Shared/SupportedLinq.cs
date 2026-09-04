@@ -1,4 +1,4 @@
-// The closed LINQ surface, spelled the way C# writes it rather than the way the wire carries it.
+﻿// The closed LINQ surface, spelled the way C# writes it rather than the way the wire carries it.
 //
 // Compiled into two places on purpose. The analyzer reads it to report what falls outside the set at
 // compile time; Scry.Tests reads it to pin it against KnownFunction and against QueryTranslator, so a
@@ -96,7 +96,8 @@ static class SupportedLinq
 
     /// <summary>
     /// Every callable member on a scalar, as <c>Owner.Member/arity</c>, paired with the
-    /// <see cref="Scry.KnownFunction"/> it becomes. An empty function name marks a member the
+    /// <c>KnownFunction</c> it becomes. Named rather than cref'd: this file is compiled into both the
+    /// generator and Scry.Tests, and only one of those references the assembly declaring it. An empty function name marks a member the
     /// translator carries as something other than a call — <c>string.Equals</c> under a
     /// <c>StringComparison</c> becomes a collated comparison — so it belongs to the surface without
     /// contributing to the wire's function set.
