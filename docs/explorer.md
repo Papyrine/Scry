@@ -85,12 +85,19 @@ one, and it stops after one level so a self-navigation terminates. Scalars come 
 is several lines tall, and burying the row's own columns between two of them makes the shorter half
 the harder to read.
 
-Three kinds never appear. A collection is aggregable but neither traversable nor projectable; an
-[attachment](attachments.md) has no value in a result at all; and both are published with their
-navigation flag *false*, so each has to be recognised on its own terms. A
-[sensitive](annotations.md) member is left out by choice rather than by rule: the server projects one
-happily, answering `no-store`, but a suggested query should not put a password on screen by default.
-Naming one explicitly still works.
+Two kinds never appear because a projection cannot carry them: a collection is aggregable but neither
+traversable nor projectable, and an [attachment](attachments.md) has no value in a result at all. Both
+are published with their navigation flag *false*, so each has to be recognised on its own terms.
+
+Two more are left out by choice. A [sensitive](annotations.md) member projects happily, answering
+`no-store` — but a suggested query should not put a password on screen by default. And a `byte[]` is
+bulk bytes whichever way it travels, which is a poor thing to open with. Note that this one goes by
+the declared type rather than by a flag, because the contract publishes none:
+[`[BinaryTransfer]`](wire-format.md#binary-transfer) deliberately does not change the queryable
+surface — that is the whole of what the attribute claims, and why an attachment moves the schema stamp
+and a diverted `byte[]` does not.
+
+Naming any of the four explicitly still works; only the suggestion leaves them out.
 
 
 ## Mapping it

@@ -153,12 +153,16 @@ public sealed class SchemaIndex
     /// says less than the row it points at.
     /// </para>
     /// <para>
-    /// Three kinds never appear. A collection is aggregable but, in the server's words, "neither
-    /// traversable nor projectable"; an attachment has no value in a result at all; and both are
-    /// published with <c>IsNavigation</c> false, so each has to be recognised on its own terms.
-    /// Missing that is a query the editor compiles and the server then rejects. A sensitive member is
-    /// left out by choice rather than by rule: the server projects one happily, answering
-    /// <c>no-store</c>, but a suggested query should not put a password on screen by default.
+    /// Two kinds never appear because a projection cannot carry them. A collection is aggregable but,
+    /// in the server's words, "neither traversable nor projectable"; an attachment has no value in a
+    /// result at all; and both are published with <c>IsNavigation</c> false, so each has to be
+    /// recognised on its own terms. Missing that is a query the editor compiles and the server then
+    /// rejects.
+    /// </para>
+    /// <para>
+    /// Two more are left out by choice. A sensitive member projects happily, answering
+    /// <c>no-store</c> — but a suggested query should not put a password on screen by default. And a
+    /// <c>byte[]</c> is bulk bytes whichever way it travels, which is a poor thing to open with.
     /// </para>
     /// <para>
     /// One level deep, so a self-navigation terminates and a model reached two ways is not spelled out
@@ -174,7 +178,7 @@ public sealed class SchemaIndex
         foreach (var indexed in AllMembers(source.Model))
         {
             var member = indexed.Member;
-            if (member.IsCollection || member.IsAttachment || member.IsSensitive)
+            if (!Suggestable(member))
             {
                 continue;
             }
@@ -217,12 +221,26 @@ public sealed class SchemaIndex
 
         var scalars = AllMembers(model)
             .Select(_ => _.Member)
-            .Where(_ => !_.IsNavigation && !_.IsCollection && !_.IsAttachment && !_.IsSensitive)
+            .Where(_ => Suggestable(_) && !_.IsNavigation)
             .Select(_ => $"{access}.{_.Name}")
             .ToList();
 
         return scalars.Count == 0 ? null : $"{member.Name} = new {{ {string.Join(", ", scalars)} }}";
     }
+
+    /// <summary>Whether a starter query should offer this member. See <see cref="StarterQuery"/>.</summary>
+    /// <remarks>
+    /// Byte arrays go by their declared type rather than by a flag, because the contract publishes
+    /// none: <c>[BinaryTransfer]</c> deliberately does not change the queryable surface — that is the
+    /// whole of what the attribute claims, and why an attachment moves the schema stamp and a diverted
+    /// <c>byte[]</c> does not. So a suggested query cannot tell a diverted one from an inline one, and
+    /// has no reason to: both are bulk bytes, and the inline one is the worse of the two to open with.
+    /// </remarks>
+    static bool Suggestable(ScryMemberInfo member) =>
+        !member.IsCollection &&
+        !member.IsAttachment &&
+        !member.IsSensitive &&
+        member.TypeDisplay.TrimEnd('?') != "byte[]";
 
     void Collect(string model, List<IndexedMember> members, HashSet<string> seen)
     {

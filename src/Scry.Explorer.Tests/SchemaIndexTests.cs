@@ -182,6 +182,20 @@ public class SchemaIndexTests
                         })
                 """));
 
+    // A byte[] is bulk bytes whichever way it travels. The contract publishes no flag for the diverted
+    // kind — [BinaryTransfer] deliberately does not change the queryable surface — so the rule is the
+    // declared type, and it catches both.
+    [Test]
+    public void LeavesAByteArrayOutOfAStarterQuery()
+    {
+        var index = Build();
+
+        Assert.That(index.StarterQuery(index.SourceFor("DepartmentQueryModel")!), Does.Not.Contain("Logo"));
+
+        // And through a navigation, where the same member is reached a second way.
+        Assert.That(index.StarterQuery(index.SourceFor("EmployeeQueryModel")!), Does.Not.Contain("Logo"));
+    }
+
     [Test]
     public void LeavesACollectionOfRowsOutOfAStarterQuery() =>
         Assert.That(
@@ -306,6 +320,7 @@ public class SchemaIndexTests
                     [
                         new("Employees", "global::System.Collections.Generic.IReadOnlyList<EmployeeQueryModel>", true, false, true),
                         new("Id", "int", false, false),
+                        new("Logo", "byte[]", true, false),
                         new("Name", "string", true, false)
                     ]) {Keys = ["Id"]},
                     new("EmployeeQueryModel",
