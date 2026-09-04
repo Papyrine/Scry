@@ -19,11 +19,25 @@ public sealed class ScryOptions(Type contextType)
     /// <summary>Maximum navigation-path length allowed in a member expression. Default 4.</summary>
     public int MaxNavigationDepth { get; set; } = 4;
 
-    /// <summary>Maximum number of operators in a query pipeline. Default 32.</summary>
+    /// <summary>
+    /// Maximum number of operators in a query pipeline. The pipeline a join's inner side or a set
+    /// operand carries is bounded by the same number. Default 32.
+    /// </summary>
     public int MaxPipelineLength { get; set; } = 32;
 
     /// <summary>Maximum expression nesting depth in a predicate. Default 32.</summary>
     public int MaxExpressionDepth { get; set; } = 32;
+
+    /// <summary>
+    /// Maximum number of members a projection may name, nested members included, and the same for
+    /// the members a join projects. Default 256.
+    /// </summary>
+    /// <remarks>
+    /// Every member is an expression the provider compiles and a column the query returns, so the
+    /// width of a projection is work a request asks for, exactly as the length of its pipeline is. A
+    /// query writing no <c>Select</c> is unaffected: its projection is the model's own members.
+    /// </remarks>
+    public int MaxProjectionMembers { get; set; } = 256;
 
     /// <summary>
     /// Maximum number of values a client may supply to a set-membership test (<c>Contains</c>, which

@@ -116,11 +116,25 @@ public int DefaultPageSize { get; set; } = 100;
 /// <summary>Maximum navigation-path length allowed in a member expression. Default 4.</summary>
 public int MaxNavigationDepth { get; set; } = 4;
 
-/// <summary>Maximum number of operators in a query pipeline. Default 32.</summary>
+/// <summary>
+/// Maximum number of operators in a query pipeline. The pipeline a join's inner side or a set
+/// operand carries is bounded by the same number. Default 32.
+/// </summary>
 public int MaxPipelineLength { get; set; } = 32;
 
 /// <summary>Maximum expression nesting depth in a predicate. Default 32.</summary>
 public int MaxExpressionDepth { get; set; } = 32;
+
+/// <summary>
+/// Maximum number of members a projection may name, nested members included, and the same for
+/// the members a join projects. Default 256.
+/// </summary>
+/// <remarks>
+/// Every member is an expression the provider compiles and a column the query returns, so the
+/// width of a projection is work a request asks for, exactly as the length of its pipeline is. A
+/// query writing no <c>Select</c> is unaffected: its projection is the model's own members.
+/// </remarks>
+public int MaxProjectionMembers { get; set; } = 256;
 
 /// <summary>
 /// Maximum number of values a client may supply to a set-membership test (<c>Contains</c>, which
@@ -178,7 +192,7 @@ public int? MaxStreamRows { get; set; }
 /// </remarks>
 public int QueryUrlLimit { get; set; } = QueryUrl.MaxLength;
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L83' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L97' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Every limit is enforced during validation, before any expression is rebound or executed.
@@ -187,8 +201,9 @@ Every limit is enforced during validation, before any expression is rebound or e
 | --- | --- | --- |
 | `MaxPageSize` | 1000 | `Take n` where `n` exceeds it. Note this caps an explicit `Take`; it does not implicitly page an unbounded query. |
 | `MaxNavigationDepth` | 4 | Member paths longer than the limit, and projection nesting deeper than it. |
-| `MaxPipelineLength` | 32 | Pipelines with more operators than the limit. |
+| `MaxPipelineLength` | 32 | Pipelines with more operators than the limit, including the pipeline a [join](querying.md#joins)'s inner side or a set operand carries. |
 | `MaxExpressionDepth` | 32 | Predicate/expression trees nested deeper than the limit. |
+| `MaxProjectionMembers` | 256 | A `Select` naming more members than the limit, nested members counted, and a join projecting more. A query writing no `Select` is unaffected. |
 | `MaxInValues` | 1000 | `Contains` over a client-supplied set larger than the limit. Bounds the SQL `IN` list a single request can build. |
 | `MaxBatchSize` | 20 | A [batch](batching.md) carrying more queries than the limit — rejected whole, before any entry runs. Every other limit is per query, so this is what stops one request from costing an arbitrary number of them. |
 | `MaxStreamRows` | unset | Nothing by default. Set it to cap a [streamed](querying.md#streaming-rows) result; the stream then ends with an error marker rather than a short one. Like `MaxPageSize`, it does not implicitly bound an unbounded query — it bounds one that asked to stream. |

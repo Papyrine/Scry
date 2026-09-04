@@ -404,11 +404,25 @@ public int DefaultPageSize { get; set; } = 100;
 /// <summary>Maximum navigation-path length allowed in a member expression. Default 4.</summary>
 public int MaxNavigationDepth { get; set; } = 4;
 
-/// <summary>Maximum number of operators in a query pipeline. Default 32.</summary>
+/// <summary>
+/// Maximum number of operators in a query pipeline. The pipeline a join's inner side or a set
+/// operand carries is bounded by the same number. Default 32.
+/// </summary>
 public int MaxPipelineLength { get; set; } = 32;
 
 /// <summary>Maximum expression nesting depth in a predicate. Default 32.</summary>
 public int MaxExpressionDepth { get; set; } = 32;
+
+/// <summary>
+/// Maximum number of members a projection may name, nested members included, and the same for
+/// the members a join projects. Default 256.
+/// </summary>
+/// <remarks>
+/// Every member is an expression the provider compiles and a column the query returns, so the
+/// width of a projection is work a request asks for, exactly as the length of its pipeline is. A
+/// query writing no <c>Select</c> is unaffected: its projection is the model's own members.
+/// </remarks>
+public int MaxProjectionMembers { get; set; } = 256;
 
 /// <summary>
 /// Maximum number of values a client may supply to a set-membership test (<c>Contains</c>, which
@@ -466,10 +480,10 @@ public int? MaxStreamRows { get; set; }
 /// </remarks>
 public int QueryUrlLimit { get; set; } = QueryUrl.MaxLength;
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L83' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L97' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-These bound the work a single request can ask for: how many rows, how deep a join chain, how long a pipeline, how deeply nested an expression.
+These bound the work a single request can ask for: how many rows, how deep a join chain, how long a pipeline — a join's inner side and a set operand each carry one of their own, held to the same length — how deeply nested an expression, and how wide a projection.
 
 All but one are **per query**, which is what makes `MaxBatchSize` load-bearing: a [batch](batching.md) is the only request that carries more than one query, so without it every other limit would apply to an arbitrary number of them at once. Each entry is otherwise validated, policy-filtered, and audited exactly as it would be sent alone — batching is a transport concern, and reaches nothing else on this page.
 

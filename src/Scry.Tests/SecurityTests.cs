@@ -243,6 +243,97 @@ public class SecurityTests
             options => options.MaxInValues = 3,
             reason: "exceeds the maximum");
 
+    // A join's inner side and a set operand each carry a pipeline of their own, which the top-level
+    // count never sees; each is held to the same length.
+    [Test]
+    public void RejectsJoinInnerPipelineOverTheConfiguredLength() =>
+        AssertRejected(
+            QueryRequest.Create(
+                "Employee",
+                [
+                    new JoinOp(
+                        "Department",
+                        JoinKind.Inner,
+                        new MemberNode(["DepartmentId"]),
+                        new MemberNode(["Id"]),
+                        null,
+                        [new("Name", JoinSide.Outer, ["Name"])])
+                    {
+                        InnerOps = [..Enumerable.Range(0, 5).Select(_ => InnerFilter())]
+                    },
+                    new CountOp()
+                ]),
+            options => options.MaxPipelineLength = 3,
+            reason: "exceeds the maximum length");
+
+    [Test]
+    public void RejectsSetOperandPipelineOverTheConfiguredLength() =>
+        AssertRejected(
+            QueryRequest.Create(
+                "Employee",
+                [
+                    new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))])),
+                    new SetOp(SetKind.Union, "Department", null, new([new("Name", new NodeValue(new MemberNode(["Name"])))]))
+                    {
+                        OperandOps = [..Enumerable.Range(0, 5).Select(_ => InnerFilter())]
+                    },
+                    new CountOp()
+                ]),
+            options => options.MaxPipelineLength = 3,
+            reason: "exceeds the maximum length");
+
+    static WhereOp InnerFilter() =>
+        new(new BinaryNode(BinaryOp.Equal, new MemberNode(["Id"]), new ConstNode("1", ClrTypeTag.Int32)));
+
+    // Every projected member is an expression the provider compiles and a column the query returns,
+    // so a projection's width is bounded like a pipeline's length — across nesting, and for a join.
+    [Test]
+    public void RejectsProjectionOverTheConfiguredWidth() =>
+        AssertRejected(
+            QueryRequest.Create(
+                "Employee",
+                [new SelectOp(new([..Enumerable.Range(0, 5).Select(_ => NameMember($"Name{_}"))]))]),
+            options => options.MaxProjectionMembers = 3,
+            reason: "exceeds the maximum of 3 members");
+
+    [Test]
+    public void CountsNestedMembersTowardTheProjectionWidth() =>
+        AssertRejected(
+            QueryRequest.Create(
+                "Employee",
+                [
+                    new SelectOp(new(
+                    [
+                        NameMember("Name"),
+                        new("Department", new NestedValue(
+                            ["Department"],
+                            new([..Enumerable.Range(0, 3).Select(_ => NameMember($"Name{_}"))])))
+                    ]))
+                ]),
+            options => options.MaxProjectionMembers = 3,
+            reason: "exceeds the maximum of 3 members");
+
+    [Test]
+    public void RejectsJoinResultOverTheConfiguredWidth() =>
+        AssertRejected(
+            QueryRequest.Create(
+                "Employee",
+                [
+                    new JoinOp(
+                        "Department",
+                        JoinKind.Inner,
+                        new MemberNode(["DepartmentId"]),
+                        new MemberNode(["Id"]),
+                        null,
+                        [..Enumerable.Range(0, 5).Select(_ => new JoinMember($"Name{_}", JoinSide.Outer, ["Name"]))]),
+                    new CountOp()
+                ]),
+            options => options.MaxProjectionMembers = 3,
+            reason: "exceeds the maximum of 3");
+
+    static ProjectionMember NameMember(string name) =>
+        new(name, new NodeValue(new MemberNode(["Name"])));
+
     // Ordering a deduplicated query is allowed, but only by the member it deduplicated: every other
     // column was folded away, so naming one would order by something the rows no longer carry.
     [Test]

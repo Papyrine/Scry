@@ -393,6 +393,20 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         IReadOnlyList<Node>? groupKeys,
         int depth)
     {
+        var members = 0;
+        ValidateProjection(projection, rootType, grouped, groupKeys, depth, ref members);
+    }
+
+    // The member count runs across every level of nesting: a nested object is one name that carries
+    // several members, and each of them is a column the query returns.
+    void ValidateProjection(
+        Projection projection,
+        Type rootType,
+        bool grouped,
+        IReadOnlyList<Node>? groupKeys,
+        int depth,
+        ref int members)
+    {
         if (depth > options.MaxNavigationDepth)
         {
             throw Reject("Projection nesting is too deep.");
@@ -405,6 +419,11 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
         foreach (var member in projection.Members)
         {
+            if (++members > options.MaxProjectionMembers)
+            {
+                throw Reject($"The projection exceeds the maximum of {options.MaxProjectionMembers} members.");
+            }
+
             switch (member.Value)
             {
                 case NodeValue {Node: AggregateNode aggregate}:
@@ -472,7 +491,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     }
 
                     var target = ResolveNavigation(nested.Path, rootType);
-                    ValidateProjection(nested.Projection, target, grouped: false, groupKeys: null, depth + 1);
+                    ValidateProjection(nested.Projection, target, grouped: false, groupKeys: null, depth + 1, ref members);
                     break;
 
                 default:
@@ -816,6 +835,12 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             throw Reject($"Empty ops on {side} — omit them instead.");
         }
 
+        // A pipeline of its own, so it is held to the same length as the one that carries it.
+        if (ops.Count > options.MaxPipelineLength)
+        {
+            throw Reject($"The pipeline on {side} exceeds the maximum length of {options.MaxPipelineLength}.");
+        }
+
         var stage = 0;
         foreach (var op in ops)
         {
@@ -982,6 +1007,11 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         if (join.Result.Count == 0)
         {
             throw Reject("A join must project at least one member.");
+        }
+
+        if (join.Result.Count > options.MaxProjectionMembers)
+        {
+            throw Reject($"A join projecting {join.Result.Count} members exceeds the maximum of {options.MaxProjectionMembers}.");
         }
 
         var grouped = join.Kind == JoinKind.Group;
