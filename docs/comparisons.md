@@ -7,6 +7,44 @@ Most alternatives are broader than that, because they solve a harder problem: ma
 Read [Intended use](../readme.md#intended-use) first. If those assumptions do not hold, most of what follows resolves to "use something else".
 
 
+## By type
+
+Ways for a client to query a server differ on two axes.
+
+**Where the query is shaped:**
+
+- **On the server.** Each use case is an endpoint or a method. The server decides the filter, the ordering, and the shape of the data, and the client names the use case and passes parameters. A new screen that needs a new shape needs a new endpoint, and altering a screen means altering its endpoint, or adding optional parameters to it. Over time those parameters accumulate into an ad hoc query language.
+- **On the client.** The client sends a description of the data it wants, and the server checks that description against what it is willing to expose, then runs it. A new screen, or a change to one, needs no server change while it stays within the exposed surface.
+
+**How many type systems describe the data:**
+
+- **Two.** A contract or schema sits between the sides: a proto file, a schema definition language, published metadata, or a pair of DTOs. The server's types are mapped onto it and the client's types are generated from it, so a change has to be carried through both mappings and a mismatch surfaces at run time.
+- **One.** The client's types are derived from the server's, with nothing in between. A renamed member on the server is a compile error in the client.
+
+| | Query shaped on the server | Query shaped on the client |
+| --- | --- | --- |
+| **Two type systems** — a contract or schema between the sides | An endpoint or method per use case, with DTOs written twice or generated from the contract | A query language of its own against a schema in its own definition language, or query options in a URL parsed onto the model |
+| **One type system** — client types derived from the server's | A procedure per use case, with the client's types inferred from or shared with the server's code (tRPC) | **Scry** — and, for peers that trust each other, a serialized expression tree over a shared model assembly |
+
+Scry is the cell where the query is written on the client, the compiler checking it is the one the UI already uses, and the client is still not trusted. What follows from that, against each type of approach:
+
+| Approach | Examples | Query written in | Client types come from | A wrong query fails |
+| --- | --- | --- | --- | --- |
+| **Scry** | | the host language, in the UI's own files | the server model dll, read by path at build time | at compile time, in the UI |
+| An endpoint per use case | Web API, minimal APIs, gRPC | nothing — the endpoint *is* the query | hand-written DTOs, or codegen from a contract | on the server; the client only names the endpoint |
+| A query language of its own | GraphQL | a second language, sent as a document | codegen from the schema | at run time, unless tooling is taught the language |
+| Query options in the URL | OData | URL text | codegen from published metadata, or untyped | at run time |
+| Serialized expression trees | Serialize.Linq, Remote.Linq, Dynamic LINQ | the host language, against the server's own types | referencing the server's assembly from the client | at compile time, but the wire carries type and method names and the server trusts them |
+| An API generated from the database | Hasura, PostgREST, Supabase | the tool's language, derived from the tables | codegen from the database schema | at run time |
+
+Most of the Scry row is one fact seen from different sides: there is one type system, and it is the one the UI is written in. The remaining traits, exposure defaults, cost control, reads versus writes, and reach, are compared in [the at-a-glance table](#at-a-glance).
+
+Two more sit outside the table:
+
+- **A hand-rolled criteria object** — property names as strings, an operator enum, a value, a sort column — is the client-shaped cell built by hand, and structurally a small serialized query AST. Its vocabulary stops where the reflection code rebuilding expressions stops, its names are strings the compiler cannot check, and its allow-list has to be added afterwards. Scry is that design carried to completion.
+- **No boundary at all.** If the UI runs on the server, inject the context and write LINQ against it directly. Scry exists because a WebAssembly client is a separate process that an attacker controls.
+
+
 ## At a glance
 
 | | Scry | GraphQL | OData | Hand-written endpoints | gRPC |

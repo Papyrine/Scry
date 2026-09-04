@@ -24,37 +24,7 @@ It also assumes the front end and the back end are built by the **same team** an
 
 ## Compared to other approaches
 
-Ways for a client to query a server differ on two axes. The first is **where the query is shaped**: on the server, as an endpoint or method per use case that the client names, or on the client, as a query the server checks and runs. The second is **how many type systems describe the data**: two, when a contract or schema sits between the sides and each side is generated from it or mapped onto it, or one, when the client's types are derived from the server's.
-
-| | Query shaped on the server | Query shaped on the client |
-| --- | --- | --- |
-| **Two type systems** — a contract or schema between the sides | An endpoint or method per use case, with DTOs written twice or generated from the contract | A query language of its own against a schema in its own definition language, or query options in a URL parsed onto the model |
-| **One type system** — client types derived from the server's | A procedure per use case, with the client's types inferred from or shared with the server's code | **Scry** — and, for peers that trust each other, a serialized expression tree over a shared model assembly |
-
-Scry is the cell where the query is written on the client, the compiler checking it is the one the UI already uses, and the client is still not trusted. What follows from that, against each type of approach:
-
-| | Scry | An endpoint per use case | A query language of its own | Query options in the URL | Serialized expression trees | An API generated from the database |
-| --- | --- | --- | --- | --- | --- | --- |
-| Query written in | the host language, in the UI's own files | nothing — the endpoint *is* the query | a second language, as a document | URL text | the host language, or a string dialect of it | the tool's language, derived from the tables |
-| Client types come from | the server model dll, read by path at build time | hand-written DTOs, or codegen from a contract | codegen from the schema | codegen from published metadata, or untyped | referencing the server's own assembly | codegen from the database schema |
-| Type systems to keep in sync | one | two | two | two | one, by sharing the model | two |
-| A wrong query fails | at compile time, in the UI | on the server, at compile time — the client only names it | at run time, unless tooling is taught the language | at run time | at compile time for a typed tree, at run time for a string | at run time |
-| Crosses the wire as | a closed AST — a fixed vocabulary of operators, member paths, and constants | a use-case name and its parameters | a query document | a URL | type names and method names, reconstructed on the server | a query document or a URL |
-| Exposure default | deny — opt in per type and member | whatever the DTO carries | the schema is the allow-list, by construction | every property of a registered type | everything the shared types reach | the exposed tables, narrowed by database policy |
-| A new shape for a new screen | client-only | new endpoint, DTO, test, deploy | free if the fields exist, else a new field and resolver | free if the option is enabled | client-only | client-only |
-| Guards against a hostile client | re-validation against the allow-list plus fixed shape limits, server-side at run time | inherent — the server wrote the query | the schema, plus depth and complexity analysis | server-side query settings | none by design — built for peers that trust each other | database policy |
-| Server work per query | one translated query | one hand-written query | a resolver per field, batched to avoid N+1 | one translated query | one query, rebuilt from the tree | one generated query |
-| Reads and writes | reads only | anything | both | both | anything | both |
-| Clients outside .NET, many consumers, a public contract | no | yes | yes | yes | no | yes |
-
-Most of the Scry column is one fact seen from different sides: there is one type system, and it is the one the UI is written in.
-
-Two more sit outside the table:
-
-- **A hand-rolled criteria object** — property names as strings, an operator enum, a value, a sort column — is the client-shaped cell built by hand, and structurally a small serialized query AST. Its vocabulary stops where the reflection code rebuilding expressions stops, its names are strings the compiler cannot check, and its allow-list has to be added afterwards. Scry is that design carried to completion.
-- **No boundary at all.** If the UI runs on the server, inject the context and write LINQ against it directly. Scry exists because a WebAssembly client is a separate process that an attacker controls.
-
-[Comparisons](docs/comparisons.md) makes the same comparison by name, writes the same query each way, and lists [when Scry is the wrong choice](docs/comparisons.md#when-scry-is-the-wrong-choice).
+Scry sits in a narrow slot beside hand-written endpoints, schema-language query APIs, URL query conventions, expression-tree serializers, and database-generated APIs. [Comparisons](docs/comparisons.md) places each by type and by name, and lists when Scry is the wrong choice.
 
 
 ## How it works
