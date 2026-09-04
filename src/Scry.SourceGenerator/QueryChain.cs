@@ -15,6 +15,8 @@ static class QueryChain
     /// locals it was held in, so what the query carries in total is visible from its last statement —
     /// which is the only place a rule about the whole query can be checked.
     /// </summary>
+    /// <param name="outermost">The last call in the chain, which the walk starts from and works back through.</param>
+    /// <param name="known">The Scry types resolved from the compilation, which is what a link is recognised against.</param>
     /// <param name="inherited">
     /// How many of the leading links came from a followed local. Those were written in another
     /// statement and reported there, so they count towards the query's state without being reported

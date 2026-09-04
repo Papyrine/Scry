@@ -18,6 +18,16 @@ record struct ModelExtract(
 /// model inherits it rather than repeating its members, which is what makes <c>OfType</c> expressible
 /// in the generated surface. Null where there is no opted-in base.
 /// </remarks>
+/// <param name="SourceName">The name the wire request roots at, which an attribute may have overridden.</param>
+/// <param name="ModelName">The generated query model's name.</param>
+/// <param name="Kind">Whether the source is an entity, a view, or a poco supplied in memory.</param>
+/// <param name="Properties">The members the type declares itself. See the remarks for the inherited ones.</param>
+/// <param name="BaseModelName">The generated model this one derives from, or null. See the remarks.</param>
+/// <param name="Obsolete">
+/// Null when the type is not <c>[Obsolete]</c>; otherwise its deprecation message, or empty when the
+/// attribute carried none.
+/// </param>
+/// <param name="IsSensitive">True when the type itself is marked sensitive, rather than one member of it.</param>
 /// <param name="ClrName">
 /// The model type's own simple CLR name, which the source name may have overridden. Read only to
 /// derive a key by EF's <c>{TypeName}Id</c> convention, where the type's name is what counts.
@@ -40,6 +50,12 @@ record struct SourceInfo(
     bool IsSensitive = false);
 
 /// <summary>An allow-listed property and the C# type the client DTO should expose.</summary>
+/// <param name="Name">The member's name, emitted unchanged onto the generated model.</param>
+/// <param name="TypeDisplay">The C# type the generated member is declared as.</param>
+/// <param name="NeedsNullDefault">
+/// Whether the emitted property needs a <c>= null!</c> initializer to satisfy nullable analysis: it is
+/// non-nullable and has no value until the response is deserialized into it.
+/// </param>
 /// <param name="IsNavigation">
 /// True for a reference navigation to another query model. Excluded from the default projection the
 /// entry point emits, which lists scalars only — matching the server's own default projection.
