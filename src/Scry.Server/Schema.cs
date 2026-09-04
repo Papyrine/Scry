@@ -1141,7 +1141,14 @@ sealed class Schema
     /// The element type of a collection member, or null when the type is not a collection. A string is
     /// excluded deliberately — it is <c>IEnumerable&lt;char&gt;</c> and is always a scalar here.
     /// </summary>
-    public static Type? CollectionElement(Type type)
+    // Answered once per type: the walk below reflects over the type's interfaces, and the builder
+    // asks about the same declared collection types on every request that flattens or aggregates one.
+    static readonly ConcurrentDictionary<Type, Type?> collectionElements = new();
+
+    public static Type? CollectionElement(Type type) =>
+        collectionElements.GetOrAdd(type, FindCollectionElement);
+
+    static Type? FindCollectionElement(Type type)
     {
         if (type == typeof(string))
         {

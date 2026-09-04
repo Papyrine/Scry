@@ -7,6 +7,22 @@ sealed class Member(string name, PropertyInfo property, MemberKind kind)
     public MemberKind Kind { get; } = kind;
 
     /// <summary>
+    /// A collection member's element type; null for every other kind. Derived once here rather than
+    /// per request, since finding it means walking the declared type's interfaces.
+    /// </summary>
+    public Type? Element { get; } = kind == MemberKind.Collection ? Schema.CollectionElement(property.PropertyType) : null;
+
+    /// <summary>
+    /// The type a path continues on after this member: a collection's element, an optional struct
+    /// complex member's struct rather than the <c>Nullable&lt;T&gt;</c> it is declared as, and
+    /// otherwise the declared type itself. The one unwrap every reader of a path applies.
+    /// </summary>
+    public Type Target { get; } =
+        (kind == MemberKind.Collection ? Schema.CollectionElement(property.PropertyType) : null) ??
+        Nullable.GetUnderlyingType(property.PropertyType) ??
+        property.PropertyType;
+
+    /// <summary>
     /// Whether the member's values travel as raw multipart parts instead of base64 in JSON. A
     /// transfer-encoding concern only — the member is otherwise an ordinary scalar.
     /// </summary>

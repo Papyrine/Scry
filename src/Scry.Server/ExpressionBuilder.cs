@@ -1005,8 +1005,7 @@ sealed class ExpressionBuilder(
             // A collection of a policied type is read through that source's policy too, so an aggregate
             // over it counts what a direct query would have returned. Startup refuses the member
             // outright unless the policy opted into being read this way, so reaching here means it did.
-            if (member.Kind == MemberKind.Collection &&
-                Schema.CollectionElement(member.Type) is { } element)
+            if (member.Element is { } element)
             {
                 if (navigations?.Applies(element) == true)
                 {

@@ -30,12 +30,9 @@ static class NavigationPolicyProbe
             {
                 // A collection of a policied element is read through the same rewrite, and one that
                 // reached here was legalized by its policy — so it needs the same proof.
-                var target = member.Kind switch
-                {
-                    MemberKind.Navigation => Nullable.GetUnderlyingType(member.Type) ?? member.Type,
-                    MemberKind.Collection => Schema.CollectionElement(member.Type),
-                    _ => null
-                };
+                var target = member.Kind is MemberKind.Navigation or MemberKind.Collection
+                    ? member.Target
+                    : null;
 
                 if (target is not null &&
                     navigations.Applies(target))

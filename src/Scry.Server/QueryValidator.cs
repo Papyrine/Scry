@@ -625,16 +625,12 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
     void ValidatePredicate(Node expr, Type elementType) =>
         ValidateExpr(expr, elementType, depth: 0);
 
-    void ValidateScalar(Node node, Type elementType, string what, int depth = 0)
-    {
-        ValidateExpr(node, elementType, depth);
-        if (node is MemberNode member)
-        {
-            ResolvePath(member.Path, elementType, requireScalar: true, what);
-        }
-    }
+    // A bare member is resolved once, under the caller's own label, rather than by ValidateExpr and
+    // then again for the label's sake.
+    void ValidateScalar(Node node, Type elementType, string what, int depth = 0) =>
+        ValidateExpr(node, elementType, depth, what);
 
-    void ValidateExpr(Node node, Type elementType, int depth)
+    void ValidateExpr(Node node, Type elementType, int depth, string what = "Member")
     {
         while (true)
         {
@@ -659,7 +655,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                             $"'{string.Join('.', member.Path)}' cannot be read here: the collection holds values, not rows, so its element has no members. Read the element itself.");
                     }
 
-                    ResolvePath(member.Path, elementType, requireScalar: true, "Member");
+                    ResolvePath(member.Path, elementType, requireScalar: true, what);
                     break;
 
                 case ElementNode:
@@ -965,7 +961,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             throw Reject($"'{string.Join('.', flatten.Path)}' is not a queryable collection.");
         }
 
-        var element = Schema.CollectionElement(member.Type) ??
+        var element = member.Element ??
                       throw Reject($"'{string.Join('.', flatten.Path)}' is not a collection.");
 
         // A collection of values can be aggregated but not flattened: the rows it would produce are
@@ -1101,7 +1097,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             throw Reject($"'{string.Join('.', subquery.Path)}' is not an aggregable collection.");
         }
 
-        var target = Schema.CollectionElement(member.Type) ??
+        var target = member.Element ??
                      throw Reject($"'{string.Join('.', subquery.Path)}' is not a collection.");
 
         switch (subquery.Function)
@@ -1456,9 +1452,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         var member = ResolvePath(path, rootType, requireScalar: false, "Navigation");
         if (member.Kind == MemberKind.Navigation)
         {
-            // Unwrap Nullable<T>, as ResolvePath does for an intermediate segment: a nested projection
-            // into an optional struct complex member is validated against the struct.
-            return Nullable.GetUnderlyingType(member.Type) ?? member.Type;
+            return member.Target;
         }
 
         throw Reject($"'{string.Join('.', path)}' is not a navigation property.");
@@ -1507,8 +1501,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     throw Reject($"Cannot traverse through non-navigation '{path[i]}'.");
                 }
 
-                // Unwrap Nullable<T> so an optional struct complex member resolves to its underlying type.
-                currentType = Nullable.GetUnderlyingType(member.Type) ?? member.Type;
+                currentType = member.Target;
             }
         }
 
