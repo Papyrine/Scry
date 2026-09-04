@@ -669,6 +669,15 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCollection: false,
           IsAttachment: false,
           IsSensitive: false
+        },
+        {
+          Name: Workstation,
+          TypeDisplay: WorkstationQueryModel?,
+          NeedsNullDefault: false,
+          IsNavigation: true,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
         }
       ],
       IsSensitive: false
@@ -1157,6 +1166,30 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       ],
       Base: AssetQueryModel,
       IsSensitive: false
+    },
+    {
+      Model: WorkstationQueryModel,
+      Members: [
+        {
+          Name: Extension,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: true
+        },
+        {
+          Name: Room,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        }
+      ],
+      IsSensitive: false
     }
   ],
   Enums: [
@@ -1209,10 +1242,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: qwPBC1rKusKBcd7j
+  SchemaStamp: 32VEDu7rkT1xWEj-
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L910' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L943' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names, member names with the exact C# type spelling the source generator would emit, and the re-emitted enums. It carries **no** policies, resolvers, connection details, or CLR internals.

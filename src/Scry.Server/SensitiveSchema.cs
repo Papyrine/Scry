@@ -12,8 +12,14 @@
 /// </remarks>
 sealed class SensitiveSchema(Schema schema)
 {
-    readonly Dictionary<string, bool> anyName = new(StringComparer.Ordinal);
-    bool scanned;
+    // Every marked member name, off any allow-listed type. Built with the schema rather than on the
+    // first unresolved path: the processor is a singleton, and two first requests filling a lazy table
+    // at once would race on it.
+    readonly HashSet<string> anyName = schema.Types
+        .SelectMany(_ => _.Members.Values)
+        .Where(_ => _.Sensitive)
+        .Select(_ => _.Name)
+        .ToHashSet(StringComparer.Ordinal);
 
     public bool IsSensitive(string? source, IReadOnlyList<string> path)
     {
@@ -65,28 +71,8 @@ sealed class SensitiveSchema(Schema schema)
         return meta.Sensitive;
     }
 
-    bool Unresolved(IReadOnlyList<string> path)
-    {
-        Scan();
-        return path.Any(anyName.ContainsKey);
-    }
-
-    // Built once, lazily: a schema that marks nothing never pays for it, and one that does pays on the
-    // first query whose shape the walk could not follow.
-    void Scan()
-    {
-        if (scanned)
-        {
-            return;
-        }
-
-        foreach (var member in schema.Types.SelectMany(_ => _.Members.Values).Where(_ => _.Sensitive))
-        {
-            anyName[member.Name] = true;
-        }
-
-        scanned = true;
-    }
+    bool Unresolved(IReadOnlyList<string> path) =>
+        path.Any(anyName.Contains);
 
     static Type? CollectionElement(Type type) =>
         type.GetInterfaces()
