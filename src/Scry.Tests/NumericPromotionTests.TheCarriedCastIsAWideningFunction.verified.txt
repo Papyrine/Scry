@@ -1,0 +1,32 @@
+﻿{
+  Version: 1,
+  Root: Order,
+  Pipeline: [
+    {
+      Projection: {
+        Members: [
+          {
+            Name: Half,
+            Value: {
+              Node: {
+                Op: Divide,
+                Left: {
+                  Function: DoubleFrom,
+                  Target: {
+                    Path: [
+                      Quantity
+                    ]
+                  }
+                },
+                Right: {
+                  Value: 2,
+                  Tag: Double
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

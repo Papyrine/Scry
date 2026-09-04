@@ -573,9 +573,11 @@ public enum KnownFunction
 
     /// <summary>
     /// Reads text as a value — <c>int.Parse</c> / <c>Convert.ToInt32</c> and their siblings; the
-    /// inverse of <see cref="StringFrom"/>. Only that direction exists: a numeric member is already a
-    /// value, and SQL's numeric-to-numeric conversions truncate where the CLR's round, so those are
-    /// not carried. Text that does not parse faults at execution, exactly as it would in memory.
+    /// inverse of <see cref="StringFrom"/> — or, over a number, widens it to the named type, which
+    /// is how a cast such as <c>(double)member</c> travels. Only a widening conversion is carried: SQL's
+    /// numeric-to-numeric conversions truncate where the CLR's round, so a narrowing one would answer
+    /// differently per source. Text that does not parse faults at execution, exactly as it would in
+    /// memory.
     /// </summary>
     Int32From,
     Int64From,
@@ -607,7 +609,7 @@ public enum KnownFunction
     BytesElementAt
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L210' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L212' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 There is no free-form method name anywhere in the format. This enum is the complete set of behaviour a client can request.

@@ -8,8 +8,27 @@ sealed partial class QueryTranslator
             switch (expression)
             {
                 case UnaryExpression {NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked} convert:
-                    expression = convert.Operand;
-                    continue;
+                    // Converted closure state is a constant of the converted type: (double)count
+                    // reaches the wire as the double it is, where converting what the operand
+                    // evaluated to would tag it as what it was.
+                    if (!ReferencesParameter(convert, root))
+                    {
+                        return ConstantOf(Evaluate(convert));
+                    }
+
+                    if (!IsBuiltIn(convert))
+                    {
+                        throw new NotSupportedException(
+                            $"The conversion to '{convert.Type.Name}' is client-side code, which cannot be carried on the wire.");
+                    }
+
+                    if (IsLifting(convert.Operand.Type, convert.Type))
+                    {
+                        expression = convert.Operand;
+                        continue;
+                    }
+
+                    return TranslateConversion(convert, root);
 
                 case UnaryExpression {NodeType: ExpressionType.Not} not:
                     return new UnaryNode(UnaryOp.Not, TranslateExpr(not.Operand, root));
@@ -33,6 +52,15 @@ sealed partial class QueryTranslator
                         KnownFunction.StringConcat,
                         TranslateExpr(concat.Left, root),
                         [TranslateExpr(concat.Right, root)]);
+
+                // A comparison's operands are peeled of what C# lowered them through; every other
+                // binary's are translated as written, since a conversion in arithmetic is one the
+                // wire has to carry.
+                case BinaryExpression binary when IsComparison(binary.NodeType):
+                    return new BinaryNode(
+                        MapBinary(binary.NodeType),
+                        TranslateExpr(Comparand(binary.Left), root),
+                        TranslateExpr(Comparand(binary.Right), root));
 
                 case BinaryExpression binary:
                     return new BinaryNode(MapBinary(binary.NodeType), TranslateExpr(binary.Left, root), TranslateExpr(binary.Right, root));

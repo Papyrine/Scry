@@ -1760,21 +1760,36 @@ sealed class ExpressionBuilder(
     /// would yield a number where the client expects a name.
     /// </remarks>
     /// <summary>
-    /// Reads text as a value — the inverse of <see cref="BuildStringFrom"/>. Only a string target is
-    /// accepted: a numeric member is already a value, and SQL's numeric-to-numeric conversions
-    /// truncate where the CLR's round, so carrying those would answer differently per source. Emitted
-    /// as the Convert call EF translates to CONVERT; text that does not parse faults at execution,
-    /// exactly as it would in memory.
+    /// Reads text as a value — the inverse of <see cref="BuildStringFrom"/> — or widens a number to a
+    /// wider numeric type, which is the cast the client wrote. Text is emitted as the Convert call EF
+    /// translates to CONVERT, and faults at execution where it does not parse, exactly as it would in
+    /// memory. A number is emitted as the conversion EF translates to CAST, and only a widening one:
+    /// SQL's numeric-to-numeric conversions truncate where the CLR's round, so a narrowing one would
+    /// answer differently per source and is refused, as the client already refuses to send it.
     /// </summary>
     static Expression BuildFromText(KnownFunction function, Expression target, MethodInfo method)
     {
         var value = NonNullable(target);
-        if (value.Type != typeof(string))
+        if (value.Type == typeof(string))
+        {
+            return Expression.Call(method, value);
+        }
+
+        var result = method.ReturnType;
+        if (Rank(value.Type) is not { } from ||
+            Rank(result) is not { } to)
         {
             throw new ScryValidationException($"'{function}' reads text as a value, and '{value.Type.Name}' is already one.");
         }
 
-        return Expression.Call(method, value);
+        if (to <= from)
+        {
+            throw new ScryValidationException($"'{function}' over a '{value.Type.Name}' would narrow it, which is not carried: the database truncates where the CLR rounds.");
+        }
+
+        // Converted as the nullable it may be, so a null widens to a null rather than faulting.
+        var lifted = Nullable.GetUnderlyingType(target.Type) is not null;
+        return Expression.Convert(target, lifted ? typeof(Nullable<>).MakeGenericType(result) : result);
     }
 
     static Expression BuildStringFrom(Expression target)

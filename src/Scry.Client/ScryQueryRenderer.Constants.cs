@@ -16,6 +16,22 @@ partial class QueryRenderer
 
         string ValueArgument(int index) => RenderValue(arguments[index], scope);
 
+        string From(string keyword)
+        {
+            var type = InferType(call.Target, scope);
+            if (type is null ||
+                (Nullable.GetUnderlyingType(type) ?? type) == typeof(string))
+            {
+                return $"{keyword}.Parse({RenderNode(call.Target, scope)})";
+            }
+
+            var cast = Nullable.GetUnderlyingType(type) is null ? keyword : $"{keyword}?";
+            var operand = RenderNode(call.Target, scope);
+            return call.Target is BinaryNode or ConditionalNode
+                ? $"({cast})({operand})"
+                : $"({cast}){operand}";
+        }
+
         switch (call.Function)
         {
             case KnownFunction.StringContains or KnownFunction.StringStartsWith or KnownFunction.StringEndsWith:
@@ -207,22 +223,25 @@ partial class QueryRenderer
                 return $"{ValueTarget()}.HasFlag({RenderConst(flag, enumType)})";
             }
 
+            // Over text these parse it; over a number they are the widening cast the client wrote,
+            // and read back as one — lifted where the member is optional, since that is how C# spells
+            // a conversion of a nullable.
             case KnownFunction.Int32From:
-                return $"int.Parse({RenderNode(call.Target, scope)})";
+                return From("int");
             case KnownFunction.Int64From:
-                return $"long.Parse({RenderNode(call.Target, scope)})";
+                return From("long");
             case KnownFunction.DecimalFrom:
-                return $"decimal.Parse({RenderNode(call.Target, scope)})";
+                return From("decimal");
             case KnownFunction.DoubleFrom:
-                return $"double.Parse({RenderNode(call.Target, scope)})";
+                return From("double");
             case KnownFunction.BooleanFrom:
-                return $"bool.Parse({RenderNode(call.Target, scope)})";
+                return From("bool");
             case KnownFunction.ByteFrom:
-                return $"byte.Parse({RenderNode(call.Target, scope)})";
+                return From("byte");
             case KnownFunction.Int16From:
-                return $"short.Parse({RenderNode(call.Target, scope)})";
+                return From("short");
             case KnownFunction.SingleFrom:
-                return $"float.Parse({RenderNode(call.Target, scope)})";
+                return From("float");
 
             case KnownFunction.CompareTo:
             {

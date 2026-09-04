@@ -642,9 +642,11 @@ public enum KnownFunction
 
     /// <summary>
     /// Reads text as a value — <c>int.Parse</c> / <c>Convert.ToInt32</c> and their siblings; the
-    /// inverse of <see cref="StringFrom"/>. Only that direction exists: a numeric member is already a
-    /// value, and SQL's numeric-to-numeric conversions truncate where the CLR's round, so those are
-    /// not carried. Text that does not parse faults at execution, exactly as it would in memory.
+    /// inverse of <see cref="StringFrom"/> — or, over a number, widens it to the named type, which
+    /// is how a cast such as <c>(double)member</c> travels. Only a widening conversion is carried: SQL's
+    /// numeric-to-numeric conversions truncate where the CLR's round, so a narrowing one would answer
+    /// differently per source. Text that does not parse faults at execution, exactly as it would in
+    /// memory.
     /// </summary>
     Int32From,
     Int64From,
@@ -676,7 +678,7 @@ public enum KnownFunction
     BytesElementAt
 }
 ```
-<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L210' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/KnownFunction.cs#L3-L212' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireFunctions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Mapped from:
@@ -771,7 +773,7 @@ The string functions take a `char` argument as readily as a string one — `Cont
 
 `HasFlag` reads a `[Flags]` enum member; a combined flag — `_.Perks.HasFlag(Perks.Parking | Perks.Gym)` — folds into one constant and travels by name, exactly as `Enum.ToString` spells it.
 
-The parsing functions read **text only** — the inverse of `ToString`. A numeric member is already a value, which arithmetic and comparison promote without a cast, and SQL's numeric-to-numeric conversions truncate where the CLR's round — so that direction is refused rather than answered differently per source. Text that does not parse faults the query at execution, exactly as it would in memory. `Convert.ToSingle` is the one spelling left out: the provider translates `float.Parse` but carries no `ToSingle` conversion.
+The parsing functions read **text** — the inverse of `ToString` — and, written as a cast, **widen a number**: `(double)_.Quantity` travels as the same function over the member, and the provider makes it a `CAST`. Only a widening cast is carried, because dropping it would change the answer — `(double)a / b` over two integer members would otherwise divide as integers. A narrowing cast is refused: SQL's numeric-to-numeric conversions truncate where the CLR's round, so the two would answer differently per source; compute over the wider type, or round first. A cast that reads an enum or a `char` as a number is refused too — an enum travels by name and a `char` as itself — where the conversions C# writes into a *comparison* of either (`_.Status == Status.Active` compares their numbers underneath) are dropped, since the wire compares the values as written. Text that does not parse faults the query at execution, exactly as it would in memory. `Convert.ToSingle` is the one spelling left out: the provider translates `float.Parse` but carries no `ToSingle` conversion.
 
 Every function past `Math.Sqrt` is defined over `double` alone, so an integer or decimal member is widened to reach it — which is also the type the provider computes it in. `Math.Log` is the natural logarithm with no second argument and a logarithm to that base with one. The angle conversions are statics on the floating types rather than on `Math` — the `float` spellings mean the same functions — and translate to SQL's `RADIANS` / `DEGREES`.
 
