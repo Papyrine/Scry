@@ -567,13 +567,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     continue;
 
                 case CallNode call:
-                    var (min, max) = Arity(call.Function);
-                    if (call.Arguments.Count < min ||
-                        call.Arguments.Count > max)
-                    {
-                        throw Reject($"Function '{call.Function}' does not take {call.Arguments.Count} argument(s).");
-                    }
-
+                    EnsureCallShape(call);
                     ValidateHaving(call.Target, elementType, groupKeys, depth + 1);
                     foreach (var argument in call.Arguments)
                     {
@@ -723,6 +717,19 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
     /// </summary>
     void ValidateCall(CallNode call, Type elementType, int depth)
     {
+        EnsureCallShape(call);
+        ValidateExpr(call.Target, elementType, depth + 1);
+        foreach (var argument in call.Arguments)
+        {
+            ValidateExpr(argument, elementType, depth + 1);
+        }
+    }
+
+    // What a call is held to wherever it appears — over a row or over a group, which differ only in
+    // what its target and arguments may read. Kept in one place so the set-membership cap and the
+    // constants-only rule cannot be enforced on one vocabulary and forgotten on the other.
+    void EnsureCallShape(CallNode call)
+    {
         var (min, max) = Arity(call.Function);
         var count = call.Arguments.Count;
         if (count < min ||
@@ -731,23 +738,19 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             throw Reject($"Function '{call.Function}' does not take {count} argument(s).");
         }
 
-        if (call.Function == KnownFunction.In)
+        if (call.Function != KnownFunction.In)
         {
-            if (count > options.MaxInValues)
-            {
-                throw Reject($"A Contains set of {count} values exceeds the maximum of {options.MaxInValues}.");
-            }
-
-            if (call.Arguments.Any(_ => _ is not ConstNode))
-            {
-                throw Reject("Every value in a Contains set must be a constant.");
-            }
+            return;
         }
 
-        ValidateExpr(call.Target, elementType, depth + 1);
-        foreach (var argument in call.Arguments)
+        if (count > options.MaxInValues)
         {
-            ValidateExpr(argument, elementType, depth + 1);
+            throw Reject($"A Contains set of {count} values exceeds the maximum of {options.MaxInValues}.");
+        }
+
+        if (call.Arguments.Any(_ => _ is not ConstNode))
+        {
+            throw Reject("Every value in a Contains set must be a constant.");
         }
     }
 
