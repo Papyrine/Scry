@@ -96,6 +96,11 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     // does not expose. The narrowing itself is validated against the schema, never
                     // against a CLR type named on the wire.
                     rootType = ValidateOfType(narrowed, rootType);
+
+                    // A narrowing is a predicate on the discriminator, and is hoisted out of a right
+                    // join's outer side like any other — and the derived source's own policies, which
+                    // the executor applies after narrowing, would be hoisted with it.
+                    sawOuterFilter = true;
                     break;
 
                 case SelectManyOp flatten:
@@ -910,7 +915,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         if (sawOuterFilter)
         {
             throw Reject(
-                "RightJoin cannot narrow its outer side — remove the Where, Skip, or Take before it, or swap the sides and use LeftJoin.");
+                "RightJoin cannot narrow its outer side — remove the Where, OfType, Skip, or Take before it, or swap the sides and use LeftJoin.");
         }
 
         if (root.Policies.Count > 0)

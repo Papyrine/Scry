@@ -10,6 +10,8 @@ public class JoinTests
 
     record TicketRow(string Employee, string Ticket);
 
+    record VehicleRow(string Employee, string Vehicle);
+
     record EmployeeWithDepartment(string Employee, string? Department, int? DepartmentId);
 
     // ReSharper restore NotAccessedPositionalProperty.Local
@@ -127,6 +129,27 @@ public class JoinTests
                     _ => _.Id,
                     _ => _.Id,
                     (department, employee) => new EmployeeWithDepartment(employee.Name, department!.Name, department.Id))
+                .ToListAsync());
+
+        Assert.That(exception!.Message, Does.Contain("RightJoin cannot narrow its outer side"));
+    }
+
+    // A narrowing to a derived type is a predicate on the discriminator, hoisted the same way — and
+    // the derived source's own policies are applied after it, so they would be hoisted with it.
+    [Test]
+    public void RightJoinRejectsANarrowedToDerivedOuterSide()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var exception = Assert.ThrowsAsync<ScryValidationException>(
+            () => client.Source<Asset>("Asset")
+                .OfType<Vehicle>()
+                .RightJoin(
+                    client.Source<Employee>("Employee"),
+                    _ => _.Id,
+                    _ => _.Id,
+                    (vehicle, employee) => new VehicleRow(employee.Name, vehicle!.Name))
                 .ToListAsync());
 
         Assert.That(exception!.Message, Does.Contain("RightJoin cannot narrow its outer side"));

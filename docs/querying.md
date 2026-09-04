@@ -873,7 +873,7 @@ var rows = await client.Source<Employee>("Employee")
         (employee, department) => new EmployeeDepartment(employee.Name, department.Name))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/JoinTests.cs#L46-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientJoin' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/JoinTests.cs#L48-L57' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientJoin' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `LeftJoin` keeps every outer row, with nulls where the inner side has no match. A value read from the inner side of a left join comes back nullable, so an unmatched row yields null rather than a fault.
@@ -894,10 +894,10 @@ var rows = await client.Source<Department>("Department")
             department.Id))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/JoinTests.cs#L90-L101' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRightJoin' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/JoinTests.cs#L92-L103' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRightJoin' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-It carries one restriction the other two do not: **the outer side of a `RightJoin` may not be narrowed.** A `Where`, `Skip`, or `Take` before it, or a [row policy](policies.md) on the outer source, is rejected. EF hoists such a predicate out of the join and into the `WHERE` of the combined query, which silently turns the right join into an inner one — unmatched inner rows are dropped instead of kept with nulls. Refusing the shape is better than answering it wrongly; swap the sides and use `LeftJoin`, which has no such problem because EF keeps the inner side as a subquery.
+It carries one restriction the other two do not: **the outer side of a `RightJoin` may not be narrowed.** A `Where`, `OfType`, `Skip`, or `Take` before it, or a [row policy](policies.md) on the outer source, is rejected — a narrowing to a derived type is a predicate on the discriminator, and the derived source's own policies are applied after it. EF hoists such a predicate out of the join and into the `WHERE` of the combined query, which silently turns the right join into an inner one — unmatched inner rows are dropped instead of kept with nulls. Refusing the shape is better than answering it wrongly; swap the sides and use `LeftJoin`, which has no such problem because EF keeps the inner side as a subquery.
 
 `FullJoin` is not supported: `Queryable.FullJoin` does not exist on .NET 10, so neither the client can express it nor EF can execute it.
 
