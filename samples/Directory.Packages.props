@@ -4,7 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- work around CVE -->
-    <PackageVersion Include="AngleSharp" Version="1.7.2" />
+    <PackageVersion Include="AngleSharp" Version="1.7.3" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.11" />
     <PackageVersion Include="EfLocalDb" Version="26.1.1" />
