@@ -100,7 +100,7 @@ See [docs/security.md](docs/security.md) for the full threat model.
 | [Scry.Client](https://nuget.org/packages/Scry.Client/) | Client-side `IQueryable` provider (no EF dependency). Ships the source generator. |
 | [Scry.Server](https://nuget.org/packages/Scry.Server/) | Server-side validation + execution against EF Core. |
 | [Scry.Server.Explorer](https://nuget.org/packages/Scry.Server.Explorer/) | Opt-in, GraphiQL-style query explorer. |
-| [Scry.Server.Delta](https://nuget.org/packages/Scry.Server.Delta/) | Opt-in `304 Not Modified`, backed by Delta. |
+| [Scry.Server.Delta](https://nuget.org/packages/Scry.Server.Delta/) | Opt-in `304 Not Modified`, backed by [Delta](https://github.com/SimonCropp/Delta). |
 
 `Scry.SourceGenerator` is packed inside `Scry.Client` rather than published separately.
 
