@@ -2054,7 +2054,9 @@ sealed class ExpressionBuilder(
                 values,
                 Expression.Lambda(value, value));
 
-            return Expression.Call(stringJoinValues, Expression.Constant(separator, typeof(string)), ordered);
+            // The separator is the client's, and travels as every other client value does: bound, so
+            // one plan serves every separator a client sends rather than one per distinct string.
+            return Expression.Call(stringJoinValues, Parameterization.Parameterize(separator, typeof(string)), ordered);
         }
 
         return aggregate.Function switch

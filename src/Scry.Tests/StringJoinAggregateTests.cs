@@ -256,6 +256,37 @@ public class StringJoinAggregateTests
         Assert.That(exception!.Message, Does.Contain("Join aggregates text"));
     }
 
+    // The separator is the one string a client hands the aggregate, and it reaches SQL the way every
+    // client value does — as a parameter, not as a literal in the statement text. Inlined, each
+    // distinct separator would compile and cache a plan of its own.
+    [Test]
+    public void TheSeparatorIsAParameter()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var request = client.Source<Order>("Order")
+            .GroupBy(_ => _.Region)
+            .Select(_ => new
+            {
+                Region = _.Key,
+                Codes = string.Join(", ", _.Select(_ => _.Code))
+            })
+            .ToScryRequest();
+        var sql = SharedProcessor.Instance.ToQueryString(request, context, NoServices.Instance);
+
+        Assert.That(sql, Does.Match(@"STRING_AGG\([^,]+, @\w+\)"));
+    }
+
     static ScryClient ClientFor(TestContext context) =>
         new((request, _) => Task.FromResult(SharedProcessor.Instance.Execute(request, context)));
+
+    sealed class NoServices :
+        IServiceProvider
+    {
+        public static readonly NoServices Instance = new();
+
+        public object? GetService(Type serviceType) =>
+            null;
+    }
 }
