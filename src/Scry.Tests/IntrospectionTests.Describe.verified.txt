@@ -43,6 +43,11 @@
       Model: HolidayQueryModel
     },
     {
+      Name: Invoice,
+      Kind: Entity,
+      Model: InvoiceQueryModel
+    },
+    {
       Name: Order,
       Kind: Entity,
       Model: OrderQueryModel
@@ -383,6 +388,66 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        }
+      ],
+      IsSensitive: false
+    },
+    {
+      Model: InvoiceQueryModel,
+      Members: [
+        {
+          Name: CreatedBy,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Notes,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Number,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Tags,
+          TypeDisplay: global::System.Collections.Generic.IReadOnlyList<string>,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: true,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Weights,
+          TypeDisplay: global::System.Collections.Generic.IReadOnlyList<int>,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: true,
           IsAttachment: false,
           IsSensitive: false
         }
@@ -841,5 +906,5 @@
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: oduMLTlJKcDJA8pG
+  SchemaStamp: qwPBC1rKusKBcd7j
 }

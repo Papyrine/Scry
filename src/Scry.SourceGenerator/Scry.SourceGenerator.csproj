@@ -26,6 +26,10 @@
          generator refuses to emit one it cannot write, so the server has to refuse the same set. -->
     <Compile Include="..\Shared\SchemaStamp.cs" Link="SchemaStamp.cs" />
     <Compile Include="..\Shared\CSharpIdentifier.cs" Link="CSharpIdentifier.cs" />
+    <Compile Include="..\Shared\CollectionShapes.cs" Link="CollectionShapes.cs" />
+    <!-- The lockstep test: Scry.Tests reads the test model with this reader and checks the stamp it
+         computes against the server's, over a model carrying every shape the two have disagreed on. -->
+    <InternalsVisibleTo Include="Scry.Tests" Key="$(ScryPublicKey)" />
     <!-- The closed LINQ surface the analyzer reports against. Compiled into Scry.Tests as well,
          where it is pinned against KnownFunction and against the translator that enforces it at
          runtime — the analyzer would otherwise drift into rejecting queries the client can carry. -->

@@ -87,6 +87,41 @@ public class GeneratorTests
     }
 
     [Test]
+    public Task UnannotatedBaseOverrideIndexerAndArrays()
+    {
+        // The unannotated base's members are the derived model's own; the override is emitted once
+        // and carries the base declaration's attributes; the indexer is not a member; an array is a
+        // collection of its element. Each is what the server reads by reflection.
+        const string model = """
+            using Scry;
+
+            namespace Sample.Model;
+
+            public abstract class Audited
+            {
+                public string CreatedBy { get; set; } = "";
+                public virtual string Notes { get; set; } = "";
+                [QueryIgnore] public virtual string Secret { get; set; } = "";
+            }
+
+            [Queryable]
+            public class Invoice : Audited
+            {
+                public int Id { get; set; }
+                public string Number { get; set; } = "";
+                public override string Notes { get; set; } = "";
+                public override string Secret { get; set; } = "";
+                public string this[int index] => Number;
+                [QueryableCollection] public string[] Tags { get; set; } = [];
+                [QueryableCollection] public int[] Weights { get; set; } = [];
+                public string[] Hidden { get; set; } = [];
+            }
+            """;
+
+        return VerifyGenerated(model);
+    }
+
+    [Test]
     public Task Hierarchy()
     {
         // Vehicle opts in and so inherits the base model, declaring only its own members. Artwork

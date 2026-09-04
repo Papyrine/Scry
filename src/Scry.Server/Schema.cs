@@ -1133,7 +1133,7 @@ sealed class Schema
             ?.GetGenericArguments()[0];
     }
 
-    static TypeMeta BuildTypeMeta(Type type, HashSet<Type> queryableTypes)
+    internal static TypeMeta BuildTypeMeta(Type type, HashSet<Type> queryableTypes)
     {
         // Declared-only, like every other opt-in read here: a subclass of a sensitive type is not
         // itself sensitive unless it says so, matching what the metadata side can see.
@@ -1154,8 +1154,11 @@ sealed class Schema
                 continue;
             }
 
+            EnsureReadableByTheGenerator(type, property, queryableTypes);
+
             if (IsScalar(property.PropertyType))
             {
+                EnsureEnumInModelAssembly(type, property, property.PropertyType);
                 if (property.PropertyType != typeof(byte[]))
                 {
                     EnsureNoBinaryTransfer(type, property, $"which is a '{ScalarDisplay(property.PropertyType)}'. Only byte[] members can travel as binary parts.");
@@ -1197,12 +1200,22 @@ sealed class Schema
             // member, not just to the type — and its element must be something a query can already
             // read: an opted-in type, or a scalar (an EF primitive collection, whose elements are
             // values with no allow-list of their own to consult).
-            if (property.HasAttribute<QueryableCollectionAttribute>() &&
-                CollectionElement(property.PropertyType) is { } element &&
-                (queryableTypes.Contains(element) || IsScalar(element)))
+            if (property.HasAttribute<QueryableCollectionAttribute>())
             {
-                meta.Members[property.Name] = new(property.Name, property, MemberKind.Collection);
-                continue;
+                var element = ExposableCollectionElement(property.PropertyType);
+                if (element is null &&
+                    CollectionElement(property.PropertyType) is not null)
+                {
+                    throw new($"'{type.Name}.{property.Name}' is a '{property.PropertyType.Name}', a collection shape the generator does not read, so a client could never see the member and every client would report itself stale. Declare it as {CollectionShapes.Described}.");
+                }
+
+                if (element is not null &&
+                    (queryableTypes.Contains(element) || IsScalar(element)))
+                {
+                    EnsureEnumInModelAssembly(type, property, element);
+                    meta.Members[property.Name] = new(property.Name, property, MemberKind.Collection);
+                    continue;
+                }
             }
 
             // Anything else (an un-opted-in collection, a non-queryable complex type) stays excluded.
@@ -1217,6 +1230,64 @@ sealed class Schema
         }
 
         return meta;
+    }
+
+    /// <summary>
+    /// Refuses a member the generator could never read. A client is generated from the model
+    /// assembly's metadata alone, so a member inherited from a base in another assembly is invisible
+    /// to it — while reflection here would expose it, and every client would then report itself
+    /// stale. A base in the model assembly is read on both sides whether or not it opted in, and an
+    /// opted-in base is the generated model's own base, so neither is refused.
+    /// </summary>
+    static void EnsureReadableByTheGenerator(Type type, PropertyInfo property, HashSet<Type> queryableTypes)
+    {
+        var declaring = property.DeclaringType;
+        if (declaring is null ||
+            declaring == type ||
+            declaring.Assembly == type.Assembly ||
+            queryableTypes.Contains(declaring))
+        {
+            return;
+        }
+
+        throw new($"'{type.Name}.{property.Name}' is inherited from '{declaring.Name}' in assembly '{declaring.Assembly.GetName().Name}'. A client is generated from the model assembly's metadata alone, so it could never see the member, and every client would report itself stale. Declare the member on a type in the model assembly, or hide it by overriding it with [QueryIgnore].");
+    }
+
+    /// <summary>
+    /// The same refusal for an enum: the generator re-emits one from the model assembly's metadata,
+    /// and cannot read the members of one declared elsewhere.
+    /// </summary>
+    static void EnsureEnumInModelAssembly(Type type, PropertyInfo property, Type valueType)
+    {
+        var underlying = Nullable.GetUnderlyingType(valueType) ?? valueType;
+        if (!underlying.IsEnum ||
+            underlying.Assembly == type.Assembly)
+        {
+            return;
+        }
+
+        throw new($"'{type.Name}.{property.Name}' is a '{underlying.Name}', an enum declared in assembly '{underlying.Assembly.GetName().Name}'. A client re-emits an enum from the model assembly's metadata alone, so it could never see this one, and every client would report itself stale. Declare the enum in the model assembly, or exclude the member with [QueryIgnore].");
+    }
+
+    /// <summary>
+    /// The element type of a collection declared in a shape the generator reads too — a
+    /// one-dimensional array or one of <see cref="CollectionShapes.GenericDefinitions"/> — or null.
+    /// Decides exposure, where <see cref="CollectionElement"/> reads any collection already exposed.
+    /// </summary>
+    internal static Type? ExposableCollectionElement(Type type)
+    {
+        if (type.IsArray)
+        {
+            return type.GetArrayRank() == 1 ? type.GetElementType() : null;
+        }
+
+        if (type.IsGenericType &&
+            CollectionShapes.GenericDefinitions.Contains(type.GetGenericTypeDefinition().FullName!))
+        {
+            return type.GetGenericArguments()[0];
+        }
+
+        return null;
     }
 
     static void RegisterMemberPreviousNames(TypeMeta meta, Member member)

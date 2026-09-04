@@ -285,7 +285,7 @@ public class ScryGenerator :
     /// and the reason — unlike <c>[BinaryTransfer]</c> — that it moves the schema stamp.
     /// </summary>
     /// <remarks>Mirrored by <c>Schema.DescribeMember</c>, which the schema stamp requires to agree.</remarks>
-    static string Display(PropertyInfo property) =>
+    internal static string Display(PropertyInfo property) =>
         property.IsAttachment ? "global::Scry.ScryAttachment" : property.TypeDisplay;
 
     // The scalar members a query written against this model projects when it writes no Select: the
@@ -426,7 +426,7 @@ public class ScryGenerator :
     // Deprecation is deliberately absent: marking something [Obsolete] leaves the queryable surface
     // exactly as it was, and folding it in would report every deployed client as stale for what is
     // only a note to whoever next rebuilds one.
-    static string ComputeStamp(ModelExtract extract)
+    internal static string ComputeStamp(ModelExtract extract)
     {
         var sources = extract.Sources
             .Where(_ => _.Kind != SourceKind.Complex)

@@ -61,7 +61,7 @@ static class MetadataModelReader
             var sources = ImmutableArray.CreateBuilder<SourceInfo>();
             foreach (var entry in discovered)
             {
-                var properties = ReadProperties(reader, entry.Type, decoder, modelByFullName, enums);
+                var properties = ReadProperties(reader, entry.Type, decoder, modelByFullName, enums, discoveredByFullName);
                 sources.Add(
                     new(
                         entry.SourceName,
@@ -74,7 +74,7 @@ static class MetadataModelReader
                         IsSensitive: entry.IsSensitive));
             }
 
-            return new(null, new(DeriveKeys(sources)), new(enums.Values.ToImmutableArray()));
+            return new(null, new(DeriveKeys(WithoutInheritedMembers(sources))), new(enums.Values.ToImmutableArray()));
         }
         catch (Exception exception)
         {
@@ -196,20 +196,27 @@ static class MetadataModelReader
         TypeDefinition type,
         SignatureDecoder decoder,
         Dictionary<string, string> modelByFullName,
-        Dictionary<string, EnumInfo> enums)
+        Dictionary<string, EnumInfo> enums,
+        Dictionary<string, Discovered> discovered)
     {
         var properties = ImmutableArray.CreateBuilder<PropertyInfo>();
-        foreach (var propertyHandle in type.GetProperties())
+        foreach (var (property, attributes) in DeclaredProperties(reader, type, discovered))
         {
-            var property = reader.GetPropertyDefinition(propertyHandle);
             if (!HasPublicInstanceGetter(reader, property) ||
-                HasAttribute(reader, property.GetCustomAttributes(), queryIgnoreAttribute))
+                HasAttribute(reader, attributes, queryIgnoreAttribute))
             {
                 continue;
             }
 
             var signature = property.DecodeSignature(decoder, genericContext: null);
-            var attributes = property.GetCustomAttributes();
+
+            // An indexer is a property with parameters, which no query names; reflection leaves it
+            // out on the server too.
+            if (signature.ParameterTypes.Length > 0)
+            {
+                continue;
+            }
+
             var collectionOptIn = HasAttribute(reader, attributes, queryableCollectionAttribute);
             var attachment = HasAttribute(reader, attributes, attachmentAttribute);
             var classified = Classify(reader, signature.ReturnType, modelByFullName, enums, collectionOptIn);
@@ -236,6 +243,90 @@ static class MetadataModelReader
         }
 
         return properties.ToImmutable();
+    }
+
+    // The properties a model exposes as its own: the type's, and those of every base in this assembly
+    // that did not opt in — the server reads inherited members by reflection, and a base that opted
+    // in is the generated model's own base instead, so the walk stops there. A name declared more
+    // than once along the chain (an override) is one member, described by its nearest declaration
+    // and carrying the attributes of every declaration, as reflection's inherit walk reads them.
+    static List<(PropertyDefinition Property, List<CustomAttributeHandle> Attributes)> DeclaredProperties(
+        MetadataReader reader,
+        TypeDefinition type,
+        Dictionary<string, Discovered> discovered)
+    {
+        var levels = new List<List<(PropertyDefinition, List<CustomAttributeHandle>)>>();
+        var byName = new Dictionary<string, List<CustomAttributeHandle>>(StringComparer.Ordinal);
+        var current = type;
+        while (true)
+        {
+            var level = new List<(PropertyDefinition, List<CustomAttributeHandle>)>();
+            foreach (var handle in current.GetProperties())
+            {
+                var property = reader.GetPropertyDefinition(handle);
+                var name = reader.GetString(property.Name);
+                var attributes = property.GetCustomAttributes().ToList();
+                if (byName.TryGetValue(name, out var nearer))
+                {
+                    nearer.AddRange(attributes);
+                    continue;
+                }
+
+                byName[name] = attributes;
+                level.Add((property, attributes));
+            }
+
+            levels.Add(level);
+
+            // A base outside this assembly is a TypeReference, which cannot be read here; the server
+            // refuses a member inherited from one, so the walk ending is what keeps the two aligned.
+            if (current.BaseType.IsNil ||
+                current.BaseType.Kind != HandleKind.TypeDefinition)
+            {
+                break;
+            }
+
+            current = reader.GetTypeDefinition((TypeDefinitionHandle)current.BaseType);
+            if (discovered.ContainsKey(FullName(reader, current)))
+            {
+                break;
+            }
+        }
+
+        // Base-most first, as a class lays its inherited members out.
+        levels.Reverse();
+        return levels.SelectMany(_ => _).ToList();
+    }
+
+    // A member an opted-in base already declares is the base model's, inherited by the derived model
+    // rather than declared again: an override is two declarations in metadata and one member in
+    // reflection, and the server describes it on the base alone (Schema.Declared). Declaring it again
+    // would also hide the inherited member, which the consumer's build warns about.
+    static ImmutableArray<SourceInfo>.Builder WithoutInheritedMembers(ImmutableArray<SourceInfo>.Builder sources)
+    {
+        var byModel = new Dictionary<string, SourceInfo>(StringComparer.Ordinal);
+        foreach (var source in sources)
+        {
+            byModel[source.ModelName] = source;
+        }
+
+        for (var i = 0; i < sources.Count; i++)
+        {
+            var source = sources[i];
+            if (source.BaseModelName is not { } baseName ||
+                !byModel.TryGetValue(baseName, out var baseSource))
+            {
+                continue;
+            }
+
+            var inherited = new HashSet<string>(Inherited(baseSource, byModel).Select(_ => _.Name), StringComparer.Ordinal);
+            sources[i] = source with
+            {
+                Properties = new(source.Properties.Where(_ => !inherited.Contains(_.Name)).ToImmutableArray())
+            };
+        }
+
+        return sources;
     }
 
     static PropertyInfo? Classify(
@@ -466,7 +557,7 @@ static class MetadataModelReader
     /// </remarks>
     static string? ObsoleteOf(
         MetadataReader reader,
-        CustomAttributeHandleCollection attributes,
+        IEnumerable<CustomAttributeHandle> attributes,
         SignatureDecoder decoder)
     {
         foreach (var handle in attributes)
@@ -525,7 +616,7 @@ static class MetadataModelReader
                (attributes & MethodAttributes.Static) == 0;
     }
 
-    static bool HasAttribute(MetadataReader reader, CustomAttributeHandleCollection attributes, string fullName)
+    static bool HasAttribute(MetadataReader reader, IEnumerable<CustomAttributeHandle> attributes, string fullName)
     {
         foreach (var handle in attributes)
         {

@@ -27,7 +27,7 @@ public class Contract
     public byte[]? Document { get; set; }
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L353-L366' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentMember' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L390-L403' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentMember' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The check that authorizes it:
@@ -45,7 +45,7 @@ public sealed class UnsealedContractsPolicy :
         context.KeyValues is not [SealedId];
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L372-L382' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L409-L419' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Registered by the attribute above, or in code:

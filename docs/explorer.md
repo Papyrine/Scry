@@ -346,6 +346,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Model: HolidayQueryModel
     },
     {
+      Name: Invoice,
+      Kind: Entity,
+      Model: InvoiceQueryModel
+    },
+    {
       Name: Order,
       Kind: Entity,
       Model: OrderQueryModel
@@ -686,6 +691,66 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        }
+      ],
+      IsSensitive: false
+    },
+    {
+      Model: InvoiceQueryModel,
+      Members: [
+        {
+          Name: CreatedBy,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Notes,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Number,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Tags,
+          TypeDisplay: global::System.Collections.Generic.IReadOnlyList<string>,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: true,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Weights,
+          TypeDisplay: global::System.Collections.Generic.IReadOnlyList<int>,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: true,
           IsAttachment: false,
           IsSensitive: false
         }
@@ -1144,10 +1209,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: oduMLTlJKcDJA8pG
+  SchemaStamp: qwPBC1rKusKBcd7j
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L845' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L910' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names, member names with the exact C# type spelling the source generator would emit, and the re-emitted enums. It carries **no** policies, resolvers, connection details, or CLR internals.
