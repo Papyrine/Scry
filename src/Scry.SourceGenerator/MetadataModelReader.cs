@@ -16,6 +16,7 @@ static class MetadataModelReader
     const string binaryTransferAttribute = "Scry.BinaryTransferAttribute";
     const string keyAttribute = "System.ComponentModel.DataAnnotations.KeyAttribute";
     const string sensitiveAttribute = "Scry.SensitiveAttribute";
+    const string flagsAttribute = "System.FlagsAttribute";
 
     public static ModelExtract Read(string? dllPath)
     {
@@ -324,18 +325,48 @@ static class MetadataModelReader
             return name;
         }
 
+        // Each member's value is read with its name: re-emitted without it, every member past the
+        // first explicit one would hold a different value from the model's. Must stay in lockstep
+        // with Schema.DescribeEnum, which describes the same enum by reflection.
         var members = ImmutableArray.CreateBuilder<string>();
+        var values = ImmutableArray.CreateBuilder<string>();
+        var underlying = "int";
         foreach (var fieldHandle in definition.GetFields())
         {
             var field = reader.GetFieldDefinition(fieldHandle);
-            if ((field.Attributes & FieldAttributes.Literal) != 0)
+            if ((field.Attributes & FieldAttributes.Literal) == 0)
             {
-                members.Add(reader.GetString(field.Name));
+                continue;
             }
+
+            members.Add(reader.GetString(field.Name));
+            var (keyword, value) = ReadConstant(reader, reader.GetConstant(field.GetDefaultValue()));
+            underlying = keyword;
+            values.Add(value);
         }
 
-        enums[name] = new(name, new(members.ToImmutable()));
+        var flags = HasAttribute(reader, definition.GetCustomAttributes(), flagsAttribute);
+        enums[name] = new(name, underlying, flags, new(members.ToImmutable()), new(values.ToImmutable()));
         return name;
+    }
+
+    // An enum member's constant, as the keyword of its type and the decimal the declaration spells.
+    static (string Keyword, string Value) ReadConstant(MetadataReader reader, Constant constant)
+    {
+        var blob = reader.GetBlobReader(constant.Value);
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        return constant.TypeCode switch
+        {
+            ConstantTypeCode.SByte => ("sbyte", blob.ReadSByte().ToString(culture)),
+            ConstantTypeCode.Byte => ("byte", blob.ReadByte().ToString(culture)),
+            ConstantTypeCode.Int16 => ("short", blob.ReadInt16().ToString(culture)),
+            ConstantTypeCode.UInt16 => ("ushort", blob.ReadUInt16().ToString(culture)),
+            ConstantTypeCode.Int32 => ("int", blob.ReadInt32().ToString(culture)),
+            ConstantTypeCode.UInt32 => ("uint", blob.ReadUInt32().ToString(culture)),
+            ConstantTypeCode.Int64 => ("long", blob.ReadInt64().ToString(culture)),
+            ConstantTypeCode.UInt64 => ("ulong", blob.ReadUInt64().ToString(culture)),
+            _ => throw new NotSupportedException($"An enum member of constant type '{constant.TypeCode}' is not supported.")
+        };
     }
 
     static bool TryClassify(

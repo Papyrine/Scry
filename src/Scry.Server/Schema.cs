@@ -158,8 +158,13 @@ sealed class Schema
         return SchemaStamp.Compute(
             sourceInfos.Select(_ => (_.Name, _.Kind, _.Model)).ToList(),
             typeInfos.Select(_ => (_.Model, _.Base, StampMembers(_))).ToList(),
-            enumInfos.Select(_ => (_.Name, _.Values.ToList())).ToList());
+            enumInfos.Select(_ => (_.Name, _.Underlying, _.IsFlags, StampEnumMembers(_))).ToList());
     }
+
+    static List<(string Name, string Value)> StampEnumMembers(ScryEnumInfo enumeration) =>
+        enumeration.Values
+            .Zip(enumeration.Constants!, (name, value) => (name, value))
+            .ToList();
 
     /// <summary>
     /// The members a type contributes to the stamp: its own, plus — for one carrying an attachment —
@@ -328,7 +333,7 @@ sealed class Schema
 
         if (actual.IsEnum)
         {
-            enums.TryAdd(actual.Name, new(actual.Name, Enum.GetNames(actual)));
+            enums.TryAdd(actual.Name, DescribeEnum(actual));
             return nullable ? $"{actual.Name}?" : actual.Name;
         }
 
@@ -370,6 +375,21 @@ sealed class Schema
 
     // Mirrors MetadataModelReader's PrimitiveKeyword + ScalarKeyword so introspection type displays
     // are identical to generated code.
+    // Names and values come back in the same order from both calls, so they pair positionally. The
+    // value is spelled as the metadata side spells it — the underlying integer, invariant culture —
+    // since the two descriptions have to hash identically. Must stay in lockstep with
+    // MetadataModelReader.CollectEnum.
+    static ScryEnumInfo DescribeEnum(Type type) =>
+        new(type.Name, Enum.GetNames(type))
+        {
+            Constants = Enum.GetValuesAsUnderlyingType(type)
+                .Cast<object>()
+                .Select(_ => Convert.ToString(_, CultureInfo.InvariantCulture)!)
+                .ToList(),
+            IsFlags = type.IsDefined(typeof(FlagsAttribute), inherit: false),
+            Underlying = ScalarDisplay(Enum.GetUnderlyingType(type))
+        };
+
     static string ScalarDisplay(Type type) =>
         type.FullName switch
         {

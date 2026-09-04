@@ -48,6 +48,45 @@ public class GeneratorTests
     }
 
     [Test]
+    public Task EnumValuesUnderlyingTypeAndFlags()
+    {
+        // Re-emitted with the values the model declares, its underlying type, and [Flags]: numbered by
+        // position instead, Remote would be 3, and a combined flag — which travels by name — would
+        // resolve to the wrong member on one side.
+        const string model = """
+            using System;
+            using Scry;
+
+            namespace Sample.Model;
+
+            [Flags]
+            public enum Perks : byte
+            {
+                None = 0,
+                Parking = 1,
+                Gym = 2,
+                Remote = 4
+            }
+
+            public enum Priority
+            {
+                Low = 10,
+                High = 20
+            }
+
+            [Queryable]
+            public class Employee
+            {
+                public int Id { get; set; }
+                public Perks Perks { get; set; }
+                public Priority? Priority { get; set; }
+            }
+            """;
+
+        return VerifyGenerated(model);
+    }
+
+    [Test]
     public Task Hierarchy()
     {
         // Vehicle opts in and so inherits the base model, declaring only its own members. Artwork

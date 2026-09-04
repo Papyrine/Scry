@@ -6,7 +6,7 @@ namespace Scry.Generated;
 
 public enum Grade
 {
-    Low,
-    High,
+    Low = 0,
+    High = 1,
 }
 

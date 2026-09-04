@@ -28,14 +28,20 @@ public static class ModelSynthesizer
 
         foreach (var enumeration in introspection.Enums)
         {
-            builder.AppendLine(
-                $$"""
-                public enum {{enumeration.Name}}
-                {
-                """);
-            foreach (var value in enumeration.Values)
+            // Mirrors ScryGenerator.EmitEnums: the values, the underlying type and [Flags] decide
+            // what a member means, so a snippet's constants have to resolve as generated code's do.
+            if (enumeration.IsFlags)
             {
-                builder.AppendLine($"    {value},");
+                builder.AppendLine("[global::System.Flags]");
+            }
+
+            var underlying = enumeration.Underlying == "int" ? "" : $" : {enumeration.Underlying}";
+            builder.AppendLine($"public enum {enumeration.Name}{underlying}");
+            builder.AppendLine("{");
+            for (var i = 0; i < enumeration.Values.Count; i++)
+            {
+                var value = enumeration.Constants is { } constants ? $" = {constants[i]}" : "";
+                builder.AppendLine($"    {enumeration.Values[i]}{value},");
             }
 
             builder.AppendLine("}");

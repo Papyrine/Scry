@@ -799,14 +799,28 @@
         Parking,
         Gym,
         Remote
-      ]
+      ],
+      Constants: [
+        0,
+        1,
+        2,
+        4
+      ],
+      IsFlags: true,
+      Underlying: int
     },
     {
       Name: Priority,
       Values: [
         Low,
         High
-      ]
+      ],
+      Constants: [
+        0,
+        1
+      ],
+      IsFlags: false,
+      Underlying: int
     },
     {
       Name: Status,
@@ -814,11 +828,18 @@
         FullTime,
         PartTime,
         Contractor
-      ]
+      ],
+      Constants: [
+        0,
+        1,
+        2
+      ],
+      IsFlags: false,
+      Underlying: int
     }
   ],
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: fe-JX0apjyRGkUkR
+  SchemaStamp: oduMLTlJKcDJA8pG
 }

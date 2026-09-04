@@ -6,8 +6,8 @@ namespace Scry.Generated;
 
 public enum Status
 {
-    FullTime,
-    PartTime,
-    Contractor,
+    FullTime = 0,
+    PartTime = 1,
+    Contractor = 2,
 }
 

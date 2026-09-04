@@ -147,7 +147,7 @@ public sealed class ScryQuery
     /// A hash of the queryable surface this client was generated against. Attached to each
     /// request so the server can identify a client generated against a different model.
     /// </summary>
-    public const string SchemaStamp = "8PyMxab6ClGyNIDQ";
+    public const string SchemaStamp = "wD-O0DfMZ_zvEg8p";
 
     readonly global::Scry.ScryClient client;
 
@@ -701,7 +701,7 @@ flowchart TD
 
 `bool`, `char`, `sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `float`, `double`, `decimal`, `string`, `DateTime`, `DateOnly`, `TimeOnly`, `DateTimeOffset`, `TimeSpan`, `Guid`, `byte[]`, and any `enum` — plus the `Nullable<>` form of each value type.
 
-An `enum` used by an exposed member is re-emitted into the generated client code (as `ScryEnums.g.cs`), so the client can compare against it without referencing the model.
+An `enum` used by an exposed member is re-emitted into the generated client code (as `ScryEnums.g.cs`), so the client can compare against it without referencing the model. The members' values, the underlying type, and `[Flags]` are carried across, so a member means the same on both sides — including a combined flag, which travels by name and resolves through those values.
 
 Scalars can be used in predicates, ordering keys, group keys, aggregate selectors, and projection leaves.
 

@@ -171,9 +171,9 @@ namespace Scry.Generated;
 
 public enum Status
 {
-    FullTime,
-    PartTime,
-    Contractor,
+    FullTime = 0,
+    PartTime = 1,
+    Contractor = 2,
 }
 ```
 <sup><a href='/src/Scry.SourceGenerator.Tests/GeneratorTests.EntitiesViewPocoAndEnum%23ScryEnums.g.verified.cs#L1-L13' title='Snippet source file'>snippet source</a> | <a href='#snippet-GeneratorTests.EntitiesViewPocoAndEnum#ScryEnums.g.verified.cs' title='Start of snippet'>anchor</a></sup>
@@ -202,7 +202,7 @@ public sealed class ScryQuery
     /// A hash of the queryable surface this client was generated against. Attached to each
     /// request so the server can identify a client generated against a different model.
     /// </summary>
-    public const string SchemaStamp = "2iosRX6CXtpmJbM0";
+    public const string SchemaStamp = "zzQQ3191-q-LlvCa";
 
     readonly global::Scry.ScryClient client;
 
@@ -253,7 +253,7 @@ builder.Services.AddScoped<ScryQuery>();
 | `byte[]` | `byte[]` (with ` = null!;`) |
 | `decimal` | `decimal` |
 | `DateTime`, `DateOnly`, `TimeOnly`, `DateTimeOffset`, `TimeSpan`, `Guid` | `global::System.X` |
-| an `enum` | the enum name, re-emitted into `ScryEnums.g.cs` |
+| an `enum` | the enum name, its members with their values, its underlying type, and `[Flags]`, re-emitted into `ScryEnums.g.cs` |
 | another opted-in type | `{Type}QueryModel?` |
 | a nullable value type | the above with `?` |
 | anything else | omitted |

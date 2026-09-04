@@ -26,12 +26,14 @@ static class SchemaStamp
     public static string Compute(
         List<(string Name, string Kind, string Model)> sources,
         List<(string Model, string? Base, List<(string Name, string Type)> Members)> types,
-        List<(string Name, List<string> Members)> enums)
+        List<(string Name, string Underlying, bool Flags, List<(string Name, string Value)> Members)> enums)
     {
         var builder = new StringBuilder();
         // Versions the canonical form itself, so a future change to what is hashed cannot silently
-        // collide with stamps produced by the old form.
-        builder.Append("scry-schema-v1\n");
+        // collide with stamps produced by the old form. v2 added each enum member's value, the
+        // underlying type, and [Flags]: a value that moved changes what a re-emitted member means,
+        // which a client generated before the move has no way to notice otherwise.
+        builder.Append("scry-schema-v2\n");
 
         sources.Sort((left, right) => string.CompareOrdinal(left.Name, right.Name));
         foreach (var (name, kind, model) in sources)
@@ -53,13 +55,13 @@ static class SchemaStamp
         }
 
         enums.Sort((left, right) => string.CompareOrdinal(left.Name, right.Name));
-        foreach (var (name, members) in enums)
+        foreach (var (name, underlying, flags, members) in enums)
         {
-            builder.Append($"enum {name}\n");
-            members.Sort(string.CompareOrdinal);
-            foreach (var member in members)
+            builder.Append(flags ? $"enum {name} : {underlying} flags\n" : $"enum {name} : {underlying}\n");
+            members.Sort((left, right) => string.CompareOrdinal(left.Name, right.Name));
+            foreach (var (member, value) in members)
             {
-                builder.Append($"  {member}\n");
+                builder.Append($"  {member} = {value}\n");
             }
         }
 

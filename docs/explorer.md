@@ -1102,14 +1102,28 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
         Parking,
         Gym,
         Remote
-      ]
+      ],
+      Constants: [
+        0,
+        1,
+        2,
+        4
+      ],
+      IsFlags: true,
+      Underlying: int
     },
     {
       Name: Priority,
       Values: [
         Low,
         High
-      ]
+      ],
+      Constants: [
+        0,
+        1
+      ],
+      IsFlags: false,
+      Underlying: int
     },
     {
       Name: Status,
@@ -1117,16 +1131,23 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
         FullTime,
         PartTime,
         Contractor
-      ]
+      ],
+      Constants: [
+        0,
+        1,
+        2
+      ],
+      IsFlags: false,
+      Underlying: int
     }
   ],
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: fe-JX0apjyRGkUkR
+  SchemaStamp: oduMLTlJKcDJA8pG
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L824' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L845' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names, member names with the exact C# type spelling the source generator would emit, and the re-emitted enums. It carries **no** policies, resolvers, connection details, or CLR internals.

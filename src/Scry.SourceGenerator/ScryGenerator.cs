@@ -346,14 +346,22 @@ public class ScryGenerator :
         var builder = Header();
         foreach (var enumeration in enums)
         {
-            builder.AppendLine(
-                $$"""
-                public enum {{enumeration.Name}}
-                {
-                """);
-            foreach (var member in enumeration.Members)
+            // Values, the underlying type and [Flags] are carried across so a member means on the
+            // client exactly what it means on the server — a combined flag travels by name, and the
+            // name it resolves to is decided by these.
+            if (enumeration.IsFlags)
             {
-                builder.AppendLine($"    {member},");
+                builder.AppendLine("[global::System.Flags]");
+            }
+
+            var underlying = enumeration.Underlying == "int" ? "" : $" : {enumeration.Underlying}";
+            builder.AppendLine($"public enum {enumeration.Name}{underlying}");
+            builder.AppendLine("{");
+            var members = enumeration.Members.ToList();
+            var values = enumeration.Values.ToList();
+            for (var i = 0; i < members.Count; i++)
+            {
+                builder.AppendLine($"    {members[i]} = {values[i]},");
             }
 
             builder.AppendLine("}");
@@ -428,7 +436,11 @@ public class ScryGenerator :
             .Select(_ => (_.ModelName, _.BaseModelName, StampMembers(_)))
             .ToList();
         var enums = extract.Enums
-            .Select(_ => (_.Name, _.Members.ToList()))
+            .Select(_ => (
+                _.Name,
+                _.Underlying,
+                _.IsFlags,
+                _.Members.ToList().Zip(_.Values.ToList(), (name, value) => (name, value)).ToList()))
             .ToList();
         return SchemaStamp.Compute(sources, types, enums);
     }
