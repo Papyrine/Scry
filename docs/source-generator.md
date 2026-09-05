@@ -59,7 +59,7 @@ Everything else is supplied by the `buildTransitive/Scry.Client.targets` file th
 
 <Target Name="ComputeScryStamp"
         AfterTargets="ResolveProjectReferences"
-        BeforeTargets="GenerateMSBuildEditorConfig;CoreCompile"
+        BeforeTargets="GenerateMSBuildEditorConfigFile;CoreCompile"
         Condition="'$(ScryModelDll)' != '' and Exists('$(ScryModelDll)')">
   <GetFileHash Files="$(ScryModelDll)" Algorithm="SHA256">
     <Output TaskParameter="Hash" PropertyName="ScryModelStamp" />
@@ -122,7 +122,7 @@ When referencing the projects directly (as the sample and integration tests do),
 
 <Target Name="ComputeScryStamp"
         AfterTargets="ResolveProjectReferences"
-        BeforeTargets="GenerateMSBuildEditorConfig;CoreCompile"
+        BeforeTargets="GenerateMSBuildEditorConfigFile;CoreCompile"
         Condition="Exists('$(ScryModelDll)')">
   <GetFileHash Files="$(ScryModelDll)" Algorithm="SHA256">
     <Output TaskParameter="Hash" PropertyName="ScryModelStamp" />

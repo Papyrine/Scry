@@ -279,7 +279,7 @@ The client half — re-asking with `If-None-Match` and replaying what the 304 st
 
 <Target Name="ComputeScryStamp"
         AfterTargets="ResolveProjectReferences"
-        BeforeTargets="GenerateMSBuildEditorConfig;CoreCompile"
+        BeforeTargets="GenerateMSBuildEditorConfigFile;CoreCompile"
         Condition="Exists('$(ScryModelDll)')">
   <GetFileHash Files="$(ScryModelDll)" Algorithm="SHA256">
     <Output TaskParameter="Hash" PropertyName="ScryModelStamp" />

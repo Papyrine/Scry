@@ -38,7 +38,7 @@
 
   <Target Name="ComputeScryStamp"
           AfterTargets="ResolveProjectReferences"
-          BeforeTargets="GenerateMSBuildEditorConfig;CoreCompile"
+          BeforeTargets="GenerateMSBuildEditorConfigFile;CoreCompile"
           Condition="Exists('$(ScryModelDll)')">
     <GetFileHash Files="$(ScryModelDll)" Algorithm="SHA256">
       <Output TaskParameter="Hash" PropertyName="ScryModelStamp" />
