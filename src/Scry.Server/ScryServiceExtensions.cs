@@ -89,12 +89,13 @@ public static class ScryServiceExtensions
     {
         if (options.QueryFreshness is null ||
             options.CacheScope is not null ||
-            processor.PolicedSource is not { } source)
+            processor.CallerDependentSources.FirstOrDefault() is not { Source: { } source } dependence)
         {
             return;
         }
 
-        throw new($"'{source}' carries a policy, so its rows depend on who asked — and a cached response identified by a URL does not say who that was. Set ScryOptions.CacheScope to what such a response belongs to (a tenant, a principal), or leave ScryOptions.QueryFreshness unset to answer nothing conditionally.");
+        var hint = dependence.Hint is null ? "" : $" {dependence.Hint}";
+        throw new($"'{source}' {dependence.Why} — and a cached response identified by a URL does not say who that was. Set ScryOptions.CacheScope to what such a response belongs to (a tenant, a principal), or leave ScryOptions.QueryFreshness unset to answer nothing conditionally.{hint}");
     }
 
     sealed class Endpoints(IReadOnlyList<IEndpointConventionBuilder> builders) :

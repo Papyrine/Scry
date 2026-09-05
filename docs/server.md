@@ -249,6 +249,8 @@ options.AddPocoSource<Holiday>(services =>
     services.GetRequiredService<IHolidayFeed>().Current());
 ```
 
+A factory is given the request's services and may answer by who asked, so a source registered this way counts as one whose rows depend on the caller: with [`QueryFreshness`](caching.md) set, `MapScry` refuses to start until `CacheScope` says what a cached response belongs to. Data that is the same for every caller is registered as the collection itself, which asks nothing of the caller.
+
 The registered sequence is wrapped with `AsQueryable()`, so the pipeline runs in memory over LINQ to<!-- include: poco-in-memory. path: /docs/includes/poco-in-memory.include.md -->
 Objects with the same validation, shaping, and limits as a database source. The string functions run
 ordinally there — a prefix, a suffix, a search, a casing, a three-way comparison — so an answer does not

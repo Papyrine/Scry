@@ -27,5 +27,11 @@ public sealed class ScrySource(
     /// </summary>
     public Type? AttachmentPolicy { get; init; }
 
+    /// <summary>
+    /// Whether the rows are supplied by a factory given the request's services — a POCO source
+    /// registered that way — and so may depend on who asked, as a policied source's do.
+    /// </summary>
+    public bool FactorySupplied { get; init; }
+
     public Func<DbContext, IServiceProvider, IQueryable> Resolve { get; } = resolve;
 }

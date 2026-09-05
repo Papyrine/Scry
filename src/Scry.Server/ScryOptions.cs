@@ -128,9 +128,10 @@ public sealed class ScryOptions(Type contextType)
     /// </summary>
     /// <remarks>
     /// Without it, two callers asking the same question share an <c>ETag</c> — and a cache that holds
-    /// one caller's rows will hand them to the next. A server with a row or attachment policy
-    /// therefore has to set this before <see cref="QueryFreshness"/> is honoured; <c>MapScry</c>
-    /// refuses to start otherwise, since the alternative is a leak that only shows up in production.
+    /// one caller's rows will hand them to the next. A server with a row or attachment policy, or a
+    /// POCO source supplied by a factory, therefore has to set this before <see cref="QueryFreshness"/>
+    /// is honoured; <c>MapScry</c> refuses to start otherwise, since the alternative is a leak that
+    /// only shows up in production.
     /// </remarks>
     public Func<HttpContext, string?>? CacheScope { get; set; }
 
@@ -196,17 +197,34 @@ public sealed class ScryOptions(Type contextType)
 
     internal Dictionary<Type, Func<IServiceProvider, IQueryable>> PocoSources { get; } = [];
 
+    // The POCO sources supplied by a factory, which is given the request's services and so may
+    // answer by who asked.
+    internal HashSet<Type> FactoryPocoSources { get; } = [];
+
     internal Dictionary<Type, (Type Policy, DeniedRowHandling Handling)> Policies { get; } = [];
 
     /// <summary>Registers the data for a <c>[QueryablePoco]</c> source, resolved per request.</summary>
+    /// <remarks>
+    /// The factory is given the request's services and may answer by who asked, so a source
+    /// registered this way counts as one whose rows depend on the caller: with
+    /// <see cref="QueryFreshness"/> set, <c>MapScry</c> refuses to start until <see cref="CacheScope"/>
+    /// says what a cached response belongs to. Data that is the same for every caller is registered
+    /// as the collection itself, which asks nothing of the caller.
+    /// </remarks>
     public void AddPocoSource<T>(Func<IServiceProvider, IEnumerable<T>> factory)
-        where T : class =>
+        where T : class
+    {
         PocoSources[typeof(T)] = services => factory(services).AsQueryable();
+        FactoryPocoSources.Add(typeof(T));
+    }
 
     /// <summary>Registers a fixed in-memory <c>[QueryablePoco]</c> source.</summary>
     public void AddPocoSource<T>(IEnumerable<T> items)
-        where T : class =>
-        AddPocoSource(_ => items);
+        where T : class
+    {
+        PocoSources[typeof(T)] = _ => items.AsQueryable();
+        FactoryPocoSources.Remove(typeof(T));
+    }
 
     /// <summary>
     /// Attaches a row/instance policy to an entity, replacing any <c>[ReturnableWith]</c> on that same

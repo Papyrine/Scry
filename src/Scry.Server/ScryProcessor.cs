@@ -28,7 +28,7 @@ public sealed class ScryProcessor
     /// or null where no source does. Read at startup to refuse a caching setup that would hand one
     /// caller's rows to the next.
     /// </summary>
-    internal string? PolicedSource => schema.PolicedSource;
+    internal IEnumerable<CallerDependence> CallerDependentSources => schema.CallerDependentSources;
 
     /// <summary>Describes the allow-listed query surface for tooling (the query explorer).</summary>
     public ScryIntrospection Describe() => schema.Describe(options);

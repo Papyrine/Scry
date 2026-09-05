@@ -68,15 +68,31 @@ sealed class Schema
     internal IEnumerable<TypeMeta> Types => types.Values;
 
     /// <summary>
-    /// The first source whose rows depend on who asked, or null where none does. Ordered by name so a
-    /// startup message names the same one every run.
+    /// The sources whose rows may depend on who asked, each with why: one carrying a row or
+    /// attachment policy, and a POCO source supplied by a factory, which is given the request's
+    /// services. Ordered by name so a startup message names the same one every run.
     /// </summary>
-    internal string? PolicedSource =>
-        sources.Values
-            .Where(_ => _.Policies.Count > 0 || _.AttachmentPolicy is not null)
-            .OrderBy(_ => _.Name, StringComparer.Ordinal)
-            .FirstOrDefault()
-            ?.Name;
+    internal IEnumerable<CallerDependence> CallerDependentSources
+    {
+        get
+        {
+            foreach (var source in sources.Values.OrderBy(_ => _.Name, StringComparer.Ordinal))
+            {
+                if (source.Policies.Count > 0 ||
+                    source.AttachmentPolicy is not null)
+                {
+                    yield return new(source.Name, "carries a policy, so its rows depend on who asked", Hint: null);
+                }
+                else if (source.FactorySupplied)
+                {
+                    yield return new(
+                        source.Name,
+                        "is supplied by a factory, which is given the request's services and may answer by who asked",
+                        "Data that is the same for every caller is registered as the collection itself, which asks nothing of the caller.");
+                }
+            }
+        }
+    }
 
     /// <summary>
     /// Maps an enum value name off the wire to its current name, translating one a client was
@@ -534,7 +550,8 @@ sealed class Schema
 
             var source = new ScrySource(name, type, kind, policies, BuildResolver(type, kind, options))
             {
-                AttachmentPolicy = ResolveAttachmentPolicy(schema, type, name, kind, options)
+                AttachmentPolicy = ResolveAttachmentPolicy(schema, type, name, kind, options),
+                FactorySupplied = kind == SourceKind.Poco && options.FactoryPocoSources.Contains(type)
             };
             schema.sources[name] = source;
             schema.sourcesByType[type] = source;

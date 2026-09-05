@@ -118,7 +118,7 @@ builder.Services
 
 `QueryFreshness` is what the rows are current as of. Null — the default — writes no `ETag` and answers nothing conditionally, so a server that never sets it behaves exactly as it did before any of this existed. Returning null from it skips one request rather than turning the feature off, so a source that cannot answer right now degrades to a full response.
 
-`CacheScope` is who a cached response belongs to. It is not optional where it matters: if any source carries a [row policy](policies.md) or an [attachment policy](attachments.md), its rows depend on who asked while its URL says nothing about that, and `MapScry` **refuses to start** until the host has said what a cached response is scoped to. The failure is loud at startup because the alternative is silent in production — a browser profile outlives a sign-out, so the next identity revalidates, matches, and is handed the previous one's rows.
+`CacheScope` is who a cached response belongs to. It is not optional where it matters: if any source carries a [row policy](policies.md) or an [attachment policy](attachments.md), or a [POCO source](server.md#poco-sources) is supplied by a factory, its rows depend on who asked while its URL says nothing about that, and `MapScry` **refuses to start** until the host has said what a cached response is scoped to. The failure is loud at startup because the alternative is silent in production — a browser profile outlives a sign-out, so the next identity revalidates, matches, and is handed the previous one's rows.
 
 
 ### The freshness source
