@@ -24,6 +24,17 @@ public sealed class TabStore
             Query = initialQuery
         });
 
+    /// <summary>Back to one tab carrying the seeded query — what clearing the stored data does.</summary>
+    public void Reset(string initialQuery = "")
+    {
+        tabs.Clear();
+        tabs.Add(new()
+        {
+            Query = initialQuery
+        });
+        ActiveIndex = 0;
+    }
+
     public void Add(string query = "")
     {
         tabs.Add(new()

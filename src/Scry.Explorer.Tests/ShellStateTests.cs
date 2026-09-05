@@ -22,6 +22,24 @@ public class ShellStateTests
     }
 
     // An explorer with no tab has nowhere to type.
+    // Clearing the stored data resets the tabs with it: the keys alone being removed left the open
+    // tabs in memory, and the next save wrote them straight back.
+    [Test]
+    public void ResetsToOneTabCarryingTheSeededQuery()
+    {
+        var tabs = new TabStore("Query.Employee");
+        tabs.Add("Query.Department");
+        tabs.Add("Query.Order");
+        tabs.Rename(0, "First");
+
+        tabs.Reset("Query.Employee");
+
+        Assert.That(tabs.Tabs, Has.Count.EqualTo(1));
+        Assert.That(tabs.Active.Query, Is.EqualTo("Query.Employee"));
+        Assert.That(tabs.Active.Title, Is.Null);
+        Assert.That(tabs.ActiveIndex, Is.Zero);
+    }
+
     [Test]
     public void RefusesToCloseTheLastTab()
     {

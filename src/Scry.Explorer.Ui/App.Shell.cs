@@ -239,12 +239,28 @@ public partial class App
         await ApplyTheme();
     }
 
-    void ClearStorage()
+    // Forgets the stored data and the state it came from, together. Removing the keys alone left the
+    // tabs, the pane sizes, the plugin, and the theme in memory as they were, and the next save — any
+    // keystroke, tab switch, or pane drag — wrote every one of them straight back.
+    async Task ClearStorage()
     {
         storage.Clear();
         storage.RawRemove(ThemeKey);
         storage.RawRemove(HistoryStore.LegacyKey);
         history.Load(null);
+
+        tabs.Reset(Sample);
+        pluginPane.Reset();
+        sessionPane.Reset();
+        wirePane.Reset();
+        visiblePlugin = PluginKind.Schema;
+        wireExpanded = true;
+        themeMode = "system";
+        await Retint();
+
+        // Through the editor, as a tab switch goes: it holds the text, and the sample it is given
+        // now is what the shell restores to on the next visit.
+        await LoadActiveTab();
     }
 
     // ---- Schema ----

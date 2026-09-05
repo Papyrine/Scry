@@ -609,13 +609,24 @@ public partial class App
         return ApplyTheme();
     }
 
+    // Stores the chosen theme and retints for it.
+    Task ApplyTheme()
+    {
+        if (JS is IJSInProcessRuntime)
+        {
+            storage.RawSet(ThemeKey, themeMode);
+        }
+
+        return Retint();
+    }
+
     // Retints the page and the editor together: the page follows data-theme, Monaco follows its own
-    // registered theme, and the two have to be set from the same decision or they disagree.
-    async Task ApplyTheme()
+    // registered theme, and the two have to be set from the same decision or they disagree. Apart
+    // from storing the choice, so that forgetting the stored data can retint without writing.
+    async Task Retint()
     {
         if (JS is IJSInProcessRuntime js)
         {
-            storage.RawSet(ThemeKey, themeMode);
             js.InvokeVoid("scry.setDataTheme", themeMode);
             resolvedDark = ResolveDark(js);
         }

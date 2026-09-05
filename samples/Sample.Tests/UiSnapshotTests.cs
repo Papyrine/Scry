@@ -1320,8 +1320,10 @@ public class UiSnapshotTests :
         Assert.That(status, Does.Contain("ms"));
     }
 
-    // The settings dialog's Clear removes the explorer's own keys and nothing else on the origin. Its
-    // own page, because it empties the storage every other test is reading.
+    // The settings dialog's Clear removes the explorer's own keys and nothing else on the origin — and
+    // resets what those keys came from, so a second tab, a dark theme, and the query being edited do
+    // not sit in memory waiting for the next save to write them all back. Its own page, because it
+    // empties the storage every other test is reading.
     [Test]
     public async Task ExplorerClearsOnlyItsOwnStoredData()
     {
@@ -1330,14 +1332,36 @@ public class UiSnapshotTests :
 
         await page.EvaluateAsync("() => localStorage.setItem('someone-elses-key', 'keep me')");
         await RunQueryAsync(page, "Query.Employee.OrderBy(_ => _.Name).Select(_ => new { _.Name })", 1);
+        await page.Locator("[data-testid='tab-add']").ClickAsync();
+        await page.SetEditorValueAsync("Query.Department");
+        await Assertions.Expect(page.Locator("[data-testid='tab']")).ToHaveCountAsync(2);
 
         await page.Locator("[data-testid='rail-settings']").ClickAsync();
+        await page.Locator("[data-testid='theme-dark']").ClickAsync();
+        await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-theme", "dark");
         await page.Locator("[data-testid='settings-clear']").ClickAsync();
 
         Assert.That(await StoredHistoryAsync(page), Is.Null);
         Assert.That(
             await page.EvaluateAsync<string>("() => localStorage.getItem('someone-elses-key')"),
             Is.EqualTo("keep me"));
+
+        // The shell is back at its defaults: one tab on the sample, the system theme.
+        await Assertions.Expect(page.Locator("[data-testid='tab']")).ToHaveCountAsync(1);
+        await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-theme", "system");
+        await page.WaitForFunctionAsync(
+            "() => monaco.editor.getEditors()[0].getValue().startsWith('Query.Employee.Where')",
+            null,
+            new() {Timeout = 10_000});
+
+        // And stays there across a reload, which is what the keys being gone is for. Past the persist
+        // window first, so a save the clear itself scheduled has already run.
+        await page.WaitForTimeoutAsync(1000);
+        await page.ReloadAsync();
+        await page.WaitForSelectorAsync("main[data-ready]", 90);
+        await Assertions.Expect(page.Locator("[data-testid='tab']")).ToHaveCountAsync(1);
+        await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-theme", "system");
+        Assert.That(await EditorValueAsync(page), Does.StartWith("Query.Employee.Where"));
     }
 
     // The drag bars are wired once at boot, and the ratio they produce is persisted. Its own page,
