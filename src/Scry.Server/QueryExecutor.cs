@@ -1455,9 +1455,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         db.Model.FindEntityType(elementType)?.FindProperty(member) is { IsNullable: false };
 
     byte[] SigningKey() =>
-        options.CursorSigningKey ?? ephemeralSigningKey;
+        options.CursorKey ?? ephemeralSigningKey;
 
-    // Used when no CursorSigningKey is configured: cursors are valid only within this process's lifetime.
+    // Used when no CursorKey is configured: cursors are valid only within this process's lifetime.
     static readonly byte[] ephemeralSigningKey = RandomNumberGenerator.GetBytes(32);
 
     static Terminal Scalar(object? value) =>
