@@ -99,6 +99,19 @@ static class ExpressionRules
             return;
         }
 
+        // Equals is == spelled as a method, and the translator carries it as that comparison over any
+        // operands — one on an instance, two on a static — refused by the comparison's own rules when
+        // either is not a value. So it is clean on every owner, a Guid or an enum or a TimeSpan
+        // included, not only the ones with functions of their own. The overloads taking a
+        // StringComparison are not this: they ask for a case sensitivity, which is the string
+        // surface's to answer below.
+        if (method.Name == "Equals" &&
+            !TakesComparison(method) &&
+            method.Parameters.Length == (method.IsStatic ? 2 : 1))
+        {
+            return;
+        }
+
         if (Owner(method.ContainingType) is { } owner)
         {
             if (SupportedLinq.IsFunction(owner, method.Name, method.Parameters.Length))
@@ -207,6 +220,19 @@ static class ExpressionRules
             context.ReportDiagnostic(
                 Diagnostic.Create(LinqDiagnostics.FormattedToString, part.Syntax.GetLocation()));
         }
+    }
+
+    static bool TakesComparison(IMethodSymbol method)
+    {
+        foreach (var parameter in method.Parameters)
+        {
+            if (parameter.Type.ToDisplayString() == "System.StringComparison")
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // The scalar owners whose members are functions rather than member paths. Everything else — a

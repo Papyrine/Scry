@@ -518,6 +518,24 @@ public class AnalyzerTests
     public void TheGeneratedEntryPointReportsNothing() =>
         Assert.That(Analyze("var orders = client.Source<HandBuilt>(\"Order\");", generated: true), Is.Empty);
 
+    // Equals is == spelled as a method, which the translator carries over any operands. Owners the
+    // callable set has no functions for — a Guid, an enum, a char, a TimeSpan — once read as
+    // client-side code or as a function the set lacks, though the same query ran.
+    [Test]
+    public void EqualsOverAnyScalarIsClean()
+    {
+        const string queries =
+            """
+            await Query.Order.Where(_ => _.Reference.Equals(Guid.Empty)).ToListAsync();
+            await Query.Order.Where(_ => _.Options.Equals(OrderFlags.Rush)).ToListAsync();
+            await Query.Order.Where(_ => _.Tier.Equals('A')).ToListAsync();
+            await Query.Order.Where(_ => _.Lead.Equals(TimeSpan.Zero)).ToListAsync();
+            await Query.Order.Where(_ => _.Id.Equals(1) && Equals(_.Amount, 1m)).ToListAsync();
+            """;
+
+        Assert.That(Analyze(queries), Is.Empty);
+    }
+
     // Ordinary LINQ over an ordinary collection is not Scry's business.
     [Test]
     public void NonScryQueriesAreIgnored()
@@ -653,6 +671,9 @@ public class AnalyzerTests
                 public OrderFlags Options { get; init; }
                 public double Rate { get; init; }
                 public DateTime Placed { get; init; }
+                public Guid Reference { get; init; }
+                public char Tier { get; init; }
+                public TimeSpan Lead { get; init; }
                 public List<OrderLineQueryModel> Lines { get; init; } = [];
             }
 
