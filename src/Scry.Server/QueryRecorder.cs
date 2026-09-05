@@ -64,8 +64,15 @@ sealed class QueryRecorder(
         IServiceProvider services) =>
         new(request: null, request, services, Source(schema, request.Root), streamed: false, sensitive: null);
 
-    static string Source(Schema schema, string root) =>
-        schema.TryGetSource(root, out _) ? root : "(unknown)";
+    static string Source(Schema schema, string root)
+    {
+        if (schema.TryGetSource(root, out _))
+        {
+            return root;
+        }
+
+        return "(unknown)";
+    }
 
     static Activity? StartActivity(string source, QueryRequest? request, AttachmentRequest? attachment)
     {

@@ -374,10 +374,20 @@ public sealed class ScryClient
 
                     if (!IsMarker(line.Span))
                     {
+                        byte[][]? parts;
+                        if (pending.Count > 0)
+                        {
+                            parts = pending.ToArray();
+                        }
+                        else
+                        {
+                            parts = null;
+                        }
+
                         yield return StreamedRow.FromUtf8(line) with
                         {
                             Aliases = aliases,
-                            Parts = pending.Count > 0 ? pending.ToArray() : null
+                            Parts = parts
                         };
                         pending.Clear();
                         continue;

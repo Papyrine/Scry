@@ -46,8 +46,15 @@ static class AttachmentBinder
     }
 
     /// <summary>Binds one row — the streaming and single-result path.</summary>
-    public static T? BindRow<T>(T? row, AttachmentPlan? plan, ScryClient client) =>
-        plan is null || row is null ? row : (T?) Row(row, plan, client);
+    public static T? BindRow<T>(T? row, AttachmentPlan? plan, ScryClient client)
+    {
+        if (plan is null || row is null)
+        {
+            return row;
+        }
+
+        return (T?) Row(row, plan, client);
+    }
 
     static object? Row(object? row, AttachmentPlan plan, ScryClient client)
     {
@@ -155,5 +162,13 @@ static class AttachmentBinder
     static ConstructorInfo? Constructor(Type type) =>
         constructors.GetOrAdd(
             type,
-            _ => _.GetConstructors() is [var single] ? single : null);
+            _ =>
+            {
+                if (_.GetConstructors() is [var single])
+                {
+                    return single;
+                }
+
+                return null;
+            });
 }

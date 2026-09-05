@@ -332,7 +332,12 @@ partial class QueryRenderer
 
         var type = InferType(member, scope) ?? throw Refuse(RenderRefusal.UnresolvedModel);
         var text = RenderNode(member, scope);
-        return Nullable.GetUnderlyingType(type) is null ? text : $"{text}.Value";
+        if (Nullable.GetUnderlyingType(type) is null)
+        {
+            return text;
+        }
+
+        return $"{text}.Value";
     }
 
     static string RenderConst(ConstNode constant, Type? expected)
@@ -344,16 +349,31 @@ partial class QueryRenderer
                 return "null";
 
             case ClrTypeTag.Boolean:
-                return value is "true" or "false" ? value : throw Refuse(RenderRefusal.UnsupportedShape);
+                if (value is "true" or "false")
+                {
+                    return value;
+                }
+
+                throw Refuse(RenderRefusal.UnsupportedShape);
 
             case ClrTypeTag.Int32:
                 return value ?? throw Refuse(RenderRefusal.UnsupportedShape);
 
             case ClrTypeTag.Int64:
-                return value is null ? throw Refuse(RenderRefusal.UnsupportedShape) : $"{value}L";
+                if (value is null)
+                {
+                    throw Refuse(RenderRefusal.UnsupportedShape);
+                }
+
+                return $"{value}L";
 
             case ClrTypeTag.Decimal:
-                return value is null ? throw Refuse(RenderRefusal.UnsupportedShape) : $"{value}m";
+                if (value is null)
+                {
+                    throw Refuse(RenderRefusal.UnsupportedShape);
+                }
+
+                return $"{value}m";
 
             case ClrTypeTag.Double:
                 return value switch

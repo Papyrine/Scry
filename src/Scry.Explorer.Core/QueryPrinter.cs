@@ -84,8 +84,15 @@ public static class QueryPrinter
     /// Formats <paramref name="snippet"/>, or returns it unchanged. For a caller composing a query it
     /// knows parses.
     /// </summary>
-    public static string Format(string snippet) =>
-        TryFormat(snippet, out var formatted, out _) ? formatted : snippet;
+    public static string Format(string snippet)
+    {
+        if (TryFormat(snippet, out var formatted, out _))
+        {
+            return formatted;
+        }
+
+        return snippet;
+    }
 
     // The declarations are kept as written — comments, blank lines and all. Reindenting them would be
     // rewriting a caller's own code to no purpose; the query is what this button is about. Only the

@@ -145,7 +145,17 @@ static class Highlight
         }
 
         var stop = Math.Min(end + 1, text.Length);
-        return Append(builder, text, start, stop, IsKey(text, stop) ? "tok-key" : "tok-str");
+        string kind;
+        if (IsKey(text, stop))
+        {
+            kind = "tok-key";
+        }
+        else
+        {
+            kind = "tok-str";
+        }
+
+        return Append(builder, text, start, stop, kind);
     }
 
     static bool IsKey(string text, int index)

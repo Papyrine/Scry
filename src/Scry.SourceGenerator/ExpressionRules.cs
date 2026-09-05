@@ -280,7 +280,12 @@ static class ExpressionRules
             return name;
         }
 
-        return SupportedLinq.Temporal.Contains(name) ? SupportedLinq.TemporalOwner : null;
+        if (SupportedLinq.Temporal.Contains(name))
+        {
+            return SupportedLinq.TemporalOwner;
+        }
+
+        return null;
     }
 
     // Whether a call touches the row at all, on either side: a string method reads it as its target,

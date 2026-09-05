@@ -45,7 +45,15 @@ static class SensitiveModel
         bySource.AddOrUpdate(
             source,
             _ => [model],
-            (_, known) => known.Contains(model) ? known : [.. known, model]);
+            (_, known) =>
+            {
+                if (known.Contains(model))
+                {
+                    return known;
+                }
+
+                return [.. known, model];
+            });
         Describe(model);
     }
 

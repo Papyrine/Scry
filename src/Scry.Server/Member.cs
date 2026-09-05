@@ -10,7 +10,7 @@ sealed class Member(string name, PropertyInfo property, MemberKind kind)
     /// A collection member's element type; null for every other kind. Derived once here rather than
     /// per request, since finding it means walking the declared type's interfaces.
     /// </summary>
-    public Type? Element { get; } = kind == MemberKind.Collection ? Schema.CollectionElement(property.PropertyType) : null;
+    public Type? Element { get; } = CollectionElement(kind, property);
 
     /// <summary>
     /// The type a path continues on after this member: a collection's element, an optional struct
@@ -18,9 +18,19 @@ sealed class Member(string name, PropertyInfo property, MemberKind kind)
     /// otherwise the declared type itself. The one unwrap every reader of a path applies.
     /// </summary>
     public Type Target { get; } =
-        (kind == MemberKind.Collection ? Schema.CollectionElement(property.PropertyType) : null) ??
+        CollectionElement(kind, property) ??
         Nullable.GetUnderlyingType(property.PropertyType) ??
         property.PropertyType;
+
+    static Type? CollectionElement(MemberKind kind, PropertyInfo property)
+    {
+        if (kind == MemberKind.Collection)
+        {
+            return Schema.CollectionElement(property.PropertyType);
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// Whether the member's values travel as raw multipart parts instead of base64 in JSON. A

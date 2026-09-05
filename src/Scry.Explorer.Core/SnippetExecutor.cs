@@ -165,8 +165,15 @@ public sealed class SnippetExecutor
 
         // The one name this context answers for. Everything else is left to the default context,
         // which is where the snippet's other references already live.
-        protected override Assembly? Load(AssemblyName name) =>
-            name.Name == modelAssembly ? Model : null;
+        protected override Assembly? Load(AssemblyName name)
+        {
+            if (name.Name == modelAssembly)
+            {
+                return Model;
+            }
+
+            return null;
+        }
     }
 
     // Collection-shaping terminals that all enumerate to a list on the wire. Their arguments (key

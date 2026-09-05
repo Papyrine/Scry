@@ -261,10 +261,15 @@ public static class ScryJson
     // An opening marker carrying a newer wire version fails closed as a response does: the rows
     // behind it are in an encoding this client does not read, and reading them anyway would answer
     // with wrong rows or a bare parse failure rather than saying the server is newer.
-    static ScryStreamMarker Versioned(ScryStreamMarker marker) =>
-        marker is {Kind: ScryStream.Begin, Version: { } version} && version > WireFormat.Version
-            ? throw Unsupported(version)
-            : marker;
+    static ScryStreamMarker Versioned(ScryStreamMarker marker)
+    {
+        if (marker is {Kind: ScryStream.Begin, Version: { } version and > WireFormat.Version})
+        {
+            throw Unsupported(version);
+        }
+
+        return marker;
+    }
 
     /// <summary>
     /// Reads a non-success response body, or null when it is not one. A failed request is usually
@@ -361,15 +366,25 @@ public static class ScryJson
     // Mirror the server's request-version gate (QueryValidator): reject a response stamped with a
     // newer wire format than this client understands rather than misreading a payload shaped by a
     // format it was not built against.
-    static QueryResponse Versioned(QueryResponse response) =>
-        response.Version <= WireFormat.Version
-            ? response
-            : throw Unsupported(response.Version);
+    static QueryResponse Versioned(QueryResponse response)
+    {
+        if (response.Version <= WireFormat.Version)
+        {
+            return response;
+        }
 
-    static QueryBatchResponse Versioned(QueryBatchResponse response) =>
-        response.Version <= WireFormat.Version
-            ? response
-            : throw Unsupported(response.Version);
+        throw Unsupported(response.Version);
+    }
+
+    static QueryBatchResponse Versioned(QueryBatchResponse response)
+    {
+        if (response.Version <= WireFormat.Version)
+        {
+            return response;
+        }
+
+        throw Unsupported(response.Version);
+    }
 
     static ScryWireException Unsupported(int version) =>
         new($"Unsupported response wire version {version}; this client supports up to {WireFormat.Version}. The server is newer than the client.");

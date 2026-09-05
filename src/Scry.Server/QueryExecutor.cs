@@ -1066,7 +1066,12 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         IQueryable Side(Func<PolicyUse, bool>? include)
         {
             var side = ApplyPolicy(source.Resolve(db, scope.Services), source, db, scope, include);
-            return narrow is null ? side : narrow(side);
+            if (narrow is null)
+            {
+                return side;
+            }
+
+            return narrow(side);
         }
 
         return DeniedRowProbe.Rows(Side(use => !use.Errors(DeniedPosition.RootList)), Side(include: null), db);
@@ -1086,7 +1091,12 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             return side;
         }
 
-        return predicate is null ? side : Apply(side, "Where", builder.BuildPredicate(predicate, elementType));
+        if (predicate is null)
+        {
+            return side;
+        }
+
+        return Apply(side, "Where", builder.BuildPredicate(predicate, elementType));
     }
 
     /// <summary>

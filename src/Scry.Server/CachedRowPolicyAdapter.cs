@@ -209,7 +209,12 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
             });
 
         var applied = registration.Store.Get(registration.Name, scopeKey) ?? CachedPolicyScope.Empty;
-        return applied.Generation == current.Generation || last ? applied : null;
+        if (applied.Generation == current.Generation || last)
+        {
+            return applied;
+        }
+
+        return null;
     }
 
     /// <inheritdoc/>

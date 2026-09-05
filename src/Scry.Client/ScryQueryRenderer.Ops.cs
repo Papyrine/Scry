@@ -151,7 +151,12 @@ partial class QueryRenderer
         {
             case NodeValue node:
                 var text = RenderNode(node.Node, scope);
-                return Shorthand(text, member.Name) ? text : $"{member.Name} = {text}";
+                if (Shorthand(text, member.Name))
+                {
+                    return text;
+                }
+
+                return $"{member.Name} = {text}";
 
             case NestedValue nested:
                 return $"{member.Name} = {RenderNested(nested, scope)}";
@@ -208,7 +213,12 @@ partial class QueryRenderer
             member =>
             {
                 var text = RenderNode(member.Value, scope);
-                return Shorthand(text, member.Name) ? text : $"{member.Name} = {text}";
+                if (Shorthand(text, member.Name))
+                {
+                    return text;
+                }
+
+                return $"{member.Name} = {text}";
             });
         return $"new {{ {string.Join(", ", parts)} }}";
     }

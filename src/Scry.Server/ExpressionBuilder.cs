@@ -205,7 +205,12 @@ sealed class ExpressionBuilder(
         {
             var comparison = Expression.Call(stringCompare, left, right);
             var zero = Expression.Constant(0);
-            return greater ? Expression.GreaterThan(comparison, zero) : Expression.LessThan(comparison, zero);
+            if (greater)
+            {
+                return Expression.GreaterThan(comparison, zero);
+            }
+
+            return Expression.LessThan(comparison, zero);
         }
 
         // Enums do not carry relational operators through Expression; compare their underlying value.
@@ -225,10 +230,20 @@ sealed class ExpressionBuilder(
                             throw new ScryValidationException($"'{left.Type.Name}' cannot be a paging key.");
             var comparison = Expression.Call(left, compareTo, right);
             var zero = Expression.Constant(0);
-            return greater ? Expression.GreaterThan(comparison, zero) : Expression.LessThan(comparison, zero);
+            if (greater)
+            {
+                return Expression.GreaterThan(comparison, zero);
+            }
+
+            return Expression.LessThan(comparison, zero);
         }
 
-        return greater ? Expression.GreaterThan(left, right) : Expression.LessThan(left, right);
+        if (greater)
+        {
+            return Expression.GreaterThan(left, right);
+        }
+
+        return Expression.LessThan(left, right);
     }
 
     /// <summary>
@@ -628,8 +643,15 @@ sealed class ExpressionBuilder(
     }
 
     // Plans without a binary slot — the common case — carry null, the one check the writers branch on.
-    static IReadOnlyList<bool>? Normalize(List<bool> binary) =>
-        binary.Contains(true) ? binary : null;
+    static IReadOnlyList<bool>? Normalize(List<bool> binary)
+    {
+        if (binary.Contains(true))
+        {
+            return binary;
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// Builds the selector for a whole-sequence aggregate, typed so the aggregate is one the provider
@@ -667,7 +689,12 @@ sealed class ExpressionBuilder(
     {
         var promoted = PromoteNumeric(body.Type) ??
                        throw new ScryValidationException($"'{function}' is not supported over '{body.Type.Name}'.");
-        return promoted == body.Type ? body : Expression.Convert(body, promoted);
+        if (promoted == body.Type)
+        {
+            return body;
+        }
+
+        return Expression.Convert(body, promoted);
     }
 
     // The numeric types Queryable.Sum/Average have overloads for. Narrower members widen to the
@@ -1124,7 +1151,12 @@ sealed class ExpressionBuilder(
         // A policied traversal yields SQL NULL for a row the policy hides, so a non-nullable value read
         // through one is widened; without that the shaper faults materializing the null. Mirrors the
         // same widening on the unmatched side of an outer join.
-        return policied ? Widened(expression) : expression;
+        if (policied)
+        {
+            return Widened(expression);
+        }
+
+        return expression;
     }
 
     // A value able to carry a null: the expression as it is where it already can, and lifted to its
@@ -1914,7 +1946,12 @@ sealed class ExpressionBuilder(
 
         // Converted as the nullable it may be, so a null widens to a null rather than faulting.
         var lifted = Nullable.GetUnderlyingType(target.Type) is not null;
-        return Expression.Convert(target, lifted ? typeof(Nullable<>).MakeGenericType(result) : result);
+        if (lifted)
+        {
+            return Expression.Convert(target, typeof(Nullable<>).MakeGenericType(result));
+        }
+
+        return Expression.Convert(target, result);
     }
 
     static Expression BuildStringFrom(Expression target)
@@ -1985,11 +2022,25 @@ sealed class ExpressionBuilder(
         return Expression.Add(ConcatOperand(left), ConcatOperand(right), stringConcatObjects);
     }
 
-    static Expression ConcatOperand(Expression expression) =>
-        expression.Type == typeof(string) ? expression : Expression.Convert(expression, typeof(object));
+    static Expression ConcatOperand(Expression expression)
+    {
+        if (expression.Type == typeof(string))
+        {
+            return expression;
+        }
 
-    static Expression ConvertTo(Expression expression, Type target) =>
-        expression.Type == target ? expression : Expression.Convert(expression, target);
+        return Expression.Convert(expression, typeof(object));
+    }
+
+    static Expression ConvertTo(Expression expression, Type target)
+    {
+        if (expression.Type == target)
+        {
+            return expression;
+        }
+
+        return Expression.Convert(expression, target);
+    }
 
     Expression BuildConstant(ConstNode constant, Type? expected)
     {

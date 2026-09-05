@@ -131,8 +131,15 @@ public static class AttachmentLinker
         return members;
     }
 
-    static ScryTypeInfo? Base(ScryIntrospection introspection, ScryTypeInfo type) =>
-        type.Base is { } model ? Model(introspection, model) : null;
+    static ScryTypeInfo? Base(ScryIntrospection introspection, ScryTypeInfo type)
+    {
+        if (type.Base is { } model)
+        {
+            return Model(introspection, model);
+        }
+
+        return null;
+    }
 
     static string Camel(string name) =>
         JsonNamingPolicy.CamelCase.ConvertName(name);

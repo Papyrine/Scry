@@ -129,7 +129,17 @@ sealed partial class QueryTranslator
         {
             // Without a Distinct there is nothing for selected values to change about a count, so the
             // selector is dropped rather than carried as noise.
-            return new(AggregateFn.Count, distinct ? selector : null)
+            Node? countSelector;
+            if (distinct)
+            {
+                countSelector = selector;
+            }
+            else
+            {
+                countSelector = null;
+            }
+
+            return new(AggregateFn.Count, countSelector)
             {
                 Predicate = predicate,
                 Distinct = distinct

@@ -13,7 +13,18 @@ readonly struct EquatableArray<T>(ImmutableArray<T> array) :
     /// <c>default</c> rather than constructed, and an uninitialized <see cref="ImmutableArray{T}"/>
     /// throws on every member — so normalizing here is what lets an optional array be simply absent.
     /// </summary>
-    public ImmutableArray<T> Array => items.IsDefault ? ImmutableArray<T>.Empty : items;
+    public ImmutableArray<T> Array
+    {
+        get
+        {
+            if (items.IsDefault)
+            {
+                return ImmutableArray<T>.Empty;
+            }
+
+            return items;
+        }
+    }
 
     public int Length => Array.Length;
 

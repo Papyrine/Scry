@@ -78,10 +78,20 @@ sealed partial class QueryTranslator
             selector = new ElementNode();
         }
 
+        Node? translatedPredicate;
+        if (predicate is null)
+        {
+            translatedPredicate = null;
+        }
+        else
+        {
+            translatedPredicate = TranslateExpr(predicate.Body, predicate.Parameters[0]);
+        }
+
         return new(
             path,
             function.Value,
-            predicate is null ? null : TranslateExpr(predicate.Body, predicate.Parameters[0]),
+            translatedPredicate,
             selector);
     }
 

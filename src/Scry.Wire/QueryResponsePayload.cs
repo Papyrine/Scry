@@ -18,7 +18,7 @@ public sealed partial record QueryResponse
     // assigns: the property below replaces the one the record would have synthesized, so the
     // constructor has this to write through instead. A response the server built, or one read from a
     // string body, arrives with the payload already in the cell and behaves exactly as it always has.
-    PayloadCell cell = new(Payload.ValueKind == JsonValueKind.Undefined ? null : Payload);
+    PayloadCell cell = new(NormalizeParsed(Payload));
 
     /// <summary>
     /// The result, as JSON. See the remarks on <see cref="QueryResponse"/> for its shape per
@@ -57,7 +57,17 @@ public sealed partial record QueryResponse
         // the response it was copied from, and replacing that copy's payload must not reach back and
         // change the original's. Undefined is what the converter returns for a payload it stepped over,
         // and what a default JsonElement is; neither is a parsed payload, so neither is recorded as one.
-        init => cell = new(value.ValueKind == JsonValueKind.Undefined ? null : value);
+        init => cell = new(NormalizeParsed(value));
+    }
+
+    static JsonElement? NormalizeParsed(JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.Undefined)
+        {
+            return null;
+        }
+
+        return value;
     }
 
     /// <summary>

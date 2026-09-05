@@ -93,7 +93,13 @@ public sealed class HistoryStore
         }
 
         var trimmed = label?.Trim();
-        item.Label = trimmed is { Length: > 0 } ? trimmed : null;
+        if (trimmed is { Length: > 0 })
+        {
+            item.Label = trimmed;
+            return;
+        }
+
+        item.Label = null;
     }
 
     /// <summary>Marks or unmarks a favorite. Unmarking one puts it back under the cap.</summary>

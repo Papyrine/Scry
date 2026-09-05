@@ -52,8 +52,15 @@ static class CSharpIdentifier
     /// either way — the prefix is spelling, not identity — so a model written in a language that lets
     /// a member be called <c>event</c> generates a client that compiles.
     /// </summary>
-    public static string Escape(string name) =>
-        reserved.Contains(name) ? "@" + name : name;
+    public static string Escape(string name)
+    {
+        if (reserved.Contains(name))
+        {
+            return "@" + name;
+        }
+
+        return name;
+    }
 
     // Lu, Ll, Lt, Lm, Lo and Nl, plus the underscore.
     static bool IsStart(char character) =>

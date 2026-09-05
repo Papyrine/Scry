@@ -1342,7 +1342,12 @@ sealed class Schema
     {
         if (type.IsArray)
         {
-            return type.GetArrayRank() == 1 ? type.GetElementType() : null;
+            if (type.GetArrayRank() == 1)
+            {
+                return type.GetElementType();
+            }
+
+            return null;
         }
 
         if (type.IsGenericType &&

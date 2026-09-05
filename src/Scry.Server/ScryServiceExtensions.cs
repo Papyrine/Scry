@@ -368,7 +368,12 @@ public static class ScryServiceExtensions
             // The server never receives more than Content-Length — the host stops the body there — so a
             // full read is the whole body in one right-sized array. A short read means a truncated body,
             // which stays exactly what it was before: unparseable, and answered as a malformed request.
-            return read == declared ? exact : exact[..read];
+            if (read == declared)
+            {
+                return exact;
+            }
+
+            return exact[..read];
         }
 
         // No usable length: none was declared (a chunked body), or the one declared is more than is

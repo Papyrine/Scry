@@ -89,7 +89,13 @@ public sealed class TabStore
         }
 
         var trimmed = title?.Trim();
-        tabs[index].Title = trimmed is { Length: > 0 } ? trimmed : null;
+        if (trimmed is { Length: > 0 })
+        {
+            tabs[index].Title = trimmed;
+            return;
+        }
+
+        tabs[index].Title = null;
     }
 
     /// <summary>
@@ -122,7 +128,12 @@ public sealed class TabStore
             end++;
         }
 
-        return end > start ? query[start..end] : null;
+        if (end > start)
+        {
+            return query[start..end];
+        }
+
+        return null;
     }
 
     public string Serialize() =>
@@ -209,7 +220,12 @@ public sealed class TabStore
                     Title = _.Title
                 })
                 .ToList();
-            return readable is { Count: > 0 } ? (readable, loaded!.ActiveIndex) : null;
+            if (readable is { Count: > 0 })
+            {
+                return (readable, loaded!.ActiveIndex);
+            }
+
+            return null;
         }
         catch (JsonException)
         {

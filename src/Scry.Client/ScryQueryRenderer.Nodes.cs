@@ -91,7 +91,12 @@ partial class QueryRenderer
                 if (groupKeys[i] is MemberNode key &&
                     key.Path.SequenceEqual(member.Path, StringComparer.Ordinal))
                 {
-                    return groupKeyNames is null ? $"{scope.Parameter}.Key" : $"{scope.Parameter}.Key.{groupKeyNames[i]}";
+                    if (groupKeyNames is null)
+                    {
+                        return $"{scope.Parameter}.Key";
+                    }
+
+                    return $"{scope.Parameter}.Key.{groupKeyNames[i]}";
                 }
             }
 
@@ -110,7 +115,12 @@ partial class QueryRenderer
             throw Refuse(RenderRefusal.UnsupportedShape);
         }
 
-        return groupKeyNames is null ? $"{scope.Parameter}.Key" : $"{scope.Parameter}.Key.{groupKeyNames[key.Index]}";
+        if (groupKeyNames is null)
+        {
+            return $"{scope.Parameter}.Key";
+        }
+
+        return $"{scope.Parameter}.Key.{groupKeyNames[key.Index]}";
     }
 
     string RenderBinary(BinaryNode node, Scope scope)
@@ -178,7 +188,12 @@ partial class QueryRenderer
                 var underlying = Nullable.GetUnderlyingType(inferred);
                 if ((underlying ?? inferred).IsEnum)
                 {
-                    return underlying is null ? $"(int){text}" : $"(int?){text}";
+                    if (underlying is null)
+                    {
+                        return $"(int){text}";
+                    }
+
+                    return $"(int?){text}";
                 }
             }
 
@@ -191,7 +206,12 @@ partial class QueryRenderer
     string Operand(Node node, Scope scope)
     {
         var text = RenderNode(node, scope);
-        return node is BinaryNode or ConditionalNode ? $"({text})" : text;
+        if (node is BinaryNode or ConditionalNode)
+        {
+            return $"({text})";
+        }
+
+        return text;
     }
 
     // The receiver of an instance call has to be a primary expression; anything composite — and a
@@ -199,7 +219,12 @@ partial class QueryRenderer
     string Target(Node node, Scope scope)
     {
         var text = RenderNode(node, scope);
-        return node is BinaryNode or ConditionalNode or UnaryNode or ConstNode ? $"({text})" : text;
+        if (node is BinaryNode or ConditionalNode or UnaryNode or ConstNode)
+        {
+            return $"({text})";
+        }
+
+        return text;
     }
 
     // Whether a node reads the row at all. A subtree that reads nothing is closure state, which the
