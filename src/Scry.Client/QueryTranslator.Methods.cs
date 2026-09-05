@@ -200,12 +200,30 @@ sealed partial class QueryTranslator
                 _ => throw Unsupported(call)
             };
 
+            // Round's rounding mode is not an operand. SQL's ROUND rounds away from zero, which is the
+            // one mode the wire can honour: written explicitly it is dropped rather than sent — sent,
+            // it would read as the digits — and any other mode is refused, since the database would
+            // answer by its own.
+            IReadOnlyList<Expression> operands = call.Arguments;
+            if (call.Method.Name == "Round" &&
+                operands.Count > 1 &&
+                operands[operands.Count - 1].Type == typeof(MidpointRounding))
+            {
+                if (Evaluate(operands[operands.Count - 1]) is not MidpointRounding.AwayFromZero)
+                {
+                    throw new NotSupportedException(
+                        "Math.Round with a rounding mode other than MidpointRounding.AwayFromZero is not supported by Scry: SQL's ROUND rounds away from zero, and no provider translates another mode. Use AwayFromZero, or round after the rows return.");
+                }
+
+                operands = [.. operands.Take(operands.Count - 1)];
+            }
+
             // The two-operand forms — Round(value, digits), Pow(value, exponent), Log(value, base),
             // Atan2(y, x) — carry their second operand as the one argument; the rest take none.
-            var arguments = call.Arguments.Count > 1
-                ? new[] { TranslateExpr(call.Arguments[1], root) }
+            var arguments = operands.Count > 1
+                ? new[] { TranslateExpr(operands[1], root) }
                 : [];
-            return new CallNode(math, TranslateExpr(call.Arguments[0], root), arguments);
+            return new CallNode(math, TranslateExpr(operands[0], root), arguments);
         }
 
         // Text and binary answer a handful of Enumerable's questions without ever yielding their
