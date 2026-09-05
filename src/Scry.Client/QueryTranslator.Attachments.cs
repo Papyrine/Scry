@@ -51,7 +51,7 @@ sealed partial class QueryTranslator
 
         var path = MemberPath(member);
         var declaring = member.Expression!.Type;
-        var (root, keys) = AttachmentModel.Fetching(declaring, member.Member.Name);
+        var (root, keys) = ScryModels.Fetching(declaring, member.Member.Name);
 
         // The row the attachment hangs off: the query's own where the path is a bare member, or the
         // navigation the path traversed to reach it.

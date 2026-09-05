@@ -466,7 +466,7 @@ public static class ScryQueryableExtensions
         // query ended up with. A hand-built source has no model to read them from and falls back to
         // the server's default projection.
         var members = pipeline.Any(_ => _ is OfTypeOp or SelectManyOp)
-            ? element.GetCustomAttribute<ScryModelAttribute>()?.Members
+            ? ScryModels.Of(element)?.Members
             : provider.DefaultProjection;
 
         if (members is not { Count: > 0 } ||
@@ -522,7 +522,7 @@ public static class ScryQueryableExtensions
 
         // Whole-model: every member the model declares comes back, so the keys are already there and
         // the handles hang off the row itself.
-        if (AttachmentModel.Of(typeof(T)) is not {Attachments.Length: > 0} model)
+        if (ScryModels.Of(typeof(T)) is not {Attachments.Length: > 0} model)
         {
             return null;
         }

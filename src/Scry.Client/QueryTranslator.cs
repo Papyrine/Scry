@@ -172,7 +172,7 @@ sealed partial class QueryTranslator
     // anyway. Nothing rests on getting it right here: the server re-resolves the name against its
     // allow-list, so a wrong guess is a rejected request rather than a reachable type.
     static string ModelSource(Type model) =>
-        model.GetCustomAttribute<ScryModelAttribute>()?.Source ?? model.Name;
+        ScryModels.Of(model)?.Source ?? model.Name;
 
     Node TranslateKey(MethodCallExpression call)
     {

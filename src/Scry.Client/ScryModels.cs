@@ -1,11 +1,16 @@
 ﻿/// <summary>
-/// The <c>[ScryModel]</c> facts an attachment needs, cached per type. A model carrying no attachment
-/// answers null, which is what keeps every query that has none on exactly the path it was on before.
+/// The <c>[ScryModel]</c> a generated type carries, read once per type: the source it stands for,
+/// the members its default projection names, and what an attachment on it needs. Read per send
+/// otherwise, and reflection over attributes is not cheap on the interpreter the browser runs.
 /// </summary>
-static class AttachmentModel
+static class ScryModels
 {
     static readonly ConcurrentDictionary<Type, ScryModelAttribute?> models = new();
 
+    /// <summary>
+    /// The attribute, or null for a hand-built model that carries none — which is what keeps every
+    /// query over one on exactly the path it was on before.
+    /// </summary>
     public static ScryModelAttribute? Of(Type type) =>
         models.GetOrAdd(type, _ => _.GetCustomAttribute<ScryModelAttribute>(inherit: false));
 
