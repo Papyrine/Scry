@@ -9,7 +9,7 @@ For usage detail on the supported surface (position rules, limits, examples), se
 
 ## Reported at compile time
 
-`Scry.Client` ships a Roslyn analyzer in the same assembly as the [source generator](source-generator.md), so it needs no second package reference and nothing to switch on. It reads LINQ written against a generated query model — or against a hand-built source opened through the client — and reports what the closed set cannot carry, where it was written, with the reasoning on this page linked from each diagnostic.
+`Scry.Client` ships a Roslyn analyzer in the same assembly as the [source generator](source-generator.md), so it needs no second package reference and nothing to switch on. It reads LINQ written against a generated query model — or against a hand-built source opened through the client — and reports what the closed set cannot carry, where it was written, with the reasoning on this page linked from each diagnostic. That includes a Razor component's `@code` block: a component compiles to a tree marked generated, which an analyzer that skipped generated code would be silent in, and a Blazor page is where most of these queries are written.
 
 | Rule | Reports |
 | --- | --- |

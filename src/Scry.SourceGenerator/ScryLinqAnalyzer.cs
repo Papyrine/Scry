@@ -21,10 +21,12 @@ public sealed class ScryLinqAnalyzer :
     public override void Initialize(AnalysisContext context)
     {
         context.EnableConcurrentExecution();
-        // The generated entry points are IQueryable-returning members that no chain is written in, so
-        // there is nothing to report there — and reporting into a file the consumer cannot edit is
-        // what the generator's own diagnostics exist to avoid.
-        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
+        // Generated trees included. A Razor component compiles to one — its @code block lands in a
+        // file marked auto-generated — and a Blazor page is where most of these queries are written,
+        // so skipping generated code would silence the analyzer exactly there. The generator's own
+        // output is safe to read: its entry points are IQueryable-returning members that no chain is
+        // written in, so nothing is ever reported into a file the consumer cannot edit.
+        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze | GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.RegisterCompilationStartAction(Start);
     }
 
