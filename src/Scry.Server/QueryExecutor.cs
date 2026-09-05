@@ -211,7 +211,19 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         // resolved — through the schema, and policy-filtered — rather than reaching a DbSet directly.
         // The same resolution backs a traversal into a policied source, which is read through its
         // policy rather than off the owner it was reached from.
-        var resolve = (string name) => ResolveSource(name, db, scope);
+        var resolve = (string name) =>
+        {
+            // A membership set reads the other source as a list, so its list position answers for
+            // it — asked about the source whole, since the filter a membership test carries is
+            // applied where the set is built, after this. Erring wide is the documented direction.
+            if (!buildOnly &&
+                schema.TryGetSource(name, out var setSource))
+            {
+                ProbeSideSource(setSource, db, scope);
+            }
+
+            return ResolveSource(name, db, scope);
+        };
         var builder = new ExpressionBuilder(
             schema,
             options,
@@ -405,6 +417,13 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         // the folding terminals below fold the joined rows.
         if (join is not null)
         {
+            // The inner side reads the joined source as a list, narrowed by the filters it carries.
+            if (!buildOnly &&
+                schema.TryGetSource(join.Root, out var joinedSource))
+            {
+                ProbeSideSource(joinedSource, db, scope, side => SideFilters(builder, side, joinedSource.ClrType, join.InnerOps, join.InnerPredicate));
+            }
+
             var (joined, joinPlan) = BuildJoined(builder, query, elementType, join, db, scope);
 
             return terminal switch
@@ -426,6 +445,13 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             {
                 throw new ScryValidationException(
                     $"A set operation is limited to {DistinctRow.ByArity.Length} projected members.");
+            }
+
+            // The operand reads its source as a list, narrowed by the filters it carries.
+            if (!buildOnly &&
+                schema.TryGetSource(set.Root, out var operandSource))
+            {
+                ProbeSideSource(operandSource, db, scope, side => SideFilters(builder, side, operandSource.ClrType, set.OperandOps, set.Predicate));
             }
 
             var otherSource = ResolveSource(set.Root, db, scope);
@@ -891,6 +917,46 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// have read. Costs nothing where no policy in the chain says so, which is every query until a host
     /// asks for one.
     /// </summary>
+    /// <summary>
+    /// The same question for a source a query reads beside its root — a join's inner side, a set
+    /// operand, a membership set. Each reads that source as a list, so its <c>RootList</c> mode
+    /// applies: where a policy there reports denials, the source is probed before this query runs,
+    /// narrowed by <paramref name="narrow"/>, the filters the side carries. Its ordering and paging
+    /// are left out, as the root's are — a denied row beyond the page is still one the query asked for.
+    /// </summary>
+    static void ProbeSideSource(ScrySource source, DbContext db, CallScope scope, Func<IQueryable, IQueryable>? narrow = null)
+    {
+        if (!source.Policies.Any(_ => _.Errors(DeniedPosition.RootList)))
+        {
+            return;
+        }
+
+        IQueryable Side(Func<PolicyUse, bool>? include)
+        {
+            var side = ApplyPolicy(source.Resolve(db, scope.Services), source, db, scope, include);
+            return narrow is null ? side : narrow(side);
+        }
+
+        DeniedRowProbe.Ensure(Side(use => !use.Errors(DeniedPosition.RootList)), Side(include: null), db);
+    }
+
+    // The filters a side pipeline carries — the operators before its ordering and paging, which the
+    // validator has pinned to come first — or the one predicate the older shape carries instead.
+    static IQueryable SideFilters(ExpressionBuilder builder, IQueryable side, Type elementType, IReadOnlyList<QueryOp>? ops, Node? predicate)
+    {
+        if (ops is not null)
+        {
+            foreach (var where in ops.OfType<WhereOp>())
+            {
+                side = Apply(side, "Where", builder.BuildPredicate(where.Predicate, elementType));
+            }
+
+            return side;
+        }
+
+        return predicate is null ? side : Apply(side, "Where", builder.BuildPredicate(predicate, elementType));
+    }
+
     static void ProbeDeniedRows(ScrySource source, ProbeSteps steps, QueryOp? terminal, DbContext db, CallScope scope)
     {
         // A single-row terminal answers with the row itself; everything else lists rows or folds them,

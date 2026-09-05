@@ -9,6 +9,12 @@ using System.Net;
 [TestFixture]
 public class DeniedRowTests
 {
+    // ReSharper disable NotAccessedPositionalProperty.Local
+    record Pair(string Department, string Employee);
+
+    record NameOnly(string Name);
+    // ReSharper restore NotAccessedPositionalProperty.Local
+
     [Test]
     public async Task HidingIsWhatAPolicyDoesUnlessItSaysOtherwise()
     {
@@ -226,6 +232,71 @@ public class DeniedRowTests
         var sql = ErroringOnLists().ToQueryString(request, context, EmptyServiceProvider.Instance);
 
         Assert.That(sql, Does.Contain("SELECT"));
+    }
+
+    // A join's inner side, a set operand, and a membership set each read another source as a list,
+    // and that source's list position answers for them — it once answered for the root alone, and a
+    // deployment that asked to be told was quietly not told here.
+    [Test]
+    public void AJoinsInnerSideErrorsWhereItsListPositionSaysSo()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context, ErroringOnLists());
+
+        Assert.ThrowsAsync<ScryPermissionException>(
+            () => client.Source<Department>("Department")
+                .Join(
+                    client.Source<Employee>("Employee"),
+                    _ => _.Id,
+                    _ => _.DepartmentId,
+                    (department, employee) => new Pair(department.Name, employee.Name))
+                .ToListAsync());
+    }
+
+    [Test]
+    public async Task AJoinsInnerSideFilteredPastTheDeniedRowSucceeds()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context, ErroringOnLists());
+
+        // The inner side's own filter excludes the one denied row, so nothing the join asked for was
+        // withheld — the same rule the root follows.
+        var rows = await client.Source<Department>("Department")
+            .Join(
+                client.Source<Employee>("Employee").Where(_ => _.Name != "Bob"),
+                _ => _.Id,
+                _ => _.DepartmentId,
+                (department, employee) => new Pair(department.Name, employee.Name))
+            .ToListAsync();
+
+        Assert.That(rows, Has.Count.EqualTo(3));
+    }
+
+    [Test]
+    public void ASetOperandErrorsWhereItsListPositionSaysSo()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context, ErroringOnLists());
+
+        Assert.ThrowsAsync<ScryPermissionException>(
+            () => client.Source<Department>("Department")
+                .Select(_ => new NameOnly(_.Name))
+                .Union(client.Source<Employee>("Employee").Select(_ => new NameOnly(_.Name)))
+                .ToListAsync());
+    }
+
+    [Test]
+    public void AMembershipSetErrorsWhereItsListPositionSaysSo()
+    {
+        using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context, ErroringOnLists());
+
+        Assert.ThrowsAsync<ScryPermissionException>(
+            () => client.Source<Department>("Department")
+                .CountAsync(department =>
+                    client.Source<Employee>("Employee")
+                        .Select(_ => _.DepartmentId)
+                        .Contains(department.Id)));
     }
 
     static readonly DeniedRowHandling erroring = new()

@@ -214,6 +214,8 @@ For the two root positions, the request fails if a row the caller could see once
 
 The rows in question are the ones the query asked for, narrowed by the filters written before the first paging or flattening operator. So a client filter that excludes the denied row means there is nothing to report, while `Take(1)` does not — the answer does not depend on where in the result the denied row happened to fall.
 
+A source read beside the root — a join's inner side, a set operand, a membership set — is read as a list, so its own `RootList` mode applies there. The inner side and the operand are narrowed by the filters they carry; a membership set is asked about whole, since its filter is applied where the set is built.
+
 For the two navigation positions the question is asked of the relationship rather than of one query: whether any row of the owner source, filtered by its own policies, reaches a denied row that way. A navigation is read per row and which rows those are depends on the whole shape of the query — including filters written over the traversal itself — so narrowing by them would make the answer depend on the question in a way a caller could use to probe it. Erring wide costs a request that would have succeeded; erring narrow returns a row the deployment asked to be told about.
 
 All of this is asked before anything executes, so a denied row never reaches a result and a stream fails before its first byte. A [SQL preview](explorer.md) runs no query and so denies nothing.
