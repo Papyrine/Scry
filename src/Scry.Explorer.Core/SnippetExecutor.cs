@@ -1,3 +1,5 @@
+using System.Runtime.ExceptionServices;
+
 namespace Scry;
 
 /// <summary>
@@ -87,7 +89,19 @@ public sealed class SnippetExecutor
         var client = new ScryClient((_, _) => Task.FromResult<QueryResponse>(null!));
         var query = Activator.CreateInstance(assembly.GetType("Scry.Generated.ScryQuery")!, client)!;
         var runner = assembly.GetType("Scry.Runner")!;
-        return (QueryRequest)runner.GetMethod("Run")!.Invoke(null, [query])!;
+        try
+        {
+            return (QueryRequest) runner.GetMethod("Run")!.Invoke(null, [query])!;
+        }
+        catch (TargetInvocationException exception) when (exception.InnerException is { } inner)
+        {
+            // Reflection wraps whatever the snippet threw — the translator refusing a call that is
+            // client-side code, a variable's initializer failing — in an exception whose own message
+            // says only that something was thrown. The banner shows the message, so the cause is
+            // rethrown as itself, its stack intact.
+            ExceptionDispatchInfo.Throw(inner);
+            throw;
+        }
     }
 
     // Collection-shaping terminals that all enumerate to a list on the wire. Their arguments (key

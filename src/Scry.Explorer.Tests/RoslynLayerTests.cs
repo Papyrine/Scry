@@ -398,6 +398,34 @@ public class RoslynLayerTests
         Assert.That(hover.End, Is.EqualTo(member + "Active".Length));
     }
 
+    // The snippet runs through reflection, which wraps whatever it throws in an exception whose own
+    // message says only that something was thrown. What the translator refuses — here a string method
+    // that is client-side code — has to reach the banner as the refusal itself.
+    [Test]
+    public void ReportsATranslatorRefusalAsItself()
+    {
+        var exception = Assert.Throws<NotSupportedException>(
+            () => executor.Translate("Query.Employee.Where(_ => _.Name.GetHashCode() == 3)"));
+
+        Assert.That(exception!.Message, Does.Contain("GetHashCode").And.Contain("client-side code"));
+    }
+
+    // A variable's initializer is the snippet's own code, and what it throws is reported as what it
+    // threw.
+    [Test]
+    public void ReportsAFailedInitializerAsItself()
+    {
+        const string code =
+            """
+            var count = int.Parse("nope");
+            Query.Employee.Where(_ => _.Name.Length == count)
+            """;
+
+        var exception = Assert.Throws<FormatException>(() => executor.Translate(code));
+
+        Assert.That(exception!.Message, Does.Contain("nope"));
+    }
+
     // Everything a declaration holds is evaluated here and folds into a constant, so a statement that
     // is not one would run in the browser without changing the request it produced — and a loop the
     // single-threaded runtime never returns from would take the page with it. Refused by both halves:
