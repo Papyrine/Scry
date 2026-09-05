@@ -110,7 +110,57 @@ sealed partial class QueryTranslator
                 $"'{parameter.Name}' is a lambda parameter this part of the query cannot read. A Scry query lambda reads its own row and closure state only: a nested query cannot read the row it is written inside, and an index parameter has no meaning in the database.");
         }
 
-        return Expression.Lambda(expression).Compile().DynamicInvoke();
+        // Read directly where the shape allows — a constant, or a chain of member reads rooted at
+        // one, which is what a captured variable compiles to. Every other shape is compiled, which on
+        // the interpreter the browser runs is the cost this exists to skip.
+        return TryRead(expression, out var value)
+            ? value
+            : Expression.Lambda(expression).Compile().DynamicInvoke();
+    }
+
+    static bool TryRead(Expression expression, out object? value)
+    {
+        switch (expression)
+        {
+            case ConstantExpression constant:
+                value = constant.Value;
+                return true;
+
+            case MemberExpression {Expression: null, Member: FieldInfo field}:
+                value = field.GetValue(null);
+                return true;
+
+            case MemberExpression {Expression: null, Member: PropertyInfo property}
+                when property.GetIndexParameters().Length == 0:
+                value = property.GetValue(null);
+                return true;
+
+            // A null owner is left to the compiled form, which throws the null reference the
+            // expression means; read here it would throw a reflection exception instead.
+            case MemberExpression {Expression: { } owner} member
+                when TryRead(owner, out var target) && target is not null:
+                switch (member.Member)
+                {
+                    case FieldInfo field:
+                        value = field.GetValue(target);
+                        return true;
+                    case PropertyInfo property when property.GetIndexParameters().Length == 0:
+                        value = property.GetValue(target);
+                        return true;
+                }
+
+                break;
+
+            // A conversion that only boxes, lifts, or widens to a base type leaves the value as it is;
+            // one that changes the representation is left to the compiler.
+            case UnaryExpression {NodeType: ExpressionType.Convert or ExpressionType.ConvertChecked} convert
+                when convert.Type.IsAssignableFrom(convert.Operand.Type) && TryRead(convert.Operand, out var inner):
+                value = inner;
+                return true;
+        }
+
+        value = null;
+        return false;
     }
 
     static LambdaExpression Lambda(Expression expression) =>

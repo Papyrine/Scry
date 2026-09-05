@@ -242,18 +242,17 @@ sealed partial class QueryTranslator
             return subquery;
         }
 
-        // Query.Department.Select(_ => _.Name).Contains(_.Name) — membership of a set drawn from
-        // another source, which the server resolves and policy-filters before the test.
-        if (TryInSource(call, root) is { } inSource)
+        // Membership of a set, which is closure state evaluated once here while the tested value
+        // comes from the row. Query.Department.Select(_ => _.Name).Contains(_.Name) draws the set from
+        // another source, which the server resolves and policy-filters before the test;
+        // ids.Contains(_.Id) reads a client-side one, whose values travel as constants of a SQL IN.
+        if (call.Method.Name == "Contains" &&
+            IsSetContains(call, root, out var set, out var value))
         {
-            return inSource;
-        }
-
-        // ids.Contains(_.Id) — membership of a client-side set, which becomes a SQL IN. The set must be
-        // closure state (evaluated here into constants) and the tested value must come from the row.
-        if (IsSetContains(call, root, out var set, out var value))
-        {
-            return new CallNode(KnownFunction.In, TranslateExpr(value, root), [..SetConstants(set)]);
+            var candidates = Evaluate(set);
+            return candidates is IQueryable {Provider: QueryProvider provider} queryable
+                ? InSource(queryable, provider, value, root)
+                : new CallNode(KnownFunction.In, TranslateExpr(value, root), [..SetConstants(candidates)]);
         }
 
         // The call reads the row, so it cannot be evaluated into a constant — and it is not on the

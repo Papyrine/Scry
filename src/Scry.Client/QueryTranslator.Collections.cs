@@ -141,22 +141,10 @@ sealed partial class QueryTranslator
 
     /// <summary>
     /// Translates membership of a set drawn from another Scry source — the candidates come from a
-    /// captured query rather than from closure state, so they are named rather than evaluated. Returns
-    /// null when the call is not that, so the caller can go on trying the client-side set form.
+    /// captured query rather than from closure state, so they are named rather than evaluated.
     /// </summary>
-    InSourceNode? TryInSource(MethodCallExpression call, ParameterExpression root)
+    InSourceNode InSource(IQueryable queryable, QueryProvider provider, Expression value, ParameterExpression root)
     {
-        if (call.Method.Name != "Contains" ||
-            !IsSetContains(call, root, out var set, out var value))
-        {
-            return null;
-        }
-
-        if (Evaluate(set) is not IQueryable {Provider: QueryProvider provider} queryable)
-        {
-            return null;
-        }
-
         // Walked directly rather than run through the operator translator: the Select here names a
         // bare value to compare against, where an ordinary projection must construct an object.
         Node? predicate = null;
@@ -258,9 +246,9 @@ sealed partial class QueryTranslator
         }
     }
 
-    static IEnumerable<Node> SetConstants(Expression set)
+    static IEnumerable<Node> SetConstants(object? set)
     {
-        if (Evaluate(set) is IEnumerable values)
+        if (set is IEnumerable values)
         {
             return values.Cast<object?>().Select(ConstantOf);
         }

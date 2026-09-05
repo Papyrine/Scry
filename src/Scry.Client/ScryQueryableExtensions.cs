@@ -6,8 +6,8 @@ public static class ScryQueryableExtensions
     /// <summary>Executes the query and returns all rows.</summary>
     public static async Task<List<T>> ToListAsync<T>(this IQueryable<T> source, Cancel cancel = default)
     {
-        var plan = PlanFor(source);
-        var response = await Send(source, terminal: null, cancel);
+        var (plan, pipeline) = Plan(source);
+        var response = await Send(source, terminal: null, cancel, pipeline);
         EnsureKind(response, ResultKind.List);
         return AttachmentBinder.Bind(Materialize<List<T>>(source, response), plan, Client(source)) ?? [];
     }
@@ -98,9 +98,9 @@ public static class ScryQueryableExtensions
                 "A streamed query cannot be batched: a batch is answered as one response, so its entries cannot be read row by row. Drop InBatch from this query, or use ToListAsync.");
         }
 
-        var plan = PlanFor(source);
+        var (plan, pipeline) = Plan(source);
         var client = provider.Client;
-        await foreach (var row in client.StreamAsync(source.ToScryRequest(), provider.Call, cancel))
+        await foreach (var row in client.StreamAsync(Request(provider, pipeline, terminal: null, typeof(T)), provider.Call, cancel))
         {
             yield return AttachmentBinder.BindRow(MaterializeRow<T>(source, row), plan, client)!;
         }
@@ -350,8 +350,8 @@ public static class ScryQueryableExtensions
 
     static async Task<ScryPage<T>> Page<T>(IQueryable<T> source, PageOp terminal, Cancel cancel)
     {
-        var plan = PlanFor(source);
-        var response = await Send(source, terminal, cancel);
+        var (plan, pipeline) = Plan(source);
+        var response = await Send(source, terminal, cancel, pipeline);
         EnsureKind(response, ResultKind.Page);
         var page = Materialize<ScryPage<T>>(source, response) ??
                    throw new ScryWireException("Page result deserialized to null.");
@@ -385,8 +385,8 @@ public static class ScryQueryableExtensions
 
     static async Task<T?> Single<T>(IQueryable<T> source, QueryOp terminal, Cancel cancel)
     {
-        var plan = PlanFor(source);
-        var response = await Send(source, terminal, cancel);
+        var (plan, pipeline) = Plan(source);
+        var response = await Send(source, terminal, cancel, pipeline);
         EnsureKind(response, ResultKind.Single);
         if (response.Payload.ValueKind == JsonValueKind.Null)
         {
@@ -436,8 +436,15 @@ public static class ScryQueryableExtensions
             throw new("This IQueryable is not a Scry source.");
         }
 
-        var pipeline = new List<QueryOp>(QueryTranslator.Translate(source.Expression));
-        AddDefaultProjection(pipeline, provider, terminal, typeof(T));
+        return Request(provider, QueryTranslator.Translate(source.Expression), terminal, typeof(T));
+    }
+
+    // The request a translated pipeline becomes: the default projection appended where the query
+    // wrote none, then the terminal.
+    static QueryRequest Request(QueryProvider provider, IReadOnlyList<QueryOp> translated, QueryOp? terminal, Type element)
+    {
+        var pipeline = new List<QueryOp>(translated);
+        AddDefaultProjection(pipeline, provider, terminal, element);
         if (terminal is not null)
         {
             pipeline.Add(terminal);
@@ -496,18 +503,23 @@ public static class ScryQueryableExtensions
     }
 
     /// <summary>
-    /// The attachment handles this query's rows will carry, or null where they carry none. Guarded by
-    /// a cached look at the row type first, so a query with no attachment anywhere in its shape pays
-    /// one dictionary lookup and never translates twice.
+    /// The pipeline a row-returning terminal sends, translated once, and the attachment handles its
+    /// rows will carry — or null where they carry none, which a cached look at the row type answers
+    /// without reading the pipeline.
     /// </summary>
-    static AttachmentPlan? PlanFor<T>(IQueryable<T> source)
+    static (AttachmentPlan? Attachments, IReadOnlyList<QueryOp> Pipeline) Plan<T>(IQueryable<T> source)
     {
         if (!AttachmentShape.Carries(typeof(T)))
         {
-            return null;
+            return (null, QueryTranslator.Translate(source.Expression));
         }
 
         var pipeline = QueryTranslator.Translate(source.Expression, out var bindings);
+        return (PlanFor<T>(pipeline, bindings), pipeline);
+    }
+
+    static AttachmentPlan? PlanFor<T>(IReadOnlyList<QueryOp> pipeline, IReadOnlyList<AttachmentBinding> bindings)
+    {
         if (bindings.Count > 0)
         {
             return new(bindings);
@@ -550,14 +562,18 @@ public static class ScryQueryableExtensions
         ]);
     }
 
-    static Task<QueryResponse> Send<T>(IQueryable<T> source, QueryOp? terminal, Cancel cancel)
+    // A terminal that already translated the pipeline to plan its attachments hands it over rather
+    // than having it translated again; one that did not leaves the request to translate it.
+    static Task<QueryResponse> Send<T>(IQueryable<T> source, QueryOp? terminal, Cancel cancel, IReadOnlyList<QueryOp>? pipeline = null)
     {
         if (source.Provider is not QueryProvider provider)
         {
             throw new("This IQueryable is not a Scry source.");
         }
 
-        var request = source.ToScryRequest(terminal);
+        var request = pipeline is null
+            ? source.ToScryRequest(terminal)
+            : Request(provider, pipeline, terminal, typeof(T));
 
         // A batched query is collected rather than sent, and its task completes when the batch does.
         // Everything above this — translation, the default projection, materialization, the kind check
