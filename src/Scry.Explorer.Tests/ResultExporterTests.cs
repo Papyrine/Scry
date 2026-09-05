@@ -45,6 +45,36 @@ public class ResultExporterTests
         Assert.That(csv, Does.StartWith($"Column{Environment.NewLine}\"{value}\""));
     }
 
+    // A cell a spreadsheet would read as a formula is prefixed with an apostrophe, which it takes as
+    // "text follows" and does not display. The rows are database content, so a value beginning with
+    // '=' is not a curiosity: it is whatever an end user typed into a form. A number keeps its sign —
+    // it is a value, and no formula is a number.
+    [TestCase("=1+1", "'=1+1")]
+    [TestCase("=HYPERLINK(\"http://evil\")", "\"'=HYPERLINK(\"\"http://evil\"\")\"")]
+    [TestCase("+cmd", "'+cmd")]
+    [TestCase("-cmd", "'-cmd")]
+    [TestCase("@SUM(A1)", "'@SUM(A1)")]
+    [TestCase("\tx", "'\tx")]
+    [TestCase("-5", "-5")]
+    [TestCase("-1.5e3", "-1.5e3")]
+    [TestCase("+7", "+7")]
+    [TestCase("a=b", "a=b")]
+    public void CsvNeutralisesAFieldASpreadsheetWouldExecute(string value, string expected)
+    {
+        var csv = ResultExporter.Csv(["Column"], [[value]]);
+
+        Assert.That(csv.ReplaceLineEndings("\n").Split('\n')[1], Is.EqualTo(expected));
+    }
+
+    // A leading carriage return is both a formula trigger and a character that forces quoting.
+    [Test]
+    public void CsvNeutralisesAndQuotesALeadingReturn()
+    {
+        var csv = ResultExporter.Csv(["Column"], [["\rx"]]);
+
+        Assert.That(csv, Does.StartWith($"Column{Environment.NewLine}\"'\rx\""));
+    }
+
     [Test]
     public void XmlNestsAProjectedNavigation()
     {

@@ -16,7 +16,10 @@ public static class ResultExporter
         WriteIndented = true
     };
 
-    /// <summary>The rows as CSV — RFC 4180 quoted, header row first.</summary>
+    /// <summary>
+    /// The rows as CSV — RFC 4180 quoted, header row first. A cell a spreadsheet would read as a
+    /// formula is neutralised: see <see cref="CsvField"/>.
+    /// </summary>
     public static string Csv(IReadOnlyList<string> columns, IReadOnlyList<IReadOnlyList<string>> rows)
     {
         var builder = new StringBuilder();
@@ -49,9 +52,23 @@ public static class ResultExporter
     }
 
     // RFC 4180: a field containing a comma, a quote, or a newline is quoted, and quotes inside it are
-    // doubled. Everything else is written as-is.
+    // doubled. Everything else is written as-is — except a field a spreadsheet would execute.
+    //
+    // Excel, and the others, read a cell beginning with '=', '+', '-', '@', a tab, or a carriage
+    // return as a formula rather than as text, and a formula can reach outside the sheet. The rows
+    // are database content, which is routinely whatever an end user typed into a form, and the
+    // export is aimed at exactly those spreadsheets. So such a field is prefixed with an apostrophe,
+    // which every one of them takes as "text follows" and none of them displays. A number is exempt:
+    // "-5" is a value a spreadsheet should keep computing with, and no formula is a number.
     static string CsvField(string value)
     {
+        if (value.Length > 0 &&
+            value[0] is '=' or '+' or '-' or '@' or '\t' or '\r' &&
+            !double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+        {
+            value = "'" + value;
+        }
+
         if (value.IndexOfAny([',', '"', '\n', '\r']) < 0)
         {
             return value;
