@@ -945,9 +945,8 @@ public class UiSnapshotTests :
         Assert.That(table, Does.Contain("Aaron").And.Contain("Carol").And.Not.Contain("Alice"));
     }
 
-    // Only a declaration may come ahead of the query. Nothing else there could change the request, and
-    // a loop the single-threaded runtime never returns from would take the page with it — so it is
-    // refused, by the same banner every other reason a query will not run is reported in.
+    // Only a declaration may come ahead of the query. Nothing else there could change the request, so
+    // it is refused, by the same banner every other reason a query will not run is reported in.
     [Test]
     public async Task ExplorerRefusesAStatementThatIsNotAVariable()
     {

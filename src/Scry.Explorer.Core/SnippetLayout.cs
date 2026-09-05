@@ -48,8 +48,12 @@ sealed record SnippetLayout(string Code, int Split, ScryDiagnostic? Problem)
             // A declaration is the whole of what the preamble is for: the query reads it as captured
             // state and the translator folds it into the constant it stands for, so nothing written
             // there reaches the wire on its own. Anything else would run in the browser without
-            // changing the request it produced — and a loop the single-threaded runtime never returns
-            // from would take the page with it, which is worse than being told no.
+            // changing the request it produced, and the snippet would stop reading as the two things
+            // it is — the values, then the query that reads them.
+            //
+            // A rule about the snippet's shape, not a boundary around what the browser runs: an
+            // initializer is ordinary code, evaluated here exactly as a compiled client would evaluate
+            // it, and one that never returns takes the page with it just as a statement would have.
             return new(
                 code,
                 split,

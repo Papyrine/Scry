@@ -427,9 +427,8 @@ public class RoslynLayerTests
     }
 
     // Everything a declaration holds is evaluated here and folds into a constant, so a statement that
-    // is not one would run in the browser without changing the request it produced — and a loop the
-    // single-threaded runtime never returns from would take the page with it. Refused by both halves:
-    // the editor squiggles it, and the executor is reachable without an editor.
+    // is not one would run in the browser without changing the request it produced. Refused by both
+    // halves: the editor squiggles it, and the executor is reachable without an editor.
     [Test]
     public async Task RefusesAStatementThatIsNotAVariable()
     {
@@ -445,5 +444,22 @@ public class RoslynLayerTests
         Assert.That(
             Assert.Throws<Exception>(() => executor.Translate(code))!.Message,
             Does.Contain("variable declaration"));
+    }
+
+    // The rule above is about the snippet's shape, not a boundary around what runs: a declaration's
+    // initializer is ordinary code, evaluated in the browser exactly as a compiled client would
+    // evaluate it, and what it produced is what the query folds in.
+    [Test]
+    public void EvaluatesADeclarationsInitializerAsOrdinaryCode()
+    {
+        const string code =
+            """
+            var name = string.Concat("Aa", "ron");
+            Query.Employee.Where(_ => _.Name == name)
+            """;
+
+        var request = executor.Translate(code);
+
+        Assert.That(ScryJson.Serialize(request), Does.Contain("Aaron").And.Not.Contain("Concat"));
     }
 }

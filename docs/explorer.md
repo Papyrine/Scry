@@ -195,7 +195,9 @@ A variable is [captured state](querying.md#constants-and-captured-values), exact
 
 Which makes them a convenience of the query rather than a feature of the wire: a value used in three places is named once, a long list of ids gets a line of its own, and the expression a value came from is written where it can be read instead of buried mid-predicate.
 
-Only declarations may come before the query. Anything else — a loop, a call, an assignment — would run in the browser without changing the request it produced, and one the single-threaded runtime never returned from would take the page with it. The editor squiggles it and *Run* refuses it, the same way both report a query that will not compile.
+Only declarations may come before the query. Anything else — a loop, a call, an assignment — would run in the browser without changing the request it produced, and the snippet would stop reading as the two things it is: the values, then the query that reads them. The editor squiggles it and *Run* refuses it, the same way both report a query that will not compile.
+
+That is a rule about the snippet's shape, not a boundary around what the browser runs. A declaration's initializer is ordinary code, evaluated in the browser exactly as a compiled client would evaluate it, and one that never returns stalls the page the way any code on a single-threaded runtime does. A reload ends it.
 
 
 ## Working with a query
