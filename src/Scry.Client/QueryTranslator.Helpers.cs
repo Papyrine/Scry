@@ -98,8 +98,20 @@ sealed partial class QueryTranslator
     static int IntArgument(Expression expression) =>
         (int)Convert.ChangeType(Evaluate(expression)!, typeof(int), CultureInfo.InvariantCulture);
 
-    static object? Evaluate(Expression expression) =>
-        Expression.Lambda(expression).Compile().DynamicInvoke();
+    static object? Evaluate(Expression expression)
+    {
+        // Closure state reads nothing of any row. An expression that reaches a lambda parameter — the
+        // row of an enclosing lambda read from a nested one, the index of an indexed Where — is not
+        // that, and compiling it would fail with the expression compiler's own message about an
+        // undefined variable rather than with what Scry cannot carry.
+        if (UnboundParameter.In(expression) is { } parameter)
+        {
+            throw new NotSupportedException(
+                $"'{parameter.Name}' is a lambda parameter this part of the query cannot read. A Scry query lambda reads its own row and closure state only: a nested query cannot read the row it is written inside, and an index parameter has no meaning in the database.");
+        }
+
+        return Expression.Lambda(expression).Compile().DynamicInvoke();
+    }
 
     static LambdaExpression Lambda(Expression expression) =>
         expression switch
@@ -140,6 +152,48 @@ sealed partial class QueryTranslator
 
     static NotSupportedException Unsupported(Expression expression) =>
         new($"Expression '{expression.NodeType}' is not supported by Scry.");
+
+    // The first parameter an expression reads that no lambda inside it declares: what makes it
+    // something other than closure state.
+    sealed class UnboundParameter :
+        ExpressionVisitor
+    {
+        readonly HashSet<ParameterExpression> bound = [];
+        ParameterExpression? found;
+
+        public static ParameterExpression? In(Expression expression)
+        {
+            var finder = new UnboundParameter();
+            finder.Visit(expression);
+            return finder.found;
+        }
+
+        protected override Expression VisitLambda<T>(Expression<T> node)
+        {
+            foreach (var parameter in node.Parameters)
+            {
+                bound.Add(parameter);
+            }
+
+            var visited = base.VisitLambda(node);
+            foreach (var parameter in node.Parameters)
+            {
+                bound.Remove(parameter);
+            }
+
+            return visited;
+        }
+
+        protected override Expression VisitParameter(ParameterExpression node)
+        {
+            if (!bound.Contains(node))
+            {
+                found ??= node;
+            }
+
+            return base.VisitParameter(node);
+        }
+    }
 
     sealed class ParameterFinder(ParameterExpression target) :
         ExpressionVisitor

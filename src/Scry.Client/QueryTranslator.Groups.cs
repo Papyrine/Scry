@@ -256,12 +256,15 @@ sealed partial class QueryTranslator
     // The same question through the Where/Select/Distinct chain a composed aggregate may put between
     // the fold and the group. A chain bottoming at anything else — g.Key, a closure — is not the
     // group being folded.
+    // Followed down the receiver of each call, which for every LINQ operator is the first argument of
+    // a static method. An instance call has no source to follow: g.ToString() reads the group as a
+    // value, and is left to the translator's ordinary refusal rather than read as a fold.
     static bool IsChainOver(MethodCallExpression call, ParameterExpression target)
     {
         Expression? current = call;
-        while (current is MethodCallExpression inner)
+        while (current is MethodCallExpression {Object: null, Arguments.Count: > 0} inner)
         {
-            current = inner.Object ?? (inner.Arguments.Count > 0 ? inner.Arguments[0] : null);
+            current = inner.Arguments[0];
         }
 
         return current == target;
