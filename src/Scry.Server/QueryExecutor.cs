@@ -581,11 +581,12 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             }
 
             var rowType = leftSelector.ReturnType;
-            var combined = ApplySelectTyped(query, leftSelector).Provider.CreateQuery(
+            var left = ApplySelectTyped(query, leftSelector);
+            var combined = left.Provider.CreateQuery(
                 CallQueryable(
                     set.Kind.ToString(),
                     [rowType],
-                    ApplySelectTyped(query, leftSelector).Expression,
+                    left.Expression,
                     ApplySelectTyped(otherSource, rightSelector).Expression));
 
             switch (terminal)
@@ -614,8 +615,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             }
 
             var rowType = selector.ReturnType;
-            var deduped = ApplySelectTyped(query, selector).Provider.CreateQuery(
-                CallQueryable("Distinct", [rowType], ApplySelectTyped(query, selector).Expression));
+            var selected = ApplySelectTyped(query, selector);
+            var deduped = selected.Provider.CreateQuery(
+                CallQueryable("Distinct", [rowType], selected.Expression));
 
             foreach (var op in afterDistinct)
             {

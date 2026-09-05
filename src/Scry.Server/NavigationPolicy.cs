@@ -32,6 +32,10 @@ sealed class NavigationPolicy(
     // would otherwise ask the database the same thing three times.
     readonly HashSet<(Type Owner, string Member)> probed = [];
 
+    // The policy-filtered target, resolved once per source a query traverses into: the chain is the
+    // same at every site that reads through it, and resolving is running that chain.
+    readonly Dictionary<Type, IQueryable> filtered = [];
+
     /// <summary>Whether stepping into <paramref name="target"/> means stepping into a policied source.</summary>
     public bool Applies(Type target) =>
         schema.TryGetPoliciedSource(target, out _);
@@ -131,12 +135,24 @@ sealed class NavigationPolicy(
 
     IQueryable Filtered(Type target, Func<PolicyUse, bool>? include)
     {
+        if (include is null &&
+            filtered.TryGetValue(target, out var whole))
+        {
+            return whole;
+        }
+
         if (!schema.TryGetPoliciedSource(target, out var source))
         {
             throw new($"'{target.Name}' carries no row policy, so a traversal into it needs no rewrite.");
         }
 
-        return sources(source.Name, include);
+        var resolved = sources(source.Name, include);
+        if (include is null)
+        {
+            filtered[target] = resolved;
+        }
+
+        return resolved;
     }
 
     /// <summary>

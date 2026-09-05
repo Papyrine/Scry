@@ -23,20 +23,26 @@ static class Parameterization
     /// </remarks>
     public static Expression Parameterize(object value, Type type)
     {
-        var holder = holders.GetOrAdd(
-            type,
-            _ =>
-            {
-                var closed = typeof(ValueHolder<>).MakeGenericType(_);
-                return (closed.GetConstructors().Single(), closed.GetField("Value")!);
-            });
-
+        var holder = holders.GetOrAdd(type, Holder);
         return Expression.Field(
-            Expression.Constant(holder.Constructor.Invoke([value]), holder.Field.DeclaringType!),
+            Expression.Constant(holder.Create(value), holder.Field.DeclaringType!),
             holder.Field);
     }
 
-    static readonly ConcurrentDictionary<Type, (ConstructorInfo Constructor, FieldInfo Field)> holders = new();
+    static readonly ConcurrentDictionary<Type, (Func<object, object> Create, FieldInfo Field)> holders = new();
+
+    // The holder's constructor, compiled once per type. A value is bound per node per request, and
+    // invoking the constructor through reflection would box and check its argument on every one.
+    static (Func<object, object> Create, FieldInfo Field) Holder(Type type)
+    {
+        var closed = typeof(ValueHolder<>).MakeGenericType(type);
+        var value = Expression.Parameter(typeof(object), "value");
+        var create = Expression.Lambda<Func<object, object>>(
+                Expression.New(closed.GetConstructors().Single(), Expression.Convert(value, type)),
+                value)
+            .Compile();
+        return (create, closed.GetField("Value")!);
+    }
 
     /// <summary>Stands in for the closure a captured variable would live on.</summary>
     sealed class ValueHolder<T>(T value)

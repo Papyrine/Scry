@@ -221,7 +221,7 @@ sealed class ExpressionBuilder(
         // uses. Expression.GreaterThan would refuse the type outright.
         if (!HasRelationalOperators(left.Type))
         {
-            var compareTo = left.Type.GetMethod(nameof(IComparable.CompareTo), [left.Type]) ??
+            var compareTo = Method(left.Type, nameof(IComparable.CompareTo), left.Type) ??
                             throw new ScryValidationException($"'{left.Type.Name}' cannot be a paging key.");
             var comparison = Expression.Call(left, compareTo, right);
             var zero = Expression.Constant(0);
@@ -249,7 +249,7 @@ sealed class ExpressionBuilder(
         // The CompareTo route needs the value itself: a lifted call has no translation, and a seek
         // key is non-nullable in the model anyway.
         return underlying == type &&
-               type.GetMethod(nameof(IComparable.CompareTo), [type]) is not null;
+               Method(type, nameof(IComparable.CompareTo), type) is not null;
     }
 
     // The types Expression.GreaterThan accepts: the numeric primitives and char, which have the
@@ -262,8 +262,38 @@ sealed class ExpressionBuilder(
             return true;
         }
 
-        return underlying.GetMethod("op_GreaterThan", [underlying, underlying]) is not null;
+        return Method(underlying, "op_GreaterThan", underlying, underlying) is not null;
     }
+
+    /// <summary>
+    /// A public method of <paramref name="owner"/> named so, taking the argument types given — none,
+    /// one, or two — or null where there is none. Resolved once per shape: the owner is a type the
+    /// wire decides, so these cannot be static fields like the file's other lookups, and a reflection
+    /// scan per node per request is what a cache here saves.
+    /// </summary>
+    static MethodInfo? Method(Type owner, string name, Type? first = null, Type? second = null) =>
+        methods.GetOrAdd((owner, name, first, second), Lookup);
+
+    static readonly ConcurrentDictionary<(Type Owner, string Name, Type? First, Type? Second), MethodInfo?> methods = new();
+
+    static MethodInfo? Lookup((Type Owner, string Name, Type? First, Type? Second) key)
+    {
+        Type[] parameters = key.First is null
+            ? []
+            : key.Second is null
+                ? [key.First]
+                : [key.First, key.Second];
+        return key.Owner.GetMethod(key.Name, parameters);
+    }
+
+    // The one-argument overload of a method whose argument type is the owner's to decide — AddDays
+    // takes an int on DateOnly and a double on DateTime.
+    static MethodInfo? Unary(Type owner, string name) =>
+        unaryMethods.GetOrAdd(
+            (owner, name),
+            key => key.Owner.GetMethods().FirstOrDefault(_ => _.Name == key.Name && _.GetParameters().Length == 1));
+
+    static readonly ConcurrentDictionary<(Type Owner, string Name), MethodInfo?> unaryMethods = new();
 
     /// <summary>
     /// Builds a default projection of every allow-listed scalar member of the source. Only reached for
@@ -1454,7 +1484,7 @@ sealed class ExpressionBuilder(
             ? target
             : Expression.Property(target, "Value");
 
-        var method = value.Type.GetMethod(name, []) ??
+        var method = Method(value.Type, name) ??
                      throw new ScryValidationException($"'{value.Type.Name}' has no '{name}'.");
         return Expression.Call(value, method);
     }
@@ -1467,8 +1497,7 @@ sealed class ExpressionBuilder(
             ? target
             : Expression.Property(target, "Value");
 
-        var method = value.Type.GetMethods()
-                         .FirstOrDefault(_ => _.Name == name && _.GetParameters().Length == 1) ??
+        var method = Unary(value.Type, name) ??
                      throw new ScryValidationException($"'{value.Type.Name}' has no '{name}'.");
 
         var argument = Build(call.Arguments[0], row, method.GetParameters()[0].ParameterType);
@@ -1629,7 +1658,7 @@ sealed class ExpressionBuilder(
         // is taken because CompareOrdinal answers with a difference rather than with -1, 0, or 1.
         Expression compared = left.Type == typeof(string) && InMemory(row)
             ? Expression.Call(mathSign, Expression.Call(stringCompareOrdinal, left, right))
-            : Expression.Call(left, left.Type.GetMethod("CompareTo", [left.Type])!, right);
+            : Expression.Call(left, Method(left.Type, "CompareTo", left.Type)!, right);
 
         // The operands that can be null: an optional member, or text, whose null no static type
         // records.
@@ -1696,18 +1725,14 @@ sealed class ExpressionBuilder(
             ConvertTo(NonNullable(target), typeof(double)),
             ConvertTo(NonNullable(Build(call.Arguments[0], row, typeof(double))), typeof(double)));
 
-    static readonly ConcurrentDictionary<(string Name, int Arity), MethodInfo> doubleMethods = new();
-
     static MethodInfo DoubleMethod(string name, int arity) =>
-        doubleMethods.GetOrAdd(
-            (name, arity),
-            key => typeof(Math).GetMethod(key.Name, [..Enumerable.Repeat(typeof(double), key.Arity)])!);
+        Method(typeof(Math), name, typeof(double), arity == 2 ? typeof(double) : null)!;
 
     static Expression MathCall(string name, Expression target)
     {
         var value = NonNullable(target);
 
-        var method = typeof(Math).GetMethod(name, [value.Type]) ??
+        var method = Method(typeof(Math), name, value.Type) ??
                      throw new ScryValidationException($"Math.{name} is not defined for '{value.Type.Name}'.");
         return Expression.Call(method, value);
     }
@@ -1724,7 +1749,7 @@ sealed class ExpressionBuilder(
             : Expression.Property(target, "Value");
         var digits = ConvertTo(Build(call.Arguments[0], row, typeof(int)), typeof(int));
 
-        var method = typeof(Math).GetMethod("Round", [value.Type, typeof(int)]) ??
+        var method = Method(typeof(Math), "Round", value.Type, typeof(int)) ??
                      throw new ScryValidationException($"Math.Round is not defined for '{value.Type.Name}'.");
         return Expression.Call(method, value, digits);
     }
@@ -1911,7 +1936,7 @@ sealed class ExpressionBuilder(
             throw new ScryValidationException($"ToString is not supported over '{value.Type.Name}'.");
         }
 
-        return Expression.Call(value, value.Type.GetMethod("ToString", Type.EmptyTypes)!);
+        return Expression.Call(value, Method(value.Type, "ToString")!);
     }
 
     // The scalar shapes a relational provider can render as text. Deliberately a list rather than
