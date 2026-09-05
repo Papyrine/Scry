@@ -27,6 +27,9 @@ public abstract class BrowserFixture
     // test may open a second page (a shared link opens one).
     readonly ConcurrentBag<IPage> pages = [];
 
+    // The contexts opened for pages that share storage; closed after their pages.
+    readonly ConcurrentBag<IBrowserContext> contexts = [];
+
     /// <summary>The origin the sample server is listening on, with no trailing slash.</summary>
     protected string BaseUrl { get; private set; } = null!;
 
@@ -41,12 +44,19 @@ public abstract class BrowserFixture
         Track(await browser.NewPageAsync(options));
 
     /// <summary>
-    /// Opens a page in another page's context, so the two share the origin's storage — what two
-    /// explorer windows in one browser do. A page of its own has a context of its own, and so a
-    /// storage of its own.
+    /// A context for pages that share an origin's storage — what two explorer windows in one browser
+    /// do. A page opened on its own owns a context of its own, with a storage of its own, and
+    /// Playwright refuses to open a second page in one of those.
     /// </summary>
-    protected async Task<IPage> NewPageBesideAsync(IPage sibling) =>
-        Track(await sibling.Context.NewPageAsync());
+    protected async Task<IBrowserContext> NewContextAsync()
+    {
+        var context = await browser.NewContextAsync();
+        contexts.Add(context);
+        return context;
+    }
+
+    protected async Task<IPage> NewPageInAsync(IBrowserContext context) =>
+        Track(await context.NewPageAsync());
 
     IPage Track(IPage page)
     {
@@ -87,6 +97,18 @@ public abstract class BrowserFixture
             {
                 // A page the test already closed, or one whose browser is going away. Neither is a
                 // failure of the test that just ran.
+            }
+        }
+
+        while (contexts.TryTake(out var context))
+        {
+            try
+            {
+                await context.CloseAsync();
+            }
+            catch (PlaywrightException)
+            {
+                // As above.
             }
         }
     }

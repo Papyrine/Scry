@@ -1197,12 +1197,13 @@ public class UiSnapshotTests :
     [Test]
     public async Task ExplorerWindowsShareTheirTabs()
     {
-        var first = await NewPageAsync();
+        var context = await NewContextAsync();
+        var first = await NewPageInAsync(context);
         await first.GoToExplorerAsync(BaseUrl);
         await first.SetEditorValueAsync("Query.Department");
         await WaitForStoredTabsAsync(first, "Query.Department");
 
-        var second = await NewPageBesideAsync(first);
+        var second = await NewPageInAsync(context);
         await second.GoToExplorerAsync(BaseUrl);
         await Assertions.Expect(second.Locator("[data-testid='tab']")).ToHaveCountAsync(1);
         await second.Locator("[data-testid='tab-add']").ClickAsync();
