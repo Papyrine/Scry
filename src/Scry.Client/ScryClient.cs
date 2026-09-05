@@ -215,6 +215,12 @@ public sealed class ScryClient
 
     bool staleRaised;
 
+    // Whether a GET was ever answered 405. Kept apart from the advertised budget: a server that maps no
+    // GET route says so through a header on every response, but a gateway in front of one that does
+    // says nothing, and the budget it re-advertises would otherwise re-open the URL form for every
+    // query to be refused again.
+    bool urlRefused;
+
     internal async Task<QueryResponse> SendAsync(QueryRequest request, ScryCall? call, Cancel cancel)
     {
         var response = await transport(request, call, cancel);
@@ -482,17 +488,22 @@ public sealed class ScryClient
         // access log of every hop a URL passes, so it travels as a body however short it is. Read off
         // the finished request rather than the expression tree, which has four ways to build one that
         // never pass through a single point — see SensitiveWalk.
-        var response = await Send(!RequiresBody(request) && QueryUrl.WithinLimit(encoded, QueryUrlLimit));
+        var asUrl = !urlRefused && !RequiresBody(request) && QueryUrl.WithinLimit(encoded, QueryUrlLimit);
+        var response = await Send(asUrl);
 
         // A server that maps no GET route answers one from its routing table, so the reply carries
         // neither a budget to learn from nor a body to read — this client would otherwise keep asking
         // the same way and keep being refused the same way. The status says exactly what to do instead,
         // so it is done once: the budget drops to zero for the life of the client, and the query is
         // re-asked as a body. Only ever this direction, and only ever once.
-        if ((int) response.StatusCode == 405 &&
-            response.RequestMessage?.Method == HttpMethod.Get)
+        // Whether the attempt was a URL is what this client decided, not what the response says: a
+        // handler need not set RequestMessage on what it returns, and only the client knows what it sent.
+        if (asUrl &&
+            (int) response.StatusCode == 405)
         {
+            urlRefused = true;
             QueryUrlLimit = 0;
+            asUrl = false;
             response.Dispose();
             response = await Send(url: false);
         }
@@ -503,8 +514,8 @@ public sealed class ScryClient
         // for, and the flag says so in a way a client can act on without matching a message. The
         // constant has already reached the log this refusal is about, which is why the answer is to
         // stop the response being cached under that URL rather than to pretend nothing happened.
-        if (!response.IsSuccessStatusCode &&
-            response.RequestMessage?.Method == HttpMethod.Get &&
+        if (asUrl &&
+            !response.IsSuccessStatusCode &&
             await IsRequiresBody(response, cancel))
         {
             response.Dispose();
