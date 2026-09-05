@@ -403,6 +403,7 @@ public partial class App
             introspection = ScryJson.DeserializeIntrospection(json);
             scryReferences = await SnippetExecutor.FetchReferencesAsync(Http);
             workspace = RoslynWorkspace.Create(ModelSynthesizer.Synthesize(introspection), scryReferences);
+            await workspace.WarmAsync();
             await TryRegister();
         }
         catch (Exception exception)

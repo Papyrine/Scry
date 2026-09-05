@@ -6,8 +6,13 @@ namespace Scry;
 /// <see cref="CompletionService"/> can offer members against the allow-listed surface (e.g.
 /// <c>Query.Employee.Where(e =&gt; e.</c> → Active, Name, Status, ...).
 /// </summary>
-public sealed class RoslynWorkspace
+public sealed class RoslynWorkspace :
+    IDisposable
 {
+    // One MEF composition for the process. Composing one loads and scans every feature assembly,
+    // and a re-fetched schema wants a new workspace, not a new composition.
+    static readonly Lazy<MefHostServices> host = new(CreateHost);
+
     // The user's snippet is spliced between these so it is a legal method body. The usings make
     // LINQ operators (System.Linq), the synthesized models/enums (Scry.Generated), and the Scry
     // terminal operators (Scry: ToListAsync/FirstAsync/CountAsync/...) resolve —
@@ -105,7 +110,7 @@ public sealed class RoslynWorkspace
     /// </param>
     public static RoslynWorkspace Create(string generatedSource, IReadOnlyList<MetadataReference> scryReferences)
     {
-        var workspace = new AdhocWorkspace(CreateHost());
+        var workspace = new AdhocWorkspace(host.Value);
 
         var projectInfo = ProjectInfo.Create(
             ProjectId.CreateNewId(),
@@ -123,6 +128,31 @@ public sealed class RoslynWorkspace
 
         return new(workspace, editor.Id);
     }
+
+    /// <summary>
+    /// Builds the compilation once, so that every request after it is an edit to it rather than a
+    /// build of its own.
+    /// </summary>
+    /// <remarks>
+    /// Each request forks the current solution with the snippet's text and asks the fork for a
+    /// semantic model. A fork derives its compilation from the one its base has cached — one syntax
+    /// tree replaced, the references and their symbols shared — but only when the base has one. Until
+    /// then, nothing does: every fork starts from nothing, binding the whole of the BCL and the models
+    /// again for one completion, one diagnostic pass, or one hover. Called once, after the workspace
+    /// is created, and the first request pays for nothing but itself.
+    /// </remarks>
+    public async Task WarmAsync()
+    {
+        var project = workspace.CurrentSolution.GetProject(editorDocumentId.ProjectId)!;
+        await project.GetCompilationAsync();
+    }
+
+    /// <summary>
+    /// Whether the base compilation is built and in hand, which is what a request's fork derives its
+    /// own from. False until <see cref="WarmAsync"/> has run.
+    /// </summary>
+    public bool IsWarm =>
+        workspace.CurrentSolution.GetProject(editorDocumentId.ProjectId)!.TryGetCompilation(out _);
 
     /// <summary>Returns the completions offered at <paramref name="caret"/> within <paramref name="code"/>.</summary>
     public async Task<List<ScryCompletion>> CompleteAsync(string code, int caret)
@@ -247,6 +277,9 @@ public sealed class RoslynWorkspace
             splice.ToSnippet(token.SpanStart),
             splice.ToSnippet(token.Span.End));
     }
+
+    public void Dispose() =>
+        workspace.Dispose();
 
     static MefHostServices CreateHost()
     {

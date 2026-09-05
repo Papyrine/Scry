@@ -1306,7 +1306,7 @@ sequenceDiagram
 
 1. On load the UI fetches `{Route}/introspect`.
 2. `ModelSynthesizer` turns that contract into the same C# the design-time generator would emit — the enums, one query model per type, and a `ScryQuery` facade.
-3. `RoslynWorkspace` compiles that source in-browser and wraps the user's snippet in a method body — the variables ahead of the query, then the query as what the body returns — so the C# completion service offers members, and diagnostics are real compiler diagnostics.
+3. `RoslynWorkspace` compiles that source in-browser, once, and wraps the user's snippet in a method body — the variables ahead of the query, then the query as what the body returns — so the C# completion service offers members, and diagnostics are real compiler diagnostics. Every completion, diagnostic pass, and hover is an edit to that one compilation rather than a build of its own.
 4. `SnippetExecutor` compiles the same snippet, runs it against a capturing client to build the LINQ expression tree, and calls the production `ToScryRequest` — so the wire request shown is produced by exactly the same translation the real client performs.
 5. The request is sent to `QueryEndpoint` — [as a URL](wire-format.md#the-url-form) where it fits in one, as a body where it does not, the same choice `ScryClient` makes — and validated like any other.
 

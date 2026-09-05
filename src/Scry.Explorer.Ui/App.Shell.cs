@@ -279,7 +279,10 @@ public partial class App
         {
             var json = await Http.GetStringAsync("introspect");
             introspection = ScryJson.DeserializeIntrospection(json);
+            var replaced = workspace;
             workspace = RoslynWorkspace.Create(ModelSynthesizer.Synthesize(introspection), scryReferences!);
+            replaced?.Dispose();
+            await workspace.WarmAsync();
             executor = null;
             error = null;
         }

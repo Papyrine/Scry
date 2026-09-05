@@ -47,6 +47,28 @@ public class RoslynLayerTests
 
     static readonly SnippetExecutor executor = SnippetExecutor.Create(introspection, scryReferences);
 
+    // A request forks the solution with the snippet's text and derives its compilation from the one
+    // the base has in hand — one tree replaced, the rest kept — but only when the base has one.
+    // Requests do not put one there: each fork's compilation is the fork's own, so cold, every
+    // completion, diagnostic pass, and hover built from nothing. Warming is what puts one there, and
+    // it stays there through the requests that follow.
+    [Test]
+    public async Task HoldsTheBaseCompilationOnceWarmed()
+    {
+        using var fresh = RoslynWorkspace.Create(ModelSynthesizer.Synthesize(introspection), scryReferences);
+        Assert.That(fresh.IsWarm, Is.False);
+
+        await fresh.DiagnoseAsync("Query.Employee.Where(_ => _.Active)");
+        Assert.That(fresh.IsWarm, Is.False, "a request warms nothing");
+
+        await fresh.WarmAsync();
+        Assert.That(fresh.IsWarm, Is.True);
+
+        await fresh.DiagnoseAsync("Query.Employee.Where(_ => _.Name.Length > 1)");
+        await fresh.CompleteAsync("Query.Employee.Where(_ => _.", 26);
+        Assert.That(fresh.IsWarm, Is.True, "requests leave it in place");
+    }
+
     [Test]
     public async Task CompletesModelMembersAfterLambdaDot()
     {
