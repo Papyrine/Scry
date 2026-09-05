@@ -598,11 +598,14 @@ public static class ScryServiceExtensions
             context.Response.ContentLength = value.Length;
             await context.Response.Body.WriteAsync(value, context.RequestAborted);
         }
-        catch (ScryValidationException exception)
+        catch (ScryValidationException exception) when (!context.Response.HasStarted)
         {
             await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, exception.StaleClient);
         }
-        catch (Exception)
+        // Not once the bytes have begun to go out: a status cannot be set on a started response, and
+        // a caller that went away mid-download is what makes the write throw, which is nothing to
+        // answer or to report.
+        catch (Exception) when (!context.Response.HasStarted && !context.RequestAborted.IsCancellationRequested)
         {
             await WriteError(context, StatusCodes.Status500InternalServerError, "Attachment fetch failed.", drifted);
         }
