@@ -117,6 +117,12 @@ public sealed class TabStore
     /// Replaces the contents from a stored value. Anything that does not parse leaves the store as it
     /// was — a single empty tab — rather than failing the page.
     /// </summary>
+    /// <remarks>
+    /// Judged tab by tab: a value that parses can still hold a <c>null</c> where a tab should be, or
+    /// a tab whose text or id is <c>null</c>, and any of those failed the page on its first render —
+    /// before the button that clears the storage was reachable. A missing tab is dropped; a tab
+    /// missing its text is a blank one, and one missing its id is given one.
+    /// </remarks>
     public void Load(string? json)
     {
         if (string.IsNullOrEmpty(json))
@@ -126,15 +132,24 @@ public sealed class TabStore
 
         try
         {
-            var loaded = JsonSerializer.Deserialize<Persisted>(json, options);
-            if (loaded?.Tabs is not { Count: > 0 })
+            var loaded = JsonSerializer.Deserialize<Stored>(json, options);
+            var readable = loaded?.Tabs?
+                .Where(_ => _ is not null)
+                .Select(_ => new TabState
+                {
+                    Id = string.IsNullOrEmpty(_!.Id) ? Guid.NewGuid().ToString("n") : _.Id,
+                    Query = _.Query ?? "",
+                    Title = _.Title
+                })
+                .ToList();
+            if (readable is not { Count: > 0 })
             {
                 return;
             }
 
             tabs.Clear();
-            tabs.AddRange(loaded.Tabs);
-            ActiveIndex = Math.Clamp(loaded.ActiveIndex, 0, tabs.Count - 1);
+            tabs.AddRange(readable);
+            ActiveIndex = Math.Clamp(loaded!.ActiveIndex, 0, tabs.Count - 1);
         }
         catch (JsonException)
         {
@@ -147,5 +162,23 @@ public sealed class TabStore
         public List<TabState> Tabs { get; set; } = [];
 
         public int ActiveIndex { get; set; }
+    }
+
+    // The shape a stored value is read through: every field optional, so what a previous session
+    // wrote — or failed to — is judged here rather than thrown at.
+    sealed class Stored
+    {
+        public List<StoredTab?>? Tabs { get; set; }
+
+        public int ActiveIndex { get; set; }
+    }
+
+    sealed class StoredTab
+    {
+        public string? Id { get; set; }
+
+        public string? Query { get; set; }
+
+        public string? Title { get; set; }
     }
 }

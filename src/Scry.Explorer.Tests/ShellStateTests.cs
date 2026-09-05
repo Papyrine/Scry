@@ -116,6 +116,8 @@ public class ShellStateTests
     [TestCase("")]
     [TestCase("not json")]
     [TestCase("{\"tabs\":[]}")]
+    [TestCase("{\"tabs\":null}")]
+    [TestCase("{\"tabs\":[null]}")]
     public void KeepsTheOpenTabOnAValueItCannotRead(string? json)
     {
         var tabs = new TabStore("Query.Employee");
@@ -123,6 +125,21 @@ public class ShellStateTests
 
         Assert.That(tabs.Tabs, Has.Count.EqualTo(1));
         Assert.That(tabs.Active.Query, Is.EqualTo("Query.Employee"));
+    }
+
+    // Tab by tab: a null where a tab should be is dropped, a tab missing its text is a blank one, and
+    // a tab missing its id is given one. Each of these failed the first render before the button that
+    // clears the storage could be reached.
+    [Test]
+    public void ReadsTheTabsItCanBesideOnesItCannot()
+    {
+        var tabs = new TabStore("Query.Employee");
+        tabs.Load("{\"tabs\":[null,{\"id\":null,\"query\":null},{\"query\":\"Query.Region\"}],\"activeIndex\":2}");
+
+        Assert.That(tabs.Tabs.Select(_ => _.Query), Is.EqualTo(["", "Query.Region"]));
+        Assert.That(tabs.Tabs[0].Id, Is.Not.Empty);
+        Assert.That(tabs.Title(tabs.Tabs[0]), Is.EqualTo("Query 1"));
+        Assert.That(tabs.Active.Query, Is.EqualTo("Query.Region"));
     }
 
     // A pane dragged past either end keeps a usable sliver rather than vanishing into an edge that

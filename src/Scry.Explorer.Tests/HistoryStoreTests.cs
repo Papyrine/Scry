@@ -204,17 +204,31 @@ public class HistoryStoreTests
         Assert.That(loaded.Count, Is.EqualTo(2));
     }
 
-    // Corrupt or from a shape this version does not read: start empty rather than fail the page.
+    // Corrupt or from a shape this version does not read: start empty rather than fail the page. The
+    // last two parse, and each held an entry that failed the first render before the button that
+    // clears the storage could be reached.
     [TestCase(null)]
     [TestCase("")]
     [TestCase("not json")]
     [TestCase("{\"not\":\"an array\"}")]
+    [TestCase("[null]")]
+    [TestCase("[{\"query\":null}]")]
     public void StartsEmptyOnAValueItCannotRead(string? json)
     {
         var store = new HistoryStore();
         store.Load(json);
 
         Assert.That(store.Count, Is.Zero);
+    }
+
+    // Entry by entry: the ones that read survive the ones that do not.
+    [Test]
+    public void KeepsTheEntriesItCanReadBesideOnesItCannot()
+    {
+        var store = new HistoryStore();
+        store.Load("[null,{\"query\":\"Query.Employee\"},{\"query\":null}]");
+
+        Assert.That(store.Items.Select(_ => _.Query), Is.EqualTo(["Query.Employee"]));
     }
 
     // The value written before entries carried labels: a plain array of query strings.

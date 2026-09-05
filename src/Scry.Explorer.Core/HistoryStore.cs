@@ -167,6 +167,12 @@ public sealed class HistoryStore
     /// Replaces the contents from a stored value. Anything that does not parse is treated as an empty
     /// history rather than surfaced — a debug convenience never fails the page.
     /// </summary>
+    /// <remarks>
+    /// Judged entry by entry, not as a whole: a value that parses can still hold a <c>null</c> where an
+    /// entry should be, or an entry with no text, and either would have failed the page on its first
+    /// render — before the button that clears the storage was reachable. Those entries are dropped and
+    /// the rest are kept.
+    /// </remarks>
     public void Load(string? json)
     {
         items.Clear();
@@ -177,10 +183,10 @@ public sealed class HistoryStore
 
         try
         {
-            var loaded = JsonSerializer.Deserialize<List<HistoryItem>>(json, options);
+            var loaded = JsonSerializer.Deserialize<List<HistoryItem?>>(json, options);
             if (loaded is not null)
             {
-                items.AddRange(loaded.Where(_ => !string.IsNullOrWhiteSpace(_.Query)));
+                items.AddRange(loaded.Where(_ => !string.IsNullOrWhiteSpace(_?.Query))!);
                 Evict();
             }
         }
@@ -204,7 +210,7 @@ public sealed class HistoryStore
 
         try
         {
-            var queries = JsonSerializer.Deserialize<List<string>>(json);
+            var queries = JsonSerializer.Deserialize<List<string?>>(json);
             if (queries is null)
             {
                 return;
@@ -215,7 +221,7 @@ public sealed class HistoryStore
                     .Where(_ => !string.IsNullOrWhiteSpace(_))
                     .Select(_ => new HistoryItem
                     {
-                        Query = _
+                        Query = _!
                     }));
             Evict();
         }
