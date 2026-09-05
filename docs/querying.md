@@ -816,7 +816,7 @@ var rows = await client.Source<Order>("Order")
     .Take(1)
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L232-L239' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientDistinctPaging' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L264-L271' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientDistinctPaging' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Ordering, paging and counting a deduplicated query all materialize it as a row with one property per projected member — a shaped row is an array of values with no equality or ordering of its own. Three rules follow:
@@ -1233,7 +1233,7 @@ var rows = await client.Source<Order>("Order")
         _.Amount - (_.Discount ?? 0m)))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L518-L525' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientComputedProjection' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L550-L557' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientComputedProjection' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The same allow-list applies inside a computed leaf as anywhere else: a `[QueryIgnore]`d member is no more reachable through an expression than through a plain path, and the expression-depth limit still holds.
@@ -1248,7 +1248,7 @@ var rows = await client.Source<Employee>("Employee")
     .Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name.ToUpper())))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L576-L581' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientNestedComputed' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L608-L613' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientNestedComputed' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 One restriction: a leaf must **read at least one member of the row**. `Select(_ => new { Kind = "employee" })` is rejected — the client already has that value, and EF refuses a constant in a client projection.
@@ -1263,7 +1263,7 @@ var rows = await client.Source<Order>("Order")
     .Select(_ => new OrderShape(_.Key, _.Sum(_ => _.Amount) / _.Count()))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L626-L631' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupedComputed' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L658-L663' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupedComputed' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 That does not widen what a group can read. Every column but the key has been folded away, so naming one — even buried inside an expression — is still rejected.
@@ -1443,7 +1443,7 @@ var rows = await client.Source<Order>("Order")
     .Select(_ => new OrderShape(_.Key, _.Sum(_ => _.Amount)))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L689-L695' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientHaving' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L721-L727' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientHaving' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Its predicate reads a group, so — exactly like the grouped `Select` — it may name only the group key and aggregates. Every other column has been folded away by the grouping, and naming one is rejected:

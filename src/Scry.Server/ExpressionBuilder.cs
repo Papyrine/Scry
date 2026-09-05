@@ -1752,22 +1752,37 @@ sealed class ExpressionBuilder(
     Expression BuildIn(CallNode call, Expression target)
     {
         var elementType = target.Type;
-        var values = Array.CreateInstance(elementType, call.Arguments.Count);
-        var underlying = Nullable.GetUnderlyingType(elementType) ?? elementType;
+        var underlying = Nullable.GetUnderlyingType(elementType);
+        var values = new List<object?>(call.Arguments.Count);
 
-        for (var i = 0; i < call.Arguments.Count; i++)
+        foreach (var argument in call.Arguments)
         {
-            var constant = (ConstNode)call.Arguments[i];
+            var constant = (ConstNode)argument;
             if (constant.Value is not null &&
                 constant.Tag != ClrTypeTag.Null)
             {
-                values.SetValue(ParseValue(constant.Value, underlying), i);
+                values.Add(ParseValue(constant.Value, underlying ?? elementType));
             }
+            else if (underlying is not null)
+            {
+                // A null candidate matches the member's own null, as Contains over a list would.
+                values.Add(null);
+            }
+
+            // Over a required member a null is in no set: C# lifts the member to compare it — which
+            // the client drops as lifting — and a lifted required value is never null. Left in the
+            // array it would read as the type's default and match key 0, or false.
+        }
+
+        var array = Array.CreateInstance(elementType, values.Count);
+        for (var i = 0; i < values.Count; i++)
+        {
+            array.SetValue(values[i], i);
         }
 
         return Expression.Call(
             enumerableContains.MakeGenericMethod(elementType),
-            Parameterization.Parameterize(values, typeof(IEnumerable<>).MakeGenericType(elementType)),
+            Parameterization.Parameterize(array, typeof(IEnumerable<>).MakeGenericType(elementType)),
             target);
     }
 

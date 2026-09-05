@@ -120,7 +120,7 @@ var sum = await client.Source<Order>("Order")
     .Where(_ => _.Region == "North")
     .SumAsync(_ => _.Amount);
 ```
-<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L136-L140' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAggregateTerminal' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L168-L172' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAggregateTerminal' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The other two positions EF Core allows an aggregate in are both reachable as well:

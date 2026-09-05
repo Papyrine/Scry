@@ -71,6 +71,38 @@ public class ExpandedOperatorTests
         Assert.That(count, Is.EqualTo(2));
     }
 
+    // A set of optional values tested against a required member: C# lifts the member, which the
+    // client drops, so the server meets a null candidate over a required type. A null is in no set
+    // of required values; it once read as the type's default and matched the inactive employee.
+    [Test]
+    public async Task ANullCandidateOverARequiredMemberMatchesNothing()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+        var flags = new List<bool?> {null};
+
+        var count = await client.Source<Employee>("Employee")
+            .Where(_ => flags.Contains(_.Active))
+            .CountAsync();
+
+        Assert.That(count, Is.Zero);
+    }
+
+    [Test]
+    public async Task ANullCandidateOverAnOptionalMemberMatchesItsNull()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+        var managers = new List<int?> {null, 1};
+
+        // Alice manages Aaron and Bob; Alice and Carol have no manager.
+        var count = await client.Source<Employee>("Employee")
+            .Where(_ => managers.Contains(_.ManagerId))
+            .CountAsync();
+
+        Assert.That(count, Is.EqualTo(4));
+    }
+
     [Test]
     public async Task AggregateTerminals()
     {
