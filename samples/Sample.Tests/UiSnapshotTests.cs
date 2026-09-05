@@ -50,7 +50,8 @@ public class UiSnapshotTests :
     // unchanged asset is a 304 on the next visit rather than a download of the Roslyn bundle, and a
     // changed one is new bytes rather than a stale copy failing the boot manifest's integrity check.
     [TestCase("/scry")]
-    [TestCase("/scry/_framework/blazor.boot.json")]
+    [TestCase("/scry/_framework/dotnet.js")]
+    [TestCase("/scry/_framework/Scry.Client.dll")]
     [TestCase("/scry/js/scry.js")]
     public async Task ExplorerAssetsRevalidate(string path)
     {

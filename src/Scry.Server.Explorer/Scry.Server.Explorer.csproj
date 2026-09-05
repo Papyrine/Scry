@@ -61,12 +61,21 @@
          still reports the old one and the stamp would never change. WriteOnlyWhenDifferent then
          leaves the stamp (and so its own timestamp) alone while the published bytes are unchanged, so
          this forces a recompile exactly when they differ and never otherwise. Named without the
-         "scryui/" prefix so ExplorerAssets does not serve it as one of the assets. -->
+         "scryui/" prefix so ExplorerAssets does not serve it as one of the assets — it reads it
+         instead, the hash being each asset's ETag. -->
     <GetFileHash Files="@(_ScryExplorerUiFile)" Algorithm="SHA256">
       <Output TaskParameter="Items" ItemName="_ScryExplorerUiHashed" />
     </GetFileHash>
+    <ItemGroup>
+      <!-- The path each asset is served at. RecursiveDir is a glob's own metadata and does not
+           survive the hash task, whose output named every asset by its file name alone; the path is
+           taken back off the full one instead, qualified so this batches per item. -->
+      <_ScryExplorerUiStamped Include="@(_ScryExplorerUiHashed)">
+        <Served>$([MSBuild]::MakeRelative('$(ExplorerUiPublishDir)', '%(_ScryExplorerUiHashed.FullPath)'))</Served>
+      </_ScryExplorerUiStamped>
+    </ItemGroup>
     <WriteLinesToFile File="$(IntermediateOutputPath)scryui.stamp"
-                      Lines="@(_ScryExplorerUiHashed->'%(RecursiveDir)%(Filename)%(Extension) %(FileHash)')"
+                      Lines="@(_ScryExplorerUiStamped->'%(Served) %(FileHash)')"
                       Overwrite="true"
                       WriteOnlyWhenDifferent="true" />
     <ItemGroup>
