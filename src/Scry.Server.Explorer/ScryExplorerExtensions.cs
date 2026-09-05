@@ -1,3 +1,7 @@
+using System.Security.Cryptography;
+using System.Text;
+using Microsoft.Net.Http.Headers;
+
 namespace Scry;
 
 /// <summary>Opt-in mapping for the Scry query explorer (a self-contained Blazor WASM debugging UI).</summary>
@@ -28,7 +32,7 @@ public static class ScryExplorerExtensions
             Sql(context, options, processor));
         // The cast forces the RouteHandler (Delegate) overload; a bare HttpContext=>IResult lambda
         // would otherwise bind to the RequestDelegate overload and fail to compile.
-        group.MapGet("", (Func<HttpContext, IResult>)(_ => Serve(_, path: null, options, basePath, assets)));
+        group.MapGet("", (Func<HttpContext, IResult>) (_ => Serve(_, path: null, options, basePath, assets)));
         group.MapGet("/{**path}", (HttpContext context, string path) =>
             Serve(context, path, options, basePath, assets));
         return group;
@@ -52,15 +56,47 @@ public static class ScryExplorerExtensions
         // A path without a file extension is a client-side route (or the root) — serve the SPA host.
         if (path.Length == 0 || Path.GetExtension(path).Length == 0)
         {
-            return Index(basePath, assets);
+            return Index(context, basePath, assets);
         }
 
-        if (assets.TryOpen(path, out var stream, out var contentType))
+        if (assets.TryOpen(path, out var stream, out var contentType, out var tag))
         {
+            if (Unchanged(context, tag))
+            {
+                stream.Dispose();
+                return Results.StatusCode(StatusCodes.Status304NotModified);
+            }
+
             return Results.Stream(stream, contentType);
         }
 
         return Results.NotFound();
+    }
+
+    /// <summary>
+    /// Sets the response's cache validators and answers whether the caller already holds the bytes.
+    /// </summary>
+    /// <remarks>
+    /// Every asset asks to be revalidated rather than cached blind or not at all. The
+    /// <c>_framework</c> names are stable across releases — the executor fetches the client and wire
+    /// assemblies by name — so a cache that kept an old assembly under a new boot manifest would fail
+    /// the integrity check the manifest declares, and one that kept nothing would download Roslyn on
+    /// every visit. A tag from the embedded content hash makes an unchanged asset a 304 and a changed
+    /// one new bytes, at the cost of one conditional request each.
+    /// </remarks>
+    static bool Unchanged(HttpContext context, string? tag)
+    {
+        var headers = context.Response.Headers;
+        headers.CacheControl = "no-cache";
+        if (tag is null)
+        {
+            return false;
+        }
+
+        var ours = new EntityTagHeaderValue(tag);
+        headers.ETag = ours.ToString();
+        return EntityTagHeaderValue.TryParseList(context.Request.Headers.IfNoneMatch, out var held) &&
+               held.Any(_ => _.Equals(EntityTagHeaderValue.Any) || _.Compare(ours, useStrongComparison: false));
     }
 
     static IResult Introspect(HttpContext context, ScryExplorerOptions options, ScryProcessor processor)
@@ -124,10 +160,17 @@ public static class ScryExplorerExtensions
     // ReSharper disable once NotAccessedPositionalProperty.Local
     sealed record SqlPreview(string Sql);
 
-    static IResult Index(string basePath, ExplorerAssets assets)
+    static IResult Index(HttpContext context, string basePath, ExplorerAssets assets)
     {
         var html = assets.ReadText("index.html")
             .Replace("__SCRY_BASE__", basePath + "/");
+
+        // Tagged from what is served rather than from the embedded file: the route is written in.
+        var tag = $"\"{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(html)))}\"";
+        if (Unchanged(context, tag))
+        {
+            return Results.StatusCode(StatusCodes.Status304NotModified);
+        }
 
         return Results.Content(html, "text/html");
     }

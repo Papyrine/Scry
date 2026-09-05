@@ -46,6 +46,34 @@ public class UiSnapshotTests :
             .NotInline();
     }
 
+    // Every embedded asset, and the host page, carries an ETag and asks to be revalidated: an
+    // unchanged asset is a 304 on the next visit rather than a download of the Roslyn bundle, and a
+    // changed one is new bytes rather than a stale copy failing the boot manifest's integrity check.
+    [TestCase("/scry")]
+    [TestCase("/scry/_framework/blazor.boot.json")]
+    [TestCase("/scry/js/scry.js")]
+    public async Task ExplorerAssetsRevalidate(string path)
+    {
+        using var http = new HttpClient();
+        using var first = await http.GetAsync($"{BaseUrl}{path}");
+
+        Assert.That(first.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(first.Headers.CacheControl?.NoCache, Is.True);
+        var tag = first.Headers.ETag;
+        Assert.That(tag, Is.Not.Null);
+
+        using var held = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}{path}");
+        held.Headers.IfNoneMatch.Add(tag!);
+        using var second = await http.SendAsync(held);
+        Assert.That(second.StatusCode, Is.EqualTo(HttpStatusCode.NotModified));
+        Assert.That(second.Headers.ETag, Is.EqualTo(tag));
+
+        using var stale = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}{path}");
+        stale.Headers.IfNoneMatch.Add(new("\"stale\""));
+        using var third = await http.SendAsync(stale);
+        Assert.That(third.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
     // Verifies the Scry explorer (a separate Blazor WASM app, embedded in and served by the
     // Scry.Server.Explorer package under /scry) boots from the embedded assets in a real browser.
     [Test]

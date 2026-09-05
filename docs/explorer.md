@@ -1317,6 +1317,8 @@ Only validated requests reach the server. The explorer is a convenience over the
 
 The UI is published and embedded as manifest resources inside the `Scry.Server.Explorer` assembly, so the package is fully self-contained: no static web assets manifest, no extra files to deploy, and nothing to configure beyond the route.
 
+Every asset is served with an `ETag` from its content hash and `Cache-Control: no-cache`, so a browser revalidates on each visit: an unchanged asset answers 304 rather than downloading the Roslyn bundle again, and after an upgrade the new bytes arrive rather than a cached copy failing the boot manifest's integrity check.
+
 Because the explorer reveals the complete queryable schema, leaving it mapped in production means publishing that schema to anyone who passes the guard. The Development-only default is deliberate — and the [SQL preview](#sql-preview), which discloses more than the schema does, keeps a Development-only default of its own even when the explorer itself is opened up.
 
 
