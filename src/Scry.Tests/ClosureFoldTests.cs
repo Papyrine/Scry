@@ -18,13 +18,14 @@ public class ClosureFoldTests
 {
     // The shape that prompted this. A relative date is the client's own clock, so it belongs in the
     // request as a value; the temporal dispatch had a wire function for the name, but only for the
-    // spelling that reads the row, and refused this one rather than folding it.
+    // spelling that reads the row, and refused this one rather than folding it. The part read off
+    // the folded value folds with it, so the whole operand is the constant.
     [Test]
     public void ATemporalConversionOverClosureState()
     {
         var predicate = PredicateOf(_ => _.Placed.Day == Date.FromDateTime(DateTime.UtcNow).Day);
 
-        Assert.That(((CallNode) predicate.Right).Target, Is.InstanceOf<ConstNode>());
+        Assert.That(predicate.Right, Is.InstanceOf<ConstNode>());
     }
 
     // A temporal name the wire carries no function for at all — the fold is what makes it a value
@@ -51,6 +52,52 @@ public class ClosureFoldTests
         var predicate = PredicateOf(_ => _.Region == "x".PadLeft(3));
 
         Assert.That(predicate.Right, Is.InstanceOf<ConstNode>());
+    }
+
+    // A property read off closure state. The temporal dispatch carried it as a function over the
+    // constant, and for an offset — which travels as text — the server refused to read a part of a
+    // string; a date's own parts happened to survive because a date carries a typed tag.
+    [Test]
+    public void ATemporalPropertyOverClosureState()
+    {
+        var cutoff = new DateTimeOffset(2026, 3, 4, 6, 15, 30, TimeSpan.FromHours(2));
+        var predicate = PredicateOf(_ => _.Placed.Year == cutoff.Year);
+
+        Assert.That(predicate.Right, Is.InstanceOf<ConstNode>());
+    }
+
+    [Test]
+    public void AnElapsedTimesPartOverClosureState()
+    {
+        var span = TimeSpan.FromHours(5);
+        var predicate = PredicateOf(_ => _.Amount > span.Hours);
+
+        Assert.That(predicate.Right, Is.InstanceOf<ConstNode>());
+    }
+
+    [Test]
+    public void AStringLengthOverClosureState()
+    {
+        var text = "north";
+        var predicate = PredicateOf(_ => _.Region.Length == text.Length);
+
+        Assert.That(predicate.Right, Is.InstanceOf<ConstNode>());
+    }
+
+    // The shape from a page: the year of the client's clock, read off an offset. Round-tripped, since
+    // the refusal was the server's.
+    [Test]
+    public async Task AClockPartRoundTrips()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = new ScryClient((request, _) => Task.FromResult(SharedProcessor.Instance.Execute(request, context)));
+        var now = new DateTimeOffset(2026, 9, 5, 0, 0, 0, TimeSpan.Zero);
+
+        var count = await client.Source<Order>("Order")
+            .Where(_ => _.Placed.Year == now.Year)
+            .CountAsync();
+
+        Assert.That(count, Is.EqualTo(context.Orders.Count(_ => _.Placed.Year == 2026)));
     }
 
     // Formatting is refused because the SQL that would express it reads the server's language. A value

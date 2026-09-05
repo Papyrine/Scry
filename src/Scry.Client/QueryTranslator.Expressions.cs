@@ -112,8 +112,15 @@ sealed partial class QueryTranslator
                     when IsOptional(asked) && IsRooted(present, root):
                     return new BinaryNode(BinaryOp.NotEqual, TranslateExpr(asked, root), ConstantOf(null));
 
+                // A property read off closure state is that state, whatever the property is called —
+                // a date part of the client's own clock, an elapsed time's hours — and folds into the
+                // constant it stands for, as a method call off closure state does. Carried as a
+                // function over the constant instead, the server would read a part of a value that
+                // travels as text for an offset, a time of day, or an elapsed time, and refuse.
                 case MemberExpression member when IsKnownProperty(member, out var function):
-                    return new CallNode(function, TranslateExpr(member.Expression!, root), []);
+                    return ReferencesParameter(member, root)
+                        ? new CallNode(function, TranslateExpr(member.Expression!, root), [])
+                        : ConstantOf(Evaluate(member));
 
                 // An attachment reached anywhere an expression is being built. A projection leaf is
                 // handled before this, so arriving here means it was used as a value — compared,
