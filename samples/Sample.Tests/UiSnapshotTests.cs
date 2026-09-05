@@ -493,7 +493,7 @@ public class UiSnapshotTests :
                 .Select(_ => new { _.Name, _.Status })
             """);
         await page.Locator("[data-testid='run']").ClickAsync();
-        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 30);
+        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr:not([aria-hidden])", 30);
         await InterceptDownloadsAsync(page);
 
         var csv = await ExportAsync(page, "csv");
@@ -539,7 +539,7 @@ public class UiSnapshotTests :
                 .Select(_ => new { _.Name, Department = new { _.Department!.Name } })
             """);
         await page.Locator("[data-testid='run']").ClickAsync();
-        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 30);
+        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr:not([aria-hidden])", 30);
 
         Assert.That(await page.Locator("[data-testid='csv']").CountAsync(), Is.Zero, "nested rows are not a grid");
         Assert.That(await page.Locator("[data-testid='json']").CountAsync(), Is.EqualTo(1));
@@ -567,7 +567,7 @@ public class UiSnapshotTests :
 
         await page.SetEditorValueAsync("Query.Department.OrderBy(_ => _.Name)");
         await page.Locator("[data-testid='run']").ClickAsync();
-        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);
+        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr:not([aria-hidden])", 60);
 
         // The attachment is in no projection the client could write, so the column below is the
         // explorer's own offer — built from the key the row does carry.
@@ -854,7 +854,7 @@ public class UiSnapshotTests :
             """);
         await page.Locator("[data-testid='run']").ClickAsync();
 
-        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);
+        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr:not([aria-hidden])", 60);
         var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
 
         // A base64 cell is a scalar, so the result is still a grid and CSV stays on offer. Read before
@@ -1349,7 +1349,7 @@ public class UiSnapshotTests :
             Assert.That(await EditorValueAsync(page), Does.StartWith($"Query.{source}"), $"starter query for {source}");
 
             await page.Locator("[data-testid='run']").ClickAsync();
-            await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);
+            await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr:not([aria-hidden])", 60);
             await Assertions.Expect(page.Locator("[data-testid='error']")).ToHaveCountAsync(0);
         }
     }
@@ -1620,7 +1620,7 @@ public class UiSnapshotTests :
         await page.Locator("[data-testid='prettify']").ClickAsync();
         await page.Locator("[data-testid='run']").ClickAsync();
 
-        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);
+        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr:not([aria-hidden])", 60);
         await Assertions.Expect(page.Locator("[data-testid='error']")).ToHaveCountAsync(0);
         await Assertions.Expect(page.Locator("[data-testid='result-table']")).ToContainTextAsync("Engineering");
     }

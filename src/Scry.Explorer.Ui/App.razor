@@ -1,5 +1,6 @@
 ﻿@inject HttpClient Http
 @inject IJSRuntime JS
+@using Microsoft.AspNetCore.Components.Web.Virtualization
 @using BlazorMonaco.Editor
 
 <PageTitle>Scry Explorer</PageTitle>
@@ -162,7 +163,7 @@
                                 </button>
                                 <button class="icon-btn" @onclick='() => Copy(wireJson!, "wire")'>@CopyLabel("wire")</button>
                             </div>
-                            <pre class="pane-body" data-testid="wire">@Highlight.Json(wireJson)</pre>
+                            <pre class="pane-body" data-testid="wire">@WireMarkup</pre>
                         </section>
                     }
                 </div>
@@ -206,22 +207,28 @@
                                 screen wide that is routinely wider than the pane. It scrolls inside this
                                 element rather than pushing a scrollbar onto the shell.
                             *@
+                            // Held outside the row template: the template is a lambda, and inside one the
+                            // compiler no longer knows the result is there.
+                            var table = result;
                             <div class="table-scroll">
                                 <table data-testid="result-table">
                                     <thead>
                                         <tr>
-                                            @foreach (var column in result.Columns) { <th>@column</th> }
+                                            @foreach (var column in table.Columns) { <th>@column</th> }
                                             @* One column per attachment: never a value, always a claim to exchange for one. *@
                                             @foreach (var link in attachmentLinks) { <th>@link.Member</th> }
                                         </tr>
                                     </thead>
                                     <tbody>
-                                    @for (var index = 0; index < result.Rows.Count; index++)
-                                    {
-                                        @* Copied out of the loop variable: the handlers below outlive this iteration. *@
-                                        var row = index;
+                                    @*
+                                        Only the rows in view are rendered. A plain ToList() is unbounded on the
+                                        server, and every row of a large one rendered on every keystroke — the
+                                        editor's change event re-renders the page — stalled typing on the
+                                        interpreter. The spacers are rows, so the body stays a table body.
+                                    *@
+                                    <Virtualize Items="rowIndices" ItemSize="30" SpacerElement="tr" Context="row">
                                         <tr>
-                                            @foreach (var cell in result.Rows[row]) { <td>@cell</td> }
+                                            @foreach (var cell in table.Rows[row]) { <td>@cell</td> }
                                             @foreach (var link in attachmentLinks)
                                             {
                                                 <td>
@@ -234,7 +241,7 @@
                                                 </td>
                                             }
                                         </tr>
-                                    }
+                                    </Virtualize>
                                     </tbody>
                                 </table>
                             </div>
@@ -250,7 +257,7 @@
                             <div class="pane-head">
                                 <button class="icon-btn" @onclick='() => Copy(resultJson!, "response")'>@CopyLabel("response")</button>
                             </div>
-                            <pre class="pane-body" data-testid="result">@Highlight.Json(resultJson)</pre>
+                            <pre class="pane-body" data-testid="result">@ResultMarkup</pre>
                         }
 
                         @if (activeOutput == OutputTab.Sql && sqlText is not null)
@@ -258,7 +265,7 @@
                             <div class="pane-head">
                                 <button class="icon-btn" @onclick='() => Copy(sqlText!, "sql")'>@CopyLabel("sql")</button>
                             </div>
-                            <pre class="pane-body" data-testid="sql">@Highlight.Sql(sqlText)</pre>
+                            <pre class="pane-body" data-testid="sql">@SqlMarkup</pre>
                         }
 
                         @if (OpenTabs.Count == 0 && error is null)

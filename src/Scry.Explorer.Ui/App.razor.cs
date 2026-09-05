@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using BlazorMonaco;
 using BlazorMonaco.Editor;
+using Microsoft.AspNetCore.Components;
 using BlazorMonaco.Languages;
 using Microsoft.CodeAnalysis;
 using Microsoft.JSInterop;
@@ -20,6 +21,16 @@ public partial class App
     IReadOnlyList<MetadataReference>? scryReferences;
     string? wireJson;
     string? resultJson;
+    // The highlighted panes, computed when their text changes rather than on every render. A render
+    // happens per keystroke and per animation frame of a pane drag, and a highlight parses the whole
+    // response each time it is asked for.
+    (string? Text, MarkupString Markup) wireHighlight;
+    (string? Text, MarkupString Markup) resultHighlight;
+    (string? Text, MarkupString Markup) sqlHighlight;
+    // The row numbers of the result table, for the rows to be rendered by. A stable list, built with
+    // the result: the table renders only the rows in view, and the component behind that wants a
+    // collection it can hold on to between renders.
+    List<int> rowIndices = [];
     // The rows as a grid: the columns, the cells as rendered, and the server's own rows kept
     // alongside them — what the exports that keep a nested projection nested are written from, and
     // what an attachment reads its row's key out of.
@@ -990,8 +1001,38 @@ public partial class App
         }
     }
 
+    MarkupString WireMarkup =>
+        Highlighted(ref wireHighlight, wireJson!, Highlight.Json);
+
+    MarkupString ResultMarkup =>
+        Highlighted(ref resultHighlight, resultJson!, Highlight.Json);
+
+    MarkupString SqlMarkup =>
+        Highlighted(ref sqlHighlight, sqlText!, Highlight.Sql);
+
+    // Recomputed only when the text is a different string: the panes hold the same instance from one
+    // render to the next until a run replaces it.
+    static MarkupString Highlighted(
+        ref (string? Text, MarkupString Markup) cache,
+        string text,
+        Func<string, MarkupString> highlight)
+    {
+        if (!ReferenceEquals(cache.Text, text))
+        {
+            cache = (text, highlight(text));
+        }
+
+        return cache.Markup;
+    }
+
     void BuildTable(JsonElement payload) =>
-        result = ResultTable.FromList(payload);
+        SetResult(ResultTable.FromList(payload));
+
+    void SetResult(ResultTable? table)
+    {
+        result = table;
+        rowIndices = [.. Enumerable.Range(0, table?.Rows.Count ?? 0)];
+    }
 
     // A Single result is one projected object (or null) — render it as a one-row table, reusing the
     // list-result markup; null / a bare scalar falls back to the scalar line.
@@ -1009,7 +1050,7 @@ public partial class App
             return;
         }
 
-        result = ResultTable.FromRow(payload);
+        SetResult(ResultTable.FromRow(payload));
     }
 
     static int ToOffset(string text, int line, int column)

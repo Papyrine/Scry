@@ -153,7 +153,7 @@ public class UiScreenshotTests :
                 .Select(_ => new { _.Name, _.Status })
             """);
         await page.Locator("[data-testid='run']").ClickAsync();
-        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);
+        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr:not([aria-hidden])", 60);
 
         await Verify(page.Locator("[data-testid='result-table']"))
             .PrettyPrintHtml();
@@ -303,7 +303,7 @@ public class UiScreenshotTests :
                     })
             """);
         await page.Locator("[data-testid='run']").ClickAsync();
-        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr", 60);
+        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr:not([aria-hidden])", 60);
 
         await SettleScrollbarsAsync(page);
 

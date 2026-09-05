@@ -450,6 +450,14 @@
     min-height: 0;
     padding: 0.6rem;
     overflow: auto;
+    /* A column, so the result table's own scroll box can take the height left under the heading. */
+    display: flex;
+    flex-direction: column;
+}
+
+/* Each child keeps its content height; only the table's scroll box (app.css) takes the rest. */
+.output-body > * {
+    flex: 0 0 auto;
 }
 
 .output-body > .error {

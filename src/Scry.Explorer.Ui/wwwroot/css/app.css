@@ -219,11 +219,16 @@ pre,
 /* Result */
 
 /*
-  The result table's scroll box. A table sizes to its content, so a row wider than the pane it is in
-  overflows — and without this, out of the shell rather than inside the pane.
+  The result table's scroll box, on both axes. A table sizes to its content, so a row wider than the
+  pane it is in overflows — and without this, out of the shell rather than inside the pane. It is the
+  vertical scroller too, rather than the pane body around it, because the rows are virtualized and
+  the component behind that measures what is in view against the nearest scrolling ancestor: one
+  that grew with the table would have every row in view.
 */
-.table-scroll {
-    overflow-x: auto;
+.output-body > .table-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
 }
 
 table[data-testid="result-table"] {
