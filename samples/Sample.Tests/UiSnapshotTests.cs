@@ -1348,6 +1348,39 @@ public class UiSnapshotTests :
         Assert.That(status, Does.Contain("ms"));
     }
 
+    // The clipboard answers whether a copy landed. Refused — by a stub here, the way a document without
+    // focus or a declined permission refuses — the note says so, where before it said "Copied" for text
+    // the clipboard did not hold.
+    [Test]
+    public async Task ExplorerReportsACopyTheClipboardRefused()
+    {
+        var page = await NewPageAsync();
+        await page.AddInitScriptAsync(
+            """
+            Object.defineProperty(navigator, 'clipboard', {
+                value: { writeText: () => Promise.reject(new DOMException('Denied', 'NotAllowedError')) }
+            });
+            """);
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await page.Locator("[data-testid='copy-query']").ClickAsync();
+
+        await Assertions.Expect(page.Locator("[data-testid='copy-failed']")).ToBeVisibleAsync();
+        await Assertions.Expect(page.Locator("[data-testid='copied']")).ToHaveCountAsync(0);
+    }
+
+    // And one the clipboard accepted still reports as it did.
+    [Test]
+    public async Task ExplorerReportsACopyTheClipboardAccepted()
+    {
+        var page = await NewPageAsync(new() {Permissions = ["clipboard-read", "clipboard-write"]});
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await page.Locator("[data-testid='copy-query']").ClickAsync();
+
+        await Assertions.Expect(page.Locator("[data-testid='copied']")).ToBeVisibleAsync();
+    }
+
     // Two runs in flight at once: the later one owns the panes, and the earlier one's response, held
     // back here until the later has answered, is dropped rather than written over it. Before, the
     // panes showed the second query's request over the first query's rows, and both went into the

@@ -126,7 +126,11 @@
                             </button>
                             @if (copied is not null)
                             {
-                                <span class="copied-note" role="status" title="Copied">✓</span>
+                                <span class="copied-note" role="status" title="Copied" data-testid="copied">✓</span>
+                            }
+                            else if (copyFailed is not null)
+                            {
+                                <span class="copied-note" role="status" title="Not copied: the clipboard refused it" data-testid="copy-failed">✗</span>
                             }
                         </div>
                     </div>
@@ -156,7 +160,7 @@
                                     </svg>
                                     Wire request
                                 </button>
-                                <button class="icon-btn" @onclick='() => Copy(wireJson!, "wire")'>@(copied == "wire" ? "✓ Copied" : "Copy")</button>
+                                <button class="icon-btn" @onclick='() => Copy(wireJson!, "wire")'>@CopyLabel("wire")</button>
                             </div>
                             <pre class="pane-body" data-testid="wire">@Highlight.Json(wireJson)</pre>
                         </section>
@@ -244,7 +248,7 @@
                         @if (activeOutput == OutputTab.Response && resultJson is not null)
                         {
                             <div class="pane-head">
-                                <button class="icon-btn" @onclick='() => Copy(resultJson!, "response")'>@(copied == "response" ? "✓ Copied" : "Copy")</button>
+                                <button class="icon-btn" @onclick='() => Copy(resultJson!, "response")'>@CopyLabel("response")</button>
                             </div>
                             <pre class="pane-body" data-testid="result">@Highlight.Json(resultJson)</pre>
                         }
@@ -252,7 +256,7 @@
                         @if (activeOutput == OutputTab.Sql && sqlText is not null)
                         {
                             <div class="pane-head">
-                                <button class="icon-btn" @onclick='() => Copy(sqlText!, "sql")'>@(copied == "sql" ? "✓ Copied" : "Copy")</button>
+                                <button class="icon-btn" @onclick='() => Copy(sqlText!, "sql")'>@CopyLabel("sql")</button>
                             </div>
                             <pre class="pane-body" data-testid="sql">@Highlight.Sql(sqlText)</pre>
                         }

@@ -46,7 +46,10 @@ public partial class App
 
     string themeMode = "system";
     bool resolvedDark;
+    // Which copy last landed, and which the clipboard last refused. One at a time each: the note
+    // beside a button says what happened to the most recent click, and goes away after a moment.
     string? copied;
+    string? copyFailed;
     string? sqlText;
     string? initialCode;
 
@@ -706,16 +709,33 @@ public partial class App
 
     async Task Copy(string text, string key)
     {
-        await JS.InvokeVoidAsync("scry.copy", text);
-        copied = key;
+        // Whether it landed is the browser's answer, not an assumption: the clipboard refuses a
+        // document without focus, and a permission the user declined.
+        var landed = await JS.InvokeAsync<bool>("scry.copy", text);
+        copied = landed ? key : null;
+        copyFailed = landed ? null : key;
         StateHasChanged();
         await Task.Delay(1500);
         if (copied == key)
         {
             copied = null;
-            StateHasChanged();
         }
+
+        if (copyFailed == key)
+        {
+            copyFailed = null;
+        }
+
+        StateHasChanged();
     }
+
+    // The label on a pane's copy button: what the last click did, or the offer.
+    string CopyLabel(string key) =>
+        copied == key
+            ? "✓ Copied"
+            : copyFailed == key
+                ? "✗ Not copied"
+                : "Copy";
 
     // Register the completion provider once both the workspace (schema) and the editor are ready.
     async Task TryRegister()

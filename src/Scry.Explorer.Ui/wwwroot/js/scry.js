@@ -33,12 +33,18 @@ window.scry = {
     setDataTheme: function (mode) {
         document.documentElement.dataset.theme = mode;
     },
-    // Copy text to the clipboard (best-effort; the UI shows its own confirmation).
+    // Copy text to the clipboard, answering whether it landed. writeText returns a promise, and its
+    // rejection — a document without focus, a permission refused — is the failure a try/catch never
+    // saw: C# showed "Copied" for text the clipboard did not hold.
     copy: function (text) {
-        try {
-            navigator.clipboard.writeText(text);
-        } catch (e) {
+        const failed = e => {
             console.warn('scry: copy failed', e);
+            return false;
+        };
+        try {
+            return navigator.clipboard.writeText(text).then(() => true, failed);
+        } catch (e) {
+            return Promise.resolve(failed(e));
         }
     },
     // The URL fragment, which is where a shared query is carried. A fragment is never sent to the
