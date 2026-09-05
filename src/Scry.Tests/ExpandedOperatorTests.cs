@@ -864,6 +864,23 @@ public class ExpandedOperatorTests
         Assert.That(rows.Single().Name, Does.StartWith("South-75"));
     }
 
+    // Four holes bind the params overload of string.Format, whose array is its second argument. The
+    // fixed-arity overloads stop at three holes, so an interpolation could grow to three and then
+    // failed at the fourth as an unsupported array.
+    [Test]
+    public async Task InterpolatedStringWithFourHoles()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var client = ClientFor(context);
+
+        var rows = await client.Source<Order>("Order")
+            .Where(_ => _.Region == "South")
+            .Select(_ => new NameRow($"{_.Region} {_.Id} {_.Grade} {_.Amount}"))
+            .ToListAsync();
+
+        Assert.That(rows.Single().Name, Does.StartWith("South ").And.Contain(" 75"));
+    }
+
     [Test]
     public async Task CharMemberAndConstant()
     {

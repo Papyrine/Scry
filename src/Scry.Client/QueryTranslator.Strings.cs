@@ -120,12 +120,16 @@ sealed partial class QueryTranslator
         call.Arguments.Count > 0 &&
         call.Arguments[^1].Type == typeof(StringComparison);
 
-    // The params overloads pass their arguments as a single constructed array.
+    // The params overloads pass their arguments as one constructed array: Concat's as its whole
+    // argument list, Format's after the format string — which is how an interpolation of four or more
+    // holes binds, the fixed-arity overloads stopping at three.
     static IReadOnlyList<Expression> ConcatArguments(MethodCallExpression call)
     {
-        if (call.Arguments is [NewArrayExpression array])
+        var arguments = call.Arguments;
+        if (arguments.Count > 0 &&
+            arguments[^1] is NewArrayExpression array)
         {
-            return array.Expressions;
+            return [.. arguments.Take(arguments.Count - 1), .. array.Expressions];
         }
 
         return (ReadOnlyCollection<Expression>) [.. call.Arguments];
