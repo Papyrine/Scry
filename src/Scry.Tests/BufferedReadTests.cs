@@ -1,6 +1,3 @@
-using System.Net;
-using System.Text;
-
 /// <summary>
 /// How a buffered response reaches the array the client keeps. HttpClient's own buffering copied
 /// every body twice on the way; now the body is read headers-first into an array sized from the

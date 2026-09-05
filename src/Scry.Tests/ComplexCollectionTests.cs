@@ -116,8 +116,7 @@ public class ComplexCollectionTests
                     new BinaryNode(
                         BinaryOp.Equal,
                         new MemberNode(["Zip"]),
-                        new ConstNode("10115", ClrTypeTag.String)),
-                    null))
+                        new ConstNode("10115", ClrTypeTag.String))))
             ]);
 
         var exception = Assert.Throws<ScryValidationException>(

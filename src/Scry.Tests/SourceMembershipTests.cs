@@ -102,8 +102,7 @@ public class SourceMembershipTests
                 new WhereOp(new InSourceNode(
                     new MemberNode(["DepartmentId"]),
                     "Secrets",
-                    new MemberNode(["Id"]),
-                    null))
+                    new MemberNode(["Id"])))
             ]);
 
         var exception = Assert.Throws<ScryValidationException>(
@@ -124,8 +123,7 @@ public class SourceMembershipTests
                 new WhereOp(new InSourceNode(
                     new MemberNode(["Amount"]),
                     "Employee",
-                    new MemberNode(["Salary"]),
-                    null))
+                    new MemberNode(["Salary"])))
             ]);
 
         Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
@@ -147,8 +145,7 @@ public class SourceMembershipTests
                         new InSourceNode(
                             new MemberNode(["Id"]),
                             "Department",
-                            new MemberNode(["Id"]),
-                            null)))
+                            new MemberNode(["Id"]))))
             ]);
 
         var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
@@ -170,7 +167,7 @@ public class SourceMembershipTests
                         new MemberNode(["DepartmentId"]),
                         "Order",
                         new MemberNode(["Id"]),
-                        new SubqueryNode(["Lines"], SubqueryFn.Any, null, null)))
+                        new SubqueryNode(["Lines"], SubqueryFn.Any)))
             ]);
 
         var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
@@ -190,10 +187,9 @@ public class SourceMembershipTests
             [
                 new WhereOp(
                     new InSourceNode(
-                        new SubqueryNode(["Lines"], SubqueryFn.Count, null, null),
+                        new SubqueryNode(["Lines"], SubqueryFn.Count),
                         "Order",
-                        new MemberNode(["Id"]),
-                        null)),
+                        new MemberNode(["Id"]))),
                 new CountOp()
             ]);
 
@@ -215,11 +211,9 @@ public class SourceMembershipTests
                         new SubqueryNode(
                             ["Lines"],
                             SubqueryFn.Count,
-                            new InSourceNode(new MemberNode(["OrderId"]), "Order", new MemberNode(["Id"]), null),
-                            null),
+                            new InSourceNode(new MemberNode(["OrderId"]), "Order", new MemberNode(["Id"]))),
                         "Order",
-                        new MemberNode(["Id"]),
-                        null))
+                        new MemberNode(["Id"])))
             ]);
 
         var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));

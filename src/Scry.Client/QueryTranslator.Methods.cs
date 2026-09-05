@@ -207,9 +207,9 @@ sealed partial class QueryTranslator
             IReadOnlyList<Expression> operands = call.Arguments;
             if (call.Method.Name == "Round" &&
                 operands.Count > 1 &&
-                operands[operands.Count - 1].Type == typeof(MidpointRounding))
+                operands[^1].Type == typeof(MidpointRounding))
             {
-                if (Evaluate(operands[operands.Count - 1]) is not MidpointRounding.AwayFromZero)
+                if (Evaluate(operands[^1]) is not MidpointRounding.AwayFromZero)
                 {
                     throw new NotSupportedException(
                         "Math.Round with a rounding mode other than MidpointRounding.AwayFromZero is not supported by Scry: SQL's ROUND rounds away from zero, and no provider translates another mode. Use AwayFromZero, or round after the rows return.");

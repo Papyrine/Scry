@@ -123,7 +123,7 @@ public class FilteredAggregateTests
             "Order",
             [
                 new GroupByOp([new MemberNode(["Region"])]),
-                new SelectOp(new([new("Rows", new NodeValue(new AggregateNode(AggregateFn.Count, null)))]))
+                new SelectOp(new([new("Rows", new NodeValue(new AggregateNode(AggregateFn.Count)))]))
             ]);
 
         var filtered = QueryRequest.Create(
@@ -136,7 +136,7 @@ public class FilteredAggregateTests
                         new(
                             "Big",
                             new NodeValue(
-                                new AggregateNode(AggregateFn.Count, null)
+                                new AggregateNode(AggregateFn.Count)
                                 {
                                     Predicate = new BinaryNode(BinaryOp.GreaterThan, new MemberNode(["Amount"]), new ConstNode("90", ClrTypeTag.Decimal))
                                 }))
@@ -164,7 +164,7 @@ public class FilteredAggregateTests
                     [
                         new("Rows",
                             new NodeValue(
-                                new AggregateNode(AggregateFn.Count, null)
+                                new AggregateNode(AggregateFn.Count)
                                 {
                                     Distinct = true
                                 }))

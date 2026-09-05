@@ -22,7 +22,7 @@ public class OptionalStructProjectionTests
 
         var rows = await client.Source<Employee>("Employee")
             .OrderBy(_ => _.Name)
-            .Select(_ => new EmployeeDesk(_.Name, new Desk(_.Workstation!.Value.Room, _.Workstation!.Value.Extension)))
+            .Select(_ => new EmployeeDesk(_.Name, new(_.Workstation!.Value.Room, _.Workstation!.Value.Extension)))
             .ToListAsync();
 
         await Verify(rows);
@@ -35,14 +35,14 @@ public class OptionalStructProjectionTests
         var client = ClientFor(context);
 
         var request = client.Source<Employee>("Employee")
-            .Select(_ => new EmployeeDesk(_.Name, new Desk(_.Workstation!.Value.Room, _.Workstation!.Value.Extension)))
+            .Select(_ => new EmployeeDesk(_.Name, new(_.Workstation!.Value.Room, _.Workstation!.Value.Extension)))
             .ToScryRequest();
 
         var nested = request.Pipeline.OfType<SelectOp>().Single().Projection.Members
             .Select(_ => _.Value)
             .OfType<NestedValue>()
             .Single();
-        Assert.That(nested.Path, Is.EqualTo(new[] {"Workstation"}));
+        Assert.That(nested.Path, Is.EqualTo(["Workstation"]));
     }
 
     static ScryClient ClientFor(TestContext context) =>

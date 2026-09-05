@@ -130,7 +130,7 @@ public class PrimitiveCollectionTests
         // default-deny applies to the member.
         var request = QueryRequest.Create(
             "Order",
-            [new WhereOp(new SubqueryNode(["Notes"], SubqueryFn.Any, null, null))]);
+            [new WhereOp(new SubqueryNode(["Notes"], SubqueryFn.Any))]);
 
         var exception = Assert.Throws<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
@@ -153,8 +153,7 @@ public class PrimitiveCollectionTests
                     new BinaryNode(
                         BinaryOp.Equal,
                         new MemberNode(["Length"]),
-                        new ConstNode("6", ClrTypeTag.Int32)),
-                    null))
+                        new ConstNode("6", ClrTypeTag.Int32))))
             ]);
 
         var exception = Assert.Throws<ScryValidationException>(
@@ -201,8 +200,7 @@ public class PrimitiveCollectionTests
                     new BinaryNode(
                         BinaryOp.Equal,
                         new ElementNode(),
-                        new ConstNode("A-1", ClrTypeTag.String)),
-                    null))
+                        new ConstNode("A-1", ClrTypeTag.String))))
             ]);
 
         var exception = Assert.Throws<ScryValidationException>(

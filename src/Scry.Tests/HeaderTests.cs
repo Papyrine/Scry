@@ -1,5 +1,3 @@
-using System.Net;
-
 /// <summary>
 /// Headers are attached to one query rather than to the client, and they are a transport concern
 /// throughout: nothing about them reaches the wire request, so the server learns of them only as HTTP

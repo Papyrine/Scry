@@ -186,7 +186,7 @@ public class CollectionSubqueryTests
         // Department.Employees carries no [QueryableCollection], so it is not on the allow-list at all.
         var request = QueryRequest.Create(
             "Department",
-            [new WhereOp(new SubqueryNode(["Employees"], SubqueryFn.Any, null, null))]);
+            [new WhereOp(new SubqueryNode(["Employees"], SubqueryFn.Any))]);
 
         var exception = Assert.Throws<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
@@ -205,8 +205,7 @@ public class CollectionSubqueryTests
                 new WhereOp(new SubqueryNode(
                     ["Lines"],
                     SubqueryFn.Any,
-                    new SubqueryNode(["Lines"], SubqueryFn.Any, null, null),
-                    null))
+                    new SubqueryNode(["Lines"], SubqueryFn.Any)))
             ]);
 
         var exception = Assert.Throws<ScryValidationException>(
@@ -227,8 +226,7 @@ public class CollectionSubqueryTests
                 new WhereOp(new SubqueryNode(
                     ["Lines"],
                     SubqueryFn.Any,
-                    new InSourceNode(new MemberNode(["OrderId"]), "Order", new MemberNode(["Id"]), null),
-                    null))
+                    new InSourceNode(new MemberNode(["OrderId"]), "Order", new MemberNode(["Id"]))))
             ]);
 
         var exception = Assert.Throws<ScryValidationException>(
@@ -254,8 +252,7 @@ public class CollectionSubqueryTests
                         new CollateNode(
                             new SubqueryNode(["Lines"], SubqueryFn.Max, null, new MemberNode(["Sku"])),
                             StringMatch.CaseInsensitive),
-                        new ConstNode("x", ClrTypeTag.String)),
-                    null))
+                        new ConstNode("x", ClrTypeTag.String))))
             ]);
 
         var exception = Assert.Throws<ScryValidationException>(
@@ -280,8 +277,7 @@ public class CollectionSubqueryTests
                     new BinaryNode(
                         BinaryOp.Equal,
                         new MemberNode(["Region"]),
-                        new ConstNode("North", ClrTypeTag.String)),
-                    null))
+                        new ConstNode("North", ClrTypeTag.String))))
             ]);
 
         var exception = Assert.Throws<ScryValidationException>(
@@ -297,7 +293,7 @@ public class CollectionSubqueryTests
 
         var request = QueryRequest.Create(
             "Order",
-            [new WhereOp(new SubqueryNode(["Lines"], SubqueryFn.All, null, null))]);
+            [new WhereOp(new SubqueryNode(["Lines"], SubqueryFn.All))]);
 
         var exception = Assert.Throws<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));

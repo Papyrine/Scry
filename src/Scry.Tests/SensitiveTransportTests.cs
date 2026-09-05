@@ -1,5 +1,3 @@
-using System.Net;
-
 /// <summary>
 /// How a query touching a <c>[Sensitive]</c> member travels. The rule is about constants, not mentions:
 /// what leaks from a URL is the value written into it, so comparing a marked member against one sends

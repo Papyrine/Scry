@@ -1,5 +1,3 @@
-using System.Net;
-
 /// <summary>
 /// The sidecar's capture handler: what it records, and — just as important — what it refuses to
 /// touch. Streams and attachments must pass through byte-identical and unbuffered, and capture

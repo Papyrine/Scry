@@ -1,6 +1,3 @@
-using System.Net;
-using System.Text;
-
 /// <summary>
 /// What the client makes of a streamed response's own framing: the opening marker's wire version,
 /// and a stream that ends inside a line. Both are the wire's failures to report, not the JSON

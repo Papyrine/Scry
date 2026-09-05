@@ -96,7 +96,7 @@ sealed partial class QueryTranslator
                 // The Count property a collection carries means the same as calling Count().
                 case MemberExpression {Member.Name: "Count", Expression: { } owner}
                     when IsRootedCollection(owner, root):
-                    return new SubqueryNode(MemberPath((MemberExpression)owner), SubqueryFn.Count, null, null);
+                    return new SubqueryNode(MemberPath((MemberExpression)owner), SubqueryFn.Count);
 
                 // A nullable's Value is the member it wraps. Every wire operand is already optional, so
                 // there is no wrapper to strip on the far side — carried as a path segment it would

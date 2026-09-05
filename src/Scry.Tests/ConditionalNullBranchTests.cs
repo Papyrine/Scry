@@ -19,7 +19,7 @@ public class ConditionalNullBranchTests
 
         var rows = await client.Source<Employee>("Employee")
             .OrderBy(_ => _.Name)
-            .Select(_ => new DepartmentRow(_.Name, _.Active ? (int?)null : _.DepartmentId))
+            .Select(_ => new DepartmentRow(_.Name, _.Active ? null : _.DepartmentId))
             .ToListAsync();
 
         // Bob is the one inactive employee, so his is the one department read.
@@ -34,7 +34,7 @@ public class ConditionalNullBranchTests
 
         var rows = await client.Source<Employee>("Employee")
             .OrderBy(_ => _.Name)
-            .Select(_ => new DepartmentRow(_.Name, _.Active ? _.DepartmentId : (int?)null))
+            .Select(_ => new DepartmentRow(_.Name, _.Active ? _.DepartmentId : null))
             .ToListAsync();
 
         Assert.That(rows.Select(_ => _.Department), Is.EqualTo(new int?[] {1, 1, null, 2}));

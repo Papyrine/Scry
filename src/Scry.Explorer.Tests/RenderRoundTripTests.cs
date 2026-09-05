@@ -297,23 +297,23 @@ public class RenderRoundTripTests
 
     [Test]
     public void TerminalAny() =>
-        RoundTrip(Employee.Where(_ => _.Active).ToScryRequest(new AnyOp(null)));
+        RoundTrip(Employee.Where(_ => _.Active).ToScryRequest(new AnyOp()));
 
     [Test]
     public void TerminalFirst() =>
-        RoundTrip(Employee.OrderBy(_ => _.Name).ToScryRequest(new FirstOp(false, null)));
+        RoundTrip(Employee.OrderBy(_ => _.Name).ToScryRequest(new FirstOp(false)));
 
     [Test]
     public void TerminalFirstOrDefault() =>
-        RoundTrip(Employee.OrderBy(_ => _.Name).ToScryRequest(new FirstOp(true, null)));
+        RoundTrip(Employee.OrderBy(_ => _.Name).ToScryRequest(new FirstOp(true)));
 
     [Test]
     public void TerminalSingle() =>
-        RoundTrip(Employee.Where(_ => _.Id == 1).ToScryRequest(new SingleOp(false, null)));
+        RoundTrip(Employee.Where(_ => _.Id == 1).ToScryRequest(new SingleOp(false)));
 
     [Test]
     public void TerminalSingleOrDefault() =>
-        RoundTrip(Employee.Where(_ => _.Id == 1).ToScryRequest(new SingleOp(true, null)));
+        RoundTrip(Employee.Where(_ => _.Id == 1).ToScryRequest(new SingleOp(true)));
 
     static Node NamePredicate() =>
         new BinaryNode(BinaryOp.Equal, new MemberNode(["Name"]), new ConstNode("x", ClrTypeTag.String));
@@ -340,7 +340,7 @@ public class RenderRoundTripTests
 
     [Test]
     public void RefusesLast() =>
-        AssertRefused(Employee.OrderBy(_ => _.Name).ToScryRequest(new LastOp(false, null)), RenderRefusal.UnsupportedTerminal);
+        AssertRefused(Employee.OrderBy(_ => _.Name).ToScryRequest(new LastOp(false)), RenderRefusal.UnsupportedTerminal);
 
     [Test]
     public void RefusesLongCount() =>

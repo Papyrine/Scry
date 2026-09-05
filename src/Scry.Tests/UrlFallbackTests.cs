@@ -1,6 +1,3 @@
-using System.Net;
-using System.Text;
-
 /// <summary>
 /// What a client does once a GET has been answered 405. The fallback is meant to happen once for the
 /// life of the client, and the budget every response advertises must not re-open it.
@@ -19,7 +16,7 @@ public class UrlFallbackTests
         {
             methods.Add(request.Method);
             var response = request.Method == HttpMethod.Get
-                ? new HttpResponseMessage(HttpStatusCode.MethodNotAllowed)
+                ? new(HttpStatusCode.MethodNotAllowed)
                 : Scalar(3);
             response.Headers.TryAddWithoutValidation(WireFormat.UrlLimitHeader, "4096");
             return response;

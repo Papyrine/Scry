@@ -1,5 +1,3 @@
-using System.Net;
-
 /// <summary>
 /// A row policy hides the rows it denies, which is the only answer that tells a caller nothing. Where
 /// that silence is worse than the disclosure — an internal tool whose users would rather be told than

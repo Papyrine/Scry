@@ -278,8 +278,8 @@ public class WireSerializationTests
                         BinaryOp.Equal,
                         new MemberNode(["Name"]),
                         new ConstNode(null, ClrTypeTag.String))),
-                new WhereOp(new SubqueryNode(["Orders"], SubqueryFn.Any, null, null)),
-                new WhereOp(new InSourceNode(new MemberNode(["Id"]), "Managers", new MemberNode(["Id"]), null)),
+                new WhereOp(new SubqueryNode(["Orders"], SubqueryFn.Any)),
+                new WhereOp(new InSourceNode(new MemberNode(["Id"]), "Managers", new MemberNode(["Id"]))),
                 new JoinOp(
                     "Department",
                     JoinKind.Inner,
@@ -289,12 +289,12 @@ public class WireSerializationTests
                     [new("Name", JoinSide.Outer, ["Name"])]),
                 new SetOp(SetKind.Union, "Contractors", null, new([new("Name", new NodeValue(new MemberNode(["Name"])))])),
                 new GroupByOp([new MemberNode(["Name"])]),
-                new SelectOp(new([new("Total", new NodeValue(new AggregateNode(AggregateFn.Count, null)))])),
-                new AnyOp(null),
-                new FirstOp(true, null),
-                new LastOp(true, null),
-                new SingleOp(true, null),
-                new PageOp(null)
+                new SelectOp(new([new("Total", new NodeValue(new AggregateNode(AggregateFn.Count)))])),
+                new AnyOp(),
+                new FirstOp(true),
+                new LastOp(true),
+                new SingleOp(true),
+                new PageOp()
             ]);
 
         return VerifyRoundTrip(request);
@@ -303,7 +303,7 @@ public class WireSerializationTests
     [Test]
     public void AnAttachmentKeyWithoutAValueReadsBack()
     {
-        var request = AttachmentRequest.Create("Employee", "Photo", [new AttachmentKey(null, ClrTypeTag.String)]);
+        var request = AttachmentRequest.Create("Employee", "Photo", [new(null, ClrTypeTag.String)]);
 
         var json = ScryJson.Serialize(request);
         var roundTripped = ScryJson.DeserializeAttachmentRequest(json);
@@ -422,8 +422,7 @@ public class WireSerializationTests
                     new SubqueryNode(
                         ["Tags"],
                         SubqueryFn.Any,
-                        new BinaryNode(BinaryOp.Equal, new ElementNode(), new ConstNode("urgent", ClrTypeTag.String)),
-                        null)),
+                        new BinaryNode(BinaryOp.Equal, new ElementNode(), new ConstNode("urgent", ClrTypeTag.String)))),
                 new WhereOp(
                     new BinaryNode(
                         BinaryOp.GreaterThan,

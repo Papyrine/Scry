@@ -48,7 +48,7 @@ public class ValidatorLimitTests
         var projection = new Projection([new("Name", new NodeValue(new MemberNode(["Name"])))]);
         for (var i = 0; i < 5; i++)
         {
-            projection = new Projection([new("Manager", new NestedValue(["Manager"], projection))]);
+            projection = new([new("Manager", new NestedValue(["Manager"], projection))]);
         }
 
         Assert.That(
@@ -111,7 +111,7 @@ public class ValidatorLimitTests
     {
         // A negative skip is not a smaller page but an unbounded one, and the operand's ops are the one
         // place paging arrives without having passed the top-level pipeline's own checks.
-        QueryOp[] operand = [Ordered, new SkipOp(-1)];
+        QueryOp[] operand = [ordered, new SkipOp(-1)];
 
         Assert.That(Rejects("Order", Union(operand)), Does.Contain("Skip cannot be negative"));
     }
@@ -119,7 +119,7 @@ public class ValidatorLimitTests
     [Test]
     public void ASetOperandTakeMustBeAtLeastOne()
     {
-        QueryOp[] operand = [Ordered, new TakeOp(0)];
+        QueryOp[] operand = [ordered, new TakeOp(0)];
 
         Assert.That(Rejects("Order", Union(operand)), Does.Contain("Take must be at least one"));
     }
@@ -129,7 +129,7 @@ public class ValidatorLimitTests
     {
         // The page size caps an operand exactly as it caps the outer query. Without this a request
         // could ask for a bounded page of an unbounded operand.
-        QueryOp[] operand = [Ordered, new TakeOp(1001)];
+        QueryOp[] operand = [ordered, new TakeOp(1001)];
 
         Assert.That(
             Rejects("Order", Union(operand)),
@@ -137,7 +137,7 @@ public class ValidatorLimitTests
     }
 
     // An ordering, because the side ops allow paging only where something bounds it.
-    static readonly OrderByOp Ordered = new(new MemberNode(["Price"]), Descending: false);
+    static readonly OrderByOp ordered = new(new MemberNode(["Price"]), Descending: false);
 
     static Node Negated(int count, Node inner)
     {

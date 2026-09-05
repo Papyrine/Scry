@@ -92,7 +92,7 @@ public class SensitiveStructTests
         {
             Assert.That(responseHeaders.CacheControl.ToString(), Is.EqualTo("no-store"));
             // Aaron, Alice, Bob, Carol: the two without a workstation read as null.
-            Assert.That(extensions, Is.EqualTo(new[] {null, "4471", "4482", null}));
+            Assert.That(extensions, Is.EqualTo([null, "4471", "4482", null]));
         });
     }
 

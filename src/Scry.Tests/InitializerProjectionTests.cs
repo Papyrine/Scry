@@ -57,7 +57,10 @@ public class InitializerProjectionTests
             .OrderBy(_ => _.Name)
             .Select(_ => new EmployeeCard(_.Name)
             {
-                Department = new DepartmentCard(_.Department!.Name) {Id = _.Department.Id}
+                Department = new(_.Department!.Name)
+                {
+                    Id = _.Department.Id
+                }
             })
             .ToListAsync();
 

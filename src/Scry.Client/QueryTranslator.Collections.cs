@@ -145,8 +145,7 @@ sealed partial class QueryTranslator
         return new(
             MemberPath((MemberExpression) source),
             SubqueryFn.Any,
-            new BinaryNode(BinaryOp.Equal, new ElementNode(), value),
-            null);
+            new BinaryNode(BinaryOp.Equal, new ElementNode(), value));
     }
 
     /// <summary>
