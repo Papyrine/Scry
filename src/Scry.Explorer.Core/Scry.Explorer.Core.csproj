@@ -24,4 +24,8 @@
     <ProjectReference Include="..\Scry.Client\Scry.Client.csproj" />
     <ProjectReference Include="..\Scry.Wire\Scry.Wire.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The synthesizer spells a member the way the generator does, keyword escaping included. -->
+    <Compile Include="..\Shared\CSharpIdentifier.cs" Link="CSharpIdentifier.cs" />
+  </ItemGroup>
 </Project>

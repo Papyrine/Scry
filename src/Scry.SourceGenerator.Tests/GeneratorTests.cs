@@ -526,6 +526,35 @@ public class GeneratorTests
         return Verify(driver.RunGenerators(consumer));
     }
 
+    // A member or an enum value can be named with a reserved keyword — with a verbatim prefix in C#,
+    // and bare in a language that has no such reservation — and the metadata carries the bare name.
+    // Emitted bare, the generated model did not compile.
+    [Test]
+    public Task KeywordMemberNamesAreEscaped()
+    {
+        const string model = """
+            using Scry;
+
+            namespace Sample.Model;
+
+            public enum Kind
+            {
+                @default = 0,
+                @override = 1
+            }
+
+            [Queryable]
+            public class Employee
+            {
+                public int Id { get; set; }
+                public string @event { get; set; } = "";
+                public Kind @class { get; set; }
+            }
+            """;
+
+        return VerifyGenerated(model);
+    }
+
     [Test]
     public Task DuplicateSourceNameIsReported()
     {

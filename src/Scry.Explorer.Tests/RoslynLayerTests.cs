@@ -197,6 +197,36 @@ public class RoslynLayerTests
         Assert.That(source, Does.Contain("client.Source<EmployeeQueryModel>(\"Employee\", [\"Name\", \"Active\", \"Status\"])"));
     }
 
+    // A member or enum value named with a reserved keyword is spelled with the verbatim prefix, as
+    // the generator spells it; the wire name introspection carries is the bare one.
+    [Test]
+    public void SynthesizesKeywordNamesEscaped()
+    {
+        var keyworded = new ScryIntrospection(
+            ScryIntrospection.CurrentVersion,
+            MaxPageSize: 200,
+            Sources: [new("Event", "EfCore", "EventQueryModel")],
+            Types:
+            [
+                new("EventQueryModel",
+                [
+                    new("event", "string", NeedsNullDefault: true, IsNavigation: false),
+                    new("class", "Kind", NeedsNullDefault: false, IsNavigation: false)
+                ])
+            ],
+            Enums: [new("Kind", ["default", "override"])]);
+
+        var source = ModelSynthesizer.Synthesize(keyworded);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(source, Does.Contain("public string @event { get; init; }"));
+            Assert.That(source, Does.Contain("public Kind @class { get; init; }"));
+            Assert.That(source, Does.Contain("    @default,"));
+            Assert.That(source, Does.Contain("    @override,"));
+        });
+    }
+
     // Variables declared ahead of the query. A variable is captured state like any other, so what the
     // query reads from it folds into the constant it stood for — the request is the one the query
     // would have produced with the value written inline, and carries no trace of the name.

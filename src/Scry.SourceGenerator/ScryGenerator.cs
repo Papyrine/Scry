@@ -265,7 +265,7 @@ public class ScryGenerator :
             var initializer = property.NeedsNullDefault || property.IsAttachment ? " = null!;" : "";
             builder.Append(Obsolete(property.Obsolete, indent: "    "));
             builder.Append(Sensitive(property.IsSensitive, indent: "    "));
-            builder.AppendLine($"    public {Display(property)} {property.Name} {{ get; init; }}{initializer}");
+            builder.AppendLine($"    public {Display(property)} {CSharpIdentifier.Escape(property.Name)} {{ get; init; }}{initializer}");
         }
 
         builder.AppendLine("}");
@@ -381,7 +381,7 @@ public class ScryGenerator :
             var values = enumeration.Values.ToList();
             for (var i = 0; i < members.Count; i++)
             {
-                builder.AppendLine($"    {members[i]} = {values[i]},");
+                builder.AppendLine($"    {CSharpIdentifier.Escape(members[i])} = {values[i]},");
             }
 
             builder.AppendLine("}");

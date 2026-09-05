@@ -46,6 +46,15 @@ static class CSharpIdentifier
         return true;
     }
 
+    /// <summary>
+    /// The name as generated code writes it: prefixed with '@' where it is a reserved keyword, which
+    /// is legal for a member and an enum value, and unchanged otherwise. The wire name is the bare one
+    /// either way — the prefix is spelling, not identity — so a model written in a language that lets
+    /// a member be called <c>event</c> generates a client that compiles.
+    /// </summary>
+    public static string Escape(string name) =>
+        reserved.Contains(name) ? "@" + name : name;
+
     // Lu, Ll, Lt, Lm, Lo and Nl, plus the underscore.
     static bool IsStart(char character) =>
         character == '_' ||

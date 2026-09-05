@@ -41,7 +41,7 @@ public static class ModelSynthesizer
             for (var i = 0; i < enumeration.Values.Count; i++)
             {
                 var value = enumeration.Constants is { } constants ? $" = {constants[i]}" : "";
-                builder.AppendLine($"    {enumeration.Values[i]}{value},");
+                builder.AppendLine($"    {CSharpIdentifier.Escape(enumeration.Values[i])}{value},");
             }
 
             builder.AppendLine("}");
@@ -67,7 +67,7 @@ public static class ModelSynthesizer
                 var initializer = member.NeedsNullDefault ? " = null!;" : "";
                 builder.Append(Obsolete(member.Obsolete, indent: "    "));
                 builder.Append(Sensitive(member.IsSensitive, executable, indent: "    "));
-                builder.AppendLine($"    public {member.TypeDisplay} {member.Name} {{ get; init; }}{initializer}");
+                builder.AppendLine($"    public {member.TypeDisplay} {CSharpIdentifier.Escape(member.Name)} {{ get; init; }}{initializer}");
             }
 
             builder.AppendLine("}");
