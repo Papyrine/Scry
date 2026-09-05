@@ -136,9 +136,18 @@ public sealed record ScryAuditEntry(
     /// the one worth watching.
     /// </summary>
     public bool StaleClient { get; init; }
+
+    /// <summary>
+    /// Whether <see cref="Request"/> compares a constant against a member the model marks
+    /// <c>[Sensitive]</c>. The constant is in the request as sent: the trail is the host's own, and
+    /// reading the query is its point, so nothing is redacted here. An auditor that forwards entries
+    /// somewhere such a value must not go — a third-party sink, a store kept longer than the rows —
+    /// has this to redact or drop on.
+    /// </summary>
+    public bool Sensitive { get; init; }
 }
 ```
-<sup><a href='/src/Scry.Server/ScryAuditEntry.cs#L19-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-auditEntry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryAuditEntry.cs#L19-L78' title='Snippet source file'>snippet source</a> | <a href='#snippet-auditEntry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Semantics:
@@ -149,6 +158,7 @@ Semantics:
 - **Streams are recorded at completion**, with the rows actually delivered — including a `Canceled` entry when the read stopped partway.
 - **A batch is audited per entry, not per request.** The trail records what was asked, and a [batch](batching.md) asked more than once; there is no entry for the batch itself. The one exception is a batch refused at its envelope, which ran no entry: that is recorded once as a `Rejected` entry carrying `Batch`, since nothing else would show a client sending oversized batches.
 - **Malformed bodies are not audited.** A payload that fails deserialization never becomes a request object, so it appears in metrics only.
+- **`Request` is unredacted.** A constant compared against a [`[Sensitive]`](annotations.md#sensitive) member is in it as sent — the trail is the host's own, and reading the query is its point. The entry says so with `Sensitive`, for an auditor that forwards entries somewhere such a value must not go.
 
 
 ## Hosting without HTTP

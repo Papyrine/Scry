@@ -39,5 +39,6 @@
   Outcome: Failed,
   Streamed: false,
   Error: The policy faulted.,
-  StaleClient: false
+  StaleClient: false,
+  Sensitive: false
 }

@@ -65,5 +65,14 @@ public sealed record ScryAuditEntry(
     /// the one worth watching.
     /// </summary>
     public bool StaleClient { get; init; }
+
+    /// <summary>
+    /// Whether <see cref="Request"/> compares a constant against a member the model marks
+    /// <c>[Sensitive]</c>. The constant is in the request as sent: the trail is the host's own, and
+    /// reading the query is its point, so nothing is redacted here. An auditor that forwards entries
+    /// somewhere such a value must not go — a third-party sink, a store kept longer than the rows —
+    /// has this to redact or drop on.
+    /// </summary>
+    public bool Sensitive { get; init; }
 }
 // end-snippet

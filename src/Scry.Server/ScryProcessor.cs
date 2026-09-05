@@ -12,14 +12,12 @@ public sealed class ScryProcessor
     QueryExecutor executor;
     Schema schema;
     ScryOptions options;
-    SensitiveSchema sensitive;
 
     internal ScryProcessor(Schema schema, ScryOptions options)
     {
         this.schema = schema;
         this.options = options;
         executor = new(schema, options);
-        sensitive = new(schema);
         PolicyCache = new(schema.CachedPolicies);
     }
 
@@ -221,7 +219,7 @@ public sealed class ScryProcessor
     /// </remarks>
     void ApplySensitivity(QueryRequest request, IHeaderDictionary responseHeaders, bool fromUrl)
     {
-        var use = SensitiveWalk.Inspect(request, sensitive.IsSensitive);
+        var use = SensitiveWalk.Inspect(request, schema.Sensitive.IsSensitive);
         if (fromUrl && use.InConstant)
         {
             throw new ScryValidationException("This query compares a value against a member the model marks sensitive, so it must be sent as a request body rather than in a URL.")

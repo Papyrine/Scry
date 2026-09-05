@@ -40,5 +40,6 @@
   Streamed: true,
   Rows: 1,
   Error: The stream ended before every row was read.,
-  StaleClient: false
+  StaleClient: false,
+  Sensitive: false
 }

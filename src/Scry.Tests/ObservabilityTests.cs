@@ -191,6 +191,31 @@ public class ObservabilityTests
         await VerifyEntry(auditor.Entries.Single());
     }
 
+    // The constant is in the entry as sent: the trail is the host's own, and reading the query is its
+    // point. The entry says so, for an auditor that forwards entries somewhere the value must not go.
+    [Test]
+    public async Task AuditFlagsAConstantAgainstASensitiveMember()
+    {
+        var auditor = new RecordingAuditor();
+        await using var provider = Services(auditor);
+        var request = QueryRequest.Create(
+            "Employee",
+            [
+                new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Workstation", "Extension"]), new ConstNode("4471", ClrTypeTag.String))),
+                new CountOp()
+            ]);
+
+        await using var context = TestContext.CreateSeeded();
+        SharedProcessor.Instance.Execute(request, context, provider);
+
+        var entry = auditor.Entries.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(entry.Sensitive, Is.True);
+            Assert.That(entry.Request, Is.SameAs(request));
+        });
+    }
+
     static QueryRequest EmployeeNames() =>
         QueryRequest.Create(
             "Employee",

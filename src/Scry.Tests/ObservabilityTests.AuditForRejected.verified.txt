@@ -15,5 +15,6 @@
   Outcome: Rejected,
   Streamed: false,
   Error: Property 'Salary' is not allow-listed on 'Employee'.,
-  StaleClient: false
+  StaleClient: false,
+  Sensitive: false
 }

@@ -645,9 +645,16 @@ sealed class Schema
         schema.CarriesBinary = schema.types.Values
             .SelectMany(_ => _.Members.Values)
             .Any(_ => _.BinaryTransfer);
+        schema.Sensitive = new(schema);
         schema.Stamp = schema.ComputeStamp();
         return schema;
     }
+
+    /// <summary>
+    /// The resolver the sensitivity walk asks, built with the schema: whether a member path off a
+    /// source is one the model marked <c>[Sensitive]</c>.
+    /// </summary>
+    internal SensitiveSchema Sensitive { get; private set; } = null!;
 
     /// <summary>
     /// Refuses a source name that cannot be written as a C# member name. A source name is not only a

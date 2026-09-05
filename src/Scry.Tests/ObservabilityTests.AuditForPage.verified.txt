@@ -19,5 +19,6 @@
   Kind: Page,
   Streamed: false,
   Rows: 2,
-  StaleClient: false
+  StaleClient: false,
+  Sensitive: false
 }

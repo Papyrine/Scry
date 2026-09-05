@@ -9,7 +9,8 @@ sealed class QueryRecorder(
     AttachmentRequest? attachment,
     IServiceProvider services,
     string source,
-    bool streamed)
+    bool streamed,
+    SensitiveSchema? sensitive)
 {
     static readonly string? version = typeof(QueryRecorder).Assembly.GetName().Version?.ToString();
 
@@ -50,7 +51,7 @@ sealed class QueryRecorder(
         QueryRequest request,
         IServiceProvider services,
         bool streamed = false) =>
-        new(request, attachment: null, services, Source(schema, request.Root), streamed);
+        new(request, attachment: null, services, Source(schema, request.Root), streamed, schema.Sensitive);
 
     /// <summary>
     /// The same, for a fetch of one attachment. Recorded through the same path as a query — the
@@ -61,7 +62,7 @@ sealed class QueryRecorder(
         Schema schema,
         AttachmentRequest request,
         IServiceProvider services) =>
-        new(request: null, request, services, Source(schema, request.Root), streamed: false);
+        new(request: null, request, services, Source(schema, request.Root), streamed: false, sensitive: null);
 
     static string Source(Schema schema, string root) =>
         schema.TryGetSource(root, out _) ? root : "(unknown)";
@@ -231,7 +232,13 @@ sealed class QueryRecorder(
                 Streamed = streamed,
                 Rows = rows,
                 Error = error,
-                StaleClient = staleClient
+                StaleClient = staleClient,
+                // Walked here rather than where the transport rule was applied, so the flag is what
+                // the request carries whichever path recorded it — and only once an auditor exists
+                // to read it.
+                Sensitive = request is not null &&
+                            sensitive is not null &&
+                            SensitiveWalk.Inspect(request, sensitive.IsSensitive).InConstant
             };
             auditor.Record(entry);
         }

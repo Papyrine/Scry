@@ -533,6 +533,8 @@ A member that stays queryable, but whose values must not be written into a log o
 
 Naming the member without either — ordering by it, comparing it against another column — changes nothing: no value travels in the URL and none comes back.
 
+The [audit trail](observability.md#the-audit-hook) is the one place the constant is written on purpose. An `IScryAuditor` receives the request as sent, flagged `Sensitive`, since the auditor is the host's own and reading the query is its point; one that forwards entries elsewhere redacts on the flag.
+
 The client picks the transport and the server holds it to that choice. A client generated before the marking reads its own model, sees nothing sensitive, and asks in a URL; the server refuses with a flag the client acts on, re-sending the same request in a body. One extra round trip, and no code change.
 
 Refusing cannot unsay the first leak — the URL was logged by every hop before it arrived — so what it buys is that the answer is never cached under that URL, and that a client getting it wrong says so. The second rule is the one that needs no cooperation at all.

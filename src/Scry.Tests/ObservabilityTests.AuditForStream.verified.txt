@@ -39,5 +39,6 @@
   Kind: List,
   Streamed: true,
   Rows: 3,
-  StaleClient: false
+  StaleClient: false,
+  Sensitive: false
 }
