@@ -17,6 +17,9 @@ using Microsoft.EntityFrameworkCore.Metadata;
 /// is planned alongside it — see <see cref="Deny"/>.
 /// </para>
 /// </remarks>
+/// <param name="schema">The allow-list schema backing the policy-filtered sources.</param>
+/// <param name="model">The EF model, used to resolve each navigation's foreign key.</param>
+/// <param name="sources">Resolves a source's name and use to its policy-filtered <see cref="IQueryable"/>.</param>
 /// <param name="probes">
 /// Where a traversal's probe is planned, for the executor to ask before the query runs — or null
 /// where nothing will run, which is a SQL preview and the startup translation check.
