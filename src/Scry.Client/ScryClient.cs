@@ -522,13 +522,22 @@ public sealed class ScryClient
         // query as a GET is stored and revalidated by the caller's own HTTP cache, which is machinery
         // that already exists and needs no client code. What does not fit stays a POST — see QueryUrl
         // for the length that bounds this, and for what a URL exposes that a body does not.
-        var encoded = QueryUrl.Encode(utf8);
-
+        //
         // A query comparing a [Sensitive] member against a constant writes that constant into the
         // access log of every hop a URL passes, so it travels as a body however short it is. Read off
         // the finished request rather than the expression tree, which has four ways to build one that
         // never pass through a single point — see SensitiveWalk.
-        var asUrl = !urlRefused && !RequiresBody(request) && QueryUrl.WithinLimit(encoded, QueryUrlLimit);
+        //
+        // Decided before anything is encoded: a query bound to a body, a budget of zero, or bytes
+        // already past it need no base64, which a large membership set would otherwise spend a
+        // browser's heap on for nothing.
+        var encoded = !urlRefused &&
+                      !RequiresBody(request) &&
+                      QueryUrl.CouldFit(utf8.Length, QueryUrlLimit)
+            ? QueryUrl.Encode(utf8)
+            : null;
+
+        var asUrl = encoded is not null && QueryUrl.WithinLimit(encoded, QueryUrlLimit);
         var response = await Send(asUrl);
 
         // A server that maps no GET route answers one from its routing table, so the reply carries
@@ -575,7 +584,7 @@ public sealed class ScryClient
             // Built explicitly rather than sent through HttpClient.PostAsync/GetAsync: a per-query
             // header needs a request message of its own to be written onto.
             using var message = url
-                ? new HttpRequestMessage(HttpMethod.Get, Url(endpoint, encoded))
+                ? new HttpRequestMessage(HttpMethod.Get, Url(endpoint, encoded!))
                 : new HttpRequestMessage(HttpMethod.Post, endpoint)
                 {
                     Content = JsonBody(utf8)

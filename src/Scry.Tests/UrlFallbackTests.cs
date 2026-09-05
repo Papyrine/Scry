@@ -31,6 +31,22 @@ public class UrlFallbackTests
         Assert.That(methods, Is.EqualTo([HttpMethod.Get, HttpMethod.Post, HttpMethod.Post]));
     }
 
+    // The pre-encoding length check agrees with the encoding it stands in for at the boundary, so
+    // nothing that would have fitted is refused unencoded and nothing past the budget is encoded.
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(3071)]
+    [TestCase(3072)]
+    [TestCase(3073)]
+    public void CouldFitAgreesWithTheEncoding(int length)
+    {
+        var encoded = QueryUrl.Encode(new byte[length]);
+
+        Assert.That(QueryUrl.CouldFit(length, QueryUrl.MaxLength), Is.EqualTo(QueryUrl.WithinLimit(encoded, QueryUrl.MaxLength)));
+    }
+
     public class NameOnly
     {
         public string Name { get; set; } = "";

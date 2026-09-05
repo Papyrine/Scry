@@ -57,6 +57,15 @@ public static class QueryUrl
     public static bool WithinLimit(string encoded, int limit) =>
         encoded.Length <= limit;
 
+    /// <summary>
+    /// Whether a request of <paramref name="length"/> bytes could encode under <paramref name="limit"/>,
+    /// asked before anything is encoded. Base64url spends four characters on every three bytes, so a
+    /// request already past the budget is refused without the encoding — and the string it would
+    /// have allocated, which on a browser's heap a large membership set makes worth not allocating.
+    /// </summary>
+    public static bool CouldFit(int length, int limit) =>
+        Base64Url.GetEncodedLength(length) <= limit;
+
     /// <summary>Encodes a request into its <see cref="Parameter"/> value.</summary>
     public static string Encode(QueryRequest request) =>
         Encode(ScryJson.SerializeToUtf8(request));
