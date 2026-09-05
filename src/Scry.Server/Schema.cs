@@ -67,6 +67,24 @@ sealed class Schema
     /// <summary>Every allow-listed type, for a reader that has no path to resolve one by.</summary>
     internal IEnumerable<TypeMeta> Types => types.Values;
 
+    /// <summary>Every source, for the startup check that each of its policies can be constructed.</summary>
+    internal IEnumerable<ScrySource> Sources => sources.Values;
+
+    /// <summary>
+    /// How a type is named to a client: a source's wire name, or the model name introspection
+    /// publishes for a type that is not one. What a rejection names, so the message never carries a
+    /// CLR name a <c>Name</c> override was chosen to keep off the wire.
+    /// </summary>
+    public string WireName(Type type)
+    {
+        if (sourcesByType.TryGetValue(type, out var source))
+        {
+            return source.Name;
+        }
+
+        return $"{type.Name}QueryModel";
+    }
+
     /// <summary>
     /// The sources whose rows may depend on who asked, each with why: one carrying a row or
     /// attachment policy, and a POCO source supplied by a factory, which is given the request's

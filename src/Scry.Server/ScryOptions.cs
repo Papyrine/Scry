@@ -29,6 +29,28 @@ public sealed class ScryOptions(Type contextType)
     public int MaxExpressionDepth { get; set; } = 32;
 
     /// <summary>
+    /// Maximum number of expression nodes one request may carry, counted across every predicate,
+    /// key, selector, and projection in it — the pipeline's own, a join's or set operand's, and
+    /// what a subquery or aggregate reads. Default 4096.
+    /// </summary>
+    /// <remarks>
+    /// Depth bounds how deeply an expression nests and width how many members a projection names;
+    /// neither bounds a flat chain of thousands of comparisons in one predicate, which is one
+    /// statement the provider has to compile. The count is shape exactly as the pipeline length is.
+    /// </remarks>
+    public int MaxExpressionNodes { get; set; } = 4096;
+
+    /// <summary>
+    /// Maximum number of correlated subqueries one request may carry: every question about a
+    /// collection and every membership test against another source, wherever it appears. Default 64.
+    /// </summary>
+    /// <remarks>
+    /// Each is a query the database runs per row. Nesting one inside another is refused outright;
+    /// this bounds how many may sit side by side.
+    /// </remarks>
+    public int MaxCorrelatedSubqueries { get; set; } = 64;
+
+    /// <summary>
     /// Maximum number of members a projection may name, nested members included, and the same for
     /// the members a join projects. Default 256.
     /// </summary>
@@ -174,12 +196,14 @@ public sealed class ScryOptions(Type contextType)
     public string? CaseInsensitiveCollation { get; set; }
 
     /// <summary>
-    /// HMAC key used to sign keyset paging cursors. When null a random per-process key is used, so
-    /// cursors do not survive a restart or work across multiple instances — set a stable key for a
-    /// scaled-out or restart-tolerant deployment. Signing enforces the opaque-cursor contract; it is
-    /// not an authorization control (a decoded cursor is always re-validated and policy-filtered).
+    /// Key used to seal keyset paging cursors (authenticated encryption, so a cursor is opaque as well
+    /// as tamper-proof). When null a random per-process key is used, so cursors do not survive a
+    /// restart or work across multiple instances — set a stable key for a scaled-out or
+    /// restart-tolerant deployment. Sealing enforces the opaque-cursor contract and keeps the ordering
+    /// keys it carries out of URLs and logs; it is not an authorization control (a decoded cursor is
+    /// always re-validated and policy-filtered).
     /// </summary>
-    public byte[]? CursorSigningKey { get; set; }
+    public byte[]? CursorKey { get; set; }
 
     /// <summary>
     /// Whether startup translates each navigation that steps into a row-policied source, to prove the

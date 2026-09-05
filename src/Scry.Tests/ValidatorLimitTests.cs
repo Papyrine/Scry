@@ -96,6 +96,65 @@ public class ValidatorLimitTests
         Assert.That(Rejects("Order", ops), Does.Contain("Expression nesting is too deep"));
     }
 
+    // Neither depth nor width bounds a flat expression of thousands of nodes, so the count of them is
+    // bounded on its own — across the whole request, since a per-operator budget is one the pipeline
+    // length multiplies.
+    [Test]
+    public void TheExpressionNodeCountIsBounded()
+    {
+        // A balanced tree of sixteen comparisons is 31 binary nodes plus 32 leaves: wide, not deep.
+        var wide = Balanced(16);
+
+        Assert.That(
+            Rejects("Employee", [new WhereOp(wide)], _ => _.MaxExpressionNodes = 40),
+            Does.Contain("expression nodes, more than the maximum of 40"));
+    }
+
+    [Test]
+    public void TheExpressionNodeCountIsCountedAcrossOperators()
+    {
+        // Each predicate alone is under the cap; the two together are not.
+        QueryOp[] ops = [new WhereOp(Balanced(8)), new WhereOp(Balanced(8))];
+
+        Assert.That(
+            Rejects("Employee", ops, _ => _.MaxExpressionNodes = 40),
+            Does.Contain("expression nodes"));
+    }
+
+    [Test]
+    public void TheCorrelatedSubqueryCountIsBounded()
+    {
+        // Three questions about a collection side by side, where nesting one in another is refused
+        // outright: each is a query the database runs per row.
+        var lines = new SubqueryNode(["Lines"], SubqueryFn.Any);
+        var predicate = new BinaryNode(BinaryOp.AndAlso, new BinaryNode(BinaryOp.AndAlso, lines, lines), lines);
+
+        Assert.That(
+            Rejects("Order", [new WhereOp(predicate)], _ => _.MaxCorrelatedSubqueries = 2),
+            Does.Contain("correlated subqueries, more than the maximum of 2"));
+    }
+
+    [Test]
+    public void AMembershipTestCountsAsACorrelatedSubquery()
+    {
+        var membership = new InSourceNode(new MemberNode(["Id"]), "Ticket", new MemberNode(["Id"]));
+        var predicate = new BinaryNode(BinaryOp.AndAlso, membership, membership);
+
+        Assert.That(
+            Rejects("Employee", [new WhereOp(predicate)], _ => _.MaxCorrelatedSubqueries = 1),
+            Does.Contain("correlated subqueries"));
+    }
+
+    static Node Balanced(int leaves)
+    {
+        if (leaves == 1)
+        {
+            return new BinaryNode(BinaryOp.Equal, new MemberNode(["Id"]), new ConstNode("1", ClrTypeTag.Int32));
+        }
+
+        return new BinaryNode(BinaryOp.OrElse, Balanced(leaves / 2), Balanced(leaves / 2));
+    }
+
     [Test]
     public void ASetOperandCannotCarryEmptyOps()
     {
@@ -173,13 +232,22 @@ public class ValidatorLimitTests
         }
     ];
 
-    static string Rejects(string root, IReadOnlyList<QueryOp> pipeline)
+    static string Rejects(string root, IReadOnlyList<QueryOp> pipeline, Action<ScryOptions>? extra = null)
     {
         using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(root, pipeline);
 
+        // Only a custom limit warrants a fresh processor; the default configuration is shared.
+        var processor = extra is null
+            ? SharedProcessor.Instance
+            : ScryProcessor.Create<TestContext>(options =>
+            {
+                options.AddPocoSource<Holiday>(_ => Holiday.Seed());
+                extra(options);
+            });
+
         var exception = Assert.Throws<ScryValidationException>(
-            () => SharedProcessor.Instance.Execute(request, context));
+            () => processor.Execute(request, context));
 
         return exception!.Message;
     }

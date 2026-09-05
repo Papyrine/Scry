@@ -101,6 +101,16 @@ public abstract class Audited
     // Overridden below, so the member is declared twice in metadata and once in reflection; both
     // sides have to describe it once.
     public virtual string Notes { get; set; } = "";
+
+    // Marked here and overridden below without the attribute. The generator carries the attributes
+    // of every declaration along the chain onto the one member, so the server has to read through
+    // the override too — or the override is sensitive to the client and not to the server.
+    [Sensitive]
+    public virtual string Reviewer { get; set; } = "";
+
+    // The same shape for the hard stop: hidden on the base, overridden below, hidden on both sides.
+    [QueryIgnore]
+    public virtual string AuditTrail { get; set; } = "";
 }
 
 /// <summary>
@@ -115,6 +125,8 @@ public class Invoice :
     public int Id { get; set; }
     public string Number { get; set; } = "";
     public override string Notes { get; set; } = "";
+    public override string Reviewer { get; set; } = "";
+    public override string AuditTrail { get; set; } = "";
 
     // An indexer is a property with parameters, which no query names and neither side exposes.
     public string this[int index] => Number;
@@ -539,6 +551,21 @@ public sealed class UkAddressesOnlyPolicy :
 {
     public IQueryable<Address> Filter(IQueryable<Address> source, ScryPolicyContext context) =>
         source.Where(_ => _.Country == "UK");
+}
+
+/// <summary>
+/// Never attached by default. Takes a dependency and has no other constructor, so it can only be
+/// built from a service provider that registers it — which the startup check has to notice, rather
+/// than the first query of its source.
+/// </summary>
+public sealed class NeedsAClockPolicy(TimeProvider clock) :
+    IReturnablePolicy<Order>
+{
+    public IQueryable<Order> Filter(IQueryable<Order> source, ScryPolicyContext context)
+    {
+        var now = clock.GetUtcNow().UtcDateTime;
+        return source.Where(_ => _.Placed <= now);
+    }
 }
 
 /// <summary>The [ReturnableWith] policy on <see cref="Ticket"/>: scopes queries to open tickets.</summary>

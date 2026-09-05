@@ -79,11 +79,13 @@ Fix: send `Content-Disposition: attachment` (with a filename from `AttachmentMed
 response; add `Content-Security-Policy: sandbox` as belt and braces; enforce `Content-Type: application/json` on every
 POST (F3); correct the two doc claims.
 
-- [ ] add (IntegrationTests): an attachment `200` carries `Content-Disposition: attachment`
-- [ ] add (IntegrationTests): a `text/plain` form-shaped POST to the attachment endpoint is refused with 415
+**Fixed:** every attachment `200` now carries `Content-Disposition: attachment; filename="{Member}{ext}"` and `Content-Security-Policy: sandbox`, and the endpoint accepts only `application/json` bodies (F3). Pinned by `AttachmentTests.IsServedAsADownload` and `HttpRoundTripTests.ABodyThatIsNotJsonIsRefused`; both doc claims corrected.
+
+- [x] covered (IntegrationTests): an attachment `200` carries `Content-Disposition: attachment`
+- [x] covered (IntegrationTests): a `text/plain` form-shaped POST to the attachment endpoint is refused with 415
 - [ ] add: startup or doc decision on declaring `text/html` / `image/svg+xml` as an attachment content type
 - [x] covered: `AttachmentTests.DeclaredContentTypeIsServed` asserts `nosniff`
-- [ ] docs: fix `docs/attachments.md:143` and the `AttachmentAttribute` remarks
+- [x] docs: fix `docs/attachments.md:143` and the `AttachmentAttribute` remarks
 
 
 ### F3 — MEDIUM — POST bodies are read whatever their `Content-Type` (confirmed)
@@ -101,11 +103,13 @@ Repro: `POST /api/query` with `Content-Type: text/plain` and the form-shaped bod
 Fix: in each handler, refuse a body whose media type is not `application/json` (415, `no-store`, before reading the body).
 The `q=` GET form is unaffected — it carries no body and is already cache-safe.
 
-- [ ] add (IntegrationTests): `text/plain`, `multipart/form-data`, `application/x-www-form-urlencoded`, and a missing
+**Fixed:** `ScryServiceExtensions.RequireJson` refuses any POST whose media type is not `application/json` with a 415 (`no-store`), before the body is read, on the query, stream, batch, and attachment endpoints and the explorer's SQL preview. Pinned by `HttpRoundTripTests.ABodyThatIsNotJsonIsRefused`, `AFormBodyIsRefused`, `ABodyWithNoContentTypeIsRefused`, `AJsonBodyIsAccepted`.
+
+- [x] covered (IntegrationTests): `text/plain`, `multipart/form-data`, `application/x-www-form-urlencoded`, and a missing
   `Content-Type` are answered 415 by `/api/query`, `/stream`, `/batch`, and `/attachment`
-- [ ] add (IntegrationTests): `application/json; charset=utf-8` and bare `application/json` are still accepted
-- [ ] add: `ScryClient` and the explorer already send `application/json` (pin it, since the server will now depend on it)
-- [ ] docs: `docs/security.md` "CORS, CSRF, TLS" — say what the endpoint enforces and what it leaves to the host
+- [x] covered (IntegrationTests): `application/json; charset=utf-8` and bare `application/json` are still accepted
+- [x] covered: `ScryClient` and the explorer already send `application/json` (pin it, since the server will now depend on it)
+- [x] docs: `docs/security.md` "CORS, CSRF, TLS" — say what the endpoint enforces and what it leaves to the host
 
 
 ### F4 — MEDIUM — `[Sensitive]` on an overridden property is dropped by the server but kept by the generator (confirmed)
@@ -126,9 +130,11 @@ generator's includes, so every client built from such a model reports itself sta
 Fix: read `[Sensitive]` on properties with `inherit: true` (matching `[QueryIgnore]` and the generator), and correct the
 comment. Type-level `[Sensitive]` can stay declared-only on both sides.
 
-- [ ] add (Scry.Tests `SensitiveSchemaTests`): a marked base property overridden without the attribute is sensitive
-- [ ] add (Scry.Tests): the URL refusal and the `no-store` both hold for such a member
-- [ ] add (TestModel + `LockstepTests`): a base with a `[Sensitive]` virtual and a `[QueryIgnore]` virtual, both
+**Fixed:** `Member.Sensitive` reads the attribute through the override chain (matching `[QueryIgnore]` and the generator), comment corrected. `Audited.Reviewer`/`AuditTrail` added to the test model, so `LockstepTests` pins the agreement; `SensitiveSchemaTests.AMarkedBasePropertyIsMarkedThroughItsOverride`, `SensitiveOverrideTests`, and `SecurityTests.RejectsAnIgnoredBasePropertyThroughItsOverride` pin the behaviour.
+
+- [x] covered (Scry.Tests `SensitiveSchemaTests`): a marked base property overridden without the attribute is sensitive
+- [x] covered (Scry.Tests): the URL refusal and the `no-store` both hold for such a member
+- [x] covered (TestModel + `LockstepTests`): a base with a `[Sensitive]` virtual and a `[QueryIgnore]` virtual, both
   overridden without the attribute, so `GeneratorStampMatchesServerStamp` pins the agreement
 - [x] covered (server side, no lockstep): `[QueryIgnore]` on an overridden base property still hides the member —
   reproduced passing in the scratch project; add the same test to `SecurityTests`
@@ -146,10 +152,12 @@ projection width already are.
 Fix: add `MaxExpressionNodes` (per request, counted across every expression the validator walks) and a separate cap on
 `SubqueryNode` + `InSourceNode` occurrences, both checked in `ValidateExpr`/`ValidateHaving` where the depth already is.
 
-- [ ] add (`ValidatorLimitTests`): a predicate over the node cap is refused before anything is rebound
-- [ ] add: the cap is counted across every operator (root predicate, terminal predicate, join inner side, set operand,
+**Fixed:** `RequestBudget` counts every expression node and every correlated subquery across the whole request before the validator walks it; `ScryOptions.MaxExpressionNodes` (4096) and `MaxCorrelatedSubqueries` (64). Pinned by `ValidatorLimitTests.TheExpressionNodeCountIsBounded`, `...IsCountedAcrossOperators`, `TheCorrelatedSubqueryCountIsBounded`, `AMembershipTestCountsAsACorrelatedSubquery`.
+
+- [x] covered (`ValidatorLimitTests`): a predicate over the node cap is refused before anything is rebound
+- [x] covered: the cap is counted across every operator (root predicate, terminal predicate, join inner side, set operand,
   HAVING, grouped projection, nested projection), since a per-operator count is a per-operator budget
-- [ ] add: N correlated subqueries in one predicate over the subquery cap are refused
+- [x] covered: N correlated subqueries in one predicate over the subquery cap are refused
 - [ ] add: `MaxInValues` reached through several `In` calls in one predicate — decide and pin whether it is per call
   (today) or per request
 - [x] covered: depth `ValidatorLimitTests.ExpressionNestingIsBounded` and `...InAHavingClause`
@@ -167,8 +175,10 @@ out of. Repro: a page ordered by `Name` produced a cursor decoding to `{"keys":[
 Fix: either encrypt the cursor (AES-GCM under the signing key, which also makes it opaque as the contract says), or have
 `SensitiveWalk` treat a `PageOp` following an ordering over a sensitive member as `InConstant` + `InProjection`.
 
+**Fixed:** cursors are sealed with AES-GCM under a key derived from `CursorKey` (`base64url(nonce || ciphertext || tag)`), so the key values never travel in the clear. Pinned by `CursorCodecTests.DoesNotCarryTheKeyValuesInTheClear`, `SealsTheSameValuesDifferentlyEachTime`, and the tamper/other-key tests over the new format; `docs/paging.md` updated.
+
 - [ ] add: a page ordered by a sensitive member is `no-store` and its next page is asked as a body
-- [ ] add (`CursorCodecTests`): a cursor does not contain the key values as plaintext (once encrypted)
+- [x] covered (`CursorCodecTests`): a cursor does not contain the key values as plaintext (once encrypted)
 - [x] covered: cursor integrity — `CursorCodecTests.RefusesATamperedPayload`, `RefusesACursorSignedWithAnotherKey`,
   `RefusesAMalformedCursor`; `SecurityTests.RejectsInvalidPagingCursor`, `RejectsCursorOnUnorderedQuery`
 
@@ -187,9 +197,11 @@ suggests alerting on. Reproduced for a pipeline entry, a group key, and a call a
 Fix: refuse null elements in `ScryJson` (a modifier on the list contracts, or a converter), or null-check in the validator
 before the `switch` and reject with a message.
 
-- [ ] add (`WireSerializationTests`): each of the eight arrays above with a null element fails deserialization with a
+**Fixed:** `NonNullElementsConverterFactory` refuses a null element of any request array at the JSON layer. Pinned by `WireSerializationTests.ANullArrayElementFailsClosed` (seven arrays), `ANullBatchEntryFailsClosed`, `ANullAttachmentKeyFailsClosed`.
+
+- [x] covered (`WireSerializationTests`): each of the eight arrays above with a null element fails deserialization with a
   message naming the member
-- [ ] add (`BatchTests`): a null batch entry is a per-entry 400, never a 500
+- [x] covered (`BatchTests`): a null batch entry is a per-entry 400, never a 500
 
 
 ### F8 — LOW — an out-of-range integer for `SetKind` reaches `Expression.Call` and faults (confirmed)
@@ -204,8 +216,10 @@ falls back to string).
 Fix: `Enum.IsDefined` every wire enum in the validator (one helper), or configure the enum converter with
 `allowIntegerValues: false` — the latter is a wire change and needs the client checked.
 
-- [ ] add: `"kind": 999` is a 400
-- [ ] add: one test per wire enum with an undefined integer, asserting 400 (pins the fail-closed arms named above)
+**Fixed:** the validator holds every request enum to its defined values (`EnsureDefined`), since integers must stay readable in payloads. Pinned by `SecurityTests.RejectsAnUndefinedEnumValue` (nine enums) and `RejectsAnUndefinedSubqueryFunction`.
+
+- [x] covered: `"kind": 999` is a 400
+- [x] covered: one test per wire enum with an undefined integer, asserting 400 (pins the fail-closed arms named above)
 - [ ] add: decide whether enum *names* on the wire are case-sensitive — the converter reads them case-insensitively, so
   `"op":"equal"` and `"op":"Equal"` are two byte-strings for one query (ETag, `q=`, and audit fingerprints diverge)
 
@@ -222,7 +236,9 @@ by CLR name in the same message.
 Fix: resolve the wire name through `schema.TryGetSourceForType` and fall back to the model name (`{Name}QueryModel`) that
 introspection already publishes.
 
-- [ ] add (`SecurityTests`): a rejection on a renamed source never contains the CLR type name
+**Fixed:** `Schema.WireName` names a source by its wire name and any other type by its model name; every validator and builder message goes through it. Pinned by `SecurityTests.RejectionNamesTheWireNameNotTheClrType`.
+
+- [x] covered (`SecurityTests`): a rejection on a renamed source never contains the CLR type name
 - [ ] add: the same for the `OfType` messages and for a complex type reached by traversal
 
 
@@ -238,8 +254,10 @@ traversal, so a root-only policy is never constructed before the first request.
 Fix: at `MapScry` startup, resolve every registered policy type once (DI or a parameterless constructor) and refuse to
 start otherwise; consider dropping the `Activator` fallback for a type that has any constructor parameter.
 
-- [ ] add: a policy with constructor dependencies and no DI registration is a startup failure naming the policy
-- [ ] add: a policy registered scoped in DI is resolved from the request scope (pins the intended path)
+**Fixed:** `ScryProcessor.EnsurePoliciesResolvable` runs at `MapScry` startup over every row, attachment, and cached policy. Pinned by `PolicyResolutionTests`.
+
+- [x] covered: a policy with constructor dependencies and no DI registration is a startup failure naming the policy
+- [x] covered: a policy registered scoped in DI is resolved from the request scope (pins the intended path)
 
 
 ### F11 — LOW — the `ETag` embeds the raw `CacheScope` and freshness token (by inspection)
@@ -249,7 +267,9 @@ The scope is "a tenant, a principal" per `ScryOptions.CacheScope`; the freshness
 Both are handed to the caller verbatim on every 200 and 304. Hashing the pair (as the query already is) costs nothing
 and keeps identifiers and write-activity timing out of a header a browser stores for as long as it caches.
 
-- [ ] add (`samples/Sample.Tests` `ConditionalQueryTests`): the `ETag` does not contain the `CacheScope` string or the
+**Fixed:** the freshness token and the cache scope are fingerprinted into the `ETag` the way the query is. Pinned by `QueryEtagTests`.
+
+- [x] covered (`samples/Sample.Tests` `ConditionalQueryTests`): the `ETag` does not contain the `CacheScope` string or the
   freshness token verbatim
 - [x] covered: a rejected query carries no `ETag` — by code (`OnStarting` checks 200 and `no-store`); add a test
 
@@ -375,8 +395,8 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
 - [ ] add: `"version": 0` and a negative version — decide and pin (accepted today)
 - [ ] add: `$type` not first in the object is refused (STJ default; pin it, since `AllowOutOfOrderMetadataProperties`
   would silently change it)
-- [ ] add: unknown top-level and nested JSON members are skipped — pin as the forward-compatibility contract the doc
-  relies on ("servers ignore an unrecognized stamp property"), and note it is what makes the F3 body shape parse
+- [x] covered: unknown members on a request are refused at every level — `WireSerializationTests.AnUnknownMemberFailsClosed`,
+  `AnUnknownMemberOnABatchFailsClosed`, `AnUnknownMemberOnAnAttachmentRequestFailsClosed` (a response stays lenient)
 - [ ] add: duplicate JSON properties — last wins; pin so a future `Disallow` is a deliberate wire change
 - [ ] add: a byte-for-byte `q=` decode failure (bad base64url, valid base64url of non-JSON, valid JSON of a non-request)
   is a 400 with `no-store` — `HttpRoundTripTests.MalformedUrlQueryIsRejected` covers the first only
@@ -528,7 +548,7 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
 - [ ] add: F6 and F12
 - [ ] add: a cursor value that does not parse as the key member's type is a 400 (`BuildConstant` → `ParseValue`), and a
   null value for a non-nullable key matches nothing rather than faulting
-- [ ] add: `CursorSigningKey` set makes cursors survive a second processor; unset makes them per-process (documented,
+- [ ] add: `CursorKey` set makes cursors survive a second processor; unset makes them per-process (documented,
   untested)
 
 

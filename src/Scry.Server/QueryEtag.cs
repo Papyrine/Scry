@@ -116,13 +116,23 @@ static class QueryEtag
         return Base64Url.EncodeToString(hash[..12]);
     }
 
+    // The freshness token and the scope are hashed like the query is: a tag is stored by the
+    // caller for as long as it caches, and the two are the database's write position and a tenant
+    // or principal — neither is the caller's to read, and both only have to be stable and distinct.
     static string Etag(string schemaStamp, string freshness, string query, string? scope)
     {
         if (scope is null)
         {
-            return $"\"{schemaStamp}-{freshness}-{query}\"";
+            return $"\"{schemaStamp}-{Fingerprint(freshness)}-{query}\"";
         }
 
-        return $"\"{schemaStamp}-{freshness}-{query}-{scope}\"";
+        return $"\"{schemaStamp}-{Fingerprint(freshness)}-{query}-{Fingerprint(scope)}\"";
+    }
+
+    static string Fingerprint(string value)
+    {
+        Span<byte> hash = stackalloc byte[SHA256.HashSizeInBytes];
+        SHA256.HashData(Encoding.UTF8.GetBytes(value), hash);
+        return Base64Url.EncodeToString(hash[..12]);
     }
 }

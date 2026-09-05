@@ -102,9 +102,8 @@ sealed class ProjectionMembersConverter :
                 continue;
             }
 
-            // Skipped rather than refused, so this reads a member exactly as the serializer did before
-            // the short form existed. What keeps the vocabulary closed is the value's discriminator.
-            reader.Skip();
+            // Refused, as every other request object refuses a member nothing reads.
+            throw new JsonException($"A projection member does not carry '{property}'.");
         }
 
         if (name is null)

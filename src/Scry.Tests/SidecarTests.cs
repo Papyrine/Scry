@@ -193,13 +193,14 @@ public class SidecarTests
 
         for (var i = 0; i < 3; i++)
         {
-            using var body = JsonContent($$"""{"version":1,"root":"Person","pipeline":[],"n":{{i}}}""");
+            // Told apart by the stamp, a member the vocabulary names: one it does not is refused.
+            using var body = JsonContent($$"""{"version":1,"root":"Person","pipeline":[],"stamp":"s{{i}}"}""");
             await client.PostAsync("/api/query", body);
         }
 
         Assert.That(store.Entries, Has.Count.EqualTo(2));
-        Assert.That(store.Entries[0].RequestJson, Does.Contain("\"n\": 1"));
-        Assert.That(store.Entries[1].RequestJson, Does.Contain("\"n\": 2"));
+        Assert.That(store.Entries[0].RequestJson, Does.Contain("\"stamp\": \"s1\""));
+        Assert.That(store.Entries[1].RequestJson, Does.Contain("\"stamp\": \"s2\""));
     }
 
     [Test]

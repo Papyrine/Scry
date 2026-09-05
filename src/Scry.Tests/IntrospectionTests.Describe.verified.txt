@@ -491,6 +491,15 @@
           IsSensitive: false
         },
         {
+          Name: Reviewer,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: true
+        },
+        {
           Name: Tags,
           TypeDisplay: global::System.Collections.Generic.IReadOnlyList<string>,
           NeedsNullDefault: true,
@@ -1045,5 +1054,5 @@
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: lxXxGGe9lWQ7xvK1
+  SchemaStamp: Gi24ZCbl-wl5nqSV
 }

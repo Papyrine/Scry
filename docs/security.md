@@ -416,6 +416,28 @@ public int MaxPipelineLength { get; set; } = 32;
 public int MaxExpressionDepth { get; set; } = 32;
 
 /// <summary>
+/// Maximum number of expression nodes one request may carry, counted across every predicate,
+/// key, selector, and projection in it — the pipeline's own, a join's or set operand's, and
+/// what a subquery or aggregate reads. Default 4096.
+/// </summary>
+/// <remarks>
+/// Depth bounds how deeply an expression nests and width how many members a projection names;
+/// neither bounds a flat chain of thousands of comparisons in one predicate, which is one
+/// statement the provider has to compile. The count is shape exactly as the pipeline length is.
+/// </remarks>
+public int MaxExpressionNodes { get; set; } = 4096;
+
+/// <summary>
+/// Maximum number of correlated subqueries one request may carry: every question about a
+/// collection and every membership test against another source, wherever it appears. Default 64.
+/// </summary>
+/// <remarks>
+/// Each is a query the database runs per row. Nesting one inside another is refused outright;
+/// this bounds how many may sit side by side.
+/// </remarks>
+public int MaxCorrelatedSubqueries { get; set; } = 64;
+
+/// <summary>
 /// Maximum number of members a projection may name, nested members included, and the same for
 /// the members a join projects. Default 256.
 /// </summary>
@@ -482,7 +504,7 @@ public int? MaxStreamRows { get; set; }
 /// </remarks>
 public int QueryUrlLimit { get; set; } = QueryUrl.MaxLength;
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L97' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L119' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 These bound the work a single request can ask for: how many rows, how deep a join chain, how long a pipeline — a join's inner side and a set operand each carry one of their own, held to the same length — how deeply nested an expression, and how wide a projection.
@@ -557,7 +579,7 @@ app.MapScry("/api/query")
 
 **Auditing, by default.** Nothing is recorded until something subscribes. The hooks exist — every query is reported to any registered [`IScryAuditor`](observability.md#the-audit-hook) with its full request AST and outcome, alongside [traces and metrics](observability.md) — but turning them on, and alerting on rejections, is deployment work.
 
-**CORS, CSRF, TLS.** Ordinary ASP.NET Core concerns, unchanged by Scry.
+**CORS, CSRF, TLS.** Ordinary ASP.NET Core concerns, mostly unchanged by Scry. The one thing the endpoints do themselves is refuse a body that is not `application/json` (a `415`): an HTML form can navigate a browser to a `POST` endpoint with a `text/plain` field shaped as JSON, but it cannot set that header, so requiring it keeps a cross-site page from executing a query — or fetching an [attachment](attachments.md#security) as a document — as whoever the browser sent. An anti-forgery token, where the host wants one, goes on top.
 
 **Cache or range-serve an [attachment](attachments.md).** Every fetch is authorized afresh, and there is no `ETag`, `Cache-Control`, or `Range` support — a cached attachment is one the policy no longer sees. Add caching in middleware only where that trade is acceptable.
 

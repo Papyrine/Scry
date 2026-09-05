@@ -1,4 +1,4 @@
-﻿// UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
+// UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
 // Core's own ToListAsync/CountAsync IQueryable extensions and collide with the Scry client terminals.
 using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 using System.Text.Encodings.Web;
@@ -304,6 +304,23 @@ public class AttachmentTests
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
             Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("image/png"));
             Assert.That(response.Headers.GetValues("X-Content-Type-Options").Single(), Is.EqualTo("nosniff"));
+        });
+    }
+
+    // A download, never a document: an HTML form navigates a browser to the endpoint with POST, so
+    // the bytes a policy allowed must not render on this origin as the person the browser sent —
+    // whatever type the member declares. The name is the member's and the declared type's extension.
+    [Test]
+    public async Task IsServedAsADownload()
+    {
+        using var response = await FetchRaw("Photo", 1);
+        var disposition = response.Content.Headers.ContentDisposition;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(disposition?.DispositionType, Is.EqualTo("attachment"));
+            Assert.That(disposition?.FileName?.Trim('"'), Is.EqualTo("Photo.png"));
+            Assert.That(response.Headers.GetValues("Content-Security-Policy").Single(), Is.EqualTo("sandbox"));
         });
     }
 

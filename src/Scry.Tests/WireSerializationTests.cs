@@ -218,6 +218,59 @@ public class WireSerializationTests
         Assert.That(exception!.Message, Does.Contain("predicate"));
     }
 
+    // A null element of a wire array is the absence's twin one level down: RespectNullableAnnotations
+    // refuses a null member, and the element converter refuses these, so a validator never dereferences
+    // one — which was a 500 recorded as Failed, for a request the client wrote.
+    [TestCase("""{"version":1,"root":"Employees","pipeline":[null]}""", "QueryOp")]
+    [TestCase("""{"version":1,"root":"Employees","pipeline":[{"$type":"groupBy","keys":[null]}]}""", "Node")]
+    [TestCase("""{"version":1,"root":"Employees","pipeline":[{"$type":"where","predicate":{"$type":"call","function":"StringContains","target":{"$type":"member","path":"Name"},"arguments":[null]}}]}""", "Node")]
+    [TestCase("""{"version":1,"root":"Employees","pipeline":[{"$type":"where","predicate":{"$type":"compositeKey","parts":[null]}}]}""", "Node")]
+    [TestCase("""{"version":1,"root":"Employees","pipeline":[{"$type":"join","root":"Department","kind":"Inner","outerKey":{"$type":"member","path":"DepartmentId"},"innerKey":{"$type":"member","path":"Id"},"result":[null]}]}""", "JoinMember")]
+    [TestCase("""{"version":1,"root":"Employees","pipeline":[{"$type":"join","root":"Department","kind":"Inner","outerKey":{"$type":"member","path":"DepartmentId"},"innerKey":{"$type":"member","path":"Id"},"result":[{"name":"Name","side":"Outer","path":"Name"}],"innerOps":[null]}]}""", "QueryOp")]
+    [TestCase("""{"version":1,"root":"Employees","pipeline":[{"$type":"set","kind":"Union","root":"Department","projection":{"members":["Name"]},"operandOps":[null]}]}""", "QueryOp")]
+    public void ANullArrayElementFailsClosed(string json, string element)
+    {
+        var exception = Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest(json));
+        Assert.That(exception!.Message, Does.Contain($"array of {element} cannot be null"));
+    }
+
+    [Test]
+    public void ANullBatchEntryFailsClosed()
+    {
+        var exception = Assert.Throws<ScryWireException>(
+            () => ScryJson.DeserializeBatchRequest("""{"version":1,"queries":[null]}"""));
+        Assert.That(exception!.Message, Does.Contain("array of QueryRequest cannot be null"));
+    }
+
+    [Test]
+    public void ANullAttachmentKeyFailsClosed()
+    {
+        var exception = Assert.Throws<ScryWireException>(
+            () => ScryJson.DeserializeAttachmentRequest("""{"version":1,"root":"Employee","member":"Photo","keys":[null]}"""));
+        Assert.That(exception!.Message, Does.Contain("array of AttachmentKey cannot be null"));
+    }
+
+    // A request names only what the vocabulary names: a member nothing reads is refused rather than
+    // skipped, at every level. Skipping is what let a form field shaped as JSON carry its "=" in a
+    // member the server never looked at.
+    [TestCase("""{"version":1,"root":"Employees","pipeline":[],"pad":"="}""")]
+    [TestCase("""{"version":1,"root":"Employees","pipeline":[{"$type":"count","extra":1}]}""")]
+    [TestCase("""{"version":1,"root":"Employees","pipeline":[{"$type":"where","predicate":{"$type":"member","path":"Name","extra":1}}]}""")]
+    [TestCase("""{"version":1,"root":"Employees","pipeline":[{"$type":"select","projection":{"members":[{"name":"N","value":{"$type":"node","node":{"$type":"member","path":"Name"}},"extra":1}]}}]}""")]
+    [TestCase("""{"version":1,"root":"Employees","pipeline":[{"$type":"select","projection":{"members":["Name"],"extra":1}}]}""")]
+    public void AnUnknownMemberFailsClosed(string json) =>
+        Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest(json));
+
+    [Test]
+    public void AnUnknownMemberOnABatchFailsClosed() =>
+        Assert.Throws<ScryWireException>(
+            () => ScryJson.DeserializeBatchRequest("""{"version":1,"queries":[],"pad":"="}"""));
+
+    [Test]
+    public void AnUnknownMemberOnAnAttachmentRequestFailsClosed() =>
+        Assert.Throws<ScryWireException>(
+            () => ScryJson.DeserializeAttachmentRequest("""{"version":1,"root":"Employee","member":"Photo","keys":[{"value":"1","tag":"Int32","pad":"="}]}"""));
+
     [Test]
     public void ANullRootFailsClosed()
     {

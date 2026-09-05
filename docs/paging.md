@@ -63,7 +63,7 @@ The client's ordering is not enough on its own — `OrderBy(_ => _.Created)` is 
 
 1. **Total order.** The server appends the source's **primary key** (which it knows from EF metadata) as a final ascending tiebreaker to the client's ordering, unless the ordering already ends in it. This is invisible to the projection — the key is used for ordering and the cursor only, never surfaced in the result unless the client projected it.
 2. **`HasMore` without a count.** The server fetches `n + 1` rows, returns `n`, and sets `HasMore` from whether the extra row existed. No `COUNT(*)` is issued.
-3. **The cursor.** The server encodes the ordering-key tuple (including the appended primary key) of the last returned row into an opaque, signed token (see [Cursor format](#cursor-format)).
+3. **The cursor.** The server encodes the ordering-key tuple (including the appended primary key) of the last returned row into an opaque, sealed token (see [Cursor format](#cursor-format)).
 4. **Resume.** On the next call the server decodes the cursor and adds a **lexicographic seek predicate** over the ordering keys, then re-runs the identical pipeline.
 
 For an ascending `a`, descending `b`, tiebreak `pk`, the seek predicate is:
@@ -105,7 +105,7 @@ Paging is governed by these `ScryOptions` settings:
 | --- | --- | --- |
 | `MaxPageSize` | 1000 | Hard ceiling on the page size. A `Take`, or a `ToPageAsync` size, above it is rejected at validation. |
 | `DefaultPageSize` | 100 | Page size applied to a `ToPageAsync()` that omits a size. |
-| `CursorSigningKey` | *(ephemeral)* | HMAC key for cursor signatures. When unset, a random per-process key is used — cursors then do not survive a restart or work across instances. Set a stable key for a scaled-out or restart-tolerant deployment. |
+| `CursorKey` | *(ephemeral)* | Key the cursors are sealed under. When unset, a random per-process key is used — cursors then do not survive a restart or work across instances. Set a stable key for a scaled-out or restart-tolerant deployment. |
 
 `DefaultPageSize` closes the paging hole where an unbounded page would otherwise bypass `MaxPageSize`: a paged result is always a bounded page, and `HasMore` tells the caller whether more exists. Truncation is never silent. (`ToListAsync` is unchanged — it still returns the full authorized set, bounded only by an explicit `Take` and by row policies; "give me everything" stays an explicit choice.)
 
@@ -157,20 +157,20 @@ A `page` terminal returns the `Page` result kind, whose payload is a `ScryPage` 
 
 ### Cursor format
 
-The cursor's shape is internal to the server and **not** part of the wire contract — clients must not depend on it. The encoding (`CursorCodec`) is `base64url(json) "." base64url(hmac)`, where the JSON is the tagged ordering-key values of the last row plus a stamp of the ordering they were read in:
+The cursor's shape is internal to the server and **not** part of the wire contract — clients must not depend on it. The encoding (`CursorCodec`) is `base64url(nonce || ciphertext || tag)`: AES-GCM over a JSON document, under a key derived from `CursorKey`. The document is the tagged ordering-key values of the last row plus a stamp of the ordering they were read in:
 
 ```
 { "keys": [ { "value": "Alice", "tag": "String" }, { "value": "42", "tag": "Int32" } ], "order": "k3nQ8yF2pXsA9vLm" }
 ```
 
-Values use the same invariant-culture string + `ClrTypeTag` form the wire uses for constants, so decoding a cursor produces exactly the `ConstNode`s the seek predicate rebinds against each key's real type. `order` is a truncated SHA-256 over the source name and every ordering key's path and direction — see [Cursor invalidation](#cursor-invalidation). The HMAC (`HMACSHA256` over the JSON, keyed by `CursorSigningKey`) is checked in constant time on decode; a bad signature or malformed token is a `400`.
+Values use the same invariant-culture string + `ClrTypeTag` form the wire uses for constants, so decoding a cursor produces exactly the `ConstNode`s the seek predicate rebinds against each key's real type. `order` is a truncated SHA-256 over the source name and every ordering key's path and direction — see [Cursor invalidation](#cursor-invalidation). The authentication tag is checked on decode; a token that does not decrypt, or is malformed, is a `400`. A fresh nonce per cursor means two cursors for one row never share bytes.
 
 
 ## Security
 
 A cursor introduces **no new attack surface**. When decoded it becomes `Where`-style comparisons over **allow-listed** ordering members, which flow through the same `QueryValidator` and `IReturnablePolicy<T>` as any other predicate. The worst a tampered cursor can do is seek to an arbitrary point *within an already-authorized, already-policy-filtered set* — it cannot widen the set, reach an unlisted member, or bypass a row policy.
 
-The cursor is nonetheless **HMAC-signed** (`CursorSigningKey`, or a per-process ephemeral key). This is not a confidentiality or authorization control — it enforces the "opaque, do not parse" contract and rejects malformed tokens early with a clear `400` rather than letting them fall through to a seek over garbage. The signing key is server-only and never leaves the server.
+The cursor is nonetheless **sealed** — authenticated encryption under `CursorKey`, or a per-process ephemeral key. That is not an authorization control: it enforces the "opaque, do not parse" contract and rejects malformed tokens early with a clear `400` rather than letting them fall through to a seek over garbage. It is a confidentiality control in one narrow sense: the ordering key's value can be a [`[Sensitive]`](annotations.md#sensitive) member's, and a cursor travels in the URL of the next page, so the values inside it are never in the clear. The key is server-only and never leaves the server.
 
 
 ### Is signing necessary? (belt-and-suspenders, by design)
@@ -185,7 +185,7 @@ Scry belongs to the **first** camp: a decoded cursor is re-validated and policy-
 Two caveats if it is kept:
 
 - **HMAC signs, it does not hide.** The payload is readable — anyone can base64-decode the cursor and see the ordering-key values (`Name = "Alice"`, `Id = 1`). For Scry that is low-sensitivity: the client ordered by those columns and already saw those rows. But if a cursor could ever carry something a client should not read, use authenticated **encryption** (e.g. AES-GCM), not bare HMAC — which is why [AWS recommends encrypting](https://github.com/amazon-archives/realworld-serverless-application/wiki/List-API-Pagination) its pagination tokens.
-- **A signed self-contained token is stateful about its key.** With the ephemeral default key a cursor dies on restart or across instances; set a stable `CursorSigningKey` for a scaled-out or restart-tolerant deployment (see [Limits](#limits)).
+- **A signed self-contained token is stateful about its key.** With the ephemeral default key a cursor dies on restart or across instances; set a stable `CursorKey` for a scaled-out or restart-tolerant deployment (see [Limits](#limits)).
 
 
 ### Handling a rejected cursor

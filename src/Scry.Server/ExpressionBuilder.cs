@@ -129,7 +129,7 @@ sealed class ExpressionBuilder(
         {
             if (!schema.TryGetType(type, out var meta))
             {
-                throw new ScryValidationException($"Type '{type.Name}' is not queryable.");
+                throw new ScryValidationException($"Type '{schema.WireName(type)}' is not queryable.");
             }
 
             foreach (var member in meta.Members.Values.Where(_ => _.Kind == MemberKind.Scalar))
@@ -319,7 +319,7 @@ sealed class ExpressionBuilder(
     {
         if (!schema.TryGetType(type, out var meta))
         {
-            throw new ScryValidationException($"Type '{type.Name}' is not queryable.");
+            throw new ScryValidationException($"Type '{schema.WireName(type)}' is not queryable.");
         }
 
         var parameter = Expression.Parameter(type, "e");
@@ -1094,7 +1094,7 @@ sealed class ExpressionBuilder(
             if (!schema.TryGetType(ownerType, out var meta) ||
                 !meta.TryGetMember(segment, out var member))
             {
-                throw new ScryValidationException($"Property '{segment}' is not allow-listed on '{ownerType.Name}'.");
+                throw new ScryValidationException($"Property '{segment}' is not allow-listed on '{schema.WireName(ownerType)}'.");
             }
 
             if (underlying is not null)
@@ -1123,7 +1123,7 @@ sealed class ExpressionBuilder(
                 if (navigations is null &&
                     schema.TryGetPoliciedSource(target, out _))
                 {
-                    throw new ScryValidationException($"'{ownerType.Name}.{member.Name}' navigates into a row-policied source, which cannot be filtered here.");
+                    throw new ScryValidationException($"'{schema.WireName(ownerType)}.{member.Name}' navigates into a row-policied source, which cannot be filtered here.");
                 }
             }
 
@@ -1141,7 +1141,7 @@ sealed class ExpressionBuilder(
                 if (navigations is null &&
                     schema.TryGetPoliciedSource(element, out _))
                 {
-                    throw new ScryValidationException($"'{ownerType.Name}.{member.Name}' is a collection of a row-policied source, which cannot be filtered here.");
+                    throw new ScryValidationException($"'{schema.WireName(ownerType)}.{member.Name}' is a collection of a row-policied source, which cannot be filtered here.");
                 }
             }
 

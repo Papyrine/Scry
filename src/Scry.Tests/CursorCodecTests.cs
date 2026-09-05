@@ -1,8 +1,8 @@
 /// <summary>
-/// The paging cursor's encoding. The codec now uses the framework's base64url rather than
-/// substituting characters into a base64 string by hand, so what these pin is the alphabet it
-/// produces, that a cursor survives the round trip whatever the values, and that a tampered or
-/// malformed one is still refused rather than half-read.
+/// The paging cursor's encoding: base64url of an AES-GCM sealed payload. What these pin is the
+/// alphabet it produces, that a cursor survives the round trip whatever the values, that nothing
+/// inside it is readable without the key, and that a tampered or malformed one is refused rather
+/// than half-read.
 /// </summary>
 [TestFixture]
 public class CursorCodecTests
@@ -70,10 +70,8 @@ public class CursorCodecTests
         }
     }
 
-    // Base64 emits its 62nd and 63rd characters, the two the url alphabet substitutes, for the sextets
-    // 111110 and 111111. The only way a payload of unescaped ASCII reaches those is a byte of 0x7E
-    // ('~') or 0x3F ('?') landing last in a three-byte group, so a run of each covers every alignment
-    // and drives both substitutions rather than hoping a random payload happens to.
+    // The token is ciphertext, so its alphabet is the encoding's alone: base64url, with nothing to
+    // escape and no padding, whatever the values inside it.
     [Test]
     public void RoundTripsValuesWhoseEncodingUsesTheSubstitutedCharacters()
     {
@@ -82,11 +80,35 @@ public class CursorCodecTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(cursor, Does.Contain("-"));
-            Assert.That(cursor, Does.Contain("_"));
             Assert.That(cursor, Does.Not.Contain("+").And.Not.Contain("/").And.Not.Contain("="));
             Assert.That(CursorCodec.Decode(cursor, key).Values.Single().Value, Is.EqualTo(text));
         });
+    }
+
+    // Sealed rather than signed: the ordering key's value can be a [Sensitive] member's, and a cursor
+    // travels in the URL of the next page — into every access log the marking exists to keep it out of.
+    [Test]
+    public void DoesNotCarryTheKeyValuesInTheClear()
+    {
+        var cursor = CursorCodec.Encode([("Alice", ClrTypeTag.String)], order, key);
+        var bytes = Base64Url.DecodeFromChars(cursor);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Encoding.Latin1.GetString(bytes), Does.Not.Contain("Alice"));
+            Assert.That(Encoding.Latin1.GetString(bytes), Does.Not.Contain(order));
+        });
+    }
+
+    // A fresh nonce per cursor: two cursors for one row never share bytes, so a token cannot be
+    // matched against another to learn that two pages ended on the same row.
+    [Test]
+    public void SealsTheSameValuesDifferentlyEachTime()
+    {
+        var first = CursorCodec.Encode([("Alice", ClrTypeTag.String)], order, key);
+        var second = CursorCodec.Encode([("Alice", ClrTypeTag.String)], order, key);
+
+        Assert.That(first, Is.Not.EqualTo(second));
     }
 
     [Test]
@@ -102,20 +124,19 @@ public class CursorCodecTests
     public void RefusesATamperedPayload()
     {
         var cursor = CursorCodec.Encode([("Alice", ClrTypeTag.String)], order, key);
-        var dot = cursor.IndexOf('.');
-        var flipped = cursor[1] == 'A' ? 'B' : 'A';
-        var tampered = $"{cursor[0]}{flipped}{cursor[2..dot]}{cursor[dot..]}";
+        // A character past the nonce, inside the ciphertext, so the tag no longer stands for it.
+        var index = 20;
+        var flipped = cursor[index] == 'A' ? 'B' : 'A';
+        var tampered = $"{cursor[..index]}{flipped}{cursor[(index + 1)..]}";
 
         Assert.Throws<ScryValidationException>(() => CursorCodec.Decode(tampered, key));
     }
 
     [TestCase("")]
-    [TestCase(".")]
-    [TestCase("nodot")]
-    [TestCase("trailing.")]
-    [TestCase(".leading")]
-    [TestCase("not!base64url.alsonot!")]
-    [TestCase("YWJj.YWJj")]
+    [TestCase("not!base64url")]
+    [TestCase("YWJj")]
+    [TestCase("eyJrIjpbXX0.c2ln")]
+    [TestCase("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
     public void RefusesAMalformedCursor(string cursor) =>
         Assert.Throws<ScryValidationException>(() => CursorCodec.Decode(cursor, key));
 

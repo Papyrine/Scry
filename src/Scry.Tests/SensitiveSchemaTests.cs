@@ -33,6 +33,17 @@ public class SensitiveSchemaTests
             Assert.That(sensitive.IsSensitive("Employee", ["PreviousAddresses"]), Is.True);
         });
 
+    // Marked on a base and overridden without the attribute: the generator carries the base's marking
+    // onto the override, and the server has to agree, or the member is sensitive to the client and
+    // not to the server.
+    [Test]
+    public void AMarkedBasePropertyIsMarkedThroughItsOverride() =>
+        Assert.Multiple(() =>
+        {
+            Assert.That(sensitive.IsSensitive("Invoice", ["Reviewer"]), Is.True);
+            Assert.That(sensitive.IsSensitive("Invoice", ["Notes"]), Is.False);
+        });
+
     // A source returned whole returns its marked members with it.
     [Test]
     public void AnEmptyPathAsksAboutTheSource() =>

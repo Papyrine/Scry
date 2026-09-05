@@ -1,4 +1,6 @@
-﻿namespace Scry;
+﻿using Microsoft.Net.Http.Headers;
+
+namespace Scry;
 
 /// <summary>Registration and endpoint wiring for the Scry server.</summary>
 public static class ScryServiceExtensions
@@ -31,6 +33,7 @@ public static class ScryServiceExtensions
             var processor = scope.ServiceProvider.GetRequiredService<ScryProcessor>();
             var db = (DbContext)scope.ServiceProvider.GetRequiredService(options.ContextType);
             processor.ValidateAgainstModel(db);
+            processor.EnsurePoliciesResolvable(scope.ServiceProvider);
             if (options.ProbePoliciedNavigations)
             {
                 processor.ProbePoliciedNavigations(db, scope.ServiceProvider);
@@ -130,6 +133,10 @@ public static class ScryServiceExtensions
         var processor = services.GetRequiredService<ScryProcessor>();
 
         Advertise(context, processor, options);
+        if (!await RequireJson(context))
+        {
+            return;
+        }
 
         var started = Stopwatch.GetTimestamp();
         var body = await ReadBody(context);
@@ -263,6 +270,10 @@ public static class ScryServiceExtensions
         var processor = services.GetRequiredService<ScryProcessor>();
 
         Advertise(context, processor, options);
+        if (!await RequireJson(context))
+        {
+            return;
+        }
 
         var started = Stopwatch.GetTimestamp();
         var body = await ReadBody(context);
@@ -447,6 +458,10 @@ public static class ScryServiceExtensions
                 return;
             }
         }
+        else if (!await RequireJson(context))
+        {
+            return;
+        }
 
         QueryRequest request;
         try
@@ -555,6 +570,10 @@ public static class ScryServiceExtensions
         // Advertised here for the same reason as on a query, and on a 404 too: a client whose fetch
         // stopped working wants to know whether its model drifted.
         Advertise(context, processor, options);
+        if (!await RequireJson(context))
+        {
+            return;
+        }
 
         var started = Stopwatch.GetTimestamp();
         var body = await ReadBody(context);
@@ -598,8 +617,19 @@ public static class ScryServiceExtensions
             // because a declared type is a statement about a column, and the bytes under it are
             // whatever was stored: a browser re-deciding from the content is the one way a wrong
             // label becomes a wrong behaviour.
-            context.Response.ContentType = result.ContentType ?? AttachmentMedia.Default;
+            var contentType = result.ContentType ?? AttachmentMedia.Default;
+            context.Response.ContentType = contentType;
             context.Response.Headers.XContentTypeOptions = "nosniff";
+
+            // A download, never a document. The endpoint answers POST, and an HTML form navigates a
+            // browser with POST — so without this a type that scripts as a top-level document
+            // (text/html, image/svg+xml) would run on this origin as whoever the browser sent. The
+            // sandbox policy is the same answer for a browser that renders inline anyway. Neither
+            // touches a client that fetches the bytes programmatically, which is every Scry client.
+            var disposition = new ContentDispositionHeaderValue("attachment");
+            disposition.SetHttpFileName($"{request.Member}{AttachmentMedia.Extension(contentType)}");
+            context.Response.Headers.ContentDisposition = disposition.ToString();
+            context.Response.Headers.ContentSecurityPolicy = "sandbox";
             context.Response.ContentLength = value.Length;
             await context.Response.Body.WriteAsync(value, context.RequestAborted);
         }
@@ -631,6 +661,28 @@ public static class ScryServiceExtensions
         var headers = context.Response.Headers;
         headers[WireFormat.SchemaStampHeader] = processor.SchemaStamp;
         headers[WireFormat.UrlLimitHeader] = options.QueryUrlLimit.ToString(CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Refuses a body that is not declared JSON, before it is read. A JSON API's one cheap defence
+    /// against a cross-site form: a form can send <c>text/plain</c> shaped like JSON, but it cannot
+    /// send <c>application/json</c>, so requiring it keeps every POST here to callers that can set a
+    /// header — which is every Scry client, and no browser navigation.
+    /// </summary>
+    internal static async Task<bool> RequireJson(HttpContext context)
+    {
+        if (MediaTypeHeaderValue.TryParse(context.Request.ContentType, out var media) &&
+            media.MediaType.Equals("application/json", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        await WriteError(
+            context,
+            StatusCodes.Status415UnsupportedMediaType,
+            "A request body must be sent as application/json.",
+            staleClient: false);
+        return false;
     }
 
     static Task WriteError(

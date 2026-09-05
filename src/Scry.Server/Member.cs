@@ -44,10 +44,14 @@ sealed class Member(string name, PropertyInfo property, MemberKind kind)
     /// re-derived per request, since it never changes for the life of the schema.
     /// </summary>
     /// <remarks>
-    /// Declared-only, matching every other opt-in read: the metadata the generator reads carries a
-    /// type's own attributes and nothing inherited, and the two sides have to agree.
+    /// Read through the override chain, as <c>[QueryIgnore]</c> is: the generator describes an
+    /// overridden member with the attributes of every declaration along the chain
+    /// (<c>MetadataModelReader.DeclaredProperties</c>), so a base's marking reaches the derived model
+    /// there, and reading it declared-only here would let the same member into a URL and a cache the
+    /// client refuses it — with the two stamps disagreeing over it. The type-level attribute stays
+    /// declared-only on both sides.
     /// </remarks>
-    public bool Sensitive { get; } = property.HasAttribute<SensitiveAttribute>(inherit: false);
+    public bool Sensitive { get; } = property.HasAttribute<SensitiveAttribute>();
 
     /// <summary>
     /// What an <c>[Attachment]</c> member's bytes are, as declared by the attribute: the media type

@@ -1,4 +1,4 @@
-﻿// UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
+// UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
 // Core's own ToListAsync/CountAsync IQueryable extensions and collide with the Scry client terminals.
 using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 // ReSharper disable NotAccessedPositionalProperty.Local
@@ -596,6 +596,62 @@ public class HttpRoundTripTests
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
             Assert.That(error!.Error, Does.Contain("predicate"));
         });
+    }
+
+    // A body that is not declared JSON is refused before it is read. An HTML form can navigate a
+    // browser to a POST endpoint with a text/plain field shaped as JSON — exactly the body below —
+    // but it cannot set application/json, so requiring the header is what keeps a cross-site page
+    // from executing a query as whoever the browser sent.
+    [TestCase("/api/query")]
+    [TestCase("/api/query/stream")]
+    [TestCase("/api/query/batch")]
+    [TestCase("/api/query/attachment")]
+    public async Task ABodyThatIsNotJsonIsRefused(string endpoint)
+    {
+        var body = "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"count\"}],\"pad\":\"=\"}\r\n";
+        using var content = new StringContent(body, Encoding.UTF8, "text/plain");
+        using var response = await http.PostAsync(endpoint, content);
+        var error = ScryJson.TryDeserializeError(await response.Content.ReadAsByteArrayAsync());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.UnsupportedMediaType));
+            Assert.That(error!.Error, Does.Contain("application/json"));
+            Assert.That(response.Headers.CacheControl!.NoStore, Is.True);
+        });
+    }
+
+    [TestCase("multipart/form-data")]
+    [TestCase("application/x-www-form-urlencoded")]
+    public async Task AFormBodyIsRefused(string mediaType)
+    {
+        using var content = new StringContent("{}", Encoding.UTF8, mediaType);
+        using var response = await http.PostAsync("/api/query", content);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.UnsupportedMediaType));
+    }
+
+    [Test]
+    public async Task ABodyWithNoContentTypeIsRefused()
+    {
+        using var content = new ByteArrayContent("{}"u8.ToArray());
+        content.Headers.ContentType = null;
+        using var response = await http.PostAsync("/api/query", content);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.UnsupportedMediaType));
+    }
+
+    // The two spellings a JSON client sends, with and without a charset, are both JSON.
+    [TestCase("application/json")]
+    [TestCase("application/json; charset=utf-8")]
+    public async Task AJsonBodyIsAccepted(string contentType)
+    {
+        using var content = new ByteArrayContent(
+            ScryJson.SerializeToUtf8(query.Employee.ToScryRequest(new CountOp())));
+        content.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse(contentType);
+        using var response = await http.PostAsync("/api/query", content);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
     }
 
     [Test]

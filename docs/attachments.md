@@ -27,7 +27,7 @@ public class Contract
     public byte[]? Document { get; set; }
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L480-L493' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentMember' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L492-L505' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentMember' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The check that authorizes it:
@@ -45,7 +45,7 @@ public sealed class UnsealedContractsPolicy :
         context.KeyValues is not [SealedId];
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L499-L509' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L511-L521' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Registered by the attribute above, or in code:
@@ -140,7 +140,7 @@ Three things about this are deliberate:
 
 - **The declaration is the server's, never the caller's.** It is written on the model, so no request can influence what a response is labelled.
 - **`200`s are sent `X-Content-Type-Options: nosniff`.** A declared type is a statement about a *column*; the bytes stored under it are whatever was written there. A mislabelled response is then a mislabelled file rather than a browser deciding for itself what it is looking at.
-- **The endpoint answers only `POST`.** There is no way to navigate a browser to one, so a type that would be scriptable as a top-level document — `image/svg+xml`, `text/html` — cannot become one here.
+- **A `200` is a download, never a document.** It carries `Content-Disposition: attachment` (named for the member and the declared type) and `Content-Security-Policy: sandbox`, and the endpoint accepts only `application/json` bodies. The endpoint answers `POST`, but an HTML form navigates a browser with `POST` too — and a `text/plain` form field can be shaped as JSON — so answering only that method is not what keeps a type that scripts as a top-level document (`image/svg+xml`, `text/html`) from running on the API's origin as whoever the browser sent. The three headers are. None of them touches a client that fetches the bytes programmatically, which every Scry client does.
 
 A value that is not a `type/subtype` fails at startup rather than being served.
 

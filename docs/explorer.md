@@ -798,6 +798,15 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsSensitive: false
         },
         {
+          Name: Reviewer,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: true
+        },
+        {
           Name: Tags,
           TypeDisplay: global::System.Collections.Generic.IReadOnlyList<string>,
           NeedsNullDefault: true,
@@ -1352,10 +1361,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: lxXxGGe9lWQ7xvK1
+  SchemaStamp: Gi24ZCbl-wl5nqSV
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L1049' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L1058' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names, member names with the exact C# type spelling the source generator would emit, and the re-emitted enums. It carries **no** policies, resolvers, connection details, or CLR internals.

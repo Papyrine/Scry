@@ -1,4 +1,5 @@
-﻿// UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
+using System.Text.RegularExpressions;
+// UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
 // Core's own ToListAsync/CountAsync IQueryable extensions and collide with the Scry client terminals.
 using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 
@@ -11,7 +12,7 @@ using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 /// <c>BinaryTransferTests.FastAndGeneralPathsEmitIdenticalPayloads</c>.
 /// </summary>
 [TestFixture]
-public class FastWriterGoldenTests
+public partial class FastWriterGoldenTests
 {
     static readonly SqlInstance<Sample.Model.SampleContext> sqlInstance = new(
         constructInstance: _ => new(_.Options),
@@ -223,12 +224,12 @@ public class FastWriterGoldenTests
     [TestCaseSource(nameof(Corpus))]
     public async Task FastBytesMatchTheGeneralPath(string name, string request)
     {
-        var expected = Direct(request);
+        var expected = Unsealed(Direct(request));
 
         // Twice: the first send builds and caches the plan, the second replays it — the writer must
         // be byte-identical on both.
-        Assert.That(await Post(request), Is.EqualTo(expected), $"{name} (miss)");
-        Assert.That(await Post(request), Is.EqualTo(expected), $"{name} (hit)");
+        Assert.That(Unsealed(await Post(request)), Is.EqualTo(expected), $"{name} (miss)");
+        Assert.That(Unsealed(await Post(request)), Is.EqualTo(expected), $"{name} (hit)");
     }
 
     [Test]
@@ -268,11 +269,19 @@ public class FastWriterGoldenTests
         queries.Add("""{"version":1,"root":"Nonexistent","pipeline":[],"stamp":"not-this-server"}""");
 
         var batch = $$"""{"version":1,"queries":[{{string.Join(',', queries)}}]}""";
-        var expected = DirectBatch(batch);
+        var expected = Unsealed(DirectBatch(batch));
 
-        Assert.That(await Post(batch, "/api/query/batch"), Is.EqualTo(expected), "miss");
-        Assert.That(await Post(batch, "/api/query/batch"), Is.EqualTo(expected), "hit");
+        Assert.That(Unsealed(await Post(batch, "/api/query/batch")), Is.EqualTo(expected), "miss");
+        Assert.That(Unsealed(await Post(batch, "/api/query/batch")), Is.EqualTo(expected), "hit");
     }
+
+    // A page's cursor is sealed under a fresh nonce every time it is minted, so two renderings of one
+    // page agree on every byte but that value. What is compared is everything around it.
+    static string Unsealed(string body) =>
+        CursorValue().Replace(body, "$1\"{cursor}\"");
+
+    [GeneratedRegex("(\"cursor\":)\"[^\"]*\"")]
+    private static partial Regex CursorValue();
 
     async Task<string> Post(string request, string path = "/api/query")
     {

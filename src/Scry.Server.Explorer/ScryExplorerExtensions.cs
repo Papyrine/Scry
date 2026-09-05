@@ -126,6 +126,17 @@ public static class ScryExplorerExtensions
             return Results.NotFound();
         }
 
+        // The same rule the query endpoints apply: a form cannot send application/json, so requiring it
+        // keeps a cross-site navigation from reaching this.
+        if (!MediaTypeHeaderValue.TryParse(context.Request.ContentType, out var media) ||
+            !media.MediaType.Equals("application/json", StringComparison.OrdinalIgnoreCase))
+        {
+            return Results.Json(
+                new ScryError("A request body must be sent as application/json."),
+                ScryJson.Options,
+                statusCode: StatusCodes.Status415UnsupportedMediaType);
+        }
+
         string body;
         using (var reader = new StreamReader(context.Request.Body))
         {

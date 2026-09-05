@@ -30,6 +30,9 @@ public static class ScryJson
         // Same shape of addition for binary: byte-identical to the built-in base64 handling except
         // when a payload read hits a multipart placeholder — see DeserializePayload.
         options.Converters.Add(new BinaryConverter());
+        // A null element of a wire array — a pipeline entry, a group key, a call argument — is refused
+        // here, where a null member already is; RespectNullableAnnotations does not reach elements.
+        options.Converters.Add(new NonNullElementsConverterFactory());
 
         // The wire vocabulary is closed, so all of it is generated at compile time and answered here
         // without reflecting over a type. A payload's type is the one thing this assembly cannot know
@@ -54,7 +57,27 @@ public static class ScryJson
                 property.IsRequired = true;
             }
         }
+
+        // A request names only what the vocabulary names. A member nothing reads is refused rather
+        // than skipped: skipping is what let a form field shaped as JSON carry its "=" in a member
+        // the server never looked at, and a request is the one side of the wire with no reader that
+        // could be older than its writer. A response stays lenient — a client may be.
+        if (IsRequest(type.Type))
+        {
+            type.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
+        }
     }
+
+    static bool IsRequest(Type type) =>
+        typeof(QueryOp).IsAssignableFrom(type) ||
+        typeof(Node).IsAssignableFrom(type) ||
+        typeof(ProjectionValue).IsAssignableFrom(type) ||
+        type == typeof(QueryRequest) ||
+        type == typeof(QueryBatchRequest) ||
+        type == typeof(AttachmentRequest) ||
+        type == typeof(AttachmentKey) ||
+        type == typeof(JoinMember) ||
+        type == typeof(Projection);
 
     // Everything the vocabulary does not name reads and writes null as it always did. The switch
     // above is options-wide, but a consumer's row type is theirs: a member declared non-null is

@@ -1,9 +1,11 @@
 /// <summary>
-/// Encodes and decodes opaque, HMAC-signed keyset paging cursors. A cursor carries the ordering-key
-/// values of a page's last row as tagged constants; the server turns them back into a seek predicate.
-/// The signature enforces the opaque-cursor contract and rejects tampered or garbage tokens early — it
-/// is not an authorization control (a decoded cursor is re-validated and policy-filtered like any
-/// other predicate). Shape: <c>base64url(json) "." base64url(hmac)</c>.
+/// Encodes and decodes opaque, sealed keyset paging cursors. A cursor carries the ordering-key values
+/// of a page's last row as tagged constants; the server turns them back into a seek predicate. It is
+/// sealed with authenticated encryption (AES-GCM under a key derived from <c>CursorKey</c>),
+/// which enforces the opaque-cursor contract two ways: a tampered or garbage token is refused early,
+/// and the key values — which can be a <c>[Sensitive]</c> member's — never travel in the clear through
+/// the URL of the next page. It is not an authorization control: a decoded cursor is re-validated and
+/// policy-filtered like any other predicate. Shape: <c>base64url(nonce || ciphertext || tag)</c>.
 /// </summary>
 static class CursorCodec
 {
@@ -13,14 +15,28 @@ static class CursorCodec
 
     sealed record CursorValue(string? Value, ClrTypeTag Tag);
 
+    const int nonceSize = 12;
+    const int tagSize = 16;
+
     public static string Encode(IReadOnlyList<(string? Value, ClrTypeTag Tag)> keys, string order, byte[] signingKey)
     {
         var payload = new Payload([.. keys.Select(_ => new CursorValue(_.Value, _.Tag))], order);
         var json = JsonSerializer.SerializeToUtf8Bytes(payload, ScryJson.Options);
-        Span<byte> mac = stackalloc byte[HMACSHA256.HashSizeInBytes];
-        HMACSHA256.HashData(signingKey, json, mac);
-        return $"{Base64Url.EncodeToString(json)}.{Base64Url.EncodeToString(mac)}";
+
+        var token = new byte[nonceSize + json.Length + tagSize];
+        var nonce = token.AsSpan(0, nonceSize);
+        var ciphertext = token.AsSpan(nonceSize, json.Length);
+        var tag = token.AsSpan(nonceSize + json.Length, tagSize);
+        RandomNumberGenerator.Fill(nonce);
+        using var aes = new AesGcm(Key(signingKey), tagSize);
+        aes.Encrypt(nonce, json, ciphertext, tag);
+        return Base64Url.EncodeToString(token);
     }
+
+    // The configured key is any length a host chose; AES wants exactly 32 bytes, and hashing it gets
+    // there from anything without weakening a key that already was.
+    static byte[] Key(byte[] signingKey) =>
+        SHA256.HashData(signingKey);
 
     /// <summary>
     /// Identifies the ordering a cursor belongs to: the source it read, and every ordering key's path
@@ -35,9 +51,9 @@ static class CursorCodec
     /// ordered after this key" stays well defined when the set narrows, so a client may filter further
     /// between pages, which forcing an identical pipeline would have refused.
     /// <para>
-    /// Only ever compared against another stamp from this same server, and inside an HMAC-signed
-    /// payload, so it is a fingerprint rather than a security boundary: it exists to catch a client
-    /// changing its ordering, not to withstand one forging a cursor.
+    /// Only ever compared against another stamp from this same server, and inside a sealed payload,
+    /// so it is a fingerprint rather than a security boundary: it exists to catch a client changing
+    /// its ordering, not to withstand one forging a cursor.
     /// </para>
     /// </remarks>
     public static string OrderStamp(string source, IReadOnlyList<(Node Key, bool Descending)> keys)
@@ -85,28 +101,34 @@ static class CursorCodec
 
     public static (IReadOnlyList<ConstNode> Values, string Order) Decode(string cursor, byte[] signingKey)
     {
-        var dot = cursor.IndexOf('.');
-        if (dot <= 0 ||
-            dot == cursor.Length - 1)
-        {
-            throw Reject();
-        }
-
-        byte[] json;
-        byte[] mac;
+        byte[] token;
         try
         {
-            json = Base64Url.DecodeFromChars(cursor.AsSpan(0, dot));
-            mac = Base64Url.DecodeFromChars(cursor.AsSpan(dot + 1));
+            token = Base64Url.DecodeFromChars(cursor);
         }
         catch (FormatException)
         {
             throw Reject();
         }
 
-        Span<byte> expected = stackalloc byte[HMACSHA256.HashSizeInBytes];
-        HMACSHA256.HashData(signingKey, json, expected);
-        if (!CryptographicOperations.FixedTimeEquals(mac, expected))
+        // Nothing sealed is shorter than its nonce and tag around an empty document, and a document
+        // is never empty.
+        if (token.Length <= nonceSize + tagSize)
+        {
+            throw Reject();
+        }
+
+        var json = new byte[token.Length - nonceSize - tagSize];
+        try
+        {
+            using var aes = new AesGcm(Key(signingKey), tagSize);
+            aes.Decrypt(
+                token.AsSpan(0, nonceSize),
+                token.AsSpan(nonceSize, json.Length),
+                token.AsSpan(nonceSize + json.Length, tagSize),
+                json);
+        }
+        catch (CryptographicException)
         {
             throw Reject();
         }

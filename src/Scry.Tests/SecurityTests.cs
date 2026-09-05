@@ -1,4 +1,4 @@
-﻿[TestFixture]
+[TestFixture]
 public class SecurityTests
 {
     // begin-snippet: rejectIgnoredProperty
@@ -461,6 +461,62 @@ public class SecurityTests
                     new("Fixed", new NodeValue(new ConstNode("x", ClrTypeTag.String)))
                 ]))
             ]));
+
+    // A rejection names the wire name — the one a Name override chose — never the CLR type behind it,
+    // which the override may exist to keep off the wire.
+    [Test]
+    public void RejectionNamesTheWireNameNotTheClrType()
+    {
+        using var context = TestContext.CreateSeeded();
+        var request = QueryRequest.Create(
+            "Region",
+            [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Nope"]), new ConstNode("x", ClrTypeTag.String)))]);
+
+        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context))!;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception.Message, Does.Contain("on 'Region'"));
+            Assert.That(exception.Message, Does.Not.Contain("SalesRegion"));
+        });
+    }
+
+    // [QueryIgnore] on a base's virtual property, overridden without the attribute: hidden through
+    // the override, on both sides — the generator carries every declaration's attributes onto the one
+    // member, and the server reads the same chain.
+    [Test]
+    public void RejectsAnIgnoredBasePropertyThroughItsOverride() =>
+        AssertRejected(QueryRequest.Create(
+            "Invoice",
+            [new SelectOp(new([new("AuditTrail", new NodeValue(new MemberNode(["AuditTrail"])))]))]));
+
+    // An enum reaches the wire by name, which the reader holds to the type, or as a number, which it
+    // does not: the payload side needs numbers readable. So the validator holds every request enum to
+    // its defined values, and one outside them is a rejection rather than a switch with no arm.
+    [TestCase("""[{"$type":"select","projection":{"members":["Name"]}},{"$type":"set","kind":999,"root":"Department","projection":{"members":["Name"]}}]""", "Set kind")]
+    [TestCase("""[{"$type":"where","predicate":{"$type":"binary","op":999,"left":{"$type":"member","path":"Id"},"right":{"$type":"const","value":"1","tag":"Int32"}}}]""", "Binary operator")]
+    [TestCase("""[{"$type":"where","predicate":{"$type":"unary","op":999,"operand":{"$type":"member","path":"Active"}}}]""", "Unary operator")]
+    [TestCase("""[{"$type":"where","predicate":{"$type":"binary","op":"Equal","left":{"$type":"member","path":"Id"},"right":{"$type":"const","value":"1","tag":999}}}]""", "Constant tag")]
+    [TestCase("""[{"$type":"where","predicate":{"$type":"call","function":999,"target":{"$type":"member","path":"Name"},"arguments":[]}}]""", "Function")]
+    [TestCase("""[{"$type":"where","predicate":{"$type":"collate","target":{"$type":"member","path":"Name"},"match":999}}]""", "String match")]
+    [TestCase("""[{"$type":"join","root":"Department","kind":999,"outerKey":{"$type":"member","path":"DepartmentId"},"innerKey":{"$type":"member","path":"Id"},"result":[{"name":"Name","side":"Outer","path":"Name"}]}]""", "Join kind")]
+    [TestCase("""[{"$type":"join","root":"Department","kind":"Inner","outerKey":{"$type":"member","path":"DepartmentId"},"innerKey":{"$type":"member","path":"Id"},"result":[{"name":"Name","side":999,"path":"Name"}]}]""", "Join side")]
+    [TestCase("""[{"$type":"groupBy","keys":[{"$type":"member","path":"Name"}]},{"$type":"select","projection":{"members":[{"name":"C","value":{"$type":"node","node":{"$type":"aggregate","function":999,"selector":{"$type":"member","path":"Id"}}}}]}}]""", "Aggregate function")]
+    public void RejectsAnUndefinedEnumValue(string pipeline, string what)
+    {
+        var request = ScryJson.DeserializeRequest($$"""{"version":1,"root":"Employee","pipeline":{{pipeline}}}""");
+
+        AssertRejected(request, reason: $"'{what}' has no value 999");
+    }
+
+    [Test]
+    public void RejectsAnUndefinedSubqueryFunction()
+    {
+        var request = ScryJson.DeserializeRequest(
+            """{"version":1,"root":"Order","pipeline":[{"$type":"where","predicate":{"$type":"subquery","path":"Lines","function":999}}]}""");
+
+        AssertRejected(request, reason: "'Subquery function' has no value 999");
+    }
 
     // A reason pins which rule refused the request, for a shape more than one rule could have.
     static void AssertRejected(QueryRequest request, Action<ScryOptions>? extra = null, string? reason = null)

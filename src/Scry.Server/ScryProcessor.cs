@@ -54,6 +54,48 @@ public sealed class ScryProcessor
         schema.ValidateAgainstModel(data.Model, options.ContextType);
 
     /// <summary>
+    /// Confirms every policy the schema will apply — row, attachment, and cached — can be built from
+    /// <paramref name="services"/> or from a parameterless constructor, throwing a directed error
+    /// otherwise. A policy is otherwise constructed on the first request that reaches its source,
+    /// where one DI cannot supply and reflection cannot construct is a 500 on every query of that
+    /// source after a startup that passed. Called once by <c>MapScry</c>; safe for any host.
+    /// </summary>
+    public void EnsurePoliciesResolvable(IServiceProvider services)
+    {
+        foreach (var source in schema.Sources)
+        {
+            foreach (var use in source.Policies)
+            {
+                if (use.Instance is null)
+                {
+                    EnsureResolvable(services, use.Policy, "Row policy", source.Name);
+                }
+            }
+
+            if (source.AttachmentPolicy is { } attachment)
+            {
+                EnsureResolvable(services, attachment, "Attachment policy", source.Name);
+            }
+        }
+
+        foreach (var registration in schema.CachedPolicies)
+        {
+            EnsureResolvable(services, registration.Policy, "Cached row policy", registration.Entity.Name);
+        }
+    }
+
+    static void EnsureResolvable(IServiceProvider services, Type policy, string kind, string source)
+    {
+        if (services.GetService(policy) is not null ||
+            policy.GetConstructor(Type.EmptyTypes) is not null)
+        {
+            return;
+        }
+
+        throw new($"{kind} '{policy.Name}' on '{source}' cannot be constructed: it is not registered with the service provider and has no parameterless constructor. Register it — services.AddScoped<{policy.Name}>() — or give it one.");
+    }
+
+    /// <summary>
     /// Translates every navigation that steps into a row-policied source, so a policy that does not
     /// compose in correlated-subquery position fails at startup rather than on the first client to
     /// name the member. Called once by <c>MapScry</c> unless

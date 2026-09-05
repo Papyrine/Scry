@@ -126,6 +126,28 @@ public int MaxPipelineLength { get; set; } = 32;
 public int MaxExpressionDepth { get; set; } = 32;
 
 /// <summary>
+/// Maximum number of expression nodes one request may carry, counted across every predicate,
+/// key, selector, and projection in it — the pipeline's own, a join's or set operand's, and
+/// what a subquery or aggregate reads. Default 4096.
+/// </summary>
+/// <remarks>
+/// Depth bounds how deeply an expression nests and width how many members a projection names;
+/// neither bounds a flat chain of thousands of comparisons in one predicate, which is one
+/// statement the provider has to compile. The count is shape exactly as the pipeline length is.
+/// </remarks>
+public int MaxExpressionNodes { get; set; } = 4096;
+
+/// <summary>
+/// Maximum number of correlated subqueries one request may carry: every question about a
+/// collection and every membership test against another source, wherever it appears. Default 64.
+/// </summary>
+/// <remarks>
+/// Each is a query the database runs per row. Nesting one inside another is refused outright;
+/// this bounds how many may sit side by side.
+/// </remarks>
+public int MaxCorrelatedSubqueries { get; set; } = 64;
+
+/// <summary>
 /// Maximum number of members a projection may name, nested members included, and the same for
 /// the members a join projects. Default 256.
 /// </summary>
@@ -192,7 +214,7 @@ public int? MaxStreamRows { get; set; }
 /// </remarks>
 public int QueryUrlLimit { get; set; } = QueryUrl.MaxLength;
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L97' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L119' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Every limit is enforced during validation, before any expression is rebound or executed.

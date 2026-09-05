@@ -44,11 +44,14 @@ public class LockstepTests
     {
         var invoice = SharedProcessor.Instance.Describe().Types.Single(_ => _.Model == "InvoiceQueryModel");
 
-        string[] expected = ["CreatedBy", "Id", "Notes", "Number", "Tags", "Weights"];
+        // AuditTrail is hidden on the base and stays hidden through the override; Reviewer is marked
+        // on the base and stays marked through it. Both sides describe both that way.
+        string[] expected = ["CreatedBy", "Id", "Notes", "Number", "Reviewer", "Tags", "Weights"];
         Assert.Multiple(() =>
         {
             Assert.That(invoice.Base, Is.Null);
             Assert.That(invoice.Members.Select(_ => _.Name), Is.EqualTo(expected));
+            Assert.That(invoice.Members.Single(_ => _.Name == "Reviewer").IsSensitive, Is.True);
             Assert.That(invoice.Members.Single(_ => _.Name == "Tags").TypeDisplay, Is.EqualTo("global::System.Collections.Generic.IReadOnlyList<string>"));
         });
     }

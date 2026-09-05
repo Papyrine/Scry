@@ -27,9 +27,11 @@ public sealed class AttachmentAttribute :
     /// <remarks>
     /// Declared on the model, so it is the server's own statement about its column and never
     /// something a caller can influence; a value the bytes contradict is a mislabelled response, not
-    /// a vulnerability, because the response is sent <c>nosniff</c> and the endpoint answers only
-    /// <c>POST</c> — there is no way to navigate a browser to one. A row needing its own answer
-    /// overrides this from the attachment policy; see <c>ScryAttachmentContext.ContentType</c>.
+    /// a vulnerability, because the response is sent <c>nosniff</c>, as a download
+    /// (<c>Content-Disposition: attachment</c>, <c>Content-Security-Policy: sandbox</c>), and only
+    /// for an <c>application/json</c> body — so a browser navigated to the endpoint by a form never
+    /// renders the bytes as a document. A row needing its own answer overrides this from the
+    /// attachment policy; see <c>ScryAttachmentContext.ContentType</c>.
     /// </remarks>
     public string? ContentType { get; set; }
 }

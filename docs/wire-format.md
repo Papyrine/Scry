@@ -68,13 +68,14 @@ public sealed record QueryRequest(int Version, string Root, IReadOnlyList<QueryO
     /// <summary>
     /// The schema stamp of the generated client model the query was written against, when known.
     /// Lets the server distinguish a stale client (generated against a different model) from an
-    /// invalid query. Omitted on the wire when null; servers ignore an unrecognized stamp property,
-    /// so carrying it is compatible in both directions.
+    /// invalid query. Omitted on the wire when null. A request carries only what the vocabulary
+    /// names — a member the server does not read is refused, not skipped — so a server that predates
+    /// this member refuses a request carrying it, which is the fail-closed direction.
     /// </summary>
     public string? Stamp { get; init; }
 }
 ```
-<sup><a href='/src/Scry.Wire/QueryRequest.cs#L7-L28' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireRequest' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/QueryRequest.cs#L7-L29' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireRequest' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ```json

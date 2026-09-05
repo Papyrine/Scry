@@ -1,4 +1,4 @@
-﻿/// <summary>
+/// <summary>
 /// The authoritative server-side gate. Walks an incoming query AST and rejects anything that is not
 /// allow-listed or exceeds a resource limit — independent of whatever code the client was generated
 /// against. Runs before any expression is rebound or executed.
@@ -21,6 +21,9 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         {
             throw Reject($"Pipeline exceeds the maximum length of {options.MaxPipelineLength}.");
         }
+
+        // Counted before anything is resolved, for the same reason the pipeline length is.
+        RequestBudget.Check(request, options);
 
         ValidatePipeline(request.Pipeline, source);
         return source;
@@ -575,16 +578,19 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
                     break;
 
-                case ConstNode:
+                case ConstNode constant:
+                    EnsureDefined(constant.Tag, "Constant tag");
                     break;
 
                 case BinaryNode binary:
+                    EnsureDefined(binary.Op, "Binary operator");
                     ValidateHaving(binary.Left, elementType, groupKeys, depth + 1);
                     node = binary.Right;
                     depth += 1;
                     continue;
 
                 case UnaryNode unary:
+                    EnsureDefined(unary.Op, "Unary operator");
                     node = unary.Operand;
                     depth += 1;
                     continue;
@@ -675,16 +681,19 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
                     break;
 
-                case ConstNode:
+                case ConstNode constant:
+                    EnsureDefined(constant.Tag, "Constant tag");
                     break;
 
                 case BinaryNode binary:
+                    EnsureDefined(binary.Op, "Binary operator");
                     ValidateExpr(binary.Left, elementType, depth + 1);
                     node = binary.Right;
                     depth += 1;
                     continue;
 
                 case UnaryNode unary:
+                    EnsureDefined(unary.Op, "Unary operator");
                     node = unary.Operand;
                     depth += 1;
                     continue;
@@ -709,6 +718,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     break;
 
                 case CollateNode collate:
+                    EnsureDefined(collate.Match, "String match");
                     // A server that has configured no collation for the requested sensitivity cannot
                     // answer the question, and must not guess at one.
                     if (Collation(collate.Match) is null)
@@ -756,6 +766,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
     // constants-only rule cannot be enforced on one vocabulary and forgotten on the other.
     void EnsureCallShape(CallNode call)
     {
+        EnsureDefined(call.Function, "Function");
         var (min, max) = Arity(call.Function);
         var count = call.Arguments.Count;
         if (count < min ||
@@ -788,6 +799,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
     /// </summary>
     void ValidateSet(SetOp set, Projection? projection)
     {
+        EnsureDefined(set.Kind, "Set kind");
         if (!schema.TryGetSource(set.Root, out var other))
         {
             throw Reject($"Unknown source '{set.Root}'.");
@@ -948,7 +960,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
         if (!rootType.IsAssignableFrom(target))
         {
-            throw Reject($"'{narrowed.Type}' does not derive from '{rootType.Name}'.");
+            throw Reject($"'{narrowed.Type}' does not derive from '{schema.WireName(rootType)}'.");
         }
 
         return target;
@@ -988,6 +1000,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
     /// </summary>
     void ValidateJoin(JoinOp join, Type outerType)
     {
+        EnsureDefined(join.Kind, "Join kind");
         if (!schema.TryGetSource(join.Root, out var inner))
         {
             throw Reject($"Unknown source '{join.Root}'.");
@@ -1026,12 +1039,8 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
         foreach (var member in join.Result)
         {
-            var side = member.Side switch
-            {
-                JoinSide.Outer => outerType,
-                JoinSide.Inner => innerType,
-                _ => throw Reject($"Unsupported join side '{member.Side}'.")
-            };
+            EnsureDefined(member.Side, "Join side");
+            var side = member.Side == JoinSide.Outer ? outerType : innerType;
 
             if (member.Aggregate is { } aggregate)
             {
@@ -1106,6 +1115,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         var target = member.Element ??
                      throw Reject($"'{string.Join('.', subquery.Path)}' is not a collection.");
 
+        EnsureDefined(subquery.Function, "Subquery function");
         switch (subquery.Function)
         {
             case SubqueryFn.All when subquery.Predicate is null:
@@ -1317,6 +1327,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
     // needs a separator, and the only one allowed to carry it.
     static void ValidateAggregateShape(AggregateNode aggregate)
     {
+        EnsureDefined(aggregate.Function, "Aggregate function");
         if (aggregate.Function == AggregateFn.Join)
         {
             if (aggregate.Selector is null)
@@ -1483,12 +1494,12 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         {
             if (!schema.TryGetType(currentType, out var meta))
             {
-                throw Reject($"Type '{currentType.Name}' is not queryable.");
+                throw Reject($"Type '{schema.WireName(currentType)}' is not queryable.");
             }
 
             if (!meta.TryGetMember(path[i], out member))
             {
-                throw Reject($"Property '{path[i]}' is not allow-listed on '{currentType.Name}'.");
+                throw Reject($"Property '{path[i]}' is not allow-listed on '{schema.WireName(currentType)}'.");
             }
 
             // Rejected explicitly rather than left to the scalar check below, which several callers
@@ -1496,7 +1507,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             // cannot express one either — this is what a hand-built request meets.
             if (member.Kind == MemberKind.Attachment)
             {
-                throw Reject($"'{path[i]}' on '{currentType.Name}' is an attachment. Its value is fetched through the attachment endpoint, not read by a query.");
+                throw Reject($"'{path[i]}' on '{schema.WireName(currentType)}' is an attachment. Its value is fetched through the attachment endpoint, not read by a query.");
             }
 
             var isLast = i == path.Count - 1;
@@ -1650,6 +1661,17 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         if (count < 0)
         {
             throw Reject($"{op} count must be non-negative.");
+        }
+    }
+
+    // An enum arrives by name, which the reader already holds to the type — or as its number, which it
+    // does not. A value outside the type would otherwise reach a switch with no arm for it.
+    static void EnsureDefined<T>(T value, string what)
+        where T : struct, Enum
+    {
+        if (!Enum.IsDefined(value))
+        {
+            throw Reject($"'{what}' has no value {Convert.ToInt64(value, CultureInfo.InvariantCulture)}.");
         }
     }
 
