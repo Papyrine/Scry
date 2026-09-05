@@ -33,6 +33,11 @@ public partial class App
     readonly Dictionary<(int Row, string Member), string> attachmentNotes = [];
     string? scalarResult;
     string? error;
+    // Which Run or Show SQL is the latest. Both clear and reassign the panes across several awaits
+    // with the buttons still live, so a second command can start under a first that has not answered;
+    // whichever answers last would otherwise write over the other's output — or under its request.
+    // Each command takes the next number, and after every await the one that no longer holds it stops.
+    int generation;
     bool editorReady;
     bool registered;
     // Set once the schema is loaded and the editor's Roslyn providers are registered. Rendered as
@@ -326,18 +331,28 @@ public partial class App
             return;
         }
 
+        var run = ++generation;
         try
         {
             error = null;
             sqlText = null;
             var code = await editor.GetValue();
             await EnsureCompiles(code);
+            if (run != generation)
+            {
+                return;
+            }
+
             executor ??= SnippetExecutor.Create(introspection, scryReferences);
             var json = ScryJson.Serialize(executor.Translate(code));
 
             using var content = new StringContent(json, Encoding.UTF8, "application/json");
             using var response = await Http.PostAsync("sql", content);
             var body = await response.Content.ReadAsStringAsync();
+            if (run != generation)
+            {
+                return;
+            }
 
             using var document = JsonDocument.Parse(body);
             if (response.IsSuccessStatusCode)
@@ -353,9 +368,13 @@ public partial class App
 
             ShowOutput(OutputTab.Sql);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (run == generation)
         {
             error = exception.Message;
+        }
+        catch (Exception)
+        {
+            // A later command owns the panes; what this one failed at is no longer what is on screen.
         }
 
         StateHasChanged();
@@ -423,6 +442,7 @@ public partial class App
             return;
         }
 
+        var run = ++generation;
         try
         {
             error = null;
@@ -440,6 +460,11 @@ public partial class App
             resultJson = null;
             var code = await editor.GetValue();
             await EnsureCompiles(code);
+            if (run != generation)
+            {
+                return;
+            }
+
             executor ??= SnippetExecutor.Create(introspection, scryReferences);
             var request = executor.Translate(code);
             var json = ScryJson.Serialize(request);
@@ -450,10 +475,23 @@ public partial class App
             using var owned = response;
             var elapsed = Stopwatch.GetElapsedTime(started);
 
+            // A later run owns the panes: this response answers a query that is no longer the one on
+            // screen, so it is dropped here rather than written over the newer run's rows — or, with
+            // the request strip already showing the newer query, under them.
+            if (run != generation)
+            {
+                return;
+            }
+
             // Not read as a string: a result carrying [BinaryTransfer] values arrives as multipart,
             // and the reader folds its parts back into the envelope as base64 — so a diverted member
             // renders, exports, and tabulates as the byte[] it is either way.
             var body = await BinaryResponseReader.ReadAsync(response);
+            if (run != generation)
+            {
+                return;
+            }
+
             resultJson = Prettify(body);
 
             if (response.IsSuccessStatusCode)
@@ -489,9 +527,13 @@ public partial class App
             // read, so it is what the column opens on.
             ShowOutput(result is not null || scalarResult is not null ? OutputTab.Result : OutputTab.Response);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (run == generation)
         {
             error = exception.Message;
+        }
+        catch (Exception)
+        {
+            // A later command owns the panes; what this one failed at is no longer what is on screen.
         }
 
         StateHasChanged();

@@ -1320,6 +1320,55 @@ public class UiSnapshotTests :
         Assert.That(status, Does.Contain("ms"));
     }
 
+    // Two runs in flight at once: the later one owns the panes, and the earlier one's response, held
+    // back here until the later has answered, is dropped rather than written over it. Before, the
+    // panes showed the second query's request over the first query's rows, and both went into the
+    // history.
+    [Test]
+    public async Task ExplorerShowsTheLatestRunWhenAnEarlierOneAnswersLast()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+        await page.ShowHistoryAsync();
+
+        var release = new TaskCompletionSource();
+        var delivered = new TaskCompletionSource();
+        var seen = 0;
+        await page.RouteAsync(
+            "**/api/query**",
+            async route =>
+            {
+                if (Interlocked.Increment(ref seen) != 1)
+                {
+                    await route.ContinueAsync();
+                    return;
+                }
+
+                await release.Task.WaitAsync(TimeSpan.FromSeconds(60));
+                var response = await route.FetchAsync();
+                await route.FulfillAsync(new() {Response = response});
+                delivered.SetResult();
+            });
+
+        await page.SetEditorValueAsync("Query.Department.Select(_ => new { _.Name })");
+        await page.Locator("[data-testid='run']").ClickAsync();
+        await page.SetEditorValueAsync("Query.Holiday.Select(_ => new { _.Name })");
+        await page.Locator("[data-testid='run']").ClickAsync();
+
+        await Assertions.Expect(page.Locator("[data-testid='history'] li"))
+            .ToHaveCountAsync(1, new() {Timeout = 60_000});
+        Assert.That(await page.Locator("[data-testid='wire']").InnerTextAsync(), Does.Contain("Holiday"));
+
+        release.SetResult();
+        await delivered.Task.WaitAsync(TimeSpan.FromSeconds(60));
+        await page.WaitForTimeoutAsync(1000);
+
+        Assert.That(await page.Locator("[data-testid='wire']").InnerTextAsync(), Does.Contain("Holiday"));
+        Assert.That(await page.Locator("[data-testid='result-table']").InnerTextAsync(), Does.Not.Contain("Engineering"));
+        await Assertions.Expect(page.Locator("[data-testid='history'] li")).ToHaveCountAsync(1);
+        Assert.That(await page.Locator("[data-testid='history']").InnerTextAsync(), Does.Not.Contain("Department"));
+    }
+
     // The settings dialog's Clear removes the explorer's own keys and nothing else on the origin — and
     // resets what those keys came from, so a second tab, a dark theme, and the query being edited do
     // not sit in memory waiting for the next save to write them all back. Its own page, because it
