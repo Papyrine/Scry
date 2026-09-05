@@ -8,8 +8,9 @@ namespace Scry;
 /// </summary>
 /// <param name="Request">
 /// The deserialized request, exactly as validated — the full query AST. Null for an attachment fetch,
-/// which carries no query; <see cref="Attachment"/> describes that instead, and exactly one of the two
-/// is ever set.
+/// which carries no query, and for a batch refused at its envelope, which ran none;
+/// <see cref="Attachment"/> or <see cref="Batch"/> describes those instead, and exactly one of the
+/// three is ever set.
 /// </param>
 /// <param name="Outcome">How the query ended.</param>
 /// <param name="Duration">
@@ -30,6 +31,17 @@ public sealed record ScryAuditEntry(
     /// so a run of rejected or not-found fetches is what key-guessing looks like.
     /// </remarks>
     public AttachmentRequest? Attachment { get; init; }
+
+    /// <summary>
+    /// The batch refused whole, when the entry describes a rejection at the envelope — more entries
+    /// than the server allows, or a wire version it does not speak — rather than a query. Null
+    /// otherwise.
+    /// </summary>
+    /// <remarks>
+    /// One entry for the whole batch, where a batch that ran is audited per entry: what was refused
+    /// is the envelope, and a client sending oversized batches is what this makes visible.
+    /// </remarks>
+    public QueryBatchRequest? Batch { get; init; }
 
     /// <summary>The result shape, when the query succeeded; null when it never produced one.</summary>
     public ResultKind? Kind { get; init; }

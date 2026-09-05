@@ -32,7 +32,7 @@ await batch.SendAsync();
 var rows = await employees;
 var count = await orders;
 ```
-<sup><a href='/src/Scry.Tests/BatchTests.cs#L135-L155' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientBatch' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/BatchTests.cs#L161-L181' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientBatch' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `InBatch<T>(this IQueryable<T> source, ScryBatch batch)` is the whole client surface. Every terminal works unchanged behind it — `ToListAsync`, `CountAsync`, `FirstOrDefaultAsync`, `ToPageAsync`, the aggregates, all of them — because it changes which request carries the query rather than what the query asks. It sits anywhere in the chain, and, like the [header operators](querying.md#headers), is invisible to translation: the wire request is byte-for-byte the one the unbatched query would have sent.
@@ -82,7 +82,7 @@ A batch is the one place a single request costs more than one query, which makes
 
 ## Observability
 
-Nothing special is needed. Each entry produces its own [span, metrics, and audit entry](observability.md), so a batch is not a blind spot in the trail — what was asked is what is recorded, and a batch asked more than once. The entries' spans nest under one `scry.batch` span tagged with `scry.batch.size`.
+Nothing special is needed. Each entry produces its own [span, metrics, and audit entry](observability.md), so a batch is not a blind spot in the trail — what was asked is what is recorded, and a batch asked more than once. The entries' spans nest under one `scry.batch` span tagged with `scry.batch.size`. A batch refused whole — more entries than `MaxBatchSize`, or an unsupported wire version — ran no entry, so the refusal is recorded once as its own: a `rejected` metric under the source `(batch)`, the `scry.batch` span marked, and one audit entry carrying the batch.
 
 
 ## Transports

@@ -72,6 +72,32 @@ public class BatchTests
         Assert.That(exception.Message, Does.Contain("more than the maximum of 2"));
     }
 
+    // Refused at the envelope, the batch ran no entry, so nothing would have reached the trail. The
+    // refusal is recorded once, carrying the batch rather than a query.
+    [Test]
+    public void ABatchRefusedWholeIsAuditedOnce()
+    {
+        var auditor = new RecordingAuditor();
+        var services = new ServiceCollection();
+        services.AddSingleton<IScryAuditor>(auditor);
+        using var provider = services.BuildServiceProvider();
+        var processor = Processor(_ => _.MaxBatchSize = 2);
+        var batch = QueryBatchRequest.Create(
+            [.. Enumerable.Repeat(QueryRequest.Create("Employee", [new CountOp()]), 3)]);
+
+        using var context = TestContext.CreateSeeded();
+        Assert.Throws<ScryValidationException>(() => processor.ExecuteBatch(batch, context, provider));
+
+        var entry = auditor.Entries.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(entry.Outcome, Is.EqualTo(ScryQueryOutcome.Rejected));
+            Assert.That(entry.Batch, Is.SameAs(batch));
+            Assert.That(entry.Request, Is.Null);
+            Assert.That(entry.Error, Does.Contain("more than the maximum of 2"));
+        });
+    }
+
     [Test]
     public void UnsupportedWireVersionRejectsTheWholeBatch()
     {

@@ -204,6 +204,40 @@ public class ObservabilityTests
         Verify(entry)
             .IgnoreMember<ScryAuditEntry>(_ => _.Duration);
 
+    // A batch refused at its envelope ran no entry, so it is metered and spanned once, as itself.
+    [Test]
+    public void MetricsAndActivityForABatchRefusedWhole()
+    {
+        var measurements = new List<(string Instrument, object Value, Dictionary<string, object?> Tags)>();
+        using var meters = ListenMeters(measurements);
+        var stopped = new List<Activity>();
+        using var activities = Listen(stopped);
+        var processor = ScryProcessor.Create<TestContext>(options =>
+        {
+            options.AddPocoSource<Holiday>(_ => Holiday.Seed());
+            options.MaxBatchSize = 1;
+        });
+        var batch = QueryBatchRequest.Create(
+        [
+            QueryRequest.Create("Employee", [new CountOp()]),
+            QueryRequest.Create("Employee", [new CountOp()])
+        ]);
+
+        using var context = TestContext.CreateSeeded();
+        Assert.Throws<ScryValidationException>(() => processor.ExecuteBatch(batch, context));
+
+        var duration = measurements.Single(_ => _.Instrument == "scry.server.query.duration");
+        var activity = stopped.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(duration.Tags["scry.source"], Is.EqualTo("(batch)"));
+            Assert.That(duration.Tags["scry.outcome"], Is.EqualTo("rejected"));
+            Assert.That(activity.DisplayName, Is.EqualTo("scry.batch"));
+            Assert.That(activity.Status, Is.EqualTo(ActivityStatusCode.Error));
+            Assert.That(activity.TagObjects.Single(_ => _.Key == "scry.batch.size").Value, Is.EqualTo(2));
+        });
+    }
+
     static ActivityListener Listen(List<Activity> stopped)
     {
         var listener = new ActivityListener

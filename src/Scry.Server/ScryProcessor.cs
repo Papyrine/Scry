@@ -492,9 +492,9 @@ public sealed class ScryProcessor
         IHeaderDictionary responseHeaders,
         BinaryPartCollector? binary)
     {
-        RejectUnusableBatch(request);
-
+        var started = Stopwatch.GetTimestamp();
         using var activity = QueryRecorder.StartBatch(request.Queries.Count);
+        RejectUnusableBatch(request, services, activity, started);
 
         var results = new List<QueryBatchResult>(request.Queries.Count);
         foreach (var query in request.Queries)
@@ -527,9 +527,9 @@ public sealed class ScryProcessor
         ResponseSpill? spill = null,
         Cancel cancel = default)
     {
-        RejectUnusableBatch(request);
-
+        var started = Stopwatch.GetTimestamp();
         using var activity = QueryRecorder.StartBatch(request.Queries.Count);
+        RejectUnusableBatch(request, services, activity, started);
 
         // Granted once, before the first entry runs — the only point at which a batch can decide. Its
         // parts are numbered globally and its envelope arrives last, so an entry that drained would be
@@ -562,18 +562,32 @@ public sealed class ScryProcessor
 
     // The envelope-level rejections, which are the only way a batch fails as a whole: they are checked
     // before any entry runs, so a rejected batch has executed nothing.
-    void RejectUnusableBatch(QueryBatchRequest request)
+    /// <summary>
+    /// Refuses a batch whole — a wire version this server does not speak, or more entries than
+    /// <see cref="ScryOptions.MaxBatchSize"/> — before any entry runs. Recorded as one rejection,
+    /// since no entry will be recorded: the refusal would otherwise leave no metric, span, or audit
+    /// entry at all.
+    /// </summary>
+    void RejectUnusableBatch(QueryBatchRequest request, IServiceProvider services, Activity? activity, long started)
     {
+        string? reason = null;
         if (request.Version > WireFormat.Version)
         {
-            throw new ScryValidationException($"Unsupported wire version {request.Version}.");
+            reason = $"Unsupported wire version {request.Version}.";
+        }
+        else if (request.Queries.Count > options.MaxBatchSize)
+        {
+            reason = $"The batch carries {request.Queries.Count} queries, more than the maximum of {options.MaxBatchSize}.";
         }
 
-        if (request.Queries.Count > options.MaxBatchSize)
+        if (reason is null)
         {
-            throw new ScryValidationException(
-                $"The batch carries {request.Queries.Count} queries, more than the maximum of {options.MaxBatchSize}.");
+            return;
         }
+
+        var exception = new ScryValidationException(reason);
+        QueryRecorder.RejectedBatch(request, exception, services, activity, Stopwatch.GetElapsedTime(started));
+        throw exception;
     }
 
     // One entry, written rather than returned — the buffered counterpart of ExecuteEntry, and its

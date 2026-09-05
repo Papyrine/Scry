@@ -286,6 +286,52 @@ sealed class QueryRecorder(
     }
 
     /// <summary>
+    /// A batch refused at its envelope, before any entry ran: the duration metric under a source of
+    /// its own, the batch span marked as an entry's would have been, and one audit entry carrying the
+    /// batch. Static because there is no query to record over — and recorded at all because a client
+    /// hammering the endpoint with oversized batches is exactly what the trail exists to show.
+    /// </summary>
+    public static void RejectedBatch(
+        QueryBatchRequest batch,
+        ScryValidationException exception,
+        IServiceProvider services,
+        Activity? activity,
+        TimeSpan elapsed)
+    {
+        var type = exception.GetType().FullName;
+        queryDuration.Record(
+            elapsed.TotalSeconds,
+            new TagList
+            {
+                { "scry.source", "(batch)" },
+                { "scry.outcome", OutcomeTag(ScryQueryOutcome.Rejected) },
+                { "error.type", type }
+            });
+
+        if (activity is not null)
+        {
+            activity.SetStatus(ActivityStatusCode.Error, exception.Message);
+            activity.SetTag("error.type", type);
+        }
+
+        if (services.GetService<IEnumerable<IScryAuditor>>() is not { } auditors)
+        {
+            return;
+        }
+
+        ScryAuditEntry? entry = null;
+        foreach (var auditor in auditors)
+        {
+            entry ??= new(Request: null, ScryQueryOutcome.Rejected, elapsed)
+            {
+                Batch = batch,
+                Error = exception.Message
+            };
+            auditor.Record(entry);
+        }
+    }
+
+    /// <summary>
     /// A deserialization failure at the transport, before a request object exists to run a recorder
     /// over. Metric only: there is no request to audit and nothing worth a span of its own — but a
     /// client sending unparseable payloads is exactly what the outcome tag exists to make visible.

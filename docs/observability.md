@@ -60,6 +60,8 @@ Every query records a duration, whatever its outcome, so query counts come off t
 
 A `rejected` rate that deployments do not explain is the signal worth alerting on. A generated client cannot produce an invalid request, so rejections are either stale clients — benign, marked by `scry.stale_client` and a `staleClient` audit entry, expected to spike right after a model change ships — or requests written by hand, which is probing. `malformed` is the same signal one layer earlier.
 
+A batch refused whole — more entries than `MaxBatchSize`, or a wire version the server does not speak — ran no entry, so it records one `rejected` duration of its own under the source `(batch)`, and its `scry.batch` span is marked as an entry's would have been.
+
 
 ## The audit hook
 
@@ -101,6 +103,17 @@ public sealed record ScryAuditEntry(
     /// </remarks>
     public AttachmentRequest? Attachment { get; init; }
 
+    /// <summary>
+    /// The batch refused whole, when the entry describes a rejection at the envelope — more entries
+    /// than the server allows, or a wire version it does not speak — rather than a query. Null
+    /// otherwise.
+    /// </summary>
+    /// <remarks>
+    /// One entry for the whole batch, where a batch that ran is audited per entry: what was refused
+    /// is the envelope, and a client sending oversized batches is what this makes visible.
+    /// </remarks>
+    public QueryBatchRequest? Batch { get; init; }
+
     /// <summary>The result shape, when the query succeeded; null when it never produced one.</summary>
     public ResultKind? Kind { get; init; }
 
@@ -125,7 +138,7 @@ public sealed record ScryAuditEntry(
     public bool StaleClient { get; init; }
 }
 ```
-<sup><a href='/src/Scry.Server/ScryAuditEntry.cs#L18-L57' title='Snippet source file'>snippet source</a> | <a href='#snippet-auditEntry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryAuditEntry.cs#L19-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-auditEntry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Semantics:
@@ -134,7 +147,7 @@ Semantics:
 - **Auditors fail closed.** An auditor that throws fails the request — an audit trail that silently drops entries is worse than a failed query. An implementation that must not block should hand the entry to a queue and return.
 - **`Error` is the real message.** For a `Failed` outcome the client saw a generic 500; the entry carries the underlying exception's message. The audit trail is where execution failures are readable.
 - **Streams are recorded at completion**, with the rows actually delivered — including a `Canceled` entry when the read stopped partway.
-- **A batch is audited per entry, not per request.** The trail records what was asked, and a [batch](batching.md) asked more than once; there is no entry for the batch itself.
+- **A batch is audited per entry, not per request.** The trail records what was asked, and a [batch](batching.md) asked more than once; there is no entry for the batch itself. The one exception is a batch refused at its envelope, which ran no entry: that is recorded once as a `Rejected` entry carrying `Batch`, since nothing else would show a client sending oversized batches.
 - **Malformed bodies are not audited.** A payload that fails deserialization never becomes a request object, so it appears in metrics only.
 
 
