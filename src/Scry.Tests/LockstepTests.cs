@@ -1,5 +1,3 @@
-using System.Reflection.Emit;
-
 /// <summary>
 /// The generator reads a model as metadata and the server reads it by reflection, and the two must
 /// describe the same surface: a client generated from one is validated by the other, and the stamp

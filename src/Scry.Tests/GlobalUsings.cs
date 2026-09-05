@@ -12,4 +12,5 @@ global using Scry;
 global using VerifyTests.DiffPlex;
 global using static VerifyNUnit.Verifier;
 global using System.Buffers.Text;
+global using System.Reflection.Emit;
 global using Microsoft.AspNetCore.Http;
