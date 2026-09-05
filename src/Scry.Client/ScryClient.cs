@@ -594,7 +594,10 @@ public sealed class ScryClient
                 }
             }
 
-            var sent = await http.SendAsync(message, cancel);
+            // Headers first: the body is read below into the one array the response keeps, straight
+            // off the connection. Buffered by HttpClient it would be copied into a stream of its own
+            // first, and out of that stream second — see ResponseBody.
+            var sent = await http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancel);
 
             // Recorded from failures too: a rejection caused by schema drift is exactly when this
             // matters.
@@ -622,7 +625,7 @@ public sealed class ScryClient
         // first transcodes the whole response to UTF-16 only for the reader to transcode it back. The
         // bytes are also what the response keeps, so the payload is parsed once, straight into the
         // caller's type. Only a failure below needs text, and one is small.
-        var body = await response.Content.ReadAsByteArrayAsync(cancel);
+        var body = await ResponseBody.ReadAsync(response.Content, cancel);
         if (response.IsSuccessStatusCode)
         {
             return ScryJson.DeserializeResponse(body);
@@ -710,7 +713,14 @@ public sealed class ScryClient
         Cancel cancel)
     {
         using var content = JsonBody(ScryJson.SerializeToUtf8(request));
-        using var response = await http.PostAsync(endpoint, content, cancel);
+        using var message = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        {
+            Content = content
+        };
+
+        // Headers first, for the reason the single path reads them first: the body goes straight into
+        // the array the response keeps.
+        using var response = await http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancel);
 
         RecordServerHeaders(response);
 
@@ -722,7 +732,7 @@ public sealed class ScryClient
             return ScryJson.DeserializeBatchResponse(envelope) with {BinaryParts = parts};
         }
 
-        var body = await response.Content.ReadAsByteArrayAsync(cancel);
+        var body = await ResponseBody.ReadAsync(response.Content, cancel);
         if (response.IsSuccessStatusCode)
         {
             return ScryJson.DeserializeBatchResponse(body);
