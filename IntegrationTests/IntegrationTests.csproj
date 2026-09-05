@@ -33,6 +33,11 @@
     <CompilerVisibleProperty Include="ScryModelStamp" />
   </ItemGroup>
 
+  <!-- Resolved against the project before the compiler sees it, as the shipped targets do. -->
+  <PropertyGroup Condition="'$(ScryModelDll)' != ''">
+    <ScryModelDll>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(ScryModelDll)'))</ScryModelDll>
+  </PropertyGroup>
+
   <Target Name="ComputeScryStamp"
           AfterTargets="ResolveProjectReferences"
           BeforeTargets="GenerateMSBuildEditorConfig;CoreCompile"

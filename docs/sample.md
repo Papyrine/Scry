@@ -272,6 +272,11 @@ The client half — re-asking with `If-None-Match` and replaying what the 304 st
   <CompilerVisibleProperty Include="ScryModelStamp" />
 </ItemGroup>
 
+<!-- Resolved against the project before the compiler sees it, as the shipped targets do. -->
+<PropertyGroup Condition="'$(ScryModelDll)' != ''">
+  <ScryModelDll>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(ScryModelDll)'))</ScryModelDll>
+</PropertyGroup>
+
 <Target Name="ComputeScryStamp"
         AfterTargets="ResolveProjectReferences"
         BeforeTargets="GenerateMSBuildEditorConfig;CoreCompile"
@@ -281,7 +286,7 @@ The client half — re-asking with `If-None-Match` and replaying what the 304 st
   </GetFileHash>
 </Target>
 ```
-<sup><a href='/samples/Sample.Client/Sample.Client.csproj#L24-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGeneratorWiring' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Sample.Client.csproj#L24-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGeneratorWiring' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Because the sample uses project references rather than the NuGet package, the generator wiring that `Scry.Client`'s `buildTransitive` props would normally supply is written out explicitly. See [Source generator](source-generator.md).

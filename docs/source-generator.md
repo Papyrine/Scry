@@ -28,6 +28,8 @@ Two things are needed in the client project. First, the path the generator reads
 <sup><a href='/samples/Sample.Client/Sample.Client.csproj#L7-L10' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientModelPath' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
+A relative path is resolved against the project directory before the compiler sees it. The generator runs inside the compiler process, whose working directory is not the project's, so one that reached it unresolved would name a file that does not exist; it reports `SCRY001` rather than generating nothing.
+
 Second, a project reference that exists purely for **build ordering**:
 
 ```xml
@@ -41,6 +43,15 @@ Everything else is supplied by the `buildTransitive/Scry.Client.targets` file th
 <!-- snippet: buildTransitiveProps -->
 <a id='snippet-buildTransitiveProps'></a>
 ```targets
+<!--
+  Resolved against the project before the compiler sees it. The generator runs inside the compiler
+  process, whose working directory is not the project's, so a relative path that passes the Exists
+  checks below would reach it as a file that does not exist.
+-->
+<PropertyGroup Condition="'$(ScryModelDll)' != ''">
+  <ScryModelDll>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(ScryModelDll)'))</ScryModelDll>
+</PropertyGroup>
+
 <ItemGroup>
   <CompilerVisibleProperty Include="ScryModelDll" />
   <CompilerVisibleProperty Include="ScryModelStamp" />
@@ -62,7 +73,7 @@ Everything else is supplied by the `buildTransitive/Scry.Client.targets` file th
 Reference the model project with ReferenceOutputAssembly=&quot;false&quot; so it builds first." />
 </Target>
 ```
-<sup><a href='/src/Scry.Client/buildTransitive/Scry.Client.targets#L11-L32' title='Snippet source file'>snippet source</a> | <a href='#snippet-buildTransitiveProps' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Client/buildTransitive/Scry.Client.targets#L11-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-buildTransitiveProps' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -104,6 +115,11 @@ When referencing the projects directly (as the sample and integration tests do),
   <CompilerVisibleProperty Include="ScryModelStamp" />
 </ItemGroup>
 
+<!-- Resolved against the project before the compiler sees it, as the shipped targets do. -->
+<PropertyGroup Condition="'$(ScryModelDll)' != ''">
+  <ScryModelDll>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(ScryModelDll)'))</ScryModelDll>
+</PropertyGroup>
+
 <Target Name="ComputeScryStamp"
         AfterTargets="ResolveProjectReferences"
         BeforeTargets="GenerateMSBuildEditorConfig;CoreCompile"
@@ -113,7 +129,7 @@ When referencing the projects directly (as the sample and integration tests do),
   </GetFileHash>
 </Target>
 ```
-<sup><a href='/samples/Sample.Client/Sample.Client.csproj#L24-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGeneratorWiring' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Client/Sample.Client.csproj#L24-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGeneratorWiring' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -267,7 +283,7 @@ builder.Services.AddScoped<ScryQuery>();
 | `SCRY002` | Error | Two queryable types resolve to the same source name. |
 | `SCRY003` | Error | A source name cannot be written as a C# property name. |
 
-`SCRY001` is reported when the DLL exists but cannot be parsed — corrupt, truncated, or not a managed assembly.
+`SCRY001` is reported when the DLL exists but cannot be parsed — corrupt, truncated, or not a managed assembly — and when the path is relative, which the shipped targets prevent by resolving it against the project.
 
 `SCRY002` guards the source-name clash that would otherwise emit duplicate properties on `ScryQuery` and surface as a `CS0102` on generated code the user cannot see. Give one of the types a distinct [`Name`](annotations.md#naming-a-source). The server rejects the same clash at startup.
 

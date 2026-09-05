@@ -501,6 +501,31 @@ public class GeneratorTests
             .SelectMany(_ => _.Split('\n'))
             .Single(_ => _.Contains("public const string SchemaStamp"));
 
+    // The generator runs inside the compiler process, whose working directory is not the project's.
+    // A relative path passes the targets' own checks, which evaluate it against the project, and
+    // reached the generator as a file that does not exist — which generated nothing and said nothing.
+    [Test]
+    public Task ARelativeModelPathIsReported()
+    {
+        var consumer = CSharpCompilation.Create(
+            "Consumer",
+            [CSharpSyntaxTree.ParseText("// consumer")],
+            ReferenceAssemblies(),
+            new(OutputKind.DynamicallyLinkedLibrary));
+
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            generators: [new ScryGenerator().AsSourceGenerator()],
+            additionalTexts: null,
+            parseOptions: null,
+            optionsProvider: new TestOptionsProvider(
+                new()
+                {
+                    ["build_property.ScryModelDll"] = @"bin\Sample.Model.dll"
+                }));
+
+        return Verify(driver.RunGenerators(consumer));
+    }
+
     [Test]
     public Task DuplicateSourceNameIsReported()
     {

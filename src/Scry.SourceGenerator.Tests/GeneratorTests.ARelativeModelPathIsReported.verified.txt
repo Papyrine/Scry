@@ -1,0 +1,16 @@
+﻿{
+  Diagnostics: [
+    {
+      Message: ScryModelDll 'bin\Sample.Model.dll' is a relative path. The generator runs inside the compiler process, whose working directory is not the project's, so the path must be absolute: resolve it with $([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(ScryModelDll)')) before it becomes compiler-visible, as the Scry.Client targets do.,
+      Severity: Error,
+      Descriptor: {
+        Id: SCRY001,
+        Title: Failed to read the Scry model assembly,
+        MessageFormat: {0},
+        Category: Scry,
+        DefaultSeverity: Error,
+        IsEnabledByDefault: true
+      }
+    }
+  ]
+}

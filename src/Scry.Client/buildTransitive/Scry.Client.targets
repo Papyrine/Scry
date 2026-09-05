@@ -9,6 +9,15 @@
     compiler-visible property so the generator re-reads it exactly when the model changes.
   -->
   <!-- begin-snippet: buildTransitiveProps -->
+  <!--
+    Resolved against the project before the compiler sees it. The generator runs inside the compiler
+    process, whose working directory is not the project's, so a relative path that passes the Exists
+    checks below would reach it as a file that does not exist.
+  -->
+  <PropertyGroup Condition="'$(ScryModelDll)' != ''">
+    <ScryModelDll>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(ScryModelDll)'))</ScryModelDll>
+  </PropertyGroup>
+
   <ItemGroup>
     <CompilerVisibleProperty Include="ScryModelDll" />
     <CompilerVisibleProperty Include="ScryModelStamp" />

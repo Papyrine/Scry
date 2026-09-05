@@ -20,7 +20,25 @@ static class MetadataModelReader
 
     public static ModelExtract Read(string? dllPath)
     {
-        if (string.IsNullOrWhiteSpace(dllPath) || !File.Exists(dllPath))
+        if (string.IsNullOrWhiteSpace(dllPath))
+        {
+            return ModelExtract.Empty;
+        }
+
+        // The generator runs inside the compiler process, whose working directory is not the
+        // project's. The shipped targets resolve the path against the project before it becomes
+        // compiler-visible; one that arrives relative anyway was wired by hand, and would otherwise
+        // read as a file that does not exist and generate nothing, silently.
+        if (!Path.IsPathRooted(dllPath))
+        {
+            return new(
+                $"ScryModelDll '{dllPath}' is a relative path. The generator runs inside the compiler process, whose working directory is not the project's, so the path must be absolute: resolve it with $([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(ScryModelDll)')) before it becomes compiler-visible, as the Scry.Client targets do.",
+                new([]),
+                new([]),
+                new([]));
+        }
+
+        if (!File.Exists(dllPath))
         {
             return ModelExtract.Empty;
         }
