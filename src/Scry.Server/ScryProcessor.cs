@@ -257,8 +257,7 @@ public sealed class ScryProcessor
             ApplySensitivity(request, responseHeaders, fromUrl);
             var scope = new CallScope(services, requestHeaders, responseHeaders)
             {
-                Binary = binary,
-                FromUrl = fromUrl
+                Binary = binary
             };
             var response = executor.Execute(request, data, scope) with
             {

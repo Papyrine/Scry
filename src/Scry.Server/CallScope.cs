@@ -21,13 +21,6 @@ readonly record struct CallScope(
     public BinaryPartCollector? Binary { get; init; }
 
     /// <summary>
-    /// Whether the request arrived as a URL rather than as a body, which decides whether the sensitive
-    /// rule applies to it. Only the query endpoint's GET sets it; a host with no URL to speak of leaves
-    /// it false, and nothing changes for one.
-    /// </summary>
-    public bool FromUrl { get; init; }
-
-    /// <summary>
     /// What each cached row policy answered with during this call. One per call, so the several sites
     /// that can apply the same policy to one query all read the same keys.
     /// </summary>
