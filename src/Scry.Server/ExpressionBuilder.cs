@@ -1235,10 +1235,14 @@ sealed class ExpressionBuilder(
             return call.Function switch
             {
                 KnownFunction.StringContains => Expression.Call(target, stringContains, StringArgument(call, 0, row)),
-                KnownFunction.StringStartsWith => Expression.Call(target, stringStartsWith, StringArgument(call, 0, row)),
-                KnownFunction.StringEndsWith => Expression.Call(target, stringEndsWith, StringArgument(call, 0, row)),
-                KnownFunction.StringToLower => Expression.Call(target, stringToLower),
-                KnownFunction.StringToUpper => Expression.Call(target, stringToUpper),
+                KnownFunction.StringStartsWith => InMemory(row)
+                    ? Expression.Call(target, stringStartsWithOrdinal, StringArgument(call, 0, row), ordinal)
+                    : Expression.Call(target, stringStartsWith, StringArgument(call, 0, row)),
+                KnownFunction.StringEndsWith => InMemory(row)
+                    ? Expression.Call(target, stringEndsWithOrdinal, StringArgument(call, 0, row), ordinal)
+                    : Expression.Call(target, stringEndsWith, StringArgument(call, 0, row)),
+                KnownFunction.StringToLower => Expression.Call(target, InMemory(row) ? stringToLowerInvariant : stringToLower),
+                KnownFunction.StringToUpper => Expression.Call(target, InMemory(row) ? stringToUpperInvariant : stringToUpper),
                 KnownFunction.StringIsNullOrEmpty => Expression.Call(stringIsNullOrEmpty, target),
                 KnownFunction.StringIsNullOrWhiteSpace => Expression.Call(stringIsNullOrWhiteSpace, target),
                 KnownFunction.StringLength => Expression.Property(target, "Length"),
@@ -1246,7 +1250,9 @@ sealed class ExpressionBuilder(
                 KnownFunction.StringTrimStart => Expression.Call(target, stringTrimStart),
                 KnownFunction.StringTrimEnd => Expression.Call(target, stringTrimEnd),
                 KnownFunction.StringSubstring => BuildSubstring(call, target, row),
-                KnownFunction.StringIndexOf => Expression.Call(target, stringIndexOf, StringArgument(call, 0, row)),
+                KnownFunction.StringIndexOf => InMemory(row)
+                    ? Expression.Call(target, stringIndexOfOrdinal, StringArgument(call, 0, row), ordinal)
+                    : Expression.Call(target, stringIndexOf, StringArgument(call, 0, row)),
                 KnownFunction.StringReplace => Expression.Call(target, stringReplace, StringArgument(call, 0, row), StringArgument(call, 1, row)),
                 KnownFunction.StringFirst => Expression.Call(stringFirstOrDefault, target),
                 KnownFunction.StringLast => Expression.Call(stringLastOrDefault, target),
@@ -1619,8 +1625,11 @@ sealed class ExpressionBuilder(
             throw new ScryValidationException($"CompareTo is not supported over '{left.Type.Name}'.");
         }
 
-        var method = left.Type.GetMethod("CompareTo", [left.Type])!;
-        Expression compared = Expression.Call(left, method, right);
+        // In memory, text compares ordinally for the reason the other string members do; the sign
+        // is taken because CompareOrdinal answers with a difference rather than with -1, 0, or 1.
+        Expression compared = left.Type == typeof(string) && InMemory(row)
+            ? Expression.Call(mathSign, Expression.Call(stringCompareOrdinal, left, right))
+            : Expression.Call(left, left.Type.GetMethod("CompareTo", [left.Type])!, right);
 
         // The operands that can be null: an optional member, or text, whose null no static type
         // records.
@@ -2354,6 +2363,29 @@ sealed class ExpressionBuilder(
     // Closed Sum/Average/Min/Max methods, keyed by (name, element type, selector return type). The
     // key space is bounded by the queryable schema, so this never grows unboundedly.
     static readonly ConcurrentDictionary<(string name, Type element, Type result), MethodInfo> aggregateMethods = new();
+
+    /// <summary>
+    /// Whether the row is one of an in-memory source, where a string member runs under LINQ to Objects
+    /// rather than as SQL. The culture-sensitive members — a prefix, a suffix, a search, a casing, a
+    /// three-way comparison — are bound to their ordinal or invariant forms there: a relational
+    /// provider answers by the column's collation whatever the request's culture, and the same wire
+    /// request over an in-memory source should be as steady, not answer per Accept-Language.
+    /// </summary>
+    bool InMemory(Expression row)
+    {
+        var type = IsGrouping(row.Type) ? row.Type.GetGenericArguments()[1] : row.Type;
+        return schema.TryGetSourceForType(type, out var source) &&
+               source.Kind == SourceKind.Poco;
+    }
+
+    static readonly Expression ordinal = Expression.Constant(StringComparison.Ordinal);
+    static readonly MethodInfo stringStartsWithOrdinal = StringMethod("StartsWith", typeof(string), typeof(StringComparison));
+    static readonly MethodInfo stringEndsWithOrdinal = StringMethod("EndsWith", typeof(string), typeof(StringComparison));
+    static readonly MethodInfo stringIndexOfOrdinal = StringMethod("IndexOf", typeof(string), typeof(StringComparison));
+    static readonly MethodInfo stringToLowerInvariant = StringMethod("ToLowerInvariant");
+    static readonly MethodInfo stringToUpperInvariant = StringMethod("ToUpperInvariant");
+    static readonly MethodInfo stringCompareOrdinal = StringMethod("CompareOrdinal", typeof(string), typeof(string));
+    static readonly MethodInfo mathSign = typeof(Math).GetMethod(nameof(Math.Sign), [typeof(int)])!;
 
     static MethodInfo StringMethod(string name, params Type[] parameters) =>
         typeof(string).GetMethod(name, parameters) ??
