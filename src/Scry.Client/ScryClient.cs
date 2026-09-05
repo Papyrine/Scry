@@ -449,31 +449,19 @@ public sealed class ScryClient
     }
 
     /// <summary>
-    /// Whether a line is one of the stream's own markers rather than a row. Reads only far enough to
-    /// answer — a row is not parsed here, since the caller materializes it into its own type.
+    /// Whether a line is one of the stream's own markers rather than a row. A marker's first property
+    /// is its kind — declared first, and written first — so only the first property name is read. A
+    /// row is not tokenised here: the caller materializes it into its own type, and reading every
+    /// property to learn that none is the marker parsed each row twice.
     /// </summary>
     static bool IsMarker(ReadOnlySpan<byte> line)
     {
         var reader = new Utf8JsonReader(line);
-        if (!reader.Read() ||
-            reader.TokenType != JsonTokenType.StartObject)
-        {
-            return false;
-        }
-
-        while (reader.Read() &&
-               reader.TokenType == JsonTokenType.PropertyName)
-        {
-            if (reader.ValueTextEquals(ScryStream.MarkerProperty))
-            {
-                return true;
-            }
-
-            reader.Read();
-            reader.Skip();
-        }
-
-        return false;
+        return reader.Read() &&
+               reader.TokenType == JsonTokenType.StartObject &&
+               reader.Read() &&
+               reader.TokenType == JsonTokenType.PropertyName &&
+               reader.ValueTextEquals(ScryStream.MarkerProperty);
     }
 
     // The stream's own markers are consumed rather than surfaced: the opening one records the server's

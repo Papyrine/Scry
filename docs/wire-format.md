@@ -796,7 +796,7 @@ A request sent to the [`…/stream` endpoint](server.md#mapping-the-endpoint) co
 
 The rows between the markers are exactly the objects a `list` payload holds, so a reader materializes them the same way. The opening marker carries what a single response carries on the envelope — the version, the schema stamp, and any enum aliases, sent under the same rule as [above](#response).
 
-`$scry` is what tells a marker from a row. Projected member names come from the client's own C# identifiers, and `$` cannot start one, so no row can collide with it.
+`$scry` is what tells a marker from a row, and it is always the marker's **first** property, so a reader decides on the first property name alone and never tokenises a row to learn it is one. Projected member names come from the client's own C# identifiers, and `$` cannot start one, so no row can collide with it.
 
 **The closing marker is load-bearing.** A stream commits to a success status before its first row is written, so a failure past that point cannot become a `400` or a `500`. Without an explicit end, a truncated response — a dropped connection, a faulting provider, a killed server — would be indistinguishable from a complete one, and a reader would silently return a short answer. A reader must therefore require the marker and fail without it. A failure the server does notice closes the stream instead with:
 
