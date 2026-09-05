@@ -38,6 +38,11 @@
       Model: EmployeeQueryModel
     },
     {
+      Name: Fleet,
+      Kind: Entity,
+      Model: FleetQueryModel
+    },
+    {
       Name: Holiday,
       Kind: Poco,
       Model: HolidayQueryModel
@@ -46,6 +51,11 @@
       Name: Invoice,
       Kind: Entity,
       Model: InvoiceQueryModel
+    },
+    {
+      Name: Machine,
+      Kind: Entity,
+      Model: MachineQueryModel
     },
     {
       Name: Order,
@@ -61,6 +71,11 @@
       Name: Post,
       Kind: Entity,
       Model: PostQueryModel
+    },
+    {
+      Name: Press,
+      Kind: Entity,
+      Model: PressQueryModel
     },
     {
       Name: Region,
@@ -380,6 +395,39 @@
       IsSensitive: false
     },
     {
+      Model: FleetQueryModel,
+      Members: [
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Machines,
+          TypeDisplay: global::System.Collections.Generic.IReadOnlyList<MachineQueryModel>,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: true,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        }
+      ],
+      IsSensitive: false
+    },
+    {
       Model: HolidayQueryModel,
       Members: [
         {
@@ -457,6 +505,39 @@
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: true,
+          IsAttachment: false,
+          IsSensitive: false
+        }
+      ],
+      IsSensitive: false
+    },
+    {
+      Model: MachineQueryModel,
+      Members: [
+        {
+          Name: FleetId,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
           IsAttachment: false,
           IsSensitive: false
         }
@@ -695,6 +776,22 @@
           IsSensitive: false
         }
       ],
+      IsSensitive: false
+    },
+    {
+      Model: PressQueryModel,
+      Members: [
+        {
+          Name: Tonnage,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        }
+      ],
+      Base: MachineQueryModel,
       IsSensitive: false
     },
     {
@@ -948,5 +1045,5 @@
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: cWWFkBW6wyn_SdLT
+  SchemaStamp: lxXxGGe9lWQ7xvK1
 }

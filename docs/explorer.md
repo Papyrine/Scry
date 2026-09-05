@@ -345,6 +345,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Model: EmployeeQueryModel
     },
     {
+      Name: Fleet,
+      Kind: Entity,
+      Model: FleetQueryModel
+    },
+    {
       Name: Holiday,
       Kind: Poco,
       Model: HolidayQueryModel
@@ -353,6 +358,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Name: Invoice,
       Kind: Entity,
       Model: InvoiceQueryModel
+    },
+    {
+      Name: Machine,
+      Kind: Entity,
+      Model: MachineQueryModel
     },
     {
       Name: Order,
@@ -368,6 +378,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Name: Post,
       Kind: Entity,
       Model: PostQueryModel
+    },
+    {
+      Name: Press,
+      Kind: Entity,
+      Model: PressQueryModel
     },
     {
       Name: Region,
@@ -687,6 +702,39 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       IsSensitive: false
     },
     {
+      Model: FleetQueryModel,
+      Members: [
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Machines,
+          TypeDisplay: global::System.Collections.Generic.IReadOnlyList<MachineQueryModel>,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: true,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        }
+      ],
+      IsSensitive: false
+    },
+    {
       Model: HolidayQueryModel,
       Members: [
         {
@@ -764,6 +812,39 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           NeedsNullDefault: true,
           IsNavigation: false,
           IsCollection: true,
+          IsAttachment: false,
+          IsSensitive: false
+        }
+      ],
+      IsSensitive: false
+    },
+    {
+      Model: MachineQueryModel,
+      Members: [
+        {
+          Name: FleetId,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
           IsAttachment: false,
           IsSensitive: false
         }
@@ -1002,6 +1083,22 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsSensitive: false
         }
       ],
+      IsSensitive: false
+    },
+    {
+      Model: PressQueryModel,
+      Members: [
+        {
+          Name: Tonnage,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        }
+      ],
+      Base: MachineQueryModel,
       IsSensitive: false
     },
     {
@@ -1255,10 +1352,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: cWWFkBW6wyn_SdLT
+  SchemaStamp: lxXxGGe9lWQ7xvK1
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L952' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L1049' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names, member names with the exact C# type spelling the source generator would emit, and the re-emitted enums. It carries **no** policies, resolvers, connection details, or CLR internals.

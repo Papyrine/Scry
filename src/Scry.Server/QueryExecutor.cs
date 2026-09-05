@@ -464,6 +464,15 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                             query.Expression,
                             Expression.Quote(collection)));
                     elementType = child;
+
+                    // The policies the rows now carry are the element's, not the root's: the flatten
+                    // read a policied element through its whole chain (the correlated rewrite), and an
+                    // unpolicied one through none. A narrowing after the flatten skips exactly that
+                    // much of the derived chain — counting the root's here would skip the derived
+                    // type's own policies instead.
+                    appliedPolicies = schema.TryGetPoliciedSource(child, out var elementSource)
+                        ? elementSource.Policies.Count
+                        : 0;
                     break;
                 case DistinctOp:
                     distinct = true;

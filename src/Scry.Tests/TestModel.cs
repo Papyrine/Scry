@@ -201,6 +201,74 @@ public class Building : Asset
 // end-snippet
 
 /// <summary>
+/// Owns a collection of <see cref="Machine"/>, whose element type carries no policy while an opted-in
+/// subclass of it (<see cref="Press"/>) can be given one. That is the shape a flatten followed by a
+/// narrowing has to apply the subclass's policy through. A hierarchy of its own rather than
+/// <see cref="Asset"/>'s, whose types other fixtures attach policies to — a collection of a policied
+/// element is refused at startup. No policy is attached by default, so the shared processor is
+/// unchanged; <c>FlattenNarrowPolicyTests</c> registers what it needs.
+/// </summary>
+[Queryable]
+public class Fleet
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+
+    [QueryableCollection]
+    public List<Machine> Machines { get; set; } = [];
+}
+
+/// <summary>
+/// The root of the fleet's TPH hierarchy. The foreign key is a real member, since a policied element
+/// is read through the collection by correlating on it, which a shadow property cannot be.
+/// </summary>
+[Queryable]
+public class Machine
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public int FleetId { get; set; }
+}
+
+[Queryable]
+public class Press : Machine
+{
+    public int Tonnage { get; set; }
+}
+
+/// <summary>Never attached by default. Hides the retired fleet, so the root of a flatten carries a policy.</summary>
+public sealed class ActiveFleetsOnlyPolicy :
+    IReturnablePolicy<Fleet>
+{
+    public IQueryable<Fleet> Filter(IQueryable<Fleet> source, ScryPolicyContext context) =>
+        source.Where(_ => _.Name != "Retired");
+}
+
+/// <summary>Never attached by default. Hides the small press, the one row the light-press policy keeps.</summary>
+public sealed class WorkingMachinesOnlyPolicy :
+    IReturnablePolicy<Machine>
+{
+    public IQueryable<Machine> Filter(IQueryable<Machine> source, ScryPolicyContext context) =>
+        source.Where(_ => _.Name != "Small press");
+}
+
+/// <summary>Never attached by default. Keeps the presses of a hundred tonnes and over.</summary>
+public sealed class HeavyPressesOnlyPolicy :
+    IReturnablePolicy<Press>
+{
+    public IQueryable<Press> Filter(IQueryable<Press> source, ScryPolicyContext context) =>
+        source.Where(_ => _.Tonnage >= 100);
+}
+
+/// <summary>Never attached by default. The inverse, keeping the presses under a hundred tonnes.</summary>
+public sealed class LightPressesOnlyPolicy :
+    IReturnablePolicy<Press>
+{
+    public IQueryable<Press> Filter(IQueryable<Press> source, ScryPolicyContext context) =>
+        source.Where(_ => _.Tonnage < 100);
+}
+
+/// <summary>
 /// Derives from <see cref="Asset"/> but is deliberately <i>not</i> opted in, so narrowing to it is
 /// rejected and its own members stay unreachable.
 /// </summary>
@@ -563,6 +631,8 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
     public DbSet<OrderLine> OrderLines => Set<OrderLine>();
     public DbSet<Ticket> Tickets => Set<Ticket>();
     public DbSet<Asset> Assets => Set<Asset>();
+    public DbSet<Fleet> Fleets => Set<Fleet>();
+    public DbSet<Machine> Machines => Set<Machine>();
     public DbSet<Post> Posts => Set<Post>();
     public DbSet<Contract> Contracts => Set<Contract>();
     public DbSet<Shift> Shifts => Set<Shift>();
@@ -603,6 +673,12 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
         builder.Entity<Building>();
         builder.Entity<Artwork>();
         builder.Entity<Announcement>();
+
+        builder.Entity<Press>();
+        builder.Entity<Fleet>()
+            .HasMany(_ => _.Machines)
+            .WithOne()
+            .HasForeignKey(_ => _.FleetId);
     }
 
     static SqlInstance<TestContext> sqlInstance = null!;
@@ -888,6 +964,43 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
             {
                 Name = "Mural",
                 Medium = "Paint"
+            });
+
+        // A heavy press, a light one, and a plain machine in the active fleet; one more light press in
+        // the retired fleet, which ActiveFleetsOnlyPolicy hides when a test attaches it.
+        context.Fleets.AddRange(
+            new()
+            {
+                Name = "Main",
+                Machines =
+                [
+                    new Press
+                    {
+                        Name = "Big press",
+                        Tonnage = 200
+                    },
+                    new Press
+                    {
+                        Name = "Small press",
+                        Tonnage = 50
+                    },
+                    new()
+                    {
+                        Name = "Drill"
+                    }
+                ]
+            },
+            new()
+            {
+                Name = "Retired",
+                Machines =
+                [
+                    new Press
+                    {
+                        Name = "Old press",
+                        Tonnage = 50
+                    }
+                ]
             });
 
         // Tokens fixed rather than generated, so a snapshot ordered by one holds still.
