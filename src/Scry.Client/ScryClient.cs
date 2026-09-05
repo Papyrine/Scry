@@ -213,7 +213,9 @@ public sealed class ScryClient
     /// </remarks>
     public event Action<SchemaDrift>? SchemaStaleDetected;
 
-    bool staleRaised;
+    // Set once, atomically: a scoped client awaiting several queries at once records several stamps
+    // on several threads, and the event is promised at most once.
+    int staleRaised;
 
     // Whether a GET was ever answered 405. Kept apart from the advertised budget: a server that maps no
     // GET route says so through a header on every response, but a gateway in front of one that does
@@ -280,13 +282,12 @@ public sealed class ScryClient
     void RecordServerStamp(string? server)
     {
         ServerSchemaStamp = server;
-        if (staleRaised ||
-            !SchemaStale)
+        if (!SchemaStale ||
+            Interlocked.CompareExchange(ref staleRaised, 1, 0) != 0)
         {
             return;
         }
 
-        staleRaised = true;
         SchemaStaleDetected?.Invoke(new(SchemaStamp!, ServerSchemaStamp!));
     }
 
