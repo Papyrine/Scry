@@ -248,13 +248,23 @@ public static class ScryJson
     /// line carries <see cref="ScryStream.MarkerProperty"/>, so this is not a probe.
     /// </summary>
     public static ScryStreamMarker DeserializeMarker(JsonElement line) =>
-        line.Deserialize(markerInfo) ??
-        throw new ScryWireException("Stream marker deserialized to null.");
+        Versioned(
+            line.Deserialize(markerInfo) ??
+            throw new ScryWireException("Stream marker deserialized to null."));
 
     /// <summary>Reads a marker from the UTF-8 line it arrived as.</summary>
     public static ScryStreamMarker DeserializeMarker(ReadOnlySpan<byte> line) =>
-        JsonSerializer.Deserialize(line, markerInfo) ??
-        throw new ScryWireException("Stream marker deserialized to null.");
+        Versioned(
+            JsonSerializer.Deserialize(line, markerInfo) ??
+            throw new ScryWireException("Stream marker deserialized to null."));
+
+    // An opening marker carrying a newer wire version fails closed as a response does: the rows
+    // behind it are in an encoding this client does not read, and reading them anyway would answer
+    // with wrong rows or a bare parse failure rather than saying the server is newer.
+    static ScryStreamMarker Versioned(ScryStreamMarker marker) =>
+        marker is {Kind: ScryStream.Begin, Version: { } version} && version > WireFormat.Version
+            ? throw Unsupported(version)
+            : marker;
 
     /// <summary>
     /// Reads a non-success response body, or null when it is not one. A failed request is usually
