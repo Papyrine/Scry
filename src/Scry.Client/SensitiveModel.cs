@@ -20,7 +20,14 @@ static class SensitiveModel
 {
     static readonly ConcurrentDictionary<Type, Model> models = new();
 
-    static readonly ConcurrentDictionary<string, Type> bySource = new(StringComparer.Ordinal);
+    // Every model a source name was opened as, and the latest of them. Two clients in one process
+    // may open the same name as models of their own — a generated one, and a hand-built one marking
+    // nothing — and the answer is the union: a member any of them marks is sensitive, so no
+    // registration can unmark what another established, and no query is sent in a URL on the strength
+    // of a model it was not written against.
+    static readonly ConcurrentDictionary<string, Type[]> bySource = new(StringComparer.Ordinal);
+
+    static readonly ConcurrentDictionary<string, Type> latest = new(StringComparer.Ordinal);
 
     static readonly HashSet<string> anyName = new(StringComparer.Ordinal);
 
@@ -34,7 +41,11 @@ static class SensitiveModel
     /// </summary>
     public static void Register(string source, Type model)
     {
-        bySource[source] = model;
+        latest[source] = model;
+        bySource.AddOrUpdate(
+            source,
+            _ => [model],
+            (_, known) => known.Contains(model) ? known : [.. known, model]);
         Describe(model);
     }
 
@@ -42,11 +53,24 @@ static class SensitiveModel
     public static bool IsSensitive(string? source, IReadOnlyList<string> path)
     {
         if (source is null ||
-            !bySource.TryGetValue(source, out var model))
+            !bySource.TryGetValue(source, out var models))
         {
             return Unresolved(path);
         }
 
+        foreach (var model in models)
+        {
+            if (IsSensitive(model, path))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    static bool IsSensitive(Type model, IReadOnlyList<string> path)
+    {
         // An empty path asks about the source itself: what a query with no Select returns.
         var described = Describe(model);
         if (path.Count == 0)
@@ -93,7 +117,7 @@ static class SensitiveModel
     /// enum constant's type. Null for a source this process never opened.
     /// </summary>
     public static Type? ModelFor(string source) =>
-        bySource.GetValueOrDefault(source);
+        latest.GetValueOrDefault(source);
 
     /// <summary>The property a member name resolves to on a model, from the same cached description
     /// the sensitivity walk reads. Null where the model does not declare it.</summary>

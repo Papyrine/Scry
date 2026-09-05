@@ -33,6 +33,30 @@ public class SensitiveTransportTests
 
     public record NameRow(string Name);
 
+    public class UnmarkedPerson
+    {
+        public int Id { get; init; }
+        public string Ssn { get; init; } = "";
+    }
+
+    // Two clients in one process opening the same source name as different models: a generated one,
+    // and a hand-built one that marks nothing. The registry once kept whichever registered last, so
+    // the unmarked model answered for the marked one's query and its constant went out in a URL.
+    [Test]
+    public void ALaterUnmarkedModelDoesNotUnmarkASource()
+    {
+        var marked = new ScryClient((_, _) => throw new("not sent"));
+        var request = marked.Source<PersonModel>("Citizen")
+            .Where(_ => _.Ssn == "123-45-6789")
+            .Select(_ => new NameRow(_.Name))
+            .ToScryRequest();
+
+        var other = new ScryClient((_, _) => throw new("not sent"));
+        _ = other.Source<UnmarkedPerson>("Citizen");
+
+        Assert.That(ScryClient.RequiresBody(request), Is.True);
+    }
+
     [Test]
     public async Task ConstantComparedAgainstAMarkedMemberTravelsAsABody()
     {
