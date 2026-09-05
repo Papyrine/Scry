@@ -67,7 +67,17 @@ sealed partial class QueryTranslator
         {
             switch (inner.Method.Name)
             {
+                // Distinct over the selected values, which is what the wire's flag means and what
+                // SUM(DISTINCT x) folds. Over the group's rows it would fold distinct rows — every
+                // row, since a row is distinct from every other — and the fold's own selector would
+                // then be read as the distinct one, summing equal values once.
                 case "Distinct" when inner.Arguments.Count == 1 && !distinct && selector is null:
+                    if (inner.Arguments[0] is not MethodCallExpression {Method.Name: "Select"})
+                    {
+                        throw new NotSupportedException(
+                            "Distinct over a group's rows is not supported by Scry: distinct rows are every row. Select the value first — Select(x => x.Amount).Distinct().Sum() — to fold distinct values.");
+                    }
+
                     distinct = true;
                     break;
 
