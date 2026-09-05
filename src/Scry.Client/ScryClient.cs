@@ -365,6 +365,12 @@ public sealed class ScryClient
                         continue;
                     }
 
+                    if (lines.Unterminated &&
+                        !IsWholeJson(line.Span))
+                    {
+                        throw Truncated();
+                    }
+
                     if (!IsMarker(line.Span))
                     {
                         yield return StreamedRow.FromUtf8(line) with
@@ -391,6 +397,15 @@ public sealed class ScryClient
                     continue;
                 }
 
+                // A final line the sender did not terminate is judged on its content: whole, it is
+                // whatever it says; cut inside a token, the connection ended in the middle of it,
+                // which is the wire's failure to report and not a marker or a row to parse.
+                if (reader.Unterminated &&
+                    !IsWholeJson(line.Span))
+                {
+                    throw Truncated();
+                }
+
                 if (!IsMarker(line.Span))
                 {
                     yield return StreamedRow.FromUtf8(line) with {Aliases = aliases};
@@ -408,6 +423,27 @@ public sealed class ScryClient
         {
             throw new ScryWireException(
                 "The result stream ended without its closing marker, so the rows received are incomplete.");
+        }
+    }
+
+    static ScryWireException Truncated() =>
+        new("The result stream ended in the middle of a line, so the rows received are incomplete.");
+
+    // Whether a line parses to its end as one JSON value. Asked of an unterminated last line only.
+    static bool IsWholeJson(ReadOnlySpan<byte> line)
+    {
+        try
+        {
+            var reader = new Utf8JsonReader(line);
+            while (reader.Read())
+            {
+            }
+
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
         }
     }
 

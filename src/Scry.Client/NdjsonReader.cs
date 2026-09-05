@@ -17,6 +17,12 @@ sealed class NdjsonReader(Stream stream) :
     int end;
     bool ended;
 
+    /// <summary>
+    /// Whether the line last handed out was the stream's final one and carried no newline — cut
+    /// off, or written by a sender that ends without one. Which of the two is for its content to say.
+    /// </summary>
+    public bool Unterminated { get; private set; }
+
     /// <summary>The next line, or null at the end of the stream. Empty lines are returned as empty.</summary>
     public async ValueTask<ReadOnlyMemory<byte>?> ReadLineAsync(Cancel cancel)
     {
@@ -43,6 +49,7 @@ sealed class NdjsonReader(Stream stream) :
 
                 var last = current.AsMemory(start, end - start);
                 start = end;
+                Unterminated = true;
                 return Trim(last);
             }
 

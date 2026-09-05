@@ -23,6 +23,34 @@ public class StreamReadTests
         Assert.That(exception!.Message, Does.Contain("Unsupported response wire version"));
     }
 
+    // Cut inside a row. The reader hands an unterminated last line over for its content to be judged,
+    // and judged it once was by the JSON reader, which threw its own exception at the incomplete
+    // token — outside the wire's classification, which the closing-marker check never reached.
+    [Test]
+    public void ReportsAStreamCutMidLineAsIncomplete()
+    {
+        var client = Streaming(
+            """{"$scry":"begin","version":1,"stamp":"s"}""" + "\n" +
+            """{"name":"Al""");
+
+        var exception = Assert.ThrowsAsync<ScryWireException>(() => Drain(client));
+
+        Assert.That(exception!.Message, Does.Contain("incomplete"));
+    }
+
+    // A whole last line without its newline is what it says: here the closing marker, so the rows
+    // are complete.
+    [Test]
+    public async Task ReadsAWholeUnterminatedLastLine()
+    {
+        var client = Streaming(
+            """{"$scry":"begin","version":1,"stamp":"s"}""" + "\n" +
+            """{"name":"Alice"}""" + "\n" +
+            """{"$scry":"end"}""");
+
+        Assert.That(await Drain(client), Is.EqualTo(1));
+    }
+
     [Test]
     public async Task ReadsACurrentStream()
     {
