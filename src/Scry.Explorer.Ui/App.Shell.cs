@@ -306,6 +306,14 @@ public partial class App
 
     void Persist()
     {
+        // Another window of this explorer may have written since this one last read. Its tabs are
+        // adopted before this one writes, so neither window's save loses the other's tabs — and an
+        // adopted tab is on the bar, so the bar is redrawn.
+        if (tabs.Merge(storage.Get(TabsKey)))
+        {
+            _ = InvokeAsync(StateHasChanged);
+        }
+
         storage.Set(TabsKey, tabs.Serialize());
         storage.Set(PluginKey, visiblePlugin?.ToString() ?? "");
         storage.Set(PluginFlexKey, pluginPane.Serialize());

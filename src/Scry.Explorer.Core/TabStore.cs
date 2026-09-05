@@ -10,6 +10,10 @@ public sealed class TabStore
 
     readonly List<TabState> tabs = [];
 
+    // Every tab id this store has held, the closed ones included. What Merge reads out of the store
+    // is judged against it: a tab that was here and was closed is not another window's to reopen.
+    readonly HashSet<string> seen = [];
+
     public IReadOnlyList<TabState> Tabs =>
         tabs;
 
@@ -19,7 +23,7 @@ public sealed class TabStore
         tabs[ActiveIndex];
 
     public TabStore(string initialQuery = "") =>
-        tabs.Add(new()
+        Open(new()
         {
             Query = initialQuery
         });
@@ -28,7 +32,7 @@ public sealed class TabStore
     public void Reset(string initialQuery = "")
     {
         tabs.Clear();
-        tabs.Add(new()
+        Open(new()
         {
             Query = initialQuery
         });
@@ -37,11 +41,17 @@ public sealed class TabStore
 
     public void Add(string query = "")
     {
-        tabs.Add(new()
+        Open(new()
         {
             Query = query
         });
         ActiveIndex = tabs.Count - 1;
+    }
+
+    void Open(TabState tab)
+    {
+        tabs.Add(tab);
+        seen.Add(tab.Id);
     }
 
     public void Activate(int index)
@@ -136,9 +146,55 @@ public sealed class TabStore
     /// </remarks>
     public void Load(string? json)
     {
-        if (string.IsNullOrEmpty(json))
+        if (Read(json) is not { } read)
         {
             return;
+        }
+
+        var (readable, activeIndex) = read;
+        tabs.Clear();
+        foreach (var tab in readable)
+        {
+            Open(tab);
+        }
+
+        ActiveIndex = Math.Clamp(activeIndex, 0, tabs.Count - 1);
+    }
+
+    /// <summary>
+    /// Adopts the tabs another window of this explorer has written to the store since this one last
+    /// read it, so that what this window writes next carries both windows' tabs rather than only its
+    /// own. A tab this window has held before — open now, or closed here — is not adopted again.
+    /// </summary>
+    /// <returns>Whether anything was adopted.</returns>
+    public bool Merge(string? stored)
+    {
+        if (Read(stored) is not { } written)
+        {
+            return false;
+        }
+
+        var adopted = false;
+        foreach (var tab in written.Tabs)
+        {
+            if (!seen.Add(tab.Id))
+            {
+                continue;
+            }
+
+            tabs.Add(tab);
+            adopted = true;
+        }
+
+        return adopted;
+    }
+
+    // The tabs a stored value holds, judged tab by tab, or null for a value holding none.
+    static (List<TabState> Tabs, int ActiveIndex)? Read(string? json)
+    {
+        if (string.IsNullOrEmpty(json))
+        {
+            return null;
         }
 
         try
@@ -153,18 +209,12 @@ public sealed class TabStore
                     Title = _.Title
                 })
                 .ToList();
-            if (readable is not { Count: > 0 })
-            {
-                return;
-            }
-
-            tabs.Clear();
-            tabs.AddRange(readable);
-            ActiveIndex = Math.Clamp(loaded!.ActiveIndex, 0, tabs.Count - 1);
+            return readable is { Count: > 0 } ? (readable, loaded!.ActiveIndex) : null;
         }
         catch (JsonException)
         {
             // Corrupt or from a shape this version does not read. Keep the tab already open.
+            return null;
         }
     }
 

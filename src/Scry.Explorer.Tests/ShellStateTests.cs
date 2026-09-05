@@ -130,6 +130,51 @@ public class ShellStateTests
         Assert.That(loaded.Tabs[1].Query, Is.EqualTo("Query.Order"));
     }
 
+    // Two windows of the explorer on one origin write the same key. Before a window writes, it adopts
+    // the tabs the other wrote since it last read, so a save carries both windows' tabs rather than
+    // overwriting the other's with only its own.
+    [Test]
+    public void AdoptsTheTabsAnotherWindowWrote()
+    {
+        var mine = new TabStore("Query.Employee");
+        var theirs = new TabStore("Query.Employee");
+        theirs.Load(mine.Serialize());
+        theirs.Add("Query.Department");
+
+        var adopted = mine.Merge(theirs.Serialize());
+
+        Assert.That(adopted, Is.True);
+        Assert.That(mine.Tabs.Select(_ => _.Query), Is.EqualTo(["Query.Employee", "Query.Department"]));
+        Assert.That(mine.ActiveIndex, Is.Zero);
+        Assert.That(mine.Merge(theirs.Serialize()), Is.False, "adopted once");
+    }
+
+    // A tab closed here is not the other window's to reopen: what it holds is a tab this window held
+    // and let go of, which is a decision the merge respects.
+    [Test]
+    public void DoesNotReadoptATabClosedHere()
+    {
+        var mine = new TabStore("Query.Employee");
+        mine.Add("Query.Department");
+        var written = mine.Serialize();
+        mine.Close(1);
+
+        Assert.That(mine.Merge(written), Is.False);
+        Assert.That(mine.Tabs, Has.Count.EqualTo(1));
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("not json")]
+    [TestCase("{\"tabs\":[null]}")]
+    public void AdoptsNothingFromAValueItCannotRead(string? json)
+    {
+        var mine = new TabStore("Query.Employee");
+
+        Assert.That(mine.Merge(json), Is.False);
+        Assert.That(mine.Tabs, Has.Count.EqualTo(1));
+    }
+
     [TestCase(null)]
     [TestCase("")]
     [TestCase("not json")]

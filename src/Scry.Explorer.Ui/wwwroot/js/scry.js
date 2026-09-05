@@ -10,6 +10,17 @@ window.scry = {
     // The callback hub every document-level event is routed back through.
     init: function (dotNetRef) {
         dotNet = dotNetRef;
+        // What the explorer remembers is written on a debounce, and a page that closed inside that
+        // window lost its last edit. pagehide is the last event a closing, reloading, or navigating
+        // page reliably sees, and the call is synchronous: the runtime is single-threaded, so it has
+        // finished writing before the page goes.
+        window.addEventListener('pagehide', () => {
+            try {
+                dotNet.invokeMethod('OnFlush');
+            } catch (e) {
+                console.warn('scry: flush failed', e);
+            }
+        });
     },
     // Turn off Monaco's word-based suggestions, so the completion dropdown offers the allow-listed
     // schema or nothing rather than mixing in the words already sitting in the editor. Set from here

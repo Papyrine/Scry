@@ -1173,6 +1173,57 @@ public class UiSnapshotTests :
         Assert.That(await EditorValueAsync(page), Is.EqualTo("Query.Holiday"));
     }
 
+    // The edit made a moment before a reload is written on the way out rather than lost to the
+    // persist window. The tab's title following the text is what proves the shell has the edit; the
+    // reload comes straight after, well inside the window.
+    [Test]
+    public async Task ExplorerKeepsAnEditMadeJustBeforeAReload()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+
+        await page.SetEditorValueAsync("Query.Holiday");
+        await Assertions.Expect(page.Locator("[data-testid='tab']").First).ToHaveTextAsync("Holiday");
+
+        await page.ReloadAsync();
+        await page.WaitForSelectorAsync("main[data-ready]", 90);
+
+        Assert.That(await EditorValueAsync(page), Is.EqualTo("Query.Holiday"));
+    }
+
+    // Two explorer windows on one origin share the store. A tab opened in the second appears in the
+    // first at its next save, rather than being overwritten by it.
+    [Test]
+    public async Task ExplorerWindowsShareTheirTabs()
+    {
+        var first = await NewPageAsync();
+        await first.GoToExplorerAsync(BaseUrl);
+        await first.SetEditorValueAsync("Query.Department");
+        await WaitForStoredTabsAsync(first, "Query.Department");
+
+        var second = await NewPageBesideAsync(first);
+        await second.GoToExplorerAsync(BaseUrl);
+        await Assertions.Expect(second.Locator("[data-testid='tab']")).ToHaveCountAsync(1);
+        await second.Locator("[data-testid='tab-add']").ClickAsync();
+        await second.SetEditorValueAsync("Query.Holiday");
+        await WaitForStoredTabsAsync(second, "Query.Holiday");
+
+        await first.SetEditorValueAsync("Query.Department.Select(_ => new { _.Name })");
+
+        await Assertions.Expect(first.Locator("[data-testid='tab']")).ToHaveCountAsync(2, new() {Timeout = 10_000});
+        await WaitForStoredTabsAsync(first, "_.Name");
+        Assert.That(
+            await first.EvaluateAsync<string>("() => localStorage.getItem('scry:tabs')"),
+            Does.Contain("Query.Holiday"));
+    }
+
+    // Past the persist debounce, which is what actually writes the tabs.
+    static Task WaitForStoredTabsAsync(IPage page, string fragment) =>
+        page.WaitForFunctionAsync(
+            "fragment => (localStorage.getItem('scry:tabs') ?? '').includes(fragment)",
+            fragment,
+            new() {Timeout = 10_000});
+
     // The frame around the query: which pane the rail is showing, the dialogs, and the document-level
     // shortcuts that reach the commands Monaco's own keymap cannot.
     [Test]

@@ -37,9 +37,19 @@ public abstract class BrowserFixture
     /// The only way a test gets a page — the browser itself is private — so no test can be written
     /// that quietly opts out of the recording.
     /// </remarks>
-    protected async Task<IPage> NewPageAsync(BrowserNewPageOptions? options = null)
+    protected async Task<IPage> NewPageAsync(BrowserNewPageOptions? options = null) =>
+        Track(await browser.NewPageAsync(options));
+
+    /// <summary>
+    /// Opens a page in another page's context, so the two share the origin's storage — what two
+    /// explorer windows in one browser do. A page of its own has a context of its own, and so a
+    /// storage of its own.
+    /// </summary>
+    protected async Task<IPage> NewPageBesideAsync(IPage sibling) =>
+        Track(await sibling.Context.NewPageAsync());
+
+    IPage Track(IPage page)
     {
-        var page = await browser.NewPageAsync(options);
         pages.Add(page);
         page.Console += (_, message) => console.Enqueue($"[{message.Type}] {message.Text}");
         page.PageError += (_, error) => console.Enqueue($"[pageerror] {error}");

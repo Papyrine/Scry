@@ -125,6 +125,7 @@ public partial class App
         callbacks = new();
         callbacks.PaneResize += OnPaneResize;
         callbacks.GlobalShortcut += OnGlobalShortcut;
+        callbacks.Flush += () => _ = persist?.Flush();
         callbackReference = DotNetObjectReference.Create(callbacks);
         await JS.InvokeVoidAsync("scry.init", callbackReference);
         await JS.InvokeVoidAsync("scry.registerGlobalShortcuts", Shortcut.Serialize(shortcuts));

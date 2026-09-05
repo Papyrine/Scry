@@ -211,6 +211,8 @@ and the query text. All of it is this browser's alone: nothing here is ever sent
 *Clear* forgets the rest while leaving the favorites, losing one of those being the thing there is no
 way back from.
 
+**Keep it.** The tabs, the pane sizes, the theme, and the history are this browser's, written to its storage as they change and once more as the page closes, so an edit made a moment before a reload survives it. A result is not kept: it is a fact about a moment, and restoring one would be showing something that may no longer be true. Two explorer windows on one origin share the store, and a tab opened in one appears in the other at its next save, so neither overwrites the other's tabs. *Clear data*, in the settings, forgets all of it and puts the shell back at its defaults.
+
 **Share a link.** *Share* puts the query in the URL and copies the link. It is placed in the **fragment** (`/scry/#q=…`), which browsers never send to the server — so a shared query cannot land in an access log, a proxy trace, or a referrer header on the way. Opening the link loads the query into the editor; a fragment that does not decode is ignored, and the explorer opens on its sample query rather than on an error.
 
 **Export the results.** The *Export:* line under the result table saves the rows it is showing — same rows, same order — as `csv`, `xml`, or `json`.

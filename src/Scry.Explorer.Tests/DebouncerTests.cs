@@ -102,6 +102,54 @@ public class DebouncerTests
         Assert.That(await outcome.Task.WaitAsync(Limit), Is.EqualTo("cancelled"));
     }
 
+    // The page closing cannot wait for the window: what was going to be written when it closed is
+    // written now, and not again when the window would have closed.
+    [Test]
+    public async Task FlushRunsThePendingActionNowAndOnce()
+    {
+        using var debouncer = new Debouncer(Window);
+        var ran = 0;
+        debouncer.Run(() =>
+        {
+            ran++;
+            return Task.CompletedTask;
+        });
+
+        await debouncer.Flush();
+
+        Assert.That(ran, Is.EqualTo(1));
+        await Task.Delay(Window * 5);
+        Assert.That(ran, Is.EqualTo(1));
+    }
+
+    // Once the window has closed and the action has run, there is nothing left for a flush to do.
+    [Test]
+    public async Task FlushRunsNothingOnceTheWindowHasClosed()
+    {
+        using var debouncer = new Debouncer(Window);
+        var ran = 0;
+        var first = new TaskCompletionSource();
+        debouncer.Run(() =>
+        {
+            ran++;
+            first.TrySetResult();
+            return Task.CompletedTask;
+        });
+        await first.Task.WaitAsync(Limit);
+
+        await debouncer.Flush();
+
+        Assert.That(ran, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task FlushWithNothingPendingDoesNothing()
+    {
+        using var debouncer = new Debouncer(Window);
+
+        await debouncer.Flush();
+    }
+
     [Test]
     public async Task DisposeDropsAPendingAction()
     {
