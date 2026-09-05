@@ -48,6 +48,39 @@ public class HeaderTests
         Assert.That(sent, Is.EqualTo(["first", "second"]));
     }
 
+    // A query re-sent as a body after a 405 is the same query asked again, so it carries the headers
+    // the first attempt was configured with rather than running the hook a second time — a value the
+    // hook mints is the same on both attempts.
+    [Test]
+    public async Task HeadersAreConfiguredOncePerQuery()
+    {
+        var sent = new List<string>();
+        var minted = 0;
+        var client = StubbedClient(
+            request =>
+            {
+                sent.Add(request.Headers.GetValues("X-Request-Id").Single());
+                return request.Method == HttpMethod.Get
+                    ? new(HttpStatusCode.MethodNotAllowed)
+                    : Scalar(3);
+            });
+
+        await client.Source<Employee>("Employee", ["Name"])
+            .WithHeaders(_ =>
+            {
+                minted++;
+                _.TryAddWithoutValidation("X-Request-Id", Guid.NewGuid().ToString());
+            })
+            .CountAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(sent, Has.Count.EqualTo(2));
+            Assert.That(sent.Distinct().Count(), Is.EqualTo(1));
+            Assert.That(minted, Is.EqualTo(1));
+        });
+    }
+
     [Test]
     public async Task ResponseHeadersAreRead()
     {

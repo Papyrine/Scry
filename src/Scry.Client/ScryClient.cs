@@ -514,6 +514,9 @@ public sealed class ScryClient
     {
         var utf8 = ScryJson.SerializeToUtf8(request);
 
+        // The headers the first attempt was configured with, for a re-send to carry as they are.
+        List<KeyValuePair<string, IEnumerable<string>>>? configured = null;
+
         // Asked as a URL whenever it fits in one. A POST is uncacheable by everything between here and
         // the server, so every repeat of a query costs a full round trip and a full response; the same
         // query as a GET is stored and revalidated by the caller's own HTTP cache, which is machinery
@@ -578,7 +581,21 @@ public sealed class ScryClient
                     Content = JsonBody(utf8)
                 };
 
-            call?.Configure(message.Headers);
+            // The hooks run once per query, on the first attempt. A re-send after a 405 or a
+            // requires-body refusal is the same query asked again, so it carries the same headers:
+            // a value a hook mints — a request id, an idempotency key — is then the same on both.
+            if (configured is null)
+            {
+                call?.Configure(message.Headers);
+                configured = [.. message.Headers];
+            }
+            else
+            {
+                foreach (var (name, values) in configured)
+                {
+                    message.Headers.TryAddWithoutValidation(name, values);
+                }
+            }
 
             var sent = await http.SendAsync(message, cancel);
 

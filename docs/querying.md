@@ -332,6 +332,8 @@ Position in the chain does not matter — the operator swaps the provider that c
 
 `OnResponseHeaders` runs on **failed** responses too, which is where a trace or correlation header is most worth having; it runs before the failure becomes an exception. On a streamed query it runs once the response headers are read, before the first row.
 
+Both hooks run once per query. A query the client re-sends — as a body after a `405`, or after the server says a constant may not travel in a URL — carries the headers the first attempt was configured with rather than running `WithHeaders` again, so a value minted there is the same on both attempts, and `OnResponseHeaders` sees the response that answered.
+
 Headers are carried by the HTTP transport, so a query carrying them needs a client built by `ScryClient.ForHttp`. A [custom transport delegate](server.md#hosting-without-the-http-endpoint) has nowhere to put them and refuses the query rather than sending it silently stripped. A header attached to the inner side of a join or a set operator is likewise ignored: those fold into the single request the outer query sends.
 
 > [!WARNING]
