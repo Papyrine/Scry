@@ -14,14 +14,18 @@ using Microsoft.EntityFrameworkCore.Metadata;
 /// is rewritten the same way and yields the elements the policy allows.
 /// <para>
 /// Where the policy is configured to fail the request instead, the rewrite is unchanged and a probe
-/// runs alongside it — see <see cref="Deny"/>.
+/// is planned alongside it — see <see cref="Deny"/>.
 /// </para>
 /// </remarks>
+/// <param name="probes">
+/// Where a traversal's probe is planned, for the executor to ask before the query runs — or null
+/// where nothing will run, which is a SQL preview and the startup translation check.
+/// </param>
 sealed class NavigationPolicy(
     Schema schema,
     IModel model,
     Func<string, Func<PolicyUse, bool>?, IQueryable> sources,
-    bool probeDenials = false)
+    List<DeniedRowProbe>? probes = null)
 {
     // One answer per traversal, however many times a query reads through it: the question is about the
     // relationship, and a request naming the same member in a filter, an ordering and a projection
@@ -88,7 +92,7 @@ sealed class NavigationPolicy(
     /// </remarks>
     void Deny(Type ownerType, Member navigation, Type target, DeniedPosition position)
     {
-        if (!probeDenials ||
+        if (probes is null ||
             !schema.TryGetPoliciedSource(target, out var source) ||
             !source.Policies.Any(_ => _.Errors(position)) ||
             !probed.Add((ownerType, navigation.Name)) ||
@@ -108,15 +112,7 @@ sealed class NavigationPolicy(
             Reachable(hide, owner, ownerType, navigation, target),
             Reachable(full, owner, ownerType, navigation, target));
 
-        var any = Expression.Call(
-            anyWithPredicate.MakeGenericMethod(ownerType),
-            query.Expression,
-            Expression.Quote(Expression.Lambda(denied, owner)));
-
-        if ((bool)query.Provider.Execute(any)!)
-        {
-            throw new ScryPermissionException(ScryPermissionException.DeniedMessage);
-        }
+        probes.Add(DeniedRowProbe.Owners(query, Expression.Lambda(denied, owner)));
     }
 
     /// <summary>
@@ -212,7 +208,6 @@ sealed class NavigationPolicy(
     // The row-predicate overloads. Where also has an indexed one, whose predicate takes the row and its
     // position, so the arity of the delegate is what tells the two apart rather than the parameter count.
     static readonly MethodInfo where = RowPredicate(nameof(Queryable.Where));
-    static readonly MethodInfo anyWithPredicate = RowPredicate(nameof(Queryable.Any));
     static readonly MethodInfo countWithPredicate = RowPredicate(nameof(Queryable.Count));
 
     static MethodInfo RowPredicate(string name) =>

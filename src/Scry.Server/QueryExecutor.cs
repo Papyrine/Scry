@@ -44,28 +44,89 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
     public QueryResponse Execute(QueryRequest request, DbContext db, CallScope scope)
     {
-        var (terminal, rows) = Run(request, db, scope, out var page);
-        if (terminal is { } folded)
+        var plan = Walk(request, db, scope);
+        Prepare(plan, scope);
+        if (plan.Fold is { } fold)
         {
-            return Materialize(folded);
+            return Materialize(fold.Finish(Execution.Run(fold.Query, fold.Call)));
         }
 
-        if (page is { } paged)
+        if (plan.Page is { } page)
         {
-            var envelope = new ScryPage<Dictionary<string, object?>>(
-                [.. paged.Rows.Select(_ => Shape(_, paged.Plan, paged.Binary))],
-                paged.HasMore,
-                paged.Cursor);
-            return QueryResponse.Create(ResultKind.Page, JsonSerializer.SerializeToElement(envelope, ScryJson.Options));
+            return Envelope(page.Finish(page.Rows.ToList()));
         }
 
+        var set = plan.Rows!.Value;
         var shaped = new List<Dictionary<string, object?>>();
-        foreach (var row in rows!.Value.Rows)
+        foreach (var row in set.Rows)
         {
-            shaped.Add(ShapeRow(row!, rows.Value));
+            shaped.Add(ShapeRow(row!, set));
         }
 
-        return QueryResponse.Create(ResultKind.List, JsonSerializer.SerializeToElement(shaped, ScryJson.Options));
+        return ListResponse(shaped);
+    }
+
+    /// <summary>
+    /// <see cref="Execute"/> with every question the database is asked awaited rather than blocked
+    /// on: the cached policies brought up to date, the probes, and the query itself.
+    /// </summary>
+    public async ValueTask<QueryResponse> ExecuteAsync(QueryRequest request, DbContext db, CallScope scope, Cancel cancel)
+    {
+        var plan = Walk(request, db, scope);
+        await PrepareAsync(plan, scope, cancel);
+        if (plan.Fold is { } fold)
+        {
+            return Materialize(fold.Finish(await Execution.RunAsync(fold.Query, fold.Call, cancel)));
+        }
+
+        if (plan.Page is { } page)
+        {
+            return Envelope(page.Finish(await Execution.ReadAsync(page.Rows, cancel)));
+        }
+
+        var set = plan.Rows!.Value;
+        var shaped = new List<Dictionary<string, object?>>();
+        await foreach (var row in Enumerate(set, cancel))
+        {
+            shaped.Add(ShapeRow(row, set));
+        }
+
+        return ListResponse(shaped);
+    }
+
+    static QueryResponse Envelope(PageSet paged)
+    {
+        var envelope = new ScryPage<Dictionary<string, object?>>(
+            [.. paged.Rows.Select(_ => Shape(_, paged.Plan, paged.Binary))],
+            paged.HasMore,
+            paged.Cursor);
+        return QueryResponse.Create(ResultKind.Page, JsonSerializer.SerializeToElement(envelope, ScryJson.Options));
+    }
+
+    static QueryResponse ListResponse(List<Dictionary<string, object?>> shaped) =>
+        QueryResponse.Create(ResultKind.List, JsonSerializer.SerializeToElement(shaped, ScryJson.Options));
+
+    /// <summary>
+    /// Everything the database is asked before the query itself: the cached policies brought up to
+    /// date, then each probe in the order the walk met it. Both are questions a plan holds unasked,
+    /// so the blocking surface and the endpoint each ask them their own way.
+    /// </summary>
+    static void Prepare(Plan plan, CallScope scope)
+    {
+        scope.Cached.Refresh();
+        foreach (var probe in plan.Probes)
+        {
+            probe.Ensure();
+        }
+    }
+
+    static async ValueTask PrepareAsync(Plan plan, CallScope scope, Cancel cancel)
+    {
+        await scope.Cached.RefreshAsync(cancel);
+        foreach (var probe in plan.Probes)
+        {
+            await probe.EnsureAsync(cancel);
+        }
     }
 
     /// <summary>
@@ -91,21 +152,24 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         ResponseSpill? spill,
         Cancel cancel)
     {
-        var (terminal, set) = Run(request, db, scope, out var page);
+        var plan = Walk(request, db, scope);
+        await PrepareAsync(plan, scope, cancel);
 
         // A terminal folded its rows away, so there is nothing to spill and permission stays withheld.
-        if (terminal is { } folded)
+        if (plan.Fold is { } fold)
         {
+            var folded = fold.Finish(await Execution.RunAsync(fold.Query, fold.Call, cancel));
             return (folded.Kind, ResponseWriter.WriteTerminal(output, folded, stamp));
         }
 
-        if (page is { } paged)
+        if (plan.Page is { } page)
         {
+            var paged = page.Finish(await Execution.ReadAsync(page.Rows, cancel));
             spill?.AllowSpill(paged.Plan.BinarySlots is null);
             return (ResultKind.Page, await ResponseWriter.WritePageAsync(output, spill, paged, stamp, cancel));
         }
 
-        var rowSet = set!.Value;
+        var rowSet = plan.Rows!.Value;
         spill?.AllowSpill(rowSet.Plan.BinarySlots is null);
         return (ResultKind.List, await ResponseWriter.WriteListAsync(output, spill, rowSet, stamp, cancel));
     }
@@ -118,17 +182,33 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// </summary>
     public RowSet Stream(QueryRequest request, DbContext db, CallScope scope)
     {
-        var (terminal, rows) = Run(request, db, scope, out var page);
-        if (rows is not { } set)
+        var plan = Walk(request, db, scope);
+        var set = Streamable(plan);
+        Prepare(plan, scope);
+        return set;
+    }
+
+    /// <summary>The same, awaiting what the database is asked before the first row.</summary>
+    public async ValueTask<RowSet> StreamAsync(QueryRequest request, DbContext db, CallScope scope, Cancel cancel)
+    {
+        var plan = Walk(request, db, scope);
+        var set = Streamable(plan);
+        await PrepareAsync(plan, scope, cancel);
+        return set;
+    }
+
+    static RowSet Streamable(Plan plan)
+    {
+        if (plan.Rows is { } set)
         {
-            // A page is bounded and answered whole, so it is as unstreamable as a folding terminal and
-            // says so the same way.
-            var kind = page is null ? terminal!.Value.Kind : ResultKind.Page;
-            throw new ScryValidationException(
-                $"Only a query that returns rows can be streamed; this one returns {kind}. Drop the terminal operator, or use the non-streaming endpoint.");
+            return set;
         }
 
-        return set;
+        // A page is bounded and answered whole, so it is as unstreamable as a folding terminal and
+        // says so the same way.
+        var kind = plan.Page is null ? plan.Fold!.Value.Kind : ResultKind.Page;
+        throw new ScryValidationException(
+            $"Only a query that returns rows can be streamed; this one returns {kind}. Drop the terminal operator, or use the non-streaming endpoint.");
     }
 
     /// <summary>
@@ -178,28 +258,51 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// run. A terminal folds the rows to a value the database has to be asked for, so a request
     /// carrying one is refused rather than run: a preview that executed would not be one.
     /// </summary>
-    public RowSet Build(QueryRequest request, DbContext db, CallScope scope)
-    {
-        var (_, rows) = Run(request, db, scope, out _, buildOnly: true);
-        if (rows is { } set)
-        {
-            return set;
-        }
-
+    public RowSet Build(QueryRequest request, DbContext db, CallScope scope) =>
+        Walk(request, db, scope, buildOnly: true).Rows ??
         throw new ScryValidationException("The query produced no rows to read SQL from.");
+
+    /// <summary>
+    /// What one request resolved to, short of running it: the probes to ask first, in the order the
+    /// walk met them, and then exactly one of a call the provider folds to a value or a row, a page to
+    /// read, or the unread rows of a list. Held unrun so the two ways of running a request — blocking,
+    /// for a processor hosted outside HTTP, and awaiting, for the endpoint — differ only in how the
+    /// database is asked, never in what.
+    /// </summary>
+    internal readonly record struct Plan(
+        IReadOnlyList<DeniedRowProbe> Probes,
+        Fold? Fold,
+        PagePlan? Page,
+        RowSet? Rows);
+
+    /// <summary>
+    /// A folding terminal, unrun: the call that answers it, over the query it folds. A scalar's call
+    /// answers with the value; a single row's answers with the shaped <c>object[]</c> that
+    /// <paramref name="Plan"/> describes.
+    /// </summary>
+    internal readonly record struct Fold(IQueryable Query, MethodCallExpression Call, ProjectionPlan? Plan, BinaryPartCollector? Binary)
+    {
+        public ResultKind Kind =>
+            Plan is null ? ResultKind.Scalar : ResultKind.Single;
+
+        public Terminal Finish(object? value) =>
+            Plan is { } plan ? Single((object[]?)value, plan, Binary) : Scalar(value);
     }
 
-    // Walks the pipeline once and produces exactly one of three things: a folding terminal's result,
-    // the unread rows of a list result, which the caller materializes or streams, or the read rows of
-    // a page and what the envelope around them says.
-    (Terminal? Terminal, RowSet? Rows) Run(
+    /// <summary>
+    /// A page, unread: the rows to fetch — one more than the page holds, to learn whether a further
+    /// page exists — and how what came back becomes the page and its envelope.
+    /// </summary>
+    internal readonly record struct PagePlan(IQueryable<object[]> Rows, Func<List<object[]>, PageSet> Finish);
+
+    // Walks the pipeline once and plans exactly one of three things: a folding terminal's call, the
+    // unread rows of a list result, which the caller materializes or streams, or a page's fetch.
+    Plan Walk(
         QueryRequest request,
         DbContext db,
         CallScope scope,
-        out PageSet? page,
         bool buildOnly = false)
     {
-        page = null;
         var source = validator.Validate(request);
         var elementType = source.ClrType;
 
@@ -211,15 +314,19 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         // resolved — through the schema, and policy-filtered — rather than reaching a DbSet directly.
         // The same resolution backs a traversal into a policied source, which is read through its
         // policy rather than off the owner it was reached from.
+        // The questions asked of the database before the query runs, in the order the walk meets
+        // them. A SQL preview runs nothing, so it asks nothing either.
+        var probes = new List<DeniedRowProbe>();
         var resolve = (string name) =>
         {
             // A membership set reads the other source as a list, so its list position answers for
             // it — asked about the source whole, since the filter a membership test carries is
             // applied where the set is built, after this. Erring wide is the documented direction.
             if (!buildOnly &&
-                schema.TryGetSource(name, out var setSource))
+                schema.TryGetSource(name, out var setSource) &&
+                ProbeSideSource(setSource, db, scope) is { } setProbe)
             {
-                ProbeSideSource(setSource, db, scope);
+                probes.Add(setProbe);
             }
 
             return ResolveSource(name, db, scope);
@@ -228,14 +335,13 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             schema,
             options,
             resolve,
-            // A traversal into a source whose policy reports denials asks the database about it as it
-            // is built, which is before anything this query runs. A SQL preview runs nothing, so it
-            // asks nothing either.
+            // A traversal into a source whose policy reports denials plans a question about it as it
+            // is built, asked with the others before anything this query runs.
             new(
                 schema,
                 db.Model,
                 (name, include) => ResolveSource(name, db, scope, include),
-                probeDenials: !buildOnly));
+                buildOnly ? null : probes));
 
         var query = source.Resolve(db, scope.Services);
         query = ApplyPolicy(query, source, db, scope);
@@ -402,15 +508,15 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
         // Before anything executes: a denied row must not reach a result, and a folding terminal would
         // leave nothing to inspect after one had. Skipped for a SQL preview, which runs nothing.
-        if (!buildOnly)
+        if (!buildOnly &&
+            ProbeDeniedRows(source, probeSteps, terminal, db, scope) is { } rootProbe)
         {
-            ProbeDeniedRows(source, probeSteps, terminal, db, scope);
+            probes.Add(rootProbe);
         }
 
         if (terminal is PageOp paging)
         {
-            page = Page(builder, query, elementType, select, orderings, tailIsOrdered && !sawSkipOrTake, paging, source, db, scope.Binary);
-            return (null, null);
+            return new(probes, null, Page(builder, query, elementType, select, orderings, tailIsOrdered && !sawSkipOrTake, paging, source, db, scope.Binary), null);
         }
 
         // A join projects straight to the shaped row, so it replaces the projection step entirely and
@@ -419,21 +525,22 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         {
             // The inner side reads the joined source as a list, narrowed by the filters it carries.
             if (!buildOnly &&
-                schema.TryGetSource(join.Root, out var joinedSource))
+                schema.TryGetSource(join.Root, out var joinedSource) &&
+                ProbeSideSource(joinedSource, db, scope, side => SideFilters(builder, side, joinedSource.ClrType, join.InnerOps, join.InnerPredicate)) is { } innerProbe)
             {
-                ProbeSideSource(joinedSource, db, scope, side => SideFilters(builder, side, joinedSource.ClrType, join.InnerOps, join.InnerPredicate));
+                probes.Add(innerProbe);
             }
 
             var (joined, joinPlan) = BuildJoined(builder, query, elementType, join, db, scope);
 
             return terminal switch
             {
-                CountOp => (Scalar(Execute<int>(joined, "Count")), null),
-                LongCountOp => (Scalar(Execute<long>(joined, "LongCount")), null),
-                AnyOp => (Scalar(Execute<bool>(joined, "Any")), null),
-                FirstOp firstRow => (Single(ExecuteRow(joined, firstRow.OrDefault ? "FirstOrDefault" : "First"), joinPlan, scope.Binary), null),
-                SingleOp singleRow => (Single(ExecuteRow(joined, singleRow.OrDefault ? "SingleOrDefault" : "Single"), joinPlan, scope.Binary), null),
-                _ => (null, new RowSet(joined, joinPlan, Deduplicated: false, scope.Binary))
+                CountOp => Folds(probes, joined, "Count"),
+                LongCountOp => Folds(probes, joined, "LongCount"),
+                AnyOp => Folds(probes, joined, "Any"),
+                FirstOp firstRow => Picks(probes, joined, firstRow.OrDefault ? "FirstOrDefault" : "First", joinPlan, scope.Binary),
+                SingleOp singleRow => Picks(probes, joined, singleRow.OrDefault ? "SingleOrDefault" : "Single", joinPlan, scope.Binary),
+                _ => Lists(probes, new(joined, joinPlan, Deduplicated: false, scope.Binary))
             };
         }
 
@@ -449,9 +556,10 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
             // The operand reads its source as a list, narrowed by the filters it carries.
             if (!buildOnly &&
-                schema.TryGetSource(set.Root, out var operandSource))
+                schema.TryGetSource(set.Root, out var operandSource) &&
+                ProbeSideSource(operandSource, db, scope, side => SideFilters(builder, side, operandSource.ClrType, set.OperandOps, set.Predicate)) is { } operandProbe)
             {
-                ProbeSideSource(operandSource, db, scope, side => SideFilters(builder, side, operandSource.ClrType, set.OperandOps, set.Predicate));
+                probes.Add(operandProbe);
             }
 
             var otherSource = ResolveSource(set.Root, db, scope);
@@ -483,14 +591,14 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             switch (terminal)
             {
                 case CountOp:
-                    return (Scalar(Execute<int>(combined, "Count")), null);
+                    return Folds(probes, combined, "Count");
                 case LongCountOp:
-                    return (Scalar(Execute<long>(combined, "LongCount")), null);
+                    return Folds(probes, combined, "LongCount");
                 case AnyOp:
-                    return (Scalar(Execute<bool>(combined, "Any")), null);
+                    return Folds(probes, combined, "Any");
             }
 
-            return (null, new RowSet(combined, new(leftSelector, shape, binarySlots), Deduplicated: true, scope.Binary));
+            return Lists(probes, new(combined, new(leftSelector, shape, binarySlots), Deduplicated: true, scope.Binary));
         }
 
         // Ordering, paging and folding all need the deduplicated rows to have equality and ordering of
@@ -527,14 +635,14 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             switch (terminal)
             {
                 case CountOp:
-                    return (Scalar(Execute<int>(deduped, "Count")), null);
+                    return Folds(probes, deduped, "Count");
                 case LongCountOp:
-                    return (Scalar(Execute<long>(deduped, "LongCount")), null);
+                    return Folds(probes, deduped, "LongCount");
                 case AnyOp:
-                    return (Scalar(Execute<bool>(deduped, "Any")), null);
+                    return Folds(probes, deduped, "Any");
             }
 
-            return (null, new RowSet(deduped, new(selector, shape, binarySlots), Deduplicated: true, scope.Binary));
+            return Lists(probes, new(deduped, new(selector, shape, binarySlots), Deduplicated: true, scope.Binary));
         }
 
         // Every other folding terminal reads the rows themselves and projects nothing. None of them can
@@ -542,16 +650,15 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         switch (terminal)
         {
             case CountOp:
-                return (Scalar(Execute<int>(query, "Count")), null);
+                return Folds(probes, query, "Count");
             case LongCountOp:
-                return (Scalar(Execute<long>(query, "LongCount")), null);
+                return Folds(probes, query, "LongCount");
             case AnyOp:
-                return (Scalar(Execute<bool>(query, "Any")), null);
+                return Folds(probes, query, "Any");
             case AllOp all:
-                return (Scalar(
-                    Execute<bool>(query, "All", Expression.Quote(builder.BuildPredicate(all.Predicate, elementType)))), null);
+                return Folds(probes, query, "All", Expression.Quote(builder.BuildPredicate(all.Predicate, elementType)));
             case AggregateOp aggregate:
-                return (Aggregate(builder, query, aggregate, elementType), null);
+                return new(probes, Aggregate(builder, query, aggregate, elementType), null, null);
         }
 
         var (projected, plan) = BuildProjected(builder, query, elementType, groupBy, select, groupFilter);
@@ -561,26 +668,25 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             projected = ApplyDistinct(projected, source.Kind);
         }
 
-        if (terminal is FirstOp first)
+        return terminal switch
         {
-            var row = ExecuteRow(projected, first.OrDefault ? "FirstOrDefault" : "First");
-            return (Single(row, plan, scope.Binary), null);
-        }
-
-        if (terminal is SingleOp single)
-        {
-            var row = ExecuteRow(projected, single.OrDefault ? "SingleOrDefault" : "Single");
-            return (Single(row, plan, scope.Binary), null);
-        }
-
-        if (terminal is LastOp last)
-        {
-            var row = ExecuteRow(projected, last.OrDefault ? "LastOrDefault" : "Last");
-            return (Single(row, plan, scope.Binary), null);
-        }
-
-        return (null, new RowSet(projected, plan, Deduplicated: false, scope.Binary));
+            FirstOp first => Picks(probes, projected, first.OrDefault ? "FirstOrDefault" : "First", plan, scope.Binary),
+            SingleOp single => Picks(probes, projected, single.OrDefault ? "SingleOrDefault" : "Single", plan, scope.Binary),
+            LastOp last => Picks(probes, projected, last.OrDefault ? "LastOrDefault" : "Last", plan, scope.Binary),
+            _ => Lists(probes, new(projected, plan, Deduplicated: false, scope.Binary))
+        };
     }
+
+    static Plan Folds(List<DeniedRowProbe> probes, IQueryable query, string method, params Expression[] arguments) =>
+        new(probes, new Fold(query, CallQueryable(method, [query.ElementType], [query.Expression, .. arguments]), null, null), null, null);
+
+    // The one-argument overload: the terminal's predicate, where it had one, was applied as a filter
+    // before this.
+    static Plan Picks(List<DeniedRowProbe> probes, IQueryable<object[]> rows, string method, ProjectionPlan plan, BinaryPartCollector? binary) =>
+        new(probes, new Fold(rows, CallQueryable(method, [typeof(object[])], rows.Expression), plan, binary), null, null);
+
+    static Plan Lists(List<DeniedRowProbe> probes, RowSet rows) =>
+        new(probes, null, null, rows);
 
     /// <summary>
     /// Resolves the joined source and combines it with the outer query. The inner source goes through
@@ -678,7 +784,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// picks its aggregate overload from the value type, which <see cref="ExpressionBuilder"/> has
     /// already widened to one that exists.
     /// </summary>
-    static Terminal Aggregate(ExpressionBuilder builder, IQueryable query, AggregateOp aggregate, Type elementType)
+    static Fold Aggregate(ExpressionBuilder builder, IQueryable query, AggregateOp aggregate, Type elementType)
     {
         var selector = builder.BuildAggregateSelector(aggregate.Selector, elementType, aggregate.Function);
         var values = ApplySelectTyped(query, selector);
@@ -695,7 +801,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             call = Expression.Call(typeof(Queryable), name, null, values.Expression);
         }
 
-        return Scalar(values.Provider.Execute(call));
+        return new(values, call, null, null);
     }
 
     /// <summary>
@@ -725,6 +831,46 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// rather than running a pipeline, since none arrives.
     /// </summary>
     public ScryAttachmentResult FetchAttachment(AttachmentRequest request, DbContext db, CallScope scope)
+    {
+        if (PlanAttachment(request, db, scope) is not { } fetch)
+        {
+            return ScryAttachmentResult.NotFound;
+        }
+
+        scope.Cached.Refresh();
+        return fetch.Finish(Execution.Run(fetch.Rows, fetch.Call));
+    }
+
+    public async ValueTask<ScryAttachmentResult> FetchAttachmentAsync(AttachmentRequest request, DbContext db, CallScope scope, Cancel cancel)
+    {
+        if (PlanAttachment(request, db, scope) is not { } fetch)
+        {
+            return ScryAttachmentResult.NotFound;
+        }
+
+        await scope.Cached.RefreshAsync(cancel);
+        return fetch.Finish(await Execution.RunAsync(fetch.Rows, fetch.Call, cancel));
+    }
+
+    /// <summary>
+    /// An attachment read, unrun: the one-column query and the call that reads its one row, with what
+    /// the model or the policy said the bytes are. Null where the request was refused or names a row
+    /// that cannot exist, which answer alike so a guessed key learns nothing.
+    /// </summary>
+    readonly record struct AttachmentFetch(IQueryable Rows, MethodCallExpression Call, string? ContentType)
+    {
+        public ScryAttachmentResult Finish(object? row) =>
+            row is object[] found
+                ? new()
+                {
+                    Found = true,
+                    Value = (byte[]?)found[0],
+                    ContentType = ContentType
+                }
+                : ScryAttachmentResult.NotFound;
+    }
+
+    AttachmentFetch? PlanAttachment(AttachmentRequest request, DbContext db, CallScope scope)
     {
         if (request.Version > AttachmentRequest.CurrentVersion)
         {
@@ -762,7 +908,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             // not-found rather than rejected: it is a key that identifies nothing, not a malformed one.
             if (request.Keys[i].Value is not { } value)
             {
-                return ScryAttachmentResult.NotFound;
+                return null;
             }
 
             values.Add(builder.ParseKey(value, keys[i].Type));
@@ -780,7 +926,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         };
         if (!AttachmentPolicy.Authorize(policy, scope.Services, context))
         {
-            return ScryAttachmentResult.NotFound;
+            return null;
         }
 
         // Resolved through the same path a query's root takes, so the source's row policies apply and
@@ -805,18 +951,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             Expression.NewArrayInit(typeof(object), Expression.Convert(Expression.Property(parameter, member.Property), typeof(object))),
             parameter);
         var rows = ApplySelect(query, selector);
-
-        if (rows.Provider.Execute<object[]?>(CallQueryable("SingleOrDefault", [typeof(object[])], rows.Expression)) is not { } row)
-        {
-            return ScryAttachmentResult.NotFound;
-        }
-
-        return new()
-        {
-            Found = true,
-            Value = (byte[]?) row[0],
-            ContentType = context.ContentType
-        };
+        return new(rows, CallQueryable("SingleOrDefault", [typeof(object[])], rows.Expression), context.ContentType);
     }
 
     static (IQueryable<object[]> Query, ProjectionPlan Plan) BuildProjected(
@@ -913,22 +1048,17 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     }
 
     /// <summary>
-    /// Fails the request where a policy configured to error denied a row this query would otherwise
-    /// have read. Costs nothing where no policy in the chain says so, which is every query until a host
-    /// asks for one.
-    /// </summary>
-    /// <summary>
-    /// The same question for a source a query reads beside its root — a join's inner side, a set
-    /// operand, a membership set. Each reads that source as a list, so its <c>RootList</c> mode
+    /// The denied-row question for a source a query reads beside its root — a join's inner side, a
+    /// set operand, a membership set. Each reads that source as a list, so its <c>RootList</c> mode
     /// applies: where a policy there reports denials, the source is probed before this query runs,
     /// narrowed by <paramref name="narrow"/>, the filters the side carries. Its ordering and paging
     /// are left out, as the root's are — a denied row beyond the page is still one the query asked for.
     /// </summary>
-    static void ProbeSideSource(ScrySource source, DbContext db, CallScope scope, Func<IQueryable, IQueryable>? narrow = null)
+    static DeniedRowProbe? ProbeSideSource(ScrySource source, DbContext db, CallScope scope, Func<IQueryable, IQueryable>? narrow = null)
     {
         if (!source.Policies.Any(_ => _.Errors(DeniedPosition.RootList)))
         {
-            return;
+            return null;
         }
 
         IQueryable Side(Func<PolicyUse, bool>? include)
@@ -937,7 +1067,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             return narrow is null ? side : narrow(side);
         }
 
-        DeniedRowProbe.Ensure(Side(use => !use.Errors(DeniedPosition.RootList)), Side(include: null), db);
+        return DeniedRowProbe.Rows(Side(use => !use.Errors(DeniedPosition.RootList)), Side(include: null), db);
     }
 
     // The filters a side pipeline carries — the operators before its ordering and paging, which the
@@ -957,7 +1087,12 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         return predicate is null ? side : Apply(side, "Where", builder.BuildPredicate(predicate, elementType));
     }
 
-    static void ProbeDeniedRows(ScrySource source, ProbeSteps steps, QueryOp? terminal, DbContext db, CallScope scope)
+    /// <summary>
+    /// The question that fails the request where a policy configured to error denied a row this query
+    /// would otherwise have read, or null where no policy in the chain says so — which is every query
+    /// until a host asks for one, and costs nothing.
+    /// </summary>
+    static DeniedRowProbe? ProbeDeniedRows(ScrySource source, ProbeSteps steps, QueryOp? terminal, DbContext db, CallScope scope)
     {
         // A single-row terminal answers with the row itself; everything else lists rows or folds them,
         // and a policy can want a denial to fail one and not the other.
@@ -967,10 +1102,10 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
         if (!steps.Sources(source).Any(_ => _.Policies.Any(policy => policy.Errors(position))))
         {
-            return;
+            return null;
         }
 
-        DeniedRowProbe.Ensure(
+        return DeniedRowProbe.Rows(
             ProbeRoot(source, steps, use => !use.Errors(position), db, scope),
             ProbeRoot(source, steps, include: null, db, scope),
             db);
@@ -1117,10 +1252,6 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         }
     }
 
-    static T Execute<T>(IQueryable query, string method, params Expression[] arguments) =>
-        (T)query.Provider.Execute(
-            CallQueryable(method, [query.ElementType], [query.Expression, ..arguments]))!;
-
     static readonly ConcurrentDictionary<string, MethodInfo> queryableMethods = new();
 
     /// <summary>
@@ -1143,19 +1274,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         return call;
     }
 
-    static object[]? ExecuteRow(IQueryable<object[]> projected, string method) =>
-        method switch
-        {
-            "First" => projected.First(),
-            "FirstOrDefault" => projected.FirstOrDefault(),
-            "Single" => projected.Single(),
-            "SingleOrDefault" => projected.SingleOrDefault(),
-            "Last" => projected.Last(),
-            "LastOrDefault" => projected.LastOrDefault(),
-            _ => throw new($"Unknown row method '{method}'.")
-        };
-
-    PageSet Page(
+    PagePlan Page(
         ExpressionBuilder builder,
         IQueryable query,
         Type elementType,
@@ -1216,32 +1335,39 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
         // Fetch one extra row to detect a further page without issuing a second COUNT query. Composed
         // through ApplyPaging rather than Queryable.Take so the count is bound, not inlined.
-        var rows = ((IQueryable<object[]>)ApplyPaging(projected, "Take", size + 1)).ToList();
-        var hasMore = rows.Count > size;
-        if (hasMore)
-        {
-            rows.RemoveRange(size, rows.Count - size);
-        }
+        var fetch = (IQueryable<object[]>)ApplyPaging(projected, "Take", size + 1);
 
-        // The next cursor is the ordering-key tuple of the last returned row — omitted on the last page
-        // (nothing more to resume) and when the query is not seek-safe (offset paging only). Read off
-        // the rows before they are shaped, since the key columns sit past the projected ones.
-        string? cursor = null;
-        if (seekSafe &&
-            hasMore &&
-            rows.Count > 0)
+        PageSet Finish(List<object[]> rows)
         {
-            var last = rows[^1];
-            var keyValues = new (string?, ClrTypeTag)[keyCount];
-            for (var i = 0; i < keyCount; i++)
+            var hasMore = rows.Count > size;
+            if (hasMore)
             {
-                keyValues[i] = CursorCodec.TagValue(last[shape.Count + i]);
+                rows.RemoveRange(size, rows.Count - size);
             }
 
-            cursor = CursorCodec.Encode(keyValues, order!, SigningKey());
+            // The next cursor is the ordering-key tuple of the last returned row — omitted on the last
+            // page (nothing more to resume) and when the query is not seek-safe (offset paging only).
+            // Read off the rows before they are shaped, since the key columns sit past the projected
+            // ones.
+            string? cursor = null;
+            if (seekSafe &&
+                hasMore &&
+                rows.Count > 0)
+            {
+                var last = rows[^1];
+                var keyValues = new (string?, ClrTypeTag)[keyCount];
+                for (var i = 0; i < keyCount; i++)
+                {
+                    keyValues[i] = CursorCodec.TagValue(last[shape.Count + i]);
+                }
+
+                cursor = CursorCodec.Encode(keyValues, order!, SigningKey());
+            }
+
+            return new(rows, plan, hasMore, cursor, binary);
         }
 
-        return new(rows, plan, hasMore, cursor, binary);
+        return new(fetch, Finish);
     }
 
     // Decides whether a page can be resumed by a keyset cursor and, if so, the total ordering to seek
@@ -1313,7 +1439,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     // Used when no CursorSigningKey is configured: cursors are valid only within this process's lifetime.
     static readonly byte[] ephemeralSigningKey = RandomNumberGenerator.GetBytes(32);
 
-    static Terminal Scalar<T>(T value) =>
+    static Terminal Scalar(object? value) =>
         new(ResultKind.Scalar, value, Row: null, Plan: null, Binary: null);
 
     static Terminal Single(object[]? row, ProjectionPlan plan, BinaryPartCollector? binary) =>

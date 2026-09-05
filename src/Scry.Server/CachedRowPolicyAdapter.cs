@@ -36,35 +36,48 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
 
     IQueryable<TEntity> Apply(IQueryable<TEntity> source, ScryPolicyContext context, CachedDecisions decisions, bool refresh)
     {
-        var allowed = Allowed(context, decisions, refresh);
-
         // Bound as one parameter rather than written into the statement, so a scope's keys do not
         // become part of the SQL text and one plan serves every caller.
         var predicate = Expression.Lambda<Func<TEntity, bool>>(
-            Expression.Call(
-                Contains,
-                Parameterization.Parameterize(allowed, typeof(TKey[])),
-                key.Body),
+            Expression.Call(Contains, Allowed(context, decisions, refresh), key.Body),
             key.Parameters[0]);
 
         return source.Where(predicate);
     }
 
-    TKey[] Allowed(ScryPolicyContext context, CachedDecisions decisions, bool refresh)
+    /// <summary>
+    /// The keys this caller is allowed, as the parameter the membership test binds. Where the call
+    /// may bring them up to date, that is put off to where the executor asks the database — after
+    /// the query is built, before it runs — and the parameter is filled then; otherwise the store's
+    /// current answer fills it now.
+    /// </summary>
+    Expression Allowed(ScryPolicyContext context, CachedDecisions decisions, bool refresh)
     {
         // Once per call however many sites apply this policy: they are all reading the same query's
         // rows, and a set that moved between them would be two answers to one question.
-        if (decisions.Get(registration) is TKey[] memo)
+        if (decisions.Get(registration) is Parameterization.Slot<TKey[]> memo)
         {
-            return memo;
+            return memo.Parameter;
         }
 
         var policy = Resolve(context);
         var scopeKey = policy.ScopeKey(context);
-        var scope = refresh
-            ? Refresh(policy, scopeKey, context)
-            : registration.Store.Get(registration.Name, scopeKey) ?? CachedPolicyScope.Empty;
+        var slot = new Parameterization.Slot<TKey[]>();
+        decisions.Set(registration, slot);
+        if (refresh)
+        {
+            decisions.Defer(new Pending(this, slot, policy, scopeKey, context));
+        }
+        else
+        {
+            slot.Value = Bounded(registration.Store.Get(registration.Name, scopeKey) ?? CachedPolicyScope.Empty);
+        }
 
+        return slot.Parameter;
+    }
+
+    TKey[] Bounded(CachedPolicyScope scope)
+    {
         var allowed = scope.AllowedKeys.Cast<TKey>().ToArray();
         if (registration.MaxKeys is { } max &&
             allowed.Length > max)
@@ -73,8 +86,22 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
                 $"Cached row policy '{registration.Policy.Name}' allows {allowed.Length} rows for one caller, past the configured MaxCachedPolicyKeys of {max}. Every allowed key travels to the database with each query, so a policy that admits an unbounded set is one to write as an ordinary IReturnablePolicy filter instead.");
         }
 
-        decisions.Set(registration, allowed);
         return allowed;
+    }
+
+    sealed class Pending(
+        CachedRowPolicyAdapter<TEntity, TKey, TVersion> adapter,
+        Parameterization.Slot<TKey[]> slot,
+        ICachedRowPolicy<TEntity> policy,
+        string scopeKey,
+        ScryPolicyContext context) :
+        IPendingDecision
+    {
+        public void Run() =>
+            slot.Value = adapter.Bounded(adapter.Refresh(policy, scopeKey, context));
+
+        public async ValueTask RunAsync(Cancel cancel) =>
+            slot.Value = adapter.Bounded(await adapter.RefreshAsync(policy, scopeKey, context, cancel));
     }
 
     /// <summary>
@@ -88,56 +115,101 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
     /// </remarks>
     CachedPolicyScope Refresh(ICachedRowPolicy<TEntity> policy, string scopeKey, ScryPolicyContext context)
     {
-        lock (registration.Gate(scopeKey))
+        var gate = registration.Gate(scopeKey);
+        gate.Wait();
+        try
         {
-            // Decided against the state read at the start, and applied under that state's generation.
-            // Deciding is the one long window here, and the host may invalidate rows or the whole
-            // scope while it runs; the store then keeps what was re-pended pending, or drops the
-            // round where the scope was forgotten, and the generation it hands back says so. Another
-            // round picks those up, so the answer returned already reflects what the host said
-            // meanwhile. Bounded, for a host that never stops saying it.
             for (var attempt = 0;; attempt++)
             {
                 var current = registration.Store.Get(registration.Name, scopeKey) ?? Reserve(scopeKey);
-                var generation = current.Generation;
-                var rows = Undecided(current, context);
-                if (rows.Count == 0)
+                var (changed, invalidated) = Undecided(current, context);
+                var rows = Merge(changed.ToList(), invalidated?.ToList());
+                if (Round(policy, scopeKey, context, current, rows, last: attempt == 2) is { } answer)
                 {
-                    return current;
-                }
-
-                var watermark = current.Watermark;
-                foreach (var row in rows)
-                {
-                    // The watermark only ever moves forward, so a row decided out of order cannot pull it
-                    // back and leave the rows between it as already answered.
-                    var read = readVersion(row);
-                    if (watermark is not TVersion known ||
-                        Comparer<TVersion>.Default.Compare(read, known) > 0)
-                    {
-                        watermark = read;
-                    }
-                }
-
-                // Every key that was pending has now been decided or found gone, so none of them is
-                // still waiting for an answer — unless the host re-pended some meanwhile, which the
-                // generation tells the store.
-                registration.Store.Apply(
-                    registration.Name,
-                    scopeKey,
-                    new(Decide(policy, rows, scopeKey, context), watermark, current.PendingKeys)
-                    {
-                        Generation = generation
-                    });
-
-                var applied = registration.Store.Get(registration.Name, scopeKey) ?? CachedPolicyScope.Empty;
-                if (applied.Generation == generation ||
-                    attempt == 2)
-                {
-                    return applied;
+                    return answer;
                 }
             }
         }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    // The same, with the rows read asynchronously and the gate waited for the same way.
+    async ValueTask<CachedPolicyScope> RefreshAsync(ICachedRowPolicy<TEntity> policy, string scopeKey, ScryPolicyContext context, Cancel cancel)
+    {
+        var gate = registration.Gate(scopeKey);
+        await gate.WaitAsync(cancel);
+        try
+        {
+            for (var attempt = 0;; attempt++)
+            {
+                var current = registration.Store.Get(registration.Name, scopeKey) ?? Reserve(scopeKey);
+                var (changed, invalidated) = Undecided(current, context);
+                var rows = Merge(
+                    await changed.ToListAsync(cancel),
+                    invalidated is null ? null : await invalidated.ToListAsync(cancel));
+                if (Round(policy, scopeKey, context, current, rows, last: attempt == 2) is { } answer)
+                {
+                    return answer;
+                }
+            }
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// One round of a refresh: the undecided rows decided against the state read at the round's
+    /// start, and applied under that state's generation. Deciding is the one long window here, and
+    /// the host may invalidate rows or the whole scope while it runs; the store then keeps what was
+    /// re-pended pending, or drops the round where the scope was forgotten, and the generation it
+    /// hands back says so. Null asks for another round to pick those up, so the answer returned
+    /// already reflects what the host said meanwhile — bounded by <paramref name="last"/>, for a
+    /// host that never stops saying it.
+    /// </summary>
+    CachedPolicyScope? Round(
+        ICachedRowPolicy<TEntity> policy,
+        string scopeKey,
+        ScryPolicyContext context,
+        CachedPolicyScope current,
+        List<TEntity> rows,
+        bool last)
+    {
+        if (rows.Count == 0)
+        {
+            return current;
+        }
+
+        var watermark = current.Watermark;
+        foreach (var row in rows)
+        {
+            // The watermark only ever moves forward, so a row decided out of order cannot pull it
+            // back and leave the rows between it as already answered.
+            var read = readVersion(row);
+            if (watermark is not TVersion known ||
+                Comparer<TVersion>.Default.Compare(read, known) > 0)
+            {
+                watermark = read;
+            }
+        }
+
+        // Every key that was pending has now been decided or found gone, so none of them is still
+        // waiting for an answer — unless the host re-pended some meanwhile, which the generation
+        // tells the store.
+        registration.Store.Apply(
+            registration.Name,
+            scopeKey,
+            new(Decide(policy, rows, scopeKey, context), watermark, current.PendingKeys)
+            {
+                Generation = current.Generation
+            });
+
+        var applied = registration.Store.Get(registration.Name, scopeKey) ?? CachedPolicyScope.Empty;
+        return applied.Generation == current.Generation || last ? applied : null;
     }
 
     /// <inheritdoc/>
@@ -150,7 +222,9 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
         }
 
         var policy = Resolve(context);
-        lock (registration.Gate(scopeKey))
+        var gate = registration.Gate(scopeKey);
+        gate.Wait();
+        try
         {
             // No watermark and nothing resolved: these are rows the caller chose rather than every row
             // up to a version, so neither claim would be true of anything but them. Applied under the
@@ -163,6 +237,10 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
                 {
                     Generation = generation
                 });
+        }
+        finally
+        {
+            gate.Release();
         }
     }
 
@@ -192,8 +270,8 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
                                     throw new($"Could not create cached row policy '{registration.Policy.Name}'."));
 
     /// <summary>
-    /// The rows whose answer is not known: those changed past the watermark — every row, where there
-    /// is no watermark yet — and those a host invalidated.
+    /// The queries for the rows whose answer is not known: those changed past the watermark — every
+    /// row, where there is no watermark yet — and those a host invalidated, where any are.
     /// </summary>
     /// <remarks>
     /// Read straight off the set rather than through the source's policies: a decision is remembered
@@ -201,16 +279,16 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
     /// caller's view into an answer other callers go on to read. The other policies still apply to the
     /// query itself, where they belong.
     /// </remarks>
-    IReadOnlyList<TEntity> Undecided(CachedPolicyScope? current, ScryPolicyContext context)
+    (IQueryable<TEntity> Changed, IQueryable<TEntity>? Invalidated) Undecided(CachedPolicyScope current, ScryPolicyContext context)
     {
         var set = context.Db.Set<TEntity>().AsNoTracking();
-        var changed = current?.Watermark is TVersion watermark
+        var changed = current.Watermark is TVersion watermark
             ? set.Where(Newer(watermark))
             : set;
 
-        if (current is not {PendingKeys.Count: > 0})
+        if (current.PendingKeys.Count == 0)
         {
-            return changed.ToList();
+            return (changed, null);
         }
 
         var pending = current.PendingKeys.Cast<TKey>().ToArray();
@@ -219,13 +297,22 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
                 Expression.Call(Contains, Parameterization.Parameterize(pending, typeof(TKey[])), key.Body),
                 key.Parameters[0]));
 
-        // A pending row that has since been deleted simply never comes back, which drops its key from
-        // the allowed set as surely as a decision against it would have. Deduplicated by key: a row can
-        // be both changed and invalidated, and deciding it twice would be work for one answer.
-        var rows = changed.ToList();
-        var seen = rows.Select(readKey).ToHashSet();
-        rows.AddRange(invalidated.ToList().Where(_ => seen.Add(readKey(_))));
-        return rows;
+        return (changed, invalidated);
+    }
+
+    // A pending row that has since been deleted simply never comes back, which drops its key from
+    // the allowed set as surely as a decision against it would have. Deduplicated by key: a row can
+    // be both changed and invalidated, and deciding it twice would be work for one answer.
+    List<TEntity> Merge(List<TEntity> changed, List<TEntity>? invalidated)
+    {
+        if (invalidated is null)
+        {
+            return changed;
+        }
+
+        var seen = changed.Select(readKey).ToHashSet();
+        changed.AddRange(invalidated.Where(_ => seen.Add(readKey(_))));
+        return changed;
     }
 
     Expression<Func<TEntity, bool>> Newer(TVersion watermark) =>

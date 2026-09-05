@@ -46,7 +46,7 @@ Total allocations are the same either way — 908 KB at a thousand rows, against
 
 So this is a peak-memory change that the allocation column cannot show, and it is not free: past the threshold a response gives up its `Content-Length` — a length can only describe a body that is already whole when the headers go out — and gives up answering a failure part-way through with a `500`. [Wire format](wire-format.md#response) sets out what a reader sees instead.
 
-The rows are also pulled asynchronously now, so writing a buffered response no longer blocks a request thread on the database. That does not show here either: the benchmark reads an in-memory source, where there is nothing to await.
+Everything the endpoint asks the database is asked asynchronously — the rows of a list or a page, a folded terminal, a denied-row probe, a cached policy's refresh, an attachment's bytes — so writing a response never holds a request thread on the database, and a caller that goes away cancels the round trip it was waiting on. That does not show here either: the benchmark reads an in-memory source, where there is nothing to await.
 
 
 ## Writing a batch

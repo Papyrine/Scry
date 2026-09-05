@@ -162,7 +162,7 @@ public static class ScryServiceExtensions
             // fixed. Validation and policies both complete before Stream returns, so anything written
             // is in place before the begin marker below. Rows arrive as finished JSON bytes, written
             // by the projection's shape writer rather than through per-row dictionaries.
-            (begin, diverting, rows) = processor.StreamBuffered(
+            (begin, diverting, rows) = await processor.StreamBufferedAsync(
                 request,
                 db,
                 services,
@@ -570,7 +570,7 @@ public static class ScryServiceExtensions
         try
         {
             var db = (DbContext) services.GetRequiredService(options.ContextType);
-            var result = processor.FetchAttachment(request, db, services, context.Request.Headers, context.Response.Headers);
+            var result = await processor.FetchAttachmentAsync(request, db, services, context.Request.Headers, context.Response.Headers, context.RequestAborted);
 
             // Refused, absent, and policy-filtered arrive here as one answer and leave as one status.
             // A body would only give a caller holding a guessed key something to tell them apart by.

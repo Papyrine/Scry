@@ -137,6 +137,50 @@ public sealed class ScryProcessor
     }
 
     /// <summary>
+    /// The attachment fetch the HTTP endpoint runs: the same decision, with the database awaited
+    /// rather than blocked on.
+    /// </summary>
+    internal async ValueTask<ScryAttachmentResult> FetchAttachmentAsync(
+        AttachmentRequest request,
+        DbContext data,
+        IServiceProvider services,
+        IHeaderDictionary requestHeaders,
+        IHeaderDictionary responseHeaders,
+        Cancel cancel)
+    {
+        var drifted = request.Stamp is { } requestStamp &&
+                      requestStamp != schema.Stamp;
+        var recorder = QueryRecorder.StartAttachment(schema, request, services);
+        try
+        {
+            var scope = new CallScope(services, requestHeaders, responseHeaders);
+            var result = await executor.FetchAttachmentAsync(request, data, scope, cancel);
+            recorder.Succeeded(ResultKind.Single, result.Found ? 1 : 0);
+            return result;
+        }
+        catch (ScryValidationException exception) when (drifted)
+        {
+            var stale = new ScryValidationException($"{exception.Message} The request's schema stamp does not match this server's model, so the client was generated against a different model surface — regenerate the client.")
+            {
+                RequiresBody = exception.RequiresBody,
+                StaleClient = true
+            };
+            recorder.Rejected(stale);
+            throw stale;
+        }
+        catch (ScryValidationException exception)
+        {
+            recorder.Rejected(exception);
+            throw;
+        }
+        catch (Exception exception)
+        {
+            recorder.Failed(exception);
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Validates and executes a request, exposing <paramref name="requestHeaders"/> to row policies and
     /// letting them write to <paramref name="responseHeaders"/>.
     /// </summary>
@@ -313,7 +357,7 @@ public sealed class ScryProcessor
             // the fully-general path rather than teaching the writer a second shape.
             if (drifted && schema.EnumAliases.Count > 0)
             {
-                var fallback = executor.Execute(request, data, scope) with
+                var fallback = await executor.ExecuteAsync(request, data, scope, cancel) with
                 {
                     Stamp = schema.Stamp,
                     EnumAliases = schema.EnumAliases
@@ -713,6 +757,63 @@ public sealed class ScryProcessor
         return (begin, diverting, Lines(rows, options.MaxStreamRows, recorder, cancel));
     }
 
+    /// <summary>
+    /// <see cref="StreamBuffered"/> with what comes before the first row — the policies brought up
+    /// to date, the probes — awaited rather than blocked on. What the HTTP endpoint runs.
+    /// </summary>
+    internal async ValueTask<(ScryStreamMarker Begin, bool Binary, IAsyncEnumerable<ReadOnlyMemory<byte>> Rows)> StreamBufferedAsync(
+        QueryRequest request,
+        DbContext data,
+        IServiceProvider services,
+        IHeaderDictionary requestHeaders,
+        IHeaderDictionary responseHeaders,
+        Cancel cancel = default,
+        BinaryPartCollector? binary = null)
+    {
+        var drifted = request.Stamp is { } requestStamp && requestStamp != schema.Stamp;
+        var recorder = QueryRecorder.Start(schema, request, services, streamed: true);
+        QueryExecutor.RowSet rows;
+        try
+        {
+            rows = await executor.StreamAsync(
+                request,
+                data,
+                new(services, requestHeaders, responseHeaders)
+                {
+                    Binary = binary
+                },
+                cancel);
+        }
+        catch (ScryValidationException exception) when (drifted)
+        {
+            var stale = new ScryValidationException($"{exception.Message} The request's schema stamp does not match this server's model, so the client was generated against a different model surface — regenerate the client.")
+            {
+                RequiresBody = exception.RequiresBody,
+                StaleClient = true
+            };
+            recorder.Rejected(stale);
+            throw stale;
+        }
+        catch (ScryValidationException exception)
+        {
+            recorder.Rejected(exception);
+            throw;
+        }
+        catch (ScryPermissionException exception)
+        {
+            recorder.Denied(exception);
+            throw;
+        }
+        catch (Exception exception)
+        {
+            recorder.Failed(exception);
+            throw;
+        }
+
+        var diverting = binary is not null && rows.Plan.BinarySlots is not null;
+        return (Begin(drifted), diverting, Lines(rows, options.MaxStreamRows, recorder, cancel));
+    }
+
     (ScryStreamMarker Begin, QueryExecutor.RowSet Rows, QueryRecorder Recorder) StreamCore(
         QueryRequest request,
         DbContext data,
@@ -761,16 +862,17 @@ public sealed class ScryProcessor
             throw;
         }
 
-        var begin = new ScryStreamMarker
+        return (Begin(drifted), rows, recorder);
+    }
+
+    ScryStreamMarker Begin(bool drifted) =>
+        new()
         {
             Kind = ScryStream.Begin,
             Version = WireFormat.Version,
             Stamp = schema.Stamp,
             EnumAliases = drifted && schema.EnumAliases.Count > 0 ? schema.EnumAliases : null
         };
-
-        return (begin, rows, recorder);
-    }
 
     static async IAsyncEnumerable<Dictionary<string, object?>> Shape(
         QueryExecutor.RowSet rows,

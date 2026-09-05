@@ -6,7 +6,7 @@ sealed class CachedPolicyRegistration(Type entity, Type policy, ICachedPolicySto
 {
     // One gate per scope. Held here rather than on the adapter because the registration is what every
     // request shares; a per-request gate would let every request past it at once.
-    readonly ConcurrentDictionary<string, object> gates = new(StringComparer.Ordinal);
+    readonly ConcurrentDictionary<string, SemaphoreSlim> gates = new(StringComparer.Ordinal);
 
     public Type Entity { get; } = entity;
 
@@ -28,6 +28,7 @@ sealed class CachedPolicyRegistration(Type entity, Type policy, ICachedPolicySto
     /// </summary>
     public object Adapter { get; set; } = null!;
 
-    public object Gate(string scope) =>
-        gates.GetOrAdd(scope, _ => new());
+    // A semaphore rather than a monitor so a refresh can wait for the gate without holding a thread.
+    public SemaphoreSlim Gate(string scope) =>
+        gates.GetOrAdd(scope, _ => new(1, 1));
 }

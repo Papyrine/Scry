@@ -43,4 +43,20 @@ static class Parameterization
     {
         public readonly T Value = value;
     }
+
+    /// <summary>
+    /// A parameter whose value arrives after the query is built. Bound the same way — a member read
+    /// off a held object — so the provider reads it when the query runs, as it would any captured
+    /// variable; which is what lets the value be fetched between building and running, and fetched
+    /// asynchronously.
+    /// </summary>
+    public sealed class Slot<T>
+    {
+        public T Value { get; set; } = default!;
+
+        public Expression Parameter { get; }
+
+        public Slot() =>
+            Parameter = Expression.Property(Expression.Constant(this), nameof(Value));
+    }
 }
