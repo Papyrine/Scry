@@ -420,6 +420,23 @@ public class RoslynLayerTests
         Assert.That(hover.End, Is.EqualTo(member + "Active".Length));
     }
 
+    // The models are compiled and loaded once for the schema; a run compiles only its own snippet
+    // against them. Before, every run re-emitted the whole model beside its snippet and loaded the
+    // result into a context nothing can unload, so a hundred runs held a hundred copies of it.
+    [Test]
+    public void LoadsTheModelOncePerSchema()
+    {
+        var local = SnippetExecutor.Create(introspection, scryReferences);
+        for (var run = 0; run < 3; run++)
+        {
+            local.Translate($"Query.Employee.Where(_ => _.Name.Length > {run})");
+        }
+
+        var names = local.LoadedAssemblies.Select(_ => _.GetName().Name!).ToList();
+        Assert.That(names.Count(_ => _ == "ScryModel"), Is.EqualTo(1));
+        Assert.That(names.Count(_ => _.StartsWith("ScrySnippet")), Is.EqualTo(3));
+    }
+
     // The snippet runs through reflection, which wraps whatever it throws in an exception whose own
     // message says only that something was thrown. What the translator refuses — here a string method
     // that is client-side code — has to reach the banner as the refusal itself.

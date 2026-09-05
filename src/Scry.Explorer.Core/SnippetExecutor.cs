@@ -1,4 +1,6 @@
 using System.Runtime.ExceptionServices;
+using System.Runtime.Loader;
+using Microsoft.CodeAnalysis.Emit;
 
 namespace Scry;
 
@@ -14,14 +16,39 @@ namespace Scry;
 /// </summary>
 public sealed class SnippetExecutor
 {
-    IReadOnlyList<MetadataReference> references;
-    string generatedSource;
+    const string modelAssembly = "ScryModel";
+
+    readonly IReadOnlyList<MetadataReference> references;
+    readonly string generatedSource;
+
+    // The models, compiled once for the schema this executor was created for: the reference a
+    // snippet compiles against, and the assembly it runs against. A run used to re-parse, re-bind,
+    // and re-emit the whole model alongside its snippet, and load the result into the default
+    // context — never unloadable — so a hundred runs held a hundred copies of the model.
+    readonly Lazy<MetadataReference> model;
+
+    // Where the model and every snippet compiled against it are loaded. A context of its own so the
+    // snippet's reference to the model resolves to the one copy loaded here, and everything else —
+    // Scry.Client, Scry.Wire, the BCL — falls through to the default context they are already in.
+    readonly ModelLoadContext context = new();
+
+    // Snippets are named apart: a context refuses a second assembly under a name it already holds.
+    int runs;
 
     SnippetExecutor(IReadOnlyList<MetadataReference> references, string generatedSource)
     {
         this.references = references;
         this.generatedSource = generatedSource;
+        model = new(EmitModel);
     }
+
+    /// <summary>
+    /// What this executor has loaded: the model once, and one small assembly per run. Those stay
+    /// loaded — a load context cannot be unloaded on this runtime — which is what makes the model
+    /// worth loading once.
+    /// </summary>
+    public IReadOnlyList<Assembly> LoadedAssemblies =>
+        [.. context.Assemblies];
 
     /// <summary>
     /// Fetches the (Webcil-disabled, unfingerprinted) Scry.Client + Scry.Wire PE images from
@@ -60,34 +87,28 @@ public sealed class SnippetExecutor
 
         var (expression, terminal) = Rewrite(layout.Expression);
 
+        // Only the snippet is compiled here, against the model compiled once: the runner's method is
+        // a few lines, and the models it reads are exactly what they were on the last run.
         var compilation = CSharpCompilation.Create(
-            "ScrySnippet",
-            [
-                CSharpSyntaxTree.ParseText(generatedSource),
-                CSharpSyntaxTree.ParseText(Wrap(layout.Preamble, expression, terminal))
-            ],
-            references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary).WithConcurrentBuild(false));
+            $"ScrySnippet{Interlocked.Increment(ref runs)}",
+            [CSharpSyntaxTree.ParseText(Wrap(layout.Preamble, expression, terminal))],
+            [.. references, model.Value],
+            Options);
 
         using var stream = new MemoryStream();
         var result = compilation.Emit(stream);
         if (!result.Success)
         {
-            var message = string.Join(
-                "; ",
-                result.Diagnostics
-                    .Where(_ => _.Severity == DiagnosticSeverity.Error)
-                    .Take(3)
-                    .Select(_ => _.GetMessage()));
-            throw new($"Could not compile the query: {message}");
+            throw new($"Could not compile the query: {Errors(result)}");
         }
 
-        var assembly = Assembly.Load(stream.ToArray());
+        stream.Position = 0;
+        var assembly = context.LoadFromStream(stream);
 
         // The capturing client is never asked to transport anything — ToScryRequest only reads the
         // captured expression tree.
         var client = new ScryClient((_, _) => Task.FromResult<QueryResponse>(null!));
-        var query = Activator.CreateInstance(assembly.GetType("Scry.Generated.ScryQuery")!, client)!;
+        var query = Activator.CreateInstance(context.Model!.GetType("Scry.Generated.ScryQuery")!, client)!;
         var runner = assembly.GetType("Scry.Runner")!;
         try
         {
@@ -102,6 +123,50 @@ public sealed class SnippetExecutor
             ExceptionDispatchInfo.Throw(inner);
             throw;
         }
+    }
+
+    static readonly CSharpCompilationOptions Options =
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary).WithConcurrentBuild(false);
+
+    // Compiles the models and loads them into the context, once. The image is kept as the reference
+    // every snippet compiles against, so a snippet binds to exactly the assembly it will run against.
+    MetadataReference EmitModel()
+    {
+        var compilation = CSharpCompilation.Create(
+            modelAssembly,
+            [CSharpSyntaxTree.ParseText(generatedSource)],
+            references,
+            Options);
+
+        using var stream = new MemoryStream();
+        var result = compilation.Emit(stream);
+        if (!result.Success)
+        {
+            throw new($"Could not compile the query models: {Errors(result)}");
+        }
+
+        var image = stream.ToArray();
+        context.Model = context.LoadFromStream(new MemoryStream(image));
+        return MetadataReference.CreateFromImage(image);
+    }
+
+    static string Errors(EmitResult result) =>
+        string.Join(
+            "; ",
+            result.Diagnostics
+                .Where(_ => _.Severity == DiagnosticSeverity.Error)
+                .Take(3)
+                .Select(_ => _.GetMessage()));
+
+    sealed class ModelLoadContext() :
+        AssemblyLoadContext(nameof(SnippetExecutor))
+    {
+        public Assembly? Model { get; set; }
+
+        // The one name this context answers for. Everything else is left to the default context,
+        // which is where the snippet's other references already live.
+        protected override Assembly? Load(AssemblyName name) =>
+            name.Name == modelAssembly ? Model : null;
     }
 
     // Collection-shaping terminals that all enumerate to a list on the wire. Their arguments (key
