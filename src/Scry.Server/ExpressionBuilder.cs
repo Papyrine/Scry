@@ -1077,9 +1077,9 @@ sealed class ExpressionBuilder(
 
             if (member.Kind == MemberKind.Navigation)
             {
-                // Unwrap Nullable<T> for the same reason the owner was: an optional struct member
-                // names its underlying type.
-                var target = Nullable.GetUnderlyingType(member.Type) ?? member.Type;
+                // The member's own unwrap, for the same reason the owner was unwrapped: an optional
+                // struct member names its underlying type.
+                var target = member.Target;
 
                 // A navigation into a policied source is read through that source's policy rather than
                 // off the owner, so the rows it reaches are the rows a direct query would have returned.

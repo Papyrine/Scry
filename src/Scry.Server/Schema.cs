@@ -313,9 +313,9 @@ sealed class Schema
 
         if (member.Kind == MemberKind.Navigation)
         {
-            // Unwrap Nullable<T> so an optional struct complex member displays as its model, not Nullable`1.
-            var target = Nullable.GetUnderlyingType(member.Type) ?? member.Type;
-            return new(member.Name, $"{target.Name}QueryModel?", NeedsNullDefault: false, IsNavigation: true);
+            // The member's own unwrap: an optional struct complex member displays as its model, not
+            // as Nullable`1.
+            return new(member.Name, $"{member.Target.Name}QueryModel?", NeedsNullDefault: false, IsNavigation: true);
         }
 
         // An attachment is emitted as the handle rather than as the byte[] it is declared as, which is
