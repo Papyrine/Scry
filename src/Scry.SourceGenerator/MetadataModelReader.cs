@@ -45,9 +45,10 @@ static class MetadataModelReader
 
         try
         {
+            // Read off the file rather than out of a byte array: only the metadata block is needed,
+            // and an array would be copied once more to become the immutable one the reader takes.
             // ReSharper disable once RedundantSuppressNullableWarningExpression
-            var bytes = File.ReadAllBytes(dllPath!);
-            using var pe = new PEReader([..bytes]);
+            using var pe = new PEReader(File.OpenRead(dllPath!));
             var reader = pe.GetMetadataReader();
 
             var decoder = new SignatureDecoder();
