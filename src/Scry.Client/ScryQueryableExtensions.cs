@@ -380,7 +380,10 @@ public static class ScryQueryableExtensions
             return default;
         }
 
-        return response.Payload.Deserialize<TValue>(ScryJson.Options);
+        // Through the same reader a row takes, so the aliases the response carries resolve a renamed
+        // enum value here too, and a value the model cannot read is classified as drift where the
+        // stamps already say so.
+        return Materialize<TValue>(source, response);
     }
 
     static async Task<T?> Single<T>(IQueryable<T> source, QueryOp terminal, Cancel cancel)

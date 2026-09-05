@@ -100,6 +100,22 @@ public class EnumAliasTests
         Assert.That(exception.Message, Does.Contain("regenerate"));
     }
 
+    // A scalar terminal once read its payload directly, outside the alias scope a list's reader
+    // opens, so a renamed value reached MinAsync and MaxAsync as a bare parse failure.
+    [Test]
+    public async Task AScalarResolvesAnAliasedValue()
+    {
+        var client = new ScryClient((_, _) => Task.FromResult(
+            QueryResponse.Create(ResultKind.Scalar, JsonSerializer.SerializeToElement("Contractor")) with
+            {
+                EnumAliases = [new("Status", "Contractor", ["Freelancer"])]
+            }));
+
+        var status = await client.Source<Employee>("Employee").MaxAsync(_ => _.Status);
+
+        Assert.That(status, Is.EqualTo(Status.Freelancer));
+    }
+
     [Test]
     public void AliasesRoundTripTheWireAndAreOmittedWhenNull()
     {
