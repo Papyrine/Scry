@@ -111,6 +111,20 @@ public class SensitiveTransportTests
         Assert.That(method, Is.EqualTo(HttpMethod.Get));
     }
 
+    // A page ordered by a marked member keeps the URL too: its cursor carries the last row's value
+    // of that member, and the cursor is sealed, so nothing of the value reaches the URL of the next
+    // page — see CursorCodecTests.DoesNotCarryTheKeyValuesInTheClear.
+    [Test]
+    public async Task PagingByAMarkedMemberKeepsTheUrl()
+    {
+        var method = await Method(
+            _ => _.OrderBy(_ => _.Ssn)
+                .Select(_ => new NameRow(_.Name))
+                .ToPageAsync(10));
+
+        Assert.That(method, Is.EqualTo(HttpMethod.Get));
+    }
+
     // A constant somewhere in a query that also names a marked member elsewhere is treated as though
     // the two met. Deliberately blunt: the shapes it is not exact for all err toward the body.
     [Test]

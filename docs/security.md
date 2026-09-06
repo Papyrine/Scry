@@ -372,6 +372,8 @@ A [reference navigation](policies.md#reached-through-a-navigation) into a polici
 
 A [collection navigation](annotations.md#collections) of a policied type is the fourth, and is **refused at startup** unless the policy says how it wants to be read through: an aggregate off the owner has no source for a policy to filter, so it would count exactly the rows the policy hides. Opting into `DeniedCollectionMode.Hide` rewrites the collection into the same policy-filtered subquery a reference navigation uses, which makes an aggregate over it count what a direct query of the element source would have reached, and a flatten reach exactly those rows.
 
+A flatten replaces the rows with the collection's elements, and the policy chain the query carries with the element's own — the whole chain where the element is policied and read through it, none otherwise. A narrowing after it therefore applies the derived type's policies exactly as rooting at the derived source would, rather than skipping as many of them as the root happened to carry.
+
 See [Row policies](policies.md).
 
 #### Reporting a denial discloses that there was one
@@ -511,15 +513,19 @@ These bound the work a single request can ask for: how many rows, how deep a joi
 
 All but one are **per query**, which is what makes `MaxBatchSize` load-bearing: a [batch](batching.md) is the only request that carries more than one query, so without it every other limit would apply to an arbitrary number of them at once. Each entry is otherwise validated, policy-filtered, and audited exactly as it would be sent alone — batching is a transport concern, and reaches nothing else on this page.
 
+Three bounds are the host's rather than Scry's, and a deployment should know it leans on them. The **size of a request body** is Kestrel's `MaxRequestBodySize` — 30 MB by default — which the endpoints do not tighten themselves: put a `RequestSizeLimit` on the builder `MapScry` returns, and every endpoint it mapped is held to it, answered by the host with a `413` before a handler reads a byte. A query is small — a few kilobytes is a long one — so a limit far under the default costs nothing and bounds what a body can carry before `MaxInValues` refuses it, since an `In` list is deserialized whole before it is counted. **JSON nesting** is bounded by the reader at 64 levels, its default, before `MaxExpressionDepth` could be reached; a document past it is a malformed body and a `400`. And the **URL** is bounded by `QueryUrlLimit` above, which the client also honours. `HostLimitTests` and `HttpRoundTripTests.ADeeplyNestedBodyIsRejected` pin the first two.
+
 [`ResponseSpillThreshold`](server.md#response-size) is deliberately not among them. It decides when a response stops being resident, not how large one may be: crossing it rejects nothing, and a request that would produce a gigabyte still produces a gigabyte. What it changes is where those bytes sit while they are produced.
 
 
 ### 7. Contained errors
 
-Validation and wire failures return `400` with a specific message — the message names the rejected property or rule, which is not a disclosure beyond what the allow-list already implies. A constant that fails to parse into its member's type is a validation failure too: parsing happens while the expression is rebound, after validation has passed, but the request is still rejected with a message naming the value rather than surfacing as a server fault. Everything else returns `500`.
+Validation and wire failures return `400` with a specific message — the message names the rejected property or rule, which is not a disclosure beyond what the allow-list already implies. A type is named as the wire knows it: a source by its wire name, which is the whole point of `[Queryable(Name = ...)]`, and a complex type by the generated model's name that introspection already publishes — never by a CLR name the allow-list chose to hide. A constant that fails to parse into its member's type is a validation failure too: parsing happens while the expression is rebound, after validation has passed, but the request is still rejected with a message naming the value rather than surfacing as a server fault. Everything else returns `500`.
 
 The `500` message is fixed — `Query execution failed.` — and stack traces, SQL, and EF Core<!-- include: error-500-body. path: /docs/includes/error-500-body.include.md -->
 messages are never returned to the client. The only variable part is the `staleClient` marker.<!-- endInclude -->
+
+A `500` is not always a server's fault, and a client can produce one on demand: a division by a constant of its own choosing, a conversion of text that is not a number, an element read past the end of a byte array. Each is a provider error at execution — after validation, which checks shape and not arithmetic — answered with the fixed message and recorded as a `Failed` outcome whose `Error` is the provider's text. Contained, but worth knowing where the [failure metric](observability.md) feeds an alert: a caller can fill it at will, as it can the rejection count.
 
 
 ## End to end

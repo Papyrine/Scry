@@ -1032,7 +1032,7 @@ sealed class Schema
             var parameter = Expression.Parameter(entity, "e");
             var key = Expression.Lambda(Expression.Property(parameter, keys[0].Property), parameter);
 
-            var registration = new CachedPolicyRegistration(entity, policy, options.CachedPolicyStore, options.MaxCachedPolicyKeys);
+            var registration = new CachedPolicyRegistration(entity, policy, options.CachedPolicyStore, options.MaxCachedPolicyKeys, options.MaxCachedPolicyRows);
             var adapter = typeof(CachedRowPolicyAdapter<,,>).MakeGenericType(entity, keys[0].Type, version.ReturnType);
 
             registration.Adapter = Activator.CreateInstance(adapter, registration, key, version)!;
@@ -1431,6 +1431,21 @@ sealed class Schema
             return;
         }
 
+        if (IsMediaType(contentType))
+        {
+            return;
+        }
+
+        throw new($"'{type.Name}.{member.Name}' declares ContentType '{contentType}', which is not a media type. Write one as 'type/subtype' — for example 'image/png' — or leave it unset to serve the bytes as '{AttachmentMedia.Default}'.");
+    }
+
+    /// <summary>
+    /// Whether a value is shaped as a media type — <c>type/subtype</c>, optionally with parameters,
+    /// and nothing a header cannot carry. The same rule for what a model declares and for what an
+    /// attachment policy replaces it with; only the first is checked at startup.
+    /// </summary>
+    internal static bool IsMediaType(string contentType)
+    {
         var media = contentType.AsSpan();
         var index = media.IndexOf(';');
         if (index != -1)
@@ -1439,16 +1454,11 @@ sealed class Schema
         }
 
         media = media.Trim();
-        if (media.Length > 0 &&
-            media.Count('/') == 1 &&
-            media[0] != '/' &&
-            media[^1] != '/' &&
-            !contentType.Any(char.IsControl))
-        {
-            return;
-        }
-
-        throw new($"'{type.Name}.{member.Name}' declares ContentType '{contentType}', which is not a media type. Write one as 'type/subtype' — for example 'image/png' — or leave it unset to serve the bytes as '{AttachmentMedia.Default}'.");
+        return media.Length > 0 &&
+               media.Count('/') == 1 &&
+               media[0] != '/' &&
+               media[^1] != '/' &&
+               !contentType.Any(char.IsControl);
     }
 
     static void EnsureNoAttachment(Type type, PropertyInfo property, string reason)

@@ -89,6 +89,21 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
         return allowed;
     }
 
+    /// <summary>
+    /// The bound on the work of a refresh rather than on its result: refused from a count, before a
+    /// row is read, since the cost being bounded is the read itself. Counted rather than taken from
+    /// the rows because a cold scope's undecided set is the whole table, and the point is not to
+    /// materialize one that size to find out.
+    /// </summary>
+    void Bounded(int undecided, int max)
+    {
+        if (undecided > max)
+        {
+            throw new(
+                $"Cached row policy '{registration.Policy.Name}' has {undecided} rows to decide for one scope, past the configured MaxCachedPolicyRows of {max}. A scope nothing has been decided for reads and decides every row once, per scope key, so a policy over a table this size is one to write as an ordinary IReturnablePolicy filter instead.");
+        }
+    }
+
     sealed class Pending(
         CachedRowPolicyAdapter<TEntity, TKey, TVersion> adapter,
         Parameterization.Slot<TKey[]> slot,
@@ -123,6 +138,11 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
             {
                 var current = registration.Store.Get(registration.Name, scopeKey) ?? Reserve(scopeKey);
                 var (changed, invalidated) = Undecided(current, context);
+                if (registration.MaxRows is { } max)
+                {
+                    Bounded(changed.Count() + (invalidated?.Count() ?? 0), max);
+                }
+
                 var rows = Merge(changed.ToList(), invalidated?.ToList());
                 if (Round(policy, scopeKey, context, current, rows, last: attempt == 2) is { } answer)
                 {
@@ -147,6 +167,13 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
             {
                 var current = registration.Store.Get(registration.Name, scopeKey) ?? Reserve(scopeKey);
                 var (changed, invalidated) = Undecided(current, context);
+                if (registration.MaxRows is { } max)
+                {
+                    Bounded(
+                        await changed.CountAsync(cancel) + (invalidated is null ? 0 : await invalidated.CountAsync(cancel)),
+                        max);
+                }
+
                 var rows = Merge(
                     await changed.ToListAsync(cancel),
                     invalidated is null ? null : await invalidated.ToListAsync(cancel));

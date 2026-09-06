@@ -519,6 +519,47 @@ public class UiSnapshotTests :
         Assert.That(restored, Is.EqualTo(query));
     }
 
+    // Following a shared link loads the query and nothing more; the opener decides whether to run it.
+    // A link is untrusted input — anyone can write one — and a query that ran on open would run as
+    // whoever opened it, with that browser's credentials. Pinned on the wire, the panes, and the
+    // requests the page made, since any one of them running quietly would be the whole problem.
+    [Test]
+    public async Task ExplorerOpensASharedLinkWithoutRunningIt()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+        await page.SetEditorValueAsync("Query.Employee.Select(_ => new { _.Name })");
+        await page.Locator("[data-testid='share']").ClickAsync();
+        var shared = await page.EvaluateAsync<string>("() => location.href");
+
+        var opened = await NewPageAsync();
+        var queries = new ConcurrentBag<string>();
+        opened.Request += (_, request) =>
+        {
+            if (request.Url.Contains("/api/query", StringComparison.Ordinal))
+            {
+                queries.Add($"{request.Method} {request.Url}");
+            }
+        };
+        await opened.GotoAsync(shared);
+        await opened.WaitForSelectorAsync("main[data-ready]", 90);
+        await opened.WaitForFunctionAsync(
+            "() => monaco.editor.getEditors().length > 0 && monaco.editor.getEditors()[0].getValue().length > 0",
+            null,
+            new() {Timeout = 30_000});
+
+        var restored = await opened.EvaluateAsync<string>("() => monaco.editor.getEditors()[0].getValue()");
+        var wire = await opened.Locator("[data-testid='wire']").CountAsync();
+        var results = await opened.Locator("[data-testid='result-table']").CountAsync();
+        Assert.Multiple(() =>
+        {
+            Assert.That(restored, Does.StartWith("Query.Employee"));
+            Assert.That(queries, Is.Empty);
+            Assert.That(wire, Is.Zero);
+            Assert.That(results, Is.Zero);
+        });
+    }
+
     // A link whose fragment is not a query the explorer wrote is ignored rather than surfaced: a URL
     // is untrusted input, and the explorer opens on its sample query instead of on an error.
     [Test]

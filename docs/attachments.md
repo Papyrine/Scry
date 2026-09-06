@@ -142,14 +142,14 @@ Three things about this are deliberate:
 - **`200`s are sent `X-Content-Type-Options: nosniff`.** A declared type is a statement about a *column*; the bytes stored under it are whatever was written there. A mislabelled response is then a mislabelled file rather than a browser deciding for itself what it is looking at.
 - **A `200` is a download, never a document.** It carries `Content-Disposition: attachment` (named for the member and the declared type) and `Content-Security-Policy: sandbox`, and the endpoint accepts only `application/json` bodies. The endpoint answers `POST`, but an HTML form navigates a browser with `POST` too — and a `text/plain` form field can be shaped as JSON — so answering only that method is not what keeps a type that scripts as a top-level document (`image/svg+xml`, `text/html`) from running on the API's origin as whoever the browser sent. The three headers are. None of them touches a client that fetches the bytes programmatically, which every Scry client does.
 
-A value that is not a `type/subtype` fails at startup rather than being served.
+A value that is not a `type/subtype` fails at startup rather than being served. The type a policy sets through `ScryAttachmentContext.ContentType` is held to the same rule where it is set, since it exists only once the policy runs: one that is not a media type is a fault naming the policy — the fixed `500` to the caller, the real message in the audit trail — and never a response header.
 
 
 ## Security
 
 Three things stand between a caller and an attachment's bytes, and all of them apply:
 
-1. **The attachment policy.** `IAttachmentPolicy<T>.Authorize` runs *before the database is touched*, receiving the member name, the parsed key values, the request services, and the headers. Mandatory, as above.
+1. **The attachment policy.** `IAttachmentPolicy<T>.Authorize` runs *before the database is touched*, receiving the member name, the parsed key values, the request services, and the headers. Mandatory, as above. Because it runs first, a refusal costs no read and so answers sooner than a row that is missing — the one thing that tells the two `404`s below apart, for a caller timing them. A policy that decides on the key alone accepts that; one that must not reads the row itself through `Db` before deciding, and then both answers cost a lookup.
 2. **The source's [row policy](policies.md).** The fetch resolves its row through the same policy-filtered source a query does, so a row a query could not have returned is not one an attachment can be pulled from.
 3. **Whatever guards the endpoint.** The attachment endpoint is mapped inside `MapScry`, so `.RequireAuthorization()` on what it returns reaches it along with the query, stream, and batch endpoints. A deployment cannot accidentally guard three of the four.
 

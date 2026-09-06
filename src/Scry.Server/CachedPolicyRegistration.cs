@@ -2,7 +2,7 @@
 /// One cached row policy as the schema resolved it: what it is called in the store, the host type that
 /// makes the decisions, and where the answers live. Built once at startup and shared by every request.
 /// </summary>
-sealed class CachedPolicyRegistration(Type entity, Type policy, ICachedPolicyStore store, int? maxKeys)
+sealed class CachedPolicyRegistration(Type entity, Type policy, ICachedPolicyStore store, int? maxKeys, int? maxRows)
 {
     // One gate per scope. Held here rather than on the adapter because the registration is what every
     // request shares; a per-request gate would let every request past it at once.
@@ -15,6 +15,8 @@ sealed class CachedPolicyRegistration(Type entity, Type policy, ICachedPolicySto
     public ICachedPolicyStore Store { get; } = store;
 
     public int? MaxKeys { get; } = maxKeys;
+
+    public int? MaxRows { get; } = maxRows;
 
     /// <summary>
     /// What this policy's answers are filed under. The policy type's full name: a store outlives the

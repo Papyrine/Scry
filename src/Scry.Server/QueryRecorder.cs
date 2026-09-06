@@ -9,6 +9,7 @@ sealed class QueryRecorder(
     AttachmentRequest? attachment,
     IServiceProvider services,
     string source,
+    string? member,
     bool streamed,
     SensitiveSchema? sensitive)
 {
@@ -39,7 +40,7 @@ sealed class QueryRecorder(
         });
 
     long started = Stopwatch.GetTimestamp();
-    Activity? activity = StartActivity(source, request, attachment);
+    Activity? activity = StartActivity(source, member, request, attachment);
     bool completed;
 
     /// <summary>
@@ -51,7 +52,7 @@ sealed class QueryRecorder(
         QueryRequest request,
         IServiceProvider services,
         bool streamed = false) =>
-        new(request, attachment: null, services, Source(schema, request.Root), streamed, schema.Sensitive);
+        new(request, attachment: null, services, Source(schema, request.Root), member: null, streamed, schema.Sensitive);
 
     /// <summary>
     /// The same, for a fetch of one attachment. Recorded through the same path as a query — the
@@ -62,7 +63,7 @@ sealed class QueryRecorder(
         Schema schema,
         AttachmentRequest request,
         IServiceProvider services) =>
-        new(request: null, request, services, Source(schema, request.Root), streamed: false, sensitive: null);
+        new(request: null, request, services, Source(schema, request.Root), Member(schema, request), streamed: false, sensitive: null);
 
     static string Source(Schema schema, string root)
     {
@@ -74,7 +75,23 @@ sealed class QueryRecorder(
         return "(unknown)";
     }
 
-    static Activity? StartActivity(string source, QueryRequest? request, AttachmentRequest? attachment)
+    // The member is a tag value only when the schema knows it as an attachment of that source, for
+    // the reason the source is: a tag is indexed by the backend it reaches, and an arbitrary client
+    // string is not something to index.
+    static string Member(Schema schema, AttachmentRequest request)
+    {
+        if (schema.TryGetSource(request.Root, out var source) &&
+            schema.TryGetType(source.ClrType, out var meta) &&
+            meta.TryGetMember(request.Member, out var member) &&
+            member.Kind == MemberKind.Attachment)
+        {
+            return member.Name;
+        }
+
+        return "(unknown)";
+    }
+
+    static Activity? StartActivity(string source, string? member, QueryRequest? request, AttachmentRequest? attachment)
     {
         var activity = activitySource.StartActivity(attachment is null ? $"scry.query {source}" : $"scry.attachment {source}");
         activity?.SetTag("scry.source", source);
@@ -83,9 +100,9 @@ sealed class QueryRecorder(
             activity?.SetTag("scry.operators", request.Pipeline.Count);
         }
 
-        if (attachment is not null)
+        if (member is not null)
         {
-            activity?.SetTag("scry.member", attachment.Member);
+            activity?.SetTag("scry.member", member);
         }
 
         return activity;

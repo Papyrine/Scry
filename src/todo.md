@@ -177,7 +177,8 @@ Fix: either encrypt the cursor (AES-GCM under the signing key, which also makes 
 
 **Fixed:** cursors are sealed with AES-GCM under a key derived from `CursorKey` (`base64url(nonce || ciphertext || tag)`), so the key values never travel in the clear. Pinned by `CursorCodecTests.DoesNotCarryTheKeyValuesInTheClear`, `SealsTheSameValuesDifferentlyEachTime`, and the tamper/other-key tests over the new format; `docs/paging.md` updated.
 
-- [ ] add: a page ordered by a sensitive member is `no-store` and its next page is asked as a body
+- [x] decided and pinned: a page ordered by a sensitive member keeps the URL, since the sealed cursor carries nothing
+  of the value — `SensitiveTransportTests.PagingByAMarkedMemberKeepsTheUrl` with `CursorCodecTests.DoesNotCarryTheKeyValuesInTheClear`
 - [x] covered (`CursorCodecTests`): a cursor does not contain the key values as plaintext (once encrypted)
 - [x] covered: cursor integrity — `CursorCodecTests.RefusesATamperedPayload`, `RefusesACursorSignedWithAnotherKey`,
   `RefusesAMalformedCursor`; `SecurityTests.RejectsInvalidPagingCursor`, `RejectsCursorOnUnorderedQuery`
@@ -239,7 +240,8 @@ introspection already publishes.
 **Fixed:** `Schema.WireName` names a source by its wire name and any other type by its model name; every validator and builder message goes through it. Pinned by `SecurityTests.RejectionNamesTheWireNameNotTheClrType`.
 
 - [x] covered (`SecurityTests`): a rejection on a renamed source never contains the CLR type name
-- [ ] add: the same for the `OfType` messages and for a complex type reached by traversal
+- [x] covered: `SecurityTests.RejectionOnANarrowingNamesTheWireName`, `RejectionOnAComplexTypeNamesItsModel` (a
+  complex type is named as introspection publishes it, `{Name}QueryModel`)
 
 
 ### F10 — LOW — a policy that DI cannot supply is constructed reflectively, per request (by inspection)
@@ -281,8 +283,10 @@ and `Root.OrderBy(Name).Page` stamp identically when both types expose `Name` an
 other and seeks the element rows past a root row's values: a plausible, wrong page. Not a leak (both queries are
 policy-filtered), but the stamp exists to catch exactly this.
 
-- [ ] add (`CursorBindingTests`): a cursor issued for the root is refused by the flattened query and vice versa
-- [ ] fix: include the `SelectMany` path (and `OfType` target) in the stamped canonical form
+**Fixed:** the ordering stamp (`scry-order-v2`) now carries every step that changed what the rows are — each `SelectMany` path and `OfType` target, in order — beside the source and keys. Pinned by `CursorBindingTests.RejectsACursorFromTheRootOnAFlattenedQuery`, `RejectsACursorFromAFlattenedQueryOnTheRoot`, `ResumesAFlattenedOrdering`, `RejectsACursorFromANarrowedQueryOnTheBase`, and `CursorCodecTests.StampsAnOrderingByItsKeysAndDirections`.
+
+- [x] covered (`CursorBindingTests`): a cursor issued for the root is refused by the flattened query and vice versa
+- [x] fix: include the `SelectMany` path (and `OfType` target) in the stamped canonical form
 
 
 ### F13 — LOW — a cold cached-policy scope loads the whole table per new scope key (by inspection)
@@ -294,9 +298,10 @@ key is new — every user, on a per-user scope — costs one full materializatio
 that many, concurrently, since the gate is per scope. The design is documented; the missing piece is a bound on the work
 rather than on the result.
 
-- [ ] add: `MaxCachedPolicyKeys` (or a new `MaxCachedPolicyRows`) refuses before the rows are materialized, with a
-  `Count` first — and pin the refusal message
-- [ ] docs: `docs/policies.md` — say what a cold scope costs and that the cost is per scope key
+**Fixed:** `ScryOptions.MaxCachedPolicyRows` (null by default) bounds the work of a refresh: the undecided rows are counted before they are read, and a scope past the bound is refused from the count naming the option. `MaxCachedPolicyKeys` keeps bounding the result. Pinned by `CachedPolicyTests.ATooLargeColdScopeIsRefusedBeforeItsRowsAreRead` (the policy is never asked); `docs/policies.md` §"Cost and shape" now says the cold cost is the table, per scope key.
+
+- [x] covered: `MaxCachedPolicyRows` refuses before the rows are materialized, with a `Count` first, naming the option
+- [x] docs: `docs/policies.md` — say what a cold scope costs and that the cost is per scope key
 - [x] covered: `CachedPolicyTests.ATooLargeAllowedSetIsRefusedRatherThanSentToTheDatabase` (after the fact)
 
 
@@ -306,9 +311,11 @@ rather than on the result.
 refuses it; JSON nesting is bounded by `JsonSerializerOptions.MaxDepth` (64 by default, never set explicitly) and only
 then by `MaxExpressionDepth`. All fine, and all undocumented.
 
-- [ ] add (IntegrationTests): a body over a configured `MaxRequestBodySize` (via `RequestSizeLimit` metadata on the
-  builder `MapScry` returns) is a 413, and a JSON document nested past 64 is a 400 rather than a stack fault
-- [ ] docs: `docs/security.md` §6 — name the host limits the endpoints depend on, and recommend a size on `MapScry`
+**Fixed (pinned and documented):** `HostLimitTests` hosts `MapScry` on Kestrel with a `RequestSizeLimit` on the builder it returns and shows all four POST endpoints answer 413 from the host, and a body within the limit is served; `HttpRoundTripTests.ADeeplyNestedBodyIsRejected` shows a document nested past the reader's 64 levels is a 400 naming the depth. `docs/security.md` §6 names the three host bounds and recommends the size limit.
+
+- [x] covered (IntegrationTests): a body over a configured `MaxRequestBodySize` is a 413, and a JSON document nested
+  past 64 is a 400 rather than a stack fault
+- [x] docs: `docs/security.md` §6 — name the host limits the endpoints depend on, and recommend a size on `MapScry`
 
 
 ### F15 — INFO — a client can produce `Failed` outcomes on demand
@@ -317,7 +324,9 @@ Division by a client constant, `Int32From` over non-numeric text, `BytesElementA
 at execution, a fixed 500, and a `Failed` audit entry carrying the SQL exception text. Contained, but `docs/security.md`
 suggests alerting on rejections and `docs/observability.md` on failures; a client can make either noisy.
 
-- [ ] docs: say that `Failed` is client-triggerable and that the audit `Error` text is provider text
+**Fixed (documented):** `docs/security.md` §7 and `docs/observability.md` (the `Error` bullet) both say a client can produce a `Failed` outcome at will and that `Error` carries the provider's text.
+
+- [x] docs: say that `Failed` is client-triggerable and that the audit `Error` text is provider text
 - [x] covered: the response is the fixed message — `ResponseSpillTests.AFailureBeforeTheWatermarkIsStillAnError`,
   `ObservabilityTests.AuditForFailed`
 
@@ -329,8 +338,11 @@ presses Run — good. Pressing it compiles and executes the snippet in the WASM 
 referenced, so a crafted link can, with one click, run `HttpClient` calls with the opener's same-origin credentials.
 The explorer is Development-only by default and the doc tells hosts to guard it, which bounds this.
 
-- [ ] add (`Sample.Tests`): opening a `#q=` link never runs the query; the wire strip and result pane stay empty
-- [ ] consider: a banner on a query that arrived via share link, cleared once the user edits or runs it
+**Pinned:** `UiSnapshotTests.ExplorerOpensASharedLinkWithoutRunningIt` opens a shared link in a fresh page and asserts the query is loaded, no request reached the query endpoint, and neither the wire strip nor a result table exists.
+
+- [x] covered (`Sample.Tests`): opening a `#q=` link never runs the query; the wire strip and result pane stay empty
+- [ ] consider: a banner on a query that arrived via share link, cleared once the user edits or runs it (not done —
+  a product decision rather than a gap; the link cannot run anything without a click)
 - [x] covered: `UiSnapshotTests.ExplorerSharesAQueryByLink`, `ExplorerIgnoresAMalformedShareLink`
 
 
@@ -340,7 +352,9 @@ The explorer is Development-only by default and the doc tells hosts to guard it,
 reaches the header unchecked. Kestrel refuses a value with a line break, so the failure mode is a 500 rather than a split
 response, and the value is host code — but the model's declaration gets a startup check and the override gets none.
 
-- [ ] add: a policy override that is not a media type is refused (400/500 with the fixed message, never a header)
+**Fixed:** `PlanAttachment` holds a policy's `ContentType` to the same media-type rule the startup check applies to the declaration (`Schema.IsMediaType`); a value that is not one is a fault naming the policy — the fixed 500, the real message audited — and never a header. Pinned by `AttachmentFetchTests.AReplacementThatIsNotAMediaTypeFaults` and, for the override path itself, `APolicyMayRelabelTheBytes`; `docs/attachments.md` says so.
+
+- [x] covered: a policy override that is not a media type is a fault with the fixed message, never a header
 
 
 ### F18 — INFO — the `scry.member` trace tag carries the raw client string
@@ -349,7 +363,9 @@ response, and the value is host code — but the model's declaration gets a star
 where the source tag is only ever a schema name. Trace backends are not metrics, so cardinality is a cost rather than a
 break; still, tag the member only when the schema knows it, as `Source` already does.
 
-- [ ] add (`ObservabilityTests`): an unknown attachment member is tagged `(unknown)`
+**Fixed:** `QueryRecorder` tags `scry.member` with the schema's name for the member only where the source knows it as an attachment, and `(unknown)` otherwise — the rule `scry.source` already follows. Pinned by `ObservabilityTests.ActivityForAnAttachment` and `ActivityForAnUnknownAttachmentMember`.
+
+- [x] covered (`ObservabilityTests`): an unknown attachment member is tagged `(unknown)`
 
 
 ### F19 — INFO — attachment timing distinguishes a policy refusal from a missing row
@@ -358,19 +374,20 @@ break; still, tag the member only when the schema knows it, as `Source` already 
 absent. The status is the same 404; the latency is not. The comment says an unauthorized caller learns "not even how long
 a lookup took", which is the opposite of what happens. A policy that decides on the key alone is the case that matters.
 
-- [ ] docs: soften the claim in `QueryExecutor.PlanAttachment` and `docs/attachments.md`; optionally run the row read
-  regardless of the decision
+**Fixed (documented):** the comment in `PlanAttachment` and `docs/attachments.md` §Security now say a refusal answers sooner than a missing row, and that a policy which must not give that away reads the row through `Db` before deciding. The row is not read regardless: that would make every refused request cost a lookup, which is the cheaper attack.
+
+- [x] docs: soften the claim in `QueryExecutor.PlanAttachment` and `docs/attachments.md`
 
 
 ## Documentation corrections
 
-- [ ] `docs/attachments.md:143` and `Scry.Annotations/AttachmentAttribute.cs:31` — the "no way to navigate a browser to
-  one" claim (F2)
-- [ ] `docs/security.md` §5 — after F1 is fixed, state that a flatten resets the policy chain to the element's
-- [ ] `docs/security.md` "What Scry does not do" — CSRF: say what `Content-Type` enforcement covers (F3)
-- [ ] `docs/security.md` §7 — messages may name a source's wire name, never its CLR name (F9)
-- [ ] `Scry.Server/Member.cs:44-49` — the comment on `Sensitive` describes the generator wrongly (F4)
-- [ ] `docs/paging.md` — the cursor is signed, not encrypted, and what that means for a sensitive ordering key (F6)
+- [x] `docs/attachments.md` and `Scry.Annotations/AttachmentAttribute.cs` — the "no way to navigate a browser to one"
+  claim (F2)
+- [x] `docs/security.md` §5 — a flatten resets the policy chain to the element's (F1)
+- [x] `docs/security.md` "What Scry does not do" — CSRF: what `Content-Type` enforcement covers (F3)
+- [x] `docs/security.md` §7 — messages name a source's wire name, never its CLR name (F9)
+- [x] `Scry.Server/Member.cs` — the comment on `Sensitive` (F4)
+- [x] `docs/paging.md` — the cursor is sealed (F6)
 
 
 ## Scenarios checked and found sound — test coverage
@@ -473,7 +490,7 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
   predicate/HAVING/grouped projection, group-by arity, distinct arity, batch size, stream rows —
   `ValidatorLimitTests`, `SecurityTests` (limits), `BatchTests.OverMaxBatchSizeRejectsTheWholeBatch`,
   `StreamingTests.EndsAStreamThatExceedsTheRowLimitWithAFailure`
-- [ ] add: F5's node and subquery caps
+- [x] covered: F5's node and subquery caps (`ValidatorLimitTests`)
 - [ ] add: `MaxNavigationDepth` is measured per path, so a subquery predicate's path plus its owner's path reaches
   twice the limit — pin the effective bound
 - [ ] add: `MaxProjectionMembers` counts a join's `Result` and a set operand's projection (the operand is validated
@@ -522,8 +539,8 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
 - [x] denied-row error mode at each position, never for an already-hidden row, fixed message — `DeniedRowTests`, `DeniedRowHttpTests`
 - [x] SQL preview runs the policies and denies nothing — `SqlPreviewTests.APolicyIsInTheSql`, `DeniedRowTests.ShowingTheSqlRunsNothingAndSoDeniesNothing`
 - [x] header-scoped policies are documented as unsafe; headers reach the policy and back — `HeaderTests`, `HttpRoundTripTests.HeadersRoundTripThroughAPolicy*`
-- [ ] add: F1's flatten-then-narrow tests
-- [ ] add: F10's constructibility test
+- [x] covered: F1's flatten-then-narrow tests (`FlattenNarrowPolicyTests`)
+- [x] covered: F10's constructibility test (`PolicyResolutionTests`)
 - [ ] add: `RightJoin` after `SelectMany` over a `Hide`-mode policied element — pin whether the hoisting the validator
   guards against on the outer side recurs here (the validator's `sawOuterFilter` is not set by `SelectMany`)
 - [ ] add: a policy on a base type reached through `OfType` from a *view* or POCO root — `Retype` casts an in-memory
@@ -534,7 +551,7 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
 
 - [x] decisions per scope, watermark, invalidation, priming, generation races, key bound, no-key refusal —
   `CachedPolicyTests`, `MemoryCachedPolicyStoreTests`
-- [ ] add: F13's pre-materialization bound
+- [x] covered: F13's pre-materialization bound (`CachedPolicyTests.ATooLargeColdScopeIsRefusedBeforeItsRowsAreRead`)
 - [ ] add: `ScopeKey` read from a request header is documented as unsafe — pin with a policy that does so and a test
   showing two callers with different headers share nothing *only* because the sample resolves the key from services
   (a doc-shaped test, so the warning has a name)
@@ -545,7 +562,7 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
 - [x] signature, tamper, malformed, other key, ordering stamp (direction, source, key count), changed filter — `CursorCodecTests`, `CursorBindingTests`
 - [x] cursor on unordered/grouped/distinct; page size caps and defaults — `SecurityTests`, `ExecutionTests.Paged*`
 - [x] seek falls back to offset on nullable keys, views, POCOs, byte[] keys — `ClientRoundTripTests.Keyset*`, `PagingOverAByteArrayKeyIssuesNoCursor`
-- [ ] add: F6 and F12
+- [x] covered: F6 (`CursorCodecTests`) and F12 (`CursorBindingTests`)
 - [ ] add: a cursor value that does not parse as the key member's type is a 400 (`BuildConstant` → `ParseValue`), and a
   null value for a non-nullable key matches nothing rather than faulting
 - [ ] add: `CursorKey` set makes cursors survive a second processor; unset makes them per-process (documented,
@@ -565,7 +582,7 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
 - [x] conditional requests: 304, invalidation on write and on grant change, per-query ETags, none on a body —
   `samples/Sample.Tests/ConditionalQueryTests`
 - [x] error bodies JSON-escape client strings — reproduced (`<script>`); add a test in IntegrationTests
-- [ ] add: F2, F3, F11 tests
+- [x] covered: F2, F3, F11 tests (`AttachmentTests.IsServedAsADownload`, `HttpRoundTripTests.*Refused`, `QueryEtagTests`)
 - [ ] add: a provider failure *after* the stream's begin marker ends with the fixed message, never SQL text
   (`HandleStream`'s catch; the row-limit test covers the validation-message branch only)
 - [ ] add: a rejected query carries no `ETag`; a `no-store` response carries no `ETag`
@@ -581,7 +598,7 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
 
 - [x] size, version, per-entry validation/policy/audit, rejected entry isolation — `BatchTests`, `HttpRoundTripTests.BatchEntryRejectedOverHttp`
 - [ ] add: a batch entry that *fails* (provider error) reports the fixed message and its own `staleClient` attribution
-- [ ] add: a null entry is a per-entry 400 (F7)
+- [x] covered: a null entry fails the batch's deserialization closed (F7, `WireSerializationTests.ANullBatchEntryFailsClosed`)
 - [ ] add: response headers written by one entry's policy apply to the whole batch response — pin as intended
 
 
@@ -589,7 +606,7 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
 
 - [x] denied, missing, and hidden are one 404; row policy applies; key parsing; wrong count; unknown member/source;
   null key; version; content types; `nosniff`; authorization convention — `AttachmentFetchTests`, `AttachmentTests`
-- [ ] add: F2, F17, F19
+- [x] covered: F2 (`AttachmentTests.IsServedAsADownload`), F17 (`AttachmentFetchTests`), F19 (documented)
 - [ ] add: a source exposing an attachment with no policy refuses to start (`Schema.ResolveAttachmentPolicy`, untested)
 - [ ] add: an attachment policy declared on a base is applied to the derived source (server side; only the explorer's
   `AttachmentLinkerTests.LinksAnInheritedAttachment` touches inheritance today)
@@ -606,7 +623,7 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
   ordering keeps the URL; a stale client retries in a body; the audit flags it —
   `SensitiveTransportTests`, `SensitiveStructTests`, `SensitiveSchemaTests`, `HttpRoundTripTests` (sensitive tests),
   `ObservabilityTests.AuditFlagsAConstantAgainstASensitiveMember`
-- [ ] add: F4 and F6
+- [x] covered: F4 (`SensitiveSchemaTests`, `SensitiveOverrideTests`) and F6 (`SensitiveTransportTests.PagingByAMarkedMemberKeepsTheUrl`)
 - [ ] add: a constant against a marked member inside a join's inner predicate, a set operand's predicate, a subquery
   predicate, a membership predicate or selector, a HAVING clause, and a group key — each is walked by `SensitiveWalk`
   and none is pinned from a URL
@@ -624,7 +641,7 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
   404 (`EnableGuard` default) — the sample sets `EnableGuard = _ => true`, so the default is never exercised
 - [ ] add: `EnableSqlPreview` false with `EnableGuard` true — `/scry/sql` is 404 and introspection says `sqlPreview: false`
 - [ ] add: asset paths with `..`, backslashes, and URL-encoded separators are 404 and never touch the file system
-- [ ] add: F16's no-auto-run test
+- [x] covered: F16's no-auto-run test (`UiSnapshotTests.ExplorerOpensASharedLinkWithoutRunningIt`)
 - [ ] add: the SQL preview endpoint refuses a non-JSON `Content-Type` alongside F3, and its 500 body is the fixed text
 - [x] covered: the host page is served under a `Content-Security-Policy` with its inline scripts allowed by hash —
   `UiSnapshotTests.ExplorerServesAContentSecurityPolicy`, `ExplorerAssetsCarryNoPolicy`; every browser test fails on a

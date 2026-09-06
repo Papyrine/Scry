@@ -481,6 +481,37 @@ public class SecurityTests
         });
     }
 
+    // The narrowing messages go through the same naming: a renamed root is named as the wire knows it.
+    [Test]
+    public void RejectionOnANarrowingNamesTheWireName()
+    {
+        using var context = TestContext.CreateSeeded();
+        var request = QueryRequest.Create("Region", [new OfTypeOp("Employee")]);
+
+        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context))!;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception.Message, Does.Contain("'Region'"));
+            Assert.That(exception.Message, Does.Not.Contain("SalesRegion"));
+        });
+    }
+
+    // A complex type has no source name. It is named the way introspection publishes it — the
+    // generated model's name — which is what the allow-list already implies about it.
+    [Test]
+    public void RejectionOnAComplexTypeNamesItsModel()
+    {
+        using var context = TestContext.CreateSeeded();
+        var request = QueryRequest.Create(
+            "Employee",
+            [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Address", "Nope"]), new ConstNode("x", ClrTypeTag.String)))]);
+
+        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context))!;
+
+        Assert.That(exception.Message, Does.Contain("on 'AddressQueryModel'"));
+    }
+
     // [QueryIgnore] on a base's virtual property, overridden without the attribute: hidden through
     // the override, on both sides — the generator carries every declaration's attributes onto the one
     // member, and the server reads the same chain.

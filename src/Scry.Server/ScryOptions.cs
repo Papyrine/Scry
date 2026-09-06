@@ -284,6 +284,15 @@ public sealed class ScryOptions(Type contextType)
     public int? MaxCachedPolicyKeys { get; set; }
 
     /// <summary>
+    /// The most undecided rows one refresh of a cached policy may read and decide — on a scope
+    /// nothing has been decided for yet, every row of the table. Null for no limit. A refresh under
+    /// the bound counts before it reads, so a table past it costs one COUNT and a refusal naming this
+    /// option rather than a materialization. The cold cost is paid per scope key — on a per-user
+    /// scope, once by every new caller — and this is what keeps it from being the size of the table.
+    /// </summary>
+    public int? MaxCachedPolicyRows { get; set; }
+
+    /// <summary>
     /// Attaches a row policy whose decision is too expensive to make in SQL. The policy answers one row
     /// at a time in C#; the server remembers the answers and composes a membership test over the keys
     /// this caller may see, wherever a row policy applies.

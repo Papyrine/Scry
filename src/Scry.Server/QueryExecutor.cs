@@ -358,6 +358,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         // Captured alongside inline application so the page terminal can rebuild the ordering into a
         // total order (append the primary key) and a keyset seek predicate.
         List<(Node Key, bool Descending)> orderings = [];
+        // The steps that changed what the rows are — a flatten, a narrowing — for the cursor's
+        // ordering stamp, so a cursor issued over the root's rows cannot resume over the element's.
+        List<string> steps = [];
         // A cursor can only append its primary-key tiebreak when the ordering is the trailing restricting
         // op (so the query is still IOrderedQueryable) and no offset (Skip/Take) is in play.
         var tailIsOrdered = false;
@@ -443,6 +446,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
                     query = query.Provider.CreateQuery(
                         CallQueryable("OfType", [derived.ClrType], query.Expression));
+                    steps.Add($"narrow {narrowed.Type}");
 
                     // The derived type's own policies apply on top of the base's. Both narrow, so the
                     // rows that survive are those a direct query of either source would have returned.
@@ -464,6 +468,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                             query.Expression,
                             Expression.Quote(collection)));
                     elementType = child;
+                    steps.Add($"flatten {string.Join('.', flatten.Path)}");
 
                     // The policies the rows now carry are the element's, not the root's: the flatten
                     // read a policied element through its whole chain (the correlated rewrite), and an
@@ -525,7 +530,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
         if (terminal is PageOp paging)
         {
-            return new(probes, null, Page(builder, query, elementType, select, orderings, tailIsOrdered && !sawSkipOrTake, paging, source, db, scope.Binary), null);
+            return new(probes, null, Page(builder, query, elementType, select, orderings, steps, tailIsOrdered && !sawSkipOrTake, paging, source, db, scope.Binary), null);
         }
 
         // A join projects straight to the shaped row, so it replaces the projection step entirely and
@@ -925,8 +930,10 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             values.Add(builder.ParseKey(value, keys[i].Type));
         }
 
-        // Before the database is touched: an unauthorized caller learns nothing, not even how long a
-        // lookup took.
+        // Before the database is touched, so a refusal costs no read. That makes a refusal answer
+        // sooner than a row that is missing, which is the one thing a caller holding a guessed key
+        // can tell the two 404s apart by; a policy that must not give that away reads the row
+        // itself through the context's Db before deciding, and then both answers cost a lookup.
         var policy = source.AttachmentPolicy ??
                      throw new($"Source '{request.Root}' exposes an attachment with no policy to authorize it.");
         var context = new ScryAttachmentContext(scope.Services, db, member.Name, values, scope.RequestHeaders, scope.ResponseHeaders)
@@ -938,6 +945,16 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         if (!AttachmentPolicy.Authorize(policy, scope.Services, context))
         {
             return null;
+        }
+
+        // The model's declaration was checked at startup; a policy's replacement is checked here, or
+        // a value that is not a media type would become a response header. Host code rather than the
+        // client's, so a fault rather than a rejection: the fixed 500, and the real message in the
+        // audit trail.
+        if (context.ContentType is { } overridden &&
+            !Schema.IsMediaType(overridden))
+        {
+            throw new($"Attachment policy '{policy.Name}' set ContentType '{overridden}' for '{request.Root}.{member.Name}', which is not a media type. Write one as 'type/subtype' — for example 'image/png' — or leave the declared type in place.");
         }
 
         // Resolved through the same path a query's root takes, so the source's row policies apply and
@@ -1301,6 +1318,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         Type elementType,
         SelectOp? select,
         IReadOnlyList<(Node Key, bool Descending)> orderings,
+        IReadOnlyList<string> steps,
         bool seekEligible,
         PageOp page,
         ScrySource source,
@@ -1328,7 +1346,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 query = ApplyOrder(query, builder.BuildKeySelector(key, elementType), descending: false, then: true);
             }
 
-            order = CursorCodec.OrderStamp(source.Name, keys);
+            order = CursorCodec.OrderStamp(source.Name, steps, keys);
 
             if (page.Cursor is not null)
             {

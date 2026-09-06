@@ -66,6 +66,46 @@ public class ObservabilityTests
             """);
     }
 
+    // The member is tagged the way the source is: by the name the schema knows, or a placeholder.
+    // A tag is indexed by whatever backend it reaches, so an arbitrary client string is not one.
+    [Test]
+    public async Task ActivityForAnAttachment()
+    {
+        var stopped = new List<Activity>();
+        using var listener = Listen(stopped);
+
+        await using var context = TestContext.CreateSeeded();
+        SharedProcessor.Instance.FetchAttachment(
+            AttachmentRequest.Create("Contract", "Document", [new("1", ClrTypeTag.Int32)]),
+            context);
+
+        var activity = stopped.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(activity.DisplayName, Is.EqualTo("scry.attachment Contract"));
+            Assert.That(activity.GetTagItem("scry.source"), Is.EqualTo("Contract"));
+            Assert.That(activity.GetTagItem("scry.member"), Is.EqualTo("Document"));
+        });
+    }
+
+    [Test]
+    public async Task ActivityForAnUnknownAttachmentMember()
+    {
+        var stopped = new List<Activity>();
+        using var listener = Listen(stopped);
+
+        await using var context = TestContext.CreateSeeded();
+        var request = AttachmentRequest.Create("Contract", "<script>", [new("1", ClrTypeTag.Int32)]);
+        Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.FetchAttachment(request, context));
+
+        var activity = stopped.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(activity.GetTagItem("scry.source"), Is.EqualTo("Contract"));
+            Assert.That(activity.GetTagItem("scry.member"), Is.EqualTo("(unknown)"));
+        });
+    }
+
     [Test]
     public async Task MetricsForSuccess()
     {

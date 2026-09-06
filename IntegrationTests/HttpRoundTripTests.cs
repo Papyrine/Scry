@@ -598,6 +598,31 @@ public class HttpRoundTripTests
         });
     }
 
+    // JSON nesting is bounded by the reader — 64 levels, its default — before the expression depth
+    // limit could be reached, so a document nested past it is a malformed body: a 400 naming the
+    // depth, never a reader fault or a stack the validator has to unwind.
+    [Test]
+    public async Task ADeeplyNestedBodyIsRejected()
+    {
+        var predicate = """{"$type":"member","path":"Active"}""";
+        for (var i = 0; i < 100; i++)
+        {
+            predicate = $$"""{"$type":"unary","op":"Not","operand":{{predicate}}}""";
+        }
+
+        var json = $$"""{"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{{predicate}}}]}""";
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var response = await http.PostAsync("/api/query", content);
+
+        var error = ScryJson.TryDeserializeError(await response.Content.ReadAsByteArrayAsync());
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+            Assert.That(error!.Error, Does.Contain("depth"));
+            Assert.That(response.Headers.CacheControl!.NoStore, Is.True);
+        });
+    }
+
     // A body that is not declared JSON is refused before it is read. An HTML form can navigate a
     // browser to a POST endpoint with a text/plain field shaped as JSON — exactly the body below —
     // but it cannot set application/json, so requiring the header is what keeps a cross-site page

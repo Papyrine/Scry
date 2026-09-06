@@ -46,6 +46,70 @@ public class AttachmentFetchTests
         });
     }
 
+    // A policy may replace the declared type for one fetch — the hook for a column holding more
+    // than one kind of thing — and what it sets is what the result carries.
+    [Test]
+    public void APolicyMayRelabelTheBytes()
+    {
+        using var data = TestContext.CreateSeeded();
+
+        var result = With<RelabellingPolicy>().FetchAttachment(Request(1), data);
+
+        Assert.That(result.ContentType, Is.EqualTo("image/png"));
+    }
+
+    // The model's declaration is checked at startup; a policy's replacement can only be checked when
+    // it is made. Host code, so a fault rather than a rejection — but a fault naming the policy,
+    // never a response header carrying whatever was set.
+    [Test]
+    public void AReplacementThatIsNotAMediaTypeFaults()
+    {
+        using var data = TestContext.CreateSeeded();
+        var processor = With<MislabellingPolicy>();
+
+        var exception = Assert.Throws<Exception>(() => processor.FetchAttachment(Request(1), data))!;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.InstanceOf<ScryValidationException>());
+            Assert.That(exception.Message, Does.Contain("MislabellingPolicy"));
+            Assert.That(exception.Message, Does.Contain("not a media type"));
+        });
+    }
+
+    static AttachmentRequest Request(int id) =>
+        AttachmentRequest.Create("Contract", "Document", [new(id.ToString(), ClrTypeTag.Int32)]);
+
+    // The shared processor's model with the contract's attachment policy replaced, since the one
+    // the model declares sets no type of its own.
+    static ScryProcessor With<TPolicy>()
+        where TPolicy : IAttachmentPolicy<Contract> =>
+        ScryProcessor.Create<TestContext>(options =>
+        {
+            options.AddPocoSource<Holiday>(_ => Holiday.Seed());
+            options.AddAttachmentPolicy<Contract, TPolicy>();
+        });
+
+    public sealed class RelabellingPolicy :
+        IAttachmentPolicy<Contract>
+    {
+        public bool Authorize(ScryAttachmentContext context)
+        {
+            context.ContentType = "image/png";
+            return true;
+        }
+    }
+
+    public sealed class MislabellingPolicy :
+        IAttachmentPolicy<Contract>
+    {
+        public bool Authorize(ScryAttachmentContext context)
+        {
+            context.ContentType = "not a media type";
+            return true;
+        }
+    }
+
     [Test]
     public void DeniedByPolicyIsNotFound() =>
         Assert.That(Fetch(UnsealedContractsPolicy.SealedId).Found, Is.False);

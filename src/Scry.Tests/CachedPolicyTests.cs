@@ -293,6 +293,30 @@ public class CachedPolicyTests
         Assert.That(exception.Message, Does.Contain("MaxCachedPolicyKeys"));
     }
 
+    // The bound on the work rather than on the result. A scope nothing has been decided for reads
+    // every row of the table, per scope key, so a table past the bound is refused from a count —
+    // before a row is read, which is what the policy never being asked proves.
+    [Test]
+    public void ATooLargeColdScopeIsRefusedBeforeItsRowsAreRead()
+    {
+        using var context = TestContext.CreateSeeded();
+        var policy = new CountingRegionPolicy();
+        var processor = Build(_ =>
+        {
+            _.MaxCachedPolicyRows = 2;
+            _.AddCachedPolicy<Order, long, CountingRegionPolicy>(order => order.Revision);
+        });
+
+        var exception = Assert.ThrowsAsync<Exception>(
+            () => ClientFor(context, processor, policy).Source<Order>("Order").CountAsync())!;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception.Message, Does.Contain("MaxCachedPolicyRows"));
+            Assert.That(policy.Decisions, Is.Zero);
+        });
+    }
+
     [Test]
     public void ATypeWithNoKeyIsRefusedAtStartup()
     {

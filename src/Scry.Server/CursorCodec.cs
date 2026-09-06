@@ -39,30 +39,38 @@ static class CursorCodec
         SHA256.HashData(signingKey);
 
     /// <summary>
-    /// Identifies the ordering a cursor belongs to: the source it read, and every ordering key's path
-    /// and direction — including the primary key appended as the tiebreaker, since that is part of the
-    /// order actually seeked. Compared on resume so a cursor cannot be applied to an ordering it was
-    /// not issued for.
+    /// Identifies the ordering a cursor belongs to: the source it read, the steps that changed what
+    /// its rows are (a flatten, a narrowing), and every ordering key's path and direction — including
+    /// the primary key appended as the tiebreaker, since that is part of the order actually seeked.
+    /// Compared on resume so a cursor cannot be applied to an ordering it was not issued for.
     /// </summary>
     /// <remarks>
     /// The <b>ordering</b> rather than the whole pipeline, deliberately. Every way a cursor can produce
     /// a wrong page is a change to the order it resumes: a different key, a different direction, a
     /// different source. A changed filter is not one of those — seeking to "the rows of this set
     /// ordered after this key" stays well defined when the set narrows, so a client may filter further
-    /// between pages, which forcing an identical pipeline would have refused.
+    /// between pages, which forcing an identical pipeline would have refused. A flatten or a
+    /// narrowing is not a filter: it changes which rows the keys are read off, so
+    /// <c>Fleet.SelectMany(Machines).OrderBy(Name)</c> and <c>Fleet.OrderBy(Name)</c> stamp apart
+    /// even where both types spell their keys the same.
     /// <para>
     /// Only ever compared against another stamp from this same server, and inside a sealed payload,
     /// so it is a fingerprint rather than a security boundary: it exists to catch a client changing
     /// its ordering, not to withstand one forging a cursor.
     /// </para>
     /// </remarks>
-    public static string OrderStamp(string source, IReadOnlyList<(Node Key, bool Descending)> keys)
+    public static string OrderStamp(string source, IReadOnlyList<string> shape, IReadOnlyList<(Node Key, bool Descending)> keys)
     {
         var builder = new StringBuilder();
         // Versions the canonical form, so a future change to what is stamped cannot silently match a
         // cursor minted under the old form.
-        builder.Append("scry-order-v1\n");
+        builder.Append("scry-order-v2\n");
         builder.Append(source).Append('\n');
+        foreach (var step in shape)
+        {
+            builder.Append(step).Append('\n');
+        }
+
         foreach (var (key, descending) in keys)
         {
             // Every seek key is a single-segment member (PlanSeek admits nothing else); anything that

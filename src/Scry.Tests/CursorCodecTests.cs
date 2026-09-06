@@ -143,17 +143,21 @@ public class CursorCodecTests
     [Test]
     public void StampsAnOrderingByItsKeysAndDirections()
     {
-        var byName = CursorCodec.OrderStamp("Employee", [(new MemberNode(["Name"]), false)]);
+        var byName = CursorCodec.OrderStamp("Employee", [], [(new MemberNode(["Name"]), false)]);
 
         Assert.Multiple(() =>
         {
-            Assert.That(CursorCodec.OrderStamp("Employee", [(new MemberNode(["Name"]), false)]), Is.EqualTo(byName));
+            Assert.That(CursorCodec.OrderStamp("Employee", [], [(new MemberNode(["Name"]), false)]), Is.EqualTo(byName));
             // Every way a cursor could be applied to an ordering it was not issued for stamps apart.
-            Assert.That(CursorCodec.OrderStamp("Employee", [(new MemberNode(["Name"]), true)]), Is.Not.EqualTo(byName));
-            Assert.That(CursorCodec.OrderStamp("Employee", [(new MemberNode(["Id"]), false)]), Is.Not.EqualTo(byName));
-            Assert.That(CursorCodec.OrderStamp("Order", [(new MemberNode(["Name"]), false)]), Is.Not.EqualTo(byName));
+            Assert.That(CursorCodec.OrderStamp("Employee", [], [(new MemberNode(["Name"]), true)]), Is.Not.EqualTo(byName));
+            Assert.That(CursorCodec.OrderStamp("Employee", [], [(new MemberNode(["Id"]), false)]), Is.Not.EqualTo(byName));
+            Assert.That(CursorCodec.OrderStamp("Order", [], [(new MemberNode(["Name"]), false)]), Is.Not.EqualTo(byName));
+            // The rows the keys are read off: a flatten or a narrowing changes them without changing
+            // a key's spelling.
+            Assert.That(CursorCodec.OrderStamp("Employee", ["flatten Reports"], [(new MemberNode(["Name"]), false)]), Is.Not.EqualTo(byName));
+            Assert.That(CursorCodec.OrderStamp("Employee", ["narrow Manager"], [(new MemberNode(["Name"]), false)]), Is.Not.EqualTo(byName));
             Assert.That(
-                CursorCodec.OrderStamp("Employee", [(new MemberNode(["Name"]), false), (new MemberNode(["Id"]), false)]),
+                CursorCodec.OrderStamp("Employee", [], [(new MemberNode(["Name"]), false), (new MemberNode(["Id"]), false)]),
                 Is.Not.EqualTo(byName));
         });
     }
@@ -167,12 +171,12 @@ public class CursorCodecTests
             .Select(_ => (Key: (Node) new MemberNode([new string('m', 40) + _]), Descending: _ % 2 == 0))
             .ToArray();
 
-        var stamp = CursorCodec.OrderStamp("Employee", keys);
+        var stamp = CursorCodec.OrderStamp("Employee", [], keys);
 
         Assert.Multiple(() =>
         {
             Assert.That(stamp, Has.Length.EqualTo(16));
-            Assert.That(CursorCodec.OrderStamp("Employee", keys), Is.EqualTo(stamp));
+            Assert.That(CursorCodec.OrderStamp("Employee", [], keys), Is.EqualTo(stamp));
         });
     }
 }
