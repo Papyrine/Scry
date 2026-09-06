@@ -341,8 +341,8 @@ The explorer is Development-only by default and the doc tells hosts to guard it,
 **Pinned:** `UiSnapshotTests.ExplorerOpensASharedLinkWithoutRunningIt` opens a shared link in a fresh page and asserts the query is loaded, no request reached the query endpoint, and neither the wire strip nor a result table exists.
 
 - [x] covered (`Sample.Tests`): opening a `#q=` link never runs the query; the wire strip and result pane stay empty
-- [ ] consider: a banner on a query that arrived via share link, cleared once the user edits or runs it (not done —
-  a product decision rather than a gap; the link cannot run anything without a click)
+- [x] decided no banner: the explorer is Development-only by default, the link runs nothing without a click, and the
+  no-auto-run test above pins that
 - [x] covered: `UiSnapshotTests.ExplorerSharesAQueryByLink`, `ExplorerIgnoresAMalformedShareLink`
 
 
