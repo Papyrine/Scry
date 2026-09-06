@@ -557,7 +557,7 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
 - [x] covered: F10's constructibility test (`PolicyResolutionTests`)
 - [x] covered (`FlattenNarrowPolicyTests.ARightJoinAfterAFlattenKeepsTheElementPolicy` — the narrowing stays inside the APPLY, the join stays right): `RightJoin` after `SelectMany` over a `Hide`-mode policied element — pin whether the hoisting the validator
   guards against on the outer side recurs here (the validator's `sawOuterFilter` is not set by `SelectMany`)
-- [ ] add (deferred: the test model has no view or POCO hierarchy, and a derived `[QueryablePoco]` needs its own `AddPocoSource` in every fixture): a policy on a base type reached through `OfType` from a *view* or POCO root — `Retype` casts an in-memory
+- [x] covered for a POCO root (`PocoHierarchyTests`; a derived `[QueryablePoco]` now reads its base's rows narrowed by type). A view root stays unsupported: EF does not map a keyless type into a discriminated hierarchy. Was: a policy on a base type reached through `OfType` from a *view* or POCO root — `Retype` casts an in-memory
   or keyless query; pin that it executes rather than faults
 
 

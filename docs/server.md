@@ -273,6 +273,8 @@ options.AddPocoSource<Holiday>(services =>
     services.GetRequiredService<IHolidayFeed>().Current());
 ```
 
+A POCO hierarchy is one collection of rows. A `[QueryablePoco]` derived from a registered one needs no registration of its own: it reads its nearest registered base's rows narrowed by type, which is also exactly what narrowing from the base with `OfType` reads, so a row policy on the base reaches the derived source either way. Only a hierarchy with no registered type in it refuses to start.
+
 A factory is given the request's services and may answer by who asked, so a source registered this way counts as one whose rows depend on the caller: with [`QueryFreshness`](caching.md) set, `MapScry` refuses to start until `CacheScope` says what a cached response belongs to. Data that is the same for every caller is registered as the collection itself, which asks nothing of the caller.
 
 The registered sequence is wrapped with `AsQueryable()`, so the pipeline runs in memory over LINQ to<!-- include: poco-in-memory. path: /docs/includes/poco-in-memory.include.md -->

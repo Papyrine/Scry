@@ -569,7 +569,11 @@ sealed class Schema
             var source = new ScrySource(name, type, kind, policies, BuildResolver(name, type, kind, options))
             {
                 AttachmentPolicy = ResolveAttachmentPolicy(schema, type, name, kind, options),
-                FactorySupplied = kind == SourceKind.Poco && options.FactoryPocoSources.Contains(type)
+                // Through the registration the rows actually come from, so a derived POCO reading a
+                // caller-dependent base's rows counts as caller-dependent itself.
+                FactorySupplied = kind == SourceKind.Poco &&
+                                  RegisteredPocoType(type, options) is { } supplied &&
+                                  options.FactoryPocoSources.Contains(supplied)
             };
             schema.sources[name] = source;
             schema.sourcesByType[type] = source;
@@ -1498,6 +1502,26 @@ sealed class Schema
         .Single(_ => _ is { Name: "Set", IsGenericMethod: true } &&
                      _.GetParameters().Length == 0);
 
+    static readonly MethodInfo ofTypeMethod = typeof(Queryable).GetMethod(nameof(Queryable.OfType))!;
+
+    /// <summary>
+    /// The registration a POCO source reads its rows from: its own, or the nearest base's. A POCO
+    /// hierarchy is one collection of rows, so a derived type opted in without rows of its own reads
+    /// the base's narrowed by type — registering it twice would be registering the same rows twice.
+    /// </summary>
+    static Type? RegisteredPocoType(Type type, ScryOptions options)
+    {
+        for (var candidate = type; candidate is not null; candidate = candidate.BaseType)
+        {
+            if (options.PocoSources.ContainsKey(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
     static Func<DbContext, IServiceProvider, IQueryable> BuildResolver(
         string name,
         Type type,
@@ -1506,12 +1530,21 @@ sealed class Schema
     {
         if (kind == SourceKind.Poco)
         {
-            if (options.PocoSources.TryGetValue(type, out var factory))
+            if (RegisteredPocoType(type, options) is not { } registered)
+            {
+                throw new($"POCO source '{type.Name}' has no data registered. Call options.AddPocoSource<{type.Name}>(...).");
+            }
+
+            var factory = options.PocoSources[registered];
+            if (registered == type)
             {
                 return (_, services) => factory(services);
             }
 
-            throw new($"POCO source '{type.Name}' has no data registered. Call options.AddPocoSource<{type.Name}>(...).");
+            // The base's rows, narrowed to this type: what a query of the derived source reads, and
+            // exactly what narrowing from the base source with OfType reads too.
+            var narrow = ofTypeMethod.MakeGenericMethod(type);
+            return (_, services) => (IQueryable) narrow.Invoke(null, [factory(services)])!;
         }
 
         var typedSet = setMethod.MakeGenericMethod(type);

@@ -78,6 +78,11 @@
       Model: PressQueryModel
     },
     {
+      Name: PublicHoliday,
+      Kind: Poco,
+      Model: PublicHolidayQueryModel
+    },
+    {
       Name: Region,
       Kind: Entity,
       Model: SalesRegionQueryModel
@@ -804,6 +809,22 @@
       IsSensitive: false
     },
     {
+      Model: PublicHolidayQueryModel,
+      Members: [
+        {
+          Name: Region,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        }
+      ],
+      Base: HolidayQueryModel,
+      IsSensitive: false
+    },
+    {
       Model: RegionSummaryQueryModel,
       Members: [
         {
@@ -1054,5 +1075,5 @@
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: Gi24ZCbl-wl5nqSV
+  SchemaStamp: p1xmLLMK86FB9Y_J
 }

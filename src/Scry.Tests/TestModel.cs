@@ -461,6 +461,33 @@ public class Holiday
 }
 
 /// <summary>
+/// A POCO derived from <see cref="Holiday"/>, opted in with no registration of its own: its rows are
+/// the base's narrowed by type. The shape a policy on a POCO base is reached through by narrowing,
+/// where the retype runs over an in-memory query rather than a discriminator. The shared seed carries
+/// none, so nothing else sees it; <c>PocoHierarchyTests</c> registers a seed that does.
+/// </summary>
+[QueryablePoco]
+public class PublicHoliday : Holiday
+{
+    public string Region { get; set; } = "";
+
+    public static IEnumerable<Holiday> SeedWithPublic() =>
+    [
+        .. Holiday.Seed(),
+        new PublicHoliday { Name = "Anzac Day", Date = new(2026, 4, 25), Region = "AU" },
+        new PublicHoliday { Name = "Unpublished day", Date = new(2026, 6, 1), Region = "AU" }
+    ];
+}
+
+/// <summary>Never attached by default. Hides the holiday nobody has published yet.</summary>
+public sealed class PublishedHolidaysOnlyPolicy :
+    IReturnablePolicy<Holiday>
+{
+    public IQueryable<Holiday> Filter(IQueryable<Holiday> source, ScryPolicyContext context) =>
+        source.Where(_ => !_.Name.StartsWith("Unpublished"));
+}
+
+/// <summary>
 /// A TPH root that carries a row policy, with a derived type that opts in and carries one of its own.
 /// This is the shape the inheritance guarantee is about: querying <see cref="Announcement"/> directly
 /// must apply the base's policy as well as its own, or opting a subclass in would shed the base's.
