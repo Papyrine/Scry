@@ -51,10 +51,11 @@ public sealed class ScryTestServer :
         // the suffix they all resolve to the same database name, since it is derived from this method.
         var database = await sqlInstance.Build(databaseSuffix: conditionalRequests ? "etag" : null);
 
-        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
-        {
-            EnvironmentName = environment
-        });
+        var builder = WebApplication.CreateBuilder(
+            new WebApplicationOptions
+            {
+                EnvironmentName = environment
+            });
         builder.WebHost.UseTestServer();
         builder.Services.AddDbContext<SampleContext>(_ => _.UseSqlServer(database.ConnectionString));
         builder.Services.AddSingleton<RegionGrants>();

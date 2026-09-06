@@ -15,11 +15,23 @@ public class ExplorerGuardTests
     [OneTimeSetUp]
     public async Task StartServers()
     {
-        production = await ScryTestServer.StartAsync(environment: "Production", explorer: _ => { });
-        development = await ScryTestServer.StartAsync(environment: "Development", explorer: _ => { });
+        production = await ScryTestServer
+            .StartAsync(
+                environment: "Production",
+                explorer: _ =>
+                {
+                });
+        development = await ScryTestServer
+            .StartAsync(
+                environment: "Development",
+                explorer: _ =>
+                {
+                });
         // The SQL preview turned off on its own: the guard lets the explorer in, the preview's guard
         // keeps SQL out.
-        previewOff = await ScryTestServer.StartAsync(environment: "Development", explorer: _ => _.EnableSqlPreview = _ => false);
+        previewOff = await ScryTestServer.StartAsync(
+            environment: "Development",
+            explorer: _ => _.EnableSqlPreview = _ => false);
     }
 
     [OneTimeTearDown]
@@ -110,12 +122,30 @@ public class ExplorerGuardTests
     public async Task TheSqlPreviewRefusesABodyThatIsNotJson()
     {
         using var http = development.CreateClient();
-        using var content = new StringContent(ScryJson.Serialize(QueryRequest.Create("Employee", [new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))]))])), Encoding.UTF8, "text/plain");
+        var memberNode = new MemberNode(["Name"]);
+        var nodeValue = new NodeValue(memberNode);
+        using var content = new StringContent(
+            ScryJson.Serialize(
+                QueryRequest.Create(
+                    "Employee",
+                    [new SelectOp(new([new("Name", nodeValue)]))])), Encoding.UTF8, "text/plain");
         using var response = await http.PostAsync("/scry/sql", content);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.UnsupportedMediaType));
     }
 
-    static StringContent Json() =>
-        new(ScryJson.Serialize(QueryRequest.Create("Employee", [new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))]))])), Encoding.UTF8, "application/json");
+    static StringContent Json()
+    {
+        var memberNode = new MemberNode(["Name"]);
+        return new(
+            ScryJson.Serialize(
+                QueryRequest.Create(
+                    "Employee",
+                    [
+                        new SelectOp(
+                            new([new("Name", new NodeValue(memberNode))]))
+                    ])),
+            Encoding.UTF8,
+            "application/json");
+    }
 }

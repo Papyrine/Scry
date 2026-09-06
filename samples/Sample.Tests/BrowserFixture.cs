@@ -17,7 +17,7 @@ public abstract class BrowserFixture
 
     // What the page logged during the current test. Written from Playwright's own threads, so a
     // concurrent collection rather than a List.
-    readonly ConcurrentQueue<string> console = new();
+    ConcurrentQueue<string> console = new();
 
     // Every page the current test opened. A page holds a fully booted WASM runtime — Roslyn included,
     // untrimmed and interpreted, because the explorer needs the interpreter — and the browser keeps
@@ -25,10 +25,10 @@ public abstract class BrowserFixture
     // failure lands as "MONO_WASM: sbrk failed to allocate", tens of tests after the one that spent
     // the memory, and everything after it fails to boot at all. A bag rather than a field because a
     // test may open a second page (a shared link opens one).
-    readonly ConcurrentBag<IPage> pages = [];
+    ConcurrentBag<IPage> pages = [];
 
     // The contexts opened for pages that share storage; closed after their pages.
-    readonly ConcurrentBag<IBrowserContext> contexts = [];
+    ConcurrentBag<IBrowserContext> contexts = [];
 
     /// <summary>The origin the sample server is listening on, with no trailing slash.</summary>
     protected string BaseUrl { get; private set; } = null!;
@@ -270,12 +270,12 @@ public abstract class BrowserFixture
         }
 
         var dll = Path.Combine(dir.FullName, "Sample.Server", "bin", config, tfm, "Sample.Server.dll");
-        if (!File.Exists(dll))
+        if (File.Exists(dll))
         {
-            throw new FileNotFoundException("Sample.Server build output not found; build the sample first.", dll);
+            return dll;
         }
 
-        return dll;
+        throw new FileNotFoundException("Sample.Server build output not found; build the sample first.", dll);
     }
 
     static int GetFreePort()

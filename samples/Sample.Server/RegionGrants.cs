@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-
 /// <summary>
 /// Which regions a caller may see, and the thing <see cref="RegionAccessPolicy"/> consults to find
 /// out. Stands in for whatever a real deployment would ask — a permissions service, a rules engine, a

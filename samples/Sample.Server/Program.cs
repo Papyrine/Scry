@@ -95,7 +95,9 @@
         // A grant moved. Nothing about any order changed, so no version column could notice and no
         // query would ever decide those rows again — the cache has to be told, and telling it is part
         // of the authorization path rather than a cache optimization.
-        app.MapPost("/api/grants/{region}", (string region, bool allowed, RegionGrants grants, ScryPolicyCache cache) =>
+        app.MapPost(
+            "/api/grants/{region}",
+            (string region, bool allowed, RegionGrants grants, ScryPolicyCache cache) =>
         {
             grants.Set("sample", region, allowed);
             cache.InvalidateScope<Order>("sample");

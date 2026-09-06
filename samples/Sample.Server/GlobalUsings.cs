@@ -1,3 +1,4 @@
+global using System.Collections.Concurrent;
 global using Delta;
 global using Microsoft.EntityFrameworkCore;
 global using OpenTelemetry;

@@ -43,7 +43,8 @@ public class IndexPageTests
     public async Task RendersStalePromptWhenQueryFailsStale()
     {
         await using var context = new BunitContext();
-        context.Services.AddSingleton(new ScryClient((_, _) =>
+        context.Services.AddSingleton(
+            new ScryClient((_, _) =>
             Task.FromException<QueryResponse>(
                 new ScryStaleClientException(
                     "Property 'Renamed' is not allow-listed on 'Employee'. The request's schema stamp does " +

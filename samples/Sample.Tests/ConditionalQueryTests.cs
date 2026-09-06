@@ -60,7 +60,13 @@ public class ConditionalQueryTests
     public async Task ARejectedQueryCarriesNoEtag()
     {
         using var http = server.CreateClient();
-        var encoded = QueryUrl.Encode(QueryRequest.Create("Employee", [new WhereOp(new MemberNode(["Nope"])), new CountOp()]));
+        var encoded = QueryUrl.Encode(
+            QueryRequest.Create(
+                "Employee",
+                [
+                    new WhereOp(new MemberNode(["Nope"])),
+                    new CountOp()
+                ]));
         using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
 
         Assert.Multiple(() =>
