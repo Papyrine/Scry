@@ -261,6 +261,26 @@ public class WireSerializationTests
     public void AnUnknownMemberFailsClosed(string json) =>
         Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest(json));
 
+    // A name is part of the wire contract, and one spelling: read case-insensitively, "equal" and
+    // "Equal" would be two byte-strings for one query, and the ETag, the URL, and the audit
+    // fingerprint are all over the bytes.
+    [Test]
+    public void AnEnumNameInTheWrongCaseFailsClosed()
+    {
+        const string json = """{"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"equal","left":{"$type":"member","path":"Id"},"right":{"$type":"const","value":"1","tag":"Int32"}}}]}""";
+
+        var exception = Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest(json))!;
+
+        Assert.That(exception.Message, Does.Contain("case-sensitive"));
+    }
+
+    // A property named twice is refused rather than last-wins, so no request has two byte-strings
+    // that read as one.
+    [Test]
+    public void ADuplicatePropertyFailsClosed() =>
+        Assert.Throws<ScryWireException>(
+            () => ScryJson.DeserializeRequest("""{"version":1,"root":"Employee","root":"Department","pipeline":[{"$type":"count"}]}"""));
+
     [Test]
     public void AnUnknownMemberOnABatchFailsClosed() =>
         Assert.Throws<ScryWireException>(

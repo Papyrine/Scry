@@ -203,4 +203,17 @@ public class AttachmentFetchTests
 
         Assert.That(exception!.Message, Does.Contain("Unsupported attachment request version"));
     }
+
+    [TestCase(0)]
+    [TestCase(-1)]
+    public void AVersionBelowOneIsRejected(int version)
+    {
+        using var data = TestContext.CreateSeeded();
+        var exception = Assert.Throws<ScryValidationException>(
+            () => SharedProcessor.Instance.FetchAttachment(
+                new(version, "Contract", "Document", [new("1", ClrTypeTag.Int32)]),
+                data));
+
+        Assert.That(exception!.Message, Does.Contain("Unsupported attachment request version"));
+    }
 }

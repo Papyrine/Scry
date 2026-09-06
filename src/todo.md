@@ -158,7 +158,7 @@ Fix: add `MaxExpressionNodes` (per request, counted across every expression the 
 - [x] covered: the cap is counted across every operator (root predicate, terminal predicate, join inner side, set operand,
   HAVING, grouped projection, nested projection), since a per-operator count is a per-operator budget
 - [x] covered: N correlated subqueries in one predicate over the subquery cap are refused
-- [ ] add: `MaxInValues` reached through several `In` calls in one predicate — decide and pin whether it is per call
+- [x] decided per call, pinned (`ValidatorLimitTests.TwoContainsSetsEachAtTheLimitAreAccepted`; the node budget bounds the sum): `MaxInValues` reached through several `In` calls in one predicate — decide and pin whether it is per call
   (today) or per request
 - [x] covered: depth `ValidatorLimitTests.ExpressionNestingIsBounded` and `...InAHavingClause`
 
@@ -221,7 +221,7 @@ Fix: `Enum.IsDefined` every wire enum in the validator (one helper), or configur
 
 - [x] covered: `"kind": 999` is a 400
 - [x] covered: one test per wire enum with an undefined integer, asserting 400 (pins the fail-closed arms named above)
-- [ ] add: decide whether enum *names* on the wire are case-sensitive — the converter reads them case-insensitively, so
+- [x] decided case-sensitive (`TolerantEnumConverter` parses names exactly; `WireSerializationTests.AnEnumNameInTheWrongCaseFailsClosed`) — was: enum *names* on the wire — the converter reads them case-insensitively, so
   `"op":"equal"` and `"op":"Equal"` are two byte-strings for one query (ETag, `q=`, and audit fingerprints diverge)
 
 
@@ -423,15 +423,15 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
   `AttachmentFetchTests.NewerVersionIsRejected`, `WireSerializationTests.NewerResponseVersionFailsClosed`,
   `StreamReadTests.RefusesANewerWireVersionOnTheOpeningMarker`
 - [x] every wire type resolves from the generated metadata — `WireMetadataTests`
-- [ ] add: `"version": 0` and a negative version — decide and pin (accepted today)
+- [x] decided refused (query, batch, attachment; `SecurityTests.RejectsAWireVersionBelowOne`, `BatchTests.AWireVersionBelowOneRejectsTheWholeBatch`, `AttachmentFetchTests.AVersionBelowOneIsRejected`): `"version": 0` and a negative version — decide and pin (accepted today)
 - [ ] add: `$type` not first in the object is refused (STJ default; pin it, since `AllowOutOfOrderMetadataProperties`
   would silently change it)
 - [x] covered: unknown members on a request are refused at every level — `WireSerializationTests.AnUnknownMemberFailsClosed`,
   `AnUnknownMemberOnABatchFailsClosed`, `AnUnknownMemberOnAnAttachmentRequestFailsClosed` (a response stays lenient)
-- [ ] add: duplicate JSON properties — last wins; pin so a future `Disallow` is a deliberate wire change
+- [x] decided refused (`ScryJson.Options.AllowDuplicateProperties = false`; `WireSerializationTests.ADuplicatePropertyFailsClosed`)
 - [ ] add: a byte-for-byte `q=` decode failure (bad base64url, valid base64url of non-JSON, valid JSON of a non-request)
   is a 400 with `no-store` — `HttpRoundTripTests.MalformedUrlQueryIsRejected` covers the first only
-- [ ] add: the `ProjectionMembersConverter` refuses a duplicate member name in one projection (accepted today; the shaped
+- [x] decided refused in the validator, for projections and join results (`SecurityTests.RejectsAProjectionNamingAMemberTwice`, `RejectsAJoinResultNamingAMemberTwice`; the two golden cases that pinned the overwrite are gone): the `ProjectionMembersConverter` refuses a duplicate member name in one projection (accepted today; the shaped
   row overwrites, and the fast writer's output for two members of one name is unpinned)
 
 
@@ -493,8 +493,8 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
   `OfType`/`SelectMany`/`Join` after `Select` — each rule exists in `ValidatePipeline` and none is pinned by name
 - [ ] add: a terminal predicate after a `Join` (`Count(pred)`, `First(pred)`) is refused
 - [ ] add: `Page` after `Join` or a set operation is refused
-- [ ] add: `Take(0)` at the root is accepted while a side `Take(0)` is refused — decide whether the asymmetry is meant
-- [ ] add: `Skip` has no upper bound — pin `Skip(int.MaxValue)` as accepted (or bound it)
+- [x] decided accepted on both (`ValidatorLimitTests.ASetOperandTakeOfZeroIsAccepted`, `ASetOperandTakeCannotBeNegative`): `Take(0)` at the root is accepted while a side `Take(0)` is refused — decide whether the asymmetry is meant
+- [x] pinned as accepted (`ValidatorLimitTests.ASkipOfIntMaxIsAccepted`): `Skip` has no upper bound — pin `Skip(int.MaxValue)` as accepted (or bound it)
 
 
 ### Validator: limits
@@ -530,10 +530,10 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
   `BinaryOp`/`UnaryOp` over every pair of scalar types, asserting the outcome is success or `ScryValidationException`
   and never another exception type (the builder's two catch arms are the only guard, and each new function is a new gap)
 - [ ] add: `CollateNode` over a non-string target (an `int` member) is a 400, not a provider fault
-- [ ] add: an enum constant spelled as an undefined integer (`"999"`) — `Enum.Parse` accepts it; decide and pin
+- [x] decided refused (`ExpressionBuilder.ParseValue` holds a parsed enum to a defined value or flag combination; `SecurityTests.RejectsAnEnumConstantSpelledAsAnUndefinedInteger`): an enum constant spelled as an undefined integer (`"999"`) — `Enum.Parse` accepts it; decide and pin
   (accepted today and matches nothing; `HasFlag` with it likewise)
 - [ ] add: a `ConstNode` on both sides of a comparison (`1 == 1`) — accepted; pin as intended
-- [ ] add: `BytesElementAt` with a negative or past-the-end index and `StringSubstring` with a negative start are
+- [x] decided: a negative constant index is refused in the validator (`SecurityTests.RejectsANegativeIndex`), past the end stays the provider's — `BytesElementAt` with a negative or past-the-end index and `StringSubstring` with a negative start are
   provider faults (fixed 500) rather than 400s — decide whether to validate the constant range
 
 

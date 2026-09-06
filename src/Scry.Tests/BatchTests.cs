@@ -109,6 +109,19 @@ public class BatchTests
         Assert.That(exception.Message, Does.Contain("Unsupported wire version"));
     }
 
+    [TestCase(0)]
+    [TestCase(-1)]
+    public void AWireVersionBelowOneRejectsTheWholeBatch(int version)
+    {
+        var batch = new QueryBatchRequest(version, [QueryRequest.Create("Employee", [new CountOp()])]);
+
+        using var context = TestContext.CreateSeeded();
+        var exception = Assert.Throws<ScryValidationException>(
+            () => SharedProcessor.Instance.ExecuteBatch(batch, context))!;
+
+        Assert.That(exception.Message, Does.Contain("Unsupported wire version"));
+    }
+
     [Test]
     public void EveryEntryIsPolicyFiltered()
     {

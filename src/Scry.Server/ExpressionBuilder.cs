@@ -2515,9 +2515,10 @@ sealed class ExpressionBuilder(
         if (underlying.IsEnum)
         {
             var resolved = schema.ResolveEnumValue(underlying, value);
+            object parsed;
             try
             {
-                return Enum.Parse(underlying, resolved);
+                parsed = Enum.Parse(underlying, resolved);
             }
             catch (ArgumentException)
             {
@@ -2526,6 +2527,18 @@ sealed class ExpressionBuilder(
                 // rather than letting it surface as a server fault.
                 throw new ScryValidationException($"'{value}' is not a value of enum '{underlying.Name}'.");
             }
+
+            // Enum.Parse accepts any integer, defined or not, and an undefined one matches nothing —
+            // or, for a flags enum, matches by bits nobody named. A defined value or combination
+            // spells itself as names; only an undefined one spells itself as its number.
+            var spelled = parsed.ToString()!;
+            if (spelled.Length > 0 &&
+                (char.IsAsciiDigit(spelled[0]) || spelled[0] == '-'))
+            {
+                throw new ScryValidationException($"'{value}' is not a value of enum '{underlying.Name}'.");
+            }
+
+            return parsed;
         }
 
         try

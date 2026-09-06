@@ -7,7 +7,8 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 {
     public ScrySource Validate(QueryRequest request)
     {
-        if (request.Version > WireFormat.Version)
+        // Below one is not an older contract but no contract: the first version was 1.
+        if (request.Version is < 1 or > WireFormat.Version)
         {
             throw Reject($"Unsupported wire version {request.Version}.");
         }
@@ -431,12 +432,15 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             throw Reject("A projection must have at least one member.");
         }
 
+        var names = new HashSet<string>(StringComparer.Ordinal);
         foreach (var member in projection.Members)
         {
             if (++members > options.MaxProjectionMembers)
             {
                 throw Reject($"The projection exceeds the maximum of {options.MaxProjectionMembers} members.");
             }
+
+            EnsureUniqueName(names, member.Name);
 
             switch (member.Value)
             {
@@ -775,6 +779,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             throw Reject($"Function '{call.Function}' does not take {count} argument(s).");
         }
 
+        EnsureNonNegativeIndexes(call);
         if (call.Function != KnownFunction.In)
         {
             return;
@@ -888,9 +893,11 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     break;
 
                 case TakeOp take when stage is 1 or 2:
-                    if (take.Count < 1)
+                    // Zero is an empty side, which is a legitimate ask — the same rule the root's Take
+                    // follows.
+                    if (take.Count < 0)
                     {
-                        throw Reject("Take must be at least one.");
+                        throw Reject("Take cannot be negative.");
                     }
 
                     if (take.Count > options.MaxPageSize)
@@ -1036,9 +1043,11 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
         var grouped = join.Kind == JoinKind.Group;
         var sawAggregate = false;
+        var names = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var member in join.Result)
         {
+            EnsureUniqueName(names, member.Name);
             EnsureDefined(member.Side, "Join side");
             var side = member.Side == JoinSide.Outer ? outerType : innerType;
 
@@ -1653,6 +1662,36 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         {
             throw Reject(
                 $"{op} over a Distinct query is limited to {DistinctRow.ByArity.Length} projected members.");
+        }
+    }
+
+    // A name carried twice would shape a row whose later value overwrote the earlier one, silently:
+    // one spelling per name, so what a projection asks for is what its row carries.
+    static void EnsureUniqueName(HashSet<string> names, string name)
+    {
+        if (!names.Add(name))
+        {
+            throw Reject($"Projection member '{name}' is named more than once.");
+        }
+    }
+
+    // A constant index below zero can never address anything, and the provider answers it with a
+    // fault rather than a rejection. Past the end depends on the row, which only the provider knows.
+    static void EnsureNonNegativeIndexes(CallNode call)
+    {
+        if (call.Function is not (KnownFunction.BytesElementAt or KnownFunction.StringSubstring))
+        {
+            return;
+        }
+
+        foreach (var argument in call.Arguments)
+        {
+            if (argument is ConstNode {Value: { } text} &&
+                long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index) &&
+                index < 0)
+            {
+                throw Reject($"Function '{call.Function}' cannot take a negative index ({index}).");
+            }
         }
     }
 

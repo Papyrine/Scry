@@ -101,26 +101,6 @@ public partial class FastWriterGoldenTests
                 "Date"]}}]}
             """);
         yield return new(
-            "duplicate projected name overwrites in place",
-            """
-            {"version":1,"root":"Employee","pipeline":[
-              {"$type":"orderBy","key":{"$type":"member","path":"Id"},"descending":false},
-              {"$type":"select","projection":{"members":[
-                "Name",
-                "Active",
-                {"name":"Name","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}]}
-            """);
-        yield return new(
-            "nested path claiming a scalar's position",
-            """
-            {"version":1,"root":"Employee","pipeline":[
-              {"$type":"orderBy","key":{"$type":"member","path":"Id"},"descending":false},
-              {"$type":"select","projection":{"members":[
-                {"name":"Boss","value":{"$type":"node","node":{"$type":"member","path":"Name"}}},
-                {"name":"Boss","value":{"$type":"nested","path":"Manager","projection":{"members":[
-                  "Name"]}}}]}}]}
-            """);
-        yield return new(
             "default projection",
             """
             {"version":1,"root":"Employee","pipeline":[

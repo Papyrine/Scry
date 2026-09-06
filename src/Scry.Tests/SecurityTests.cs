@@ -481,6 +481,86 @@ public class SecurityTests
         });
     }
 
+    // Below one is not an older contract but no contract: the first version was 1.
+    [TestCase(0)]
+    [TestCase(-1)]
+    public void RejectsAWireVersionBelowOne(int version)
+    {
+        using var context = TestContext.CreateSeeded();
+        var request = new QueryRequest(version, "Employee", [new CountOp()]);
+
+        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context))!;
+
+        Assert.That(exception.Message, Does.Contain("Unsupported wire version"));
+    }
+
+    // A name carried twice would shape a row whose later value silently overwrote the earlier one.
+    [Test]
+    public void RejectsAProjectionNamingAMemberTwice()
+    {
+        using var context = TestContext.CreateSeeded();
+        var request = QueryRequest.Create(
+            "Employee",
+            [new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"]))), new("Name", new NodeValue(new MemberNode(["Id"])))]))]);
+
+        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context))!;
+
+        Assert.That(exception.Message, Does.Contain("'Name' is named more than once"));
+    }
+
+    [Test]
+    public void RejectsAJoinResultNamingAMemberTwice()
+    {
+        using var context = TestContext.CreateSeeded();
+        var request = QueryRequest.Create(
+            "Employee",
+            [
+                new JoinOp(
+                    "Department",
+                    JoinKind.Inner,
+                    new MemberNode(["DepartmentId"]),
+                    new MemberNode(["Id"]),
+                    null,
+                    [new("Name", JoinSide.Outer, ["Name"]), new("Name", JoinSide.Inner, ["Name"])])
+            ]);
+
+        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context))!;
+
+        Assert.That(exception.Message, Does.Contain("'Name' is named more than once"));
+    }
+
+    // Enum.Parse accepts any integer, and an undefined one would match nothing — or, for a flags
+    // enum, match by bits nobody named. A constant is held to the values the enum defines.
+    [TestCase("999")]
+    [TestCase("-1")]
+    public void RejectsAnEnumConstantSpelledAsAnUndefinedInteger(string value)
+    {
+        using var context = TestContext.CreateSeeded();
+        var request = QueryRequest.Create(
+            "Employee",
+            [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Status"]), new ConstNode(value, ClrTypeTag.Enum)))]);
+
+        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context))!;
+
+        Assert.That(exception.Message, Does.Contain("is not a value of enum 'Status'"));
+    }
+
+    // A constant index below zero addresses nothing and would be a provider fault; past the end is
+    // the provider's to answer, since only it knows the row.
+    [TestCase(KnownFunction.BytesElementAt, "Avatar", "-1")]
+    [TestCase(KnownFunction.StringSubstring, "Name", "-1")]
+    [TestCase(KnownFunction.StringSubstring, "Name", "0", "-1")]
+    public void RejectsANegativeIndex(KnownFunction function, string member, params string[] indexes)
+    {
+        using var context = TestContext.CreateSeeded();
+        var call = new CallNode(function, new MemberNode([member]), [.. indexes.Select(_ => new ConstNode(_, ClrTypeTag.Int32))]);
+        var request = QueryRequest.Create("Employee", [new SelectOp(new([new("x", new NodeValue(call))]))]);
+
+        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context))!;
+
+        Assert.That(exception.Message, Does.Contain("cannot take a negative index"));
+    }
+
     // A rejection echoes what it rejected, which is the client's own text; a message is bounded so a
     // client cannot have its own megabytes handed back in the body, the audit trail, and the trace.
     [TestCase("root")]

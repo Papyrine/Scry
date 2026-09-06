@@ -32,7 +32,7 @@ await batch.SendAsync();
 var rows = await employees;
 var count = await orders;
 ```
-<sup><a href='/src/Scry.Tests/BatchTests.cs#L160-L180' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientBatch' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/BatchTests.cs#L173-L193' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientBatch' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `InBatch<T>(this IQueryable<T> source, ScryBatch batch)` is the whole client surface. Every terminal works unchanged behind it — `ToListAsync`, `CountAsync`, `FirstOrDefaultAsync`, `ToPageAsync`, the aggregates, all of them — because it changes which request carries the query rather than what the query asks. It sits anywhere in the chain, and, like the [header operators](querying.md#headers), is invisible to translation: the wire request is byte-for-byte the one the unbatched query would have sent.

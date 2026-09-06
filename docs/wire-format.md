@@ -98,6 +98,10 @@ Because `root` is part of the contract, prefer setting `Name` over relying on th
 `QueryRequest.Create(root, pipeline)` fills in the current wire version, and takes an optional schema stamp.
 
 
+### One spelling per request
+
+A request is read strictly, so that one query has one byte-string — the ETag, the URL form, and the audit fingerprint are all taken over the bytes, and two spellings of one request would be two of each. Enum names are matched **case-sensitively** (`"op":"Equal"`, never `"equal"`); a property named twice in one object is refused rather than last-wins; a member the vocabulary does not name is refused rather than skipped; `version` must be at least 1; and a projection or join result may not carry one name twice. Each of these is a `400` naming the rule.
+
 ### The URL form
 
 The same request travels one of two ways, and the JSON above is identical in both. As a body:

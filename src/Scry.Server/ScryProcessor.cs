@@ -610,7 +610,7 @@ public sealed class ScryProcessor
     void RejectUnusableBatch(QueryBatchRequest request, IServiceProvider services, Activity? activity, long started)
     {
         string? reason = null;
-        if (request.Version > WireFormat.Version)
+        if (request.Version is < 1 or > WireFormat.Version)
         {
             reason = $"Unsupported wire version {request.Version}.";
         }

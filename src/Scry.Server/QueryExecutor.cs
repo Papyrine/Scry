@@ -888,7 +888,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
     AttachmentFetch? PlanAttachment(AttachmentRequest request, DbContext db, CallScope scope)
     {
-        if (request.Version > AttachmentRequest.CurrentVersion)
+        if (request.Version is < 1 or > AttachmentRequest.CurrentVersion)
         {
             throw new ScryValidationException($"Unsupported attachment request version {request.Version}; this server supports up to {AttachmentRequest.CurrentVersion}.");
         }

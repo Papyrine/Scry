@@ -21,7 +21,11 @@ public static class ScryJson
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             // A null where the vocabulary declares a value is refused on read. Options-wide, which is
             // wider than wanted — see RelaxAnnotations for where it is taken back.
-            RespectNullableAnnotations = true
+            RespectNullableAnnotations = true,
+            // A property named twice is refused rather than last-wins: two spellings of one request
+            // would be two byte-strings — two ETags, two URLs, two audit fingerprints — for one query,
+            // and a reader that keeps the last is a reader whose answer depends on which one it is.
+            AllowDuplicateProperties = false
         };
         // No naming policy on enums: names are part of the wire contract and must stay stable. The
         // tolerant wrapper is byte-identical to JsonStringEnumConverter except when a payload read

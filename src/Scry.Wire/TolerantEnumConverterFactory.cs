@@ -29,47 +29,45 @@ sealed class TolerantEnumConverterFactory :
 
         public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            // The value is a single token, so the checkpoint doubles as the correct final reader
-            // position: converters return with the reader on the last token of the value.
-            var checkpoint = reader;
-            try
+            // A number is read as the built-in converter reads it; a name is read here, exactly as
+            // spelled. The built-in read matches names case-insensitively, which would make "equal"
+            // and "Equal" two byte-strings for one query — and the ETag, the URL, and the audit
+            // fingerprint are all over the bytes. A name is part of the wire contract, so one spelling.
+            if (reader.TokenType != JsonTokenType.String)
             {
                 return inner.Read(ref reader, typeToConvert, options);
             }
-            catch (JsonException)
+
+            var name = reader.GetString()!;
+            if (Enum.TryParse<T>(name, ignoreCase: false, out var exact))
             {
-                if (EnumAliasScope.Current is not { } aliases)
-                {
-                    throw;
-                }
-
-                reader = checkpoint;
-                if (reader.TokenType != JsonTokenType.String ||
-                    reader.GetString() is not { } name)
-                {
-                    throw;
-                }
-
-                foreach (var alias in aliases)
-                {
-                    if (alias.EnumName != typeToConvert.Name ||
-                        alias.ValueName != name)
-                    {
-                        continue;
-                    }
-
-                    foreach (var previous in alias.PreviousNames)
-                    {
-                        if (Enum.TryParse<T>(previous, out var value))
-                        {
-                            return value;
-                        }
-                    }
-                }
-
-                throw new ScryStaleClientException(
-                    $"'{name}' is not a value of enum '{typeToConvert.Name}' in this client's generated model. The server's model has changed — regenerate the client, or reload the deployed app.");
+                return exact;
             }
+
+            if (EnumAliasScope.Current is not { } aliases)
+            {
+                throw new JsonException($"'{name}' is not a value of enum '{typeToConvert.Name}'. Enum names are case-sensitive on the wire.");
+            }
+
+            foreach (var alias in aliases)
+            {
+                if (alias.EnumName != typeToConvert.Name ||
+                    alias.ValueName != name)
+                {
+                    continue;
+                }
+
+                foreach (var previous in alias.PreviousNames)
+                {
+                    if (Enum.TryParse<T>(previous, ignoreCase: false, out var value))
+                    {
+                        return value;
+                    }
+                }
+            }
+
+            throw new ScryStaleClientException(
+                $"'{name}' is not a value of enum '{typeToConvert.Name}' in this client's generated model. The server's model has changed — regenerate the client, or reload the deployed app.");
         }
 
         public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) =>

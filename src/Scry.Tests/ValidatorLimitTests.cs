@@ -175,12 +175,60 @@ public class ValidatorLimitTests
         Assert.That(Rejects("Order", Union(operand)), Does.Contain("Skip cannot be negative"));
     }
 
+    // An empty side is a legitimate ask, the same as an empty page at the root; only a negative one
+    // is refused.
     [Test]
-    public void ASetOperandTakeMustBeAtLeastOne()
+    public void ASetOperandTakeOfZeroIsAccepted()
     {
         QueryOp[] operand = [ordered, new TakeOp(0)];
 
-        Assert.That(Rejects("Order", Union(operand)), Does.Contain("Take must be at least one"));
+        Assert.DoesNotThrow(() => Execute("Order", Union(operand)));
+    }
+
+    [Test]
+    public void ASetOperandTakeCannotBeNegative()
+    {
+        QueryOp[] operand = [ordered, new TakeOp(-1)];
+
+        Assert.That(Rejects("Order", Union(operand)), Does.Contain("Take cannot be negative"));
+    }
+
+    // Skip has no upper bound: the offset is a parameter, so a large one costs the database nothing
+    // it would not spend on a small one, and there is nothing to bound it against.
+    [Test]
+    public void ASkipOfIntMaxIsAccepted()
+    {
+        var count = Execute("Employee", [new OrderByOp(new MemberNode(["Id"]), Descending: false), new SkipOp(int.MaxValue), new CountOp()]);
+
+        Assert.That(count.Payload.GetInt32(), Is.Zero);
+    }
+
+    // MaxInValues bounds each Contains set, not the request: two sets each at the limit are two
+    // parameters of that size, and the request-wide node budget is what bounds their sum.
+    [Test]
+    public void TwoContainsSetsEachAtTheLimitAreAccepted()
+    {
+        static CallNode Set(string member) =>
+            new(KnownFunction.In, new MemberNode([member]), [.. Enumerable.Range(0, 3).Select(_ => new ConstNode(_.ToString(), ClrTypeTag.Int32))]);
+
+        var request = QueryRequest.Create(
+            "Employee",
+            [new WhereOp(new BinaryNode(BinaryOp.AndAlso, Set("Id"), Set("DepartmentId"))), new CountOp()]);
+
+        using var context = TestContext.CreateSeeded();
+        var processor = ScryProcessor.Create<TestContext>(options =>
+        {
+            options.AddPocoSource<Holiday>(_ => Holiday.Seed());
+            options.MaxInValues = 3;
+        });
+
+        Assert.DoesNotThrow(() => processor.Execute(request, context));
+    }
+
+    static QueryResponse Execute(string root, IReadOnlyList<QueryOp> pipeline)
+    {
+        using var context = TestContext.CreateSeeded();
+        return SharedProcessor.Instance.Execute(QueryRequest.Create(root, pipeline), context);
     }
 
     [Test]
