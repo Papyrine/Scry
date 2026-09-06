@@ -54,6 +54,23 @@ public class ConditionalQueryTests
         Assert.That(rows, Is.Not.Empty);
     }
 
+    // A rejection carries no ETag: a client that cached one could later be told its copy of the
+    // rejection is still current. The tag is written only on a 200 that is not no-store.
+    [Test]
+    public async Task ARejectedQueryCarriesNoEtag()
+    {
+        using var http = server.CreateClient();
+        var encoded = QueryUrl.Encode(QueryRequest.Create("Employee", [new WhereOp(new MemberNode(["Nope"])), new CountOp()]));
+        using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+            Assert.That(response.Headers.ETag, Is.Null);
+            Assert.That(response.Headers.CacheControl!.NoStore, Is.True);
+        });
+    }
+
     [Test]
     public async Task WriteToTheDatabaseInvalidatesTheEtag()
     {

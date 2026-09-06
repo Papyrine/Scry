@@ -481,6 +481,37 @@ public class SecurityTests
         });
     }
 
+    // Lookups are ordinal: a name is one spelling, on the source and on the member.
+    [Test]
+    public void RejectsASourceNameInAnotherCase() =>
+        AssertRejected(QueryRequest.Create("employee", [new CountOp()]));
+
+    [Test]
+    public void RejectsAMemberNameInAnotherCase() =>
+        AssertRejected(QueryRequest.Create("Employee", [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["name"]), new ConstNode("x", ClrTypeTag.String)))]));
+
+    // A collation is a rule about text; over anything else it is a rejection, not a provider fault.
+    [Test]
+    public void RejectsACollationOverANonStringMember() =>
+        AssertRejected(QueryRequest.Create(
+            "Employee",
+            [new WhereOp(new BinaryNode(BinaryOp.Equal, new CollateNode(new MemberNode(["Id"]), StringMatch.CaseInsensitive), new ConstNode("1", ClrTypeTag.String)))]));
+
+    // A comparison of two constants reads no member, so there is nothing for the allow-list to say
+    // about it; it is accepted and answers what it says. Pinned as intended.
+    [Test]
+    public void AcceptsAComparisonOfTwoConstants()
+    {
+        using var context = TestContext.CreateSeeded();
+        var request = QueryRequest.Create(
+            "Employee",
+            [new WhereOp(new BinaryNode(BinaryOp.Equal, new ConstNode("1", ClrTypeTag.Int32), new ConstNode("1", ClrTypeTag.Int32))), new CountOp()]);
+
+        var response = SharedProcessor.Instance.Execute(request, context);
+
+        Assert.That(response.Payload.GetInt32(), Is.GreaterThan(0));
+    }
+
     // Below one is not an older contract but no contract: the first version was 1.
     [TestCase(0)]
     [TestCase(-1)]

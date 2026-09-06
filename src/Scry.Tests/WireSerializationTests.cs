@@ -274,6 +274,13 @@ public class WireSerializationTests
         Assert.That(exception.Message, Does.Contain("case-sensitive"));
     }
 
+    // The discriminator leads its object. STJ's default; pinned because AllowOutOfOrderMetadataProperties
+    // would silently make "$type" anywhere a second spelling of the same operator.
+    [Test]
+    public void ADiscriminatorNotFirstFailsClosed() =>
+        Assert.Throws<ScryWireException>(
+            () => ScryJson.DeserializeRequest("""{"version":1,"root":"Employee","pipeline":[{"predicate":{"$type":"member","path":"Active"},"$type":"where"}]}"""));
+
     // A property named twice is refused rather than last-wins, so no request has two byte-strings
     // that read as one.
     [Test]

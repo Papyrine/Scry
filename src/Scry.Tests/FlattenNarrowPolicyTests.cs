@@ -68,22 +68,23 @@ public class FlattenNarrowPolicyTests
 
         var flattened = Names(processor, context, "Fleet", [new SelectManyOp(["Machines"]), new OfTypeOp("Press"), SelectName()]);
 
-        // The direct counterpart, held to the active fleet by hand: the fleet's policy filters the
+        // The direct counterpart, held to the active fleets by hand: the fleet's policy filters the
         // flatten's root, not a query rooted at Press, and the retired fleet holds a light press.
-        var main = context.Fleets.Single(_ => _.Name == "Main").Id;
+        var retired = context.Fleets.Single(_ => _.Name == "Retired").Id;
         var direct = Names(
             processor,
             context,
             "Press",
             [
-                new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["FleetId"]), new ConstNode(main.ToString(), ClrTypeTag.Int32))),
+                new WhereOp(new BinaryNode(BinaryOp.NotEqual, new MemberNode(["FleetId"]), new ConstNode(retired.ToString(), ClrTypeTag.Int32))),
                 SelectName()
             ]);
 
-        // Skipping the derived policy answers "Big press"; skipping the element's answers "Small press".
+        // Skipping the derived policy answers "Big press" as well; skipping the element's answers
+        // "Small press" as well. The two yards' light presses are what both chains let through.
         Assert.Multiple(() =>
         {
-            Assert.That(flattened, Is.Empty);
+            Assert.That(flattened, Is.EqualTo(["Annex press", "Depot press"]));
             Assert.That(flattened, Is.EqualTo(direct));
         });
     }
@@ -110,7 +111,67 @@ public class FlattenNarrowPolicyTests
 
         var flattened = Names(processor, context, "Fleet", [new SelectManyOp(["Machines"]), SelectName()]);
 
-        Assert.That(flattened, Is.EqualTo(["Big press", "Drill", "Small press"]));
+        Assert.That(flattened, Is.EqualTo(["Annex press", "Big press", "Depot press", "Drill", "Small press"]));
+    }
+
+    // A root carrying two policies — its base's and its own — over the same flatten: the count the
+    // executor resets at the flatten is the element's, whatever the root carried.
+    [Test]
+    public void NarrowingAfterAFlattenFromATwiceRootAppliesTheDerivedPolicy()
+    {
+        using var context = TestContext.CreateSeeded();
+        var processor = Build(
+            _ => _.AddPolicy<Fleet, ActiveFleetsOnlyPolicy>(),
+            _ => _.AddPolicy<Yard, StaffedYardsOnlyPolicy>(),
+            _ => _.AddPolicy<Press, LightPressesOnlyPolicy>());
+
+        var flattened = Names(processor, context, "Yard", [new SelectManyOp(["Machines"]), new OfTypeOp("Press"), SelectName()]);
+
+        // The unstaffed yard's press is hidden by the root's own policy; the depot's light press
+        // survives the derived policy. A heavy press anywhere would have proven the derived policy
+        // ran, and there is none in a yard, so the light policy is the one whose skipping would show.
+        Assert.That(flattened, Is.EqualTo(["Depot press"]));
+    }
+
+    // A flatten stops the denied-row probe: the rows after it are the elements, and the probe asks
+    // about the root's. A derived policy that fails the request elsewhere therefore hides after a
+    // flatten instead. Pinned as the accepted behaviour — hiding discloses nothing, which is the
+    // safe direction — so a change to it is a deliberate one.
+    [Test]
+    public void AnErroringDerivedPolicyHidesRatherThanFailsAfterAFlatten()
+    {
+        using var context = TestContext.CreateSeeded();
+        var processor = Build(
+            _ => _.AddPolicy<Press, HeavyPressesOnlyPolicy>(new()
+            {
+                RootList = DeniedRowMode.Error
+            }));
+
+        var flattened = Names(processor, context, "Fleet", [new SelectManyOp(["Machines"]), new OfTypeOp("Press"), SelectName()]);
+
+        Assert.That(flattened, Is.EqualTo(["Big press"]));
+    }
+
+    // Down a three-level chain, each level's policy is applied exactly once: the narrowing to the
+    // middle applies the middle's, and the narrowing to the leaf applies only what the leaf adds.
+    [Test]
+    public void NarrowingTwiceAppliesEachLevelOnce()
+    {
+        using var context = TestContext.CreateSeeded();
+        var processor = Build(
+            _ => _.AddPolicy<Press, TalliedPressPolicy>(),
+            _ => _.AddPolicy<HeavyPress, TalliedHeavyPressPolicy>());
+        TalliedPressPolicy.Applications = 0;
+        TalliedHeavyPressPolicy.Applications = 0;
+
+        var names = Names(processor, context, "Machine", [new OfTypeOp("Press"), new OfTypeOp("HeavyPress"), SelectName()]);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(names, Is.EqualTo(["Big press"]));
+            Assert.That(TalliedPressPolicy.Applications, Is.EqualTo(1));
+            Assert.That(TalliedHeavyPressPolicy.Applications, Is.EqualTo(1));
+        });
     }
 
     // A right join refuses a narrowed outer side, since EF hoists the narrowing into the combined
@@ -145,7 +206,7 @@ public class FlattenNarrowPolicyTests
             .Order()
             .ToList();
 
-        Assert.That(rows, Is.EqualTo([("Big press", "Main"), ("Drill", "Main"), ("Old press", "Retired")]));
+        Assert.That(rows, Is.EqualTo([("Annex press", "Annex"), ("Big press", "Main"), ("Depot press", "Depot"), ("Drill", "Main"), ("Old press", "Retired")]));
     }
 
     static SelectOp SelectName() =>

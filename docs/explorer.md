@@ -350,6 +350,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Model: FleetQueryModel
     },
     {
+      Name: HeavyPress,
+      Kind: Entity,
+      Model: HeavyPressQueryModel
+    },
+    {
       Name: Holiday,
       Kind: Poco,
       Model: HolidayQueryModel
@@ -406,6 +411,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Model: ShiftQueryModel
     },
     {
+      Name: SignedContract,
+      Kind: Entity,
+      Model: SignedContractQueryModel
+    },
+    {
       Name: Ticket,
       Kind: Entity,
       Model: TicketQueryModel
@@ -414,6 +424,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Name: Vehicle,
       Kind: Entity,
       Model: VehicleQueryModel
+    },
+    {
+      Name: Yard,
+      Kind: Entity,
+      Model: YardQueryModel
     }
   ],
   Types: [
@@ -737,6 +752,22 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsSensitive: false
         }
       ],
+      IsSensitive: false
+    },
+    {
+      Model: HeavyPressQueryModel,
+      Members: [
+        {
+          Name: Certified,
+          TypeDisplay: bool,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        }
+      ],
+      Base: PressQueryModel,
       IsSensitive: false
     },
     {
@@ -1250,6 +1281,25 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       IsSensitive: false
     },
     {
+      Model: SignedContractQueryModel,
+      Members: [
+        {
+          Name: Signer,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        }
+      ],
+      Base: ContractQueryModel,
+      Keys: [
+        Id
+      ],
+      IsSensitive: false
+    },
+    {
       Model: TicketQueryModel,
       Members: [
         {
@@ -1330,6 +1380,22 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
         }
       ],
       IsSensitive: false
+    },
+    {
+      Model: YardQueryModel,
+      Members: [
+        {
+          Name: Site,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        }
+      ],
+      Base: FleetQueryModel,
+      IsSensitive: false
     }
   ],
   Enums: [
@@ -1382,10 +1448,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: p1xmLLMK86FB9Y_J
+  SchemaStamp: v18ww6qgOkR4k_FE
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L1079' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L1145' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names, member names with the exact C# type spelling the source generator would emit, and the re-emitted enums. It carries **no** policies, resolvers, connection details, or CLR internals.

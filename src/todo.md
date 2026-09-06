@@ -51,10 +51,10 @@ shape in `TestModel`.
 - [x] covered: `FlattenNarrowPolicyTests.NarrowingAfterAFlattenOfAPoliciedElementAppliesBothChains` (`Hide` element)
 - [x] covered: `FlattenNarrowPolicyTests.NarrowingAfterAFlattenOfAnUnpoliciedRootAppliesTheDerivedPolicy`,
   `TheRootPolicyStillFiltersWhatIsFlattened`
-- [ ] add: the root carrying **two** policies (a policied base and derived root) over the same shape
-- [ ] add: `DeniedRowMode.Error` on the derived policy still fails the request after a flatten (`ProbeSteps.Stop()` is
+- [x] covered (`FlattenNarrowPolicyTests.NarrowingAfterAFlattenFromATwiceRootAppliesTheDerivedPolicy`; `Yard : Fleet` added): the root carrying **two** policies (a policied base and derived root) over the same shape
+- [x] decided and pinned: hides rather than fails, since the probe stops at the flatten (`FlattenNarrowPolicyTests.AnErroringDerivedPolicyHidesRatherThanFailsAfterAFlatten`): `DeniedRowMode.Error` on the derived policy still fails the request after a flatten (`ProbeSteps.Stop()` is
   called at the flatten, so no probe is planned today — decide whether that is acceptable and pin it)
-- [ ] add: `OfType` applied twice down a chain (`Base.OfType(Mid).OfType(Leaf)`) applies each level exactly once
+- [x] covered (`FlattenNarrowPolicyTests.NarrowingTwiceAppliesEachLevelOnce`; `HeavyPress : Press` added): `OfType` applied twice down a chain (`Base.OfType(Mid).OfType(Leaf)`) applies each level exactly once
 - [x] covered: `PolicyInheritanceTests.NarrowingToASubclassMatchesQueryingItDirectly` (no flatten)
 - [x] covered: `PoliciedCollectionTests.FlatteningTheCollectionReachesOnlyTheAllowedElements` (no narrowing)
 
@@ -393,6 +393,33 @@ surfaces per request rather than at startup.
 - [x] covered (as a skip): `FunctionMatrixTests.ScalarMembers` excludes sources the context does not map
 
 
+### F21 — MEDIUM — two positions of the sensitivity walk let a constant against a marked member into a URL (found by `SensitivePositionTests`)
+
+`SensitiveWalk` visited a subquery's predicate with a null source, so the server resolved each path by member name alone
+— and a member of a type marked `[Sensitive]` at the type level (`Address.City`) has no marked name of its own. And a
+`GroupKeyNode` was never sensitive, so a HAVING clause comparing a marked group key against a constant, and a `Select`
+returning one, were a URL and storable. Both reproduced from a URL; both fail closed on the client and server alike
+since the walk is shared.
+
+**Fixed:** the walk prefixes a subquery's collection path onto every path read inside it, which both resolvers follow
+to the element; and a grouping remembers which keys touched a marked member, so a group key read later answers as its
+expression did. Pinned by `SensitivePositionTests` (seven constant positions, two projected positions).
+
+- [x] covered: `SensitivePositionTests.AConstantAgainstAMarkedMemberIsRefusedFromAUrl`, `TheSameQueryIsAnsweredFromABody`,
+  `AMarkedMemberInTheResultIsNotStorable`
+
+
+### F22 — LOW — a `$type` discriminator that is not first was a `NotSupportedException`, not a wire rejection
+
+STJ raises `NotSupportedException` rather than `JsonException` for a polymorphic object whose discriminator is missing or
+out of order, and `ScryJson` wrapped only the latter — so the request was a 500 recorded as `Failed`, on demand.
+
+**Fixed:** `ScryJson` wraps both into `ScryWireException`. Pinned by `WireSerializationTests.ADiscriminatorNotFirstFailsClosed`.
+
+- [x] covered: `WireSerializationTests.ADiscriminatorNotFirstFailsClosed`
+
+
+
 ## Documentation corrections
 
 - [x] `docs/attachments.md` and `Scry.Annotations/AttachmentAttribute.cs` — the "no way to navigate a browser to one"
@@ -424,12 +451,12 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
   `StreamReadTests.RefusesANewerWireVersionOnTheOpeningMarker`
 - [x] every wire type resolves from the generated metadata — `WireMetadataTests`
 - [x] decided refused (query, batch, attachment; `SecurityTests.RejectsAWireVersionBelowOne`, `BatchTests.AWireVersionBelowOneRejectsTheWholeBatch`, `AttachmentFetchTests.AVersionBelowOneIsRejected`): `"version": 0` and a negative version — decide and pin (accepted today)
-- [ ] add: `$type` not first in the object is refused (STJ default; pin it, since `AllowOutOfOrderMetadataProperties`
+- [x] covered (`WireSerializationTests.ADiscriminatorNotFirstFailsClosed`; found F22): `$type` not first in the object is refused (STJ default; pin it, since `AllowOutOfOrderMetadataProperties`
   would silently change it)
 - [x] covered: unknown members on a request are refused at every level — `WireSerializationTests.AnUnknownMemberFailsClosed`,
   `AnUnknownMemberOnABatchFailsClosed`, `AnUnknownMemberOnAnAttachmentRequestFailsClosed` (a response stays lenient)
 - [x] decided refused (`ScryJson.Options.AllowDuplicateProperties = false`; `WireSerializationTests.ADuplicatePropertyFailsClosed`)
-- [ ] add: a byte-for-byte `q=` decode failure (bad base64url, valid base64url of non-JSON, valid JSON of a non-request)
+- [x] covered (`HttpRoundTripTests.AUrlThatDoesNotDecodeToARequestIsRejected`, three cases): a byte-for-byte `q=` decode failure (bad base64url, valid base64url of non-JSON, valid JSON of a non-request)
   is a 400 with `no-store` — `HttpRoundTripTests.MalformedUrlQueryIsRejected` covers the first only
 - [x] decided refused in the validator, for projections and join results (`SecurityTests.RejectsAProjectionNamingAMemberTwice`, `RejectsAJoinResultNamingAMemberTwice`; the two golden cases that pinned the overwrite are gone): the `ProjectionMembersConverter` refuses a duplicate member name in one projection (accepted today; the shaped
   row overwrites, and the fast writer's output for two members of one name is unpinned)
@@ -459,11 +486,11 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
   `ReadingAMemberOfAValueElementIsRejected`; flattening values — `FlatteningACollectionOfValuesIsRejected`
 - [x] derived member without narrowing; narrowing to same/unrelated/base — `OfTypeTests` (five rejection tests)
 - [x] previous names resolve and never widen — `PreviousNamesTests` (eight tests)
-- [ ] add: member and source lookups are ordinal — `"name"` is not `"Name"`, `"employee"` is not `"Employee"`
-- [ ] add: the startup refusals for `[PreviousNames]` (blank, current name, claimed twice, on an unexposed member, on
+- [x] covered (`SecurityTests.RejectsASourceNameInAnotherCase`, `RejectsAMemberNameInAnotherCase`): member and source lookups are ordinal — `"name"` is not `"Name"`, `"employee"` is not `"Employee"`
+- [x] covered (`StartupRefusalTests`, six `[PreviousNames]` cases over Roslyn-compiled models): the startup refusals for `[PreviousNames]` (blank, current name, claimed twice, on an unexposed member, on
   a complex type, on an un-opted-in type) — `Schema.RegisterSourcePreviousNames`/`RegisterMemberPreviousNames` have no tests
-- [ ] add: `OfType` to a sibling after narrowing (`Asset.OfType(Vehicle).OfType(Building)`) is refused
-- [ ] add: `SelectMany` over a complex-typed collection then `OfType` is refused (a complex type is never a source)
+- [x] covered (`PipelineShapeTests.OfTypeToASiblingAfterNarrowingIsRefused`): `OfType` to a sibling after narrowing (`Asset.OfType(Vehicle).OfType(Building)`) is refused
+- [x] covered (`PipelineShapeTests.SelectManyOverAComplexCollectionThenOfTypeIsRefused`): `SelectMany` over a complex-typed collection then `OfType` is refused (a complex type is never a source)
 
 
 ### Validator: pipeline shape
@@ -489,10 +516,10 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
   `AMembershipTestInsideASubqueryIsRejected`, `ASubqueryWrappedInACollationIsStillNested`,
   `SourceMembershipTests.ANestedMembershipTestIsRejected`, `ASubqueryInsideAMembershipTestIsRejected`,
   `AMembershipTestInsideASubqueryInTheValueIsRejected`
-- [ ] add: a second `GroupBy`; `GroupBy` after `Select`; `GroupBy` without a following `Select`; `Where`/`OrderBy`/
+- [x] covered (`PipelineShapeTests`: second `GroupBy`, `GroupBy` after and without `Select`, five operators after `Select`): a second `GroupBy`; `GroupBy` after `Select`; `GroupBy` without a following `Select`; `Where`/`OrderBy`/
   `OfType`/`SelectMany`/`Join` after `Select` — each rule exists in `ValidatePipeline` and none is pinned by name
-- [ ] add: a terminal predicate after a `Join` (`Count(pred)`, `First(pred)`) is refused
-- [ ] add: `Page` after `Join` or a set operation is refused
+- [x] covered (`PipelineShapeTests.ATerminalPredicateAfterAJoinIsRefused`): a terminal predicate after a `Join` (`Count(pred)`, `First(pred)`) is refused
+- [x] covered (`PipelineShapeTests.PageAfterAJoinIsRefused`, `PageAfterASetOperationIsRefused`): `Page` after `Join` or a set operation is refused
 - [x] decided accepted on both (`ValidatorLimitTests.ASetOperandTakeOfZeroIsAccepted`, `ASetOperandTakeCannotBeNegative`): `Take(0)` at the root is accepted while a side `Take(0)` is refused — decide whether the asymmetry is meant
 - [x] pinned as accepted (`ValidatorLimitTests.ASkipOfIntMaxIsAccepted`): `Skip` has no upper bound — pin `Skip(int.MaxValue)` as accepted (or bound it)
 - [x] decided: `Skip`, `Take`, and `Page` without an `OrderBy` before them are refused (`ValidatorLimitTests.PagingWithoutAnOrderingIsRefused`, `PagingAfterAFlattenNeedsAnOrderingOfItsOwn`); EF warns on the
@@ -507,9 +534,9 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
   `ValidatorLimitTests`, `SecurityTests` (limits), `BatchTests.OverMaxBatchSizeRejectsTheWholeBatch`,
   `StreamingTests.EndsAStreamThatExceedsTheRowLimitWithAFailure`
 - [x] covered: F5's node and subquery caps (`ValidatorLimitTests`)
-- [ ] add: `MaxNavigationDepth` is measured per path, so a subquery predicate's path plus its owner's path reaches
+- [ ] add (no shape in the test model reaches it: the collections' elements are complex types or values, with no navigation below them): `MaxNavigationDepth` is measured per path, so a subquery predicate's path plus its owner's path reaches
   twice the limit — pin the effective bound
-- [ ] add: `MaxProjectionMembers` counts a join's `Result` and a set operand's projection (the operand is validated
+- [x] covered (`ValidatorLimitTests.AJoinResultIsBoundedByTheProjectionWidth`, `ASetOperandProjectionIsCountedOnItsOwn`): `MaxProjectionMembers` counts a join's `Result` and a set operand's projection (the operand is validated
   through `ValidateProjection` and so counted; the join has its own check) — pin both
 
 
@@ -531,10 +558,10 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
 - [x] covered (`FunctionMatrixTests`, generated from the schema; found F20): a systematic matrix — every `KnownFunction` applied to every scalar member type of `TestModel`, and every
   `BinaryOp`/`UnaryOp` over every pair of scalar types, asserting the outcome is success or `ScryValidationException`
   and never another exception type (the builder's two catch arms are the only guard, and each new function is a new gap)
-- [ ] add: `CollateNode` over a non-string target (an `int` member) is a 400, not a provider fault
+- [x] covered (`SecurityTests.RejectsACollationOverANonStringMember`): `CollateNode` over a non-string target (an `int` member) is a 400, not a provider fault
 - [x] decided refused (`ExpressionBuilder.ParseValue` holds a parsed enum to a defined value or flag combination; `SecurityTests.RejectsAnEnumConstantSpelledAsAnUndefinedInteger`): an enum constant spelled as an undefined integer (`"999"`) — `Enum.Parse` accepts it; decide and pin
   (accepted today and matches nothing; `HasFlag` with it likewise)
-- [ ] add: a `ConstNode` on both sides of a comparison (`1 == 1`) — accepted; pin as intended
+- [x] covered (`SecurityTests.AcceptsAComparisonOfTwoConstants`): a `ConstNode` on both sides of a comparison (`1 == 1`) — accepted; pin as intended
 - [x] decided: a negative constant index is refused in the validator (`SecurityTests.RejectsANegativeIndex`), past the end stays the provider's — `BytesElementAt` with a negative or past-the-end index and `StringSubstring` with a negative start are
   provider faults (fixed 500) rather than 400s — decide whether to validate the constant range
 
@@ -568,7 +595,7 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
 - [x] decisions per scope, watermark, invalidation, priming, generation races, key bound, no-key refusal —
   `CachedPolicyTests`, `MemoryCachedPolicyStoreTests`
 - [x] covered: F13's pre-materialization bound (`CachedPolicyTests.ATooLargeColdScopeIsRefusedBeforeItsRowsAreRead`)
-- [ ] add: `ScopeKey` read from a request header is documented as unsafe — pin with a policy that does so and a test
+- [x] covered (`CachedPolicyTests.AScopeKeyReadFromAHeaderIsChosenByTheCaller`): `ScopeKey` read from a request header is documented as unsafe — pin with a policy that does so and a test
   showing two callers with different headers share nothing *only* because the sample resolves the key from services
   (a doc-shaped test, so the warning has a name)
 
@@ -579,9 +606,9 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
 - [x] cursor on unordered/grouped/distinct; page size caps and defaults — `SecurityTests`, `ExecutionTests.Paged*`
 - [x] seek falls back to offset on nullable keys, views, POCOs, byte[] keys — `ClientRoundTripTests.Keyset*`, `PagingOverAByteArrayKeyIssuesNoCursor`
 - [x] covered: F6 (`CursorCodecTests`) and F12 (`CursorBindingTests`)
-- [ ] add: a cursor value that does not parse as the key member's type is a 400 (`BuildConstant` → `ParseValue`), and a
+- [x] covered (`CursorBindingTests.RejectsACursorValueThatDoesNotParseAsTheKey`, `ANullCursorValueForANonNullableKeyDoesNotFault`): a cursor value that does not parse as the key member's type is a 400 (`BuildConstant` → `ParseValue`), and a
   null value for a non-nullable key matches nothing rather than faulting
-- [ ] add: `CursorKey` set makes cursors survive a second processor; unset makes them per-process (documented,
+- [x] covered (`CursorBindingTests.ACursorKeyLetsAnotherProcessorResumeTheCursor`, `ADifferentCursorKeyRefusesTheCursor`, `WithoutACursorKeyCursorsArePerProcess` — per process, since every processor in one shares the ephemeral key): `CursorKey` set makes cursors survive a second processor; unset makes them per-process (documented,
   untested)
 
 
@@ -601,21 +628,21 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
 - [x] covered: F2, F3, F11 tests (`AttachmentTests.IsServedAsADownload`, `HttpRoundTripTests.*Refused`, `QueryEtagTests`)
 - [x] covered (`HttpRoundTripTests.AProviderFailureAfterTheStreamBeganEndsItWithTheFixedMessage`): a provider failure *after* the stream's begin marker ends with the fixed message, never SQL text
   (`HandleStream`'s catch; the row-limit test covers the validation-message branch only)
-- [ ] add: a rejected query carries no `ETag`; a `no-store` response carries no `ETag`
+- [x] covered for the rejection (`ConditionalQueryTests.ARejectedQueryCarriesNoEtag`); the `no-store` half has no marked member in the sample model to reach it with, and is held by the same `OnStarting` check: a rejected query carries no `ETag`; a `no-store` response carries no `ETag`
 - [x] decided excluded: a bare `*` never matches (`QueryEtag.Matches`; `ConditionalQueryTests.AWildcardConditionIsNotAMatch`)
-- [ ] add: `HEAD` and `OPTIONS` on the query route are 405 (no handler runs, nothing is advertised)
-- [ ] add: a `q=` parameter given twice is a 400 (the joined `StringValues` is not base64url)
+- [x] covered (`HttpRoundTripTests.OtherMethodsOnTheQueryRouteAreNotAllowed`): `HEAD` and `OPTIONS` on the query route are 405 (no handler runs, nothing is advertised)
+- [x] covered (`HttpRoundTripTests.ADoubledQueryParameterIsRejected`): a `q=` parameter given twice is a 400 (the joined `StringValues` is not base64url)
 - [x] fixed: every `ScryValidationException` message is bounded at 1024 chars (`SecurityTests.ARejectionEchoingALongClientStringIsBounded` — root, member, constant)
-- [ ] add: the `RequireAuthorization` convention reaches the GET route (the attachment and POST routes are covered by
+- [x] covered (`AttachmentTests.AuthorizationReachesTheAttachmentEndpoint` now asks the GET route too): the `RequireAuthorization` convention reaches the GET route (the attachment and POST routes are covered by
   `AttachmentTests.AuthorizationReachesTheAttachmentEndpoint`; the GET route is inserted after that list is built)
 
 
 ### Batch
 
 - [x] size, version, per-entry validation/policy/audit, rejected entry isolation — `BatchTests`, `HttpRoundTripTests.BatchEntryRejectedOverHttp`
-- [ ] add: a batch entry that *fails* (provider error) reports the fixed message and its own `staleClient` attribution
+- [x] covered (`BatchTests.AFailingEntryReportsTheFixedMessageInItsOwnSlot`); a batch entry carries no per-entry stale marker to attribute with, so that half is moot: a batch entry that *fails* (provider error) reports the fixed message and its own `staleClient` attribution
 - [x] covered: a null entry fails the batch's deserialization closed (F7, `WireSerializationTests.ANullBatchEntryFailsClosed`)
-- [ ] add: response headers written by one entry's policy apply to the whole batch response — pin as intended
+- [x] covered (`HttpRoundTripTests.AHeaderWrittenByOneEntryIsOnTheWholeBatchResponse`): response headers written by one entry's policy apply to the whole batch response — pin as intended
 
 
 ### Attachments
@@ -623,12 +650,12 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
 - [x] denied, missing, and hidden are one 404; row policy applies; key parsing; wrong count; unknown member/source;
   null key; version; content types; `nosniff`; authorization convention — `AttachmentFetchTests`, `AttachmentTests`
 - [x] covered: F2 (`AttachmentTests.IsServedAsADownload`), F17 (`AttachmentFetchTests`), F19 (documented)
-- [ ] add: a source exposing an attachment with no policy refuses to start (`Schema.ResolveAttachmentPolicy`, untested)
-- [ ] add: an attachment policy declared on a base is applied to the derived source (server side; only the explorer's
+- [x] covered (`StartupRefusalTests`, "an attachment with no policy to authorize it"): a source exposing an attachment with no policy refuses to start (`Schema.ResolveAttachmentPolicy`, untested)
+- [x] covered (`AttachmentFetchTests.AnAttachmentPolicyOnTheBaseAppliesToTheDerivedSource`; `SignedContract : Contract` added): an attachment policy declared on a base is applied to the derived source (server side; only the explorer's
   `AttachmentLinkerTests.LinksAnInheritedAttachment` touches inheritance today)
-- [ ] add: the startup refusals for `[Attachment]`/`[BinaryTransfer]` on a non-`byte[]`, on a hidden member, on both at
+- [x] covered (`StartupRefusalTests`, the non-`byte[]`, hidden, both-at-once, complex-type, and malformed-type cases; a view or POCO shape needs an EF mapping or a registration a dynamic type cannot take): the startup refusals for `[Attachment]`/`[BinaryTransfer]` on a non-`byte[]`, on a hidden member, on both at
   once, on a view/POCO source, on a complex type, and for a malformed declared content type — none has a test
-- [ ] add: a key value carrying a *different* tag than the key's type (`"tag":"String"` for an `int` key) is parsed as
+- [x] covered (`AttachmentFetchTests.AKeyValueIsParsedAsTheKeysTypeWhateverItsTag`): a key value carrying a *different* tag than the key's type (`"tag":"String"` for an `int` key) is parsed as
   the member's type (the doc says the tag is a hint; pin it for keys as `UnsignedMemberFilters` does for constants)
 
 
@@ -640,11 +667,11 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
   `SensitiveTransportTests`, `SensitiveStructTests`, `SensitiveSchemaTests`, `HttpRoundTripTests` (sensitive tests),
   `ObservabilityTests.AuditFlagsAConstantAgainstASensitiveMember`
 - [x] covered: F4 (`SensitiveSchemaTests`, `SensitiveOverrideTests`) and F6 (`SensitiveTransportTests.PagingByAMarkedMemberKeepsTheUrl`)
-- [ ] add: a constant against a marked member inside a join's inner predicate, a set operand's predicate, a subquery
+- [x] covered (`SensitivePositionTests`, seven positions; found F21): a constant against a marked member inside a join's inner predicate, a set operand's predicate, a subquery
   predicate, a membership predicate or selector, a HAVING clause, and a group key — each is walked by `SensitiveWalk`
   and none is pinned from a URL
-- [ ] add: a marked member projected through a join `Result` or a set operand projection is `no-store`
-- [ ] add: an unknown `Node` kind fails closed in `SensitiveWalk` (both flags set) — reachable only by adding a node
+- [x] covered (`SensitivePositionTests.AMarkedMemberInTheResultIsNotStorable`): a marked member projected through a join `Result` or a set operand projection is `no-store`
+- [x] by code: the walk's default arm sets both flags and `InProjection`; reachable only by adding a node kind, so a test would have to add one — documented here instead: an unknown `Node` kind fails closed in `SensitiveWalk` (both flags set) — reachable only by adding a node
   kind; pin with a test-local subclass if the walk can be given one, otherwise document
 
 
@@ -653,12 +680,12 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
 - [x] explorer assets revalidate; introspection endpoint; share link; malformed share link; CSV formula neutralisation;
   XML escaping; attachment link derivation — `UiSnapshotTests`, `ResultExporterTests`, `AttachmentLinkerTests`
 - [x] SQL preview refuses what the query would refuse and shows the policy — `SqlPreviewTests`
-- [ ] add (Sample.Tests): outside Development, `/scry`, `/scry/introspect`, `/scry/sql`, and `/scry/_framework/x` are
+- [x] covered (`ExplorerGuardTests.OutsideDevelopmentEveryRouteIsNotFound`, `OutsideDevelopmentTheSqlPreviewIsNotFound`): outside Development, `/scry`, `/scry/introspect`, `/scry/sql`, and `/scry/_framework/x` are
   404 (`EnableGuard` default) — the sample sets `EnableGuard = _ => true`, so the default is never exercised
-- [ ] add: `EnableSqlPreview` false with `EnableGuard` true — `/scry/sql` is 404 and introspection says `sqlPreview: false`
-- [ ] add: asset paths with `..`, backslashes, and URL-encoded separators are 404 and never touch the file system
+- [x] covered (`ExplorerGuardTests.ASqlPreviewGuardOfItsOwnKeepsSqlOutWhileTheExplorerIsIn`): `EnableSqlPreview` false with `EnableGuard` true — `/scry/sql` is 404 and introspection says `sqlPreview: false`
+- [x] covered (`ExplorerGuardTests.AnAssetPathCannotLeaveTheCatalogue`): asset paths with `..`, backslashes, and URL-encoded separators are 404 and never touch the file system
 - [x] covered: F16's no-auto-run test (`UiSnapshotTests.ExplorerOpensASharedLinkWithoutRunningIt`)
-- [ ] add: the SQL preview endpoint refuses a non-JSON `Content-Type` alongside F3, and its 500 body is the fixed text
+- [x] covered for the 415 (`ExplorerGuardTests.TheSqlPreviewRefusesABodyThatIsNotJson`); the fixed 500 body is not provokable through a request: the SQL preview endpoint refuses a non-JSON `Content-Type` alongside F3, and its 500 body is the fixed text
 - [x] covered: the host page is served under a `Content-Security-Policy` with its inline scripts allowed by hash —
   `UiSnapshotTests.ExplorerServesAContentSecurityPolicy`, `ExplorerAssetsCarryNoPolicy`; every browser test fails on a
   refusal the browser logs (`BrowserFixture.RefuseContentSecurityPolicyViolations`)
@@ -669,12 +696,12 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
 - [x] complex/entity mix-ups, inherited members from other assemblies, foreign enums, unreadable collection shapes,
   double opt-in, no-key cached policy, negative URL limit, unscoped caching, malformed collation —
   `GuardrailTests`, `LockstepTests`, `CachedPolicyTests.ATypeWithNoKeyIsRefusedAtStartup`, `UrlLimitTests`, `CollationTests`
-- [ ] add: duplicate source names (two types named the same via `Name`) refuse to start
-- [ ] add: a source name that is not a C# identifier refuses to start (`EnsureNameIsIdentifier`; the generator's SCRY003
+- [x] covered (`StartupRefusalTests`, "two sources with one name"): duplicate source names (two types named the same via `Name`) refuse to start
+- [x] covered (`StartupRefusalTests`, "a source name that is not an identifier"): a source name that is not a C# identifier refuses to start (`EnsureNameIsIdentifier`; the generator's SCRY003
   is tested, the server's twin is not)
-- [ ] add: a policy type implementing `IReturnablePolicy<T>` for two `T`s, or for a type outside the hierarchy it is
+- [x] covered (`StartupRefusalTests`, "a policy filtering two types", "a policy attached outside the hierarchy it filters"): a policy type implementing `IReturnablePolicy<T>` for two `T`s, or for a type outside the hierarchy it is
   attached to, refuses to start (`RowPolicy.EntityType`, `Schema.ResolvePolicies`)
-- [ ] add: `ProbePoliciedNavigations` runs every policy once with empty headers and no principal — pin that a policy
+- [x] covered (`PolicyResolutionTests.APolicyThatThrowsUnderTheStartupProbeFailsStartupNamingIt`); clearing the option is `MapScry`'s, documented: `ProbePoliciedNavigations` runs every policy once with empty headers and no principal — pin that a policy
   which throws under those conditions is a startup failure naming it, and that clearing the option skips it
   (`NavigationPolicyTests.Probe*` cover translation failures, not construction failures)
 

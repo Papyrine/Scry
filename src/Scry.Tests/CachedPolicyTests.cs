@@ -293,6 +293,25 @@ public class CachedPolicyTests
         Assert.That(exception.Message, Does.Contain("MaxCachedPolicyKeys"));
     }
 
+    // The hazard the doc names, given a test: a scope key read from a request header is a scope key
+    // the caller chooses. Two callers with different headers share nothing, and every row is decided
+    // again for the second — which is what proves the caller, not the server, picked the scope.
+    [Test]
+    public async Task AScopeKeyReadFromAHeaderIsChosenByTheCaller()
+    {
+        await using var context = TestContext.CreateSeeded();
+        var policy = new HeaderScopedPolicy();
+        var processor = Build(_ => _.AddCachedPolicy<Order, long, HeaderScopedPolicy>(order => order.Revision));
+        var request = QueryRequest.Create("Order", [new CountOp()]);
+
+        var services = new ServiceCollection().AddSingleton(policy).BuildServiceProvider();
+
+        processor.Execute(request, context, services, new HeaderDictionary {["X-Scope"] = "one"}, new HeaderDictionary());
+        processor.Execute(request, context, services, new HeaderDictionary {["X-Scope"] = "two"}, new HeaderDictionary());
+
+        Assert.That(policy.Decisions, Is.EqualTo(6));
+    }
+
     // The bound on the work rather than on the result. A scope nothing has been decided for reads
     // every row of the table, per scope key, so a table past the bound is refused from a count —
     // before a row is read, which is what the policy never being asked proves.
@@ -384,6 +403,25 @@ public class CachedPolicyTests
 /// Stands in for a decision too expensive to make in SQL by counting how often it is made. What it
 /// answers is trivial; when it is asked is the whole subject.
 /// </summary>
+/// <summary>
+/// Never registered by default. The scope key the documentation warns against: one the caller
+/// chooses, by sending a header.
+/// </summary>
+public sealed class HeaderScopedPolicy :
+    ICachedRowPolicy<Order>
+{
+    public int Decisions { get; private set; }
+
+    public string ScopeKey(ScryPolicyContext context) =>
+        context.RequestHeaders["X-Scope"].ToString();
+
+    public bool Allow(Order row, string scopeKey, ScryPolicyContext context)
+    {
+        Decisions++;
+        return true;
+    }
+}
+
 public sealed class CountingRegionPolicy :
     ICachedRowPolicy<Order>
 {

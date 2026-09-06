@@ -32,14 +32,29 @@ public sealed class ScryTestServer :
     /// <c>ETag</c> on every URL-borne response, and the value moves with the database's log position,
     /// which would be churn in the snapshots of the other fixtures that share one of these servers.
     /// </param>
-    public static async Task<ScryTestServer> StartAsync(bool conditionalRequests = false)
+    /// <param name="environment">
+    /// The hosting environment name, where a test needs one other than the default. The explorer's
+    /// default guard reads it: outside Development the explorer is unmapped, which is what the
+    /// guard tests exercise.
+    /// </param>
+    /// <param name="explorer">
+    /// Maps the explorer with these options, where given. Null maps none, which is what every fixture
+    /// but the guard tests wants — the browser suite drives the real server for the explorer itself.
+    /// </param>
+    public static async Task<ScryTestServer> StartAsync(
+        bool conditionalRequests = false,
+        string? environment = null,
+        Action<ScryExplorerOptions>? explorer = null)
     {
         // A database of its own when conditional requests are on: that fixture writes, and every other
         // in-process fixture shares one of these servers and asserts against the seeded rows. Without
         // the suffix they all resolve to the same database name, since it is derived from this method.
         var database = await sqlInstance.Build(databaseSuffix: conditionalRequests ? "etag" : null);
 
-        var builder = WebApplication.CreateBuilder();
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = environment
+        });
         builder.WebHost.UseTestServer();
         builder.Services.AddDbContext<SampleContext>(_ => _.UseSqlServer(database.ConnectionString));
         builder.Services.AddSingleton<RegionGrants>();
@@ -60,6 +75,10 @@ public sealed class ScryTestServer :
 
         var app = builder.Build();
         app.MapScry("/api/query");
+        if (explorer is not null)
+        {
+            app.MapScryExplorer(explorer);
+        }
 
         // The sample's own endpoints behind the cached row policy, mirrored from Program.cs so the
         // page under test drives the same two things here as it does in the running app.

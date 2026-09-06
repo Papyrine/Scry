@@ -43,6 +43,11 @@
       Model: FleetQueryModel
     },
     {
+      Name: HeavyPress,
+      Kind: Entity,
+      Model: HeavyPressQueryModel
+    },
+    {
       Name: Holiday,
       Kind: Poco,
       Model: HolidayQueryModel
@@ -99,6 +104,11 @@
       Model: ShiftQueryModel
     },
     {
+      Name: SignedContract,
+      Kind: Entity,
+      Model: SignedContractQueryModel
+    },
+    {
       Name: Ticket,
       Kind: Entity,
       Model: TicketQueryModel
@@ -107,6 +117,11 @@
       Name: Vehicle,
       Kind: Entity,
       Model: VehicleQueryModel
+    },
+    {
+      Name: Yard,
+      Kind: Entity,
+      Model: YardQueryModel
     }
   ],
   Types: [
@@ -430,6 +445,22 @@
           IsSensitive: false
         }
       ],
+      IsSensitive: false
+    },
+    {
+      Model: HeavyPressQueryModel,
+      Members: [
+        {
+          Name: Certified,
+          TypeDisplay: bool,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        }
+      ],
+      Base: PressQueryModel,
       IsSensitive: false
     },
     {
@@ -943,6 +974,25 @@
       IsSensitive: false
     },
     {
+      Model: SignedContractQueryModel,
+      Members: [
+        {
+          Name: Signer,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        }
+      ],
+      Base: ContractQueryModel,
+      Keys: [
+        Id
+      ],
+      IsSensitive: false
+    },
+    {
       Model: TicketQueryModel,
       Members: [
         {
@@ -1023,6 +1073,22 @@
         }
       ],
       IsSensitive: false
+    },
+    {
+      Model: YardQueryModel,
+      Members: [
+        {
+          Name: Site,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false
+        }
+      ],
+      Base: FleetQueryModel,
+      IsSensitive: false
     }
   ],
   Enums: [
@@ -1075,5 +1141,5 @@
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: p1xmLLMK86FB9Y_J
+  SchemaStamp: v18ww6qgOkR4k_FE
 }

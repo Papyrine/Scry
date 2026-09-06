@@ -599,6 +599,67 @@ public class HttpRoundTripTests
         Assert.That(response.Headers.GetValues("Scry-Schema-Stamp").Single(), Is.EqualTo(ScryQuery.SchemaStamp));
     }
 
+    // Every way a URL can fail to be a request is one 400: not base64url, base64url of something that
+    // is not JSON, and JSON that is not a request. None reaches a handler, and none is storable.
+    [TestCase("not-base64url!!", TestName = "not base64url")]
+    [TestCase("bm90IGpzb24", TestName = "base64url of text that is not JSON")]
+    [TestCase("eyJhIjoxfQ", TestName = "base64url of JSON that is not a request")]
+    public async Task AUrlThatDoesNotDecodeToARequestIsRejected(string encoded)
+    {
+        using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+            Assert.That(response.Headers.CacheControl!.NoStore, Is.True);
+        });
+    }
+
+    // Two q parameters join into one string that is not base64url: a 400, not the first one.
+    [Test]
+    public async Task ADoubledQueryParameterIsRejected()
+    {
+        var encoded = QueryUrl.Encode(QueryRequest.Create("Employee", [new CountOp()]));
+        using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}&{QueryUrl.Parameter}={encoded}");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    // Only the methods with a handler are mapped, so anything else is routing's 405 — no handler runs
+    // and nothing is advertised beyond the Allow header routing writes.
+    [TestCase("HEAD")]
+    [TestCase("OPTIONS")]
+    [TestCase("PUT")]
+    public async Task OtherMethodsOnTheQueryRouteAreNotAllowed(string method)
+    {
+        using var request = new HttpRequestMessage(new(method), "/api/query");
+        using var response = await http.SendAsync(request);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.MethodNotAllowed));
+    }
+
+    // A batch is one response, so a header one entry's policy writes is on it once — for the whole
+    // batch, since the entries share a response. Pinned as intended.
+    [Test]
+    public async Task AHeaderWrittenByOneEntryIsOnTheWholeBatchResponse()
+    {
+        var batch = QueryBatchRequest.Create([
+            QueryRequest.Create("Order", [new CountOp()]),
+            QueryRequest.Create("Department", [new CountOp()])
+        ]);
+        using var content = new StringContent(ScryJson.Serialize(batch), Encoding.UTF8, "application/json");
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/query/batch") {Content = content};
+        request.Headers.Add("X-Correlation", "batch-1");
+
+        using var response = await http.SendAsync(request);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(response.Headers.GetValues("X-Scry-Echo").Single(), Is.EqualTo("batch-1"));
+        });
+    }
+
     // A body missing a member an operator requires is refused where an unparseable one is: a 400
     // naming the member, never a server fault a validator reached by dereferencing the default.
     [Test]

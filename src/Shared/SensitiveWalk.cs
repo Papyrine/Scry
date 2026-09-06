@@ -50,6 +50,14 @@ static class SensitiveWalk
         public bool InConstant;
         public bool InProjection;
 
+        // Whether each key of the current grouping touched a marked member, by index, so a group key
+        // read later — in the HAVING, in the Select — answers as the key's own expression would.
+        readonly List<bool> groupKeys = [];
+
+        // Inside a subquery: the collection's path off the row, prefixed onto every path read there,
+        // so the element's members resolve through the collection rather than as an unresolved name.
+        IReadOnlyList<string>? prefix;
+
         public void Pipeline(IReadOnlyList<QueryOp> pipeline, string? root)
         {
             // A query that never says what to return is answered with the source's own members, every
@@ -112,9 +120,17 @@ static class SensitiveWalk
                     Expression(aggregate.Selector, root);
                     return root;
                 case GroupByOp groupBy:
+                    groupKeys.Clear();
                     foreach (var key in groupBy.Keys)
                     {
-                        Expression(key, root);
+                        var found = new Found();
+                        Visit(key, root, projected: false, found);
+                        if (found is { Sensitive: true, Constant: true })
+                        {
+                            InConstant = true;
+                        }
+
+                        groupKeys.Add(found.Sensitive);
                     }
 
                     // The rows are groups now, and a later path reads a key or an aggregate rather than
@@ -271,18 +287,35 @@ static class SensitiveWalk
                     return;
                 case SubqueryNode subquery:
                     // The collection member is read off this row; what is inside is read off its
-                    // elements, which are rows of a type this walk cannot name.
+                    // elements, which both resolvers reach by following the collection's path one
+                    // segment further. A subquery cannot nest, so one prefix is the most there is.
                     Member(subquery.Path, root);
-                    Visit(subquery.Predicate, null, projected: false, found);
-                    Visit(subquery.Selector, null, projected: false, found);
+                    var outer = prefix;
+                    prefix = [.. outer ?? [], .. subquery.Path];
+                    Visit(subquery.Predicate, root, projected: false, found);
+                    Visit(subquery.Selector, root, projected: false, found);
+                    prefix = outer;
                     return;
                 case InSourceNode inSource:
                     Visit(inSource.Value, root, projected, found);
                     Visit(inSource.Selector, inSource.Root, projected: false, found);
                     Visit(inSource.Predicate, inSource.Root, projected: false, found);
                     return;
+                case GroupKeyNode groupKey:
+                    // Reads the key's value, so it answers as the key's expression did — and a marked
+                    // key in the Select is a marked member in the result.
+                    if (groupKey.Index < groupKeys.Count &&
+                        groupKeys[groupKey.Index])
+                    {
+                        found.Sensitive = true;
+                        if (projected)
+                        {
+                            InProjection = true;
+                        }
+                    }
+
+                    return;
                 case ElementNode:
-                case GroupKeyNode:
                     return;
                 default:
                     // A node kind this walk does not know cannot be reasoned about, so it is treated as
@@ -295,10 +328,18 @@ static class SensitiveWalk
             }
         }
 
+        static IReadOnlyList<string> Prefixed(IReadOnlyList<string> prefix, IReadOnlyList<string> path) =>
+            [.. prefix, .. path];
+
         bool Member(IReadOnlyList<string> path, string? root, bool projected = false)
         {
-            if (path.Count == 0 ||
-                !sensitive(root, path))
+            if (path.Count == 0)
+            {
+                return false;
+            }
+
+            var full = prefix is null ? path : Prefixed(prefix, path);
+            if (!sensitive(root, full))
             {
                 return false;
             }

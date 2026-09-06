@@ -417,10 +417,22 @@ public class AttachmentTests
                 "application/json");
             using var response = await transport.PostAsync("/api/query/attachment", content);
 
-            Assert.That(
-                response.StatusCode,
-                Is.AnyOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden),
-                "The attachment endpoint must inherit the authorization applied to MapScry.");
+            // The GET route is mapped after the list the conventions are applied to is built, so it
+            // is the one an authorization convention could miss.
+            var encoded = QueryUrl.Encode(QueryRequest.Create("Person", [new CountOp()]));
+            using var viaUrl = await transport.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(
+                    response.StatusCode,
+                    Is.AnyOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden),
+                    "The attachment endpoint must inherit the authorization applied to MapScry.");
+                Assert.That(
+                    viaUrl.StatusCode,
+                    Is.AnyOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden),
+                    "The GET route must inherit the authorization applied to MapScry.");
+            });
         }
         finally
         {

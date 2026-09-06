@@ -23,6 +23,20 @@ public class PolicyResolutionTests
         });
     }
 
+    // The startup probe runs every policy a traversal reaches once, with empty headers and no
+    // principal. One that cannot answer under those conditions fails startup naming itself, which is
+    // the moment to either give it a default or clear ProbePoliciedNavigations.
+    [Test]
+    public void APolicyThatThrowsUnderTheStartupProbeFailsStartupNamingIt()
+    {
+        using var context = TestContext.CreateSeeded();
+        var processor = Build(_ => _.AddPolicy<Department, NeedsAPrincipalPolicy>());
+
+        var exception = Assert.Throws<Exception>(() => processor.ProbePoliciedNavigations(context, new ServiceCollection().BuildServiceProvider()))!;
+
+        Assert.That(exception.ToString(), Does.Contain("NeedsAPrincipalPolicy"));
+    }
+
     [Test]
     public void ARegisteredPolicyPasses()
     {
@@ -47,4 +61,12 @@ public class PolicyResolutionTests
             options.AddPocoSource<Holiday>(_ => Holiday.Seed());
             extra(options);
         });
+}
+
+/// <summary>Never attached by default. Cannot answer without a principal, which the startup probe has none of.</summary>
+public sealed class NeedsAPrincipalPolicy :
+    IReturnablePolicy<Department>
+{
+    public IQueryable<Department> Filter(IQueryable<Department> source, ScryPolicyContext context) =>
+        throw new InvalidOperationException("No principal to scope by.");
 }

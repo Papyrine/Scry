@@ -193,6 +193,41 @@ public class ValidatorLimitTests
         Assert.That(Rejects("Order", Union(operand)), Does.Contain("Take cannot be negative"));
     }
 
+    // A join's result is a projection of its own and is held to the same width.
+    [Test]
+    public void AJoinResultIsBoundedByTheProjectionWidth()
+    {
+        var join = new JoinOp(
+            "Department",
+            JoinKind.Inner,
+            new MemberNode(["DepartmentId"]),
+            new MemberNode(["Id"]),
+            null,
+            [new("Employee", JoinSide.Outer, ["Name"]), new("Department", JoinSide.Inner, ["Name"])]);
+
+        Assert.That(
+            Rejects("Employee", [join], _ => _.MaxProjectionMembers = 1),
+            Does.Contain("join projecting 2 members exceeds the maximum of 1"));
+    }
+
+    // A set operand's projection is validated through the same walk as the pipeline's, and counted
+    // on its own: two projections of two members are each within a bound of two, not one of four.
+    [Test]
+    public void ASetOperandProjectionIsCountedOnItsOwn()
+    {
+        Projection two = new([new("Name", new NodeValue(new MemberNode(["Name"]))), new("Id", new NodeValue(new MemberNode(["Id"])))]);
+        QueryOp[] ops = [new SelectOp(two), new SetOp(SetKind.Union, "Employee", null, two), new CountOp()];
+
+        using var context = TestContext.CreateSeeded();
+        var processor = ScryProcessor.Create<TestContext>(options =>
+        {
+            options.AddPocoSource<Holiday>(_ => Holiday.Seed());
+            options.MaxProjectionMembers = 2;
+        });
+
+        Assert.DoesNotThrow(() => processor.Execute(QueryRequest.Create("Employee", ops), context));
+    }
+
     // A row-limiting operator over rows in no defined order slices an undefined sequence, and a host
     // whose EF treats that warning as an error would fault on it. Refused here, whatever the host did.
     [TestCase("skip")]

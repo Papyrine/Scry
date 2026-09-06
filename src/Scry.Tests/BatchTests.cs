@@ -109,6 +109,36 @@ public class BatchTests
         Assert.That(exception.Message, Does.Contain("Unsupported wire version"));
     }
 
+    // An entry that fails at execution — a division by a constant of the client's choosing — reports
+    // the fixed message and a 500, in its own slot, beside an entry that succeeded.
+    [Test]
+    public void AFailingEntryReportsTheFixedMessageInItsOwnSlot()
+    {
+        var failing = QueryRequest.Create(
+            "Employee",
+            [
+                new SelectOp(new([
+                    new("Ratio", new NodeValue(new BinaryNode(
+                        BinaryOp.Divide,
+                        new ConstNode("100", ClrTypeTag.Int32),
+                        new BinaryNode(BinaryOp.Subtract, new MemberNode(["Id"]), new MemberNode(["Id"])))))
+                ]))
+            ]);
+        var batch = QueryBatchRequest.Create([QueryRequest.Create("Employee", [new CountOp()]), failing]);
+
+        using var context = TestContext.CreateSeeded();
+        var response = SharedProcessor.Instance.ExecuteBatch(batch, context);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.Results[0].Response, Is.Not.Null);
+            Assert.That(response.Results[0].Error, Is.Null);
+            Assert.That(response.Results[1].Status, Is.EqualTo(HttpStatusCode.InternalServerError));
+            Assert.That(response.Results[1].Error, Is.EqualTo("Query execution failed."));
+            Assert.That(response.Results[1].Response, Is.Null);
+        });
+    }
+
     [TestCase(0)]
     [TestCase(-1)]
     public void AWireVersionBelowOneRejectsTheWholeBatch(int version)

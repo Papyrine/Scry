@@ -46,6 +46,57 @@ public class AttachmentFetchTests
         });
     }
 
+    // A policy declared on the base applies to a derived source, as a row policy would: the derived
+    // contract opts in with none of its own and is authorized by the base's.
+    [Test]
+    public async Task AnAttachmentPolicyOnTheBaseAppliesToTheDerivedSource()
+    {
+        // A database of its own: a signed contract in the shared seed would be one more contract in
+        // every fixture that counts them.
+        await using var database = await TestContext.CreateIsolated("SignedContract");
+        await using (var writing = database.NewDbContext())
+        {
+            writing.Contracts.Add(new SignedContract
+            {
+                Id = 4,
+                Name = "Signed lease",
+                Signer = "Ada",
+                Document = [0x44]
+            });
+            await writing.SaveChangesAsync();
+        }
+
+        await using var data = database.NewDbContext();
+        var granted = SharedProcessor.Instance.FetchAttachment(
+            AttachmentRequest.Create("SignedContract", "Document", [new("4", ClrTypeTag.Int32)]),
+            data);
+        var refused = SharedProcessor.Instance.FetchAttachment(
+            AttachmentRequest.Create("SignedContract", "Document", [new(UnsealedContractsPolicy.SealedId.ToString(), ClrTypeTag.Int32)]),
+            data);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(granted.Found, Is.True);
+            Assert.That(granted.Value, Is.EqualTo(new byte[] {0x44}));
+            // The base's policy is the one answering: its sealed id is refused here too.
+            Assert.That(refused.Found, Is.False);
+        });
+    }
+
+    // The tag on a key value is the client's hint; the key is parsed as the member's own type, as a
+    // constant in a predicate is.
+    [Test]
+    public void AKeyValueIsParsedAsTheKeysTypeWhateverItsTag()
+    {
+        using var data = TestContext.CreateSeeded();
+
+        var result = SharedProcessor.Instance.FetchAttachment(
+            AttachmentRequest.Create("Contract", "Document", [new("1", ClrTypeTag.String)]),
+            data);
+
+        Assert.That(result.Found, Is.True);
+    }
+
     // A policy may replace the declared type for one fetch — the hook for a column holding more
     // than one kind of thing — and what it sets is what the result carries.
     [Test]

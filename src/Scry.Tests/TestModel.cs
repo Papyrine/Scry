@@ -248,6 +248,60 @@ public class Press : Machine
     public int Tonnage { get; set; }
 }
 
+/// <summary>
+/// A third level under <see cref="Machine"/>, so a narrowing can be applied twice down one chain
+/// and each level's policy shown to run exactly once. The big press is one of these.
+/// </summary>
+[Queryable]
+public class HeavyPress : Press
+{
+    public bool Certified { get; set; }
+}
+
+/// <summary>
+/// A derived fleet, so a flatten can start from a root carrying two policies — its own and the base's.
+/// Holds one light press and nothing else, which keeps the heavy-press expectations elsewhere intact.
+/// </summary>
+[Queryable]
+public class Yard : Fleet
+{
+    public string Site { get; set; } = "";
+}
+
+/// <summary>Never attached by default. Hides nothing; counts how often it was applied.</summary>
+public sealed class TalliedPressPolicy :
+    IReturnablePolicy<Press>
+{
+    public static int Applications;
+
+    public IQueryable<Press> Filter(IQueryable<Press> source, ScryPolicyContext context)
+    {
+        Applications++;
+        return source;
+    }
+}
+
+/// <summary>Never attached by default. Hides nothing; counts how often it was applied.</summary>
+public sealed class TalliedHeavyPressPolicy :
+    IReturnablePolicy<HeavyPress>
+{
+    public static int Applications;
+
+    public IQueryable<HeavyPress> Filter(IQueryable<HeavyPress> source, ScryPolicyContext context)
+    {
+        Applications++;
+        return source;
+    }
+}
+
+/// <summary>Never attached by default. Hides the yard at the depot, so a yard root carries a policy of its own.</summary>
+public sealed class StaffedYardsOnlyPolicy :
+    IReturnablePolicy<Yard>
+{
+    public IQueryable<Yard> Filter(IQueryable<Yard> source, ScryPolicyContext context) =>
+        source.Where(_ => _.Site != "Unstaffed");
+}
+
 /// <summary>Never attached by default. Hides the retired fleet, so the root of a flatten carries a policy.</summary>
 public sealed class ActiveFleetsOnlyPolicy :
     IReturnablePolicy<Fleet>
@@ -532,6 +586,17 @@ public class Contract
 // end-snippet
 
 /// <summary>
+/// A derived contract, opted in with no attachment policy of its own: the base's applies to it, as
+/// a row policy would. Not in the shared seed — a contract more would move every count of them —
+/// so the fixture that fetches through it seeds a database of its own.
+/// </summary>
+[Queryable]
+public class SignedContract : Contract
+{
+    public string Signer { get; set; } = "";
+}
+
+/// <summary>
 /// <see cref="Contract"/>'s attachment check: everything but the sealed contract, whose document is
 /// refused however the row is reached.
 /// </summary>
@@ -729,6 +794,9 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
         builder.Entity<Announcement>();
 
         builder.Entity<Press>();
+        builder.Entity<HeavyPress>();
+        builder.Entity<Yard>();
+        builder.Entity<SignedContract>();
         builder.Entity<Fleet>()
             .HasMany(_ => _.Machines)
             .WithOne()
@@ -1028,10 +1096,11 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
                 Name = "Main",
                 Machines =
                 [
-                    new Press
+                    new HeavyPress
                     {
                         Name = "Big press",
-                        Tonnage = 200
+                        Tonnage = 200,
+                        Certified = true
                     },
                     new Press
                     {
@@ -1052,6 +1121,33 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
                     new Press
                     {
                         Name = "Old press",
+                        Tonnage = 50
+                    }
+                ]
+            },
+            // Two yards, each with one light press, so the heavy-press expectations above hold.
+            new Yard
+            {
+                Name = "Depot",
+                Site = "Staffed",
+                Machines =
+                [
+                    new Press
+                    {
+                        Name = "Depot press",
+                        Tonnage = 50
+                    }
+                ]
+            },
+            new Yard
+            {
+                Name = "Annex",
+                Site = "Unstaffed",
+                Machines =
+                [
+                    new Press
+                    {
+                        Name = "Annex press",
                         Tonnage = 50
                     }
                 ]

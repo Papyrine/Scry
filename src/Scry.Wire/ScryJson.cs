@@ -451,7 +451,9 @@ public static class ScryJson
 
             return deserialize;
         }
-        catch (JsonException exception)
+        // A NotSupportedException is what the reader raises for a polymorphic object whose discriminator is
+        // missing or not first: a malformed request like any other, not a fault.
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
             throw new ScryWireException($"Invalid query {what}: {exception.Message}", exception);
         }
@@ -471,7 +473,9 @@ public static class ScryJson
 
             return deserialize;
         }
-        catch (JsonException exception)
+        // A NotSupportedException is what the reader raises for a polymorphic object whose discriminator is
+        // missing or not first: a malformed request like any other, not a fault.
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
             throw new ScryWireException($"Invalid query {what}: {exception.Message}", exception);
         }
