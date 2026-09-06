@@ -14,7 +14,7 @@ public class AsyncExecutionTests
 {
     [Test]
     public async Task AListIsReadAsynchronously() =>
-        await Buffered(SharedProcessor.Instance, QueryRequest.Create("Employee", [new TakeOp(2)]));
+        await Buffered(SharedProcessor.Instance, QueryRequest.Create("Employee", [new OrderByOp(new MemberNode(["Name"]), Descending: false), new TakeOp(2)]));
 
     [Test]
     public async Task APageIsReadAsynchronously() =>

@@ -495,7 +495,9 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
 - [ ] add: `Page` after `Join` or a set operation is refused
 - [x] decided accepted on both (`ValidatorLimitTests.ASetOperandTakeOfZeroIsAccepted`, `ASetOperandTakeCannotBeNegative`): `Take(0)` at the root is accepted while a side `Take(0)` is refused — decide whether the asymmetry is meant
 - [x] pinned as accepted (`ValidatorLimitTests.ASkipOfIntMaxIsAccepted`): `Skip` has no upper bound — pin `Skip(int.MaxValue)` as accepted (or bound it)
-
+- [x] decided: `Skip`, `Take`, and `Page` without an `OrderBy` before them are refused (`ValidatorLimitTests.PagingWithoutAnOrderingIsRefused`, `PagingAfterAFlattenNeedsAnOrderingOfItsOwn`); EF warns on the
+  shape, and a context treating the warning as an error made it a client-triggerable 500. `docs/querying.md` recommends
+  EntityFramework.OrderBy for the host's own queries.
 
 ### Validator: limits
 

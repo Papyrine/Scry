@@ -193,6 +193,33 @@ public class ValidatorLimitTests
         Assert.That(Rejects("Order", Union(operand)), Does.Contain("Take cannot be negative"));
     }
 
+    // A row-limiting operator over rows in no defined order slices an undefined sequence, and a host
+    // whose EF treats that warning as an error would fault on it. Refused here, whatever the host did.
+    [TestCase("skip")]
+    [TestCase("take")]
+    [TestCase("page")]
+    public void PagingWithoutAnOrderingIsRefused(string op)
+    {
+        QueryOp limiting = op switch
+        {
+            "skip" => new SkipOp(1),
+            "take" => new TakeOp(1),
+            _ => new PageOp(Size: 1)
+        };
+
+        Assert.That(Rejects("Employee", [limiting]), Does.Contain("requires an OrderBy"));
+    }
+
+    // A flatten consumes the ordering written before it: the rows after it are the elements, which
+    // the root's ordering says nothing about.
+    [Test]
+    public void PagingAfterAFlattenNeedsAnOrderingOfItsOwn()
+    {
+        QueryOp[] ops = [new OrderByOp(new MemberNode(["Name"]), Descending: false), new SelectManyOp(["Machines"]), new TakeOp(1)];
+
+        Assert.That(Rejects("Fleet", ops), Does.Contain("requires an OrderBy"));
+    }
+
     // Skip has no upper bound: the offset is a parameter, so a large one costs the database nothing
     // it would not spend on a small one, and there is nothing to bound it against.
     [Test]

@@ -1461,7 +1461,7 @@ Several group filters conjoin, so `.Where(…).Where(…)` after a `GroupBy` mea
 
 The pipeline is validated as a whole. In order:
 
-1. `Where`, `OrderBy`/`ThenBy`, `Skip`, `Take` — any number, in any order, before grouping, projection, or deduplication.
+1. `Where`, `OrderBy`/`ThenBy`, `Skip`, `Take` — any number, in any order, before grouping, projection, or deduplication. `Skip`, `Take`, and a `Page` require an `OrderBy` somewhere before them: a row-limiting operator over rows in no defined order slices an undefined sequence, so the server refuses the shape rather than answering it differently from one run to the next. A `SelectMany` or `Distinct` consumes the ordering written before it, so the rule wants one written after. The same rule for the server's own EF queries, the ones Scry never sees, is what [EntityFramework.OrderBy](https://github.com/SimonCropp/EntityFramework.OrderBy) enforces; it is a good companion, since a client query is only ever a fraction of what a host runs.
 2. At most one `GroupBy`, which must precede the `Select`.
 3. At most one `Select`.
 4. At most one `Distinct`, after which only the `Select` and a terminal may follow.

@@ -157,12 +157,14 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                 case SkipOp skip:
                     sawOuterFilter = true;
                     EnsurePageableDistinct(sawDistinct, sawOrdering, projection, "Skip");
+                    EnsureOrdered(sawOrdering, "Skip");
                     EnsureNonNegative(skip.Count, "Skip");
                     break;
 
                 case TakeOp take:
                     sawOuterFilter = true;
                     EnsurePageableDistinct(sawDistinct, sawOrdering, projection, "Take");
+                    EnsureOrdered(sawOrdering, "Take");
                     EnsureNonNegative(take.Count, "Take");
                     if (take.Count > options.MaxPageSize)
                     {
@@ -358,6 +360,7 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                         throw Reject("Paging is not supported over a Distinct query.");
                     }
 
+                    EnsureOrdered(sawOrdering, "Page");
                     if (page.Size is { } pageSize)
                     {
                         EnsureNonNegative(pageSize, "Page size");
@@ -1625,6 +1628,19 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
     // Paging a deduplicated query slices an order, so it needs one — otherwise it would be slicing an
     // order the deduplication never defined.
+    // A row-limiting operator over rows in no defined order slices an undefined sequence: which rows
+    // arrive is the provider's whim, and can differ from one run to the next. EF warns on the shape,
+    // and a context that treats the warning as an error would make it a fault a client can trigger;
+    // refusing it here makes the answer the same whatever the host configured. The flags follow the
+    // rows: a flatten or a deduplication consumes the ordering written before it.
+    static void EnsureOrdered(bool sawOrdering, string op)
+    {
+        if (!sawOrdering)
+        {
+            throw Reject($"{op} requires an OrderBy — without one the rows it limits are in no defined order.");
+        }
+    }
+
     static void EnsurePageableDistinct(bool sawDistinct, bool sawOrdering, Projection? projection, string op)
     {
         if (!sawDistinct)
