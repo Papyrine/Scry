@@ -19,6 +19,7 @@ public static class ScryExplorerExtensions
 
         var basePath = "/" + options.Route.Trim('/');
         var assets = ExplorerAssets.Instance;
+        var policy = ContentSecurityPolicy(options, assets);
 
         var group = endpoints.MapGroup(basePath);
         // Schema introspection the UI reads on load (literal route wins over the asset catch-all).
@@ -28,10 +29,50 @@ public static class ScryExplorerExtensions
             Sql(context, options, processor));
         // The cast forces the RouteHandler (Delegate) overload; a bare HttpContext=>IResult lambda
         // would otherwise bind to the RequestDelegate overload and fail to compile.
-        group.MapGet("", (Func<HttpContext, IResult>) (_ => Serve(_, path: null, options, basePath, assets)));
+        group.MapGet("", (Func<HttpContext, IResult>) (_ => Serve(_, path: null, options, basePath, assets, policy)));
         group.MapGet("/{**path}", (HttpContext context, string path) =>
-            Serve(context, path, options, basePath, assets));
+            Serve(context, path, options, basePath, assets, policy));
         return group;
+    }
+
+    /// <summary>
+    /// The policy the host page is served under. Every source is the explorer's own origin, and the
+    /// allowances past that are the ones the page cannot run without: <c>'wasm-unsafe-eval'</c> for
+    /// the .NET runtime, inline styles for Monaco (which writes its theme into style elements it
+    /// creates), and <c>blob:</c> workers for Monaco too (its worker factory wraps the same-origin
+    /// worker script in a blob, and a blob worker inherits this policy, so the script it imports is
+    /// still held to <c>'self'</c>). The page's own inline scripts are allowed by hash rather than
+    /// by nonce — see <see cref="ExplorerAssets.InlineScriptHashes"/>.
+    /// </summary>
+    /// <remarks>
+    /// Only the document carries it: a policy governs what a page loads and runs, and the assets the
+    /// page loads are governed by the page's. <c>connect-src</c> is the origin alone unless
+    /// <see cref="ScryExplorerOptions.QueryEndpoint"/> names another, which is then the one other
+    /// origin the page may call.
+    /// </remarks>
+    static string ContentSecurityPolicy(ScryExplorerOptions options, ExplorerAssets assets)
+    {
+        var connect = "'self'";
+        if (Uri.TryCreate(options.QueryEndpoint, UriKind.Absolute, out var endpoint) &&
+            endpoint.Scheme is "http" or "https")
+        {
+            connect += $" {endpoint.GetLeftPart(UriPartial.Authority)}";
+        }
+
+        string[] scripts = ["'self'", "'wasm-unsafe-eval'", .. assets.InlineScriptHashes];
+        return string.Join(
+            "; ",
+            "default-src 'self'",
+            $"script-src {string.Join(' ', scripts)}",
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data:",
+            "font-src 'self' data:",
+            $"connect-src {connect}",
+            "worker-src 'self' blob:",
+            "object-src 'none'",
+            "base-uri 'self'",
+            "frame-ancestors 'self'",
+            "form-action 'none'");
     }
 
     static IResult Serve(
@@ -39,7 +80,8 @@ public static class ScryExplorerExtensions
         string? path,
         ScryExplorerOptions options,
         string basePath,
-        ExplorerAssets assets)
+        ExplorerAssets assets,
+        string policy)
     {
         if (!options.EnableGuard(context))
         {
@@ -52,7 +94,7 @@ public static class ScryExplorerExtensions
         // A path without a file extension is a client-side route (or the root) — serve the SPA host.
         if (path.Length == 0 || Path.GetExtension(path).Length == 0)
         {
-            return Index(context, basePath, assets);
+            return Index(context, basePath, assets, policy);
         }
 
         if (assets.TryOpen(path, out var stream, out var contentType, out var tag))
@@ -167,10 +209,14 @@ public static class ScryExplorerExtensions
     // ReSharper disable once NotAccessedPositionalProperty.Local
     sealed record SqlPreview(string Sql);
 
-    static IResult Index(HttpContext context, string basePath, ExplorerAssets assets)
+    static IResult Index(HttpContext context, string basePath, ExplorerAssets assets, string policy)
     {
         var html = assets.ReadText("index.html")
             .Replace("__SCRY_BASE__", basePath + "/");
+
+        // On the 304 as well: a browser folds a 304's headers into the copy it kept, so the policy the
+        // cached page runs under is this one rather than the one it was first served with.
+        context.Response.Headers.ContentSecurityPolicy = policy;
 
         // Tagged from what is served rather than from the embedded file: the route is written in.
         var tag = $"\"{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(html)))}\"";

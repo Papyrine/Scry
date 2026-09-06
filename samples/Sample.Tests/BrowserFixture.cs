@@ -1,4 +1,4 @@
-﻿/// <summary>
+/// <summary>
 /// Launches the real Sample.Server — the same DLL <c>dotnet run</c> would execute — and a headless
 /// Chromium, for fixtures that drive the live WebAssembly UI.
 /// </summary>
@@ -111,6 +111,54 @@ public abstract class BrowserFixture
                 // As above.
             }
         }
+
+        RefuseContentSecurityPolicyViolations();
+    }
+
+    /// <summary>
+    /// Fails a test that otherwise passed where the browser refused something under the explorer's
+    /// <c>Content-Security-Policy</c>. The browser says so only as a console error, so every browser
+    /// test doubles as the check that the policy allows what the explorer actually does: a directive
+    /// tightened past what Monaco or the runtime needs fails here naming the refusal, rather than as a
+    /// page that quietly stopped completing or booting somewhere else in the suite.
+    /// </summary>
+    void RefuseContentSecurityPolicyViolations()
+    {
+        if (TestContext.CurrentContext.Result.Outcome.Status == TestStatus.Failed)
+        {
+            return;
+        }
+
+        Assert.That(TakePolicyRefusals(), Is.Empty, "The browser refused something under the explorer's Content-Security-Policy.");
+    }
+
+    /// <summary>
+    /// The policy refusals the page logged so far, removed from the record. For the one test that
+    /// provokes a refusal on purpose, to prove the record sees them — taking them is what keeps that
+    /// test from failing its own tear-down.
+    /// </summary>
+    protected IReadOnlyList<string> TakePolicyRefusals()
+    {
+        var refused = new List<string>();
+        var kept = new List<string>();
+        while (console.TryDequeue(out var message))
+        {
+            if (message.Contains("Content Security Policy", StringComparison.Ordinal))
+            {
+                refused.Add(message);
+            }
+            else
+            {
+                kept.Add(message);
+            }
+        }
+
+        foreach (var message in kept)
+        {
+            console.Enqueue(message);
+        }
+
+        return refused;
     }
 
     void ReportConsoleOnFailure()

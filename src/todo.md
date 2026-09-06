@@ -626,6 +626,9 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
 - [ ] add: asset paths with `..`, backslashes, and URL-encoded separators are 404 and never touch the file system
 - [ ] add: F16's no-auto-run test
 - [ ] add: the SQL preview endpoint refuses a non-JSON `Content-Type` alongside F3, and its 500 body is the fixed text
+- [x] covered: the host page is served under a `Content-Security-Policy` with its inline scripts allowed by hash —
+  `UiSnapshotTests.ExplorerServesAContentSecurityPolicy`, `ExplorerAssetsCarryNoPolicy`; every browser test fails on a
+  refusal the browser logs (`BrowserFixture.RefuseContentSecurityPolicyViolations`)
 
 
 ### Startup guardrails (`Schema.Build`, `MapScry`)

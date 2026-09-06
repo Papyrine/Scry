@@ -1427,6 +1427,8 @@ The UI is published and embedded as manifest resources inside the `Scry.Server.E
 
 Every asset is served with an `ETag` from its content hash and `Cache-Control: no-cache`, so a browser revalidates on each visit: an unchanged asset answers 304 rather than downloading the Roslyn bundle again, and after an upgrade the new bytes arrive rather than a cached copy failing the boot manifest's integrity check.
 
+The host page is served under a `Content-Security-Policy`. Every source is the explorer's own origin; the allowances past that are the ones the page cannot run without — `'wasm-unsafe-eval'` for the .NET runtime, inline styles and `blob:` workers for Monaco — and the page's own two inline scripts, which are allowed by hash. The hashes are computed once from the embedded page, so they follow it: a nonce would have to be minted into the page per response, and every revalidation would then be a download. `connect-src` is the origin alone unless `QueryEndpoint` names another origin, which is then added. `frame-ancestors 'self'` keeps the page out of another origin's frame. Only the document carries the policy — the assets it loads are governed by the page's — and a reverse proxy that writes a policy of its own onto the route replaces this one rather than adding to it.
+
 Because the explorer reveals the complete queryable schema, leaving it mapped in production means publishing that schema to anyone who passes the guard. The Development-only default is deliberate — and the [SQL preview](#sql-preview), which discloses more than the schema does, keeps a Development-only default of its own even when the explorer itself is opened up.
 
 

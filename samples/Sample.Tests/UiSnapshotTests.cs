@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+using System.Security.Cryptography;
+using System.Text.Json;
 using System.Xml.Linq;
 
 // Drives the live WebAssembly UI in a headless browser, asserting behaviour and snapshotting the
@@ -73,6 +74,66 @@ public class UiSnapshotTests :
         stale.Headers.IfNoneMatch.Add(new("\"stale\""));
         using var third = await http.SendAsync(stale);
         Assert.That(third.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
+    // The host page is served under a Content-Security-Policy: its own origin for everything, the .NET
+    // runtime's wasm allowance, Monaco's inline styles and blob workers, and the page's two inline
+    // scripts by hash. The hashes are checked against the page as served rather than pinned as
+    // literals: the server computes them from the same embedded page, so editing a script moves both
+    // sides together, and what this pins is that they are what a browser computes over that page.
+    // That the policy allows everything the explorer does is what every browser test in this fixture
+    // then checks, since a refusal is a console error the fixture fails on.
+    [Test]
+    public async Task ExplorerServesAContentSecurityPolicy()
+    {
+        using var http = new HttpClient();
+        using var response = await http.GetAsync($"{BaseUrl}/scry");
+        var html = await response.Content.ReadAsStringAsync();
+        var policy = response.Headers.GetValues("Content-Security-Policy").Single();
+
+        var hashes = Regex.Matches(html, @"<script(?![^>]*\ssrc\s*=)[^>]*>(.*?)</script>", RegexOptions.Singleline | RegexOptions.IgnoreCase)
+            .Select(_ => SHA256.HashData(Encoding.UTF8.GetBytes(_.Groups[1].Value.ReplaceLineEndings("\n"))))
+            .Select(_ => $"'sha256-{Convert.ToBase64String(_)}'")
+            .ToList();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(hashes, Has.Count.EqualTo(2));
+            Assert.That(
+                policy,
+                Is.EqualTo(
+                    $"default-src 'self'; script-src 'self' 'wasm-unsafe-eval' {hashes[0]} {hashes[1]}; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'none'"));
+        });
+    }
+
+    // The check behind every browser test here: a refusal reaches the console the fixture records. A
+    // page that forbids its own inline script says so, and the fixture has to hear it — otherwise a
+    // policy tightened past what the explorer needs would fail as a page that quietly never booted.
+    [Test]
+    public async Task TheFixtureSeesAPolicyRefusal()
+    {
+        var page = await NewPageAsync();
+        await page.GotoAsync(
+            "data:text/html,<meta http-equiv=\"Content-Security-Policy\" content=\"script-src 'none'\"><script>document.title = 'ran';</script><p>page</p>");
+        await page.WaitForSelectorAsync("p");
+
+        var refused = TakePolicyRefusals();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(refused, Is.Not.Empty);
+            Assert.That(refused[0], Does.Contain("inline script"));
+        });
+    }
+
+    // An asset carries no policy of its own: what a page loads is governed by the page's.
+    [Test]
+    public async Task ExplorerAssetsCarryNoPolicy()
+    {
+        using var http = new HttpClient();
+        using var response = await http.GetAsync($"{BaseUrl}/scry/js/scry.js");
+
+        Assert.That(response.Headers.Contains("Content-Security-Policy"), Is.False);
     }
 
     // Verifies the Scry explorer (a separate Blazor WASM app, embedded in and served by the

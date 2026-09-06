@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace Scry;
 
 /// <summary>
@@ -5,7 +7,7 @@ namespace Scry;
 /// manifest resources under the <c>scryui/</c> prefix (see Scry.Server.Explorer.csproj); this maps
 /// request paths back to those resources and supplies the content types a Blazor WASM app needs.
 /// </summary>
-sealed class ExplorerAssets
+sealed partial class ExplorerAssets
 {
     const string prefix = "scryui/";
 
@@ -22,8 +24,16 @@ sealed class ExplorerAssets
     readonly Dictionary<string, string> pathToResource = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, string> pathToTag = new(StringComparer.OrdinalIgnoreCase);
 
+    // The host page's inline scripts, as the source expressions a Content-Security-Policy allows them
+    // by. Computed once from the embedded page: the page is fixed at build and only its base href is
+    // rewritten at serve time, which sits outside every script, so a hash pins each script exactly
+    // and the page is the same bytes on every serve — which its ETag needs. A nonce would have to be
+    // minted into the page per response, and every revalidation would then be a download.
+    readonly Lazy<IReadOnlyList<string>> inlineScriptHashes;
+
     ExplorerAssets()
     {
+        inlineScriptHashes = new(HashInlineScripts);
         foreach (var name in assembly.GetManifestResourceNames())
         {
             if (!name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
@@ -64,6 +74,35 @@ sealed class ExplorerAssets
     public bool HasAssets => pathToResource.Count > 0;
 
     /// <summary>
+    /// The <c>'sha256-…'</c> source expressions for the host page's inline scripts, in document order.
+    /// What a <c>script-src</c> lists to allow exactly those scripts and no other inline one.
+    /// </summary>
+    public IReadOnlyList<string> InlineScriptHashes => inlineScriptHashes.Value;
+
+    IReadOnlyList<string> HashInlineScripts()
+    {
+        if (!pathToResource.ContainsKey("index.html"))
+        {
+            return [];
+        }
+
+        var hashes = new List<string>();
+        foreach (Match match in InlineScript().Matches(ReadText("index.html")))
+        {
+            // The browser hashes exactly the element's text, whitespace included, so the capture keeps
+            // it whole — and reads it off the same normalized text the page is served as.
+            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(match.Groups[1].Value));
+            hashes.Add($"'sha256-{Convert.ToBase64String(hash)}'");
+        }
+
+        return hashes;
+    }
+
+    // A script element carrying no src: the ones whose text the page itself holds.
+    [GeneratedRegex(@"<script(?![^>]*\ssrc\s*=)[^>]*>(.*?)</script>", RegexOptions.Singleline | RegexOptions.IgnoreCase)]
+    private static partial Regex InlineScript();
+
+    /// <summary>
     /// Opens an embedded asset. The tag is the entity tag its content hash makes, quoted as the
     /// header wants it, or null for an asset the stamp does not list.
     /// </summary>
@@ -87,7 +126,10 @@ sealed class ExplorerAssets
     {
         using var stream = assembly.GetManifestResourceStream(pathToResource[Normalize(path)])!;
         using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
+
+        // Line endings as the HTML parser normalizes them, so a hash computed over this text is the
+        // hash a browser computes over the script it parsed out of the same bytes.
+        return reader.ReadToEnd().ReplaceLineEndings("\n");
     }
 
     static string Normalize(string path) =>
