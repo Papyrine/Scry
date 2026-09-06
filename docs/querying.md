@@ -1187,7 +1187,7 @@ var rows = await employees
     .Select(_ => new NameRow(_.Name))
     .ToListAsync();
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L312-L337' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRuntimeComposition' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L342-L367' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRuntimeComposition' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Nothing executes client-side, so an operator appended inside an `if` is part of the captured expression like any other, and the terminal serializes whatever was built. No criteria DTO — property-name strings, an operator enum — is needed, and the request that leaves is indistinguishable from one written as a single chain.
