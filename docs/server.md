@@ -62,6 +62,8 @@ Failures surface at startup, not at first request:
 
 - A `[QueryablePoco]` type with no registered data.
 - Two sources resolving to the same name.
+- An opted-in entity or view type the context does not map (`MapScry` checks every source against the model, since introspection would advertise a source every query of which fails). One model assembly serving several contexts sets `options.AllowUnmappedSources`, and a query naming a source this context lacks is then rejected as unknown rather than faulted.
+- A row, attachment, or cached policy that neither DI nor a parameterless constructor can build.
 
 
 ## Mapping the endpoint

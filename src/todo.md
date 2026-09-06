@@ -83,7 +83,7 @@ POST (F3); correct the two doc claims.
 
 - [x] covered (IntegrationTests): an attachment `200` carries `Content-Disposition: attachment`
 - [x] covered (IntegrationTests): a `text/plain` form-shaped POST to the attachment endpoint is refused with 415
-- [ ] add: startup or doc decision on declaring `text/html` / `image/svg+xml` as an attachment content type
+- [x] decided allowed, documented in `docs/attachments.md` (the download headers are what make them safe): declaring `text/html` / `image/svg+xml` as an attachment content type
 - [x] covered: `AttachmentTests.DeclaredContentTypeIsServed` asserts `nosniff`
 - [x] docs: fix `docs/attachments.md:143` and the `AttachmentAttribute` remarks
 
@@ -388,7 +388,7 @@ recorded as `Failed`, on demand. `TestModel` carries two (`DepartmentHeadcount`,
 `FunctionMatrixTests` found it. Nothing leaks; the cost is a client-drivable failure count and a host mistake that
 surfaces per request rather than at startup.
 
-- [ ] decide: refuse at `MapScry` startup (beside `EnsurePoliciesResolvable`) or answer `Unknown source` (400) — either
+- [x] fixed: refused at `MapScry` startup by `ScryProcessor.EnsureSourcesMapped` unless `AllowUnmappedSources` waives it for an assembly serving several contexts, where a query naming one is a 400 `Unknown source` rather than a fault (`SourceMappingTests`; `docs/server.md` lists it) — was: refuse at startup or answer `Unknown source` (400); either
   ends the per-request fault; the test model's unmapped types would then need a `DbSet` or a `[QueryablePoco]`
 - [x] covered (as a skip): `FunctionMatrixTests.ScalarMembers` excludes sources the context does not map
 
@@ -600,7 +600,7 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
 - [x] covered (`HttpRoundTripTests.AProviderFailureAfterTheStreamBeganEndsItWithTheFixedMessage`): a provider failure *after* the stream's begin marker ends with the fixed message, never SQL text
   (`HandleStream`'s catch; the row-limit test covers the validation-message branch only)
 - [ ] add: a rejected query carries no `ETag`; a `no-store` response carries no `ETag`
-- [ ] add: `If-None-Match: *` answers 304 before the query is decoded — pin as intended RFC behaviour, or exclude `*`
+- [x] decided excluded: a bare `*` never matches (`QueryEtag.Matches`; `ConditionalQueryTests.AWildcardConditionIsNotAMatch`)
 - [ ] add: `HEAD` and `OPTIONS` on the query route are 405 (no handler runs, nothing is advertised)
 - [ ] add: a `q=` parameter given twice is a 400 (the joined `StringValues` is not base64url)
 - [x] fixed: every `ScryValidationException` message is bounded at 1024 chars (`SecurityTests.ARejectionEchoingALongClientStringIsBounded` — root, member, constant)

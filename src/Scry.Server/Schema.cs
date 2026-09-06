@@ -566,7 +566,7 @@ sealed class Schema
                 throw new($"Duplicate queryable source name '{name}'.");
             }
 
-            var source = new ScrySource(name, type, kind, policies, BuildResolver(type, kind, options))
+            var source = new ScrySource(name, type, kind, policies, BuildResolver(name, type, kind, options))
             {
                 AttachmentPolicy = ResolveAttachmentPolicy(schema, type, name, kind, options),
                 FactorySupplied = kind == SourceKind.Poco && options.FactoryPocoSources.Contains(type)
@@ -1499,6 +1499,7 @@ sealed class Schema
                      _.GetParameters().Length == 0);
 
     static Func<DbContext, IServiceProvider, IQueryable> BuildResolver(
+        string name,
         Type type,
         SourceKind kind,
         ScryOptions options)
@@ -1514,6 +1515,18 @@ sealed class Schema
         }
 
         var typedSet = setMethod.MakeGenericMethod(type);
-        return (db, _) => (IQueryable) typedSet.Invoke(db, null)!;
+        return (db, _) =>
+        {
+            // A type the context does not map is refused at startup unless the host said its
+            // assembly serves several contexts; then a query naming one is a rejection here — the
+            // same answer as a source that does not exist — rather than the fault Set<T>() would
+            // raise, which a client could otherwise produce on demand.
+            if (db.Model.FindEntityType(type) is null)
+            {
+                throw new ScryValidationException($"Unknown source '{name}'.");
+            }
+
+            return (IQueryable) typedSet.Invoke(db, null)!;
+        };
     }
 }

@@ -54,6 +54,34 @@ public sealed class ScryProcessor
         schema.ValidateAgainstModel(data.Model, options.ContextType);
 
     /// <summary>
+    /// Confirms every entity and view source is a type the context maps, throwing a directed error
+    /// otherwise. The schema allows an opted-in type the context does not map — a model assembly may
+    /// serve more than one context — but a host that serves such a source serves a 500 on every query
+    /// of it, since introspection advertises what <c>Set&lt;T&gt;()</c> then refuses. Called once by
+    /// <c>MapScry</c>; safe for any host. Waived by <see cref="ScryOptions.AllowUnmappedSources"/>,
+    /// where a query naming such a source is rejected as unknown instead.
+    /// </summary>
+    public void EnsureSourcesMapped(DbContext data)
+    {
+        if (options.AllowUnmappedSources)
+        {
+            return;
+        }
+
+        foreach (var source in schema.Sources)
+        {
+            if (source.Kind == SourceKind.Poco ||
+                data.Model.FindEntityType(source.ClrType) is not null)
+            {
+                continue;
+            }
+
+            throw new(
+                $"Source '{source.Name}' ({source.ClrType.Name}) is opted in but {options.ContextType.Name} does not map it, so every query of it would fail. Add a DbSet<{source.ClrType.Name}> or map it in OnModelCreating, make it a [QueryablePoco] supplied by AddPocoSource, or remove the opt-in.");
+        }
+    }
+
+    /// <summary>
     /// Confirms every policy the schema will apply — row, attachment, and cached — can be built from
     /// <paramref name="services"/> or from a parameterless constructor, throwing a directed error
     /// otherwise. A policy is otherwise constructed on the first request that reaches its source,

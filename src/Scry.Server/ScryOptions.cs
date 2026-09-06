@@ -217,6 +217,15 @@ public sealed class ScryOptions(Type contextType)
     /// </remarks>
     public bool ProbePoliciedNavigations { get; set; } = true;
 
+    /// <summary>
+    /// Whether <c>MapScry</c> may start with an opted-in entity or view type the context does not
+    /// map. Off by default: such a source is advertised by introspection and answers nothing, so it
+    /// is refused at startup naming the type. Set this where one model assembly serves several
+    /// contexts and each opts in types the others map; a query naming a source this context lacks is
+    /// then rejected as an unknown source, never faulted.
+    /// </summary>
+    public bool AllowUnmappedSources { get; set; }
+
     internal Type ContextType { get; private set; } = contextType;
 
     internal Dictionary<Type, Func<IServiceProvider, IQueryable>> PocoSources { get; } = [];

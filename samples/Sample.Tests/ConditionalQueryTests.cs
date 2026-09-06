@@ -38,6 +38,22 @@ public class ConditionalQueryTests
         Assert.That(exception!.StatusCode, Is.EqualTo(HttpStatusCode.NotModified));
     }
 
+    // A bare "*" is not a match. The RFC reads it as "any current representation", which here would
+    // answer 304 to a request whose query was never decoded — including one the validator would have
+    // refused. A cache revalidates with the tag it holds, so nothing legitimate sends it.
+    [Test]
+    public async Task AWildcardConditionIsNotAMatch()
+    {
+        var query = new ScryQuery(server.CreateScryClient());
+        await Warm(query, "Engineering");
+
+        var rows = await Active(query, "Engineering")
+            .WithHeader("If-None-Match", "*")
+            .ToListAsync();
+
+        Assert.That(rows, Is.Not.Empty);
+    }
+
     [Test]
     public async Task WriteToTheDatabaseInvalidatesTheEtag()
     {

@@ -9,23 +9,18 @@ public class QueryEtagTests
     [Test]
     public async Task DoesNotCarryTheScopeOrTheFreshnessTokenVerbatim()
     {
-        var options = new ScryOptions(typeof(TestContext))
-        {
-            QueryFreshness = (_, _) => ValueTask.FromResult<string?>("log-position-0000123"),
-            CacheScope = _ => "tenant-42"
-        };
-        var context = new DefaultHttpContext();
-        context.Request.Method = "GET";
-        context.Request.QueryString = new($"?q={QueryUrl.Encode(QueryRequest.Create("Employee", [new CountOp()]))}");
-        // Any current representation matches, so the tag is written on a 304 without a query running.
-        context.Request.Headers.IfNoneMatch = "*";
+        var context = Request();
+        var etag = TagFor(context, "log-position-0000123", "tenant-42");
 
-        var notModified = await QueryEtag.NotModified(context, SharedProcessor.Instance, options);
-        var etag = context.Response.Headers.ETag.ToString();
+        // Sent back as the condition, so the tag the test computed is proven to be the one the server
+        // answers 304 with.
+        context.Request.Headers.IfNoneMatch = etag;
+        var notModified = await QueryEtag.NotModified(context, SharedProcessor.Instance, Options("log-position-0000123", "tenant-42"));
 
         Assert.Multiple(() =>
         {
             Assert.That(notModified, Is.True);
+            Assert.That(context.Response.Headers.ETag.ToString(), Is.EqualTo(etag));
             Assert.That(etag, Does.StartWith("\"").And.EndWith("\""));
             Assert.That(etag, Does.Not.Contain("tenant-42"));
             Assert.That(etag, Does.Not.Contain("log-position"));
@@ -34,26 +29,46 @@ public class QueryEtagTests
     }
 
     [Test]
-    public async Task DifferentScopesGetDifferentTags()
+    public void DifferentScopesGetDifferentTags()
     {
-        var first = await TagFor("tenant-1");
-        var second = await TagFor("tenant-2");
+        var first = TagFor(Request(), "fresh", "tenant-1");
+        var second = TagFor(Request(), "fresh", "tenant-2");
 
         Assert.That(first, Is.Not.EqualTo(second));
     }
 
-    static async Task<string> TagFor(string scope)
+    // A bare "*" would answer 304 to a request whose query was never decoded — including one the
+    // validator would have refused — so it is not a match here, whatever the RFC says it stands for.
+    [Test]
+    public async Task AWildcardConditionIsNotAMatch()
     {
-        var options = new ScryOptions(typeof(TestContext))
+        var context = Request();
+        context.Request.Headers.IfNoneMatch = "*";
+
+        var notModified = await QueryEtag.NotModified(context, SharedProcessor.Instance, Options("fresh", "tenant-1"));
+
+        Assert.Multiple(() =>
         {
-            QueryFreshness = (_, _) => ValueTask.FromResult<string?>("fresh"),
-            CacheScope = _ => scope
-        };
+            Assert.That(notModified, Is.False);
+            Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status200OK));
+        });
+    }
+
+    static DefaultHttpContext Request()
+    {
         var context = new DefaultHttpContext();
         context.Request.Method = "GET";
         context.Request.QueryString = new($"?q={QueryUrl.Encode(QueryRequest.Create("Employee", [new CountOp()]))}");
-        context.Request.Headers.IfNoneMatch = "*";
-        await QueryEtag.NotModified(context, SharedProcessor.Instance, options);
-        return context.Response.Headers.ETag.ToString();
+        return context;
     }
+
+    static ScryOptions Options(string freshness, string scope) =>
+        new(typeof(TestContext))
+        {
+            QueryFreshness = (_, _) => ValueTask.FromResult<string?>(freshness),
+            CacheScope = _ => scope
+        };
+
+    static string TagFor(HttpContext context, string freshness, string scope) =>
+        QueryEtag.Etag(SharedProcessor.Instance.SchemaStamp, freshness, QueryEtag.Query(context.Request)!, scope);
 }

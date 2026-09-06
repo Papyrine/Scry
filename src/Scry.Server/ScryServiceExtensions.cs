@@ -33,6 +33,7 @@ public static class ScryServiceExtensions
             var processor = scope.ServiceProvider.GetRequiredService<ScryProcessor>();
             var db = (DbContext)scope.ServiceProvider.GetRequiredService(options.ContextType);
             processor.ValidateAgainstModel(db);
+            processor.EnsureSourcesMapped(db);
             processor.EnsurePoliciesResolvable(scope.ServiceProvider);
             if (options.ProbePoliciedNavigations)
             {

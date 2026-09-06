@@ -80,7 +80,7 @@ public class AttachmentTests
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Services.AddDbContext<AttachmentContext>(_ => _.UseSqlServer(database.ConnectionString));
-        builder.Services.AddScry<AttachmentContext>(_ => { });
+        builder.Services.AddScry<AttachmentContext>(_ => _.AllowUnmappedSources = true);
 
         app = builder.Build();
         app.MapScry("/api/query");
@@ -398,7 +398,7 @@ public class AttachmentTests
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Services.AddDbContext<AttachmentContext>(_ => _.UseSqlServer(database.ConnectionString));
-        builder.Services.AddScry<AttachmentContext>(_ => { });
+        builder.Services.AddScry<AttachmentContext>(_ => _.AllowUnmappedSources = true);
         builder.Services.AddAuthentication("Test").AddScheme<AuthenticationSchemeOptions, RefusingHandler>("Test", _ => { });
         builder.Services.AddAuthorizationBuilder().AddPolicy("Reader", _ => _.RequireAssertion(_ => false));
 

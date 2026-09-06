@@ -91,8 +91,12 @@ static class QueryEtag
             return false;
         }
 
+        // A bare "*" is deliberately not a match. The RFC reads it as "any current representation",
+        // which for a query would answer 304 to a request whose query was never decoded — including
+        // one the validator would have refused. No client sends it on a GET; a cache revalidates
+        // with the tag it holds.
         var current = EntityTagHeaderValue.Parse(etag);
-        return conditions.Any(_ => _.Equals(EntityTagHeaderValue.Any) || _.Compare(current, useStrongComparison: false));
+        return conditions.Any(_ => !_.Equals(EntityTagHeaderValue.Any) && _.Compare(current, useStrongComparison: false));
     }
 
     static Microsoft.AspNetCore.Http.Headers.RequestHeaders RequestHeaders(HttpContext context) =>
@@ -104,7 +108,7 @@ static class QueryEtag
     /// of SHA-256 is sixteen base64url characters, and for a cache one client keeps the odds of two of
     /// its own queries colliding are about n²/2^97.
     /// </summary>
-    static string? Query(HttpRequest request)
+    internal static string? Query(HttpRequest request)
     {
         if (request.Query[QueryUrl.Parameter].ToString() is not {Length: > 0} encoded)
         {
@@ -119,7 +123,7 @@ static class QueryEtag
     // The freshness token and the scope are hashed like the query is: a tag is stored by the
     // caller for as long as it caches, and the two are the database's write position and a tenant
     // or principal — neither is the caller's to read, and both only have to be stable and distinct.
-    static string Etag(string schemaStamp, string freshness, string query, string? scope)
+    internal static string Etag(string schemaStamp, string freshness, string query, string? scope)
     {
         if (scope is null)
         {

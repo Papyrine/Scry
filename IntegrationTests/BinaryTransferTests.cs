@@ -60,7 +60,7 @@ public class BinaryTransferTests
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Services.AddDbContext<BinaryContext>(_ => _.UseSqlServer(database.ConnectionString));
-        builder.Services.AddScry<BinaryContext>(_ => { });
+        builder.Services.AddScry<BinaryContext>(_ => _.AllowUnmappedSources = true);
 
         app = builder.Build();
         app.MapScry("/api/query");
@@ -471,7 +471,11 @@ public class BinaryTransferTests
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Services.AddDbContext<BinaryContext>(_ => _.UseSqlServer(database.ConnectionString));
-        builder.Services.AddScry<BinaryContext>(_ => _.ResponseSpillThreshold = threshold);
+        builder.Services.AddScry<BinaryContext>(_ =>
+        {
+            _.AllowUnmappedSources = true;
+            _.ResponseSpillThreshold = threshold;
+        });
 
         var app = builder.Build();
         app.MapScry("/api/query");
@@ -485,7 +489,11 @@ public class BinaryTransferTests
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Services.AddDbContext<BinaryContext>(_ => _.UseSqlServer(database.ConnectionString));
-        builder.Services.AddScry<BinaryContext>(_ => _.MaxStreamRows = maxStreamRows);
+        builder.Services.AddScry<BinaryContext>(_ =>
+        {
+            _.AllowUnmappedSources = true;
+            _.MaxStreamRows = maxStreamRows;
+        });
 
         var app = builder.Build();
         app.MapScry("/api/query");
