@@ -113,6 +113,41 @@ public class FlattenNarrowPolicyTests
         Assert.That(flattened, Is.EqualTo(["Big press", "Drill", "Small press"]));
     }
 
+    // A right join refuses a narrowed outer side, since EF hoists the narrowing into the combined
+    // WHERE and the join quietly turns inner. A flatten over a Hide-mode element narrows inside the
+    // collection subquery instead, which EF keeps as an APPLY — so the validator lets it through,
+    // and this pins that it is right to: the hidden machine stays hidden, and the join stays a join.
+    [Test]
+    public void ARightJoinAfterAFlattenKeepsTheElementPolicy()
+    {
+        using var context = TestContext.CreateSeeded();
+        var processor = Build(
+            _ => _.AddPolicy<Machine, WorkingMachinesOnlyPolicy>(new()
+            {
+                CollectionNavigation = DeniedCollectionMode.Hide
+            }));
+        var request = QueryRequest.Create(
+            "Fleet",
+            [
+                new SelectManyOp(["Machines"]),
+                new JoinOp(
+                    "Fleet",
+                    JoinKind.Right,
+                    new MemberNode(["FleetId"]),
+                    new MemberNode(["Id"]),
+                    null,
+                    [new("Machine", JoinSide.Outer, ["Name"]), new("Fleet", JoinSide.Inner, ["Name"])])
+            ]);
+
+        var rows = processor.Execute(request, context).Payload
+            .EnumerateArray()
+            .Select(_ => (Machine: _.GetProperty("machine").GetString(), Fleet: _.GetProperty("fleet").GetString()))
+            .Order()
+            .ToList();
+
+        Assert.That(rows, Is.EqualTo([("Big press", "Main"), ("Drill", "Main"), ("Old press", "Retired")]));
+    }
+
     static SelectOp SelectName() =>
         new(new([new("Name", new NodeValue(new MemberNode(["Name"])))]));
 

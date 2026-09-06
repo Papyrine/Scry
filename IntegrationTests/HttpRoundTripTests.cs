@@ -276,6 +276,36 @@ public class HttpRoundTripTests
         Assert.That(exception!.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
 
+    record RatioRow(int Ratio);
+
+    // A provider failure once rows are already on the wire: the status is long since sent, so the
+    // failure rides the stream's error marker — carrying the fixed message, never the provider's
+    // text, exactly as a non-streamed 500 would. Dividing by a client constant is the reliable way
+    // to fail on the second row rather than the first, which is what proves the stream had begun.
+    [Test]
+    public void AProviderFailureAfterTheStreamBeganEndsItWithTheFixedMessage()
+    {
+        var rows = new List<RatioRow>();
+        var exception = Assert.ThrowsAsync<ScryWireException>(
+            async () =>
+            {
+                await foreach (var row in query.Employee
+                                   .OrderBy(_ => _.Id)
+                                   .Select(_ => new RatioRow(100 / (_.Id - 2)))
+                                   .ToAsyncEnumerable())
+                {
+                    rows.Add(row);
+                }
+            });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(rows, Is.Not.Empty, "the stream should have begun before the failure");
+            Assert.That(exception!.Message, Does.Contain("Query execution failed."));
+            Assert.That(exception.Message, Does.Not.Contain("zero").IgnoreCase);
+        });
+    }
+
     [Test]
     public async Task GroupedAggregateOverHttp()
     {

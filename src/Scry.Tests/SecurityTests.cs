@@ -481,6 +481,33 @@ public class SecurityTests
         });
     }
 
+    // A rejection echoes what it rejected, which is the client's own text; a message is bounded so a
+    // client cannot have its own megabytes handed back in the body, the audit trail, and the trace.
+    [TestCase("root")]
+    [TestCase("member")]
+    [TestCase("constant")]
+    public void ARejectionEchoingALongClientStringIsBounded(string where)
+    {
+        using var context = TestContext.CreateSeeded();
+        var huge = new string('x', 100_000);
+        var request = where switch
+        {
+            "root" => QueryRequest.Create(huge, [new CountOp()]),
+            "member" => QueryRequest.Create("Employee", [new WhereOp(new MemberNode([huge]))]),
+            _ => QueryRequest.Create(
+                "Employee",
+                [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Id"]), new ConstNode(huge, ClrTypeTag.Int32)))])
+        };
+
+        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context))!;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception.Message, Has.Length.LessThanOrEqualTo(ScryValidationException.MaxMessageLength + 1));
+            Assert.That(exception.Message, Does.EndWith("…"));
+        });
+    }
+
     // The narrowing messages go through the same naming: a renamed root is named as the wire knows it.
     [Test]
     public void RejectionOnANarrowingNamesTheWireName()

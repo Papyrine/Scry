@@ -379,6 +379,20 @@ a lookup took", which is the opposite of what happens. A policy that decides on 
 - [x] docs: soften the claim in `QueryExecutor.PlanAttachment` and `docs/attachments.md`
 
 
+### F20 — LOW — an opted-in type the context does not map faults on every request (found by the matrix)
+
+`Schema.ValidateAgainstModel` leaves a source-annotated type absent from the EF model alone, by design
+(`Schema.cs`: "[Queryable] is deliberately allowed on types that carry no DbSet"). A client can name such a source —
+introspection advertises it — and every query of it is an `InvalidOperationException` from `Set<T>()`: a fixed 500,
+recorded as `Failed`, on demand. `TestModel` carries two (`DepartmentHeadcount`, `SalesRegion` as `Region`), which is how
+`FunctionMatrixTests` found it. Nothing leaks; the cost is a client-drivable failure count and a host mistake that
+surfaces per request rather than at startup.
+
+- [ ] decide: refuse at `MapScry` startup (beside `EnsurePoliciesResolvable`) or answer `Unknown source` (400) — either
+  ends the per-request fault; the test model's unmapped types would then need a `DbSet` or a `[QueryablePoco]`
+- [x] covered (as a skip): `FunctionMatrixTests.ScalarMembers` excludes sources the context does not map
+
+
 ## Documentation corrections
 
 - [x] `docs/attachments.md` and `Scry.Annotations/AttachmentAttribute.cs` — the "no way to navigate a browser to one"
@@ -512,7 +526,7 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
   `SignTests.RejectsTheSignOfSomethingNotNumeric`, `MinMaxTests.RejectsSomethingNotNumeric`, `CompareToTests.RejectsSomethingWithoutAnOrdering`,
   `ToStringTests.RejectsReadingAnEnumAsText`, `TextConversionTests.*RefusedByTheServer`, `AngleConversionTests.RejectsSomethingNotNumeric`
 - [x] unknown enum value name — `PreviousNamesTests.UnknownEnumValueIsRejected`
-- [ ] add: a systematic matrix — every `KnownFunction` applied to every scalar member type of `TestModel`, and every
+- [x] covered (`FunctionMatrixTests`, generated from the schema; found F20): a systematic matrix — every `KnownFunction` applied to every scalar member type of `TestModel`, and every
   `BinaryOp`/`UnaryOp` over every pair of scalar types, asserting the outcome is success or `ScryValidationException`
   and never another exception type (the builder's two catch arms are the only guard, and each new function is a new gap)
 - [ ] add: `CollateNode` over a non-string target (an `int` member) is a 400, not a provider fault
@@ -541,9 +555,9 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
 - [x] header-scoped policies are documented as unsafe; headers reach the policy and back — `HeaderTests`, `HttpRoundTripTests.HeadersRoundTripThroughAPolicy*`
 - [x] covered: F1's flatten-then-narrow tests (`FlattenNarrowPolicyTests`)
 - [x] covered: F10's constructibility test (`PolicyResolutionTests`)
-- [ ] add: `RightJoin` after `SelectMany` over a `Hide`-mode policied element — pin whether the hoisting the validator
+- [x] covered (`FlattenNarrowPolicyTests.ARightJoinAfterAFlattenKeepsTheElementPolicy` — the narrowing stays inside the APPLY, the join stays right): `RightJoin` after `SelectMany` over a `Hide`-mode policied element — pin whether the hoisting the validator
   guards against on the outer side recurs here (the validator's `sawOuterFilter` is not set by `SelectMany`)
-- [ ] add: a policy on a base type reached through `OfType` from a *view* or POCO root — `Retype` casts an in-memory
+- [ ] add (deferred: the test model has no view or POCO hierarchy, and a derived `[QueryablePoco]` needs its own `AddPocoSource` in every fixture): a policy on a base type reached through `OfType` from a *view* or POCO root — `Retype` casts an in-memory
   or keyless query; pin that it executes rather than faults
 
 
@@ -583,13 +597,13 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
   `samples/Sample.Tests/ConditionalQueryTests`
 - [x] error bodies JSON-escape client strings — reproduced (`<script>`); add a test in IntegrationTests
 - [x] covered: F2, F3, F11 tests (`AttachmentTests.IsServedAsADownload`, `HttpRoundTripTests.*Refused`, `QueryEtagTests`)
-- [ ] add: a provider failure *after* the stream's begin marker ends with the fixed message, never SQL text
+- [x] covered (`HttpRoundTripTests.AProviderFailureAfterTheStreamBeganEndsItWithTheFixedMessage`): a provider failure *after* the stream's begin marker ends with the fixed message, never SQL text
   (`HandleStream`'s catch; the row-limit test covers the validation-message branch only)
 - [ ] add: a rejected query carries no `ETag`; a `no-store` response carries no `ETag`
 - [ ] add: `If-None-Match: *` answers 304 before the query is decoded — pin as intended RFC behaviour, or exclude `*`
 - [ ] add: `HEAD` and `OPTIONS` on the query route are 405 (no handler runs, nothing is advertised)
 - [ ] add: a `q=` parameter given twice is a 400 (the joined `StringValues` is not base64url)
-- [ ] add: a 400 message echoing a very long client constant is bounded (truncate the echoed value to, say, 200 chars)
+- [x] fixed: every `ScryValidationException` message is bounded at 1024 chars (`SecurityTests.ARejectionEchoingALongClientStringIsBounded` — root, member, constant)
 - [ ] add: the `RequireAuthorization` convention reaches the GET route (the attachment and POST routes are covered by
   `AttachmentTests.AuthorizationReachesTheAttachmentEndpoint`; the GET route is inserted after that list is built)
 
