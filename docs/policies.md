@@ -524,14 +524,16 @@ Invalidating is the one of the three a host has to remember, because nothing els
 // A grant moved. Nothing about any order changed, so no version column could notice and no
 // query would ever decide those rows again — the cache has to be told, and telling it is part
 // of the authorization path rather than a cache optimization.
-app.MapPost("/api/grants/{region}", (string region, bool allowed, RegionGrants grants, ScryPolicyCache cache) =>
+app.MapPost(
+    "/api/grants/{region}",
+    (string region, bool allowed, RegionGrants grants, ScryPolicyCache cache) =>
 {
     grants.Set("sample", region, allowed);
     cache.InvalidateScope<Order>("sample");
     return Results.NoContent();
 });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L94-L104' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L94-L106' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Priming is `cache.Prime(scopeKey, rows, context)` alongside the write that produced them. `ScryPolicyCache` is registered as a singleton by `AddScry`, and is also `ScryProcessor.PolicyCache`.
@@ -570,7 +572,7 @@ app.MapPost("/api/orders/{id:int}/touch", async (int id, SampleContext data) =>
     return Results.NoContent();
 });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L106-L124' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L108-L126' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `InvalidateRows<T>(keys)` is the narrower form of the second: it re-decides those rows in every scope, rather than emptying one scope entirely.

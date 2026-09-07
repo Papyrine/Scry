@@ -240,7 +240,7 @@ app.MapScryExplorer(
         _.EnableGuard = _ => true;
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L125-L134' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L127-L136' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The sample always exposes the explorer so it can be browsed without setting an environment. A real app should leave the default Development-only guard in place, or replace it with an authorization check — see [Query explorer](explorer.md).
@@ -511,7 +511,7 @@ app.MapPost("/api/orders/{id:int}/touch", async (int id, SampleContext data) =>
     return Results.NoContent();
 });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L106-L124' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L108-L126' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The third has to be, or the change never reaches a query at all:
@@ -522,14 +522,16 @@ The third has to be, or the change never reaches a query at all:
 // A grant moved. Nothing about any order changed, so no version column could notice and no
 // query would ever decide those rows again — the cache has to be told, and telling it is part
 // of the authorization path rather than a cache optimization.
-app.MapPost("/api/grants/{region}", (string region, bool allowed, RegionGrants grants, ScryPolicyCache cache) =>
+app.MapPost(
+    "/api/grants/{region}",
+    (string region, bool allowed, RegionGrants grants, ScryPolicyCache cache) =>
 {
     grants.Set("sample", region, allowed);
     cache.InvalidateScope<Order>("sample");
     return Results.NoContent();
 });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L94-L104' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Server/Program.cs#L94-L106' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Order.Revision` is `[QueryIgnore]`d — a version column is server machinery, not query surface, and clients never see it. `Sample.Tests\CachedPolicyPageTests.cs` drives the page and asserts those three counts, so the table above is checked rather than claimed.
