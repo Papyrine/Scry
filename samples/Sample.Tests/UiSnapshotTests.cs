@@ -106,6 +106,27 @@ public class UiSnapshotTests :
         });
     }
 
+    // A browser folds a 304's headers into the copy it kept, so the policy has to be on the
+    // revalidation too — otherwise the cached page keeps running under whatever it was first served
+    // with, and a tightened policy would not reach it until the page's bytes happened to change.
+    [Test]
+    public async Task ExplorerCarriesThePolicyOnARevalidation()
+    {
+        using var http = new HttpClient();
+        using var first = await http.GetAsync($"{BaseUrl}/scry");
+        var policy = first.Headers.GetValues("Content-Security-Policy").Single();
+
+        using var held = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/scry");
+        held.Headers.IfNoneMatch.Add(first.Headers.ETag!);
+        using var second = await http.SendAsync(held);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(second.StatusCode, Is.EqualTo(HttpStatusCode.NotModified));
+            Assert.That(second.Headers.GetValues("Content-Security-Policy").Single(), Is.EqualTo(policy));
+        });
+    }
+
     // The check behind every browser test here: a refusal reaches the console the fixture records. A
     // page that forbids its own inline script says so, and the fixture has to hear it — otherwise a
     // policy tightened past what the explorer needs would fail as a page that quietly never booted.

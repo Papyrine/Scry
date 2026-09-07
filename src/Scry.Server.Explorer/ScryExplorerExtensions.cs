@@ -19,7 +19,10 @@ public static class ScryExplorerExtensions
 
         var basePath = "/" + options.Route.Trim('/');
         var assets = ExplorerAssets.Instance;
-        var policy = ContentSecurityPolicy(options, assets);
+        // Lazy, not eager: a mapping whose guard never opens - the Development-only default, in
+        // production - never reads the page, and a package built without the UI embedded still fails
+        // on a request rather than taking startup down with it.
+        var page = new Lazy<ExplorerPage>(() => Render(options, basePath, assets));
 
         var group = endpoints.MapGroup(basePath);
         // Schema introspection the UI reads on load (literal route wins over the asset catch-all).
@@ -29,9 +32,9 @@ public static class ScryExplorerExtensions
             Sql(context, options, processor));
         // The cast forces the RouteHandler (Delegate) overload; a bare HttpContext=>IResult lambda
         // would otherwise bind to the RequestDelegate overload and fail to compile.
-        group.MapGet("", (Func<HttpContext, IResult>) (_ => Serve(_, path: null, options, basePath, assets, policy)));
+        group.MapGet("", (Func<HttpContext, IResult>) (_ => Serve(_, path: null, options, assets, page)));
         group.MapGet("/{**path}", (HttpContext context, string path) =>
-            Serve(context, path, options, basePath, assets, policy));
+            Serve(context, path, options, assets, page));
         return group;
     }
 
@@ -50,16 +53,19 @@ public static class ScryExplorerExtensions
     /// <see cref="ScryExplorerOptions.QueryEndpoint"/> names another, which is then the one other
     /// origin the page may call.
     /// </remarks>
-    static string ContentSecurityPolicy(ScryExplorerOptions options, ExplorerAssets assets)
+    static string ContentSecurityPolicy(ScryExplorerOptions options, IReadOnlyList<string> hashes)
     {
         var connect = "'self'";
         if (Uri.TryCreate(options.QueryEndpoint, UriKind.Absolute, out var endpoint) &&
             endpoint.Scheme is "http" or "https")
         {
-            connect += $" {endpoint.GetLeftPart(UriPartial.Authority)}";
+            // Scheme and authority, not GetLeftPart(UriPartial.Authority), which keeps any userinfo the
+            // endpoint carried. A host-source has no room for one, so the browser would drop the whole
+            // expression as unparseable and refuse every call the explorer makes to that origin.
+            connect += $" {endpoint.Scheme}://{endpoint.Authority}";
         }
 
-        string[] scripts = ["'self'", "'wasm-unsafe-eval'", .. assets.InlineScriptHashes];
+        string[] scripts = ["'self'", "'wasm-unsafe-eval'", .. hashes];
         return string.Join(
             "; ",
             "default-src 'self'",
@@ -79,9 +85,8 @@ public static class ScryExplorerExtensions
         HttpContext context,
         string? path,
         ScryExplorerOptions options,
-        string basePath,
         ExplorerAssets assets,
-        string policy)
+        Lazy<ExplorerPage> page)
     {
         if (!options.EnableGuard(context))
         {
@@ -94,7 +99,7 @@ public static class ScryExplorerExtensions
         // A path without a file extension is a client-side route (or the root) — serve the SPA host.
         if (path.Length == 0 || Path.GetExtension(path).Length == 0)
         {
-            return Index(context, basePath, assets, policy);
+            return Index(context, page.Value);
         }
 
         if (assets.TryOpen(path, out var stream, out var contentType, out var tag))
@@ -209,22 +214,45 @@ public static class ScryExplorerExtensions
     // ReSharper disable once NotAccessedPositionalProperty.Local
     sealed record SqlPreview(string Sql);
 
-    static IResult Index(HttpContext context, string basePath, ExplorerAssets assets, string policy)
+    static IResult Index(HttpContext context, ExplorerPage page)
     {
-        var html = assets.ReadText("index.html")
-            .Replace("__SCRY_BASE__", basePath + "/");
-
         // On the 304 as well: a browser folds a 304's headers into the copy it kept, so the policy the
         // cached page runs under is this one rather than the one it was first served with.
-        context.Response.Headers.ContentSecurityPolicy = policy;
+        context.Response.Headers.ContentSecurityPolicy = page.Policy;
 
-        // Tagged from what is served rather than from the embedded file: the route is written in.
-        var tag = $"\"{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(html)))}\"";
-        if (Unchanged(context, tag))
+        if (Unchanged(context, page.Tag))
         {
             return Results.StatusCode(StatusCodes.Status304NotModified);
         }
 
-        return Results.Content(html, "text/html");
+        return Results.Content(page.Html, "text/html");
+    }
+
+    /// <summary>
+    /// The host page as it is served, built once per mapping. Everything about it is fixed by the
+    /// route: the page is the embedded one with its base href written in, the policy names the hashes
+    /// of the inline scripts <em>that</em> text holds, and the tag is of those same bytes.
+    /// </summary>
+    static ExplorerPage Render(ScryExplorerOptions options, string basePath, ExplorerAssets assets) =>
+        Build(assets.ReadText("index.html"), basePath, options);
+
+    /// <summary>
+    /// The page, its policy and its tag from the embedded page's text. Separated from
+    /// <see cref="Render"/> so the three can be asserted against a page of the test's own.
+    /// </summary>
+    internal static ExplorerPage Build(string html, string basePath, ScryExplorerOptions options)
+    {
+        html = html.Replace("__SCRY_BASE__", basePath.TrimEnd('/') + "/");
+
+        return new(
+            html,
+            // Hashed after the rewrite, so a token that ever moves inside a script takes its hash with
+            // it rather than invalidating it.
+            ContentSecurityPolicy(options, ExplorerAssets.InlineScriptHashes(html)),
+            // Tagged from what is served rather than from the embedded file: the route is written in.
+            $"\"{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(html)))}\"");
     }
 }
+
+/// <summary>The host page, its Content-Security-Policy and its entity tag, as one mapping serves them.</summary>
+sealed record ExplorerPage(string Html, string Policy, string Tag);

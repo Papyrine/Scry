@@ -24,16 +24,8 @@ sealed partial class ExplorerAssets
     readonly Dictionary<string, string> pathToResource = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, string> pathToTag = new(StringComparer.OrdinalIgnoreCase);
 
-    // The host page's inline scripts, as the source expressions a Content-Security-Policy allows them
-    // by. Computed once from the embedded page: the page is fixed at build and only its base href is
-    // rewritten at serve time, which sits outside every script, so a hash pins each script exactly
-    // and the page is the same bytes on every serve — which its ETag needs. A nonce would have to be
-    // minted into the page per response, and every revalidation would then be a download.
-    readonly Lazy<IReadOnlyList<string>> inlineScriptHashes;
-
     ExplorerAssets()
     {
-        inlineScriptHashes = new(HashInlineScripts);
         foreach (var name in assembly.GetManifestResourceNames())
         {
             if (!name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
@@ -74,20 +66,22 @@ sealed partial class ExplorerAssets
     public bool HasAssets => pathToResource.Count > 0;
 
     /// <summary>
-    /// The <c>'sha256-…'</c> source expressions for the host page's inline scripts, in document order.
-    /// What a <c>script-src</c> lists to allow exactly those scripts and no other inline one.
+    /// The <c>'sha256-…'</c> source expressions for <paramref name="html"/>'s inline scripts, in
+    /// document order. What a <c>script-src</c> lists to allow exactly those scripts and no other
+    /// inline one.
     /// </summary>
-    public IReadOnlyList<string> InlineScriptHashes => inlineScriptHashes.Value;
-
-    IReadOnlyList<string> HashInlineScripts()
+    /// <remarks>
+    /// Takes the page rather than reading it, so the caller hashes the text it is about to serve: a
+    /// hash read off the embedded page instead would be right only for as long as no serve-time
+    /// rewrite reached inside a script, and wrong silently — the browser refuses the script and the
+    /// explorer never boots. Hashes at all rather than a nonce because the page then stays the same
+    /// bytes on every serve, which is what its ETag needs; a nonce would be minted per response and
+    /// every revalidation would be a download.
+    /// </remarks>
+    public static IReadOnlyList<string> InlineScriptHashes(string html)
     {
-        if (!pathToResource.ContainsKey("index.html"))
-        {
-            return [];
-        }
-
         var hashes = new List<string>();
-        foreach (Match match in InlineScript().Matches(ReadText("index.html")))
+        foreach (Match match in InlineScript().Matches(html))
         {
             // The browser hashes exactly the element's text, whitespace included, so the capture keeps
             // it whole — and reads it off the same normalized text the page is served as.

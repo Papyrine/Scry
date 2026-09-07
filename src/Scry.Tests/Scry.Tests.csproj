@@ -23,6 +23,10 @@
     <ProjectReference Include="..\Scry.Annotations\Scry.Annotations.csproj" />
     <ProjectReference Include="..\Scry.Server\Scry.Server.csproj" />
     <ProjectReference Include="..\Scry.Client\Scry.Client.csproj" />
+    <!-- For ExplorerPageTests alone: the explorer's host page, its policy and its tag are built from
+         one another, and the builder is worth asserting directly rather than through a browser. The
+         package is already in this solution, so this adds ordering rather than work. -->
+    <ProjectReference Include="..\Scry.Server.Explorer\Scry.Server.Explorer.csproj" />
     <!-- Referenced as a library, not as an analyzer: LockstepTests runs its metadata reader over this
          project's own model assembly and compares the stamp it computes with the server's. It also
          supplies SupportedLinq, the closed LINQ surface the analyzer reports against, which

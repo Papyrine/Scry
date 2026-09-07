@@ -689,6 +689,12 @@ Each line is a scenario that was checked against the code. `[x]` names the test 
 - [x] covered: the host page is served under a `Content-Security-Policy` with its inline scripts allowed by hash —
   `UiSnapshotTests.ExplorerServesAContentSecurityPolicy`, `ExplorerAssetsCarryNoPolicy`; every browser test fails on a
   refusal the browser logs (`BrowserFixture.RefuseContentSecurityPolicyViolations`)
+- [x] covered: the policy is on the 304 as well, so a cached page runs under the current one —
+  `UiSnapshotTests.ExplorerCarriesThePolicyOnARevalidation`
+- [x] covered: the page's scripts are hashed after the base href is written in, so a rewrite reaching inside a script
+  moves its hash rather than invalidating it — `ExplorerPageTests.HashesTheScriptAsItIsServedNotAsItIsEmbedded`
+- [x] covered: `connect-src` names a `QueryEndpoint`'s origin without any userinfo it carried, which a host-source has
+  no room for — `ExplorerPageTests.ConnectSrcNamesTheEndpointsOriginWithoutItsCredentials`
 
 
 ### Startup guardrails (`Schema.Build`, `MapScry`)

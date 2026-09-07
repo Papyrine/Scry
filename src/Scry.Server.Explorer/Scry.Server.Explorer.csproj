@@ -9,6 +9,12 @@
     <ExplorerUiPublishDir>$(MSBuildThisFileDirectory)..\Scry.Explorer.Ui\bin\$(Configuration)\net10.0\publish\wwwroot</ExplorerUiPublishDir>
   </PropertyGroup>
   <ItemGroup>
+    <!-- The host page is built once per mapping - its base href written in, its inline scripts hashed
+         into the policy, its bytes tagged - and the three have to agree with each other. Reaching the
+         builder directly is what lets a test hash a page whose rewrite lands inside a script, which
+         the embedded page deliberately never does. Named by key for the reason given on Scry.Client's
+         friend. -->
+    <InternalsVisibleTo Include="Scry.Tests" Key="$(ScryPublicKey)" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
     <ProjectReference Include="..\Scry.Server\Scry.Server.csproj" />
