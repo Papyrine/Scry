@@ -19,10 +19,19 @@ public static class ScryExplorerExtensions
 
         var basePath = "/" + options.Route.Trim('/');
         var assets = ExplorerAssets.Instance;
-        // Lazy, not eager: a mapping whose guard never opens - the Development-only default, in
-        // production - never reads the page, and a package built without the UI embedded still fails
-        // on a request rather than taking startup down with it.
-        var page = new Lazy<ExplorerPage>(() => Render(options, basePath, assets));
+        if (!assets.HasAssets)
+        {
+            // At startup rather than as a 500 on the first visit. A build that embedded no UI can
+            // never serve the explorer, whatever the guard decides, so the only thing waiting
+            // achieves is that the sentence arrives as a stack trace to whoever browsed there.
+            throw new InvalidOperationException(
+                "Scry.Server.Explorer holds no embedded explorer UI, so MapScryExplorer has nothing to serve. " +
+                "The UI is published and embedded by the EmbedExplorerUi target in Scry.Server.Explorer.csproj; " +
+                "a package or local build without it is incomplete.");
+        }
+
+        // Built here rather than per request: everything about the page is fixed by the route.
+        var page = Render(options, basePath, assets);
 
         var group = endpoints.MapGroup(basePath);
         // Schema introspection the UI reads on load (literal route wins over the asset catch-all).
@@ -86,7 +95,7 @@ public static class ScryExplorerExtensions
         string? path,
         ScryExplorerOptions options,
         ExplorerAssets assets,
-        Lazy<ExplorerPage> page)
+        ExplorerPage page)
     {
         if (!options.EnableGuard(context))
         {
@@ -99,7 +108,7 @@ public static class ScryExplorerExtensions
         // A path without a file extension is a client-side route (or the root) — serve the SPA host.
         if (path.Length == 0 || Path.GetExtension(path).Length == 0)
         {
-            return Index(context, page.Value);
+            return Index(context, page);
         }
 
         if (assets.TryOpen(path, out var stream, out var contentType, out var tag))

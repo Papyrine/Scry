@@ -107,6 +107,37 @@ public class ExplorerPageTests
     }
 
     /// <summary>
+    /// The embedded page through the same builder. What the browser suite proves at the far end, this
+    /// pins at the near one: the real page has exactly the two inline scripts the policy names, and
+    /// its base href is the route it was mounted at.
+    /// </summary>
+    [Test]
+    public void BuildsTheEmbeddedPage()
+    {
+        var page = ScryExplorerExtensions.Build(
+            ExplorerAssets.Instance.ReadText("index.html"),
+            "/tools/scry",
+            new());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(page.Html, Does.Contain("""<base href="/tools/scry/" />"""));
+            Assert.That(page.Html, Does.Not.Contain("__SCRY_BASE__"));
+            Assert.That(ExplorerAssets.InlineScriptHashes(page.Html), Has.Count.EqualTo(2));
+        });
+    }
+
+    /// <summary>
+    /// The one asset a mapping cannot start without, and the one that goes missing silently: a build
+    /// whose UI publish did not run still produces a package, and the only symptom is an explorer
+    /// serving nothing. MapScryExplorer refuses to map without it, and this is what says that guard
+    /// is not the thing failing.
+    /// </summary>
+    [Test]
+    public void ThePackageEmbedsItsHostPage() =>
+        Assert.That(ExplorerAssets.Instance.HasAssets, Is.True);
+
+    /// <summary>
     /// The root mount. A base href of "//" is a scheme-relative url, which would send the whole app
     /// looking for its assets on a host named by whatever followed.
     /// </summary>

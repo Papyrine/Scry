@@ -62,8 +62,12 @@ sealed partial class ExplorerAssets
         }
     }
 
-    /// <summary>True once the embedded UI is present (i.e. the package was built with the UI published in).</summary>
-    public bool HasAssets => pathToResource.Count > 0;
+    /// <summary>
+    /// True once the embedded UI is present. Asks for the host page rather than counting resources:
+    /// it is the one asset a mapping cannot start without, and the only one whose absence would
+    /// otherwise surface as an exception mid-request.
+    /// </summary>
+    public bool HasAssets => pathToResource.ContainsKey("index.html");
 
     /// <summary>
     /// The <c>'sha256-…'</c> source expressions for <paramref name="html"/>'s inline scripts, in
