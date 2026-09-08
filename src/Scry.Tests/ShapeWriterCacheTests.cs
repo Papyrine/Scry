@@ -52,4 +52,11 @@ public class ShapeWriterCacheTests
         Assert.That(PlanShapeWriter.Get(shape, null), Is.Not.SameAs(PlanShapeWriter.Get(shape, [true])));
         Assert.That(PlanShapeWriter.Get(shape, [false]), Is.Not.SameAs(PlanShapeWriter.Get(shape, [true])));
     }
+
+    // Slots built separately compare by value, as the paths do.
+    [Test]
+    public void EqualBinarySlotsBuiltSeparatelyShareOneWriter() =>
+        Assert.That(
+            PlanShapeWriter.Get([["Payload"], ["Name"]], [true, false]),
+            Is.SameAs(PlanShapeWriter.Get([["Payload"], ["Name"]], [true, false])));
 }

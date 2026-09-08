@@ -295,7 +295,7 @@ sealed class PlanShapeWriter
     // A writer is immutable once built and is published through the dictionary, so concurrent readers
     // see it whole. Two threads that both miss build identical writers and one of them wins, which is
     // the same benign race the per-plan field had.
-    static readonly ConcurrentDictionary<string, PlanShapeWriter> writers = new(StringComparer.Ordinal);
+    static readonly ConcurrentDictionary<ShapeKey, PlanShapeWriter> writers = new();
 
     // A projection is the client's, so the number of distinct shapes reaching this is bounded only by
     // what a caller chooses to send. Growth stops here and a shape arriving past the limit builds its
@@ -308,7 +308,7 @@ sealed class PlanShapeWriter
         IReadOnlyList<IReadOnlyList<string>> shape,
         IReadOnlyList<bool>? binarySlots)
     {
-        var key = Key(shape, binarySlots);
+        var key = new ShapeKey(shape, binarySlots);
         if (writers.TryGetValue(key, out var cached))
         {
             return cached;
@@ -324,34 +324,95 @@ sealed class PlanShapeWriter
     }
 
     /// <summary>
-    /// A shape's identity as a string. Every part is length-prefixed, so no projected name can be
-    /// arranged to read as a different shape's key — the names are the client's, and a caller who could
-    /// collide two shapes would have one projection answered in another's member order.
+    /// A shape's identity: its paths, segment by segment, and its binary slots. Compared by value across
+    /// the lists two requests of one projection arrive as, and hashed the same way, so finding a
+    /// writer allocates nothing — where a string spelling of the shape was built per request, on the
+    /// hit path too. Segments are compared one at a time, so no projected name can be arranged to read
+    /// as a different shape's: the names are the client's, and a caller who could collide two shapes
+    /// would have one projection answered in another's member order.
     /// </summary>
-    static string Key(IReadOnlyList<IReadOnlyList<string>> shape, IReadOnlyList<bool>? binarySlots)
+    readonly struct ShapeKey(IReadOnlyList<IReadOnlyList<string>> shape, IReadOnlyList<bool>? binary) :
+        IEquatable<ShapeKey>
     {
-        var key = new StringBuilder();
-        foreach (var path in shape)
+        readonly IReadOnlyList<IReadOnlyList<string>> shape = shape;
+        readonly IReadOnlyList<bool>? binary = binary;
+
+        public bool Equals(ShapeKey other)
         {
-            key.Append(path.Count).Append(':');
-            foreach (var segment in path)
+            if (shape.Count != other.shape.Count ||
+                binary is null != other.binary is null)
             {
-                key.Append(segment.Length).Append(':').Append(segment);
+                return false;
             }
+
+            for (var slot = 0; slot < shape.Count; slot++)
+            {
+                var path = shape[slot];
+                var otherPath = other.shape[slot];
+                if (path.Count != otherPath.Count)
+                {
+                    return false;
+                }
+
+                for (var segment = 0; segment < path.Count; segment++)
+                {
+                    if (!string.Equals(path[segment], otherPath[segment], StringComparison.Ordinal))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            // Same paths shaped by different binary slots are different writers, so the flags are part
+            // of the identity rather than an attribute of it.
+            if (binary is null)
+            {
+                return true;
+            }
+
+            if (binary.Count != other.binary!.Count)
+            {
+                return false;
+            }
+
+            for (var slot = 0; slot < binary.Count; slot++)
+            {
+                if (binary[slot] != other.binary[slot])
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
-        // Same paths shaped by different binary slots are different writers, so the flags are part of
-        // the identity rather than an attribute of it.
-        if (binarySlots is not null)
-        {
-            key.Append('|');
-            foreach (var slot in binarySlots)
-            {
-                key.Append(slot ? '1' : '0');
-            }
-        }
+        public override bool Equals(object? obj) =>
+            obj is ShapeKey other && Equals(other);
 
-        return key.ToString();
+        public override int GetHashCode()
+        {
+            var hash = new HashCode();
+            hash.Add(shape.Count);
+            foreach (var path in shape)
+            {
+                hash.Add(path.Count);
+                foreach (var segment in path)
+                {
+                    hash.Add(segment, StringComparer.Ordinal);
+                }
+            }
+
+            if (binary is not null)
+            {
+                hash.Add(binary.Count);
+                foreach (var slot in binary)
+                {
+                    hash.Add(slot);
+                }
+            }
+
+            return hash.ToHashCode();
+        }
     }
 
     static PlanShapeWriter Create(
