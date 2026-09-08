@@ -1,6 +1,6 @@
 # Performance
 
-What it costs the server to write a response and the client to read one, in allocations and time.
+What it costs the server to prepare a request and write a response, and the client to read one, in allocations and time.
 
 Both sides carry two ways of doing the same work. The server can shape a result into dictionaries, serialize that into a `JsonElement`, and serialize the envelope around it a second time — or it can write the rows straight from the projected values into the response buffer, for one query or for every entry of a batch. The client can decode a response body to a string and read the payload through a `JsonElement` — or it can read the UTF-8 exactly as it arrived. The pairs produce identical bytes and identical results; what differs is what they spend getting there.
 
@@ -15,7 +15,7 @@ dotnet run -c Release --project Benchmarks -- --filter '*'
 
 Release is mandatory — BenchmarkDotNet refuses a Debug build. The project is deliberately in no solution; see the note in `CLAUDE.md` for why.
 
-The sources are [`Benchmarks/ResponseBenchmarks.cs`](../Benchmarks/ResponseBenchmarks.cs), [`Benchmarks/PageBenchmarks.cs`](../Benchmarks/PageBenchmarks.cs), [`Benchmarks/BatchBenchmarks.cs`](../Benchmarks/BatchBenchmarks.cs) and [`Benchmarks/TerminalBenchmarks.cs`](../Benchmarks/TerminalBenchmarks.cs) for the server, and [`Benchmarks/ClientReadBenchmarks.cs`](../Benchmarks/ClientReadBenchmarks.cs) for the client. Rows come from an in-memory `[QueryablePoco]` source, so the measurement is shaping and serialization with no database and no I/O in it.
+The sources are [`Benchmarks/ResponseBenchmarks.cs`](../Benchmarks/ResponseBenchmarks.cs), [`Benchmarks/PageBenchmarks.cs`](../Benchmarks/PageBenchmarks.cs), [`Benchmarks/BatchBenchmarks.cs`](../Benchmarks/BatchBenchmarks.cs) and [`Benchmarks/TerminalBenchmarks.cs`](../Benchmarks/TerminalBenchmarks.cs) and [`Benchmarks/PreparationBenchmarks.cs`](../Benchmarks/PreparationBenchmarks.cs) for the server, and [`Benchmarks/ClientReadBenchmarks.cs`](../Benchmarks/ClientReadBenchmarks.cs) for the client. Rows come from an in-memory `[QueryablePoco]` source, so the measurement is shaping and serialization with no database and no I/O in it.
 
 
 ## Writing a response
@@ -79,6 +79,26 @@ A terminal — a count, an aggregate, a `First` — costs the same whatever the 
 Read the third row before the second. A list of one row goes through the writer that has always written lists, and it carries the same gap — so what the second row shows is not a terminal costing more than it used to, but the fixed cost the writer pays for any result and amortizes over the rows in it. One row never amortizes it, whatever result shape the row arrived in. This is the same effect that makes the single-row entries of the tables above read the way they do.
 
 What a terminal gets out of going through the writer is the rest of the table: it is one path for every result kind, so a terminal is written by the code the golden tests already hold to the general path byte for byte, rather than being the one shape that keeps its own.
+
+
+## Preparing a request
+
+What the server spends on a request before the database is asked: validating it, resolving its source, applying its policies, rebinding it onto EF, and planning its projection. `PreparationBenchmarks` prepares each request through `ScryProcessor.Stream` and drops the rows unread, so nothing executes and nothing crosses HTTP. The sources are entity sets on an unreachable context, so the composition goes through EF's own provider — which compiles nothing until a query is enumerated — rather than the in-memory provider the other benchmarks read, which compiles the whole tree on every enumeration and would bury this cost.
+
+| Shape | Before | After |
+| --- | --- | --- |
+| A predicate and a projection | 6.70 KB | **5.55 KB** |
+| Temporal reads, one through a nullable | 6.39 KB | **5.20 KB** |
+| A membership list | 6.09 KB | **4.67 KB** |
+| An inner join | 5.03 KB | **4.42 KB** |
+| A row policy | 6.87 KB | **5.61 KB** |
+| A deduplicated projection, ordered | 6.73 KB | **4.65 KB** |
+| The baseline carried into EF's translation | 13.95 KB | **12.79 KB** |
+| *The request's JSON alone, for comparison* | *4.17 KB* | *4.17 KB* |
+
+The whole of a preparation is a few microseconds and a few kilobytes, which is what a source generator on the server side could never have improved on: nothing here is compiled per request, and the projection is the client's, so there is no shape to generate ahead of time. What the *before* column paid was reflection that ran per request rather than once — a `Set<T>` invoked reflectively per source resolution, a generic method closed and a provider's untyped `CreateQuery` invoked per composed operator, a temporal part and an optional's `Value` looked up by name per node, a policy applied through `MethodInfo.Invoke`, and the row writer's key spelled as a string on every request. Each is now a delegate or a lookup made once, and the *after* column is the difference.
+
+The last row is the same request carried on into EF's pre-execution work — funcletizing, hashing, the compiled-query lookup, the command text — so the server's share can be read against the provider's. Read the allocation columns; the timings of these arms move by a third between runs, as the note below says, and the difference between two arms of two microseconds is inside that.
 
 
 ## Reading a response
