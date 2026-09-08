@@ -148,8 +148,15 @@ public class ClosureReaderTests
         includeAbsent ? [..values, null] : values;
 
     // A shift counts in ints whatever it shifts, so the right operand of one is not the left's type.
-    static Type? ShiftCount(ExpressionType op) =>
-        op is ExpressionType.LeftShift or ExpressionType.RightShift ? typeof(int) : null;
+    static Type? ShiftCount(ExpressionType op)
+    {
+        if (op is ExpressionType.LeftShift or ExpressionType.RightShift)
+        {
+            return typeof(int);
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// Asks the reader and the compiler the same expression and asserts they agree — on the value,
@@ -270,7 +277,11 @@ public class ClosureReaderTests
         // The compiler prefers MemoryExtensions for an array's Contains, so the array reaches it as a
         // span through the implicit operator. The translator reads what was converted rather than the
         // span, and so does this.
-        if (closure is MethodCallExpression {Method.Name: "op_Implicit", Arguments: [var converted]} &&
+        if (closure is MethodCallExpression
+            {
+                Method.Name: "op_Implicit",
+                Arguments: [var converted]
+            } &&
             closure.Type.IsByRefLike)
         {
             closure = converted;
@@ -297,7 +308,7 @@ public class ClosureReaderTests
         var counting = new Counting();
 
         var request = Client().Source<Order>("Order", ["Region"])
-            .Where(_ => counting.Ids.Where(id => id > 1).Contains(_.Id))
+            .Where(_ => counting.Ids.Where(_ => _ > 1).Contains(_.Id))
             .ToScryRequest();
 
         Assert.Multiple(() =>
