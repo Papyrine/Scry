@@ -30,3 +30,14 @@ Only the endpoint arm pays HTTP framing and a loopback round trip, so its absolu
 Expect the endpoint arm to *lose* at one row, where the measurement is almost entirely that transport constant, and to win by a wide margin by a thousand. A run where it does not is worth investigating before trusting any other number in the table.
 
 The allocation column deserves as much attention as the time column: at a thousand rows the difference is on the order of a megabyte per response, which is GC pressure rather than a one-off cost.
+
+
+## Preparing a request
+
+`PreparationBenchmarks` measures what the server spends on a request before the database is asked: validating it, resolving its source, applying its policies, rebinding it onto EF, and planning its projection. Each arm prepares a request through `ScryProcessor.Stream` and drops the rows unread, so nothing is executed and nothing crosses HTTP.
+
+The sources are entity sets on the same unreachable context, rather than the in-memory rows the other benchmarks read. Composing over EF's provider is what the endpoint does, and EF compiles nothing until a query is enumerated; an in-memory provider compiles the whole tree on every enumeration, which would bury the cost under measurement. An arm that enumerated by mistake would fail on the connection string rather than quietly measure a round trip.
+
+`Filtered` is the plain path and the baseline. The other arms each add one shape whose preparation has a cost of its own — temporal reads, a membership list, a join, a row policy, a deduplicated projection — and the setup reads back each arm's SQL and refuses to run unless it contains the operator the arm names. `Translated` carries the baseline on into EF's own pre-execution work (funcletizing, hashing, the compiled-query lookup, the command text), so the server's share can be read against the provider's. `Deserialize` is the request's JSON alone.
+
+These arms carry no transport and no execution, so their absolute figures are the cost of preparation itself, and allocations are the number to compare between runs. The one thing the endpoint does that `Stream` does not is the sensitivity walk, which the client shares and which costs one pass over the request.
