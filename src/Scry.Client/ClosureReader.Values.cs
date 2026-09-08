@@ -32,7 +32,7 @@ static partial class ClosureReader
         // by rounding to nearest — both exactly stated. A float narrowed to an integer is the one
         // left out: what an unchecked conversion does with a value the target cannot hold is a
         // property of the instruction rather than of the language, so it stays the compiler's.
-        return (Integrals.Contains(from) && (Integrals.Contains(to) || IsFloating(to))) ||
+        return (integrals.Contains(from) && (integrals.Contains(to) || IsFloating(to))) ||
                (IsFloating(from) && IsFloating(to));
     }
 
@@ -124,11 +124,11 @@ static partial class ClosureReader
     static ulong Bits(object value) =>
         unchecked(value switch
         {
-            sbyte number => (ulong) (long) number,
+            sbyte number => (ulong) number,
             byte number => number,
-            short number => (ulong) (long) number,
+            short number => (ulong) number,
             ushort number => number,
-            int number => (ulong) (long) number,
+            int number => (ulong) number,
             uint number => number,
             long number => (ulong) number,
             ulong number => number,
@@ -182,7 +182,7 @@ static partial class ClosureReader
         {
             // An unsigned integer negates through the signed width above it, as the language states
             // it and as the compiler emits it.
-            ExpressionType.Negate => -(long) operand,
+            ExpressionType.Negate => -operand,
             ExpressionType.Not => ~operand,
             _ => operand
         });

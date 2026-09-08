@@ -1,5 +1,3 @@
-using System.Linq.Expressions;
-
 /// <summary>
 /// A call inside a query lambda that reads nothing from the row is closure state, and is evaluated
 /// into the constant it stands for before the request is sent.

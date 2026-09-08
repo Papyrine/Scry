@@ -1,5 +1,3 @@
-using System.Linq.Expressions;
-
 /// <summary>
 /// A lambda that binds a variable and reads it translates as the lambda that reads the bound
 /// expression in its place.

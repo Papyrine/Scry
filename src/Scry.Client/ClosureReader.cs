@@ -157,9 +157,11 @@ static partial class ClosureReader
     // An optional bool's & and | are three-valued — an absent and a false are a false, not an absent
     // — so they are neither the operator they name nor the propagation everything else lifted does.
     static bool IsLiftedLogical(BinaryExpression binary) =>
-        binary.IsLifted &&
-        binary.NodeType is ExpressionType.And or ExpressionType.Or or
-            ExpressionType.AndAlso or ExpressionType.OrElse &&
+        binary is {
+            IsLifted: true,
+            NodeType: ExpressionType.And or ExpressionType.Or or
+            ExpressionType.AndAlso or ExpressionType.OrElse
+        } &&
         Underlying(binary.Left.Type) == typeof(bool);
 
     static bool CanCompute(BinaryExpression binary)
@@ -175,7 +177,7 @@ static partial class ClosureReader
         // A shift counts in ints whatever it is shifting.
         if (binary.NodeType is ExpressionType.LeftShift or ExpressionType.RightShift)
         {
-            return right == typeof(int) && Integrals.Contains(Numeric(left));
+            return right == typeof(int) && integrals.Contains(Numeric(left));
         }
 
         if (left != right)
@@ -208,7 +210,7 @@ static partial class ClosureReader
     // The checked spellings are absent throughout — Convert aside, where an identity conversion
     // cannot overflow. An overflow is the compiler's to raise, and a reader that raised it a shade
     // differently would be a difference in which queries are refused.
-    static readonly HashSet<Type> Integrals =
+    static HashSet<Type> integrals =
     [
         typeof(sbyte), typeof(byte), typeof(short), typeof(ushort),
         typeof(int), typeof(uint), typeof(long), typeof(ulong), typeof(char)
@@ -220,7 +222,7 @@ static partial class ClosureReader
         return numeric == typeof(bool) ||
                numeric == typeof(float) ||
                numeric == typeof(double) ||
-               Integrals.Contains(numeric);
+               integrals.Contains(numeric);
     }
 
     // What a type counts as: an enum counts as the integer it is written on, since that is what the
@@ -234,6 +236,7 @@ static partial class ClosureReader
     static bool IsOptional(Type type) =>
         Nullable.GetUnderlyingType(type) is not null;
 
+    // ReSharper disable TailRecursiveCall
     static object? Read(Expression expression)
     {
         switch (expression)
@@ -254,9 +257,12 @@ static partial class ClosureReader
                 return ReadBinary(binary);
 
             case ConditionalExpression conditional:
-                return (bool) Read(conditional.Test)!
-                    ? Read(conditional.IfTrue)
-                    : Read(conditional.IfFalse);
+                if ((bool) Read(conditional.Test)!)
+                {
+                    return Read(conditional.IfTrue);
+                }
+
+                return Read(conditional.IfFalse);
 
             case MethodCallExpression call:
                 return Invoke(
@@ -288,6 +294,7 @@ static partial class ClosureReader
                 throw new($"'{expression.NodeType}' passed CanRead with nothing to read it.");
         }
     }
+    // ReSharper restore TailRecursiveCall
 
     // The dereference the compiled form performs. Reflection raises a complaint of its own about a
     // null target, which names reflection rather than the query.

@@ -1,5 +1,3 @@
-using System.Linq.Expressions;
-
 /// <summary>
 /// An in-memory source answers a string function under LINQ to Objects, where the culture-sensitive
 /// members read the current culture — which request localization sets per request. The same wire

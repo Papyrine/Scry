@@ -1,6 +1,3 @@
-using System.Linq.Expressions;
-using System.Reflection;
-
 /// <summary>
 /// The reader that turns a captured expression into its value without compiling it, checked against
 /// the compiler it stands in for.
@@ -343,7 +340,9 @@ public class ClosureReaderTests
         int? maybe = 4;
 
         var request = Client().Source<Order>("Order", ["Region"])
-            .Where(_ => _.Id == maybe!.Value && maybe.HasValue)
+            .Where(_ => _.Id == maybe.Value &&
+                        // ReSharper disable once ConditionIsAlwaysTrueOrFalse
+                        maybe.HasValue)
             .ToScryRequest();
 
         var predicate = (BinaryNode) ((WhereOp) request.Pipeline[0]).Predicate;

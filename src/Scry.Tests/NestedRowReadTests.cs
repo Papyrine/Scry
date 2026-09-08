@@ -1,5 +1,3 @@
-using System.Linq.Expressions;
-
 /// <summary>
 /// A query lambda reads its own row and closure state. A shape that reads the row of an enclosing
 /// lambda, or a parameter that is not a row, was compiled as closure state and failed with the

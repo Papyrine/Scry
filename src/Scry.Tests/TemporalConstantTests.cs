@@ -1,5 +1,3 @@
-using System.Linq.Expressions;
-
 /// <summary>
 /// How a temporal constant is spelled on the wire. Each of these values reaches the server as text and
 /// is parsed back into the member's own type, so a spelling that drops part of the value drops it
