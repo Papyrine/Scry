@@ -50,7 +50,7 @@ sealed class ExpressionBuilder(
         // regardless of how the navigation is declared. The delegate type carries that, rather than a
         // Convert around the body — a conversion node stops EF expanding the navigation at all.
         var selector = Expression.Lambda(
-            typeof(Func<,>).MakeGenericType(type, typeof(IEnumerable<>).MakeGenericType(element)),
+            QueryComposition.Close(typeof(Func<,>), type, QueryComposition.Close(typeof(IEnumerable<>), element)),
             collection,
             parameter);
         return (selector, element);
@@ -358,7 +358,7 @@ sealed class ExpressionBuilder(
         // the group rather than a row — and the only thing the projection may do with it is aggregate.
         var grouped = kind == JoinKind.Group;
         var inner = Expression.Parameter(
-            grouped ? typeof(IEnumerable<>).MakeGenericType(innerType) : innerType,
+            grouped ? QueryComposition.Close(typeof(IEnumerable<>), innerType) : innerType,
             "i");
         var leaves = new List<Expression>(members.Count);
         var shape = new List<IReadOnlyList<string>>(members.Count);
@@ -388,7 +388,7 @@ sealed class ExpressionBuilder(
                 leaf.Type.IsValueType &&
                 Nullable.GetUnderlyingType(leaf.Type) is null)
             {
-                leaf = Expression.Convert(leaf, typeof(Nullable<>).MakeGenericType(leaf.Type));
+                leaf = Expression.Convert(leaf, QueryComposition.Close(typeof(Nullable<>), leaf.Type));
             }
 
             leaves.Add(leaf);
@@ -560,7 +560,7 @@ sealed class ExpressionBuilder(
     /// </summary>
     public ProjectionPlan BuildGroupProjection(Projection projection, Type element, Type key)
     {
-        var groupingType = typeof(IGrouping<,>).MakeGenericType(key, element);
+        var groupingType = QueryComposition.Close(typeof(IGrouping<,>), key, element);
         var parameter = Expression.Parameter(groupingType, "g");
         var leaves = new List<Expression>(projection.Members.Count);
         var shape = new List<IReadOnlyList<string>>(projection.Members.Count);
@@ -670,7 +670,7 @@ sealed class ExpressionBuilder(
             if (body.Type.IsValueType &&
                 Nullable.GetUnderlyingType(body.Type) is null)
             {
-                body = Expression.Convert(body, typeof(Nullable<>).MakeGenericType(body.Type));
+                body = Expression.Convert(body, QueryComposition.Close(typeof(Nullable<>), body.Type));
             }
         }
         else
@@ -731,7 +731,7 @@ sealed class ExpressionBuilder(
             return promoted;
         }
 
-        return typeof(Nullable<>).MakeGenericType(promoted);
+        return QueryComposition.Close(typeof(Nullable<>), promoted);
     }
 
     /// <summary>
@@ -816,7 +816,7 @@ sealed class ExpressionBuilder(
             subquery.Function != SubqueryFn.All)
         {
             source = Expression.Call(
-                enumerableWhere.MakeGenericMethod(element),
+                QueryComposition.Close(enumerableWhere, element),
                 source,
                 ElementLambda(filter, element, typeof(bool)));
         }
@@ -824,16 +824,16 @@ sealed class ExpressionBuilder(
         switch (subquery.Function)
         {
             case SubqueryFn.Any:
-                return Expression.Call(enumerableAny.MakeGenericMethod(element), source);
+                return Expression.Call(QueryComposition.Close(enumerableAny, element), source);
 
             case SubqueryFn.All:
                 return Expression.Call(
-                    enumerableAll.MakeGenericMethod(element),
+                    QueryComposition.Close(enumerableAll, element),
                     source,
                     ElementLambda(subquery.Predicate!, element, typeof(bool)));
 
             case SubqueryFn.Count:
-                return Expression.Call(enumerableCount.MakeGenericMethod(element), source);
+                return Expression.Call(QueryComposition.Close(enumerableCount, element), source);
         }
 
         var parameter = Expression.Parameter(element, "x");
@@ -846,7 +846,7 @@ sealed class ExpressionBuilder(
             if (body.Type.IsValueType &&
                 Nullable.GetUnderlyingType(body.Type) is null)
             {
-                body = Expression.Convert(body, typeof(Nullable<>).MakeGenericType(body.Type));
+                body = Expression.Convert(body, QueryComposition.Close(typeof(Nullable<>), body.Type));
             }
         }
         else
@@ -893,7 +893,7 @@ sealed class ExpressionBuilder(
         }
 
         return Expression.Call(
-            collateMethod.MakeGenericMethod(target.Type),
+            QueryComposition.Close(collateMethod, target.Type),
             Expression.Constant(EF.Functions),
             target,
             Expression.Constant(collation));
@@ -922,9 +922,9 @@ sealed class ExpressionBuilder(
 
         if (inSource.Predicate is { } predicate)
         {
-            inner = inner.Provider.CreateQuery(
-                Expression.Call(
-                    typeof(Queryable),
+            inner = QueryComposition.Compose(
+                inner,
+                QueryComposition.Call(
                     "Where",
                     [element],
                     inner.Expression,
@@ -956,16 +956,16 @@ sealed class ExpressionBuilder(
             }
         }
 
-        var candidates = inner.Provider.CreateQuery(
-            Expression.Call(
-                typeof(Queryable),
+        var candidates = QueryComposition.Compose(
+            inner,
+            QueryComposition.Call(
                 "Select",
                 [element, selector.ReturnType],
                 inner.Expression,
                 Expression.Quote(selector)));
 
         return Expression.Call(
-            queryableContains.MakeGenericMethod(value.Type),
+            QueryComposition.Close(queryableContains, value.Type),
             candidates.Expression,
             value);
     }
@@ -1038,7 +1038,7 @@ sealed class ExpressionBuilder(
     /// </summary>
     public LambdaExpression BuildGroupPredicate(Node predicate, Type element, Type key)
     {
-        var parameter = Expression.Parameter(typeof(IGrouping<,>).MakeGenericType(key, element), "g");
+        var parameter = Expression.Parameter(QueryComposition.Close(typeof(IGrouping<,>), key, element), "g");
         return Expression.Lambda(EnsureCondition(Build(predicate, parameter, typeof(bool))), parameter);
     }
 
@@ -1163,7 +1163,7 @@ sealed class ExpressionBuilder(
     // nullable where it cannot.
     static Expression Widened(Expression expression) =>
         expression.Type.IsValueType && Nullable.GetUnderlyingType(expression.Type) is null
-            ? Expression.Convert(expression, typeof(Nullable<>).MakeGenericType(expression.Type))
+            ? Expression.Convert(expression, QueryComposition.Close(typeof(Nullable<>), expression.Type))
             : expression;
 
     Expression BuildBinary(BinaryNode binary, Expression row)
@@ -1838,8 +1838,8 @@ sealed class ExpressionBuilder(
         }
 
         return Expression.Call(
-            enumerableContains.MakeGenericMethod(elementType),
-            Parameterization.Parameterize(array, typeof(IEnumerable<>).MakeGenericType(elementType)),
+            QueryComposition.Close(enumerableContains, elementType),
+            Parameterization.Parameterize(array, QueryComposition.Close(typeof(IEnumerable<>), elementType)),
             target);
     }
 
@@ -1868,7 +1868,7 @@ sealed class ExpressionBuilder(
         if (Nullable.GetUnderlyingType(left.Type) is not null ||
             Nullable.GetUnderlyingType(right.Type) is not null)
         {
-            target = typeof(Nullable<>).MakeGenericType(target);
+            target = QueryComposition.Close(typeof(Nullable<>), target);
         }
 
         left = ConvertTo(left, target);
@@ -1948,7 +1948,7 @@ sealed class ExpressionBuilder(
         var lifted = Nullable.GetUnderlyingType(target.Type) is not null;
         if (lifted)
         {
-            return Expression.Convert(target, typeof(Nullable<>).MakeGenericType(result));
+            return Expression.Convert(target, QueryComposition.Close(typeof(Nullable<>), result));
         }
 
         return Expression.Convert(target, result);
@@ -2053,7 +2053,7 @@ sealed class ExpressionBuilder(
             if (target.IsValueType &&
                 Nullable.GetUnderlyingType(target) is null)
             {
-                var nullable = typeof(Nullable<>).MakeGenericType(target);
+                var nullable = QueryComposition.Close(typeof(Nullable<>), target);
                 return Expression.Constant(null, nullable);
             }
 
@@ -2072,7 +2072,7 @@ sealed class ExpressionBuilder(
         if (aggregate.Predicate is { } filtered)
         {
             source = Expression.Call(
-                enumerableWhere.MakeGenericMethod(element),
+                QueryComposition.Close(enumerableWhere, element),
                 source,
                 BuildPredicate(filtered, element));
         }
@@ -2101,7 +2101,7 @@ sealed class ExpressionBuilder(
                 var notNull = Expression.Lambda(
                     Expression.NotEqual(valueBody, Expression.Constant(null, valueBody.Type)),
                     valueParameter);
-                source = Expression.Call(enumerableWhere.MakeGenericMethod(element), source, notNull);
+                source = Expression.Call(QueryComposition.Close(enumerableWhere, element), source, notNull);
             }
 
             if (aggregate.Function is AggregateFn.Sum or AggregateFn.Average)
@@ -2110,14 +2110,14 @@ sealed class ExpressionBuilder(
             }
 
             var values = Expression.Call(
-                enumerableSelect.MakeGenericMethod(element, valueBody.Type),
+                QueryComposition.Close(enumerableSelect, element, valueBody.Type),
                 source,
                 Expression.Lambda(valueBody, valueParameter));
-            var distinct = Expression.Call(enumerableDistinct.MakeGenericMethod(valueBody.Type), values);
+            var distinct = Expression.Call(QueryComposition.Close(enumerableDistinct, valueBody.Type), values);
 
             return aggregate.Function switch
             {
-                AggregateFn.Count => Expression.Call(enumerableCount.MakeGenericMethod(valueBody.Type), distinct),
+                AggregateFn.Count => Expression.Call(QueryComposition.Close(enumerableCount, valueBody.Type), distinct),
                 AggregateFn.Sum => Expression.Call(BareFold("Sum", valueBody.Type), distinct),
                 AggregateFn.Average => Expression.Call(BareFold("Average", valueBody.Type), distinct),
                 AggregateFn.Min => Expression.Call(bareMinMax.GetOrAdd(("Min", valueBody.Type), BareMinOrMax), distinct),
@@ -2128,7 +2128,7 @@ sealed class ExpressionBuilder(
 
         if (aggregate.Function == AggregateFn.Count)
         {
-            return Expression.Call(enumerableCount.MakeGenericMethod(element), source);
+            return Expression.Call(QueryComposition.Close(enumerableCount, element), source);
         }
 
         if (aggregate.Selector is not { } selected)
@@ -2165,12 +2165,12 @@ sealed class ExpressionBuilder(
             var notNull = Expression.Lambda(
                 Expression.NotEqual(selectorBody, Expression.Constant(null, typeof(string))),
                 selectorParameter);
-            var present = Expression.Call(enumerableWhere.MakeGenericMethod(element), source, notNull);
-            var values = Expression.Call(enumerableSelect.MakeGenericMethod(element, typeof(string)), present, selector);
+            var present = Expression.Call(QueryComposition.Close(enumerableWhere, element), source, notNull);
+            var values = Expression.Call(QueryComposition.Close(enumerableSelect, element, typeof(string)), present, selector);
 
             var value = Expression.Parameter(typeof(string), "v");
             var ordered = Expression.Call(
-                enumerableOrderBy.MakeGenericMethod(typeof(string), typeof(string)),
+                QueryComposition.Close(enumerableOrderBy, typeof(string), typeof(string)),
                 values,
                 Expression.Lambda(value, value));
 
@@ -2199,7 +2199,7 @@ sealed class ExpressionBuilder(
                     _.Name == key.Item1 &&
                     !_.IsGenericMethodDefinition &&
                     _.GetParameters().Length == 1 &&
-                    _.GetParameters()[0].ParameterType == typeof(IEnumerable<>).MakeGenericType(key.Item2)));
+                    _.GetParameters()[0].ParameterType == QueryComposition.Close(typeof(IEnumerable<>), key.Item2)));
 
     static MethodInfo BareMinOrMax((string Name, Type Value) key) =>
         typeof(Enumerable).GetMethods()
@@ -2310,7 +2310,7 @@ sealed class ExpressionBuilder(
         if (Nullable.GetUnderlyingType(left.Type) is not null ||
             Nullable.GetUnderlyingType(right.Type) is not null)
         {
-            target = typeof(Nullable<>).MakeGenericType(target);
+            target = QueryComposition.Close(typeof(Nullable<>), target);
         }
 
         left = ConvertTo(left, target);

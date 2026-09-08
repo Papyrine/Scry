@@ -405,8 +405,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                     // The declared ordering no longer describes the rows, so a keyset cursor cannot
                     // seek over it; paging falls back to offset.
                     tailIsOrdered = false;
-                    query = query.Provider.CreateQuery(
-                        CallQueryable("Reverse", [query.ElementType], query.Expression));
+                    query = QueryComposition.Compose(
+                        query,
+                        QueryComposition.Call("Reverse", [query.ElementType], query.Expression));
                     break;
                 // Over a deduplicated query the ordering describes the projected values, so it is held
                 // back and applied to those rather than to the rows that fed them.
@@ -449,8 +450,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                         throw new ScryValidationException($"Unknown source '{narrowed.Type}'.");
                     }
 
-                    query = query.Provider.CreateQuery(
-                        CallQueryable("OfType", [derived.ClrType], query.Expression));
+                    query = QueryComposition.Compose(
+                        query,
+                        QueryComposition.Call("OfType", [derived.ClrType], query.Expression));
                     steps.Add($"narrow {narrowed.Type}");
 
                     // The derived type's own policies apply on top of the base's. Both narrow, so the
@@ -466,8 +468,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                     // The rows are the collection's from here on, not the root's.
                     probeSteps.Stop();
                     var (collection, child) = builder.BuildCollectionSelector(flatten.Path, elementType);
-                    query = query.Provider.CreateQuery(
-                        CallQueryable(
+                    query = QueryComposition.Compose(
+                        query,
+                        QueryComposition.Call(
                             "SelectMany",
                             [elementType, child],
                             query.Expression,
@@ -601,8 +604,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
             var rowType = leftSelector.ReturnType;
             var left = ApplySelectTyped(query, leftSelector);
-            var combined = left.Provider.CreateQuery(
-                CallQueryable(
+            var combined = QueryComposition.Compose(
+                left,
+                QueryComposition.Call(
                     set.Kind.ToString(),
                     [rowType],
                     left.Expression,
@@ -635,8 +639,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
             var rowType = selector.ReturnType;
             var selected = ApplySelectTyped(query, selector);
-            var deduped = selected.Provider.CreateQuery(
-                CallQueryable("Distinct", [rowType], selected.Expression));
+            var deduped = QueryComposition.Compose(
+                selected,
+                QueryComposition.Call("Distinct", [rowType], selected.Expression));
 
             foreach (var op in afterDistinct)
             {
@@ -699,12 +704,12 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     }
 
     static Plan Folds(List<DeniedRowProbe> probes, IQueryable query, string method, params Expression[] arguments) =>
-        new(probes, new Fold(query, CallQueryable(method, [query.ElementType], [query.Expression, .. arguments]), null, null), null, null);
+        new(probes, new Fold(query, QueryComposition.Call(method, [query.ElementType], [query.Expression, .. arguments]), null, null), null, null);
 
     // The one-argument overload: the terminal's predicate, where it had one, was applied as a filter
     // before this.
     static Plan Picks(List<DeniedRowProbe> probes, IQueryable<object[]> rows, string method, ProjectionPlan plan, BinaryPartCollector? binary) =>
-        new(probes, new Fold(rows, CallQueryable(method, [typeof(object[])], rows.Expression), plan, binary), null, null);
+        new(probes, new Fold(rows, QueryComposition.Call(method, [typeof(object[])], rows.Expression), plan, binary), null, null);
 
     static Plan Lists(List<DeniedRowProbe> probes, RowSet rows) =>
         new(probes, null, null, rows);
@@ -742,8 +747,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         var (outerKey, innerKey) = builder.BuildJoinKeys(join.OuterKey, outerType, join.InnerKey, innerType);
         var (selector, shape, binarySlots) = builder.BuildJoinProjection(join.Result, outerType, innerType, join.Kind);
 
-        var joined = (IQueryable<object[]>)outer.Provider.CreateQuery(
-            CallQueryable(
+        var joined = (IQueryable<object[]>)QueryComposition.Compose(
+            outer,
+            QueryComposition.Call(
                 JoinMethod(join.Kind),
                 [outerType, innerType, outerKey.ReturnType, typeof(object[])],
                 outer.Expression,
@@ -812,15 +818,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         var name = aggregate.Function.ToString();
 
         // Min/Max are generic in the value type; Sum/Average have one overload per numeric type.
-        MethodCallExpression call;
-        if (aggregate.Function is AggregateFn.Min or AggregateFn.Max)
-        {
-            call = Expression.Call(typeof(Queryable), name, [values.ElementType], values.Expression);
-        }
-        else
-        {
-            call = Expression.Call(typeof(Queryable), name, null, values.Expression);
-        }
+        var call = QueryComposition.Fold(name, aggregate.Function is AggregateFn.Min or AggregateFn.Max, values);
 
         return new(values, call, null, null);
     }
@@ -984,7 +982,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             Expression.NewArrayInit(typeof(object), Expression.Convert(Expression.Property(parameter, member.Property), typeof(object))),
             parameter);
         var rows = ApplySelect(query, selector);
-        return new(rows, CallQueryable("SingleOrDefault", [typeof(object[])], rows.Expression), context.ContentType);
+        return new(rows, QueryComposition.Call("SingleOrDefault", [typeof(object[])], rows.Expression), context.ContentType);
     }
 
     static (IQueryable<object[]> Query, ProjectionPlan Plan) BuildProjected(
@@ -1172,8 +1170,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             // Narrowed exactly as the fold narrowed it, the same levels of the chain skipped as already
             // applied, so the two builds differ in nothing but which policies they carry.
             var derived = step.Narrow!;
-            query = query.Provider.CreateQuery(
-                CallQueryable("OfType", [derived.ClrType], query.Expression));
+            query = QueryComposition.Compose(
+                query,
+                QueryComposition.Call("OfType", [derived.ClrType], query.Expression));
             query = ApplyPolicies(query, derived, step.NarrowFrom, db, scope, include);
         }
 
@@ -1201,18 +1200,20 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         }
 
         var method = target.IsAssignableFrom(query.ElementType) ? "Cast" : "OfType";
-        return query.Provider.CreateQuery(CallQueryable(method, [target], query.Expression));
+        return QueryComposition.Compose(query, QueryComposition.Call(method, [target], query.Expression));
     }
 
     static IQueryable Apply(IQueryable query, string method, LambdaExpression argument) =>
-        query.Provider.CreateQuery(
-            CallQueryable(method, [query.ElementType], query.Expression, Expression.Quote(argument)));
+        QueryComposition.Compose(
+            query,
+            QueryComposition.Call(method, [query.ElementType], query.Expression, Expression.Quote(argument)));
 
     static IQueryable ApplyOrder(IQueryable query, LambdaExpression keySelector, bool descending, bool then)
     {
         var method = (then ? "ThenBy" : "OrderBy") + (descending ? "Descending" : "");
-        return query.Provider.CreateQuery(
-            CallQueryable(
+        return QueryComposition.Compose(
+            query,
+            QueryComposition.Call(
                 method,
                 [query.ElementType, keySelector.ReturnType],
                 query.Expression,
@@ -1222,16 +1223,19 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     // The count is bound rather than inlined so every offset and limit shares one statement — and so
     // one compiled plan serves every page a client walks.
     static IQueryable ApplyPaging(IQueryable query, string method, int count) =>
-        query.Provider.CreateQuery(
-            CallQueryable(method, [query.ElementType], query.Expression, Parameterization.Parameterize(count, typeof(int))));
+        QueryComposition.Compose(
+            query,
+            QueryComposition.Call(method, [query.ElementType], query.Expression, Parameterization.Parameterize(count, typeof(int))));
 
     static IQueryable ApplyGroupBy(IQueryable query, LambdaExpression keySelector, Type elementType, Type keyType) =>
-        query.Provider.CreateQuery(
-            CallQueryable("GroupBy", [elementType, keyType], query.Expression, Expression.Quote(keySelector)));
+        QueryComposition.Compose(
+            query,
+            QueryComposition.Call("GroupBy", [elementType, keyType], query.Expression, Expression.Quote(keySelector)));
 
     static IQueryable<object[]> ApplySelect(IQueryable query, LambdaExpression selector) =>
-        (IQueryable<object[]>)query.Provider.CreateQuery(
-            CallQueryable("Select", [query.ElementType, typeof(object[])], query.Expression, Expression.Quote(selector)));
+        (IQueryable<object[]>)QueryComposition.Compose(
+            query,
+            QueryComposition.Call("Select", [query.ElementType, typeof(object[])], query.Expression, Expression.Quote(selector)));
 
     // Which projected leaf an ordering names. The validator has already established that the key names
     // one of them and that none of them is nested, so member position is leaf position.
@@ -1252,8 +1256,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     }
 
     static IQueryable ApplySelectTyped(IQueryable query, LambdaExpression selector) =>
-        query.Provider.CreateQuery(
-            CallQueryable("Select", [query.ElementType, selector.ReturnType], query.Expression, Expression.Quote(selector)));
+        QueryComposition.Compose(
+            query,
+            QueryComposition.Call("Select", [query.ElementType, selector.ReturnType], query.Expression, Expression.Quote(selector)));
 
     /// <summary>
     /// Deduplicates the projected rows. A relational provider turns this into <c>SELECT DISTINCT</c>
@@ -1268,8 +1273,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             return query.Distinct(RowComparer.Instance);
         }
 
-        return (IQueryable<object[]>)query.Provider.CreateQuery(
-            CallQueryable("Distinct", [typeof(object[])], query.Expression));
+        return (IQueryable<object[]>)QueryComposition.Compose(
+            query,
+            QueryComposition.Call("Distinct", [typeof(object[])], query.Expression));
     }
 
     sealed class RowComparer :
@@ -1293,28 +1299,6 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
             return hash.ToHashCode();
         }
-    }
-
-    static readonly ConcurrentDictionary<string, MethodInfo> queryableMethods = new();
-
-    /// <summary>
-    /// Builds a call to a generic <see cref="Queryable"/> method. Each method name is used with exactly
-    /// one overload shape here, so the first call lets the framework's name-based binder pick the right
-    /// overload, then caches its open generic definition. Later calls close that definition over
-    /// <paramref name="typeArgs"/> and bind directly — skipping the metadata scan and overload
-    /// resolution the name-based <see cref="Expression.Call(Type, string, Type[], Expression[])"/> does
-    /// on every invocation.
-    /// </summary>
-    static MethodCallExpression CallQueryable(string method, Type[] typeArgs, params Expression[] arguments)
-    {
-        if (queryableMethods.TryGetValue(method, out var open))
-        {
-            return Expression.Call(open.MakeGenericMethod(typeArgs), arguments);
-        }
-
-        var call = Expression.Call(typeof(Queryable), method, typeArgs, arguments);
-        queryableMethods.TryAdd(method, call.Method.GetGenericMethodDefinition());
-        return call;
     }
 
     PagePlan Page(

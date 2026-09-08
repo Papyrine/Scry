@@ -59,7 +59,7 @@ sealed class NavigationPolicy(
             row);
 
         return Expression.Call(
-            firstOrDefault.MakeGenericMethod(target),
+            QueryComposition.Close(firstOrDefault, target),
             filtered.Expression,
             Expression.Quote(predicate));
     }
@@ -80,7 +80,7 @@ sealed class NavigationPolicy(
             row);
 
         return Expression.Call(
-            where.MakeGenericMethod(element),
+            QueryComposition.Close(where, element),
             filtered.Expression,
             Expression.Quote(predicate));
     }
@@ -131,7 +131,7 @@ sealed class NavigationPolicy(
     {
         var row = Expression.Parameter(element, "p");
         return Expression.Call(
-            countWithPredicate.MakeGenericMethod(element),
+            QueryComposition.Close(countWithPredicate, element),
             target.Expression,
             Expression.Quote(Expression.Lambda(KeyMatch(row, owner, ownerType, navigation, element), row)));
     }
@@ -213,7 +213,7 @@ sealed class NavigationPolicy(
         Nullable.GetUnderlyingType(other) is not null &&
         value.Type.IsValueType &&
         Nullable.GetUnderlyingType(value.Type) is null
-            ? Expression.Convert(value, typeof(Nullable<>).MakeGenericType(value.Type))
+            ? Expression.Convert(value, QueryComposition.Close(typeof(Nullable<>), value.Type))
             : value;
 
     // The predicate overload specifically: the other two-parameter one takes a default value, which

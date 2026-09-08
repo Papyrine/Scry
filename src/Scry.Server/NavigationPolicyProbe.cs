@@ -94,7 +94,8 @@ static class NavigationPolicyProbe
             ? Expression.Call(count.MakeGenericMethod(target), correlated)
             : Leaf(schema, correlated, target);
 
-        return query.Provider.CreateQuery(
+        return QueryComposition.Compose(
+            query,
             Expression.Call(
                 typeof(Queryable),
                 nameof(Queryable.Select),

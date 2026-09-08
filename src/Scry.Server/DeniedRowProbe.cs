@@ -118,10 +118,10 @@ sealed class DeniedRowProbe
     }
 
     static MethodCallExpression Any(Type element, Expression source, LambdaExpression predicate) =>
-        Expression.Call(anyWithPredicate.MakeGenericMethod(element), source, Expression.Quote(predicate));
+        Expression.Call(QueryComposition.Close(anyWithPredicate, element), source, Expression.Quote(predicate));
 
     static MethodCallExpression Total(IQueryable query) =>
-        Expression.Call(count.MakeGenericMethod(query.ElementType), query.Expression);
+        Expression.Call(QueryComposition.Close(count, query.ElementType), query.Expression);
 
     // Resolved by parameter count rather than through the executor's shared helper, which caches one
     // overload per method name and already holds the predicate-less Any and Count.
