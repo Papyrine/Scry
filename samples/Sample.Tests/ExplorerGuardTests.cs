@@ -12,6 +12,8 @@ public class ExplorerGuardTests
     ScryTestServer development = null!;
     ScryTestServer previewOff = null!;
 
+    // Three servers from the one member, so each is told which database is its own: two of them would
+    // otherwise be handed a name a live server already holds, which re-clones it underneath that server.
     [OneTimeSetUp]
     public async Task StartServers()
     {
@@ -20,18 +22,21 @@ public class ExplorerGuardTests
                 environment: "Production",
                 explorer: _ =>
                 {
-                });
+                },
+                databaseSuffix: "production");
         development = await ScryTestServer
             .StartAsync(
                 environment: "Development",
                 explorer: _ =>
                 {
-                });
+                },
+                databaseSuffix: "development");
         // The SQL preview turned off on its own: the guard lets the explorer in, the preview's guard
         // keeps SQL out.
         previewOff = await ScryTestServer.StartAsync(
             environment: "Development",
-            explorer: _ => _.EnableSqlPreview = _ => false);
+            explorer: _ => _.EnableSqlPreview = _ => false,
+            databaseSuffix: "previewOff");
     }
 
     [OneTimeTearDown]

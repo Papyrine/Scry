@@ -41,15 +41,26 @@ public sealed class ScryTestServer :
     /// Maps the explorer with these options, where given. Null maps none, which is what every fixture
     /// but the guard tests wants — the browser suite drives the real server for the explorer itself.
     /// </param>
+    /// <param name="databaseSuffix">
+    /// Separates the databases of two servers a single member starts, which the caller info alone
+    /// cannot tell apart.
+    /// </param>
     public static async Task<ScryTestServer> StartAsync(
         bool conditionalRequests = false,
         string? environment = null,
-        Action<ScryExplorerOptions>? explorer = null)
+        Action<ScryExplorerOptions>? explorer = null,
+        string? databaseSuffix = null,
+        [CallerFilePath] string testFile = "",
+        [CallerMemberName] string memberName = "")
     {
-        // A database of its own when conditional requests are on: that fixture writes, and every other
-        // in-process fixture shares one of these servers and asserts against the seeded rows. Without
-        // the suffix they all resolve to the same database name, since it is derived from this method.
-        var database = await sqlInstance.Build(databaseSuffix: conditionalRequests ? "etag" : null);
+        // A database per caller, not one per call of this method: EfLocalDb names the database after
+        // the member asking for it, so passing the caller's own info through is what keeps the fixtures
+        // apart. Building a name some live server already holds detaches and re-clones the database
+        // underneath it, and every query that server answers afterwards fails.
+        var database = await sqlInstance.Build(
+            testFile: testFile,
+            databaseSuffix: databaseSuffix,
+            memberName: memberName);
 
         var builder = WebApplication.CreateBuilder(
             new WebApplicationOptions
