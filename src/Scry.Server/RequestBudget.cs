@@ -136,6 +136,7 @@ static class RequestBudget
             }
         }
 
+        // ReSharper disable TailRecursiveCall
         // Bounded by the JSON reader's own depth limit, which a request has already passed.
         void Node(Node? node)
         {
@@ -186,5 +187,6 @@ static class RequestBudget
                     break;
             }
         }
+        // ReSharper restore TailRecursiveCall
     }
 }

@@ -1,6 +1,4 @@
-﻿using System.Net;
-
-namespace Scry;
+﻿namespace Scry;
 
 /// <summary>
 /// Executes a query request against a <see cref="DbContext"/>, applying validation, allow-list,

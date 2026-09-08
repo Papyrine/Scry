@@ -527,7 +527,7 @@ public class PublicHoliday : Holiday
 
     public static IEnumerable<Holiday> SeedWithPublic() =>
     [
-        .. Holiday.Seed(),
+        .. Seed(),
         new PublicHoliday { Name = "Anzac Day", Date = new(2026, 4, 25), Region = "AU" },
         new PublicHoliday { Name = "Unpublished day", Date = new(2026, 6, 1), Region = "AU" }
     ];

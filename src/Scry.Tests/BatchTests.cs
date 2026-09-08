@@ -1,5 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
-
 [TestFixture]
 public class BatchTests
 {

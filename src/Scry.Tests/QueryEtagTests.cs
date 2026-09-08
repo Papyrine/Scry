@@ -54,13 +54,15 @@ public class QueryEtagTests
         });
     }
 
-    static DefaultHttpContext Request()
-    {
-        var context = new DefaultHttpContext();
-        context.Request.Method = "GET";
-        context.Request.QueryString = new($"?q={QueryUrl.Encode(QueryRequest.Create("Employee", [new CountOp()]))}");
-        return context;
-    }
+    static DefaultHttpContext Request() =>
+        new()
+        {
+            Request =
+            {
+                Method = "GET",
+                QueryString = new($"?q={QueryUrl.Encode(QueryRequest.Create("Employee", [new CountOp()]))}")
+            }
+        };
 
     static ScryOptions Options(string freshness, string scope) =>
         new(typeof(TestContext))

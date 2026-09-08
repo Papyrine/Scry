@@ -1,7 +1,3 @@
-using System.Runtime.ExceptionServices;
-using System.Runtime.Loader;
-using Microsoft.CodeAnalysis.Emit;
-
 namespace Scry;
 
 /// <summary>
@@ -18,8 +14,8 @@ public sealed class SnippetExecutor
 {
     const string modelAssembly = "ScryModel";
 
-    readonly IReadOnlyList<MetadataReference> references;
-    readonly string generatedSource;
+    IReadOnlyList<MetadataReference> references;
+    string generatedSource;
 
     // The models, compiled once for the schema this executor was created for: the reference a
     // snippet compiles against, and the assembly it runs against. A run used to re-parse, re-bind,
@@ -93,7 +89,7 @@ public sealed class SnippetExecutor
             $"ScrySnippet{Interlocked.Increment(ref runs)}",
             [CSharpSyntaxTree.ParseText(Wrap(layout.Preamble, expression, terminal))],
             [.. references, model.Value],
-            Options);
+            options);
 
         using var stream = new MemoryStream();
         var result = compilation.Emit(stream);
@@ -125,8 +121,9 @@ public sealed class SnippetExecutor
         }
     }
 
-    static readonly CSharpCompilationOptions Options =
-        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary).WithConcurrentBuild(false);
+    static CSharpCompilationOptions options =
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+            .WithConcurrentBuild(false);
 
     // Compiles the models and loads them into the context, once. The image is kept as the reference
     // every snippet compiles against, so a snippet binds to exactly the assembly it will run against.
@@ -136,7 +133,7 @@ public sealed class SnippetExecutor
             modelAssembly,
             [CSharpSyntaxTree.ParseText(generatedSource)],
             references,
-            Options);
+            options);
 
         using var stream = new MemoryStream();
         var result = compilation.Emit(stream);
@@ -231,7 +228,10 @@ public sealed class SnippetExecutor
             expression = awaited.Expression;
         }
 
-        if (expression is InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax member } invocation)
+        if (expression is InvocationExpressionSyntax
+            {
+                Expression: MemberAccessExpressionSyntax member
+            } invocation)
         {
             var name = member.Name.Identifier.ValueText;
 

@@ -1,5 +1,3 @@
-using System.Net;
-
 /// <summary>
 /// Writes a list result straight from projected <c>object[]</c> rows to UTF-8 — no per-row
 /// dictionaries, no <see cref="JsonElement"/> round trip, no reflection walk over the envelope — and

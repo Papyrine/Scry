@@ -1,6 +1,8 @@
 ﻿global using System.Buffers;
 global using System.Globalization;
 global using System.Reflection;
+global using System.Runtime.ExceptionServices;
+global using System.Runtime.Loader;
 global using System.Text;
 global using System.Text.Json;
 global using Basic.Reference.Assemblies;
@@ -10,4 +12,5 @@ global using Microsoft.CodeAnalysis.CSharp;
 global using Microsoft.CodeAnalysis.Host.Mef;
 global using Microsoft.CodeAnalysis.Text;
 global using Microsoft.CodeAnalysis.CSharp.Syntax;
+global using Microsoft.CodeAnalysis.Emit;
 global using Scry;

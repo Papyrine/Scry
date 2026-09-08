@@ -1,6 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
-
 /// <summary>
 /// The explorer's host page as one mapping serves it: the base href written in, the inline scripts
 /// hashed into the <c>Content-Security-Policy</c>, and the entity tag of those same bytes. The
@@ -33,7 +30,7 @@ public class ExplorerPageTests
     [Test]
     public void HashesTheScriptAsItIsServedNotAsItIsEmbedded()
     {
-        var page = Build("""<script>window.base = '__SCRY_BASE__';</script>""");
+        var page = Build("<script>window.base = '__SCRY_BASE__';</script>");
 
         Assert.Multiple(() =>
         {
