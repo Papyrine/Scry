@@ -1497,10 +1497,14 @@ sealed class Schema
                underlying == typeof(byte[]);
     }
 
-    static readonly MethodInfo setMethod = typeof(DbContext)
-        .GetMethods()
-        .Single(_ => _ is { Name: "Set", IsGenericMethod: true } &&
-                     _.GetParameters().Length == 0);
+    // The set a context holds for an entity type, read through a static so it can be closed over the
+    // type once and held as a delegate. Set<T>() itself is a generic virtual method, and the runtime
+    // refuses an open-instance delegate over one of those.
+    static IQueryable SetOf<T>(DbContext db)
+        where T : class =>
+        db.Set<T>();
+
+    static readonly MethodInfo setOf = typeof(Schema).GetMethod(nameof(SetOf), BindingFlags.NonPublic | BindingFlags.Static)!;
 
     static readonly MethodInfo ofTypeMethod = typeof(Queryable).GetMethod(nameof(Queryable.OfType))!;
 
@@ -1542,12 +1546,16 @@ sealed class Schema
             }
 
             // The base's rows, narrowed to this type: what a query of the derived source reads, and
-            // exactly what narrowing from the base source with OfType reads too.
-            var narrow = ofTypeMethod.MakeGenericMethod(type);
-            return (_, services) => (IQueryable) narrow.Invoke(null, [factory(services)])!;
+            // exactly what narrowing from the base source with OfType reads too. Closed once and
+            // called as a delegate: a source is resolved on every request that reads it, and the
+            // reflective invoke per resolution is what the delegate saves.
+            var narrow = ofTypeMethod.MakeGenericMethod(type).CreateDelegate<Func<IQueryable, IQueryable>>();
+            return (_, services) => narrow(factory(services));
         }
 
-        var typedSet = setMethod.MakeGenericMethod(type);
+        // Closed over the type once: what is held is the way to ask a context for its set, never a
+        // set, which belongs to the one context that made it.
+        var typedSet = setOf.MakeGenericMethod(type).CreateDelegate<Func<DbContext, IQueryable>>();
         return (db, _) =>
         {
             // A type the context does not map is refused at startup unless the host said its
@@ -1559,7 +1567,7 @@ sealed class Schema
                 throw new ScryValidationException($"Unknown source '{name}'.");
             }
 
-            return (IQueryable) typedSet.Invoke(db, null)!;
+            return typedSet(db);
         };
     }
 }

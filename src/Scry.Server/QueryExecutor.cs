@@ -218,18 +218,23 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// POCO one) has nothing to await and is read directly.
     /// </summary>
     public static IAsyncEnumerable<object> Enumerate(RowSet set, Cancel cancel) =>
-        (IAsyncEnumerable<object>)enumerators
-            .GetOrAdd(
-                set.Rows.ElementType,
-                _ => typeof(QueryExecutor)
-                    .GetMethod(nameof(EnumerateTyped), BindingFlags.NonPublic | BindingFlags.Static)!
-                    .MakeGenericMethod(_))
-            .Invoke(null, [set.Rows, cancel])!;
+        enumerators.GetOrAdd(set.Rows.ElementType, Enumerator)(set.Rows, cancel);
 
-    static readonly ConcurrentDictionary<Type, MethodInfo> enumerators = new();
+    // One closed enumerator per element type, held as a delegate rather than a MethodInfo: a list or a
+    // stream reads its rows through here once per request, and a reflective invoke would box the
+    // cancellation and build an argument array for each. The typed method takes the untyped query and
+    // casts inside, since a delegate cannot bind an IQueryable argument to an IQueryable<T> parameter.
+    static readonly ConcurrentDictionary<Type, Func<IQueryable, Cancel, IAsyncEnumerable<object>>> enumerators = new();
 
-    static async IAsyncEnumerable<object> EnumerateTyped<T>(IQueryable<T> rows, [EnumeratorCancellation] Cancel cancel)
+    static Func<IQueryable, Cancel, IAsyncEnumerable<object>> Enumerator(Type element) =>
+        typeof(QueryExecutor)
+            .GetMethod(nameof(EnumerateTyped), BindingFlags.NonPublic | BindingFlags.Static)!
+            .MakeGenericMethod(element)
+            .CreateDelegate<Func<IQueryable, Cancel, IAsyncEnumerable<object>>>();
+
+    static async IAsyncEnumerable<object> EnumerateTyped<T>(IQueryable untyped, [EnumeratorCancellation] Cancel cancel)
     {
+        var rows = (IQueryable<T>)untyped;
         if (rows is IAsyncEnumerable<T> asynchronous)
         {
             await foreach (var row in asynchronous.WithCancellation(cancel))
