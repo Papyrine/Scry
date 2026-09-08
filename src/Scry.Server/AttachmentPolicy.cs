@@ -1,11 +1,11 @@
 /// <summary>
-/// What an attachment policy type declares about itself, and the cached reflection used to call it.
-/// Mirrors <see cref="RowPolicy"/>: the authorized type is read off the policy rather than assumed to
-/// be the source's own, since a policy attached to a base is written against that base.
+/// What an attachment policy type declares about itself, and the typed call used to ask it. Mirrors
+/// <see cref="RowPolicy"/>: the authorized type is read off the policy rather than assumed to be the
+/// source's own, since a policy attached to a base is written against that base.
 /// </summary>
 static class AttachmentPolicy
 {
-    static readonly ConcurrentDictionary<Type, (Type Entity, MethodInfo Authorize)> resolved = new();
+    static readonly ConcurrentDictionary<Type, (Type Entity, IAttachmentInvoker Invoker)> resolved = new();
 
     /// <summary>
     /// The type a policy authorizes — the <c>T</c> of the one <see cref="IAttachmentPolicy{T}"/> it
@@ -29,10 +29,10 @@ static class AttachmentPolicy
             throw new($"Could not create attachment policy '{policyType.Name}'.");
         }
 
-        return (bool) Describe(policyType).Authorize.Invoke(policy, [context])!;
+        return Describe(policyType).Invoker.Authorize(policy, context);
     }
 
-    static (Type Entity, MethodInfo Authorize) Describe(Type policyType) =>
+    static (Type Entity, IAttachmentInvoker Invoker) Describe(Type policyType) =>
         resolved.GetOrAdd(
             policyType,
             type =>
@@ -52,7 +52,24 @@ static class AttachmentPolicy
                         $"Attachment policy '{type.Name}' implements IAttachmentPolicy<T> for {string.Join(" and ", interfaces.Select(_ => _.GenericTypeArguments[0].Name))}, so which rows it authorizes is ambiguous. Write one policy type per authorized type.");
                 }
 
-                var single = interfaces[0];
-                return (single.GenericTypeArguments[0], single.GetMethod(nameof(IAttachmentPolicy<>.Authorize))!);
+                var entity = interfaces[0].GenericTypeArguments[0];
+                return (entity, (IAttachmentInvoker) Activator.CreateInstance(typeof(AttachmentInvoker<>).MakeGenericType(entity))!);
             });
+}
+
+/// <summary>
+/// The typed call that asks an attachment policy: <see cref="IAttachmentPolicy{T}.Authorize"/>,
+/// reached through a class closed over the authorized type once, as <see cref="RowPolicyInvoker{T}"/>
+/// reaches a row policy, rather than a <see cref="MethodInfo"/> invoked reflectively per fetch.
+/// </summary>
+interface IAttachmentInvoker
+{
+    bool Authorize(object policy, ScryAttachmentContext context);
+}
+
+sealed class AttachmentInvoker<T> :
+    IAttachmentInvoker
+{
+    public bool Authorize(object policy, ScryAttachmentContext context) =>
+        ((IAttachmentPolicy<T>) policy).Authorize(context);
 }

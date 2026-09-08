@@ -1013,9 +1013,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         return (ApplySelect(query, plan.Selector), plan);
     }
 
-    // The type a policy filters and its IReturnablePolicy<T>.Filter, keyed by the policy type — not by
+    // The type a policy filters and the typed call that applies it, keyed by the policy type — not by
     // the source's, which is a different type whenever the policy is inherited. Bounded by the schema.
-    static readonly ConcurrentDictionary<Type, (Type EntityType, MethodInfo Filter)> policyFilters = new();
+    static readonly ConcurrentDictionary<Type, (Type EntityType, IRowPolicyInvoker Invoker)> policyFilters = new();
 
     /// <summary>
     /// Applies every policy the source carries, base-most first, so the rows a client can go on to
@@ -1064,7 +1064,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 throw new($"Could not create policy '{use.Policy.Name}'.");
             }
 
-            var (entityType, filter) = policyFilters.GetOrAdd(use.Policy, PolicyFilter);
+            var (entityType, invoker) = policyFilters.GetOrAdd(use.Policy, PolicyFilter);
 
             // A cached policy is applied directly rather than through the interface: what it needs
             // beyond the context — where to remember this call's answer, and whether it may decide any
@@ -1072,7 +1072,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             // it in front of every host-written policy too.
             query = policy is ICachedPolicyAdapter cached
                 ? cached.Filter(Retype(query, entityType), context, scope.Cached, scope.EnsureCachedFreshness)
-                : (IQueryable)filter.Invoke(policy, [Retype(query, entityType), context])!;
+                : invoker.Filter(policy, Retype(query, entityType), context);
         }
 
         return Retype(query, source.ClrType);
@@ -1179,12 +1179,10 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         return query;
     }
 
-    static (Type EntityType, MethodInfo Filter) PolicyFilter(Type policyType)
+    static (Type EntityType, IRowPolicyInvoker Invoker) PolicyFilter(Type policyType)
     {
         var entityType = RowPolicy.EntityType(policyType);
-        return (entityType, typeof(IReturnablePolicy<>)
-            .MakeGenericType(entityType)
-            .GetMethod(nameof(IReturnablePolicy<>.Filter))!);
+        return (entityType, RowPolicyInvoker.For(entityType));
     }
 
     /// <summary>

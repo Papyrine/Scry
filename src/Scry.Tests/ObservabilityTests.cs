@@ -188,10 +188,9 @@ public class ObservabilityTests
         });
 
         await using var context = TestContext.CreateSeeded();
-        // The reflection invoke of the policy wraps the failure; the audit entry unwraps it, so the
-        // trail names the root cause rather than the wrapper.
-        var thrown = Assert.Throws<TargetInvocationException>(() => processor.Execute(EmployeeNames(), context, provider))!;
-        Assert.That(thrown.InnerException, Is.TypeOf<InvalidOperationException>());
+        // The policy is applied through a typed call, so its failure arrives as it was thrown, and the
+        // audit entry names it as such.
+        Assert.Throws<InvalidOperationException>(() => processor.Execute(EmployeeNames(), context, provider));
 
         await VerifyEntry(auditor.Entries.Single());
     }

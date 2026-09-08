@@ -136,8 +136,9 @@ sealed class QueryRecorder(
 
     public void Failed(Exception exception)
     {
-        // A policy filter is invoked through reflection, so its failure arrives wrapped — and the
-        // wrapper's message says nothing. The telemetry exists to name the root cause.
+        // A policy the request's services did not supply is constructed reflectively, and a
+        // constructor that fails arrives wrapped, in a message that says nothing. The telemetry exists
+        // to name the root cause. A policy's own failure arrives as it was thrown.
         while (exception is TargetInvocationException { InnerException: { } inner })
         {
             exception = inner;
