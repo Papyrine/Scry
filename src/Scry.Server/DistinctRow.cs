@@ -23,6 +23,23 @@ static class DistinctRow
         typeof(DistinctRow<,,,,,,>).GetGenericTypeDefinition(),
         typeof(DistinctRow<,,,,,,,>).GetGenericTypeDefinition(),
     ];
+
+    /// <summary>
+    /// A closed row type's constructor and its values in projection order, found once per closing:
+    /// three builders read them per deduplicated projection, and each reflected over the constructor's
+    /// parameters and looked every value up by name. Bounded as the readers of these rows are, by the
+    /// closings the schema's member types can produce.
+    /// </summary>
+    public static (ConstructorInfo Constructor, PropertyInfo[] Values) Describe(Type row) =>
+        described.GetOrAdd(row, Reflect);
+
+    static readonly ConcurrentDictionary<Type, (ConstructorInfo Constructor, PropertyInfo[] Values)> described = new();
+
+    static (ConstructorInfo Constructor, PropertyInfo[] Values) Reflect(Type row)
+    {
+        var constructor = row.GetConstructors().Single();
+        return (constructor, [..constructor.GetParameters().Select(_ => row.GetProperty(_.Name!)!)]);
+    }
 }
 
 sealed record DistinctRow<T1>(T1 Value1);

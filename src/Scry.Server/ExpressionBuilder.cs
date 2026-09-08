@@ -85,10 +85,7 @@ sealed class ExpressionBuilder(
         var parameter = Expression.Parameter(type, "e");
         var values = keys.Select(_ => Build(_, parameter, null)).ToList();
         var row = DistinctRow.ByArity[values.Count - 1].MakeGenericType([..values.Select(_ => _.Type)]);
-        var constructor = row.GetConstructors().Single();
-        var members = constructor.GetParameters()
-            .Select(MemberInfo (_) => row.GetProperty(_.Name!)!)
-            .ToArray();
+        var (constructor, members) = DistinctRow.Describe(row);
 
         compositeKeys = keys;
         return Expression.Lambda(Expression.New(constructor, values, members), parameter);
@@ -310,6 +307,14 @@ sealed class ExpressionBuilder(
 
     static readonly ConcurrentDictionary<(Type Owner, string Name), MethodInfo?> unaryMethods = new();
 
+    // A public property of the owner named so, or null where there is none. Resolved once per
+    // pairing, as a method is: the owner is a type the wire decides, and a pairing that has no
+    // property is remembered too, so refusing one costs what answering one does.
+    internal static PropertyInfo? Property(Type owner, string name) =>
+        properties.GetOrAdd((owner, name), key => key.Owner.GetProperty(key.Name));
+
+    static readonly ConcurrentDictionary<(Type Owner, string Name), PropertyInfo?> properties = new();
+
     /// <summary>
     /// Builds a default projection of every allow-listed scalar member of the source. Only reached for
     /// a request that named no members: a generated client always sends an explicit projection, so its
@@ -435,10 +440,7 @@ sealed class ExpressionBuilder(
             }
 
             var row = DistinctRow.ByArity[outerValues.Count - 1].MakeGenericType([..outerValues.Select(_ => _.Type)]);
-            var constructor = row.GetConstructors().Single();
-            var members = constructor.GetParameters()
-                .Select(MemberInfo (_) => row.GetProperty(_.Name!)!)
-                .ToArray();
+            var (constructor, members) = DistinctRow.Describe(row);
 
             return (
                 Expression.Lambda(Expression.New(constructor, outerValues, members), outerParameter),
@@ -490,10 +492,7 @@ sealed class ExpressionBuilder(
         }
 
         var row = DistinctRow.ByArity[leaves.Count - 1].MakeGenericType([..leaves.Select(_ => _.Type)]);
-        var constructor = row.GetConstructors().Single();
-        var members = constructor.GetParameters()
-            .Select(MemberInfo (_) => row.GetProperty(_.Name!)!)
-            .ToArray();
+        var (constructor, members) = DistinctRow.Describe(row);
 
         return (Expression.Lambda(Expression.New(constructor, leaves, members), parameter), shape, Normalize(binary));
     }
@@ -513,17 +512,9 @@ sealed class ExpressionBuilder(
         var row = Expression.Parameter(typeof(object), "row");
         var typed = Expression.Convert(row, type);
 
-        var arity = 0;
-        while (type.GetProperty($"Value{arity + 1}") is not null)
-        {
-            arity++;
-        }
-
-        var values = new Expression[arity];
-        for (var i = 0; i < arity; i++)
-        {
-            values[i] = Expression.Convert(Expression.Property(typed, $"Value{i + 1}"), typeof(object));
-        }
+        var values = DistinctRow.Describe(type).Values
+            .Select(Expression (_) => Expression.Convert(Expression.Property(typed, _), typeof(object)))
+            .ToArray();
 
         return Expression.Lambda<Func<object, object[]>>(Expression.NewArrayInit(typeof(object), values), row)
             .Compile();
@@ -533,7 +524,7 @@ sealed class ExpressionBuilder(
     public static LambdaExpression BuildDistinctRowKey(Type row, int index)
     {
         var parameter = Expression.Parameter(row, "r");
-        return Expression.Lambda(Expression.Property(parameter, $"Value{index + 1}"), parameter);
+        return Expression.Lambda(Expression.Property(parameter, DistinctRow.Describe(row).Values[index]), parameter);
     }
 
     /// <summary>
@@ -1007,7 +998,7 @@ sealed class ExpressionBuilder(
     // match — names itself.
     Expression BuildGroupKeyAt(int index, Expression row)
     {
-        var key = Expression.Property(row, "Key");
+        var key = Expression.Property(row, GroupingKey(row.Type));
         if (compositeKeys is null)
         {
             if (index != 0)
@@ -1025,7 +1016,7 @@ sealed class ExpressionBuilder(
                 $"Group key {index} was read, but the query grouped by {compositeKeys.Count}.");
         }
 
-        return Expression.Property(key, $"Value{index + 1}");
+        return Expression.Property(key, DistinctRow.Describe(key.Type).Values[index]);
     }
 
     static bool IsGrouping(Type type) =>
@@ -1099,7 +1090,7 @@ sealed class ExpressionBuilder(
 
             if (underlying is not null)
             {
-                expression = Expression.Property(expression, "Value");
+                expression = Expression.Property(expression, NullableValue(expression.Type));
             }
 
             if (member.Kind == MemberKind.Navigation)
@@ -1307,7 +1298,7 @@ sealed class ExpressionBuilder(
                 KnownFunction.StringToUpper => Expression.Call(target, InMemory(row) ? stringToUpperInvariant : stringToUpper),
                 KnownFunction.StringIsNullOrEmpty => Expression.Call(stringIsNullOrEmpty, target),
                 KnownFunction.StringIsNullOrWhiteSpace => Expression.Call(stringIsNullOrWhiteSpace, target),
-                KnownFunction.StringLength => Expression.Property(target, "Length"),
+                KnownFunction.StringLength => Expression.Property(target, stringLength),
                 KnownFunction.StringTrim => Expression.Call(target, stringTrim),
                 KnownFunction.StringTrimStart => Expression.Call(target, stringTrimStart),
                 KnownFunction.StringTrimEnd => Expression.Call(target, stringTrimEnd),
@@ -1484,11 +1475,9 @@ sealed class ExpressionBuilder(
 
     static Expression TemporalProperty(Expression target, string name)
     {
-        var value = Nullable.GetUnderlyingType(target.Type) is null
-            ? target
-            : Expression.Property(target, "Value");
+        var value = NonNullable(target);
 
-        var property = value.Type.GetProperty(name) ??
+        var property = Property(value.Type, name) ??
                        throw new ScryValidationException($"'{value.Type.Name}' has no '{name}'.");
         return Expression.Property(value, property);
     }
@@ -1497,14 +1486,9 @@ sealed class ExpressionBuilder(
     // target is the value being read, so it is the argument here rather than the instance.
     static Expression TemporalStatic(Type owner, string name, Expression target)
     {
-        var value = Nullable.GetUnderlyingType(target.Type) is null
-            ? target
-            : Expression.Property(target, "Value");
+        var value = NonNullable(target);
 
-        var method = owner.GetMethods(BindingFlags.Public | BindingFlags.Static)
-                         .FirstOrDefault(_ => _.Name == name &&
-                                              _.GetParameters() is [var parameter] &&
-                                              parameter.ParameterType == value.Type) ??
+        var method = Method(owner, name, value.Type) ??
                      throw new ScryValidationException($"'{owner.Name}' has no '{name}' reading a '{value.Type.Name}'.");
         return Expression.Call(method, value);
     }
@@ -1512,9 +1496,7 @@ sealed class ExpressionBuilder(
     // An argument-less instance method on a temporal — the Unix-time readings.
     static Expression TemporalCall(Expression target, string name)
     {
-        var value = Nullable.GetUnderlyingType(target.Type) is null
-            ? target
-            : Expression.Property(target, "Value");
+        var value = NonNullable(target);
 
         var method = Method(value.Type, name) ??
                      throw new ScryValidationException($"'{value.Type.Name}' has no '{name}'.");
@@ -1525,9 +1507,7 @@ sealed class ExpressionBuilder(
     // against whatever the resolved overload actually declares.
     Expression TemporalAdd(CallNode call, Expression target, string name, Expression row)
     {
-        var value = Nullable.GetUnderlyingType(target.Type) is null
-            ? target
-            : Expression.Property(target, "Value");
+        var value = NonNullable(target);
 
         var method = Unary(value.Type, name) ??
                      throw new ScryValidationException($"'{value.Type.Name}' has no '{name}'.");
@@ -1544,7 +1524,20 @@ sealed class ExpressionBuilder(
     static Expression NonNullable(Expression target) =>
         Nullable.GetUnderlyingType(target.Type) is null
             ? target
-            : Expression.Property(target, "Value");
+            : Expression.Property(target, NullableValue(target.Type));
+
+    // The Value of a closed Nullable<T>, found once per closing: the string overload of
+    // Expression.Property looks it up by name on every call.
+    internal static PropertyInfo NullableValue(Type nullable) =>
+        nullableValues.GetOrAdd(nullable, _ => _.GetProperty(nameof(Nullable<int>.Value))!);
+
+    static readonly ConcurrentDictionary<Type, PropertyInfo> nullableValues = new();
+
+    // The Key of a closed IGrouping<TKey, TElement>, found once per closing for the same reason.
+    internal static PropertyInfo GroupingKey(Type grouping) =>
+        groupingKeys.GetOrAdd(grouping, _ => _.GetProperty(nameof(IGrouping<int, int>.Key))!);
+
+    static readonly ConcurrentDictionary<Type, PropertyInfo> groupingKeys = new();
 
     /// <summary>
     /// Builds the sign of a value as -1, 0, or 1, from comparisons rather than from SQL's own
@@ -1776,9 +1769,7 @@ sealed class ExpressionBuilder(
             return MathCall("Round", target);
         }
 
-        var value = Nullable.GetUnderlyingType(target.Type) is null
-            ? target
-            : Expression.Property(target, "Value");
+        var value = NonNullable(target);
         var digits = ConvertTo(Build(call.Arguments[0], row, typeof(int)), typeof(int));
 
         var method = Method(typeof(Math), "Round", value.Type, typeof(int)) ??
@@ -2373,6 +2364,8 @@ sealed class ExpressionBuilder(
     static readonly MethodInfo stringReplace = StringMethod("Replace", typeof(string), typeof(string));
     static readonly MethodInfo stringConcat = StringMethod("Concat", typeof(string), typeof(string));
     static readonly MethodInfo stringConcatObjects = StringMethod("Concat", typeof(object), typeof(object));
+
+    static readonly PropertyInfo stringLength = typeof(string).GetProperty(nameof(string.Length))!;
 
     static readonly MethodInfo enumHasFlag = typeof(Enum).GetMethod("HasFlag")!;
 
