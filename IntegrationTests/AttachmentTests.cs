@@ -448,7 +448,10 @@ public class AttachmentTests
         var body = await response.Content.ReadAsStringAsync();
         if (!response.IsSuccessStatusCode)
         {
-            throw new ScryRequestException(response.StatusCode, body);
+            throw new ScryRequestException(
+                response.StatusCode,
+                ScryJson.TryDeserializeError(body)?.Code ?? ScryErrorCode.Unknown,
+                body);
         }
     }
 

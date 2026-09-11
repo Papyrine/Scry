@@ -363,20 +363,34 @@ Terminal handling:
 
 The endpoint maps failures deliberately:
 
-| Cause | Status | Body |
-| --- | --- | --- |
-| Malformed JSON, unknown discriminator, wrong shape (`ScryWireException`) | `400` | `{"error":"..."}` |
-| Allow-list or limit violation (`ScryValidationException`) | `400` | `{"error":"..."}` |
-| Anything else | `500` | `{"error":"Query execution failed."}` |
+| Cause | Status | `code` | Body |
+| --- | --- | --- | --- |
+| A body not declared `application/json` | `415` | `UnsupportedMedia` | `{"error":"...","code":"UnsupportedMedia"}` |
+| Malformed JSON, unknown discriminator, wrong shape (`ScryWireException`) | `400` | `WireFormat` | `{"error":"...","code":"WireFormat"}` |
+| Allow-list or limit violation (`ScryValidationException`) | `400` | `Validation` | `{"error":"...","code":"Validation"}` |
+| A [row policy](policies.md) denied the rows (`ScryPermissionException`) | `403` | `Forbidden` | `{"error":"...","code":"Forbidden"}` |
+| Anything else | `500` | `ExecutionFailed` | `{"error":"Query execution failed.","code":"ExecutionFailed"}` |
 
-When the request's [schema stamp](schema-versioning.md#the-two-version-axes) differs from the server's, the `400` and `500` bodies additionally carry `"staleClient": true` — the failure is attributed to a client generated against an older model surface rather than to the query itself. A malformed request (`ScryWireException`) is never attributed: it carries no usable stamp. The marker is omitted entirely when the stamps agree or the request sent none.
+The `code` is what a client branches on; the message is for a person. It is deliberately coarser than the message behind it — which of the endpoint's own answers this is, never which member or which rule was involved — so it says nothing a caller could not already read off the status, and rides on the fixed `500` body as safely as on a rejection. The status alone will not do the job: a malformed query and an over-long `In` list are both `400`, and only one of them is worth a second look.
+
+When the request's [schema stamp](schema-versioning.md#the-two-version-axes) differs from the server's, the `400` and `500` bodies carry `"code":"StaleClient"` **in place of** `Validation` or `ExecutionFailed` — the failure is attributed to a client generated against an older model surface rather than to the query itself, and what the client does about it is the same either way. A malformed request (`ScryWireException`) is never attributed: it carries no usable stamp.
+
+A body refused for comparing a `[Sensitive]` member against a constant [while travelling as a URL](security.md#sensitive-members) additionally carries `"requiresBody": true`. That is a separate axis from the code — it says what to do next, not what went wrong — and it rides on a `StaleClient` rejection as readily as on a `Validation` one, because a client generated before the member was marked is exactly the client that hits it. Re-sending in a body is still the answer, whatever it does about regenerating.
 
 The `500` message is fixed — `Query execution failed.` — and stack traces, SQL, and EF Core<!-- include: error-500-body. path: /docs/includes/error-500-body.include.md -->
-messages are never returned to the client. The only variable part is the `staleClient` marker.<!-- endInclude -->
+messages are never returned to the client. The only variable part is the `code`.<!-- endInclude -->
 
 Log them with the application's normal exception logging.
 
-On the client, a non-success status becomes a `ScryRequestException` carrying `StatusCode` and the raw `Body` — unless the body carries `staleClient`, in which case it becomes a `ScryStaleClientException`, the same type the payload reader throws for an unknown enum value. One catch therefore covers every failure whose remedy is regenerating the client (or reloading the deployed app); see [Schema versioning](schema-versioning.md#detecting-a-stale-client).
+On the client, the code decides the exception:
+
+| `code` | Exception |
+| --- | --- |
+| `StaleClient` | `ScryStaleClientException` — the same type the payload reader throws for an unknown enum value, so one catch covers every failure whose remedy is regenerating the client (or reloading the deployed app); see [Schema versioning](schema-versioning.md#detecting-a-stale-client) |
+| `Forbidden` | `ScryPermissionException` — retrying will not help, and only the caller knows what to tell a user |
+| anything else | `ScryRequestException`, carrying `StatusCode`, `Code`, and the raw `Body` |
+
+A response the endpoint did not write — a proxy's `502`, a gateway's `403` — carries no code, so it arrives as a `ScryRequestException` with `Code` of `Unknown` and the status to go on. Nothing but the endpoint gets to claim a denial.
 
 
 ## Result payloads

@@ -36,12 +36,16 @@ public sealed record QueryBatchResult
     public HttpStatusCode Status { get; init; }
 
     /// <summary>
-    /// True when this entry's rejection is attributed to a schema stamp differing from the server's.
-    /// The typed client turns it into <see cref="ScryStaleClientException"/>, as it does for a
-    /// single query.
+    /// Which of the endpoint's answers this entry is, as on a <see cref="ScryError"/>. The typed
+    /// client raises the same exception from it that it would for an unbatched query. Omitted when
+    /// <see cref="ScryErrorCode.Unknown"/>, which is every entry that succeeded.
     /// </summary>
+    /// <remarks>
+    /// <see cref="ScryError.RequiresBody"/> has no counterpart here: it refuses a query for arriving
+    /// in a URL, and a batch entry only ever arrives in a body.
+    /// </remarks>
     [JsonPropertyOrder(3)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public bool StaleClient { get; init; }
+    public ScryErrorCode Code { get; init; }
 }
 // end-snippet

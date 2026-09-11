@@ -152,7 +152,7 @@ public static class ScryServiceExtensions
             // Never reaches the processor, so it is metered here — an unparseable payload is a signal
             // the outcome tag exists for.
             QueryRecorder.Malformed(Stopwatch.GetElapsedTime(started));
-            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, staleClient: false);
+            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, ScryErrorCode.WireFormat);
             return;
         }
 
@@ -182,19 +182,19 @@ public static class ScryServiceExtensions
         }
         catch (ScryValidationException exception)
         {
-            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, exception.StaleClient);
+            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, ErrorCodes.Classify(exception));
             return;
         }
         catch (ScryPermissionException exception)
         {
             // The stream is built before its first byte is written, so a denial found while building
             // it still answers as a status — the response has not started.
-            await WriteError(context, StatusCodes.Status403Forbidden, exception.Message, staleClient: false);
+            await WriteError(context, StatusCodes.Status403Forbidden, exception.Message, ScryErrorCode.Forbidden);
             return;
         }
         catch (Exception)
         {
-            await WriteError(context, StatusCodes.Status500InternalServerError, "Query execution failed.", drifted);
+            await WriteError(context, StatusCodes.Status500InternalServerError, "Query execution failed.", ErrorCodes.Failed(drifted));
             return;
         }
 
@@ -287,7 +287,7 @@ public static class ScryServiceExtensions
         catch (ScryWireException exception)
         {
             QueryRecorder.Malformed(Stopwatch.GetElapsedTime(started));
-            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, staleClient: false);
+            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, ScryErrorCode.WireFormat);
             return;
         }
 
@@ -342,16 +342,16 @@ public static class ScryServiceExtensions
         catch (ScryValidationException exception) when (!context.Response.HasStarted)
         {
             // Envelope-level only: a per-entry rejection never reaches here.
-            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, exception.StaleClient);
+            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, ErrorCodes.Classify(exception));
         }
         catch (ScryPermissionException exception) when (!context.Response.HasStarted)
         {
             // Envelope-level only in the same way: an entry's denial is answered in that entry's result.
-            await WriteError(context, StatusCodes.Status403Forbidden, exception.Message, staleClient: false);
+            await WriteError(context, StatusCodes.Status403Forbidden, exception.Message, ScryErrorCode.Forbidden);
         }
         catch (Exception) when (!context.Response.HasStarted && !context.RequestAborted.IsCancellationRequested)
         {
-            await WriteError(context, StatusCodes.Status500InternalServerError, "Query execution failed.", staleClient: false);
+            await WriteError(context, StatusCodes.Status500InternalServerError, "Query execution failed.", ScryErrorCode.ExecutionFailed);
         }
     }
 
@@ -476,7 +476,7 @@ public static class ScryServiceExtensions
             // A malformed request carries no usable stamp, so it is never attributed to staleness.
             // It also never reaches the processor, so it is metered here.
             QueryRecorder.Malformed(Stopwatch.GetElapsedTime(started));
-            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, staleClient: false);
+            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, ScryErrorCode.WireFormat);
             return;
         }
 
@@ -549,16 +549,16 @@ public static class ScryServiceExtensions
         }
         catch (ScryValidationException exception) when (!context.Response.HasStarted)
         {
-            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, exception.StaleClient, exception.RequiresBody);
+            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, ErrorCodes.Classify(exception), exception.RequiresBody);
         }
         catch (ScryPermissionException exception) when (!context.Response.HasStarted)
         {
-            await WriteError(context, StatusCodes.Status403Forbidden, exception.Message, staleClient: false);
+            await WriteError(context, StatusCodes.Status403Forbidden, exception.Message, ScryErrorCode.Forbidden);
         }
         catch (Exception) when (!context.Response.HasStarted && !context.RequestAborted.IsCancellationRequested)
         {
             // Never leak internals (stack traces, SQL) to the client.
-            await WriteError(context, StatusCodes.Status500InternalServerError, "Query execution failed.", drifted);
+            await WriteError(context, StatusCodes.Status500InternalServerError, "Query execution failed.", ErrorCodes.Failed(drifted));
         }
     }
 
@@ -587,7 +587,7 @@ public static class ScryServiceExtensions
         catch (ScryWireException exception)
         {
             QueryRecorder.Malformed(Stopwatch.GetElapsedTime(started));
-            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, staleClient: false);
+            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, ScryErrorCode.WireFormat);
             return;
         }
 
@@ -636,14 +636,14 @@ public static class ScryServiceExtensions
         }
         catch (ScryValidationException exception) when (!context.Response.HasStarted)
         {
-            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, exception.StaleClient);
+            await WriteError(context, StatusCodes.Status400BadRequest, exception.Message, ErrorCodes.Classify(exception));
         }
         // Not once the bytes have begun to go out: a status cannot be set on a started response, and
         // a caller that went away mid-download is what makes the write throw, which is nothing to
         // answer or to report.
         catch (Exception) when (!context.Response.HasStarted && !context.RequestAborted.IsCancellationRequested)
         {
-            await WriteError(context, StatusCodes.Status500InternalServerError, "Attachment fetch failed.", drifted);
+            await WriteError(context, StatusCodes.Status500InternalServerError, "Attachment fetch failed.", ErrorCodes.Failed(drifted));
         }
     }
 
@@ -682,7 +682,7 @@ public static class ScryServiceExtensions
             context,
             StatusCodes.Status415UnsupportedMediaType,
             "A request body must be sent as application/json.",
-            staleClient: false);
+            ScryErrorCode.UnsupportedMedia);
         return false;
     }
 
@@ -690,7 +690,7 @@ public static class ScryServiceExtensions
         HttpContext context,
         int status,
         string message,
-        bool staleClient,
+        ScryErrorCode code,
         bool requiresBody = false)
     {
         var response = context.Response;
@@ -703,7 +703,7 @@ public static class ScryServiceExtensions
         return response.WriteAsJsonAsync(
             new ScryError(message)
             {
-                StaleClient = staleClient,
+                Code = code,
                 RequiresBody = requiresBody
             },
             ScryJson.Options,

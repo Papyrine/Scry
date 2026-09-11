@@ -23,10 +23,14 @@ static class ResponseWriter
     static readonly JsonEncodedText response = JsonEncodedText.Encode("response");
     static readonly JsonEncodedText error = JsonEncodedText.Encode("error");
     static readonly JsonEncodedText status = JsonEncodedText.Encode("status");
-    static readonly JsonEncodedText staleClient = JsonEncodedText.Encode("staleClient");
+    static readonly JsonEncodedText code = JsonEncodedText.Encode("code");
     static readonly JsonEncodedText badRequest = JsonEncodedText.Encode(nameof(HttpStatusCode.BadRequest));
     static readonly JsonEncodedText forbidden = JsonEncodedText.Encode(nameof(HttpStatusCode.Forbidden));
     static readonly JsonEncodedText internalServerError = JsonEncodedText.Encode(nameof(HttpStatusCode.InternalServerError));
+    static readonly JsonEncodedText validation = JsonEncodedText.Encode(nameof(ScryErrorCode.Validation));
+    static readonly JsonEncodedText stale = JsonEncodedText.Encode(nameof(ScryErrorCode.StaleClient));
+    static readonly JsonEncodedText denied = JsonEncodedText.Encode(nameof(ScryErrorCode.Forbidden));
+    static readonly JsonEncodedText executionFailed = JsonEncodedText.Encode(nameof(ScryErrorCode.ExecutionFailed));
 
     /// <summary>Writes the whole list envelope — version, kind, rows, stamp — returning the row count.</summary>
     /// <remarks>
@@ -231,19 +235,19 @@ static class ResponseWriter
 
     /// <summary>
     /// An entry that was rejected or failed. Mirrors what <see cref="QueryBatchResult"/> serializes to:
-    /// no <c>response</c>, and a <c>staleClient</c> written only when it is true, since the member is
-    /// omitted when it is its default.
+    /// no <c>response</c>, and a <c>code</c> written only when it is not its default, since the member
+    /// is omitted when it is.
     /// </summary>
-    public static void WriteEntry(Utf8JsonWriter json, string message, HttpStatusCode entryStatus, bool stale)
+    public static void WriteEntry(Utf8JsonWriter json, string message, HttpStatusCode entryStatus, ScryErrorCode entryCode)
     {
         json.WriteStartObject();
         json.WriteString(error, message);
         // Always 400, 403 or 500 for a reported entry, so never the default that would omit it. The
         // name, not the number: the shared options write an enum as its name, and this has to match.
         json.WriteString(status, Name(entryStatus));
-        if (stale)
+        if (entryCode != ScryErrorCode.Unknown)
         {
-            json.WriteBoolean(staleClient, true);
+            json.WriteString(code, Name(entryCode));
         }
 
         json.WriteEndObject();
@@ -256,6 +260,19 @@ static class ResponseWriter
             HttpStatusCode.Forbidden => forbidden,
             HttpStatusCode.InternalServerError => internalServerError,
             _ => throw new ArgumentOutOfRangeException(nameof(entryStatus), entryStatus, null)
+        };
+
+    // The four an entry can carry. A code outside them is a new answer the batch has learned to give
+    // without this learning to write it, which is a mismatch with QueryBatchResult rather than
+    // something to encode generically.
+    static JsonEncodedText Name(ScryErrorCode entryCode) =>
+        entryCode switch
+        {
+            ScryErrorCode.Validation => validation,
+            ScryErrorCode.StaleClient => stale,
+            ScryErrorCode.Forbidden => denied,
+            ScryErrorCode.ExecutionFailed => executionFailed,
+            _ => throw new ArgumentOutOfRangeException(nameof(entryCode), entryCode, null)
         };
 }
 

@@ -14,18 +14,20 @@ static class ResponseFailure
     /// </summary>
     public static Exception Read(HttpStatusCode status, byte[] body)
     {
-        var error = ScryJson.TryDeserializeError(body);
-        if (error is {StaleClient: true, Error.Length: > 0})
+        // Not one of ours, or from something in the way that answers in its own shape: there is no
+        // code to dispatch on and the status is all the caller gets.
+        if (ScryJson.TryDeserializeError(body) is not {Error.Length: > 0} error)
         {
-            return new ScryStaleClientException(error.Error);
+            return new ScryRequestException(status, ScryErrorCode.Unknown, Encoding.UTF8.GetString(body));
         }
 
-        if (status == HttpStatusCode.Forbidden &&
-            error is {Error.Length: > 0})
+        return error.Code switch
         {
-            return new ScryPermissionException(error.Error);
-        }
-
-        return new ScryRequestException(status, Encoding.UTF8.GetString(body));
+            ScryErrorCode.StaleClient => new ScryStaleClientException(error.Error),
+            ScryErrorCode.Forbidden => new ScryPermissionException(error.Error),
+            // Everything else keeps the raw body: the code says which answer this is, and the body
+            // carries the message a person reads.
+            _ => new ScryRequestException(status, error.Code, Encoding.UTF8.GetString(body))
+        };
     }
 }

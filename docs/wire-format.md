@@ -788,6 +788,25 @@ The payload itself always carries the **current** name — the aliases are a tra
 That is the same trade the closing marker below exists for, arrived at through the transport rather than through the format. Past the threshold a failure has no way to become a `400` or a `500`, so the answer is truncated instead — but a truncated one is never mistakable for a complete one. The envelope's closing `stamp` is written only after the last row, and the host does not synthesize a valid ending: HTTP/1.1 closes the connection with no terminating chunk, HTTP/2 resets the stream. A reader must treat a body that ends early as a failure, exactly as it must treat a stream that ends without its marker. A response carrying [binary parts](#binary-transfer) is never sent early whatever the threshold says, because its parts have to precede the JSON that references them.
 
 
+### Error responses
+
+A request that was not answered with a result comes back as a `ScryError` instead, under the status [the endpoint chose](server.md#error-handling):
+
+```json
+{ "error": "Property 'Salary' is not allow-listed on 'Employee'.", "code": "Validation" }
+```
+
+| Field | Meaning |
+| --- | --- |
+| `error` | What was rejected, or the fixed execution-failure message for a `500`. Written for a person to read; bounded at 1024 characters, since a rejection often names the client's own text back to it. |
+| `code` | Which of the endpoint's answers this is — one of `WireFormat`, `Validation`, `StaleClient`, `Forbidden`, `UnsupportedMedia`, `ExecutionFailed`. This is the field a client branches on. Omitted when absent, which is how a body from a proxy rather than from the endpoint reads. |
+| `requiresBody` | Optional, `true` only when the query was refused for arriving as a URL while comparing a `[Sensitive]` member against a constant. A separate axis from `code`: it says what to do next — re-send the same request in a body — and can accompany any rejection code. Omitted when false. |
+
+The codes are deliberately coarse. One says which of the endpoint's own answers this is, never which member or which rule was involved, so a code reveals nothing the status and the fixed message did not already — which is what lets the fixed `500` body carry one at all.
+
+There is no error envelope for a failure found *after* the response has started: the status is committed by then, and a [stream](#streamed-results) reports it in its closing marker instead.
+
+
 ### Streamed results
 
 A request sent to the [`…/stream` endpoint](server.md#mapping-the-endpoint) comes back as newline-delimited JSON (`application/x-ndjson`) instead: one JSON value per line, a marker line opening and closing the rows.
@@ -834,7 +853,7 @@ The response answers each entry positionally, and is likewise an envelope around
   "stamp": "WsQ9hxzDNvqFuufg",
   "results": [
     { "response": { "version": 1, "kind": "Scalar", "payload": 4 } },
-    { "error": "Unknown source 'Secret'.", "status": 400 }
+    { "error": "Unknown source 'Secret'.", "status": 400, "code": "Validation" }
   ]
 }
 ```
@@ -844,7 +863,7 @@ The response answers each entry positionally, and is likewise an envelope around
 | `response` | The entry's result, when it succeeded — exactly what it would have been sent alone. |
 | `error` | Why the entry was rejected or failed; the specific message for a validation failure, and the same fixed text a `500` carries for anything else. |
 | `status` | What the entry would have returned on its own: `400` rejected, `500` failed. Entries are returned inside a successful envelope and so have no status to inherit, which is why it is carried. |
-| `staleClient` | As on a [single error](#response) — the rejection is attributed to a differing schema stamp. |
+| `code` | As on a [single error](#error-responses) — which of the endpoint's answers this entry is. `requiresBody` has no counterpart: it refuses a query for arriving in a URL, and a batch entry only ever arrives in a body. |
 
 **Entries are independent.** Each is validated, policy-filtered, and executed separately, so one being rejected leaves the rest answered — the envelope only fails for a fault of its own: an unreadable body, an unsupported version, or more entries than [`MaxBatchSize`](server.md#options). It is not a transaction, and the entries run sequentially. The schema stamp is carried once on the envelope, since one server answered all of them.
 

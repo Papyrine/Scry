@@ -7,13 +7,12 @@ namespace Scry;
 public sealed record ScryError(string Error)
 {
     /// <summary>
-    /// True when the failure is attributed to the request's schema stamp differing from the server's —
-    /// a client generated against an older model surface. The typed client surfaces such failures as
-    /// <see cref="ScryStaleClientException"/> so one catch can prompt a reload. Omitted from the JSON
-    /// when false.
+    /// Which of the endpoint's answers this is. The message is for a person; this is what a client
+    /// branches on. Omitted from the JSON when <see cref="ScryErrorCode.Unknown"/>, which the endpoint
+    /// never writes — a body carrying no code is one this client did not get from a Scry endpoint.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public bool StaleClient { get; init; }
+    public ScryErrorCode Code { get; init; }
 
     /// <summary>
     /// True when the request was refused for the way it travelled rather than for what it asked: it
@@ -22,9 +21,18 @@ public sealed record ScryError(string Error)
     /// failing. Omitted from the JSON when false.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// A flag rather than a message to match on, because a message is for a person and this is for a
     /// client. It is also why the message says only what to do: naming the member would answer "which
     /// of these columns is the sensitive one?" for anyone who asked.
+    /// </para>
+    /// <para>
+    /// A flag rather than a <see cref="Code"/> because it is a different axis: it says what to do
+    /// next, not what went wrong, and it rides on a <see cref="ScryErrorCode.StaleClient"/> rejection
+    /// as readily as on a plain <see cref="ScryErrorCode.Validation"/> one — a client generated before
+    /// the member was marked is exactly the client that hits this, and re-sending in a body is still
+    /// the answer whatever it does about regenerating.
+    /// </para>
     /// </remarks>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool RequiresBody { get; init; }

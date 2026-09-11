@@ -130,8 +130,8 @@ Eventually a drifted client's query does fail — a member it still references w
 
 | Failure | Attributed by |
 | --- | --- |
-| The server rejects the query (`400`) | `"staleClient": true` on the [error body](server.md#error-handling) |
-| The query faults during execution (`500`) | the same marker — a drifted client's query can still fault in ways neither validation nor rebinding can name |
+| The server rejects the query (`400`) | `"code": "StaleClient"` on the [error body](server.md#error-handling), in place of the `Validation` it would otherwise carry |
+| The query faults during execution (`500`) | the same code, in place of `ExecutionFailed` — a drifted client's query can still fault in ways neither validation nor rebinding can name |
 | A result carries an enum value name the generated model lacks | the client's reader, after the [alias table](annotations.md#the-response-side) fails to resolve it |
 | A result cannot be read at all — a widened numeric that now overflows, a member that became nullable | the client, when the stamp already shows it drifted |
 
