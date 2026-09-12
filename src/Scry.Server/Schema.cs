@@ -1,6 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Metadata;
-
-/// <summary>
+﻿/// <summary>
 /// The server's authoritative allow-list, built once from the model assembly's annotations. The
 /// generator and the server derive the same surface from the same attributes; this is the runtime
 /// source of truth that every incoming query is validated against.

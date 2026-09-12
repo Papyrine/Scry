@@ -100,11 +100,15 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             [.. paged.Rows.Select(_ => Shape(_, paged.Plan, paged.Binary))],
             paged.HasMore,
             paged.Cursor);
-        return QueryResponse.Create(ResultKind.Page, JsonSerializer.SerializeToElement(envelope, ScryJson.Options));
+        return QueryResponse.Create(
+            ResultKind.Page,
+            JsonSerializer.SerializeToElement(envelope, ScryJson.Options));
     }
 
     static QueryResponse ListResponse(List<Dictionary<string, object?>> shaped) =>
-        QueryResponse.Create(ResultKind.List, JsonSerializer.SerializeToElement(shaped, ScryJson.Options));
+        QueryResponse.Create(
+            ResultKind.List,
+            JsonSerializer.SerializeToElement(shaped, ScryJson.Options));
 
     /// <summary>
     /// Everything the database is asked before the query itself: the cached policies brought up to
@@ -166,12 +170,16 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         {
             var paged = page.Finish(await Execution.ReadAsync(page.Rows, cancel));
             spill?.AllowSpill(paged.Plan.BinarySlots is null);
-            return (ResultKind.Page, await ResponseWriter.WritePageAsync(output, spill, paged, stamp, cancel));
+            return (
+                ResultKind.Page,
+                await ResponseWriter.WritePageAsync(output, spill, paged, stamp, cancel));
         }
 
         var rowSet = plan.Rows!.Value;
         spill?.AllowSpill(rowSet.Plan.BinarySlots is null);
-        return (ResultKind.List, await ResponseWriter.WriteListAsync(output, spill, rowSet, stamp, cancel));
+        return (
+            ResultKind.List,
+            await ResponseWriter.WriteListAsync(output, spill, rowSet, stamp, cancel));
     }
 
     /// <summary>
@@ -226,10 +234,11 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     // casts inside, since a delegate cannot bind an IQueryable argument to an IQueryable<T> parameter.
     static ConcurrentDictionary<Type, Func<IQueryable, Cancel, IAsyncEnumerable<object>>> enumerators = new();
 
+    static MethodInfo enumerateTyped = typeof(QueryExecutor)
+        .GetMethod(nameof(EnumerateTyped), BindingFlags.NonPublic | BindingFlags.Static)!;
+
     static Func<IQueryable, Cancel, IAsyncEnumerable<object>> Enumerator(Type element) =>
-        typeof(QueryExecutor)
-            .GetMethod(nameof(EnumerateTyped), BindingFlags.NonPublic | BindingFlags.Static)!
-            .MakeGenericMethod(element)
+        QueryComposition.Close(enumerateTyped, element)
             .CreateDelegate<Func<IQueryable, Cancel, IAsyncEnumerable<object>>>();
 
     static async IAsyncEnumerable<object> EnumerateTyped<T>(IQueryable untyped, [EnumeratorCancellation] Cancel cancel)
@@ -253,10 +262,15 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     }
 
     /// <summary>Shapes one row of a <see cref="RowSet"/> into its response object.</summary>
-    internal static Dictionary<string, object?> ShapeRow(object row, RowSet set) =>
-        set.Deduplicated
-            ? Shape(ExpressionBuilder.ReadDistinctRow(row), set.Plan, set.Binary)
-            : Shape((object[])row, set.Plan, set.Binary);
+    internal static Dictionary<string, object?> ShapeRow(object row, RowSet set)
+    {
+        if (set.Deduplicated)
+        {
+            return Shape(ExpressionBuilder.ReadDistinctRow(row), set.Plan, set.Binary);
+        }
+
+        return Shape((object[]) row, set.Plan, set.Binary);
+    }
 
     /// <summary>
     /// Builds a request into its EF query without executing it — for reading back the SQL it would
@@ -274,7 +288,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// for a processor hosted outside HTTP, and awaiting, for the endpoint — differ only in how the
     /// database is asked, never in what.
     /// </summary>
-    internal readonly record struct Plan(
+    readonly record struct Plan(
         IReadOnlyList<DeniedRowProbe> Probes,
         Fold? Fold,
         PagePlan? Page,
@@ -313,7 +327,10 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
         // A query that runs reads rows, so a cached policy's answers are brought up to date for it. A
         // SQL preview reads none and leaves them as they are.
-        scope = scope with {EnsureCachedFreshness = !buildOnly};
+        scope = scope with
+        {
+            EnsureCachedFreshness = !buildOnly
+        };
 
         // Built per request so a node that reads another source resolves it the same way the root was
         // resolved — through the schema, and policy-filtered — rather than reaching a DbSet directly.
@@ -878,15 +895,20 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// </summary>
     readonly record struct AttachmentFetch(IQueryable Rows, MethodCallExpression Call, string? ContentType)
     {
-        public ScryAttachmentResult Finish(object? row) =>
-            row is object[] found
-                ? new()
+        public ScryAttachmentResult Finish(object? row)
+        {
+            if (row is object[] found)
+            {
+                return new()
                 {
                     Found = true,
-                    Value = (byte[]?)found[0],
+                    Value = (byte[]?) found[0],
                     ContentType = ContentType
-                }
-                : ScryAttachmentResult.NotFound;
+                };
+            }
+
+            return ScryAttachmentResult.NotFound;
+        }
     }
 
     AttachmentFetch? PlanAttachment(AttachmentRequest request, DbContext db, CallScope scope)

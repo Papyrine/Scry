@@ -105,5 +105,4 @@ public static class WireFormat
             NestedValue nested => Richer(nested.Projection),
             null => false
         });
-
 }

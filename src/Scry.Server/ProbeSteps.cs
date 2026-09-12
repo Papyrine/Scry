@@ -9,7 +9,7 @@
 /// </remarks>
 sealed class ProbeSteps
 {
-    readonly List<ProbeStep> steps = [];
+    List<ProbeStep> steps = [];
 
     /// <summary>
     /// Whether recording has stopped. Set at the first operator whose rows are no longer the root's —
@@ -52,6 +52,3 @@ sealed class ProbeSteps
         }
     }
 }
-
-/// <summary>One recorded operator: a predicate over the current element type, or a narrowing to a subclass.</summary>
-readonly record struct ProbeStep(LambdaExpression? Where, ScrySource? Narrow, int NarrowFrom);

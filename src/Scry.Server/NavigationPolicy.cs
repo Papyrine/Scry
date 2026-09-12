@@ -1,5 +1,3 @@
-using Microsoft.EntityFrameworkCore.Metadata;
-
 /// <summary>
 /// Applies a source's row policy where a query traverses <em>into</em> that source through a
 /// navigation. A policy filters a source and a navigation is not one, so reading a member off the
@@ -220,9 +218,16 @@ sealed class NavigationPolicy(
     // would bind a row rather than filter to one.
     static MethodInfo firstOrDefault = typeof(Queryable)
         .GetMethods()
-        .Single(_ => _.Name == nameof(Queryable.FirstOrDefault) &&
-                     _.GetParameters() is [_, {ParameterType.IsGenericType: true}] parameters &&
-                     parameters[1].ParameterType.GetGenericTypeDefinition() == typeof(Expression<>));
+        .Single(_ =>
+        {
+            if (_.Name != nameof(Queryable.FirstOrDefault) ||
+                _.GetParameters() is not [_, {ParameterType.IsGenericType: true}] parameters)
+            {
+                return false;
+            }
+
+            return parameters[1].ParameterType.GetGenericTypeDefinition() == typeof(Expression<>);
+        });
 
     // The row-predicate overloads. Where also has an indexed one, whose predicate takes the row and its
     // position, so the arity of the delegate is what tells the two apart rather than the parameter count.
@@ -231,8 +236,16 @@ sealed class NavigationPolicy(
 
     static MethodInfo RowPredicate(string name) =>
         typeof(Queryable).GetMethods()
-            .Single(_ => _.Name == name &&
-                         _.GetParameters() is [_, {ParameterType.IsGenericType: true}] parameters &&
-                         parameters[1].ParameterType.GetGenericTypeDefinition() == typeof(Expression<>) &&
-                         parameters[1].ParameterType.GenericTypeArguments[0].GenericTypeArguments.Length == 2);
+            .Single(_ =>
+            {
+                if (_.Name != name ||
+                    _.GetParameters() is not [_, {ParameterType.IsGenericType: true}] parameters)
+                {
+                    return false;
+                }
+
+                var parameterType = parameters[1].ParameterType;
+                return parameterType.GetGenericTypeDefinition() == typeof(Expression<>) &&
+                       parameterType.GenericTypeArguments[0].GenericTypeArguments.Length == 2;
+            });
 }

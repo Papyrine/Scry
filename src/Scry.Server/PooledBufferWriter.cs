@@ -67,10 +67,11 @@ sealed class PooledBufferWriter :
             return;
         }
 
-        var grown = ArrayPool<byte>.Shared.Rent(Math.Max(current.Length * 2, written + sizeHint));
+        var pool = ArrayPool<byte>.Shared;
+        var grown = pool.Rent(Math.Max(current.Length * 2, written + sizeHint));
         current.AsSpan(0, written).CopyTo(grown);
         buffer = grown;
-        ArrayPool<byte>.Shared.Return(current);
+        pool.Return(current);
     }
 
     public void Dispose()

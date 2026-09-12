@@ -1,5 +1,3 @@
-// Global using directives
-
 global using System.Buffers.Text;
 global using System.Diagnostics.CodeAnalysis;
 global using System.Security.Cryptography;

@@ -1,5 +1,3 @@
-using Microsoft.EntityFrameworkCore.Metadata;
-
 /// <summary>
 /// Translates, once at startup, every navigation that steps into a row-policied source.
 /// </summary>
@@ -30,14 +28,13 @@ static class NavigationPolicyProbe
             {
                 // A collection of a policied element is read through the same rewrite, and one that
                 // reached here was legalized by its policy — so it needs the same proof.
-                var target = member.Kind is MemberKind.Navigation or MemberKind.Collection
-                    ? member.Target
-                    : null;
-
-                if (target is not null &&
-                    navigations.Applies(target))
+                if (member.Kind is MemberKind.Navigation or MemberKind.Collection)
                 {
-                    Probe(schema, navigations, db, meta.ClrType, member, target, member.Kind);
+                    var target = member.Target;
+                    if (navigations.Applies(target))
+                    {
+                        Probe(schema, navigations, db, meta.ClrType, member, target, member.Kind);
+                    }
                 }
             }
         }
@@ -127,11 +124,12 @@ static class NavigationPolicyProbe
     }
 
     static IQueryable SetOf(DbContext db, Type entityType) =>
-        (IQueryable)set.MakeGenericMethod(entityType).Invoke(db, [])!;
+        (IQueryable) set.MakeGenericMethod(entityType).Invoke(db, [])!;
 
     static MethodInfo count = typeof(Queryable)
         .GetMethods()
-        .Single(_ => _.Name == nameof(Queryable.Count) && _.GetParameters().Length == 1);
+        .Single(_ => _.Name == nameof(Queryable.Count) &&
+                     _.GetParameters().Length == 1);
 
     static MethodInfo set = typeof(DbContext)
         .GetMethods()

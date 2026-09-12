@@ -18,3 +18,4 @@ global using System.ComponentModel.DataAnnotations;
 global using System.ComponentModel;
 global using System.Diagnostics.CodeAnalysis;
 global using System.Net;
+global using Microsoft.EntityFrameworkCore.Metadata;

@@ -57,10 +57,13 @@ static class QueryEtag
                 state =>
                 {
                     var response = (HttpResponse) state;
+                    var headers = response.Headers;
                     if (response.StatusCode == StatusCodes.Status200OK &&
-                        !response.Headers.CacheControl.Any(_ => _ is not null && _.Contains("no-store", StringComparison.Ordinal)))
+                        !headers.CacheControl
+                            .Any(_ => _ is not null &&
+                                      _.Contains("no-store", StringComparison.Ordinal)))
                     {
-                        response.Headers.ETag = etag;
+                        headers.ETag = etag;
                     }
 
                     return Task.CompletedTask;
@@ -96,7 +99,8 @@ static class QueryEtag
         // one the validator would have refused. No client sends it on a GET; a cache revalidates
         // with the tag it holds.
         var current = EntityTagHeaderValue.Parse(etag);
-        return conditions.Any(_ => !_.Equals(EntityTagHeaderValue.Any) && _.Compare(current, useStrongComparison: false));
+        return conditions.Any(_ => !_.Equals(EntityTagHeaderValue.Any) &&
+                                   _.Compare(current, useStrongComparison: false));
     }
 
     static Microsoft.AspNetCore.Http.Headers.RequestHeaders RequestHeaders(HttpContext context) =>

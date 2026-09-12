@@ -43,7 +43,11 @@ public static class ScryJson
         // — it is the consumer's generated query model, an anonymous projection, or a DTO of theirs —
         // so reflection sits behind the generated set and only ever sees what the wire does not name.
         options.TypeInfoResolverChain.Add(WireJsonContext.Default.WithAddedModifier(RequireWhatTheWriterAlwaysWrites));
-        options.TypeInfoResolverChain.Add(new DefaultJsonTypeInfoResolver {Modifiers = {RelaxAnnotations}});
+        options.TypeInfoResolverChain.Add(
+            new DefaultJsonTypeInfoResolver
+            {
+                Modifiers = {RelaxAnnotations}
+            });
         return options;
     }
 
@@ -56,7 +60,11 @@ public static class ScryJson
     {
         foreach (var property in type.Properties)
         {
-            if (property.AssociatedParameter is {HasDefaultValue: false, IsMemberInitializer: false})
+            if (property.AssociatedParameter is
+                {
+                    HasDefaultValue: false,
+                    IsMemberInitializer: false
+                })
             {
                 property.IsRequired = true;
             }
@@ -290,7 +298,11 @@ public static class ScryJson
     // with wrong rows or a bare parse failure rather than saying the server is newer.
     static ScryStreamMarker Versioned(ScryStreamMarker marker)
     {
-        if (marker is {Kind: ScryStream.Begin, Version: { } version and > WireFormat.Version})
+        if (marker is
+            {
+                Kind: ScryStream.Begin,
+                Version: { } version and > WireFormat.Version
+            })
         {
             throw Unsupported(version);
         }
@@ -354,7 +366,14 @@ public static class ScryJson
             if (result.Response is { } entry &&
                 next < ranges.Count)
             {
-                results.Add(result with {Response = entry with {RawPayload = Slice(utf8, ranges[next++])}});
+                results.Add(
+                    result with
+                    {
+                        Response = entry with
+                        {
+                            RawPayload = Slice(utf8, ranges[next++])
+                        }
+                    });
             }
             else
             {
@@ -384,7 +403,10 @@ public static class ScryJson
         Versioned(response);
         if (ranges.Count == 1)
         {
-            return response with {RawPayload = Slice(utf8, ranges[0])};
+            return response with
+            {
+                RawPayload = Slice(utf8, ranges[0])
+            };
         }
 
         return response;
@@ -443,41 +465,44 @@ public static class ScryJson
     {
         try
         {
-            var deserialize = JsonSerializer.Deserialize(json, info);
-            if (deserialize == null)
-            {
-                throw new ScryWireException($"Query {what} deserialized to null.");
-            }
-
-            return deserialize;
+            return NotNull(JsonSerializer.Deserialize(json, info), what);
         }
-        // A NotSupportedException is what the reader raises for a polymorphic object whose discriminator is
-        // missing or not first: a malformed request like any other, not a fault.
-        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        catch (Exception exception) when (IsMalformed(exception))
         {
-            throw new ScryWireException($"Invalid query {what}: {exception.Message}", exception);
+            throw Invalid(exception, what);
         }
     }
 
     // Duplicated rather than sharing a body with the string overload: a span cannot be captured, so the
-    // two cannot funnel into one without buffering the very copy this exists to avoid.
+    // two cannot funnel into one without buffering the very copy this exists to avoid. Only the read
+    // itself is duplicated — what surrounds it is the two helpers below.
     static T Deserialize<T>(ReadOnlySpan<byte> utf8, JsonTypeInfo<T> info, string what)
     {
         try
         {
-            var deserialize = JsonSerializer.Deserialize(utf8, info);
-            if (deserialize == null)
-            {
-                throw new ScryWireException($"Query {what} deserialized to null.");
-            }
-
-            return deserialize;
+            return NotNull(JsonSerializer.Deserialize(utf8, info), what);
         }
-        // A NotSupportedException is what the reader raises for a polymorphic object whose discriminator is
-        // missing or not first: a malformed request like any other, not a fault.
-        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        catch (Exception exception) when (IsMalformed(exception))
         {
-            throw new ScryWireException($"Invalid query {what}: {exception.Message}", exception);
+            throw Invalid(exception, what);
         }
     }
+
+    // A NotSupportedException is what the reader raises for a polymorphic object whose discriminator is
+    // missing or not first: a malformed request like any other, not a fault.
+    static bool IsMalformed(Exception exception) =>
+        exception is JsonException or NotSupportedException;
+
+    static T NotNull<T>(T? value, string what)
+    {
+        if (value != null)
+        {
+            return value;
+        }
+
+        throw new ScryWireException($"Query {what} deserialized to null.");
+    }
+
+    static ScryWireException Invalid(Exception exception, string what) =>
+        new($"Invalid query {what}: {exception.Message}", exception);
 }

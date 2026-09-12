@@ -1,0 +1,2 @@
+﻿/// <summary>One recorded operator: a predicate over the current element type, or a narrowing to a subclass.</summary>
+readonly record struct ProbeStep(LambdaExpression? Where, ScrySource? Narrow, int NarrowFrom);

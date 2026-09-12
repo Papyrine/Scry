@@ -14,7 +14,6 @@ public readonly record struct PolicyUse(Type Policy, DeniedRowHandling Handling)
     /// </summary>
     internal object? Instance { get; init; }
 
-
     /// <summary>
     /// Whether this policy fails the request for a row it denies read at <paramref name="position"/>,
     /// rather than hiding it.
