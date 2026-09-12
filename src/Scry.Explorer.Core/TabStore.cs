@@ -3,11 +3,6 @@ namespace Scry;
 /// <summary>The open query tabs and which one is active.</summary>
 public sealed class TabStore
 {
-    static JsonSerializerOptions options = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
-
     List<TabState> tabs = [];
 
     // Every tab id this store has held, the closed ones included. What Merge reads out of the store
@@ -144,7 +139,7 @@ public sealed class TabStore
                 Tabs = tabs,
                 ActiveIndex = ActiveIndex
             },
-            options);
+            StorageJson.Options);
 
     /// <summary>
     /// Replaces the contents from a stored value. Anything that does not parse leaves the store as it
@@ -211,7 +206,7 @@ public sealed class TabStore
 
         try
         {
-            var loaded = JsonSerializer.Deserialize<Stored>(json, options);
+            var loaded = JsonSerializer.Deserialize<Stored>(json, StorageJson.Options);
             var readable = loaded?.Tabs?
                 .Where(_ => _ is not null)
                 .Select(_ => new TabState

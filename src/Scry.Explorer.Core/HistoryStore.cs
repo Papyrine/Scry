@@ -33,11 +33,6 @@ public sealed class HistoryStore
     /// </summary>
     public const string LegacyKey = "scry-history";
 
-    static JsonSerializerOptions options = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
-
     List<HistoryItem> items = [];
 
     /// <summary>Favorites first, then the ordinary entries, both newest-first.</summary>
@@ -169,7 +164,7 @@ public sealed class HistoryStore
     }
 
     public string Serialize() =>
-        JsonSerializer.Serialize(items, options);
+        JsonSerializer.Serialize(items, StorageJson.Options);
 
     /// <summary>
     /// Replaces the contents from a stored value. Anything that does not parse is treated as an empty
@@ -191,7 +186,7 @@ public sealed class HistoryStore
 
         try
         {
-            var loaded = JsonSerializer.Deserialize<List<HistoryItem?>>(json, options);
+            var loaded = JsonSerializer.Deserialize<List<HistoryItem?>>(json, StorageJson.Options);
             if (loaded is not null)
             {
                 items.AddRange(loaded.Where(_ => !string.IsNullOrWhiteSpace(_?.Query))!);
