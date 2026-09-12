@@ -322,14 +322,6 @@ static class SensitiveWalk
                     return;
                 case ElementNode:
                     return;
-                default:
-                    // A node kind this walk does not know cannot be reasoned about, so it is treated as
-                    // both — the query travels as a body and its answer is not stored. Failing closed
-                    // here is what lets the vocabulary grow without this quietly going blind.
-                    found.Sensitive = true;
-                    found.Constant = true;
-                    InProjection = true;
-                    return;
             }
         }
 

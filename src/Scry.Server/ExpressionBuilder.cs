@@ -752,7 +752,12 @@ sealed class ExpressionBuilder(
                 SubqueryNode subquery => BuildSubquery(subquery, row),
                 CollateNode collate => BuildCollate(collate, row),
                 InSourceNode inSource => BuildInSource(inSource, row),
-                _ => throw new ScryValidationException($"Unsupported expression '{node.GetType().Name}'.")
+
+                // A group key or an aggregate outside a grouping, and a composite key anywhere but a
+                // join key, which JoinOp builds itself. The validator refuses all three, so reaching
+                // here is a defect rather than a request.
+                GroupKeyNode or AggregateNode or CompositeKeyNode =>
+                    throw new ScryValidationException($"Unsupported expression '{node.GetType().Name}'.")
             };
         }
         // The validator resolves every member and checks every shape, but not every pairing of types:

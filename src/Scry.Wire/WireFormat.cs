@@ -93,7 +93,8 @@ public static class WireFormat
                                      Richer(inSource.Selector) ||
                                      Richer(inSource.Predicate),
             CompositeKeyNode composite => composite.Parts.Any(Richer),
-            _ => false
+            // Leaves: nothing below them to carry a version 2 shape.
+            MemberNode or ElementNode or ConstNode or GroupKeyNode or null => false
         };
 
     static bool Richer(Projection? projection) =>
@@ -102,7 +103,7 @@ public static class WireFormat
         {
             NodeValue value => Richer(value.Node),
             NestedValue nested => Richer(nested.Projection),
-            _ => false
+            null => false
         });
 
 }
