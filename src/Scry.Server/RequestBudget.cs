@@ -29,6 +29,7 @@ static class RequestBudget
         }
     }
 
+    [SuppressMessage("Performance", "CA1822:Mark members as static")]
     sealed class Counter
     {
         public int Nodes;

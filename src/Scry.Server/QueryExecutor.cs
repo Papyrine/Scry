@@ -1141,7 +1141,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             ? DeniedPosition.RootSingle
             : DeniedPosition.RootList;
 
-        if (!steps.Sources(source).Any(_ => _.Policies.Any(policy => policy.Errors(position))))
+        if (!steps.Sources(source).Any(_ => _.Policies.Any(_ => _.Errors(position))))
         {
             return null;
         }
