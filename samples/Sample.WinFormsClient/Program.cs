@@ -1,6 +1,3 @@
-using System.Net.Http;
-using Microsoft.Extensions.DependencyInjection;
-
 namespace Sample.WinFormsClient;
 
 static class Program

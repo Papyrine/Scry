@@ -2,34 +2,49 @@
 // to it, and every ConstNode spelled back as the C# expression ValueTag reads to the same bytes.
 partial class QueryRenderer
 {
-    string RenderCall(CallNode call, Scope scope)
+    void RenderCall(CallNode call, Scope scope)
     {
         var arguments = call.Arguments;
 
-        string Target() => this.Target(call.Target, scope);
+        // The receiver, then the rest of the call spelled whole: `.ToLower()`, `.Length`.
+        void OnTarget(string spelling)
+        {
+            Target(call.Target, scope);
+            builder.Append(spelling);
+        }
 
         // A value-typed receiver whose member is unlifted in C# gets its .Value back — the forward
         // pass strips it. Needing this without a model to ask is a resolution failure.
-        string ValueTarget() => RenderValue(call.Target, scope);
+        void OnValueTarget(string spelling)
+        {
+            RenderValue(call.Target, scope);
+            builder.Append(spelling);
+        }
 
-        string Argument(int index) => RenderNode(arguments[index], scope);
+        void Argument(int index) => RenderNode(arguments[index], scope);
 
-        string ValueArgument(int index) => RenderValue(arguments[index], scope);
+        void ValueArgument(int index) => RenderValue(arguments[index], scope);
 
-        string From(string keyword)
+        void From(string keyword)
         {
             var type = InferType(call.Target, scope);
             if (type is null ||
                 (Nullable.GetUnderlyingType(type) ?? type) == typeof(string))
             {
-                return $"{keyword}.Parse({RenderNode(call.Target, scope)})";
+                builder.Append(keyword).Append(".Parse(");
+                RenderNode(call.Target, scope);
+                builder.Append(')');
+                return;
             }
 
-            var cast = Nullable.GetUnderlyingType(type) is null ? keyword : $"{keyword}?";
-            var operand = RenderNode(call.Target, scope);
-            return call.Target is BinaryNode or ConditionalNode
-                ? $"({cast})({operand})"
-                : $"({cast}){operand}";
+            builder.Append('(').Append(keyword);
+            if (Nullable.GetUnderlyingType(type) is not null)
+            {
+                builder.Append('?');
+            }
+
+            builder.Append(')');
+            Operand(call.Target, scope);
         }
 
         switch (call.Function)
@@ -48,54 +63,94 @@ partial class QueryRenderer
                     _ => "EndsWith"
                 };
 
-                var argument = arguments[0] is ConstNode text
-                    ? RenderConst(text, typeof(string))
-                    : Argument(0);
-
-                if (call.Target is CollateNode collate)
+                var collate = call.Target as CollateNode;
+                Target(collate?.Target ?? call.Target, scope);
+                builder.Append('.').Append(name).Append('(');
+                if (arguments[0] is ConstNode text)
                 {
-                    return $"{this.Target(collate.Target, scope)}.{name}({argument}, {Comparison(collate.Match)})";
+                    builder.Append(RenderConst(text, typeof(string)));
+                }
+                else
+                {
+                    Argument(0);
                 }
 
-                return $"{Target()}.{name}({argument})";
+                if (collate is not null)
+                {
+                    builder.Append(", ").Append(Comparison(collate.Match));
+                }
+
+                builder.Append(')');
+                return;
             }
 
             case KnownFunction.StringToLower:
-                return $"{Target()}.ToLower()";
+                OnTarget(".ToLower()");
+                return;
             case KnownFunction.StringToUpper:
-                return $"{Target()}.ToUpper()";
+                OnTarget(".ToUpper()");
+                return;
             case KnownFunction.StringTrim:
-                return $"{Target()}.Trim()";
+                OnTarget(".Trim()");
+                return;
             case KnownFunction.StringTrimStart:
-                return $"{Target()}.TrimStart()";
+                OnTarget(".TrimStart()");
+                return;
             case KnownFunction.StringTrimEnd:
-                return $"{Target()}.TrimEnd()";
+                OnTarget(".TrimEnd()");
+                return;
 
             case KnownFunction.StringIsNullOrEmpty:
-                return $"string.IsNullOrEmpty({RenderNode(call.Target, scope)})";
+                builder.Append("string.IsNullOrEmpty(");
+                RenderNode(call.Target, scope);
+                builder.Append(')');
+                return;
             case KnownFunction.StringIsNullOrWhiteSpace:
-                return $"string.IsNullOrWhiteSpace({RenderNode(call.Target, scope)})";
+                builder.Append("string.IsNullOrWhiteSpace(");
+                RenderNode(call.Target, scope);
+                builder.Append(')');
+                return;
 
             case KnownFunction.StringLength:
-                return $"{Target()}.Length";
+                OnTarget(".Length");
+                return;
 
             case KnownFunction.StringSubstring:
-                return arguments.Count switch
+                if (arguments.Count is not (1 or 2))
                 {
-                    1 => $"{Target()}.Substring({Argument(0)})",
-                    2 => $"{Target()}.Substring({Argument(0)}, {Argument(1)})",
-                    _ => throw Refuse(RenderRefusal.UnsupportedShape)
-                };
+                    throw Refuse(RenderRefusal.UnsupportedShape);
+                }
+
+                OnTarget(".Substring(");
+                Argument(0);
+                if (arguments.Count == 2)
+                {
+                    builder.Append(", ");
+                    Argument(1);
+                }
+
+                builder.Append(')');
+                return;
 
             case KnownFunction.StringIndexOf:
-                return $"{Target()}.IndexOf({Argument(0)})";
+                OnTarget(".IndexOf(");
+                Argument(0);
+                builder.Append(')');
+                return;
             case KnownFunction.StringReplace:
-                return $"{Target()}.Replace({Argument(0)}, {Argument(1)})";
+                OnTarget(".Replace(");
+                Argument(0);
+                builder.Append(", ");
+                Argument(1);
+                builder.Append(')');
+                return;
 
             case KnownFunction.StringFirst:
-                return $"{Target()}.FirstOrDefault()";
+                OnTarget(".FirstOrDefault()");
+                return;
             case KnownFunction.StringLast:
-                return $"{Target()}.LastOrDefault()";
+                OnTarget(".LastOrDefault()");
+                return;
 
             // The left-folded chain flattens back into the one static spelling that captures to the
             // identical fold whatever the operand types are.
@@ -103,11 +158,24 @@ partial class QueryRenderer
             {
                 var parts = new List<Node>();
                 FlattenConcat(call, parts);
-                return $"string.Concat({string.Join(", ", parts.Select(_ => RenderNode(_, scope)))})";
+                builder.Append("string.Concat(");
+                for (var i = 0; i < parts.Count; i++)
+                {
+                    if (i > 0)
+                    {
+                        builder.Append(", ");
+                    }
+
+                    RenderNode(parts[i], scope);
+                }
+
+                builder.Append(')');
+                return;
             }
 
             case KnownFunction.StringFrom:
-                return $"{Target()}.ToString()";
+                OnTarget(".ToString()");
+                return;
 
             case KnownFunction.DateYear or
                 KnownFunction.DateMonth or
@@ -132,7 +200,9 @@ partial class QueryRenderer
                     KnownFunction.DateTimeOfDay => "TimeOfDay",
                     _ => call.Function.ToString()["Date".Length..]
                 };
-                return $"{ValueTarget()}.{name}";
+                RenderValue(call.Target, scope);
+                builder.Append('.').Append(name);
+                return;
             }
 
             case KnownFunction.TimeSpanHours or
@@ -141,7 +211,9 @@ partial class QueryRenderer
                 KnownFunction.TimeSpanMilliseconds or
                 KnownFunction.TimeSpanMicroseconds or
                 KnownFunction.TimeSpanNanoseconds:
-                return $"{ValueTarget()}.{call.Function.ToString()["TimeSpan".Length..]}";
+                RenderValue(call.Target, scope);
+                builder.Append('.').Append(call.Function.ToString()["TimeSpan".Length..]);
+                return;
 
             case KnownFunction.DateAddYears or
                 KnownFunction.DateAddMonths or
@@ -150,34 +222,62 @@ partial class QueryRenderer
                 KnownFunction.DateAddMinutes or
                 KnownFunction.DateAddSeconds or
                 KnownFunction.DateAddMilliseconds:
-                return $"{ValueTarget()}.{call.Function.ToString()["Date".Length..]}({ValueArgument(0)})";
+                RenderValue(call.Target, scope);
+                builder.Append('.').Append(call.Function.ToString()["Date".Length..]).Append('(');
+                ValueArgument(0);
+                builder.Append(')');
+                return;
 
             case KnownFunction.DateOnlyFromDateTime:
-                return $"DateOnly.FromDateTime({ValueTarget()})";
+                builder.Append("DateOnly.FromDateTime(");
+                RenderValue(call.Target, scope);
+                builder.Append(')');
+                return;
             case KnownFunction.TimeOnlyFromDateTime:
-                return $"TimeOnly.FromDateTime({ValueTarget()})";
+                builder.Append("TimeOnly.FromDateTime(");
+                RenderValue(call.Target, scope);
+                builder.Append(')');
+                return;
             case KnownFunction.TimeOnlyFromTimeSpan:
-                return $"TimeOnly.FromTimeSpan({ValueTarget()})";
+                builder.Append("TimeOnly.FromTimeSpan(");
+                RenderValue(call.Target, scope);
+                builder.Append(')');
+                return;
             case KnownFunction.DateTimeFromDateAndTime:
-            {
+                OnValueTarget(".ToDateTime(");
+
                 // The time of day travels under the String tag, having none of its own, so rendering
                 // it needs the type it composes with — without that it spells as text, which is not
                 // what ToDateTime takes.
-                var moment = arguments is [ConstNode time, ..]
-                    ? RenderConst(time, typeof(Time))
-                    : ValueArgument(0);
-                return $"{ValueTarget()}.ToDateTime({moment})";
-            }
+                if (arguments is [ConstNode time, ..])
+                {
+                    builder.Append(RenderConst(time, typeof(Time)));
+                }
+                else
+                {
+                    ValueArgument(0);
+                }
+
+                builder.Append(')');
+                return;
 
             case KnownFunction.UnixSecondsFromOffset:
-                return $"{ValueTarget()}.ToUnixTimeSeconds()";
+                OnValueTarget(".ToUnixTimeSeconds()");
+                return;
             case KnownFunction.UnixMillisecondsFromOffset:
-                return $"{ValueTarget()}.ToUnixTimeMilliseconds()";
+                OnValueTarget(".ToUnixTimeMilliseconds()");
+                return;
 
             case KnownFunction.MathDegreesToRadians:
-                return $"double.DegreesToRadians({ValueTarget()})";
+                builder.Append("double.DegreesToRadians(");
+                RenderValue(call.Target, scope);
+                builder.Append(')');
+                return;
             case KnownFunction.MathRadiansToDegrees:
-                return $"double.RadiansToDegrees({ValueTarget()})";
+                builder.Append("double.RadiansToDegrees(");
+                RenderValue(call.Target, scope);
+                builder.Append(')');
+                return;
 
             case KnownFunction.MathAbs or
                 KnownFunction.MathCeiling or
@@ -199,18 +299,25 @@ partial class QueryRenderer
                 KnownFunction.MathAtan2 or
                 KnownFunction.MathMax or
                 KnownFunction.MathMin:
-            {
-                var name = call.Function.ToString()["Math".Length..];
-                return arguments.Count switch
+                if (arguments.Count > 1)
                 {
-                    0 => $"Math.{name}({ValueTarget()})",
-                    1 => $"Math.{name}({ValueTarget()}, {ValueArgument(0)})",
-                    _ => throw Refuse(RenderRefusal.UnsupportedShape)
-                };
-            }
+                    throw Refuse(RenderRefusal.UnsupportedShape);
+                }
+
+                builder.Append("Math.").Append(call.Function.ToString()["Math".Length..]).Append('(');
+                RenderValue(call.Target, scope);
+                if (arguments.Count == 1)
+                {
+                    builder.Append(", ");
+                    ValueArgument(0);
+                }
+
+                builder.Append(')');
+                return;
 
             case KnownFunction.In:
-                return RenderIn(call, scope);
+                RenderIn(call, scope);
+                return;
 
             case KnownFunction.EnumHasFlag:
             {
@@ -220,52 +327,79 @@ partial class QueryRenderer
                 }
 
                 var enumType = InferType(call.Target, scope);
-                return $"{ValueTarget()}.HasFlag({RenderConst(flag, enumType)})";
+                OnValueTarget(".HasFlag(");
+                builder.Append(RenderConst(flag, enumType)).Append(')');
+                return;
             }
 
             // Over text these parse it; over a number they are the widening cast the client wrote,
             // and read back as one — lifted where the member is optional, since that is how C# spells
             // a conversion of a nullable.
             case KnownFunction.Int32From:
-                return From("int");
+                From("int");
+                return;
             case KnownFunction.Int64From:
-                return From("long");
+                From("long");
+                return;
             case KnownFunction.DecimalFrom:
-                return From("decimal");
+                From("decimal");
+                return;
             case KnownFunction.DoubleFrom:
-                return From("double");
+                From("double");
+                return;
             case KnownFunction.BooleanFrom:
-                return From("bool");
+                From("bool");
+                return;
             case KnownFunction.ByteFrom:
-                return From("byte");
+                From("byte");
+                return;
             case KnownFunction.Int16From:
-                return From("short");
+                From("short");
+                return;
             case KnownFunction.SingleFrom:
-                return From("float");
+                From("float");
+                return;
 
             case KnownFunction.CompareTo:
-            {
-                var argument = arguments[0] is ConstNode compared
-                    ? RenderConst(compared, InferType(call.Target, scope))
-                    : Argument(0);
-                return $"{ValueTarget()}.CompareTo({argument})";
-            }
+                OnValueTarget(".CompareTo(");
+                if (arguments[0] is ConstNode compared)
+                {
+                    builder.Append(RenderConst(compared, InferType(call.Target, scope)));
+                }
+                else
+                {
+                    Argument(0);
+                }
+
+                builder.Append(')');
+                return;
 
             case KnownFunction.BytesLength:
-                return $"{Target()}.Length";
+                OnTarget(".Length");
+                return;
 
             case KnownFunction.BytesContains:
-            {
+                OnTarget(".Contains(");
+
                 // The byte the wire compares travels as its code point, and the snippet has to hand
                 // the overload a byte again for the same capture to happen.
-                var value = arguments[0] is ConstNode {Tag: ClrTypeTag.Int32, Value: { } number}
-                    ? $"(byte){number}"
-                    : Argument(0);
-                return $"{Target()}.Contains({value})";
-            }
+                if (arguments[0] is ConstNode {Tag: ClrTypeTag.Int32, Value: { } number})
+                {
+                    builder.Append("(byte)").Append(number);
+                }
+                else
+                {
+                    Argument(0);
+                }
+
+                builder.Append(')');
+                return;
 
             case KnownFunction.BytesElementAt:
-                return $"{Target()}.ElementAt({Argument(0)})";
+                OnTarget(".ElementAt(");
+                Argument(0);
+                builder.Append(')');
+                return;
 
             default:
                 throw Refuse(RenderRefusal.UnsupportedShape);
@@ -284,21 +418,16 @@ partial class QueryRenderer
         parts.Add(node);
     }
 
-    string RenderIn(CallNode call, Scope scope)
+    void RenderIn(CallNode call, Scope scope)
     {
         var elementType = InferType(call.Target, scope);
-        var items = new List<string>();
         foreach (var argument in call.Arguments)
         {
-            if (argument is not ConstNode constant)
+            if (argument is not ConstNode)
             {
                 throw Refuse(RenderRefusal.UnsupportedShape);
             }
-
-            items.Add(RenderConst(constant, elementType));
         }
-
-        var tested = RenderNode(call.Target, scope);
 
         // A List rather than an array: an array receiver binds MemoryExtensions.Contains, whose
         // overload for a non-IEquatable element (an enum) carries an optional comparer the forward
@@ -307,37 +436,59 @@ partial class QueryRenderer
         // member's model.
         if (elementType is null)
         {
-            if (items.Count == 0)
+            if (call.Arguments.Count == 0)
             {
                 throw Refuse(RenderRefusal.UnresolvedModel);
             }
 
-            return $"new[] {{ {string.Join(", ", items)} }}.Contains({tested})";
+            builder.Append("new[]");
+        }
+        else
+        {
+            builder.Append("new List<").Append(TypeName(elementType)).Append('>');
+            if (call.Arguments.Count == 0)
+            {
+                builder.Append("()");
+            }
         }
 
-        var list = items.Count == 0
-            ? $"new List<{TypeName(elementType)}>()"
-            : $"new List<{TypeName(elementType)}> {{ {string.Join(", ", items)} }}";
-        return $"{list}.Contains({tested})";
+        if (call.Arguments.Count > 0)
+        {
+            builder.Append(" { ");
+            for (var i = 0; i < call.Arguments.Count; i++)
+            {
+                if (i > 0)
+                {
+                    builder.Append(", ");
+                }
+
+                builder.Append(RenderConst((ConstNode) call.Arguments[i], elementType));
+            }
+
+            builder.Append(" }");
+        }
+
+        builder.Append(".Contains(");
+        RenderNode(call.Target, scope);
+        builder.Append(')');
     }
 
     // A member whose C# spelling needs the wrapped value rather than the optional: the wire carries
     // no wrapper, so a nullable member gets its .Value back — which takes knowing it is one.
-    string RenderValue(Node node, Scope scope)
+    void RenderValue(Node node, Scope scope)
     {
         if (node is not MemberNode member)
         {
-            return Target(node, scope);
+            Target(node, scope);
+            return;
         }
 
         var type = InferType(member, scope) ?? throw Refuse(RenderRefusal.UnresolvedModel);
-        var text = RenderNode(member, scope);
-        if (Nullable.GetUnderlyingType(type) is null)
+        RenderNode(member, scope);
+        if (Nullable.GetUnderlyingType(type) is not null)
         {
-            return text;
+            builder.Append(".Value");
         }
-
-        return $"{text}.Value";
     }
 
     static string RenderConst(ConstNode constant, Type? expected)

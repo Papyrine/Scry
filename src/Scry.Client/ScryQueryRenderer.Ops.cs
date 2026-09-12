@@ -3,53 +3,102 @@
 // ReSharper disable TailRecursiveCall
 partial class QueryRenderer
 {
-    string RenderOp(QueryOp op) =>
-        op switch
-        {
-            WhereOp where => $".Where({Lambda(where.Predicate)})",
-
-            OrderByOp orderBy => $".{(orderBy.Descending ? "OrderByDescending" : "OrderBy")}({Lambda(orderBy.Key)})",
-            ThenByOp thenBy => $".{(thenBy.Descending ? "ThenByDescending" : "ThenBy")}({Lambda(thenBy.Key)})",
-
-            SkipOp skip => $".Skip({skip.Count.ToString(CultureInfo.InvariantCulture)})",
-            TakeOp take => $".Take({take.Count.ToString(CultureInfo.InvariantCulture)})",
-
-            DistinctOp => ".Distinct()",
-            ReverseOp => ".Reverse()",
-
-            OfTypeOp ofType => RenderOfType(ofType),
-            SelectManyOp many => RenderSelectMany(many),
-
-            GroupByOp groupBy => RenderGroupBy(groupBy),
-            SelectOp select => RenderSelect(select),
-            JoinOp join => RenderJoin(join),
-            SetOp set => RenderSet(set),
-
-            // A terminal never reaches here — RenderModel splits the trailing one off and refuses
-            // any other — but naming them is what lets the compiler check the rest of this switch.
-            CountOp or LongCountOp or AnyOp or AllOp or FirstOp or SingleOp or LastOp or
-                AggregateOp or PageOp => throw Refuse(RenderRefusal.UnsupportedShape)
-        };
-
-    string RenderOfType(OfTypeOp op)
+    // A statement rather than an expression, since every arm appends instead of producing a value.
+    // The exhaustiveness a switch expression would give lives in IsTerminal, which is where the
+    // compiler stops a new operator from slipping past unspelled.
+    void RenderOp(QueryOp op)
     {
-        currentModel = SensitiveModel.ModelFor(op.Type) ?? throw Refuse(RenderRefusal.UnresolvedModel);
-        return $".OfType<{currentModel.Name}>()";
+        switch (op)
+        {
+            case WhereOp where:
+                builder.Append(".Where(");
+                Lambda(where.Predicate);
+                builder.Append(')');
+                return;
+
+            case OrderByOp orderBy:
+                Ordering(orderBy.Descending ? "OrderByDescending" : "OrderBy", orderBy.Key);
+                return;
+
+            case ThenByOp thenBy:
+                Ordering(thenBy.Descending ? "ThenByDescending" : "ThenBy", thenBy.Key);
+                return;
+
+            case SkipOp skip:
+                builder.Append(".Skip(").Append(skip.Count.ToString(CultureInfo.InvariantCulture)).Append(')');
+                return;
+
+            case TakeOp take:
+                builder.Append(".Take(").Append(take.Count.ToString(CultureInfo.InvariantCulture)).Append(')');
+                return;
+
+            case DistinctOp:
+                builder.Append(".Distinct()");
+                return;
+
+            case ReverseOp:
+                builder.Append(".Reverse()");
+                return;
+
+            case OfTypeOp ofType:
+                RenderOfType(ofType);
+                return;
+
+            case SelectManyOp many:
+                RenderSelectMany(many);
+                return;
+
+            case GroupByOp groupBy:
+                RenderGroupBy(groupBy);
+                return;
+
+            case SelectOp select:
+                RenderSelect(select);
+                return;
+
+            case JoinOp join:
+                RenderJoin(join);
+                return;
+
+            case SetOp set:
+                RenderSet(set);
+                return;
+
+            // A terminal never reaches here — Render splits the trailing one off and refuses any
+            // other — and neither does an operator no arm above spells.
+            default:
+                throw Refuse(RenderRefusal.UnsupportedShape);
+        }
     }
 
-    string RenderSelectMany(SelectManyOp op)
+    void Ordering(string method, Node key)
     {
-        var text = $".SelectMany(_ => _.{string.Join('.', op.Path)})";
+        builder.Append('.').Append(method).Append('(');
+        Lambda(key);
+        builder.Append(')');
+    }
+
+    void RenderOfType(OfTypeOp op)
+    {
+        currentModel = SensitiveModel.ModelFor(op.Type) ?? throw Refuse(RenderRefusal.UnresolvedModel);
+        builder.Append(".OfType<").Append(currentModel.Name).Append(">()");
+    }
+
+    void RenderSelectMany(SelectManyOp op)
+    {
+        builder.Append(".SelectMany(_ => _.");
+        AppendPath(op.Path);
+        builder.Append(')');
         currentModel = ElementModel(currentModel, op.Path);
-        return text;
     }
 
     // A lambda whose body is one node, in whichever context the pipeline is in: a plain row (`_`),
     // or the group a GroupBy left (`g`).
-    string Lambda(Node body)
+    void Lambda(Node body)
     {
         var scope = CurrentScope();
-        return $"{scope.Parameter} => {RenderNode(body, scope)}";
+        builder.Append(scope.Parameter).Append(" => ");
+        RenderNode(body, scope);
     }
 
     Scope CurrentScope()
@@ -62,7 +111,20 @@ partial class QueryRenderer
         return new("_", currentModel, Grouped: false, Depth: 0);
     }
 
-    string RenderGroupBy(GroupByOp op)
+    void AppendPath(IReadOnlyList<string> path)
+    {
+        for (var i = 0; i < path.Count; i++)
+        {
+            if (i > 0)
+            {
+                builder.Append('.');
+            }
+
+            builder.Append(path[i]);
+        }
+    }
+
+    void RenderGroupBy(GroupByOp op)
     {
         var scope = new Scope("_", currentModel, Grouped: false, Depth: 0);
         grouped = true;
@@ -73,10 +135,13 @@ partial class QueryRenderer
             throw Refuse(RenderRefusal.UnsupportedShape);
         }
 
+        builder.Append(".GroupBy(_ => ");
         if (op.Keys.Count == 1)
         {
             groupKeyNames = null;
-            return $".GroupBy(_ => {RenderNode(op.Keys[0], scope)})";
+            RenderNode(op.Keys[0], scope);
+            builder.Append(')');
+            return;
         }
 
         // A composite key becomes an anonymous type. The names never reach the wire — the parts
@@ -84,9 +149,14 @@ partial class QueryRenderer
         // it later in this same snippet: a member part is named by its last segment (deduplicated),
         // a computed part by its position.
         var names = new List<string>();
-        var parts = new List<string>();
+        builder.Append("new { ");
         for (var i = 0; i < op.Keys.Count; i++)
         {
+            if (i > 0)
+            {
+                builder.Append(", ");
+            }
+
             var key = op.Keys[i];
             var name = key is MemberNode {Path.Count: > 0} member ? member.Path[^1] : $"Key{i}";
             if (names.Contains(name))
@@ -101,70 +171,113 @@ partial class QueryRenderer
             }
 
             names.Add(name);
-            var value = RenderNode(key, scope);
-            parts.Add(
-                key is MemberNode plain && plain.Path[^1] == name
-                    ? value
-                    : $"{name} = {value}");
+            if (key is not MemberNode plain ||
+                plain.Path[^1] != name)
+            {
+                builder.Append(name).Append(" = ");
+            }
+
+            RenderNode(key, scope);
         }
 
+        builder.Append(" })");
         groupKeyNames = names;
-        return $".GroupBy(_ => new {{ {string.Join(", ", parts)} }})";
     }
 
-    string RenderSelect(SelectOp op)
+    void RenderSelect(SelectOp op)
     {
         var scope = CurrentScope();
-        var text = $".Select({scope.Parameter} => {RenderProjection(op.Projection, scope)})";
+        builder.Append(".Select(").Append(scope.Parameter).Append(" => ");
+        RenderProjection(op.Projection, scope);
+        builder.Append(')');
 
         // Whatever the projection built, the row is now an anonymous shape no model describes.
         grouped = false;
         groupKeys = null;
         groupKeyNames = null;
         currentModel = null;
-        return text;
     }
 
-    string RenderProjection(Projection projection, Scope scope)
+    void RenderProjection(Projection projection, Scope scope)
     {
         if (projection.Members.Count == 0)
         {
             throw Refuse(RenderRefusal.UnsupportedShape);
         }
 
-        var parts = projection.Members.Select(_ => RenderProjectionMember(_, scope));
-        return $"new {{ {string.Join(", ", parts)} }}";
-    }
-
-    string RenderProjectionMember(ProjectionMember member, Scope scope) =>
-        member.Value switch
+        builder.Append("new { ");
+        for (var i = 0; i < projection.Members.Count; i++)
         {
-            NodeValue node => RenderNodeMember(node, member.Name, scope),
-            NestedValue nested => $"{member.Name} = {RenderNested(nested, scope)}"
-        };
+            if (i > 0)
+            {
+                builder.Append(", ");
+            }
 
-    string RenderNodeMember(NodeValue node, string name, Scope scope)
-    {
-        var text = RenderNode(node.Node, scope);
-        if (Shorthand(text, name))
-        {
-            return text;
+            var member = projection.Members[i];
+            switch (member.Value)
+            {
+                case NodeValue node:
+                    RenderNamed(member.Name, node.Node, scope);
+                    break;
+                case NestedValue nested:
+                    builder.Append(member.Name).Append(" = ");
+                    RenderNested(nested, scope);
+                    break;
+            }
         }
 
-        return $"{name} = {text}";
+        builder.Append(" }");
     }
 
-    // Whether an anonymous-type member can drop its name: the expression is a plain member chain
-    // whose trailing identifier is the name C# would infer anyway.
-    static bool Shorthand(string expression, string name)
+    // An anonymous-type member, written without its name wherever C# would infer that same name.
+    // Whether it would is a question about the rendered text, so the value goes down first and the
+    // name is spliced in front of it only once the text says one is needed.
+    void RenderNamed(string name, Node value, Scope scope)
     {
-        if (!expression.All(_ => char.IsLetterOrDigit(_) || _ is '.' or '_'))
+        var start = builder.Length;
+        RenderNode(value, scope);
+        if (!Shorthand(start, name))
+        {
+            builder.Insert(start, $"{name} = ");
+        }
+    }
+
+    // Whether the expression just appended is a plain member chain whose trailing identifier is the
+    // name C# would infer from it.
+    bool Shorthand(int start, string name)
+    {
+        var identifier = -1;
+        for (var i = start; i < builder.Length; i++)
+        {
+            var character = builder[i];
+            if (character == '.')
+            {
+                identifier = i + 1;
+                continue;
+            }
+
+            if (!char.IsLetterOrDigit(character) &&
+                character != '_')
+            {
+                return false;
+            }
+        }
+
+        if (identifier < 0 ||
+            builder.Length - identifier != name.Length)
         {
             return false;
         }
 
-        var dot = expression.LastIndexOf('.');
-        return dot >= 0 && expression[(dot + 1)..] == name;
+        for (var i = 0; i < name.Length; i++)
+        {
+            if (builder[identifier + i] != name[i])
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -173,7 +286,7 @@ partial class QueryRenderer
     /// this only renders when that derivation lands back on the wire's own prefix — a deeper shared
     /// prefix would rebase the members differently and change the bytes.
     /// </summary>
-    string RenderNested(NestedValue nested, Scope scope)
+    void RenderNested(NestedValue nested, Scope scope)
     {
         var members = new List<(string Name, Node Value)>();
         foreach (var member in nested.Projection.Members)
@@ -197,18 +310,19 @@ partial class QueryRenderer
             throw Refuse(RenderRefusal.UnsupportedShape);
         }
 
-        var parts = members.Select(
-            member =>
+        builder.Append("new { ");
+        for (var i = 0; i < members.Count; i++)
+        {
+            if (i > 0)
             {
-                var text = RenderNode(member.Value, scope);
-                if (Shorthand(text, member.Name))
-                {
-                    return text;
-                }
+                builder.Append(", ");
+            }
 
-                return $"{member.Name} = {text}";
-            });
-        return $"new {{ {string.Join(", ", parts)} }}";
+            var (name, value) = members[i];
+            RenderNamed(name, value, scope);
+        }
+
+        builder.Append(" }");
     }
 
     // The inverse of the translator's StripPrefix: every rooted path gets the navigation back.
@@ -298,7 +412,7 @@ partial class QueryRenderer
         return prefix;
     }
 
-    string RenderJoin(JoinOp op)
+    void RenderJoin(JoinOp op)
     {
         var method = op.Kind switch
         {
@@ -309,18 +423,32 @@ partial class QueryRenderer
             _ => throw Refuse(RenderRefusal.UnsupportedShape)
         };
 
+        if (op.Result.Count == 0)
+        {
+            throw Refuse(RenderRefusal.UnsupportedShape);
+        }
+
         var innerModel = SensitiveModel.ModelFor(op.Root);
         var innerScope = new Scope("x", innerModel, Grouped: false, Depth: 1);
-        var source = new StringBuilder("Query.").Append(op.Root);
-        AppendSideOps(source, op.InnerOps, op.InnerPredicate, innerScope);
-
         var outerScope = new Scope("_", currentModel, Grouped: false, Depth: 0);
-        var outerKey = RenderJoinKey(op.OuterKey, outerScope);
-        var innerKey = RenderJoinKey(op.InnerKey, innerScope);
 
-        var members = new List<string>();
-        foreach (var member in op.Result)
+        builder.Append('.').Append(method).Append("(Query.").Append(op.Root);
+        AppendSideOps(op.InnerOps, op.InnerPredicate, innerScope);
+
+        builder.Append(", _ => ");
+        RenderJoinKey(op.OuterKey, outerScope);
+        builder.Append(", x => ");
+        RenderJoinKey(op.InnerKey, innerScope);
+
+        builder.Append(", (_, x) => new { ");
+        for (var i = 0; i < op.Result.Count; i++)
         {
+            if (i > 0)
+            {
+                builder.Append(", ");
+            }
+
+            var member = op.Result[i];
             if (member.Aggregate is { } aggregate)
             {
                 if (op.Kind != JoinKind.Group)
@@ -328,7 +456,8 @@ partial class QueryRenderer
                     throw Refuse(RenderRefusal.UnsupportedShape);
                 }
 
-                members.Add($"{member.Name} = {RenderAggregate(aggregate, "x", innerModel, depth: 1)}");
+                builder.Append(member.Name).Append(" = ");
+                RenderAggregate(aggregate, "x", innerModel, depth: 1);
                 continue;
             }
 
@@ -337,28 +466,29 @@ partial class QueryRenderer
                 throw Refuse(RenderRefusal.UnsupportedShape);
             }
 
-            var root = member.Side == JoinSide.Outer ? "_" : "x";
-            var text = $"{root}.{string.Join('.', member.Path)}";
-            members.Add(member.Path[^1] == member.Name ? text : $"{member.Name} = {text}");
+            if (member.Path[^1] != member.Name)
+            {
+                builder.Append(member.Name).Append(" = ");
+            }
+
+            builder.Append(member.Side == JoinSide.Outer ? "_." : "x.");
+            AppendPath(member.Path);
         }
 
-        if (members.Count == 0)
-        {
-            throw Refuse(RenderRefusal.UnsupportedShape);
-        }
+        builder.Append(" })");
 
         // The joined pair is an anonymous shape from here on.
         currentModel = null;
-        return $".{method}({source}, _ => {outerKey}, x => {innerKey}, (_, x) => new {{ {string.Join(", ", members)} }})";
     }
 
     // A composite key becomes an anonymous type; C# demands both sides construct the same one, so
     // the parts are named by position on both. A single part never travels as a composite.
-    string RenderJoinKey(Node key, Scope scope)
+    void RenderJoinKey(Node key, Scope scope)
     {
         if (key is not CompositeKeyNode composite)
         {
-            return RenderNode(key, scope);
+            RenderNode(key, scope);
+            return;
         }
 
         if (composite.Parts.Count < 2)
@@ -366,11 +496,22 @@ partial class QueryRenderer
             throw Refuse(RenderRefusal.UnsupportedShape);
         }
 
-        var parts = composite.Parts.Select((part, i) => $"K{i} = {RenderNode(part, scope)}");
-        return $"new {{ {string.Join(", ", parts)} }}";
+        builder.Append("new { ");
+        for (var i = 0; i < composite.Parts.Count; i++)
+        {
+            if (i > 0)
+            {
+                builder.Append(", ");
+            }
+
+            builder.Append('K').Append(i.ToString(CultureInfo.InvariantCulture)).Append(" = ");
+            RenderNode(composite.Parts[i], scope);
+        }
+
+        builder.Append(" }");
     }
 
-    string RenderSet(SetOp op)
+    void RenderSet(SetOp op)
     {
         var method = op.Kind switch
         {
@@ -383,38 +524,57 @@ partial class QueryRenderer
 
         var operandModel = SensitiveModel.ModelFor(op.Root);
         var scope = new Scope("x", operandModel, Grouped: false, Depth: 1);
-        var operand = new StringBuilder("Query.").Append(op.Root);
-        AppendSideOps(operand, op.OperandOps, op.Predicate, scope);
-        operand.Append($".Select(x => {RenderProjection(op.Projection, scope)})");
-        return $".{method}({operand})";
+
+        builder.Append('.').Append(method).Append("(Query.").Append(op.Root);
+        AppendSideOps(op.OperandOps, op.Predicate, scope);
+        builder.Append(".Select(x => ");
+        RenderProjection(op.Projection, scope);
+        builder.Append("))");
     }
 
     // The pipeline a join's inner side or a set operand carries: filters, then an ordering bounded
     // by paging — or, in the older spelling, a single folded predicate.
-    void AppendSideOps(StringBuilder builder, IReadOnlyList<QueryOp>? ops, Node? predicate, Scope scope)
+    void AppendSideOps(IReadOnlyList<QueryOp>? ops, Node? predicate, Scope scope)
     {
-        if (ops is not null)
+        if (ops is null)
         {
-            foreach (var op in ops)
+            if (predicate is not null)
             {
-                builder.Append(
-                    op switch
-                    {
-                        WhereOp where => $".Where({scope.Parameter} => {RenderNode(where.Predicate, scope)})",
-                        OrderByOp orderBy => $".{(orderBy.Descending ? "OrderByDescending" : "OrderBy")}({scope.Parameter} => {RenderNode(orderBy.Key, scope)})",
-                        ThenByOp thenBy => $".{(thenBy.Descending ? "ThenByDescending" : "ThenBy")}({scope.Parameter} => {RenderNode(thenBy.Key, scope)})",
-                        SkipOp skip => $".Skip({skip.Count.ToString(CultureInfo.InvariantCulture)})",
-                        TakeOp take => $".Take({take.Count.ToString(CultureInfo.InvariantCulture)})",
-                        _ => throw Refuse(RenderRefusal.UnsupportedShape)
-                    });
+                SideLambda("Where", predicate, scope);
             }
 
             return;
         }
 
-        if (predicate is not null)
+        foreach (var op in ops)
         {
-            builder.Append($".Where({scope.Parameter} => {RenderNode(predicate, scope)})");
+            switch (op)
+            {
+                case WhereOp where:
+                    SideLambda("Where", where.Predicate, scope);
+                    break;
+                case OrderByOp orderBy:
+                    SideLambda(orderBy.Descending ? "OrderByDescending" : "OrderBy", orderBy.Key, scope);
+                    break;
+                case ThenByOp thenBy:
+                    SideLambda(thenBy.Descending ? "ThenByDescending" : "ThenBy", thenBy.Key, scope);
+                    break;
+                case SkipOp skip:
+                    builder.Append(".Skip(").Append(skip.Count.ToString(CultureInfo.InvariantCulture)).Append(')');
+                    break;
+                case TakeOp take:
+                    builder.Append(".Take(").Append(take.Count.ToString(CultureInfo.InvariantCulture)).Append(')');
+                    break;
+                default:
+                    throw Refuse(RenderRefusal.UnsupportedShape);
+            }
         }
+    }
+
+    void SideLambda(string method, Node body, Scope scope)
+    {
+        builder.Append('.').Append(method).Append('(').Append(scope.Parameter).Append(" => ");
+        RenderNode(body, scope);
+        builder.Append(')');
     }
 }

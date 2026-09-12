@@ -18,21 +18,25 @@ sealed record Scope(string Parameter, Type? Model, bool Grouped, int Depth)
 // QueryTranslator's expression and method dispatch.
 partial class QueryRenderer
 {
-    string RenderNode(Node node, Scope scope)
+    void RenderNode(Node node, Scope scope)
     {
         switch (node)
         {
             case MemberNode member:
-                return RenderMember(member, scope);
+                RenderMember(member, scope);
+                return;
 
             case ElementNode:
-                return scope.Parameter;
+                builder.Append(scope.Parameter);
+                return;
 
             case ConstNode constant:
-                return RenderConst(constant, expected: null);
+                builder.Append(RenderConst(constant, expected: null));
+                return;
 
             case BinaryNode binary:
-                return RenderBinary(binary, scope);
+                RenderBinary(binary, scope);
+                return;
 
             case UnaryNode unary:
                 if (!Reads(unary.Operand))
@@ -41,30 +45,40 @@ partial class QueryRenderer
                     throw Refuse(RenderRefusal.UnsupportedShape);
                 }
 
-                if (unary.Op == UnaryOp.Not)
-                {
-                    return $"!({RenderNode(unary.Operand, scope)})";
-                }
-
-                return $"-({RenderNode(unary.Operand, scope)})";
+                builder.Append(unary.Op == UnaryOp.Not ? "!(" : "-(");
+                RenderNode(unary.Operand, scope);
+                builder.Append(')');
+                return;
 
             case ConditionalNode conditional:
-                return $"({Operand(conditional.Test, scope)} ? {Operand(conditional.IfTrue, scope)} : {Operand(conditional.IfFalse, scope)})";
+                builder.Append('(');
+                Operand(conditional.Test, scope);
+                builder.Append(" ? ");
+                Operand(conditional.IfTrue, scope);
+                builder.Append(" : ");
+                Operand(conditional.IfFalse, scope);
+                builder.Append(')');
+                return;
 
             case CallNode call:
-                return RenderCall(call, scope);
+                RenderCall(call, scope);
+                return;
 
             case SubqueryNode subquery:
-                return RenderSubquery(subquery, scope);
+                RenderSubquery(subquery, scope);
+                return;
 
             case InSourceNode inSource:
-                return RenderInSource(inSource, scope);
+                RenderInSource(inSource, scope);
+                return;
 
             case AggregateNode aggregate when scope.Grouped:
-                return RenderAggregate(aggregate, scope.Parameter, scope.Model, scope.Depth);
+                RenderAggregate(aggregate, scope.Parameter, scope.Model, scope.Depth);
+                return;
 
             case GroupKeyNode key when scope.Grouped:
-                return RenderGroupKey(key, scope);
+                RenderGroupKey(key, scope);
+                return;
 
             default:
                 // CollateNode anywhere but under the comparisons that spell it, a group construct
@@ -73,7 +87,7 @@ partial class QueryRenderer
         }
     }
 
-    string RenderMember(MemberNode member, Scope scope)
+    void RenderMember(MemberNode member, Scope scope)
     {
         if (member.Path.Count == 0)
         {
@@ -94,22 +108,19 @@ partial class QueryRenderer
                 if (groupKeys[i] is MemberNode key &&
                     key.Path.SequenceEqual(member.Path, StringComparer.Ordinal))
                 {
-                    if (groupKeyNames is null)
-                    {
-                        return $"{scope.Parameter}.Key";
-                    }
-
-                    return $"{scope.Parameter}.Key.{groupKeyNames[i]}";
+                    AppendGroupKey(scope, i);
+                    return;
                 }
             }
 
             throw Refuse(RenderRefusal.UnsupportedShape);
         }
 
-        return $"{scope.Parameter}.{string.Join('.', member.Path)}";
+        builder.Append(scope.Parameter).Append('.');
+        AppendPath(member.Path);
     }
 
-    string RenderGroupKey(GroupKeyNode key, Scope scope)
+    void RenderGroupKey(GroupKeyNode key, Scope scope)
     {
         if (groupKeys is null ||
             key.Index < 0 ||
@@ -118,15 +129,19 @@ partial class QueryRenderer
             throw Refuse(RenderRefusal.UnsupportedShape);
         }
 
-        if (groupKeyNames is null)
-        {
-            return $"{scope.Parameter}.Key";
-        }
-
-        return $"{scope.Parameter}.Key.{groupKeyNames[key.Index]}";
+        AppendGroupKey(scope, key.Index);
     }
 
-    string RenderBinary(BinaryNode node, Scope scope)
+    void AppendGroupKey(Scope scope, int index)
+    {
+        builder.Append(scope.Parameter).Append(".Key");
+        if (groupKeyNames is not null)
+        {
+            builder.Append('.').Append(groupKeyNames[index]);
+        }
+    }
+
+    void RenderBinary(BinaryNode node, Scope scope)
     {
         // Both sides constant would be folded by the compiler into a single constant, so the
         // rendered snippet could not reproduce the wire's two operands.
@@ -142,10 +157,19 @@ partial class QueryRenderer
                 Left: CollateNode collate
             })
         {
-            var argument = node.Right is ConstNode constant
-                ? RenderConst(constant, typeof(string))
-                : Operand(node.Right, scope);
-            return $"{Target(collate.Target, scope)}.Equals({argument}, {Comparison(collate.Match)})";
+            Target(collate.Target, scope);
+            builder.Append(".Equals(");
+            if (node.Right is ConstNode constant)
+            {
+                builder.Append(RenderConst(constant, typeof(string)));
+            }
+            else
+            {
+                Operand(node.Right, scope);
+            }
+
+            builder.Append(", ").Append(Comparison(collate.Match)).Append(')');
+            return;
         }
 
         if (node.Left is CollateNode || node.Right is CollateNode)
@@ -172,16 +196,18 @@ partial class QueryRenderer
             _ => throw Refuse(RenderRefusal.UnsupportedShape)
         };
 
-        return $"{Side(node.Left, node.Right)} {symbol} {Side(node.Right, node.Left)}";
+        Side(node.Left, node.Right);
+        builder.Append(' ').Append(symbol).Append(' ');
+        Side(node.Right, node.Left);
+        return;
 
-        string Side(Node side, Node other)
+        void Side(Node side, Node other)
         {
             if (side is ConstNode constant)
             {
-                return RenderConst(constant, InferType(other, scope));
+                builder.Append(RenderConst(constant, InferType(other, scope)));
+                return;
             }
-
-            var text = Operand(side, scope);
 
             // A comparison of an enum-typed member against a numeric constant was written through a
             // cast the wire stripped; put the cast back so the snippet compiles to the same bytes.
@@ -191,43 +217,42 @@ partial class QueryRenderer
                 var underlying = Nullable.GetUnderlyingType(inferred);
                 if ((underlying ?? inferred).IsEnum)
                 {
-                    if (underlying is null)
-                    {
-                        return $"(int){text}";
-                    }
-
-                    return $"(int?){text}";
+                    builder.Append(underlying is null ? "(int)" : "(int?)");
                 }
             }
 
-            return text;
+            Operand(side, scope);
         }
     }
 
     // An operand keeps its own parentheses where the surrounding operator would otherwise re-group
     // it. Extra parentheses never change the captured tree, so grouping errs toward wrapping.
-    string Operand(Node node, Scope scope)
+    void Operand(Node node, Scope scope)
     {
-        var text = RenderNode(node, scope);
         if (node is BinaryNode or ConditionalNode)
         {
-            return $"({text})";
+            builder.Append('(');
+            RenderNode(node, scope);
+            builder.Append(')');
+            return;
         }
 
-        return text;
+        RenderNode(node, scope);
     }
 
     // The receiver of an instance call has to be a primary expression; anything composite — and a
     // bare literal, whose dot the lexer would eat — is wrapped.
-    string Target(Node node, Scope scope)
+    void Target(Node node, Scope scope)
     {
-        var text = RenderNode(node, scope);
         if (node is BinaryNode or ConditionalNode or UnaryNode or ConstNode)
         {
-            return $"({text})";
+            builder.Append('(');
+            RenderNode(node, scope);
+            builder.Append(')');
+            return;
         }
 
-        return text;
+        RenderNode(node, scope);
     }
 
     // Whether a node reads the row at all. A subtree that reads nothing is closure state, which the
@@ -256,7 +281,7 @@ partial class QueryRenderer
         return "StringComparison.OrdinalIgnoreCase";
     }
 
-    string RenderSubquery(SubqueryNode subquery, Scope scope)
+    void RenderSubquery(SubqueryNode subquery, Scope scope)
     {
         if (scope.Grouped ||
             subquery.Path.Count == 0)
@@ -264,26 +289,19 @@ partial class QueryRenderer
             throw Refuse(RenderRefusal.UnsupportedShape);
         }
 
-        var collection = $"{scope.Parameter}.{string.Join('.', subquery.Path)}";
         var elementModel = Walk(scope.Model, subquery.Path) is { } property
             ? SensitiveModel.Element(property.PropertyType)
             : null;
         var inner = new Scope(scope.NestedParameter, elementModel, Grouped: false, Depth: scope.Depth + 1);
 
-        string Fold(string name, Node? body)
-        {
-            if (body is null)
-            {
-                return $"{collection}.{name}()";
-            }
-
-            return $"{collection}.{name}({inner.Parameter} => {RenderNode(body, inner)})";
-        }
+        builder.Append(scope.Parameter).Append('.');
+        AppendPath(subquery.Path);
 
         switch (subquery.Function)
         {
             case SubqueryFn.Any:
-                return Fold("Any", subquery.Predicate);
+                Fold("Any", subquery.Predicate);
+                return;
 
             case SubqueryFn.All:
                 if (subquery.Predicate is null)
@@ -291,45 +309,59 @@ partial class QueryRenderer
                     throw Refuse(RenderRefusal.UnsupportedShape);
                 }
 
-                return Fold("All", subquery.Predicate);
+                Fold("All", subquery.Predicate);
+                return;
 
             case SubqueryFn.Count:
-                return Fold("Count", subquery.Predicate);
+                Fold("Count", subquery.Predicate);
+                return;
 
             case SubqueryFn.Sum or SubqueryFn.Average or SubqueryFn.Min or SubqueryFn.Max:
-            {
-                var name = subquery.Function.ToString();
-                if (subquery.Predicate is not null)
+                if (subquery.Selector is null)
                 {
-                    collection = $"{collection}.Where({inner.Parameter} => {RenderNode(subquery.Predicate, inner)})";
+                    throw Refuse(RenderRefusal.UnsupportedShape);
                 }
 
-                return subquery.Selector switch
+                if (subquery.Predicate is { } predicate)
                 {
-                    ElementNode => $"{collection}.{name}()",
-                    null => throw Refuse(RenderRefusal.UnsupportedShape),
-                    _ => $"{collection}.{name}({inner.Parameter} => {RenderNode(subquery.Selector, inner)})"
-                };
-            }
+                    Fold("Where", predicate);
+                }
+
+                Fold(subquery.Function.ToString(), subquery.Selector is ElementNode ? null : subquery.Selector);
+                return;
 
             default:
                 throw Refuse(RenderRefusal.UnsupportedShape);
         }
+
+        void Fold(string name, Node? body)
+        {
+            builder.Append('.').Append(name).Append('(');
+            if (body is not null)
+            {
+                builder.Append(inner.Parameter).Append(" => ");
+                RenderNode(body, inner);
+            }
+
+            builder.Append(')');
+        }
     }
 
-    string RenderInSource(InSourceNode inSource, Scope scope)
+    void RenderInSource(InSourceNode inSource, Scope scope)
     {
         var sourceModel = SensitiveModel.ModelFor(inSource.Root);
         var inner = new Scope(scope.NestedParameter, sourceModel, Grouped: false, Depth: scope.Depth + 1);
-        var builder = new StringBuilder("Query.").Append(inSource.Root);
+
+        builder.Append("Query.").Append(inSource.Root);
         if (inSource.Predicate is { } predicate)
         {
-            builder.Append($".Where({inner.Parameter} => {RenderNode(predicate, inner)})");
+            SideLambda("Where", predicate, inner);
         }
 
-        builder.Append($".Select({inner.Parameter} => {RenderNode(inSource.Selector, inner)})");
-        builder.Append($".Contains({RenderNode(inSource.Value, scope)})");
-        return builder.ToString();
+        SideLambda("Select", inSource.Selector, inner);
+        builder.Append(".Contains(");
+        RenderNode(inSource.Value, scope);
+        builder.Append(')');
     }
 
     /// <summary>
@@ -338,7 +370,7 @@ partial class QueryRenderer
     /// <c>Count(x =&gt; P)</c> abbreviating the filtered count, and <c>string.Join</c> as the text
     /// fold.
     /// </summary>
-    string RenderAggregate(AggregateNode aggregate, string group, Type? elementModel, int depth)
+    void RenderAggregate(AggregateNode aggregate, string group, Type? elementModel, int depth)
     {
         var inner = new Scope(depth == 0 ? "x" : "y", elementModel, Grouped: false, Depth: depth + 1);
 
@@ -351,41 +383,50 @@ partial class QueryRenderer
                 throw Refuse(RenderRefusal.UnsupportedShape);
             }
 
-            var selected = RenderNode(aggregate.Selector, inner);
-            return $"string.Join({CSharpLiteral.String(aggregate.Separator ?? "")}, {group}.Select({inner.Parameter} => {selected}))";
+            builder
+                .Append("string.Join(")
+                .Append(CSharpLiteral.String(aggregate.Separator ?? ""))
+                .Append(", ")
+                .Append(group);
+            SideLambda("Select", aggregate.Selector, inner);
+            builder.Append(')');
+            return;
         }
 
-        var source = group;
+        builder.Append(group);
         if (aggregate.Predicate is { } predicate)
         {
             // A bare filtered count folds the predicate into Count itself, which is the exact
             // abbreviation the forward pass records the same way.
-            if (aggregate is {Function: AggregateFn.Count, Distinct: false, Selector: null})
+            var abbreviated = aggregate is {Function: AggregateFn.Count, Distinct: false, Selector: null};
+            SideLambda(abbreviated ? "Count" : "Where", predicate, inner);
+            if (abbreviated)
             {
-                return $"{group}.Count({inner.Parameter} => {RenderNode(predicate, inner)})";
+                return;
             }
-
-            source = $"{source}.Where({inner.Parameter} => {RenderNode(predicate, inner)})";
         }
 
         if (aggregate.Function == AggregateFn.Count)
         {
-            if (aggregate.Distinct)
+            if (!aggregate.Distinct)
             {
-                if (aggregate.Selector is null or ElementNode)
+                if (aggregate.Selector is not null)
                 {
                     throw Refuse(RenderRefusal.UnsupportedShape);
                 }
 
-                return $"{source}.Select({inner.Parameter} => {RenderNode(aggregate.Selector, inner)}).Distinct().Count()";
+                builder.Append(".Count()");
+                return;
             }
 
-            if (aggregate.Selector is not null)
+            if (aggregate.Selector is null or ElementNode)
             {
                 throw Refuse(RenderRefusal.UnsupportedShape);
             }
 
-            return $"{source}.Count()";
+            SideLambda("Select", aggregate.Selector, inner);
+            builder.Append(".Distinct().Count()");
+            return;
         }
 
         if (aggregate.Function is not (AggregateFn.Sum or AggregateFn.Average or AggregateFn.Min or AggregateFn.Max) ||
@@ -395,12 +436,13 @@ partial class QueryRenderer
         }
 
         var fold = aggregate.Function.ToString();
-        var selector = RenderNode(aggregate.Selector, inner);
         if (aggregate.Distinct)
         {
-            return $"{source}.Select({inner.Parameter} => {selector}).Distinct().{fold}()";
+            SideLambda("Select", aggregate.Selector, inner);
+            builder.Append(".Distinct().").Append(fold).Append("()");
+            return;
         }
 
-        return $"{source}.{fold}({inner.Parameter} => {selector})";
+        SideLambda(fold, aggregate.Selector, inner);
     }
 }

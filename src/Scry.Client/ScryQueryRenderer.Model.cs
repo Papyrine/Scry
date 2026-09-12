@@ -26,6 +26,12 @@ partial class QueryRenderer(Type? rootModel)
     IReadOnlyList<Node>? groupKeys;
     List<string>? groupKeyNames;
 
+    // The one buffer a render appends into. Every composing method writes its fragment here rather
+    // than returning it, so a nested expression is written once instead of being copied again into
+    // each enclosing fragment on the way back out. Only the leaves — a constant, a type name — still
+    // return text, having nothing beneath them to compose.
+    StringBuilder builder = new();
+
     public string Render(QueryRequest request)
     {
         currentModel = rootModel;
@@ -54,28 +60,47 @@ partial class QueryRenderer(Type? rootModel)
             body.RemoveAt(body.Count - 1);
         }
 
-        var builder = new StringBuilder();
         builder.Append("Query.").Append(request.Root);
         foreach (var op in body)
         {
-            builder.Append('\n').Append(RenderOp(op));
+            builder.Append('\n');
+            RenderOp(op);
         }
 
         builder.Append('\n').Append(terminalText);
         return builder.ToString();
     }
 
+    // A switch expression over the closed QueryOp hierarchy rather than an `is` pattern, so a new
+    // operator breaks this build instead of being silently taken for a body one — the break that
+    // sends its author to RenderOp, whose switch statement gets no such check and can only refuse an
+    // unspelled operator at runtime.
     static bool IsTerminal(QueryOp op) =>
-        op is
+        op switch
+        {
             CountOp or
-            LongCountOp or
-            AnyOp or
-            AllOp or
-            FirstOp or
-            SingleOp or
-            LastOp or
-            AggregateOp or
-            PageOp;
+                LongCountOp or
+                AnyOp or
+                AllOp or
+                FirstOp or
+                SingleOp or
+                LastOp or
+                AggregateOp or
+                PageOp => true,
+            WhereOp or
+                OrderByOp or
+                ThenByOp or
+                SkipOp or
+                TakeOp or
+                SelectOp or
+                SelectManyOp or
+                OfTypeOp or
+                GroupByOp or
+                DistinctOp or
+                ReverseOp or
+                JoinOp or
+                SetOp => false
+        };
 
     // Only terminals the explorer folds back into the identical wire op are spelled. A
     // predicate-carrying terminal has no such spelling: `.Where(p).FirstAsync()` produces different

@@ -16,15 +16,17 @@ public partial class MainWindow
 
     // The shape the window wants, declared here rather than anywhere the server knows about. The
     // response comes back keyed by these names.
+    // ReSharper disable NotAccessedPositionalProperty.Local
     // begin-snippet: wpfProjectionType
     record EmployeeRow(string Name, Status Status, string? Manager, string Department);
     // end-snippet
+    // ReSharper restore NotAccessedPositionalProperty.Local
 
     // Ordinary LINQ, captured rather than executed: it is translated to the wire AST, validated
     // against the allow-list on the server, rebound to the real Employee, and run through EF Core.
     // begin-snippet: wpfQuery
-    async Task<List<EmployeeRow>> ActiveEmployees() =>
-        await query
+    Task<List<EmployeeRow>> ActiveEmployees() =>
+        query
             .Employee
             .Where(_ => _.Active)
             .OrderBy(_ => _.Name)

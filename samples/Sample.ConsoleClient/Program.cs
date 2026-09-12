@@ -24,8 +24,8 @@ class Program
         }
         catch (HttpRequestException exception)
         {
-            Console.Error.WriteLine($"Cannot reach {serverAddress}: {exception.Message}");
-            Console.Error.WriteLine("Start the server with: dotnet run --project samples/Sample.WebServer");
+            await Console.Error.WriteLineAsync($"Cannot reach {serverAddress}: {exception.Message}");
+            await Console.Error.WriteLineAsync("Start the server with: dotnet run --project samples/Sample.WebServer");
             return 1;
         }
     }

@@ -1,11 +1,8 @@
-using System.Net.Http;
-
 namespace Sample.WinFormsClient;
 
 sealed class MainForm : Form
 {
     readonly ScryQuery query;
-    readonly DataGridView grid;
     readonly BindingSource binding = new();
     readonly Button refresh;
     readonly Label status;
@@ -35,7 +32,7 @@ sealed class MainForm : Form
             AutoSize = false
         };
 
-        grid = new()
+        DataGridView grid1 = new()
         {
             Left = 12,
             Top = 48,
@@ -50,14 +47,16 @@ sealed class MainForm : Form
 
         Controls.Add(refresh);
         Controls.Add(status);
-        Controls.Add(grid);
+        Controls.Add(grid1);
 
         Shown += async (_, _) => await LoadEmployees();
     }
 
     // The shape the form wants, declared here rather than anywhere the server knows about. The
     // response comes back keyed by these names.
+    // ReSharper disable NotAccessedPositionalProperty.Local
     record EmployeeRow(string Name, Status Status, string? Manager, string Department);
+    // ReSharper restore NotAccessedPositionalProperty.Local
 
     // The same LINQ the WPF and console samples write. It is captured rather than executed, then
     // translated to the wire AST, validated against the allow-list on the server, and run there.
