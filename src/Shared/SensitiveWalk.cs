@@ -1,4 +1,4 @@
-// ReSharper disable TailRecursiveCall
+﻿// ReSharper disable TailRecursiveCall
 /// <summary>
 /// What a finished request does with the members its model marks <c>[Sensitive]</c>: whether it
 /// compares one against a constant, and whether it returns one.
@@ -322,6 +322,21 @@ static class SensitiveWalk
                     return;
                 case ElementNode:
                     return;
+                // Unreachable: Node is a closed hierarchy and every case above is covered. It is here
+                // for two reasons. A node kind this walk does not know cannot be reasoned about, so it
+                // is treated as both sensitive and constant — the query travels as a body and its
+                // answer is not stored; failing closed here is what lets the vocabulary grow without
+                // this quietly going blind. And an exhaustive switch over a closed type that ends a
+                // void method miscompiles under Release in the pinned SDK: the JIT rejects the method
+                // with an InvalidProgramException. A default arm restores a valid exit path. Both the
+                // pragma and this arm can go once that is fixed upstream.
+#pragma warning disable CS0162
+                default:
+                    found.Sensitive = true;
+                    found.Constant = true;
+                    InProjection = true;
+                    return;
+#pragma warning restore CS0162
             }
         }
 
