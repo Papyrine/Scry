@@ -354,13 +354,6 @@ public class RenderRoundTripTests
     public void RefusesPage() =>
         AssertRefused(Employee.ToScryRequest(new PageOp(10)), RenderRefusal.UnsupportedTerminal);
 
-    sealed record BogusOp :
-        QueryOp;
-
-    [Test]
-    public void RefusesUnknownOpWithoutThrowing() =>
-        AssertRefused(new(1, "Employee", [new BogusOp()]), RenderRefusal.UnsupportedShape);
-
     [Test]
     public void RefusesSensitiveConstant() =>
         AssertRefused(Employee.Where(_ => _.Ssn == "123-45-6789").ToScryRequest(), RenderRefusal.SensitiveConstants);

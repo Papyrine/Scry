@@ -59,7 +59,8 @@ public static class WireFormat
                 FirstOp first => Richer(first.Predicate),
                 SingleOp single => Richer(single.Predicate),
                 LastOp last => Richer(last.Predicate),
-                _ => false
+                // Carry nothing a version 2 server reads differently.
+                SkipOp or TakeOp or SelectManyOp or OfTypeOp or DistinctOp or ReverseOp or PageOp => false
             };
 
             if (richer)
