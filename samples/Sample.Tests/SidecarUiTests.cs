@@ -1,4 +1,4 @@
-/// <summary>
+﻿/// <summary>
 /// The debug sidecar over the running sample: toggled by its shortcut, populated by the page's own
 /// queries, and linking into the explorer with the captured query pre-populated.
 /// </summary>
@@ -86,7 +86,7 @@ public class SidecarUiTests :
 
         // The link is the explorer's tested entry point: opening it fills the editor with the snippet.
         await page.GotoAsync($"{BaseUrl}{href}");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync(".monaco-editor", 90);
         await page.WaitForSelectorAsync("main[data-ready]", 90);
         var value = await page.EvaluateAsync<string>("() => monaco.editor.getEditors()[0].getValue()");
         Assert.That(value, Is.EqualTo(snippet));

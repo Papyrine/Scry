@@ -548,7 +548,8 @@ public static class ScryQueryableExtensions
                 $"An attachment cannot be carried through {refused.GetType().Name.Replace("Op", "")}. The result's rows no longer correspond to single rows of the source the attachment is fetched from.");
         }
 
-        if (model.Keys.Length == 0)
+        var keys = model.Keys;
+        if (keys.Length == 0)
         {
             throw new NotSupportedException(
                 $"'{typeof(T).Name}' declares attachments but no keys on its [ScryModel]. An attachment is fetched by its row's key, so the key members have to be named there.");
@@ -561,7 +562,7 @@ public static class ScryQueryableExtensions
                     [attachment],
                     model.Source,
                     attachment,
-                    [..model.Keys.Select(IReadOnlyList<string> (key) => [key])]))
+                    [..keys.Select(IReadOnlyList<string> (key) => [key])]))
         ]);
     }
 

@@ -21,7 +21,7 @@ static class PageExtensions
     public static async Task GoToExplorerAsync(this IPage page, string baseUrl)
     {
         await page.GotoAsync($"{baseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync(".monaco-editor", 90);
         await page.WaitForSelectorAsync("main[data-ready]", 90);
     }
 

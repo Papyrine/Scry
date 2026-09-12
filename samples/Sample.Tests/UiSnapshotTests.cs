@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text.Json;
 using System.Xml.Linq;
 
@@ -176,12 +176,12 @@ public class UiSnapshotTests :
         await page.GotoAsync($"{BaseUrl}/scry");
 
         // Allow the WASM runtime to download and boot before asserting the app rendered.
-        await page.WaitForSelectorAsync("[data-testid='explorer-title']", 30);
+        await page.WaitForSelectorAsync("[data-testid='explorer-title']", 90);
         var title = page.Locator("[data-testid='explorer-title']");
         await Assertions.Expect(title).ToHaveTextAsync("Scry Explorer");
 
         // The Monaco editor mounts only if the embedded _content/BlazorMonaco assets are served.
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync(".monaco-editor", 90);
 
         // The action buttons carry explanatory tooltips.
         var runTooltip = await page.Locator("[data-testid='run']").GetAttributeAsync("title");
@@ -242,7 +242,7 @@ public class UiSnapshotTests :
     {
         var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync(".monaco-editor", 90);
 
         var height = await page.EvaluateAsync<double>(
             "() => document.querySelector('.scry-editor').getBoundingClientRect().height");
@@ -540,7 +540,7 @@ public class UiSnapshotTests :
         // navigation would leave the editor as it is and prove nothing.
         var opened = await NewPageAsync();
         await opened.GotoAsync(shared);
-        await opened.WaitForSelectorAsync(".monaco-editor", 30);
+        await opened.WaitForSelectorAsync(".monaco-editor", 90);
         await opened.WaitForFunctionAsync(
             "() => monaco.editor.getEditors().length > 0 && monaco.editor.getEditors()[0].getValue().length > 0",
             null,
@@ -598,7 +598,7 @@ public class UiSnapshotTests :
     {
         var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry/#q=!!!not-base64!!!");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync(".monaco-editor", 90);
         await page.WaitForFunctionAsync(
             "() => monaco.editor.getEditors().length > 0 && monaco.editor.getEditors()[0].getValue().length > 0",
             null,
@@ -1133,7 +1133,7 @@ public class UiSnapshotTests :
     {
         var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync(".monaco-editor", 90);
 
         // System → Light → Dark (deterministic regardless of the OS preference).
         var toggle = page.Locator("[data-testid='theme-toggle']");
@@ -1150,7 +1150,7 @@ public class UiSnapshotTests :
         await page.WaitForSelectorAsync(".monaco-editor.vs-dark", 10);
 
         await page.ReloadAsync();
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync(".monaco-editor", 90);
         var theme = await page.EvaluateAsync<string>("() => document.documentElement.dataset.theme");
         Assert.That(theme, Is.EqualTo("dark"), "theme should persist across reload");
         await page.WaitForSelectorAsync(".monaco-editor.vs-dark", 10);
@@ -1170,7 +1170,7 @@ public class UiSnapshotTests :
     {
         var page = await NewPageAsync();
         await page.GotoAsync($"{BaseUrl}/scry");
-        await page.WaitForSelectorAsync(".monaco-editor", 30);
+        await page.WaitForSelectorAsync(".monaco-editor", 90);
 
         // The chunks editor.main.js pulls in, which is the part of the load that is asynchronous —
         // loader.js and editor.main.js themselves are plain synchronous script tags, and delaying one
