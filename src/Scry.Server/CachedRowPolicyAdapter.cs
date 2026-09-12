@@ -20,8 +20,8 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
     where TVersion : struct
 {
     // Compiled once. Read per undecided row, which on a cold scope is every row there is.
-    readonly Func<TEntity, TKey> readKey = key.Compile();
-    readonly Func<TEntity, TVersion> readVersion = version.Compile();
+    Func<TEntity, TKey> readKey = key.Compile();
+    Func<TEntity, TVersion> readVersion = version.Compile();
 
     /// <summary>
     /// Reached where a policy is applied without the call's own state — the startup probe, which builds

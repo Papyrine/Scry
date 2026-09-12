@@ -12,7 +12,7 @@
 static class DistinctRow
 {
     /// <summary>The row types by arity. Beyond this a deduplicated projection can only be enumerated.</summary>
-    public static readonly Type[] ByArity =
+    public static Type[] ByArity =
     [
         typeof(DistinctRow<>).GetGenericTypeDefinition(),
         typeof(DistinctRow<,>).GetGenericTypeDefinition(),
@@ -33,7 +33,7 @@ static class DistinctRow
     public static (ConstructorInfo Constructor, PropertyInfo[] Values) Describe(Type row) =>
         described.GetOrAdd(row, Reflect);
 
-    static readonly ConcurrentDictionary<Type, (ConstructorInfo Constructor, PropertyInfo[] Values)> described = new();
+    static ConcurrentDictionary<Type, (ConstructorInfo Constructor, PropertyInfo[] Values)> described = new();
 
     static (ConstructorInfo Constructor, PropertyInfo[] Values) Reflect(Type row)
     {

@@ -29,7 +29,7 @@ static class Parameterization
             holder.Field);
     }
 
-    static readonly ConcurrentDictionary<Type, (Func<object, object> Create, FieldInfo Field)> holders = new();
+    static ConcurrentDictionary<Type, (Func<object, object> Create, FieldInfo Field)> holders = new();
 
     // The holder's constructor, compiled once per type. A value is bound per node per request, and
     // invoking the constructor through reflection would box and check its argument on every one.

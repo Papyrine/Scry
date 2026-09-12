@@ -12,9 +12,9 @@
 /// </remarks>
 sealed class DeniedRowProbe
 {
-    readonly IQueryable query;
-    readonly Expression? exists;
-    readonly IQueryable? full;
+    IQueryable query;
+    Expression? exists;
+    IQueryable? full;
 
     DeniedRowProbe(IQueryable query, Expression? exists, IQueryable? full)
     {
@@ -130,8 +130,8 @@ sealed class DeniedRowProbe
 
     // Resolved by parameter count rather than through the executor's shared helper, which caches one
     // overload per method name and already holds the predicate-less Any and Count.
-    static readonly MethodInfo anyWithPredicate = Overload(nameof(Queryable.Any), 2);
-    static readonly MethodInfo count = Overload(nameof(Queryable.Count), 1);
+    static MethodInfo anyWithPredicate = Overload(nameof(Queryable.Any), 2);
+    static MethodInfo count = Overload(nameof(Queryable.Count), 1);
 
     static MethodInfo Overload(string name, int parameters) =>
         typeof(Queryable).GetMethods()

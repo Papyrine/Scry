@@ -12,12 +12,12 @@ namespace Scry;
 public sealed class MemoryCachedPolicyStore :
     ICachedPolicyStore
 {
-    readonly ConcurrentDictionary<(string Policy, string Scope), CachedPolicyScope> scopes = new();
+    ConcurrentDictionary<(string Policy, string Scope), CachedPolicyScope> scopes = new();
 
     // The generation each scope was last forgotten at. A forgotten scope is kept as an empty one
     // rather than removed, so its generation keeps moving; this remembers where the forgetting
     // happened, which is what tells a round decided before it from one decided after.
-    readonly ConcurrentDictionary<(string Policy, string Scope), long> cleared = new();
+    ConcurrentDictionary<(string Policy, string Scope), long> cleared = new();
 
     public CachedPolicyScope? Get(string policy, string scope) =>
         scopes.GetValueOrDefault((policy, scope));

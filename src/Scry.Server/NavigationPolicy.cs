@@ -33,11 +33,11 @@ sealed class NavigationPolicy(
     // One answer per traversal, however many times a query reads through it: the question is about the
     // relationship, and a request naming the same member in a filter, an ordering and a projection
     // would otherwise ask the database the same thing three times.
-    readonly HashSet<(Type Owner, string Member)> probed = [];
+    HashSet<(Type Owner, string Member)> probed = [];
 
     // The policy-filtered target, resolved once per source a query traverses into: the chain is the
     // same at every site that reads through it, and resolving is running that chain.
-    readonly Dictionary<Type, IQueryable> filtered = [];
+    Dictionary<Type, IQueryable> filtered = [];
 
     /// <summary>Whether stepping into <paramref name="target"/> means stepping into a policied source.</summary>
     public bool Applies(Type target) =>
@@ -218,7 +218,7 @@ sealed class NavigationPolicy(
 
     // The predicate overload specifically: the other two-parameter one takes a default value, which
     // would bind a row rather than filter to one.
-    static readonly MethodInfo firstOrDefault = typeof(Queryable)
+    static MethodInfo firstOrDefault = typeof(Queryable)
         .GetMethods()
         .Single(_ => _.Name == nameof(Queryable.FirstOrDefault) &&
                      _.GetParameters() is [_, {ParameterType.IsGenericType: true}] parameters &&
@@ -226,8 +226,8 @@ sealed class NavigationPolicy(
 
     // The row-predicate overloads. Where also has an indexed one, whose predicate takes the row and its
     // position, so the arity of the delegate is what tells the two apart rather than the parameter count.
-    static readonly MethodInfo where = RowPredicate(nameof(Queryable.Where));
-    static readonly MethodInfo countWithPredicate = RowPredicate(nameof(Queryable.Count));
+    static MethodInfo where = RowPredicate(nameof(Queryable.Where));
+    static MethodInfo countWithPredicate = RowPredicate(nameof(Queryable.Count));
 
     static MethodInfo RowPredicate(string name) =>
         typeof(Queryable).GetMethods()

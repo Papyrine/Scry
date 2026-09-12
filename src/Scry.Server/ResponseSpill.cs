@@ -14,7 +14,7 @@
 sealed class ResponseSpill(HttpContext context, int threshold) :
     IDisposable
 {
-    readonly PooledBufferWriter buffer = new();
+    PooledBufferWriter buffer = new();
     bool allowed;
     bool committed;
 

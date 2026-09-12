@@ -22,7 +22,7 @@ static class Execution
 
     // One closed runner per result type, since the provider answers a Task of that type and nothing
     // more general.
-    static readonly ConcurrentDictionary<Type, Func<IAsyncQueryProvider, Expression, Cancel, ValueTask<object?>>> runners = new();
+    static ConcurrentDictionary<Type, Func<IAsyncQueryProvider, Expression, Cancel, ValueTask<object?>>> runners = new();
 
     static Func<IAsyncQueryProvider, Expression, Cancel, ValueTask<object?>> Runner(Type result) =>
         typeof(Execution)

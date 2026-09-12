@@ -28,7 +28,7 @@ static class QueryComposition
         return call;
     }
 
-    static readonly ConcurrentDictionary<string, MethodInfo> queryableMethods = new();
+    static ConcurrentDictionary<string, MethodInfo> queryableMethods = new();
 
     /// <summary>
     /// A call that folds a sequence to one value. A generic fold — Min, Max — closes over the element
@@ -49,7 +49,7 @@ static class QueryComposition
         return call;
     }
 
-    static readonly ConcurrentDictionary<(string Method, Type Element), MethodInfo> folds = new();
+    static ConcurrentDictionary<(string Method, Type Element), MethodInfo> folds = new();
 
     /// <summary>
     /// Asks a query's provider for the query <paramref name="call"/> describes, through the provider's
@@ -65,7 +65,7 @@ static class QueryComposition
         return Cached(creators, element, Creator)(query.Provider, call);
     }
 
-    static readonly ConcurrentDictionary<Type, Func<IQueryProvider, Expression, IQueryable>> creators = new();
+    static ConcurrentDictionary<Type, Func<IQueryProvider, Expression, IQueryable>> creators = new();
 
     // Reached through a static of this class's own rather than bound directly: CreateQuery<T> is a
     // generic interface method, and the runtime refuses an open-instance delegate over one of those.
@@ -74,7 +74,7 @@ static class QueryComposition
     static IQueryable Create<T>(IQueryProvider provider, Expression expression) =>
         provider.CreateQuery<T>(expression);
 
-    static readonly MethodInfo create = typeof(QueryComposition).GetMethod(nameof(Create), BindingFlags.NonPublic | BindingFlags.Static)!;
+    static MethodInfo create = typeof(QueryComposition).GetMethod(nameof(Create), BindingFlags.NonPublic | BindingFlags.Static)!;
 
     static Func<IQueryProvider, Expression, IQueryable> Creator(Type element) =>
         create.MakeGenericMethod(element).CreateDelegate<Func<IQueryProvider, Expression, IQueryable>>();
@@ -111,8 +111,8 @@ static class QueryComposition
     static Type InstantiateType(Closing key) =>
         ((Type) key.Definition).MakeGenericType(key.Arguments);
 
-    static readonly ConcurrentDictionary<Closing, MethodInfo> closedMethods = new();
-    static readonly ConcurrentDictionary<Closing, Type> closedTypes = new();
+    static ConcurrentDictionary<Closing, MethodInfo> closedMethods = new();
+    static ConcurrentDictionary<Closing, Type> closedTypes = new();
 
     // A closing is its definition and up to four arguments, held as fields rather than as an array so
     // the key compares by value and a lookup allocates nothing. The definitions are the fixed set the

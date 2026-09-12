@@ -4,8 +4,8 @@
 /// </summary>
 sealed class CachedDecisions
 {
-    readonly Dictionary<CachedPolicyRegistration, object> answers = [];
-    readonly List<IPendingDecision> pending = [];
+    Dictionary<CachedPolicyRegistration, object> answers = [];
+    List<IPendingDecision> pending = [];
 
     public object? Get(CachedPolicyRegistration registration) =>
         answers.GetValueOrDefault(registration);

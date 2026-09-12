@@ -224,7 +224,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     // stream reads its rows through here once per request, and a reflective invoke would box the
     // cancellation and build an argument array for each. The typed method takes the untyped query and
     // casts inside, since a delegate cannot bind an IQueryable argument to an IQueryable<T> parameter.
-    static readonly ConcurrentDictionary<Type, Func<IQueryable, Cancel, IAsyncEnumerable<object>>> enumerators = new();
+    static ConcurrentDictionary<Type, Func<IQueryable, Cancel, IAsyncEnumerable<object>>> enumerators = new();
 
     static Func<IQueryable, Cancel, IAsyncEnumerable<object>> Enumerator(Type element) =>
         typeof(QueryExecutor)
@@ -1015,7 +1015,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
     // The type a policy filters and the typed call that applies it, keyed by the policy type — not by
     // the source's, which is a different type whenever the policy is inherited. Bounded by the schema.
-    static readonly ConcurrentDictionary<Type, (Type EntityType, IRowPolicyInvoker Invoker)> policyFilters = new();
+    static ConcurrentDictionary<Type, (Type EntityType, IRowPolicyInvoker Invoker)> policyFilters = new();
 
     /// <summary>
     /// Applies every policy the source carries, base-most first, so the rows a client can go on to
@@ -1279,7 +1279,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     sealed class RowComparer :
         IEqualityComparer<object[]>
     {
-        public static readonly RowComparer Instance = new();
+        public static RowComparer Instance = new();
 
         public bool Equals(object[]? x, object[]? y) =>
             x is not null &&
@@ -1463,7 +1463,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         options.CursorKey ?? ephemeralSigningKey;
 
     // Used when no CursorKey is configured: cursors are valid only within this process's lifetime.
-    static readonly byte[] ephemeralSigningKey = RandomNumberGenerator.GetBytes(32);
+    static byte[] ephemeralSigningKey = RandomNumberGenerator.GetBytes(32);
 
     static Terminal Scalar(object? value) =>
         new(ResultKind.Scalar, value, Row: null, Plan: null, Binary: null);

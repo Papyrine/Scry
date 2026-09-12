@@ -129,11 +129,11 @@ static class NavigationPolicyProbe
     static IQueryable SetOf(DbContext db, Type entityType) =>
         (IQueryable)set.MakeGenericMethod(entityType).Invoke(db, [])!;
 
-    static readonly MethodInfo count = typeof(Queryable)
+    static MethodInfo count = typeof(Queryable)
         .GetMethods()
         .Single(_ => _.Name == nameof(Queryable.Count) && _.GetParameters().Length == 1);
 
-    static readonly MethodInfo set = typeof(DbContext)
+    static MethodInfo set = typeof(DbContext)
         .GetMethods()
         .Single(_ => _ is
                      {

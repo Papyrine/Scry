@@ -286,7 +286,7 @@ sealed class ExpressionBuilder(
     static MethodInfo? Method(Type owner, string name, Type? first = null, Type? second = null) =>
         methods.GetOrAdd((owner, name, first, second), Lookup);
 
-    static readonly ConcurrentDictionary<(Type Owner, string Name, Type? First, Type? Second), MethodInfo?> methods = new();
+    static ConcurrentDictionary<(Type Owner, string Name, Type? First, Type? Second), MethodInfo?> methods = new();
 
     static MethodInfo? Lookup((Type Owner, string Name, Type? First, Type? Second) key)
     {
@@ -305,7 +305,7 @@ sealed class ExpressionBuilder(
             (owner, name),
             key => key.Owner.GetMethods().FirstOrDefault(_ => _.Name == key.Name && _.GetParameters().Length == 1));
 
-    static readonly ConcurrentDictionary<(Type Owner, string Name), MethodInfo?> unaryMethods = new();
+    static ConcurrentDictionary<(Type Owner, string Name), MethodInfo?> unaryMethods = new();
 
     // A public property of the owner named so, or null where there is none. Resolved once per
     // pairing, as a method is: the owner is a type the wire decides, and a pairing that has no
@@ -313,7 +313,7 @@ sealed class ExpressionBuilder(
     internal static PropertyInfo? Property(Type owner, string name) =>
         properties.GetOrAdd((owner, name), key => key.Owner.GetProperty(key.Name));
 
-    static readonly ConcurrentDictionary<(Type Owner, string Name), PropertyInfo?> properties = new();
+    static ConcurrentDictionary<(Type Owner, string Name), PropertyInfo?> properties = new();
 
     /// <summary>
     /// Builds a default projection of every allow-listed scalar member of the source. Only reached for
@@ -505,7 +505,7 @@ sealed class ExpressionBuilder(
     public static object[] ReadDistinctRow(object row) =>
         distinctReaders.GetOrAdd(row.GetType(), DistinctReader)(row);
 
-    static readonly ConcurrentDictionary<Type, Func<object, object[]>> distinctReaders = new();
+    static ConcurrentDictionary<Type, Func<object, object[]>> distinctReaders = new();
 
     static Func<object, object[]> DistinctReader(Type type)
     {
@@ -897,7 +897,7 @@ sealed class ExpressionBuilder(
 
     // Resolved by name rather than referenced: a collation is a relational concept, and Scry.Server
     // itself depends only on EF Core proper, so a non-relational model simply cannot offer it.
-    static readonly MethodInfo? collateMethod = Type
+    static MethodInfo? collateMethod = Type
         .GetType("Microsoft.EntityFrameworkCore.RelationalDbFunctionsExtensions, Microsoft.EntityFrameworkCore.Relational")
         ?.GetMethod("Collate");
 
@@ -966,7 +966,7 @@ sealed class ExpressionBuilder(
             value);
     }
 
-    static readonly MethodInfo queryableContains = typeof(Queryable).GetMethods()
+    static MethodInfo queryableContains = typeof(Queryable).GetMethods()
         .Single(_ =>
             _ is { Name: "Contains", IsGenericMethodDefinition: true } &&
             _.GetParameters().Length == 2);
@@ -1468,10 +1468,10 @@ sealed class ExpressionBuilder(
 
     // Resolved by name rather than referenced: Scry.Server depends on EF Core alone, not on any one
     // provider's package. Null when the SQL Server provider is not part of the application at all.
-    static readonly Type? sqlServerFunctions = Type.GetType(
+    static Type? sqlServerFunctions = Type.GetType(
         "Microsoft.EntityFrameworkCore.SqlServerDbFunctionsExtensions, Microsoft.EntityFrameworkCore.SqlServer");
 
-    static readonly ConcurrentDictionary<Type, MethodInfo?> dateDiffDays = new();
+    static ConcurrentDictionary<Type, MethodInfo?> dateDiffDays = new();
 
     static MethodInfo? DateDiffDay(Type type) =>
         dateDiffDays.GetOrAdd(
@@ -1536,13 +1536,13 @@ sealed class ExpressionBuilder(
     internal static PropertyInfo NullableValue(Type nullable) =>
         nullableValues.GetOrAdd(nullable, _ => _.GetProperty(nameof(Nullable<>.Value))!);
 
-    static readonly ConcurrentDictionary<Type, PropertyInfo> nullableValues = new();
+    static ConcurrentDictionary<Type, PropertyInfo> nullableValues = new();
 
     // The Key of a closed IGrouping<TKey, TElement>, found once per closing for the same reason.
     internal static PropertyInfo GroupingKey(Type grouping) =>
         groupingKeys.GetOrAdd(grouping, _ => _.GetProperty(nameof(IGrouping<,>.Key))!);
 
-    static readonly ConcurrentDictionary<Type, PropertyInfo> groupingKeys = new();
+    static ConcurrentDictionary<Type, PropertyInfo> groupingKeys = new();
 
     /// <summary>
     /// Builds the sign of a value as -1, 0, or 1, from comparisons rather than from SQL's own
@@ -1741,8 +1741,8 @@ sealed class ExpressionBuilder(
         return Expression.Call(method, ConvertTo(value, typeof(double)));
     }
 
-    static readonly MethodInfo degreesToRadians = typeof(double).GetMethod("DegreesToRadians", [typeof(double)])!;
-    static readonly MethodInfo radiansToDegrees = typeof(double).GetMethod("RadiansToDegrees", [typeof(double)])!;
+    static MethodInfo degreesToRadians = typeof(double).GetMethod("DegreesToRadians", [typeof(double)])!;
+    static MethodInfo radiansToDegrees = typeof(double).GetMethod("RadiansToDegrees", [typeof(double)])!;
 
     // A Math method defined over double alone: the target is widened to reach it.
     static Expression Double1(string name, Expression target) =>
@@ -1892,9 +1892,15 @@ sealed class ExpressionBuilder(
         return typeof(int);
     }
 
-    static readonly Type[] numericWidths =
+    static Type[] numericWidths =
     [
-        typeof(decimal), typeof(double), typeof(float), typeof(ulong), typeof(long), typeof(uint), typeof(int)
+        typeof(decimal),
+        typeof(double),
+        typeof(float),
+        typeof(ulong),
+        typeof(long),
+        typeof(uint),
+        typeof(int)
     ];
 
     static bool IsNumeric(Type type) =>
@@ -1974,7 +1980,7 @@ sealed class ExpressionBuilder(
 
     // The scalar shapes a relational provider can render as text. Deliberately a list rather than
     // "anything with a ToString": every CLR type has one, and almost none of them mean anything in SQL.
-    static readonly HashSet<Type> convertibleToText =
+    static HashSet<Type> convertibleToText =
     [
         typeof(bool),
         typeof(char),
@@ -2206,11 +2212,12 @@ sealed class ExpressionBuilder(
                 _.GetParameters().Length == 1)
             .MakeGenericMethod(key.Value);
 
-    static readonly ConcurrentDictionary<(string, Type), MethodInfo> bareFolds = new();
-    static readonly ConcurrentDictionary<(string, Type), MethodInfo> bareMinMax = new();
+    static ConcurrentDictionary<(string, Type), MethodInfo> bareFolds = new();
+    static ConcurrentDictionary<(string, Type), MethodInfo> bareMinMax = new();
 
-    static readonly MethodInfo enumerableDistinct = typeof(Enumerable).GetMethods()
-        .Single(_ => _.Name == "Distinct" && _.GetParameters().Length == 1);
+    static MethodInfo enumerableDistinct = typeof(Enumerable).GetMethods()
+        .Single(_ => _.Name == "Distinct" &&
+                     _.GetParameters().Length == 1);
 
     static MethodInfo SumOrAverage(string name, Type element, Type selectorReturnType) =>
         aggregateMethods.GetOrAdd(
@@ -2353,64 +2360,64 @@ sealed class ExpressionBuilder(
     // metadata on every query is wasted work. Resolve them once. One ExpressionBuilder is shared across
     // all concurrent requests (it hangs off the singleton ScryProcessor), so these caches are static
     // and thread-safe.
-    static readonly MethodInfo stringContains = StringMethod("Contains", typeof(string));
-    static readonly MethodInfo stringStartsWith = StringMethod("StartsWith", typeof(string));
-    static readonly MethodInfo stringEndsWith = StringMethod("EndsWith", typeof(string));
-    static readonly MethodInfo stringToLower = StringMethod("ToLower");
-    static readonly MethodInfo stringToUpper = StringMethod("ToUpper");
-    static readonly MethodInfo stringIsNullOrEmpty = StringMethod("IsNullOrEmpty", typeof(string));
-    static readonly MethodInfo stringIsNullOrWhiteSpace = StringMethod("IsNullOrWhiteSpace", typeof(string));
-    static readonly MethodInfo stringTrim = StringMethod("Trim");
-    static readonly MethodInfo stringTrimStart = StringMethod("TrimStart");
-    static readonly MethodInfo stringTrimEnd = StringMethod("TrimEnd");
-    static readonly MethodInfo stringSubstring = StringMethod("Substring", typeof(int));
-    static readonly MethodInfo stringSubstringWithLength = StringMethod("Substring", typeof(int), typeof(int));
-    static readonly MethodInfo stringIndexOf = StringMethod("IndexOf", typeof(string));
-    static readonly MethodInfo stringReplace = StringMethod("Replace", typeof(string), typeof(string));
-    static readonly MethodInfo stringConcat = StringMethod("Concat", typeof(string), typeof(string));
-    static readonly MethodInfo stringConcatObjects = StringMethod("Concat", typeof(object), typeof(object));
+    static MethodInfo stringContains = StringMethod("Contains", typeof(string));
+    static MethodInfo stringStartsWith = StringMethod("StartsWith", typeof(string));
+    static MethodInfo stringEndsWith = StringMethod("EndsWith", typeof(string));
+    static MethodInfo stringToLower = StringMethod("ToLower");
+    static MethodInfo stringToUpper = StringMethod("ToUpper");
+    static MethodInfo stringIsNullOrEmpty = StringMethod("IsNullOrEmpty", typeof(string));
+    static MethodInfo stringIsNullOrWhiteSpace = StringMethod("IsNullOrWhiteSpace", typeof(string));
+    static MethodInfo stringTrim = StringMethod("Trim");
+    static MethodInfo stringTrimStart = StringMethod("TrimStart");
+    static MethodInfo stringTrimEnd = StringMethod("TrimEnd");
+    static MethodInfo stringSubstring = StringMethod("Substring", typeof(int));
+    static MethodInfo stringSubstringWithLength = StringMethod("Substring", typeof(int), typeof(int));
+    static MethodInfo stringIndexOf = StringMethod("IndexOf", typeof(string));
+    static MethodInfo stringReplace = StringMethod("Replace", typeof(string), typeof(string));
+    static MethodInfo stringConcat = StringMethod("Concat", typeof(string), typeof(string));
+    static MethodInfo stringConcatObjects = StringMethod("Concat", typeof(object), typeof(object));
 
-    static readonly PropertyInfo stringLength = typeof(string).GetProperty(nameof(string.Length))!;
+    static PropertyInfo stringLength = typeof(string).GetProperty(nameof(string.Length))!;
 
-    static readonly MethodInfo enumHasFlag = typeof(Enum).GetMethod("HasFlag")!;
+    static MethodInfo enumHasFlag = typeof(Enum).GetMethod("HasFlag")!;
 
     // The first and last character of a string, and the questions about a binary member's bytes. Each
     // is an Enumerable static closed over the element the provider recognizes — char for text, byte
     // for binary — which is the shape the SQL Server translator matches on.
-    static readonly MethodInfo stringFirstOrDefault = EnumerableMethod("FirstOrDefault", 1).MakeGenericMethod(typeof(char));
-    static readonly MethodInfo stringLastOrDefault = EnumerableMethod("LastOrDefault", 1).MakeGenericMethod(typeof(char));
-    static readonly MethodInfo bytesContains = EnumerableMethod("Contains", 2).MakeGenericMethod(typeof(byte));
+    static MethodInfo stringFirstOrDefault = EnumerableMethod("FirstOrDefault", 1).MakeGenericMethod(typeof(char));
+    static MethodInfo stringLastOrDefault = EnumerableMethod("LastOrDefault", 1).MakeGenericMethod(typeof(char));
+    static MethodInfo bytesContains = EnumerableMethod("Contains", 2).MakeGenericMethod(typeof(byte));
     // ElementAt carries an Index overload alongside its int one, so it is resolved by the argument
     // type rather than by parameter count: the provider translates the int spelling and knows nothing
     // of the other.
-    static readonly MethodInfo bytesElementAt = typeof(Enumerable)
+    static MethodInfo bytesElementAt = typeof(Enumerable)
         .GetMethods(BindingFlags.Public | BindingFlags.Static)
         .Single(_ => _.Name == "ElementAt" && _.GetParameters()[^1].ParameterType == typeof(int))
         .MakeGenericMethod(typeof(byte));
 
-    static readonly MethodInfo enumerableSelect = typeof(Enumerable).GetMethods()
+    static MethodInfo enumerableSelect = typeof(Enumerable).GetMethods()
         .Single(_ => _.Name == "Select" && _.GetParameters()[1].ParameterType.GetGenericArguments().Length == 2);
 
-    static readonly MethodInfo enumerableOrderBy = typeof(Enumerable).GetMethods()
+    static MethodInfo enumerableOrderBy = typeof(Enumerable).GetMethods()
         .Single(_ => _.Name == "OrderBy" && _.GetParameters().Length == 2);
 
-    static readonly MethodInfo stringJoinValues = typeof(string).GetMethod("Join", [typeof(string), typeof(IEnumerable<string>)])!;
+    static MethodInfo stringJoinValues = typeof(string).GetMethod("Join", [typeof(string), typeof(IEnumerable<string>)])!;
 
-    static readonly MethodInfo convertToInt32 = typeof(Convert).GetMethod("ToInt32", [typeof(string)])!;
-    static readonly MethodInfo convertToInt64 = typeof(Convert).GetMethod("ToInt64", [typeof(string)])!;
-    static readonly MethodInfo convertToDecimal = typeof(Convert).GetMethod("ToDecimal", [typeof(string)])!;
-    static readonly MethodInfo convertToDouble = typeof(Convert).GetMethod("ToDouble", [typeof(string)])!;
-    static readonly MethodInfo convertToBoolean = typeof(Convert).GetMethod("ToBoolean", [typeof(string)])!;
-    static readonly MethodInfo convertToByte = typeof(Convert).GetMethod("ToByte", [typeof(string)])!;
-    static readonly MethodInfo convertToInt16 = typeof(Convert).GetMethod("ToInt16", [typeof(string)])!;
+    static MethodInfo convertToInt32 = typeof(Convert).GetMethod("ToInt32", [typeof(string)])!;
+    static MethodInfo convertToInt64 = typeof(Convert).GetMethod("ToInt64", [typeof(string)])!;
+    static MethodInfo convertToDecimal = typeof(Convert).GetMethod("ToDecimal", [typeof(string)])!;
+    static MethodInfo convertToDouble = typeof(Convert).GetMethod("ToDouble", [typeof(string)])!;
+    static MethodInfo convertToBoolean = typeof(Convert).GetMethod("ToBoolean", [typeof(string)])!;
+    static MethodInfo convertToByte = typeof(Convert).GetMethod("ToByte", [typeof(string)])!;
+    static MethodInfo convertToInt16 = typeof(Convert).GetMethod("ToInt16", [typeof(string)])!;
 
     // float.Parse rather than Convert.ToSingle: the provider translates Parse for every numeric type
     // but carries no ToSingle conversion.
-    static readonly MethodInfo singleParse = typeof(float).GetMethod("Parse", [typeof(string)])!;
+    static MethodInfo singleParse = typeof(float).GetMethod("Parse", [typeof(string)])!;
 
 
     // The generic Contains<TSource>(source, value) definition, closed per member type by BuildIn.
-    static readonly MethodInfo enumerableContains = typeof(Enumerable).GetMethods()
+    static MethodInfo enumerableContains = typeof(Enumerable).GetMethods()
         .Single(_ =>
             _ is { Name: "Contains", IsGenericMethodDefinition: true } &&
             _.GetParameters().Length == 2);
@@ -2418,12 +2425,12 @@ sealed class ExpressionBuilder(
     // The collection-subquery methods, closed per element type. Enumerable rather than Queryable: a
     // navigation collection is an IEnumerable in the expression tree, which is the shape EF translates
     // into a correlated subquery.
-    static readonly MethodInfo enumerableAny = EnumerableMethod("Any", 1);
-    static readonly MethodInfo enumerableAll = EnumerableMethod("All", 2);
+    static MethodInfo enumerableAny = EnumerableMethod("Any", 1);
+    static MethodInfo enumerableAll = EnumerableMethod("All", 2);
 
     // Where has an indexed overload too; the wanted one takes Func<TSource, bool> — two generic
     // arguments — rather than Func<TSource, int, bool>.
-    static readonly MethodInfo enumerableWhere = typeof(Enumerable).GetMethods()
+    static MethodInfo enumerableWhere = typeof(Enumerable).GetMethods()
         .Single(_ =>
             _ is { Name: "Where", IsGenericMethodDefinition: true } &&
             _.GetParameters().Length == 2 &&
@@ -2441,10 +2448,10 @@ sealed class ExpressionBuilder(
 
     // string.Compare(string, string) — the seek predicate uses it so a string ordering key rebinds to
     // a SQL relational comparison (EF has no translation for the > / < operators on string directly).
-    static readonly MethodInfo stringCompare = StringMethod("Compare", typeof(string), typeof(string));
+    static MethodInfo stringCompare = StringMethod("Compare", typeof(string), typeof(string));
 
     // The generic Count<TSource>(source) definition is type-independent; only MakeGenericMethod varies.
-    static readonly MethodInfo enumerableCount = typeof(Enumerable).GetMethods()
+    static MethodInfo enumerableCount = typeof(Enumerable).GetMethods()
         .Single(_ =>
             _ is { Name: "Count", IsGenericMethodDefinition: true } &&
             _.GetParameters().Length == 1);
