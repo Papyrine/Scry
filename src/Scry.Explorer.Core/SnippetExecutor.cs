@@ -21,12 +21,12 @@ public sealed class SnippetExecutor
     // snippet compiles against, and the assembly it runs against. A run used to re-parse, re-bind,
     // and re-emit the whole model alongside its snippet, and load the result into the default
     // context — never unloadable — so a hundred runs held a hundred copies of the model.
-    readonly Lazy<MetadataReference> model;
+    Lazy<MetadataReference> model;
 
     // Where the model and every snippet compiled against it are loaded. A context of its own so the
     // snippet's reference to the model resolves to the one copy loaded here, and everything else —
     // Scry.Client, Scry.Wire, the BCL — falls through to the default context they are already in.
-    readonly ModelLoadContext context = new();
+    ModelLoadContext context = new();
 
     // Snippets are named apart: a context refuses a second assembly under a name it already holds.
     int runs;

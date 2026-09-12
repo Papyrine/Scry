@@ -13,8 +13,8 @@
 sealed class LetInliner :
     ExpressionVisitor
 {
-    readonly Dictionary<ParameterExpression, Expression> bindings = [];
-    readonly HashSet<ParameterExpression> declared = [];
+    Dictionary<ParameterExpression, Expression> bindings = [];
+    HashSet<ParameterExpression> declared = [];
 
     public static Expression Inline(Expression expression) =>
         new LetInliner().Visit(expression);

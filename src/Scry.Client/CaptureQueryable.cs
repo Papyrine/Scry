@@ -2,7 +2,7 @@
 sealed class CaptureQueryable<T> :
     IOrderedQueryable<T>
 {
-    readonly QueryProvider provider;
+    QueryProvider provider;
 
     public CaptureQueryable(QueryProvider provider) :
         this(provider, null)

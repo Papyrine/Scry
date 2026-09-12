@@ -5,7 +5,7 @@
 /// </summary>
 static class AttachmentShape
 {
-    static readonly ConcurrentDictionary<Type, bool> carries = new();
+    static ConcurrentDictionary<Type, bool> carries = new();
 
     public static bool Carries(Type type) =>
         carries.GetOrAdd(type, _ => Walk(_, depth: 0));

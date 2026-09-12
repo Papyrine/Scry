@@ -181,11 +181,11 @@ public class RenderRoundTripTests
         MetadataReference.CreateFromFile(typeof(QueryRequest).Assembly.Location)
     ];
 
-    static readonly SnippetExecutor executor = SnippetExecutor.Create(introspection, scryReferences);
+    static SnippetExecutor executor = SnippetExecutor.Create(introspection, scryReferences);
 
     // The capture-only client the corpus is built with. The stamp matches the introspection's, so
     // both sides of a round trip stamp their requests identically.
-    static readonly ScryClient client = new((_, _) => Task.FromResult<QueryResponse>(null!))
+    static ScryClient client = new((_, _) => Task.FromResult<QueryResponse>(null!))
     {
         SchemaStamp = "render-round-trip"
     };

@@ -11,7 +11,7 @@ public sealed class RoslynWorkspace :
 {
     // One MEF composition for the process. Composing one loads and scans every feature assembly,
     // and a re-fetched schema wants a new workspace, not a new composition.
-    static readonly Lazy<MefHostServices> host = new(CreateHost);
+    static Lazy<MefHostServices> host = new(CreateHost);
 
     // The user's snippet is spliced between these so it is a legal method body. The usings make
     // LINQ operators (System.Linq), the synthesized models/enums (Scry.Generated), and the Scry

@@ -3,16 +3,16 @@ namespace Scry;
 /// <summary>The open query tabs and which one is active.</summary>
 public sealed class TabStore
 {
-    static readonly JsonSerializerOptions options = new()
+    static JsonSerializerOptions options = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    readonly List<TabState> tabs = [];
+    List<TabState> tabs = [];
 
     // Every tab id this store has held, the closed ones included. What Merge reads out of the store
     // is judged against it: a tab that was here and was closed is not another window's to reopen.
-    readonly HashSet<string> seen = [];
+    HashSet<string> seen = [];
 
     public IReadOnlyList<TabState> Tabs =>
         tabs;

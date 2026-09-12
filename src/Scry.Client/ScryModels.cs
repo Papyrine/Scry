@@ -5,7 +5,7 @@
 /// </summary>
 static class ScryModels
 {
-    static readonly ConcurrentDictionary<Type, ScryModelAttribute?> models = new();
+    static ConcurrentDictionary<Type, ScryModelAttribute?> models = new();
 
     /// <summary>
     /// The attribute, or null for a hand-built model that carries none — which is what keeps every

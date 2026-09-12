@@ -5,7 +5,7 @@
 /// </summary>
 static class AttachmentPolicy
 {
-    static readonly ConcurrentDictionary<Type, (Type Entity, IAttachmentInvoker Invoker)> resolved = new();
+    static ConcurrentDictionary<Type, (Type Entity, IAttachmentInvoker Invoker)> resolved = new();
 
     /// <summary>
     /// The type a policy authorizes — the <c>T</c> of the one <see cref="IAttachmentPolicy{T}"/> it

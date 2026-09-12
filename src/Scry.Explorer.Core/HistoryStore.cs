@@ -33,12 +33,12 @@ public sealed class HistoryStore
     /// </summary>
     public const string LegacyKey = "scry-history";
 
-    static readonly JsonSerializerOptions options = new()
+    static JsonSerializerOptions options = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    readonly List<HistoryItem> items = [];
+    List<HistoryItem> items = [];
 
     /// <summary>Favorites first, then the ordinary entries, both newest-first.</summary>
     public IReadOnlyList<HistoryItem> Items =>

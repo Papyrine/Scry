@@ -195,7 +195,7 @@ static partial class ClosureReader
         return IsComputable(left) && operators.Contains(binary.NodeType);
     }
 
-    static readonly HashSet<ExpressionType> operators =
+    static HashSet<ExpressionType> operators =
     [
         ExpressionType.Add, ExpressionType.Subtract, ExpressionType.Multiply,
         ExpressionType.Divide, ExpressionType.Modulo,

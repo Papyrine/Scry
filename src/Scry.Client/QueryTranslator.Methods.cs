@@ -351,7 +351,7 @@ sealed partial class QueryTranslator
     }
 
     // The Parse owners and Convert members the text-reading functions answer for, by target type.
-    static readonly Dictionary<Type, KnownFunction> parseTargets = new()
+    static Dictionary<Type, KnownFunction> parseTargets = new()
     {
         [typeof(int)] = KnownFunction.Int32From,
         [typeof(long)] = KnownFunction.Int64From,
@@ -366,7 +366,7 @@ sealed partial class QueryTranslator
     // ToSingle is deliberately absent: the provider translates float.Parse but has no ToSingle
     // conversion, so carrying the spelling would trade a translation-time refusal for an execution
     // fault.
-    static readonly Dictionary<string, KnownFunction> convertTargets = new(StringComparer.Ordinal)
+    static Dictionary<string, KnownFunction> convertTargets = new(StringComparer.Ordinal)
     {
         ["ToInt32"] = KnownFunction.Int32From,
         ["ToInt64"] = KnownFunction.Int64From,

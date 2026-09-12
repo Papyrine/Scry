@@ -18,8 +18,8 @@
 /// </remarks>
 static class AttachmentBinder
 {
-    static readonly ConcurrentDictionary<(Type, string), PropertyInfo?> properties = new();
-    static readonly ConcurrentDictionary<Type, ConstructorInfo?> constructors = new();
+    static ConcurrentDictionary<(Type, string), PropertyInfo?> properties = new();
+    static ConcurrentDictionary<Type, ConstructorInfo?> constructors = new();
 
     /// <summary>Binds every row of a materialized result, returning it with handles in place.</summary>
     public static T? Bind<T>(T? result, AttachmentPlan? plan, ScryClient client)

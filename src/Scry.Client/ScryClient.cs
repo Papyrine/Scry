@@ -6,10 +6,10 @@
 /// </summary>
 public sealed class ScryClient
 {
-    readonly Func<QueryRequest, ScryCall?, Cancel, Task<QueryResponse>> transport;
-    readonly Func<QueryRequest, ScryCall?, Cancel, IAsyncEnumerable<StreamedRow>>? streamTransport;
-    readonly Func<QueryBatchRequest, Cancel, Task<QueryBatchResponse>>? batchTransport;
-    readonly Func<AttachmentRequest, Cancel, Task<Stream?>>? attachmentTransport;
+    Func<QueryRequest, ScryCall?, Cancel, Task<QueryResponse>> transport;
+    Func<QueryRequest, ScryCall?, Cancel, IAsyncEnumerable<StreamedRow>>? streamTransport;
+    Func<QueryBatchRequest, Cancel, Task<QueryBatchResponse>>? batchTransport;
+    Func<AttachmentRequest, Cancel, Task<Stream?>>? attachmentTransport;
 
     /// <summary>
     /// Creates a client over a custom transport. <paramref name="streamTransport"/> and

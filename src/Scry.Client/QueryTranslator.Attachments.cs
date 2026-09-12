@@ -4,7 +4,7 @@ sealed partial class QueryTranslator
     // Attachment members met while translating the projection, resolved against it once it is whole:
     // the keys an attachment needs are sibling members of the same projection, so none of them is
     // known to be present until every member has been translated.
-    readonly List<Pending> pendingAttachments = [];
+    List<Pending> pendingAttachments = [];
 
     /// <summary>An attachment leaf met in a projection, before its keys have been looked for.</summary>
     /// <param name="Target">Where it sits in the projected object.</param>

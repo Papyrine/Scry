@@ -179,7 +179,7 @@ sealed partial class QueryTranslator
     sealed class UnboundParameter :
         ExpressionVisitor
     {
-        readonly HashSet<ParameterExpression> bound = [];
+        HashSet<ParameterExpression> bound = [];
         ParameterExpression? found;
 
         public static ParameterExpression? In(Expression expression)

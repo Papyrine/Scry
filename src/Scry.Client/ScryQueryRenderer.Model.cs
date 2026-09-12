@@ -14,8 +14,6 @@ sealed class RenderRefusalException(RenderRefusal refusal) :
 /// </summary>
 partial class QueryRenderer(Type? rootModel)
 {
-    readonly Type? rootModel = rootModel;
-
     // The model of the row the pipeline is currently reading: the root's, then whatever OfType or
     // SelectMany narrowed or flattened to, and null after a Select/Join/Set leaves an anonymous
     // shape. Null is not a refusal on its own — only a construct that needs the model refuses.

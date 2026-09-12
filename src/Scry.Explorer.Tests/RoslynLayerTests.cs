@@ -42,10 +42,10 @@ public class RoslynLayerTests
 
     // Shared across tests: building the MEF host / executor is the expensive part, and both are used
     // through functional (non-mutating) APIs, so they are safe to reuse.
-    static readonly RoslynWorkspace workspace =
+    static RoslynWorkspace workspace =
         RoslynWorkspace.Create(ModelSynthesizer.Synthesize(introspection), scryReferences);
 
-    static readonly SnippetExecutor executor = SnippetExecutor.Create(introspection, scryReferences);
+    static SnippetExecutor executor = SnippetExecutor.Create(introspection, scryReferences);
 
     // A request forks the solution with the snippet's text and derives its compilation from the one
     // the base has in hand — one tree replaced, the rest kept — but only when the base has one.

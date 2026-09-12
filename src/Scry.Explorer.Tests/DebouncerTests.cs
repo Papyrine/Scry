@@ -5,14 +5,14 @@
 public class DebouncerTests
 {
     // Short enough to keep the suite fast, long enough to be clear of scheduler jitter.
-    const int Window = 30;
+    const int window = 30;
 
-    static readonly TimeSpan Limit = TimeSpan.FromSeconds(5);
+    static TimeSpan limit = TimeSpan.FromSeconds(5);
 
     [Test]
     public async Task RunsOnlyTheLastActionInTheWindow()
     {
-        using var debouncer = new Debouncer(Window);
+        using var debouncer = new Debouncer(window);
         var ran = new List<string>();
         var third = new TaskCompletionSource();
 
@@ -33,7 +33,7 @@ public class DebouncerTests
             return Task.CompletedTask;
         });
 
-        await third.Task.WaitAsync(Limit);
+        await third.Task.WaitAsync(limit);
 
         Assert.That(ran, Is.EqualTo(["third"]));
     }
@@ -42,7 +42,7 @@ public class DebouncerTests
     [Test]
     public async Task RunsAgainOnceTheWindowHasClosed()
     {
-        using var debouncer = new Debouncer(Window);
+        using var debouncer = new Debouncer(window);
         var ran = 0;
 
         var first = new TaskCompletionSource();
@@ -52,7 +52,7 @@ public class DebouncerTests
             first.SetResult();
             return Task.CompletedTask;
         });
-        await first.Task.WaitAsync(Limit);
+        await first.Task.WaitAsync(limit);
 
         var second = new TaskCompletionSource();
         debouncer.Run(() =>
@@ -61,7 +61,7 @@ public class DebouncerTests
             second.SetResult();
             return Task.CompletedTask;
         });
-        await second.Task.WaitAsync(Limit);
+        await second.Task.WaitAsync(limit);
 
         Assert.That(ran, Is.EqualTo(2));
     }
@@ -73,7 +73,7 @@ public class DebouncerTests
     [Test]
     public async Task HandsTheActionATokenItsSuccessorCancels()
     {
-        using var debouncer = new Debouncer(Window);
+        using var debouncer = new Debouncer(window);
         var started = new TaskCompletionSource();
         var outcome = new TaskCompletionSource<string>();
 
@@ -83,7 +83,7 @@ public class DebouncerTests
             try
             {
                 // Stands in for the slow pass: the next call lands while this is still running.
-                await Task.Delay(Limit * 10, cancel);
+                await Task.Delay(limit * 10, cancel);
                 outcome.SetResult("ran to completion");
             }
             catch (OperationCanceledException)
@@ -96,10 +96,10 @@ public class DebouncerTests
             }
         });
 
-        await started.Task.WaitAsync(Limit);
+        await started.Task.WaitAsync(limit);
         debouncer.Run(() => Task.CompletedTask);
 
-        Assert.That(await outcome.Task.WaitAsync(Limit), Is.EqualTo("cancelled"));
+        Assert.That(await outcome.Task.WaitAsync(limit), Is.EqualTo("cancelled"));
     }
 
     // The page closing cannot wait for the window: what was going to be written when it closed is
@@ -107,7 +107,7 @@ public class DebouncerTests
     [Test]
     public async Task FlushRunsThePendingActionNowAndOnce()
     {
-        using var debouncer = new Debouncer(Window);
+        using var debouncer = new Debouncer(window);
         var ran = 0;
         debouncer.Run(() =>
         {
@@ -118,7 +118,7 @@ public class DebouncerTests
         await debouncer.Flush();
 
         Assert.That(ran, Is.EqualTo(1));
-        await Task.Delay(Window * 5);
+        await Task.Delay(window * 5);
         Assert.That(ran, Is.EqualTo(1));
     }
 
@@ -126,7 +126,7 @@ public class DebouncerTests
     [Test]
     public async Task FlushRunsNothingOnceTheWindowHasClosed()
     {
-        using var debouncer = new Debouncer(Window);
+        using var debouncer = new Debouncer(window);
         var ran = 0;
         var first = new TaskCompletionSource();
         debouncer.Run(() =>
@@ -135,7 +135,7 @@ public class DebouncerTests
             first.TrySetResult();
             return Task.CompletedTask;
         });
-        await first.Task.WaitAsync(Limit);
+        await first.Task.WaitAsync(limit);
 
         await debouncer.Flush();
 
@@ -145,7 +145,7 @@ public class DebouncerTests
     [Test]
     public async Task FlushWithNothingPendingDoesNothing()
     {
-        using var debouncer = new Debouncer(Window);
+        using var debouncer = new Debouncer(window);
 
         await debouncer.Flush();
     }
@@ -154,7 +154,7 @@ public class DebouncerTests
     public async Task DisposeDropsAPendingAction()
     {
         var ran = false;
-        var debouncer = new Debouncer(Window);
+        var debouncer = new Debouncer(window);
         debouncer.Run(() =>
         {
             ran = true;
@@ -163,7 +163,7 @@ public class DebouncerTests
         debouncer.Dispose();
 
         // Long enough that the window would have closed several times over had Dispose not shut it.
-        await Task.Delay(Window * 10);
+        await Task.Delay(window * 10);
 
         Assert.That(ran, Is.False);
     }
@@ -174,7 +174,7 @@ public class DebouncerTests
     [Test]
     public async Task ReportsAnActionThatThrewAndKeepsGoing()
     {
-        using var debouncer = new Debouncer(Window);
+        using var debouncer = new Debouncer(window);
         var reported = new StringWriter();
         var original = Console.Error;
         Console.SetError(reported);
@@ -191,7 +191,7 @@ public class DebouncerTests
                 next.SetResult();
                 return Task.CompletedTask;
             });
-            await next.Task.WaitAsync(Limit);
+            await next.Task.WaitAsync(limit);
         }
         finally
         {
@@ -203,7 +203,7 @@ public class DebouncerTests
 
     static async Task WaitUntil(Func<bool> condition, string expectation)
     {
-        var deadline = DateTime.UtcNow + Limit;
+        var deadline = DateTime.UtcNow + limit;
         while (DateTime.UtcNow < deadline)
         {
             if (condition())

@@ -20,7 +20,7 @@ public interface IStorageBackend
 public sealed class InMemoryStorageBackend :
     IStorageBackend
 {
-    readonly Dictionary<string, string> values = [];
+    Dictionary<string, string> values = [];
 
     public string? Get(string key) =>
         values.GetValueOrDefault(key);

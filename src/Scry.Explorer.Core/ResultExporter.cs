@@ -11,7 +11,7 @@ namespace Scry;
 /// </remarks>
 public static class ResultExporter
 {
-    static readonly JsonSerializerOptions indented = new()
+    static JsonSerializerOptions indented = new()
     {
         WriteIndented = true
     };

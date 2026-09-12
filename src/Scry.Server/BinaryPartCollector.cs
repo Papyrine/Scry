@@ -6,7 +6,7 @@
 /// </summary>
 sealed class BinaryPartCollector
 {
-    readonly List<byte[]> parts = [];
+    List<byte[]> parts = [];
 
     public IReadOnlyList<byte[]> Parts => parts;
 

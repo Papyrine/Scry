@@ -8,10 +8,10 @@ namespace Scry;
 /// </summary>
 public sealed class ScryAttachment
 {
-    readonly ScryClient client;
-    readonly string root;
-    readonly string member;
-    readonly IReadOnlyList<AttachmentKey> keys;
+    ScryClient client;
+    string root;
+    string member;
+    IReadOnlyList<AttachmentKey> keys;
 
     internal ScryAttachment(ScryClient client, string root, string member, IReadOnlyList<AttachmentKey> keys)
     {

@@ -88,7 +88,7 @@ public static class ModelSynthesizer
                 $$"""
                     public const string SchemaStamp = "{{introspection.SchemaStamp}}";
 
-                    readonly global::Scry.ScryClient client;
+                    global::Scry.ScryClient client;
 
                     public ScryQuery(global::Scry.ScryClient client)
                     {

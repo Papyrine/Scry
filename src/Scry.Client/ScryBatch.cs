@@ -19,8 +19,8 @@ namespace Scry;
 /// </remarks>
 public sealed class ScryBatch
 {
-    readonly ScryClient client;
-    readonly List<Entry> entries = [];
+    ScryClient client;
+    List<Entry> entries = [];
     bool sent;
 
     internal ScryBatch(ScryClient client) =>

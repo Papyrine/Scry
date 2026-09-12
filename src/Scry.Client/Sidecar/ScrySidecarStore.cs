@@ -7,8 +7,8 @@ namespace Scry;
 /// </summary>
 public sealed class ScrySidecarStore(ScrySidecarOptions options)
 {
-    readonly object sync = new();
-    readonly List<ScrySidecarEntry> entries = [];
+    Lock sync = new();
+    List<ScrySidecarEntry> entries = [];
     int nextId;
 
     /// <summary>Raised after an entry is added or the log is cleared.</summary>

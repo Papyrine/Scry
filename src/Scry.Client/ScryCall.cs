@@ -12,7 +12,7 @@ sealed class ScryCall(
     Action<HttpRequestHeaders>? configureRequest,
     Action<HttpResponseHeaders>? readResponse)
 {
-    static readonly ScryCall empty = new(null, null);
+    static ScryCall empty = new(null, null);
 
     Action<HttpRequestHeaders>? ConfigureRequest { get; } = configureRequest;
 

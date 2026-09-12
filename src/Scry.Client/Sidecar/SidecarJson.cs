@@ -1,7 +1,7 @@
 /// <summary>Pretty-printing for the sidecar's request and response panes.</summary>
 static class SidecarJson
 {
-    static readonly JsonSerializerOptions indented = new()
+    static JsonSerializerOptions indented = new()
     {
         WriteIndented = true
     };
