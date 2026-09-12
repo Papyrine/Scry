@@ -167,7 +167,7 @@ Decoding fails closed like the rest of the wire: a `q` that is absent, not base6
 [JsonDerivedType(typeof(LastOp), "last")]
 [JsonDerivedType(typeof(AggregateOp), "aggregate")]
 [JsonDerivedType(typeof(PageOp), "page")]
-public abstract record QueryOp;
+public closed record QueryOp;
 ```
 <sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L33' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
@@ -690,13 +690,26 @@ Everything else travels as an **object** with `name` and `value`: a member renam
 <!-- snippet: wireProjectionValues -->
 <a id='snippet-wireProjectionValues'></a>
 ```cs
-/// <summary>The value of a projection member.</summary>
+/// <summary>
+/// The value of a projection member. The set is closed, so a projection member is either an
+/// expression or a nested projection and can be nothing else.
+/// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(NodeValue), "node")]
 [JsonDerivedType(typeof(NestedValue), "nested")]
-public abstract record ProjectionValue;
+public closed record ProjectionValue;
+
+/// <summary>A projection member backed by an expression (a member path or an aggregate).</summary>
+public sealed record NodeValue(Node Node) :
+    ProjectionValue;
+
+/// <summary>A projection member backed by a nested projection into a navigation property.</summary>
+public sealed record NestedValue(
+    [property: JsonConverter(typeof(PathConverter))] IReadOnlyList<string> Path,
+    Projection Projection) :
+    ProjectionValue;
 ```
-<sup><a href='/src/Scry.Wire/Projections/ProjectionValue.cs#L3-L9' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireProjectionValues' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Wire/Projections/ProjectionValue.cs#L3-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireProjectionValues' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 | `$type` | Payload | Produces |

@@ -28,7 +28,7 @@ The serializable query AST shared by the [Scry](https://github.com/Papyrine/Scry
 [JsonDerivedType(typeof(LastOp), "last")]
 [JsonDerivedType(typeof(AggregateOp), "aggregate")]
 [JsonDerivedType(typeof(PageOp), "page")]
-public abstract record QueryOp;
+public closed record QueryOp;
 ```
 <sup><a href='/src/Scry.Wire/Operators/QueryOp.cs#L8-L33' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireOperators' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->

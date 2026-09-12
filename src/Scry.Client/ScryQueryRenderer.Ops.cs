@@ -3,54 +3,45 @@
 // ReSharper disable TailRecursiveCall
 partial class QueryRenderer
 {
-    string RenderOp(QueryOp op)
-    {
-        switch (op)
+    string RenderOp(QueryOp op) =>
+        op switch
         {
-            case WhereOp where:
-                return $".Where({Lambda(where.Predicate)})";
+            WhereOp where => $".Where({Lambda(where.Predicate)})",
 
-            case OrderByOp orderBy:
-                return $".{(orderBy.Descending ? "OrderByDescending" : "OrderBy")}({Lambda(orderBy.Key)})";
-            case ThenByOp thenBy:
-                return $".{(thenBy.Descending ? "ThenByDescending" : "ThenBy")}({Lambda(thenBy.Key)})";
+            OrderByOp orderBy => $".{(orderBy.Descending ? "OrderByDescending" : "OrderBy")}({Lambda(orderBy.Key)})",
+            ThenByOp thenBy => $".{(thenBy.Descending ? "ThenByDescending" : "ThenBy")}({Lambda(thenBy.Key)})",
 
-            case SkipOp skip:
-                return $".Skip({skip.Count.ToString(CultureInfo.InvariantCulture)})";
-            case TakeOp take:
-                return $".Take({take.Count.ToString(CultureInfo.InvariantCulture)})";
+            SkipOp skip => $".Skip({skip.Count.ToString(CultureInfo.InvariantCulture)})",
+            TakeOp take => $".Take({take.Count.ToString(CultureInfo.InvariantCulture)})",
 
-            case DistinctOp:
-                return ".Distinct()";
-            case ReverseOp:
-                return ".Reverse()";
+            DistinctOp => ".Distinct()",
+            ReverseOp => ".Reverse()",
 
-            case OfTypeOp ofType:
-                currentModel = SensitiveModel.ModelFor(ofType.Type) ?? throw Refuse(RenderRefusal.UnresolvedModel);
-                return $".OfType<{currentModel.Name}>()";
+            OfTypeOp ofType => RenderOfType(ofType),
+            SelectManyOp many => RenderSelectMany(many),
 
-            case SelectManyOp many:
-            {
-                var text = $".SelectMany(_ => _.{string.Join('.', many.Path)})";
-                currentModel = ElementModel(currentModel, many.Path);
-                return text;
-            }
+            GroupByOp groupBy => RenderGroupBy(groupBy),
+            SelectOp select => RenderSelect(select),
+            JoinOp join => RenderJoin(join),
+            SetOp set => RenderSet(set),
 
-            case GroupByOp groupBy:
-                return RenderGroupBy(groupBy);
+            // A terminal never reaches here — RenderModel splits the trailing one off and refuses
+            // any other — but naming them is what lets the compiler check the rest of this switch.
+            CountOp or LongCountOp or AnyOp or AllOp or FirstOp or SingleOp or LastOp or
+                AggregateOp or PageOp => throw Refuse(RenderRefusal.UnsupportedShape)
+        };
 
-            case SelectOp select:
-                return RenderSelect(select);
+    string RenderOfType(OfTypeOp op)
+    {
+        currentModel = SensitiveModel.ModelFor(op.Type) ?? throw Refuse(RenderRefusal.UnresolvedModel);
+        return $".OfType<{currentModel.Name}>()";
+    }
 
-            case JoinOp join:
-                return RenderJoin(join);
-
-            case SetOp set:
-                return RenderSet(set);
-
-            default:
-                throw Refuse(RenderRefusal.UnsupportedShape);
-        }
+    string RenderSelectMany(SelectManyOp op)
+    {
+        var text = $".SelectMany(_ => _.{string.Join('.', op.Path)})";
+        currentModel = ElementModel(currentModel, op.Path);
+        return text;
     }
 
     // A lambda whose body is one node, in whichever context the pipeline is in: a plain row (`_`),
@@ -145,25 +136,22 @@ partial class QueryRenderer
         return $"new {{ {string.Join(", ", parts)} }}";
     }
 
-    string RenderProjectionMember(ProjectionMember member, Scope scope)
-    {
-        switch (member.Value)
+    string RenderProjectionMember(ProjectionMember member, Scope scope) =>
+        member.Value switch
         {
-            case NodeValue node:
-                var text = RenderNode(node.Node, scope);
-                if (Shorthand(text, member.Name))
-                {
-                    return text;
-                }
+            NodeValue node => RenderNodeMember(node, member.Name, scope),
+            NestedValue nested => $"{member.Name} = {RenderNested(nested, scope)}"
+        };
 
-                return $"{member.Name} = {text}";
-
-            case NestedValue nested:
-                return $"{member.Name} = {RenderNested(nested, scope)}";
-
-            default:
-                throw Refuse(RenderRefusal.UnsupportedShape);
+    string RenderNodeMember(NodeValue node, string name, Scope scope)
+    {
+        var text = RenderNode(node.Node, scope);
+        if (Shorthand(text, name))
+        {
+            return text;
         }
+
+        return $"{name} = {text}";
     }
 
     // Whether an anonymous-type member can drop its name: the expression is a plain member chain

@@ -79,112 +79,117 @@ static class SensitiveWalk
         // Returns the source later operators read off, which most operators leave alone. The ones that
         // reshape the row hand back null: the walk cannot say what a path means after that, and the
         // resolver is told so rather than being asked about the wrong source.
-        string? Operator(QueryOp op, string? root)
-        {
-            switch (op)
+        string? Operator(QueryOp op, string? root) =>
+            op switch
             {
-                case WhereOp where:
-                    Expression(where.Predicate, root);
-                    return root;
-                case OrderByOp orderBy:
-                    Expression(orderBy.Key, root);
-                    return root;
-                case ThenByOp thenBy:
-                    Expression(thenBy.Key, root);
-                    return root;
-                case SelectOp select:
-                    Projection(select.Projection, root);
-                    return root;
-                case CountOp {Predicate: { } predicate}:
-                    Expression(predicate, root);
-                    return root;
-                case LongCountOp {Predicate: { } predicate}:
-                    Expression(predicate, root);
-                    return root;
-                case AnyOp {Predicate: { } predicate}:
-                    Expression(predicate, root);
-                    return root;
-                case AllOp all:
-                    Expression(all.Predicate, root);
-                    return root;
-                case FirstOp {Predicate: { } predicate}:
-                    Expression(predicate, root);
-                    return root;
-                case SingleOp {Predicate: { } predicate}:
-                    Expression(predicate, root);
-                    return root;
-                case LastOp {Predicate: { } predicate}:
-                    Expression(predicate, root);
-                    return root;
-                case AggregateOp aggregate:
-                    Expression(aggregate.Selector, root);
-                    return root;
-                case GroupByOp groupBy:
-                    groupKeys.Clear();
-                    foreach (var key in groupBy.Keys)
-                    {
-                        var found = new Found();
-                        Visit(key, root, projected: false, found);
-                        if (found is { Sensitive: true, Constant: true })
-                        {
-                            InConstant = true;
-                        }
+                WhereOp where => Read(where.Predicate, root),
+                OrderByOp orderBy => Read(orderBy.Key, root),
+                ThenByOp thenBy => Read(thenBy.Key, root),
+                CountOp count => Read(count.Predicate, root),
+                LongCountOp longCount => Read(longCount.Predicate, root),
+                AnyOp any => Read(any.Predicate, root),
+                AllOp all => Read(all.Predicate, root),
+                FirstOp first => Read(first.Predicate, root),
+                SingleOp single => Read(single.Predicate, root),
+                LastOp last => Read(last.Predicate, root),
+                AggregateOp aggregate => Read(aggregate.Selector, root),
+                SelectOp select => Projected(select.Projection, root),
+                GroupByOp groupBy => Grouped(groupBy, root),
 
-                        groupKeys.Add(found.Sensitive);
-                    }
+                // Narrowing keeps the row and changes its type, which is a source name of its own.
+                OfTypeOp ofType => ofType.Type,
 
-                    // The rows are groups now, and a later path reads a key or an aggregate rather than
-                    // a member of the source.
-                    return null;
-                case OfTypeOp ofType:
-                    // Narrowing keeps the row and changes its type, which is a source name of its own.
-                    return ofType.Type;
-                case SelectManyOp selectMany:
-                    Member(selectMany.Path, root);
-                    return null;
-                case JoinOp join:
-                    Expression(join.OuterKey, root);
-                    Expression(join.InnerKey, join.Root);
-                    if (join.InnerPredicate is { } inner)
-                    {
-                        Expression(inner, join.Root);
-                    }
+                SelectManyOp selectMany => Flattened(selectMany, root),
+                JoinOp join => Joined(join, root),
+                SetOp set => Combined(set, root),
 
-                    if (join.InnerOps is { } innerOps)
-                    {
-                        Pipeline(innerOps, join.Root);
-                    }
+                // Carry no member path and no constant of a member's own, so there is nothing here to
+                // read. A terminal carrying no predicate reaches its own arm above and reads nothing
+                // there either.
+                SkipOp or TakeOp or DistinctOp or ReverseOp or PageOp => root
+            };
 
-                    foreach (var member in join.Result)
-                    {
-                        var side = member.Side == JoinSide.Inner ? join.Root : root;
-                        Member(member.Path, side, projected: true);
-                        if (member.Aggregate is { } folded)
-                        {
-                            Expression(folded, join.Root);
-                        }
-                    }
+        // Reads one expression off the row, which the operator leaves as it was.
+        string? Read(Node? node, string? root)
+        {
+            Expression(node, root);
+            return root;
+        }
 
-                    return null;
-                case SetOp set:
-                    if (set.Predicate is { } filter)
-                    {
-                        Expression(filter, set.Root);
-                    }
+        string? Projected(Projection projection, string? root)
+        {
+            Projection(projection, root);
+            return root;
+        }
 
-                    if (set.OperandOps is { } operandOps)
-                    {
-                        Pipeline(operandOps, set.Root);
-                    }
+        string? Grouped(GroupByOp op, string? root)
+        {
+            groupKeys.Clear();
+            foreach (var key in op.Keys)
+            {
+                var found = new Found();
+                Visit(key, root, projected: false, found);
+                if (found is { Sensitive: true, Constant: true })
+                {
+                    InConstant = true;
+                }
 
-                    // The operand's own rows, projected to match the pipeline's shape.
-                    Projection(set.Projection, set.Root);
-                    return null;
-                default:
-                    // Skip, Take, Distinct, Reverse, Page, and the bare terminals carry no member path
-                    // and no constant of a member's own, so there is nothing here to read.
-                    return root;
+                groupKeys.Add(found.Sensitive);
             }
+
+            // The rows are groups now, and a later path reads a key or an aggregate rather than a
+            // member of the source.
+            return null;
+        }
+
+        string? Flattened(SelectManyOp op, string? root)
+        {
+            Member(op.Path, root);
+            return null;
+        }
+
+        string? Joined(JoinOp op, string? root)
+        {
+            Expression(op.OuterKey, root);
+            Expression(op.InnerKey, op.Root);
+            if (op.InnerPredicate is { } inner)
+            {
+                Expression(inner, op.Root);
+            }
+
+            if (op.InnerOps is { } innerOps)
+            {
+                Pipeline(innerOps, op.Root);
+            }
+
+            foreach (var member in op.Result)
+            {
+                var side = member.Side == JoinSide.Inner ? op.Root : root;
+                Member(member.Path, side, projected: true);
+                if (member.Aggregate is { } folded)
+                {
+                    Expression(folded, op.Root);
+                }
+            }
+
+            return null;
+        }
+
+        string? Combined(SetOp op, string? root)
+        {
+            if (op.Predicate is { } filter)
+            {
+                Expression(filter, op.Root);
+            }
+
+            if (op.OperandOps is { } operandOps)
+            {
+                Pipeline(operandOps, op.Root);
+            }
+
+            // The operand's own rows, projected to match the pipeline's shape.
+            Projection(op.Projection, op.Root);
+            return null;
         }
 
         void Projection(Projection projection, string? root)
