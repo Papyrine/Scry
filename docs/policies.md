@@ -490,7 +490,7 @@ public sealed class RegionAccessPolicy(RegionGrants grants) :
         grants.Allows(scopeKey, row.Region);
 }
 ```
-<sup><a href='/samples/Sample.Server/RegionAccessPolicy.cs#L1-L26' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedRowPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/RegionAccessPolicy.cs#L1-L26' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedRowPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Registered with the column that says a row has changed:
@@ -503,7 +503,7 @@ Registered with the column that says a row has changed:
 // and needs deciding again — see /docs/policies.md and the /permissions page.
 _.AddCachedPolicy<Order, long, RegionAccessPolicy>(_ => _.Revision);
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L46-L51' title='Snippet source file'>snippet source</a> | <a href='#snippet-addCachedPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L46-L51' title='Snippet source file'>snippet source</a> | <a href='#snippet-addCachedPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The adapter is an ordinary `IReturnablePolicy<T>` underneath, so everything on this page still holds: it applies at the root, at a join's inner side, at a narrowing, at a membership test and at a traversal, it narrows alongside any other policy on the chain, and it takes the same `DeniedRowHandling`.
@@ -533,7 +533,7 @@ app.MapPost(
     return Results.NoContent();
 });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L94-L106' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L94-L106' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Priming is `cache.Prime(scopeKey, rows, context)` alongside the write that produced them. `ScryPolicyCache` is registered as a singleton by `AddScry`, and is also `ScryProcessor.PolicyCache`.
@@ -572,7 +572,7 @@ app.MapPost("/api/orders/{id:int}/touch", async (int id, SampleContext data) =>
     return Results.NoContent();
 });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L108-L126' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L108-L126' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `InvalidateRows<T>(keys)` is the narrower form of the second: it re-decides those rows in every scope, rather than emptying one scope entirely.

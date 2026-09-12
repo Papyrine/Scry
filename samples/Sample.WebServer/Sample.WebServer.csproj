@@ -14,6 +14,6 @@
     <ProjectReference Include="..\..\src\Scry.Server.Delta\Scry.Server.Delta.csproj" />
     <ProjectReference Include="..\..\src\Scry.Server.Explorer\Scry.Server.Explorer.csproj" />
     <ProjectReference Include="..\Sample.Model\Sample.Model.csproj" />
-    <ProjectReference Include="..\Sample.Client\Sample.Client.csproj" />
+    <ProjectReference Include="..\Sample.WebClient\Sample.WebClient.csproj" />
   </ItemGroup>
 </Project>

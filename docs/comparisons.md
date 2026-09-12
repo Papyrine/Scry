@@ -42,7 +42,7 @@ Most of the Scry row is one fact seen from different sides: there is one type sy
 Two more sit outside the table:
 
 - **A hand-rolled criteria object** — property names as strings, an operator enum, a value, a sort column — is the client-shaped cell built by hand, and structurally a small serialized query AST. Its vocabulary stops where the reflection code rebuilding expressions stops, its names are strings the compiler cannot check, and its allow-list has to be added afterwards. Scry is that design carried to completion.
-- **No boundary at all.** Blazor Server, MVC, Razor Pages, and any other UI that renders on the server. Inject the context and write LINQ against it directly. Scry exists because a WebAssembly client is a separate process that an attacker controls.
+- **No boundary at all.** Blazor Server, MVC, Razor Pages, and any other UI that renders on the server. Inject the context and write LINQ against it directly. Scry exists because a client that runs outside the server's process — a browser tab, a desktop app, a service — is one an attacker controls.
 
 
 ## At a glance
@@ -77,7 +77,7 @@ employees = await Query
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L48-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L48-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 GraphQL, with Hot Chocolate's filtering and sorting conventions:
@@ -198,7 +198,7 @@ The differences are structural: the source of truth is the database rather than 
 
 If the UI runs on the server, none of this is needed. Inject the `DbContext` and write LINQ directly — no capture, no serialization, no validation, because there is no hostile boundary to cross.
 
-Scry exists because a WebAssembly client is a separate process that an attacker controls. If Blazor Server is still on the table, it is the cheaper answer to the query problem, and the comparison worth making is Blazor Server versus WASM rather than Scry versus anything.
+Scry exists because a client that runs outside the server's process — a browser tab, a desktop app, a service — is one an attacker controls. If Blazor Server is still on the table, it is the cheaper answer to the query problem, and the comparison worth making is Blazor Server versus WASM rather than Scry versus anything.
 
 
 ## A note on tRPC
@@ -221,4 +221,4 @@ tRPC, from the TypeScript world, is the closest relative: one language on both s
 
 Scry is not a smaller GraphQL or a typed OData. It is a narrower design, and a deliberate trade: give up cross-language reach, writes, and public-contract stability, and in return the query language, the client types, and the server model collapse into a single C# type system with a default-deny allow-list enforced at runtime.
 
-That trade pays off for a Blazor WASM front end talking to its own back end, built by one team, deployed together. Outside that shape, one of the alternatives above is the better tool.
+That trade pays off for a .NET client talking to its own back end, built by one team, deployed together — a Blazor WASM front end, a WPF or Windows Forms app, a console tool, another service. Outside that shape, one of the alternatives above is the better tool.

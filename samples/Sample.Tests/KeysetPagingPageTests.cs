@@ -1,5 +1,5 @@
 using Bunit;
-using KeysetPage = Sample.Client.Pages.KeysetPaging;
+using KeysetPage = Sample.WebClient.Pages.KeysetPaging;
 
 // Renders the real Keyset paging page against the real Scry server pipeline (in-memory) and drives the
 // Next button, proving cursor round-tripping (page 1 emits a cursor, Next resumes past it) end to end.

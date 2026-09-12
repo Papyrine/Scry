@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Sample.Model;
 
 /// <summary>
-/// An in-process Scry server wired up exactly like <c>Sample.Server</c>'s <c>Program.cs</c>, but
+/// An in-process Scry server wired up exactly like <c>Sample.WebServer</c>'s <c>Program.cs</c>, but
 /// hosted on <see cref="TestServer"/> so tests can drive the real query pipeline without a socket.
 /// Each instance runs against its own LocalDB database, cloned from a seeded template.
 /// </summary>

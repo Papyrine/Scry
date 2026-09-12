@@ -1,5 +1,5 @@
 /// <summary>
-/// Launches the real Sample.Server — the same DLL <c>dotnet run</c> would execute — and a headless
+/// Launches the real Sample.WebServer — the same DLL <c>dotnet run</c> would execute — and a headless
 /// Chromium, for fixtures that drive the live WebAssembly UI.
 /// </summary>
 /// <remarks>
@@ -286,7 +286,7 @@ public abstract class BrowserFixture
 
         var dir = baseDir;
         while (dir is not null &&
-               !Directory.Exists(Path.Combine(dir.FullName, "Sample.Server")))
+               !Directory.Exists(Path.Combine(dir.FullName, "Sample.WebServer")))
         {
             dir = dir.Parent;
         }
@@ -294,16 +294,16 @@ public abstract class BrowserFixture
         if (dir is null)
         {
             throw new DirectoryNotFoundException(
-                "Could not locate the Sample.Server project from the test output directory.");
+                "Could not locate the Sample.WebServer project from the test output directory.");
         }
 
-        var dll = Path.Combine(dir.FullName, "Sample.Server", "bin", config, tfm, "Sample.Server.dll");
+        var dll = Path.Combine(dir.FullName, "Sample.WebServer", "bin", config, tfm, "Sample.WebServer.dll");
         if (File.Exists(dll))
         {
             return dll;
         }
 
-        throw new FileNotFoundException("Sample.Server build output not found; build the sample first.", dll);
+        throw new FileNotFoundException("Sample.WebServer build output not found; build the sample first.", dll);
     }
 
     static int GetFreePort()
@@ -331,6 +331,6 @@ public abstract class BrowserFixture
             }
         }
 
-        throw new TimeoutException($"Sample.Server did not start listening on port {port}.");
+        throw new TimeoutException($"Sample.WebServer did not start listening on port {port}.");
     }
 }

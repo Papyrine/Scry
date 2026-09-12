@@ -1,5 +1,5 @@
 // ReSharper disable UnusedVariable
-namespace Sample.Client.Pages;
+namespace Sample.WebClient.Pages;
 
 // Documentation-only example backing the "grammar" section of docs/paging.md. Not wired to a page;
 // it exists so that doc snippet compiles against the generated Query surface like any other sample.

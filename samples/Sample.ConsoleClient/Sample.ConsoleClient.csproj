@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <!-- The server model, pointed at by path. NOT referenced. -->
+    <ScryModelDll>$(MSBuildThisFileDirectory)..\Sample.Model\bin\$(Configuration)\net10.0\Sample.Model.dll</ScryModelDll>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Scry.Client\Scry.Client.csproj" />
+  </ItemGroup>
+
+  <!--
+    Generator wiring. When consuming the Scry.Client NuGet package this is automatic
+    (buildTransitive props); with project references it is set up explicitly here.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Scry.SourceGenerator\Scry.SourceGenerator.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Sample.Model\Sample.Model.csproj" ReferenceOutputAssembly="false" />
+    <CompilerVisibleProperty Include="ScryModelDll" />
+    <CompilerVisibleProperty Include="ScryModelStamp" />
+  </ItemGroup>
+
+  <!-- Resolved against the project before the compiler sees it, as the shipped targets do. -->
+  <PropertyGroup Condition="'$(ScryModelDll)' != ''">
+    <ScryModelDll>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(ScryModelDll)'))</ScryModelDll>
+  </PropertyGroup>
+
+  <Target Name="ComputeScryStamp"
+          AfterTargets="ResolveProjectReferences"
+          BeforeTargets="GenerateMSBuildEditorConfigFile;CoreCompile"
+          Condition="Exists('$(ScryModelDll)')">
+    <GetFileHash Files="$(ScryModelDll)" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="ScryModelStamp" />
+    </GetFileHash>
+  </Target>
+</Project>

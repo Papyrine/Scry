@@ -5,12 +5,18 @@
 | Project | Role |
 | --- | --- |
 | `Sample.Model` | EF Core model with the allow-list attributes. Referenced by the server, pointed at by path from the client. |
-| `Sample.Server` | ASP.NET Core host: `DbContext`, `MapScry`, `MapScryExplorer`, and the Blazor host page. |
-| `Sample.Client` | Blazor WebAssembly UI that writes LINQ against the generated models. |
+| `Sample.WebServer` | ASP.NET Core host: `DbContext`, `MapScry`, `MapScryExplorer`, and the Blazor host page. The one back end every client below talks to. |
+| `Sample.WebClient` | Blazor WebAssembly UI that writes LINQ against the generated models. |
+| `Sample.ConsoleClient` | A console client: an `HttpClient`, `ScryClient.ForHttp`, and the generated entry point, with no container. |
+| `Sample.WpfClient` | A WPF client binding the same queries to a `DataGrid`, registered through `IHttpClientFactory`. |
+| `Sample.WinFormsClient` | A Windows Forms client with the same registration, bound to a `DataGridView`. |
 | `Sample.Tests` | Snapshot tests over the rendered UI, the wire traffic, and the explorer endpoint. |
 | `Sample.QueryModels` | A C# class library holding the generator's output for the sample model, for clients in other languages. |
 | `Sample.FSharp` | An F# client writing queries through `Sample.QueryModels`. See [F#](fsharp.md). |
 | `Sample.FSharp.Tests` | The F# queries run through the server, hosted in-process, with the requests and rows snapshotted. |
+
+The three desktop and console clients are there to show that the client half is not tied to a browser.
+[Client hosts](clients.md) covers what each host needs and where they differ.
 
 
 ## Running it
@@ -18,10 +24,28 @@
 The sample uses SQL Server LocalDB and creates/seeds the database on startup.
 
 ```bash
-dotnet run --project samples/Sample.Server
+dotnet run --project samples/Sample.WebServer
 ```
 
 Then browse to the URL it prints. The query explorer is at `/scry`.
+
+The other clients talk to that same server over HTTP, so start it first and leave it running. Each one
+reports the command above rather than an unhandled exception when the server is not up.
+
+```bash
+dotnet run --project samples/Sample.ConsoleClient
+```
+
+```bash
+dotnet run --project samples/Sample.WpfClient
+```
+
+```bash
+dotnet run --project samples/Sample.WinFormsClient
+```
+
+The WPF and Windows Forms clients build on Windows alone. Elsewhere they produce an empty assembly, so
+a build of the samples solution on another OS still succeeds.
 
 
 ## The model
@@ -215,7 +239,7 @@ builder.Services
         _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L31-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L31-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Holiday` has no table, so its data is registered explicitly — see [POCO sources](server.md#poco-sources). `MaxPageSize` is lowered from the default 1000 to 200.
@@ -225,7 +249,7 @@ builder.Services
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L85-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L85-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: mapExplorer -->
@@ -240,14 +264,14 @@ app.MapScryExplorer(
         _.EnableGuard = _ => true;
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L127-L136' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L127-L136' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The sample always exposes the explorer so it can be browsed without setting an environment. A real app should leave the default Development-only guard in place, or replace it with an authorization check — see [Query explorer](explorer.md).
 
 It also answers a repeated query with `304 Not Modified`, using [Delta](https://github.com/SimonCropp/Delta) as the freshness source behind the ETag — two settings inside `AddScry`, shown in the registration above.
 
-The client half — re-asking with `If-None-Match` and replaying what the 304 stands for — is a `DelegatingHandler` in `Sample.Client`. Neither half is part of Scry; both are explained in [Caching and 304](caching.md).
+The client half — re-asking with `If-None-Match` and replaying what the 304 stands for — is a `DelegatingHandler` in `Sample.WebClient`. Neither half is part of Scry; both are explained in [Caching and 304](caching.md).
 
 
 ## The client
@@ -258,7 +282,7 @@ The client half — re-asking with `If-None-Match` and replaying what the 304 st
 <!-- The server model, pointed at by path. NOT referenced. -->
 <ScryModelDll>$(MSBuildThisFileDirectory)..\Sample.Model\bin\$(Configuration)\net10.0\Sample.Model.dll</ScryModelDll>
 ```
-<sup><a href='/samples/Sample.Client/Sample.Client.csproj#L7-L10' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientModelPath' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Sample.WebClient.csproj#L7-L10' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientModelPath' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: clientGeneratorWiring -->
@@ -286,7 +310,7 @@ The client half — re-asking with `If-None-Match` and replaying what the 304 st
   </GetFileHash>
 </Target>
 ```
-<sup><a href='/samples/Sample.Client/Sample.Client.csproj#L24-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGeneratorWiring' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Sample.WebClient.csproj#L24-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGeneratorWiring' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Because the sample uses project references rather than the NuGet package, the generator wiring that `Scry.Client`'s `buildTransitive` props would normally supply is written out explicitly. See [Source generator](source-generator.md).
@@ -302,7 +326,7 @@ builder.Services.AddScryClient(
     _ => _.GetRequiredService<IHttpClientFactory>().CreateClient("scry"));
 builder.Services.AddScoped<ScryQuery>();
 ```
-<sup><a href='/samples/Sample.Client/Program.cs#L14-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Program.cs#L14-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -317,7 +341,7 @@ record EmployeeRow(string Name, Status Status, string? Manager, string Departmen
 
 record RegionSummary(string Region, decimal Total, int Count);
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L5-L9' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientProjectionTypes' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L5-L9' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientProjectionTypes' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A filter, an ordering, and a projection that reaches through two navigations:
@@ -332,7 +356,7 @@ employees = await Query
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L48-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L48-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A group-by with aggregates:
@@ -346,7 +370,7 @@ regions = await Query
     .Select(_ => new RegionSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L57-L63' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L57-L63' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 And a query parameterized by closure-captured locals — the values are evaluated client-side and sent as constants, which is how an app builds a filtered query at runtime:
@@ -362,7 +386,7 @@ fullTimers = await Query
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L65-L73' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L65-L73' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -377,7 +401,7 @@ fullTimers = await Query
 // projected beside it because that is the key the bytes are fetched by.
 record EmployeePhoto(int Id, string Name, ScryAttachment Photo);
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L11-L15' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentType' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L11-L15' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentType' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: clientAttachmentQuery -->
@@ -392,7 +416,7 @@ photos = await Query
     .Select(_ => new EmployeePhoto(_.Id, _.Name, _.Photo))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L88-L97' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L88-L97' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The page renders the names off that response, and only then goes looking for the bytes — one request per face, each authorized by the server's `IAttachmentPolicy` on its own terms:
@@ -409,7 +433,7 @@ foreach (var photo in photos)
     }
 }
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L103-L112' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentFetch' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L103-L112' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentFetch' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: clientAttachmentOpen -->
@@ -435,7 +459,7 @@ static async Task<string?> FaceAsync(ScryAttachment photo)
     return $"data:image/svg+xml;base64,{Convert.ToBase64String(buffer.ToArray())}";
 }
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L132-L152' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentOpen' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L132-L152' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentOpen' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Employee.Photo` declares `ContentType = "image/svg+xml"`, so the fetch is served as that rather than as bytes — which is what lets the [explorer](explorer.md) and the [sidecar](sidecar.md) offer the download as `.svg`. `Department.Handbook` declares `text/plain` and downloads as `.txt`. See [Content type](attachments.md#content-type).
@@ -475,7 +499,7 @@ public sealed class RegionAccessPolicy(RegionGrants grants) :
         grants.Allows(scopeKey, row.Region);
 }
 ```
-<sup><a href='/samples/Sample.Server/RegionAccessPolicy.cs#L1-L26' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedRowPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/RegionAccessPolicy.cs#L1-L26' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedRowPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 So it runs in C# rather than in SQL, and the server remembers what it answered. What a query carries is a membership test over the keys this caller is allowed, which is why the LINQ on the page is what it would be for any other source — nothing about it says the policy is cached.
@@ -511,7 +535,7 @@ app.MapPost("/api/orders/{id:int}/touch", async (int id, SampleContext data) =>
     return Results.NoContent();
 });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L108-L126' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L108-L126' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The third has to be, or the change never reaches a query at all:
@@ -531,7 +555,7 @@ app.MapPost(
     return Results.NoContent();
 });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L94-L106' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L94-L106' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Order.Revision` is `[QueryIgnore]`d — a version column is server machinery, not query surface, and clients never see it. `Sample.Tests\CachedPolicyPageTests.cs` drives the page and asserts those three counts, so the table above is checked rather than claimed.

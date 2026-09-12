@@ -4,7 +4,7 @@
     {
       "name": "sample",
       "runtimeExecutable": "dotnet",
-      "runtimeArgs": ["run", "--project", "samples/Sample.Server", "--urls", "http://localhost:5249"],
+      "runtimeArgs": ["run", "--project", "samples/Sample.WebServer", "--urls", "http://localhost:5249"],
       "port": 5249
     },
     {

@@ -42,7 +42,7 @@ builder.Services
         _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L31-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L31-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddPocoSource` supplies the rows for a `[QueryablePoco]` type — see [POCO sources](https://github.com/Papyrine/Scry/blob/main/docs/server.md#poco-sources).
@@ -52,7 +52,7 @@ builder.Services
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L85-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L85-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Docs: [Server](https://github.com/Papyrine/Scry/blob/main/docs/server.md) · [Row policies](https://github.com/Papyrine/Scry/blob/main/docs/policies.md) · [Security model](https://github.com/Papyrine/Scry/blob/main/docs/security.md)

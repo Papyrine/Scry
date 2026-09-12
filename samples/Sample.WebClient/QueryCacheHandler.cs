@@ -1,4 +1,4 @@
-namespace Sample.Client;
+namespace Sample.WebClient;
 
 /// <summary>
 /// The client half of the 304 exchange: re-asks with <c>If-None-Match</c>, and rebuilds the response a

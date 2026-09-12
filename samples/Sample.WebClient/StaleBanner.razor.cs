@@ -1,4 +1,4 @@
-namespace Sample.Client;
+namespace Sample.WebClient;
 
 /// <summary>
 /// Watches for the server's queryable surface drifting away from the one this app was generated

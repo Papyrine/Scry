@@ -12,7 +12,7 @@ The generator is a Roslyn generator, so only a C# project runs it. A client writ
 
 The generator reads the server model's **built DLL from disk** using `System.Reflection.Metadata`. The assembly is never referenced by the client project, never loaded into the compiler, and never executed. Only the allow-listed surface is extracted from its metadata tables.
 
-That is what lets a Blazor WebAssembly client be strongly typed against a server-side EF Core model without dragging EF Core, connection strings, or the non-allow-listed members of the model into the client's dependency graph or its shipped output.
+That is what lets any .NET client — Blazor WebAssembly, WPF, Windows Forms, a console tool, a service — be strongly typed against a server-side EF Core model without dragging EF Core, connection strings, or the non-allow-listed members of the model into the client's dependency graph or its shipped output. The wiring below is the same whichever of those the client is; see [Client hosts](clients.md).
 
 
 ## Wiring
@@ -25,7 +25,7 @@ Two things are needed in the client project. First, the path the generator reads
 <!-- The server model, pointed at by path. NOT referenced. -->
 <ScryModelDll>$(MSBuildThisFileDirectory)..\Sample.Model\bin\$(Configuration)\net10.0\Sample.Model.dll</ScryModelDll>
 ```
-<sup><a href='/samples/Sample.Client/Sample.Client.csproj#L7-L10' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientModelPath' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Sample.WebClient.csproj#L7-L10' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientModelPath' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A relative path is resolved against the project directory before the compiler sees it. The generator runs inside the compiler process, whose working directory is not the project's, so one that reached it unresolved would name a file that does not exist; it reports `SCRY001` rather than generating nothing.
@@ -129,7 +129,7 @@ When referencing the projects directly (as the sample and integration tests do),
   </GetFileHash>
 </Target>
 ```
-<sup><a href='/samples/Sample.Client/Sample.Client.csproj#L24-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGeneratorWiring' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Sample.WebClient.csproj#L24-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGeneratorWiring' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -256,7 +256,7 @@ builder.Services.AddScryClient(
     _ => _.GetRequiredService<IHttpClientFactory>().CreateClient("scry"));
 builder.Services.AddScoped<ScryQuery>();
 ```
-<sup><a href='/samples/Sample.Client/Program.cs#L14-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Program.cs#L14-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 

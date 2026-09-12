@@ -15,9 +15,9 @@ Add or extend a query by writing LINQ in the client — no new endpoint, no new 
 
 ## Intended use
 
-Scry is designed for a **WebAssembly front end** — typically Blazor WASM — talking to its own back end. The client has no EF dependency, so it stays small under a trimmed WASM publish, while remaining strongly typed against the server's EF Core model.
+Scry is designed for a **.NET client that runs outside the server's process** — a Blazor WebAssembly front end, a WPF or Windows Forms desktop app, a console tool, or another service — talking to its own back end. The client has no EF dependency, so it stays small under a trimmed WebAssembly publish and light in an installed desktop app, while remaining strongly typed against the server's EF Core model. [Client hosts](docs/clients.md) covers what each host needs.
 
-It also assumes the front end and the back end are built by the **same team** and deployed together. A generated client is bound to the model surface it was generated against, and the two are expected to move in lockstep. Scry is deliberately *not* a general-purpose web API: it is not intended as a stable public contract for multiple external consumers, third-party apps, or clients on release cycles the team does not control. See [docs/schema-versioning.md](docs/schema-versioning.md) for how drift between the two is detected and mitigated.
+It also assumes the client and the back end are built by the **same team** and deployed together. A generated client is bound to the model surface it was generated against, and the two are expected to move in lockstep. Scry is deliberately *not* a general-purpose web API: it is not intended as a stable public contract for multiple external consumers, third-party apps, or clients on release cycles the team does not control. See [docs/schema-versioning.md](docs/schema-versioning.md) for how drift between the two is detected and mitigated.
 
 "Same team" is about coupling, not trust. The client is still treated as hostile — the generated code, the LINQ, and the wire request are all attacker-controlled — and every guarantee is re-enforced server-side at runtime. See [docs/security.md](docs/security.md).
 
@@ -195,7 +195,7 @@ builder.Services
         _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L31-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L31-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddPocoSource` supplies the rows for a `[QueryablePoco]` type — see [POCO sources](docs/server.md#poco-sources).
@@ -205,7 +205,7 @@ builder.Services
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L85-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L85-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Point the client at the model by path — no reference:
@@ -216,7 +216,7 @@ Point the client at the model by path — no reference:
 <!-- The server model, pointed at by path. NOT referenced. -->
 <ScryModelDll>$(MSBuildThisFileDirectory)..\Sample.Model\bin\$(Configuration)\net10.0\Sample.Model.dll</ScryModelDll>
 ```
-<sup><a href='/samples/Sample.Client/Sample.Client.csproj#L7-L10' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientModelPath' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Sample.WebClient.csproj#L7-L10' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientModelPath' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Then write LINQ:
@@ -231,7 +231,7 @@ employees = await Query
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L48-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L48-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -247,7 +247,7 @@ app.MapScryExplorer("/scry");
 
 It is off unless mapped, and Development-only by default. See [Query explorer](docs/explorer.md).
 
-The client side has a companion: a [debug sidecar](docs/sidecar.md) that opens over the running app (<kbd>Alt</kbd>+<kbd>Q</kbd>) and shows every Scry exchange the page has made — decoded requests, pretty-printed responses, headers, and a one-click jump into the explorer with the captured query pre-populated.
+A Blazor client has a companion: a [debug sidecar](docs/sidecar.md) that opens over the running app (<kbd>Alt</kbd>+<kbd>Q</kbd>) and shows every Scry exchange the page has made — decoded requests, pretty-printed responses, headers, and a one-click jump into the explorer with the captured query pre-populated.
 
 <img src="samples/Sample.Tests/UiScreenshotTests.SampleSidecar.verified.png" border="1" alt="The sidecar open over the sample app: the captured exchanges, queries and attachment fetches alike, and one query's decoded request, response, and headers">
 

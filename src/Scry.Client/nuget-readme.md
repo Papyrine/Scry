@@ -1,6 +1,6 @@
 # Scry.Client
 
-Client-side LINQ provider for [Scry](https://github.com/Papyrine/Scry). Write ordinary LINQ against the source-generated query models; Scry captures it, serializes it to the query AST, and sends it to the server. No EF dependency, so it stays small in a trimmed Blazor WebAssembly app.
+Client-side LINQ provider for [Scry](https://github.com/Papyrine/Scry). Write ordinary LINQ against the source-generated query models; Scry captures it, serializes it to the query AST, and sends it to the server. No EF dependency, so it stays small in a trimmed Blazor WebAssembly app and light in a WPF, Windows Forms, or console client.
 
 This package also ships the Scry source generator, so a client project needs only a `<ScryModelDll>` path to the server model's built DLL — never a reference to it.
 
@@ -10,7 +10,7 @@ This package also ships the Scry source generator, so a client project needs onl
 <!-- The server model, pointed at by path. NOT referenced. -->
 <ScryModelDll>$(MSBuildThisFileDirectory)..\Sample.Model\bin\$(Configuration)\net10.0\Sample.Model.dll</ScryModelDll>
 ```
-<sup><a href='/samples/Sample.Client/Sample.Client.csproj#L7-L10' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientModelPath' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Sample.WebClient.csproj#L7-L10' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientModelPath' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Register the client over a **named** `HttpClient`, so its base address — and any handler pipeline it grows — stays separate from every other call the application makes:
@@ -26,7 +26,7 @@ builder.Services.AddScryClient(
     _ => _.GetRequiredService<IHttpClientFactory>().CreateClient("scry"));
 builder.Services.AddScoped<ScryQuery>();
 ```
-<sup><a href='/samples/Sample.Client/Program.cs#L14-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Program.cs#L14-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Blazor WebAssembly is the exception: there is one `HttpClient`, the browser backs it, and it already points at the app's own origin, so nothing needs disambiguating and the shorter overload avoids pulling `Microsoft.Extensions.Http` into the payload.
@@ -55,7 +55,7 @@ employees = await Query
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L48-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L48-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Docs: [Getting started](https://github.com/Papyrine/Scry/blob/main/docs/getting-started.md) · [Writing queries](https://github.com/Papyrine/Scry/blob/main/docs/querying.md) · [Source generator](https://github.com/Papyrine/Scry/blob/main/docs/source-generator.md)

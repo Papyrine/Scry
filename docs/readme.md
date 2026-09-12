@@ -7,7 +7,8 @@ Type-safe, serializable LINQ from a client to a server-side EF Core model.
 
 | Page | Contents |
 | --- | --- |
-| [Getting started](getting-started.md) | The three-project layout, wiring the model, server, and client end to end. |
+| [Getting started](getting-started.md) | The core project layout, wiring the model, server, and client end to end. |
+| [Client hosts](clients.md) | Blazor WebAssembly, WPF, Windows Forms, console, and service clients — what each needs, and what differs. |
 | [Comparisons](comparisons.md) | Scry against GraphQL, OData, hand-written endpoints, gRPC, and expression-tree serializers — and when to pick one of those instead. |
 | [Annotations](annotations.md) | `[Queryable]`, `[QueryableView]`, `[QueryablePoco]`, `[QueryIgnore]`, `[ReturnableWith]`, and what each exposes. |
 | [Source generator](source-generator.md) | How the model assembly is read by path, the MSBuild wiring, what is emitted, and troubleshooting. |
@@ -46,11 +47,12 @@ Sample.Model (EF Core + [Queryable])
    │                                                     │ ScryQuery.g.cs           │
    │                                                     └────────────┬─────────────┘
    │                                                                  │
-   │                                                    Sample.Client (ordinary LINQ)
+   │                                            any client (ordinary LINQ): Blazor WASM,
+   │                                            WPF, Windows Forms, console, a service
    │                                                                  │
    │                                          QueryRequest (JSON AST) │ GET|POST /api/query
    │                                                                  ▼
-   └─────────────────────────────────────────────────────▶ Sample.Server
+   └─────────────────────────────────────────────────────▶ Sample.WebServer
       referenced normally                                  validate → policy → rebind
                                                            → EF Core → project → JSON
 ```
@@ -75,7 +77,7 @@ Every package puts its public types in the single `Scry` namespace, so one `usin
 
 - .NET 10 (`net10.0`) for `Scry.Wire`, `Scry.Client`, `Scry.Server`, `Scry.Server.Explorer`, and `Scry.Server.Delta`.
 - `Scry.Annotations` targets `netstandard2.0`, so any model project can reference it.
-- EF Core on the server. The client has no EF dependency, which keeps it small under trimmed Blazor WebAssembly.
+- EF Core on the server. The client has no EF dependency, which keeps it small under trimmed Blazor WebAssembly and light in a desktop or console app.
 
 
 ## Editing these docs

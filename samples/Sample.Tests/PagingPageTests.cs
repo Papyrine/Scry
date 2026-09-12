@@ -1,5 +1,5 @@
 using Bunit;
-using PagingPage = Sample.Client.Pages.Paging;
+using PagingPage = Sample.WebClient.Pages.Paging;
 
 // Renders the real Paging page against the real Scry server pipeline (in-memory) and drives the
 // Next button, proving ToPageAsync + HasMore page through the seeded employees end to end.
