@@ -12,12 +12,12 @@ static class Execution
 
     public static ValueTask<object?> RunAsync(IQueryable query, Expression call, Cancel cancel)
     {
-        if (query.Provider is not IAsyncQueryProvider asynchronous)
+        if (query.Provider is IAsyncQueryProvider asynchronous)
         {
-            return new(query.Provider.Execute(call));
+            return runners.GetOrAdd(call.Type, Runner)(asynchronous, call, cancel);
         }
 
-        return runners.GetOrAdd(call.Type, Runner)(asynchronous, call, cancel);
+        return new(query.Provider.Execute(call));
     }
 
     // One closed runner per result type, since the provider answers a Task of that type and nothing

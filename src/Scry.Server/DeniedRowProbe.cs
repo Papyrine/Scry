@@ -28,10 +28,15 @@ sealed class DeniedRowProbe
     /// the whole chain — whether the first has a row the second does not. Both describe the same
     /// rows through the same operators and differ only in which policies they carry.
     /// </summary>
-    public static DeniedRowProbe Rows(IQueryable hide, IQueryable full, DbContext db) =>
-        Correlated(hide, full, db) is { } exists
-            ? new(hide, exists, null)
-            : new(hide, null, full);
+    public static DeniedRowProbe Rows(IQueryable hide, IQueryable full, DbContext db)
+    {
+        if (Correlated(hide, full, db) is { } exists)
+        {
+            return new(hide, exists, null);
+        }
+
+        return new(hide, null, full);
+    }
 
     /// <summary>
     /// Whether any row of <paramref name="owners"/> satisfies <paramref name="denied"/>, a condition

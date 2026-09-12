@@ -17,8 +17,9 @@
 static class ExpressionRules
 {
     // What a group can be folded to. Only used to tell a fold from a projection of the group itself.
-    static readonly HashSet<string> folds = new(StringComparer.Ordinal)
-    {
+    static HashSet<string> folds =
+    [
+        with(StringComparer.Ordinal),
         "Count",
         "LongCount",
         "Sum",
@@ -27,7 +28,7 @@ static class ExpressionRules
         "Max",
         "Any",
         "All"
-    };
+    ];
 
     public static void Check(OperationAnalysisContext context, IInvocationOperation link)
     {

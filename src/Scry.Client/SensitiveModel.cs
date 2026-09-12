@@ -18,20 +18,20 @@
 /// </remarks>
 static class SensitiveModel
 {
-    static readonly ConcurrentDictionary<Type, Model> models = new();
+    static ConcurrentDictionary<Type, Model> models = new();
 
     // Every model a source name was opened as, and the latest of them. Two clients in one process
     // may open the same name as models of their own — a generated one, and a hand-built one marking
     // nothing — and the answer is the union: a member any of them marks is sensitive, so no
     // registration can unmark what another established, and no query is sent in a URL on the strength
     // of a model it was not written against.
-    static readonly ConcurrentDictionary<string, Type[]> bySource = new(StringComparer.Ordinal);
+    static ConcurrentDictionary<string, Type[]> bySource = new(StringComparer.Ordinal);
 
-    static readonly ConcurrentDictionary<string, Type> latest = new(StringComparer.Ordinal);
+    static ConcurrentDictionary<string, Type> latest = new(StringComparer.Ordinal);
 
-    static readonly HashSet<string> anyName = new(StringComparer.Ordinal);
+    static HashSet<string> anyName = [with(StringComparer.Ordinal)];
 
-    static readonly Lock gate = new();
+    static Lock gate = new();
 
     sealed record Model(bool Sensitive, Dictionary<string, PropertyInfo> Members, HashSet<string> SensitiveMembers);
 

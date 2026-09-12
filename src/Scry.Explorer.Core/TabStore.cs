@@ -23,10 +23,11 @@ public sealed class TabStore
         tabs[ActiveIndex];
 
     public TabStore(string initialQuery = "") =>
-        Open(new()
-        {
-            Query = initialQuery
-        });
+        Open(
+            new()
+            {
+                Query = initialQuery
+            });
 
     /// <summary>Back to one tab carrying the seeded query — what clearing the stored data does.</summary>
     public void Reset(string initialQuery = "")
@@ -89,7 +90,7 @@ public sealed class TabStore
         }
 
         var trimmed = title?.Trim();
-        if (trimmed is { Length: > 0 })
+        if (trimmed is {Length: > 0})
         {
             tabs[index].Title = trimmed;
             return;
@@ -220,7 +221,7 @@ public sealed class TabStore
                     Title = _.Title
                 })
                 .ToList();
-            if (readable is { Count: > 0 })
+            if (readable is {Count: > 0})
             {
                 return (readable, loaded!.ActiveIndex);
             }

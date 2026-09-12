@@ -177,8 +177,9 @@ public sealed class SnippetExecutor
     // selectors, element selectors, comparers) reshape the result client-side and do not affect the
     // request, so these are stripped regardless of argument count. Both the Scry async terminals (the
     // real client API) and the plain-LINQ equivalents are accepted, so habitual `.ToList()` works too.
-    static HashSet<string> collectionTerminals = new(StringComparer.Ordinal)
-    {
+    static HashSet<string> collectionTerminals =
+    [
+        with(StringComparer.Ordinal),
         "ToListAsync",
         "ToList",
         "ToArrayAsync",
@@ -188,10 +189,9 @@ public sealed class SnippetExecutor
         "ToDictionaryAsync",
         "ToDictionary",
         "ToLookupAsync",
-        "ToLookup"
-        // ToAsyncEnumerable is intentionally absent: streaming is not supported yet (the client
+        "ToLookup" // ToAsyncEnumerable is intentionally absent: streaming is not supported yet (the client
         // terminal throws), so the explorer must not fold it into a valid list request either.
-    };
+    ];
 
     // Scalar/element terminals → their wire QueryOp. Only recognised with zero arguments: a predicate
     // overload (e.g. `.First(_ => _.Active)`) affects the wire and must not be silently dropped, so it

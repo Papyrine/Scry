@@ -89,7 +89,7 @@ public class ErrorCodeTests
             });
 
         Assert.That(await Count(client), Is.EqualTo(3));
-        Assert.That(methods, Is.EqualTo(new[] {HttpMethod.Get, HttpMethod.Post}));
+        Assert.That(methods, Is.EqualTo([HttpMethod.Get, HttpMethod.Post]));
     }
 
     /// <summary>

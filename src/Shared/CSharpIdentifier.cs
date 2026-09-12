@@ -84,8 +84,9 @@ static class CSharpIdentifier
     /// absent: they are legal member names, and refusing one would reject a name C# is happy to
     /// express. <c>CSharpIdentifierTests</c> pins the list against Roslyn's own.
     /// </summary>
-    static readonly HashSet<string> reserved = new(StringComparer.Ordinal)
-    {
+    static HashSet<string> reserved =
+    [
+        with(StringComparer.Ordinal),
         "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked",
         "class", "const", "continue", "decimal", "default", "delegate", "do", "double", "else",
         "enum", "event", "explicit", "extern", "false", "finally", "fixed", "float", "for",
@@ -97,5 +98,5 @@ static class CSharpIdentifier
         "void", "volatile", "while",
         // Undocumented, but reserved all the same.
         "__arglist", "__makeref", "__reftype", "__refvalue"
-    };
+    ];
 }

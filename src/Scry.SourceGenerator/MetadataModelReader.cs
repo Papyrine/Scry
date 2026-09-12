@@ -140,7 +140,10 @@ static class MetadataModelReader
                 continue;
             }
 
-            result.Add(source with {Keys = new(Keys(source, members))});
+            result.Add(source with
+            {
+                Keys = [with(Keys(source, members))]
+            });
         }
 
         return result.ToImmutable();
@@ -351,7 +354,7 @@ static class MetadataModelReader
             var inherited = new HashSet<string>(Inherited(baseSource, byModel).Select(_ => _.Name), StringComparer.Ordinal);
             sources[i] = source with
             {
-                Properties = new(source.Properties.Where(_ => !inherited.Contains(_.Name)).ToImmutableArray())
+                Properties = [with(source.Properties.Where(_ => !inherited.Contains(_.Name)).ToImmutableArray())]
             };
         }
 

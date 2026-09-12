@@ -67,10 +67,12 @@ public sealed class HistoryStore
             return;
         }
 
-        items.Insert(0, new()
-        {
-            Query = query
-        });
+        items.Insert(
+            0,
+            new()
+            {
+                Query = query
+            });
 
         Evict();
     }
@@ -93,7 +95,7 @@ public sealed class HistoryStore
         }
 
         var trimmed = label?.Trim();
-        if (trimmed is { Length: > 0 })
+        if (trimmed is {Length: > 0})
         {
             item.Label = trimmed;
             return;

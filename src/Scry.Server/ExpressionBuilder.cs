@@ -1529,13 +1529,13 @@ sealed class ExpressionBuilder(
     // The Value of a closed Nullable<T>, found once per closing: the string overload of
     // Expression.Property looks it up by name on every call.
     internal static PropertyInfo NullableValue(Type nullable) =>
-        nullableValues.GetOrAdd(nullable, _ => _.GetProperty(nameof(Nullable<int>.Value))!);
+        nullableValues.GetOrAdd(nullable, _ => _.GetProperty(nameof(Nullable<>.Value))!);
 
     static readonly ConcurrentDictionary<Type, PropertyInfo> nullableValues = new();
 
     // The Key of a closed IGrouping<TKey, TElement>, found once per closing for the same reason.
     internal static PropertyInfo GroupingKey(Type grouping) =>
-        groupingKeys.GetOrAdd(grouping, _ => _.GetProperty(nameof(IGrouping<int, int>.Key))!);
+        groupingKeys.GetOrAdd(grouping, _ => _.GetProperty(nameof(IGrouping<,>.Key))!);
 
     static readonly ConcurrentDictionary<Type, PropertyInfo> groupingKeys = new();
 

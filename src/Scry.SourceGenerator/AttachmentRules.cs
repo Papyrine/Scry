@@ -13,8 +13,9 @@ static class AttachmentRules
 {
     // Operators that rewrite what a row is. A key projected beside an attachment stops identifying one
     // row of one source once any of them has run.
-    static readonly HashSet<string> refused = new(StringComparer.Ordinal)
-    {
+    static HashSet<string> refused =
+    [
+        with(StringComparer.Ordinal),
         "Distinct",
         "DistinctBy",
         "SelectMany",
@@ -28,7 +29,7 @@ static class AttachmentRules
         "IntersectBy",
         "Except",
         "ExceptBy"
-    };
+    ];
 
     /// <summary>
     /// Checks one link's wired lambdas. A projection is held to the key rule; every other lambda —
