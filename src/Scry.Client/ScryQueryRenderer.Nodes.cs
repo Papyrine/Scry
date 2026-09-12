@@ -41,9 +41,12 @@ partial class QueryRenderer
                     throw Refuse(RenderRefusal.UnsupportedShape);
                 }
 
-                return unary.Op == UnaryOp.Not
-                    ? $"!({RenderNode(unary.Operand, scope)})"
-                    : $"-({RenderNode(unary.Operand, scope)})";
+                if (unary.Op == UnaryOp.Not)
+                {
+                    return $"!({RenderNode(unary.Operand, scope)})";
+                }
+
+                return $"-({RenderNode(unary.Operand, scope)})";
 
             case ConditionalNode conditional:
                 return $"({Operand(conditional.Test, scope)} ? {Operand(conditional.IfTrue, scope)} : {Operand(conditional.IfFalse, scope)})";
@@ -283,9 +286,12 @@ partial class QueryRenderer
                 return Fold("Any", subquery.Predicate);
 
             case SubqueryFn.All:
-                return subquery.Predicate is null
-                    ? throw Refuse(RenderRefusal.UnsupportedShape)
-                    : Fold("All", subquery.Predicate);
+                if (subquery.Predicate is null)
+                {
+                    throw Refuse(RenderRefusal.UnsupportedShape);
+                }
+
+                return Fold("All", subquery.Predicate);
 
             case SubqueryFn.Count:
                 return Fold("Count", subquery.Predicate);
