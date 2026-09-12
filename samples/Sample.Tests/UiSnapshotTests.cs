@@ -2,11 +2,21 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Xml.Linq;
 
+// Eight at a time, against NUnit's default of one worker per core. What a running test costs here is a
+// booted WASM runtime, so the ceiling is the agent's memory rather than the machine's cores, and a
+// core's worth of workers apiece is the "sbrk failed to allocate" BrowserFixture warns about arriving
+// all at once. Eight is where the wall clock stops falling anyway: twelve measured within noise of it.
+[assembly: LevelOfParallelism(8)]
+
 // Drives the live WebAssembly UI in a headless browser, asserting behaviour and snapshotting the
 // rendered markup as text. The pixel snapshots live in UiScreenshotTests.
 // Categorised "Browser" so a run can opt out: the browser download and WASM boot are heavier than
 // the in-process tests.
+// Its tests run in parallel with each other: the cost of one is a WASM boot that the machine spends
+// mostly waiting on, and a page opened through the fixture already carries a context — and so a
+// storage — of its own, which is what keeps two of them from meeting.
 [TestFixture]
+[Parallelizable(ParallelScope.Children)]
 [Category("Browser")]
 public class UiSnapshotTests :
     BrowserFixture
