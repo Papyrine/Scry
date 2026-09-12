@@ -3,6 +3,7 @@
 /// allow-listed or exceeds a resource limit — independent of whatever code the client was generated
 /// against. Runs before any expression is rebound or executed.
 /// </summary>
+[SuppressMessage("Performance", "CA1822:Mark members as static")]
 sealed class QueryValidator(Schema schema, ScryOptions options)
 {
     public ScrySource Validate(QueryRequest request)

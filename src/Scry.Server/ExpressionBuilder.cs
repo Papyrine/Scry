@@ -9,6 +9,7 @@
 /// omission a rejection rather than an unfiltered read. <c>navigations</c> is the same idea for a
 /// member path that steps into a policied source, and is omitted on the same terms.
 /// </remarks>
+[SuppressMessage("Performance", "CA1822:Mark members as static")]
 sealed class ExpressionBuilder(
     Schema schema,
     ScryOptions options,

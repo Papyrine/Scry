@@ -1,6 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
-
-/// <summary>The allow-listed surface of a queryable CLR type.</summary>
+﻿/// <summary>The allow-listed surface of a queryable CLR type.</summary>
 sealed class TypeMeta(Type clrType)
 {
     public Type ClrType { get; } = clrType;
