@@ -297,7 +297,7 @@ public class DeniedRowTests
                         .Contains(department.Id)));
     }
 
-    static readonly DeniedRowHandling erroring = new()
+    static DeniedRowHandling erroring = new()
     {
         RootList = DeniedRowMode.Error
     };

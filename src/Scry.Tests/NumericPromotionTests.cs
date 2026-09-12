@@ -382,7 +382,7 @@ public class NumericPromotionTests
     sealed class NoServices :
         IServiceProvider
     {
-        public static readonly NoServices Instance = new();
+        public static NoServices Instance = new();
 
         public object? GetService(Type serviceType) => null;
     }

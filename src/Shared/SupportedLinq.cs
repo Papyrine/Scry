@@ -30,7 +30,7 @@ static class SupportedLinq
     /// resolved. An operator called with an argument count that is not listed is an overload outside
     /// the set: a comparer, an element selector, or an indexed lambda.
     /// </summary>
-    public static readonly Dictionary<string, int[]> Operators = new(StringComparer.Ordinal)
+    public static Dictionary<string, int[]> Operators = new(StringComparer.Ordinal)
     {
         ["Where"] = [2],
         ["Select"] = [2],

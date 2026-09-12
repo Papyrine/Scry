@@ -442,7 +442,7 @@ public partial class WireShapeTests
     /// read. Nothing but the whitespace between tokens differs: same resolver, same converters, so the
     /// member order and the escaping are the ones that travel.
     /// </summary>
-    static readonly JsonSerializerOptions indented = new(ScryJson.Options)
+    static JsonSerializerOptions indented = new(ScryJson.Options)
     {
         WriteIndented = true
     };

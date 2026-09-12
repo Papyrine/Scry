@@ -6,9 +6,9 @@
 [TestFixture]
 public class PipelineShapeTests
 {
-    static readonly SelectOp selectName = new(new([new("Name", new NodeValue(new MemberNode(["Name"])))]));
+    static SelectOp selectName = new(new([new("Name", new NodeValue(new MemberNode(["Name"])))]));
 
-    static readonly OrderByOp byName = new(new MemberNode(["Name"]), Descending: false);
+    static OrderByOp byName = new(new MemberNode(["Name"]), Descending: false);
 
     [Test]
     public void OfTypeToASiblingAfterNarrowingIsRefused() =>

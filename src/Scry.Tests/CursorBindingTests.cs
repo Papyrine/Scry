@@ -140,9 +140,9 @@ public class CursorBindingTests
         Assert.That(exception.Message, Does.Contain("does not match the query's ordering"));
     }
 
-    static readonly byte[] sharedKey = "a key the tests share"u8.ToArray();
+    static byte[] sharedKey = "a key the tests share"u8.ToArray();
 
-    static readonly OrderByOp byName = new(new MemberNode(["Name"]), Descending: false);
+    static OrderByOp byName = new(new MemberNode(["Name"]), Descending: false);
 
     // The stamp the executor would mint for Employee ordered by Name: the client's key, then the
     // primary key it appends as the tiebreaker.

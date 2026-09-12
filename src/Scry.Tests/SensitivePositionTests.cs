@@ -8,7 +8,7 @@
 [TestFixture]
 public class SensitivePositionTests
 {
-    static readonly ConstNode text = new("x", ClrTypeTag.String);
+    static ConstNode text = new("x", ClrTypeTag.String);
 
     static BinaryNode Compared(params string[] path) =>
         new(BinaryOp.Equal, new MemberNode(path), text);

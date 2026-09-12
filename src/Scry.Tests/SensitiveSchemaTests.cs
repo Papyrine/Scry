@@ -6,7 +6,7 @@
 [TestFixture]
 public class SensitiveSchemaTests
 {
-    static readonly SensitiveSchema sensitive = Build();
+    static SensitiveSchema sensitive = Build();
 
     static SensitiveSchema Build()
     {

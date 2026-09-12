@@ -306,7 +306,7 @@ public class ValidatorLimitTests
     }
 
     // An ordering, because the side ops allow paging only where something bounds it.
-    static readonly OrderByOp ordered = new(new MemberNode(["Price"]), Descending: false);
+    static OrderByOp ordered = new(new MemberNode(["Price"]), Descending: false);
 
     static Node Negated(int count, Node inner)
     {

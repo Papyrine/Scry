@@ -140,7 +140,7 @@ public class BufferedReadTests
     sealed class Unseekable(byte[] bytes) :
         Stream
     {
-        readonly MemoryStream inner = new(bytes);
+        MemoryStream inner = new(bytes);
 
         public override bool CanRead => true;
 

@@ -104,14 +104,14 @@ public static class ScryJson
     // Resolved once, through Options, so each carries the shared policies and converters and every
     // method below hands JsonSerializer its metadata rather than looking one up by type per call.
     // Declared after Options because static field initializers run in textual order.
-    static readonly JsonTypeInfo<QueryRequest> requestInfo = Info<QueryRequest>();
-    static readonly JsonTypeInfo<QueryResponse> responseInfo = Info<QueryResponse>();
-    static readonly JsonTypeInfo<AttachmentRequest> attachmentRequestInfo = Info<AttachmentRequest>();
-    static readonly JsonTypeInfo<QueryBatchRequest> batchRequestInfo = Info<QueryBatchRequest>();
-    static readonly JsonTypeInfo<QueryBatchResponse> batchResponseInfo = Info<QueryBatchResponse>();
-    static readonly JsonTypeInfo<ScryIntrospection> introspectionInfo = Info<ScryIntrospection>();
-    static readonly JsonTypeInfo<ScryStreamMarker> markerInfo = Info<ScryStreamMarker>();
-    static readonly JsonTypeInfo<ScryError> errorInfo = Info<ScryError>();
+    static JsonTypeInfo<QueryRequest> requestInfo = Info<QueryRequest>();
+    static JsonTypeInfo<QueryResponse> responseInfo = Info<QueryResponse>();
+    static JsonTypeInfo<AttachmentRequest> attachmentRequestInfo = Info<AttachmentRequest>();
+    static JsonTypeInfo<QueryBatchRequest> batchRequestInfo = Info<QueryBatchRequest>();
+    static JsonTypeInfo<QueryBatchResponse> batchResponseInfo = Info<QueryBatchResponse>();
+    static JsonTypeInfo<ScryIntrospection> introspectionInfo = Info<ScryIntrospection>();
+    static JsonTypeInfo<ScryStreamMarker> markerInfo = Info<ScryStreamMarker>();
+    static JsonTypeInfo<ScryError> errorInfo = Info<ScryError>();
 
     static JsonTypeInfo<T> Info<T>() =>
         (JsonTypeInfo<T>)Options.GetTypeInfo(typeof(T));

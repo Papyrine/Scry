@@ -8,9 +8,9 @@
 [TestFixture]
 public class TypeMismatchTests
 {
-    static readonly MemberNode name = new(["Name"]);
-    static readonly MemberNode active = new(["Active"]);
-    static readonly MemberNode managerId = new(["ManagerId"]);
+    static MemberNode name = new(["Name"]);
+    static MemberNode active = new(["Active"]);
+    static MemberNode managerId = new(["ManagerId"]);
 
     [TestCaseSource(nameof(Mismatches))]
     public void IsRejected(string label, Node predicate)

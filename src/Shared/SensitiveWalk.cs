@@ -52,7 +52,7 @@ static class SensitiveWalk
 
         // Whether each key of the current grouping touched a marked member, by index, so a group key
         // read later — in the HAVING, in the Select — answers as the key's own expression would.
-        readonly List<bool> groupKeys = [];
+        List<bool> groupKeys = [];
 
         // Inside a subquery: the collection's path off the row, prefixed onto every path read there,
         // so the element's members resolve through the collection rather than as an unresolved name.

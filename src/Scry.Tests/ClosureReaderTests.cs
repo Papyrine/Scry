@@ -14,7 +14,7 @@ public class ClosureReaderTests
 {
     #region Matrices
 
-    static readonly ExpressionType[] binaryOperators =
+    static ExpressionType[] binaryOperators =
     [
         ExpressionType.Add, ExpressionType.Subtract, ExpressionType.Multiply,
         ExpressionType.Divide, ExpressionType.Modulo,
@@ -47,7 +47,7 @@ public class ClosureReaderTests
             _ => [Priority.Low, Priority.High]
         };
 
-    static readonly Type[] operandTypes =
+    static Type[] operandTypes =
     [
         typeof(bool), typeof(int), typeof(uint), typeof(long), typeof(ulong),
         typeof(float), typeof(double), typeof(Priority)

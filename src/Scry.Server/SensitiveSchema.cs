@@ -15,7 +15,7 @@ sealed class SensitiveSchema(Schema schema)
     // Every marked member name, off any allow-listed type. Built with the schema rather than on the
     // first unresolved path: the processor is a singleton, and two first requests filling a lazy table
     // at once would race on it.
-    readonly HashSet<string> anyName = schema.Types
+    HashSet<string> anyName = schema.Types
         .SelectMany(_ => _.Members.Values)
         .Where(_ => _.Sensitive)
         .Select(_ => _.Name)

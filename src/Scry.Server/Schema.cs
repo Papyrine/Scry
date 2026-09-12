@@ -8,32 +8,32 @@ using Microsoft.EntityFrameworkCore.Metadata;
 /// </summary>
 sealed class Schema
 {
-    readonly Dictionary<string, ScrySource> sources = new(StringComparer.Ordinal);
-    readonly Dictionary<Type, TypeMeta> types = [];
+    Dictionary<string, ScrySource> sources = new(StringComparer.Ordinal);
+    Dictionary<Type, TypeMeta> types = [];
 
     // The policied sources keyed by the CLR type a navigation would land on. Only the policied ones:
     // this exists so a traversal can ask whether the type it is stepping into filters its rows, and a
     // source with no policy is nothing for that question to find.
-    readonly Dictionary<Type, ScrySource> policiedSources = [];
+    Dictionary<Type, ScrySource> policiedSources = [];
 
     // Every source keyed by its CLR type, which is how the denied-row probe finds the rows that own a
     // traversal. Kept apart from the name lookup above: a source answers to previous names too, and a
     // type is exactly one source.
-    readonly Dictionary<Type, ScrySource> sourcesByType = [];
+    Dictionary<Type, ScrySource> sourcesByType = [];
 
     // Previous wire names still answered to, kept apart from the current surface above so they never
     // leak into introspection or the stamp. Enum values are keyed by enum type, then previous name.
-    readonly Dictionary<string, ScrySource> sourcePreviousNames = new(StringComparer.Ordinal);
-    readonly Dictionary<Type, Dictionary<string, string>> enumPreviousNames = [];
+    Dictionary<string, ScrySource> sourcePreviousNames = new(StringComparer.Ordinal);
+    Dictionary<Type, Dictionary<string, string>> enumPreviousNames = [];
 
     // Captured for the startup guardrail (ValidateAgainstModel): the CLR types the annotations claim
     // are EF-mapped entities/views versus the ones claimed to be complex value types. The classifiers
     // work from attributes alone; only the live EF model can confirm the claim is right.
-    readonly List<Type> entitySourceTypes = [];
-    readonly List<Type> complexTypes = [];
+    List<Type> entitySourceTypes = [];
+    List<Type> complexTypes = [];
 
     // The cached row policies, for the facade a host invalidates and primes through.
-    readonly List<CachedPolicyRegistration> cachedPolicies = [];
+    List<CachedPolicyRegistration> cachedPolicies = [];
 
     /// <summary>Every cached row policy registered, or nothing where none is.</summary>
     internal IReadOnlyList<CachedPolicyRegistration> CachedPolicies => cachedPolicies;
@@ -1504,9 +1504,9 @@ sealed class Schema
         where T : class =>
         db.Set<T>();
 
-    static readonly MethodInfo setOf = typeof(Schema).GetMethod(nameof(SetOf), BindingFlags.NonPublic | BindingFlags.Static)!;
+    static MethodInfo setOf = typeof(Schema).GetMethod(nameof(SetOf), BindingFlags.NonPublic | BindingFlags.Static)!;
 
-    static readonly MethodInfo ofTypeMethod = typeof(Queryable).GetMethod(nameof(Queryable.OfType))!;
+    static MethodInfo ofTypeMethod = typeof(Queryable).GetMethod(nameof(Queryable.OfType))!;
 
     /// <summary>
     /// The registration a POCO source reads its rows from: its own, or the nearest base's. A POCO

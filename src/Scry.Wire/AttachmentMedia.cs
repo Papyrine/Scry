@@ -17,7 +17,7 @@ public static class AttachmentMedia
     /// </summary>
     public const string Default = "application/octet-stream";
 
-    static readonly Dictionary<string, string> extensions = new(StringComparer.OrdinalIgnoreCase)
+    static Dictionary<string, string> extensions = new(StringComparer.OrdinalIgnoreCase)
     {
         {"image/png", ".png"},
         {"image/jpeg", ".jpg"},
@@ -40,7 +40,7 @@ public static class AttachmentMedia
 
     // Lets the map be probed with the media type sliced off the header, rather than a substring cut
     // out of it just to be looked up and dropped.
-    static readonly Dictionary<string, string>.AlternateLookup<ReadOnlySpan<char>> lookup =
+    static Dictionary<string, string>.AlternateLookup<ReadOnlySpan<char>> lookup =
         extensions.GetAlternateLookup<ReadOnlySpan<char>>();
 
     /// <summary>

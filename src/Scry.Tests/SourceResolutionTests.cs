@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore.Query;
 [TestFixture]
 public class SourceResolutionTests
 {
-    static readonly Schema schema = Build();
+    static Schema schema = Build();
 
     static Schema Build()
     {

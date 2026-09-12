@@ -35,8 +35,8 @@ sealed class SignatureDecoder :
     ISignatureTypeProvider<DecodedType, object?>,
     ICustomAttributeTypeProvider<DecodedType>
 {
-    static readonly OtherDecoded other = new();
-    static readonly BytesDecoded bytes = new();
+    static OtherDecoded other = new();
+    static BytesDecoded bytes = new();
 
     public DecodedType GetPrimitiveType(PrimitiveTypeCode typeCode) => new PrimitiveDecoded(typeCode);
 
@@ -76,7 +76,7 @@ sealed class SignatureDecoder :
     // The one-argument collection shapes an EF navigation is declared as. Matched by name because the
     // model assembly is read as metadata — there is no type system here to ask about assignability.
     // Shared with the server, which refuses any other shape so the two never disagree about a member.
-    static readonly HashSet<string> collectionTypes = CollectionShapes.GenericDefinitions;
+    static HashSet<string> collectionTypes = CollectionShapes.GenericDefinitions;
 
     // byte[] is the one array that is a value in its own right; every other one-dimensional array is
     // a collection of its element, exactly as the server reads it.

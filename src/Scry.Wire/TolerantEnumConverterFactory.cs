@@ -11,7 +11,7 @@ sealed class TolerantEnumConverterFactory :
     // Integers stay readable: a payload carries a computed value as its number (a day of the week read
     // as an int) and a batch entry its status. A request's enums are checked for range by the
     // validator instead, which is where an undefined value is a rejection rather than a fault.
-    static readonly JsonStringEnumConverter inner = new();
+    static JsonStringEnumConverter inner = new();
 
     public override bool CanConvert(Type typeToConvert) =>
         typeToConvert.IsEnum;
@@ -25,7 +25,7 @@ sealed class TolerantEnumConverterFactory :
         JsonConverter<T>
         where T : struct, Enum
     {
-        readonly JsonConverter<T> inner = (JsonConverter<T>)innerConverter;
+        JsonConverter<T> inner = (JsonConverter<T>)innerConverter;
 
         public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {

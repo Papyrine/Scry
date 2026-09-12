@@ -8,29 +8,29 @@
 /// </summary>
 static class ResponseWriter
 {
-    static readonly JsonEncodedText version = JsonEncodedText.Encode("version");
-    static readonly JsonEncodedText kind = JsonEncodedText.Encode("kind");
-    static readonly JsonEncodedText payload = JsonEncodedText.Encode("payload");
-    static readonly JsonEncodedText stamp = JsonEncodedText.Encode("stamp");
-    static readonly JsonEncodedText list = JsonEncodedText.Encode(nameof(ResultKind.List));
-    static readonly JsonEncodedText page = JsonEncodedText.Encode(nameof(ResultKind.Page));
-    static readonly JsonEncodedText scalar = JsonEncodedText.Encode(nameof(ResultKind.Scalar));
-    static readonly JsonEncodedText single = JsonEncodedText.Encode(nameof(ResultKind.Single));
-    static readonly JsonEncodedText items = JsonEncodedText.Encode("items");
-    static readonly JsonEncodedText hasMore = JsonEncodedText.Encode("hasMore");
-    static readonly JsonEncodedText cursor = JsonEncodedText.Encode("cursor");
-    static readonly JsonEncodedText results = JsonEncodedText.Encode("results");
-    static readonly JsonEncodedText response = JsonEncodedText.Encode("response");
-    static readonly JsonEncodedText error = JsonEncodedText.Encode("error");
-    static readonly JsonEncodedText status = JsonEncodedText.Encode("status");
-    static readonly JsonEncodedText code = JsonEncodedText.Encode("code");
-    static readonly JsonEncodedText badRequest = JsonEncodedText.Encode(nameof(HttpStatusCode.BadRequest));
-    static readonly JsonEncodedText forbidden = JsonEncodedText.Encode(nameof(HttpStatusCode.Forbidden));
-    static readonly JsonEncodedText internalServerError = JsonEncodedText.Encode(nameof(HttpStatusCode.InternalServerError));
-    static readonly JsonEncodedText validation = JsonEncodedText.Encode(nameof(ScryErrorCode.Validation));
-    static readonly JsonEncodedText stale = JsonEncodedText.Encode(nameof(ScryErrorCode.StaleClient));
-    static readonly JsonEncodedText denied = JsonEncodedText.Encode(nameof(ScryErrorCode.Forbidden));
-    static readonly JsonEncodedText executionFailed = JsonEncodedText.Encode(nameof(ScryErrorCode.ExecutionFailed));
+    static JsonEncodedText version = JsonEncodedText.Encode("version");
+    static JsonEncodedText kind = JsonEncodedText.Encode("kind");
+    static JsonEncodedText payload = JsonEncodedText.Encode("payload");
+    static JsonEncodedText stamp = JsonEncodedText.Encode("stamp");
+    static JsonEncodedText list = JsonEncodedText.Encode(nameof(ResultKind.List));
+    static JsonEncodedText page = JsonEncodedText.Encode(nameof(ResultKind.Page));
+    static JsonEncodedText scalar = JsonEncodedText.Encode(nameof(ResultKind.Scalar));
+    static JsonEncodedText single = JsonEncodedText.Encode(nameof(ResultKind.Single));
+    static JsonEncodedText items = JsonEncodedText.Encode("items");
+    static JsonEncodedText hasMore = JsonEncodedText.Encode("hasMore");
+    static JsonEncodedText cursor = JsonEncodedText.Encode("cursor");
+    static JsonEncodedText results = JsonEncodedText.Encode("results");
+    static JsonEncodedText response = JsonEncodedText.Encode("response");
+    static JsonEncodedText error = JsonEncodedText.Encode("error");
+    static JsonEncodedText status = JsonEncodedText.Encode("status");
+    static JsonEncodedText code = JsonEncodedText.Encode("code");
+    static JsonEncodedText badRequest = JsonEncodedText.Encode(nameof(HttpStatusCode.BadRequest));
+    static JsonEncodedText forbidden = JsonEncodedText.Encode(nameof(HttpStatusCode.Forbidden));
+    static JsonEncodedText internalServerError = JsonEncodedText.Encode(nameof(HttpStatusCode.InternalServerError));
+    static JsonEncodedText validation = JsonEncodedText.Encode(nameof(ScryErrorCode.Validation));
+    static JsonEncodedText stale = JsonEncodedText.Encode(nameof(ScryErrorCode.StaleClient));
+    static JsonEncodedText denied = JsonEncodedText.Encode(nameof(ScryErrorCode.Forbidden));
+    static JsonEncodedText executionFailed = JsonEncodedText.Encode(nameof(ScryErrorCode.ExecutionFailed));
 
     /// <summary>Writes the whole list envelope — version, kind, rows, stamp — returning the row count.</summary>
     /// <remarks>
@@ -297,9 +297,9 @@ sealed class PlanShapeWriter
         public Dictionary<string, int>? Index;
     }
 
-    static readonly JsonEncodedText bin = JsonEncodedText.Encode(ScryBinary.PartProperty);
+    static JsonEncodedText bin = JsonEncodedText.Encode(ScryBinary.PartProperty);
 
-    readonly Node root;
+    Node root;
 
     PlanShapeWriter(Node root) =>
         this.root = root;
@@ -312,7 +312,7 @@ sealed class PlanShapeWriter
     // A writer is immutable once built and is published through the dictionary, so concurrent readers
     // see it whole. Two threads that both miss build identical writers and one of them wins, which is
     // the same benign race the per-plan field had.
-    static readonly ConcurrentDictionary<ShapeKey, PlanShapeWriter> writers = new();
+    static ConcurrentDictionary<ShapeKey, PlanShapeWriter> writers = new();
 
     // A projection is the client's, so the number of distinct shapes reaching this is bounded only by
     // what a caller chooses to send. Growth stops here and a shape arriving past the limit builds its
@@ -351,8 +351,8 @@ sealed class PlanShapeWriter
     readonly struct ShapeKey(IReadOnlyList<IReadOnlyList<string>> shape, IReadOnlyList<bool>? binary) :
         IEquatable<ShapeKey>
     {
-        readonly IReadOnlyList<IReadOnlyList<string>> shape = shape;
-        readonly IReadOnlyList<bool>? binary = binary;
+        IReadOnlyList<IReadOnlyList<string>> shape = shape;
+        IReadOnlyList<bool>? binary = binary;
 
         public bool Equals(ShapeKey other)
         {

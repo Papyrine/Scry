@@ -10,7 +10,7 @@ sealed class NonNullElementsConverterFactory :
 {
     // The request vocabulary only. A response is the server's own, and a batch response's entries are
     // read with a range scope that needs the reader they arrived on rather than one scoped to a value.
-    static readonly HashSet<Type> elements =
+    static HashSet<Type> elements =
     [
         typeof(QueryOp),
         typeof(Node),

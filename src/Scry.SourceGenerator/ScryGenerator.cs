@@ -40,7 +40,7 @@ public class ScryGenerator :
         return null;
     }
 
-    static readonly DiagnosticDescriptor readFailed = new(
+    static DiagnosticDescriptor readFailed = new(
         "SCRY001",
         "Failed to read the Scry model assembly",
         "{0}",
@@ -48,7 +48,7 @@ public class ScryGenerator :
         DiagnosticSeverity.Error,
         true);
 
-    static readonly DiagnosticDescriptor duplicateSource = new(
+    static DiagnosticDescriptor duplicateSource = new(
         "SCRY002",
         "Duplicate Scry source name",
         "Two queryable types resolve to the source name '{0}'. Set a distinct [Queryable(Name = \"...\")] on one of them.",
@@ -56,7 +56,7 @@ public class ScryGenerator :
         DiagnosticSeverity.Error,
         true);
 
-    static readonly DiagnosticDescriptor invalidSourceName = new(
+    static DiagnosticDescriptor invalidSourceName = new(
         "SCRY003",
         "Scry source name cannot be a C# property name",
         "The source name '{0}' cannot be written as a C# property name, so the entry point exposing it cannot be generated. Set [Queryable(Name = \"...\")] to a plain identifier that is not a reserved keyword.",
@@ -64,7 +64,7 @@ public class ScryGenerator :
         DiagnosticSeverity.Error,
         true);
 
-    static readonly DiagnosticDescriptor attachmentNotBytes = new(
+    static DiagnosticDescriptor attachmentNotBytes = new(
         "SCRY004",
         "[Attachment] must be a byte[] member",
         "'{0}.{1}' carries [Attachment] but is not a byte[]. An attachment is a stream of bytes fetched on demand; apply it to a byte[] member, or remove it.",
@@ -72,7 +72,7 @@ public class ScryGenerator :
         DiagnosticSeverity.Error,
         true);
 
-    static readonly DiagnosticDescriptor attachmentNotEntity = new(
+    static DiagnosticDescriptor attachmentNotEntity = new(
         "SCRY005",
         "[Attachment] is only valid on a queryable entity",
         "'{0}.{1}' carries [Attachment], but '{0}' is a {2} and has no primary key to fetch the value by. Expose the type with [Queryable], or remove the attachment.",
@@ -80,7 +80,7 @@ public class ScryGenerator :
         DiagnosticSeverity.Error,
         true);
 
-    static readonly DiagnosticDescriptor attachmentWithBinaryTransfer = new(
+    static DiagnosticDescriptor attachmentWithBinaryTransfer = new(
         "SCRY006",
         "[Attachment] cannot combine with [BinaryTransfer]",
         "'{0}.{1}' carries both [Attachment] and [BinaryTransfer]. [BinaryTransfer] changes how a value the query read is encoded; [Attachment] means the query never reads it. Keep one.",
@@ -88,7 +88,7 @@ public class ScryGenerator :
         DiagnosticSeverity.Error,
         true);
 
-    static readonly DiagnosticDescriptor attachmentKeysNotDerivable = new(
+    static DiagnosticDescriptor attachmentKeysNotDerivable = new(
         "SCRY007",
         "Attachment keys are not derivable",
         "'{0}' carries an attachment but no primary key could be derived for it. An attachment is fetched by its row's key, so one must be nameable: mark the key member(s) with [Key], or name a member 'Id' or '{0}Id'.",
@@ -96,7 +96,7 @@ public class ScryGenerator :
         DiagnosticSeverity.Error,
         true);
 
-    static readonly DiagnosticDescriptor conflictingOptIn = new(
+    static DiagnosticDescriptor conflictingOptIn = new(
         "SCRY008",
         "A type opts in more than once",
         "{0}. A type opts in as exactly one of [Queryable], [QueryableView], [QueryablePoco], or [QueryableComplex].",
@@ -405,7 +405,7 @@ public class ScryGenerator :
                 /// </summary>
                 public const string SchemaStamp = "{{ComputeStamp(extract)}}";
 
-                readonly global::Scry.ScryClient client;
+                global::Scry.ScryClient client;
 
                 public ScryQuery(global::Scry.ScryClient client)
                 {

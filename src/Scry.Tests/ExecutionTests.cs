@@ -243,7 +243,7 @@ public class ExecutionTests
             extra(options);
         });
 
-    static readonly JsonSerializerOptions indented =
+    static JsonSerializerOptions indented =
         new()
         {
             WriteIndented = true

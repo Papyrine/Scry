@@ -738,8 +738,8 @@ public class AnalyzerTests
 
         public class Queries
         {
-            readonly ScryQuery Query = null!;
-            readonly ScryClient client = null!;
+            ScryQuery Query = null!;
+            ScryClient client = null!;
 
             static string Munge(string value) => value;
 

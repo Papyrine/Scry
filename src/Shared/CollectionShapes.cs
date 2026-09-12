@@ -8,7 +8,7 @@
 static class CollectionShapes
 {
     /// <summary>The generic type definitions, by metadata full name.</summary>
-    public static readonly HashSet<string> GenericDefinitions =
+    public static HashSet<string> GenericDefinitions =
     [
         "System.Collections.Generic.ICollection`1",
         "System.Collections.Generic.IEnumerable`1",

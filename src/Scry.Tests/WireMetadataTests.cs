@@ -7,7 +7,7 @@
 public class WireMetadataTests
 {
     // The generated resolver, which sits ahead of the reflection fallback covering payload types.
-    static readonly IJsonTypeInfoResolver generated = ScryJson.Options.TypeInfoResolverChain[0];
+    static IJsonTypeInfoResolver generated = ScryJson.Options.TypeInfoResolverChain[0];
 
     [Test]
     public void GeneratedMetadataIsAheadOfReflection()

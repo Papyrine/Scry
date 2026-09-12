@@ -359,7 +359,7 @@ public class BatchTests
             Entries.Add(entry);
     }
 
-    static readonly JsonSerializerOptions indented =
+    static JsonSerializerOptions indented =
         new()
         {
             WriteIndented = true

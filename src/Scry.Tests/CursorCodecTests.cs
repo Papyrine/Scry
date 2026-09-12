@@ -7,7 +7,7 @@
 [TestFixture]
 public class CursorCodecTests
 {
-    static readonly byte[] key = Enumerable.Range(0, 32).Select(_ => (byte) _).ToArray();
+    static byte[] key = Enumerable.Range(0, 32).Select(_ => (byte) _).ToArray();
 
     const string order = "abcdefghijkl";
 
