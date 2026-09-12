@@ -351,8 +351,8 @@ sealed class PlanShapeWriter
     readonly struct ShapeKey(IReadOnlyList<IReadOnlyList<string>> shape, IReadOnlyList<bool>? binary) :
         IEquatable<ShapeKey>
     {
-        IReadOnlyList<IReadOnlyList<string>> shape = shape;
-        IReadOnlyList<bool>? binary = binary;
+        readonly IReadOnlyList<IReadOnlyList<string>> shape = shape;
+        readonly IReadOnlyList<bool>? binary = binary;
 
         public bool Equals(ShapeKey other)
         {

@@ -2458,7 +2458,7 @@ sealed class ExpressionBuilder(
 
     // Closed Sum/Average/Min/Max methods, keyed by (name, element type, selector return type). The
     // key space is bounded by the queryable schema, so this never grows unboundedly.
-    static readonly ConcurrentDictionary<(string name, Type element, Type result), MethodInfo> aggregateMethods = new();
+    static ConcurrentDictionary<(string name, Type element, Type result), MethodInfo> aggregateMethods = new();
 
     /// <summary>
     /// Whether the row is one of an in-memory source, where a string member runs under LINQ to Objects
@@ -2474,14 +2474,14 @@ sealed class ExpressionBuilder(
                source.Kind == SourceKind.Poco;
     }
 
-    static readonly Expression ordinal = Expression.Constant(StringComparison.Ordinal);
-    static readonly MethodInfo stringStartsWithOrdinal = StringMethod("StartsWith", typeof(string), typeof(StringComparison));
-    static readonly MethodInfo stringEndsWithOrdinal = StringMethod("EndsWith", typeof(string), typeof(StringComparison));
-    static readonly MethodInfo stringIndexOfOrdinal = StringMethod("IndexOf", typeof(string), typeof(StringComparison));
-    static readonly MethodInfo stringToLowerInvariant = StringMethod("ToLowerInvariant");
-    static readonly MethodInfo stringToUpperInvariant = StringMethod("ToUpperInvariant");
-    static readonly MethodInfo stringCompareOrdinal = StringMethod("CompareOrdinal", typeof(string), typeof(string));
-    static readonly MethodInfo mathSign = typeof(Math).GetMethod(nameof(Math.Sign), [typeof(int)])!;
+    static Expression ordinal = Expression.Constant(StringComparison.Ordinal);
+    static MethodInfo stringStartsWithOrdinal = StringMethod("StartsWith", typeof(string), typeof(StringComparison));
+    static MethodInfo stringEndsWithOrdinal = StringMethod("EndsWith", typeof(string), typeof(StringComparison));
+    static MethodInfo stringIndexOfOrdinal = StringMethod("IndexOf", typeof(string), typeof(StringComparison));
+    static MethodInfo stringToLowerInvariant = StringMethod("ToLowerInvariant");
+    static MethodInfo stringToUpperInvariant = StringMethod("ToUpperInvariant");
+    static MethodInfo stringCompareOrdinal = StringMethod("CompareOrdinal", typeof(string), typeof(string));
+    static MethodInfo mathSign = typeof(Math).GetMethod(nameof(Math.Sign), [typeof(int)])!;
 
     static MethodInfo StringMethod(string name, params Type[] parameters) =>
         typeof(string).GetMethod(name, parameters) ??
