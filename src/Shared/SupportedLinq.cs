@@ -61,7 +61,7 @@ static class SupportedLinq
     /// Operators a query may carry at most once. Each is rejected on the second occurrence by
     /// <c>QueryValidator</c> — server-side, so today the cost of writing two is a round trip.
     /// </summary>
-    public static readonly Dictionary<string, string> SingleUse = new(StringComparer.Ordinal)
+    public static Dictionary<string, string> SingleUse = new(StringComparer.Ordinal)
     {
         ["Select"] = "Select",
         ["Distinct"] = "Distinct",
@@ -74,25 +74,27 @@ static class SupportedLinq
     };
 
     /// <summary>The operators that establish an ordering, which <c>Reverse</c> requires.</summary>
-    public static readonly HashSet<string> Ordering = new(StringComparer.Ordinal)
-    {
+    public static HashSet<string> Ordering =
+    [
+        with(StringComparer.Ordinal),
         "OrderBy",
         "OrderByDescending",
         "ThenBy",
         "ThenByDescending"
-    };
+    ];
 
     /// <summary>
     /// The types whose members read as date functions rather than as a member path. Kept in step with
     /// <c>QueryTranslator.IsTemporal</c>.
     /// </summary>
-    public static readonly HashSet<string> Temporal = new(StringComparer.Ordinal)
-    {
+    public static HashSet<string> Temporal =
+    [
+        with(StringComparer.Ordinal),
         "System.DateTime",
         "System.DateOnly",
         "System.DateTimeOffset",
         "System.TimeOnly"
-    };
+    ];
 
     /// <summary>
     /// Every callable member on a scalar, as <c>Owner.Member/arity</c>, paired with the
@@ -101,7 +103,7 @@ static class SupportedLinq
     /// <c>StringComparison</c> becomes a collated comparison — so it belongs to the surface without
     /// contributing to the wire's function set.
     /// </summary>
-    public static readonly (string Signature, string Function)[] Functions =
+    public static (string Signature, string Function)[] Functions =
     [
         ("System.String.Contains/1", "StringContains"),
         ("System.String.Contains/2", "StringContains"),
@@ -265,12 +267,13 @@ static class SupportedLinq
     /// Owners that stand for a shape rather than a type, so no reflected member backs them. Each is a
     /// call the wire carries whose C# spelling belongs to <c>Enumerable</c> or to the language itself.
     /// </summary>
-    public static readonly HashSet<string> Markers = new(StringComparer.Ordinal)
-    {
+    public static HashSet<string> Markers =
+    [
+        with(StringComparer.Ordinal),
         "$set",
         "$sequence",
         "$binary"
-    };
+    ];
 
     /// <summary>
     /// The signature every temporal type shares, since the four spell the same members. A member on a
@@ -281,7 +284,7 @@ static class SupportedLinq
     /// <summary>The signature <c>Nullable&lt;T&gt;</c>'s members are looked up under, whatever the T.</summary>
     public const string NullableOwner = "$nullable";
 
-    static readonly HashSet<string> signatures = Build();
+    static HashSet<string> signatures = Build();
 
     static HashSet<string> Build()
     {

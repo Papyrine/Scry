@@ -14,13 +14,13 @@ sealed partial class ExplorerAssets
     // asset's ETag.
     const string stamp = "scryui.stamp";
 
-    static readonly Lazy<ExplorerAssets> lazy = new(() => new());
+    static Lazy<ExplorerAssets> lazy = new(() => new());
 
     public static ExplorerAssets Instance => lazy.Value;
 
-    readonly Assembly assembly = typeof(ExplorerAssets).Assembly;
-    readonly Dictionary<string, string> pathToResource = new(StringComparer.OrdinalIgnoreCase);
-    readonly Dictionary<string, string> pathToTag = new(StringComparer.OrdinalIgnoreCase);
+    Assembly assembly = typeof(ExplorerAssets).Assembly;
+    Dictionary<string, string> pathToResource = new(StringComparer.OrdinalIgnoreCase);
+    Dictionary<string, string> pathToTag = new(StringComparer.OrdinalIgnoreCase);
 
     ExplorerAssets()
     {

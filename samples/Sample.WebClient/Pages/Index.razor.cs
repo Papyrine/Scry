@@ -1,4 +1,4 @@
-namespace Sample.Client.Pages;
+namespace Sample.WebClient.Pages;
 
 public partial class Index
 {

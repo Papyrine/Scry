@@ -142,7 +142,7 @@ builder.Services
         _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
     });
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L31-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L31-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddScry<TContext>` scans `typeof(TContext).Assembly` once at startup, builds the allow-list schema, and registers it as a singleton along with the `ScryProcessor`.
@@ -156,7 +156,7 @@ Then map the endpoint:
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.Server/Program.cs#L85-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L85-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 That is a single HTTP endpoint which accepts a serialized query and returns the projected rows. It answers `POST`, where the query is the body, and `GET`, where the query [rides in the URL](wire-format.md#the-url-form) so the response can be cached and revalidated. See [Server](server.md) for all options, and [Row policies](policies.md) for row-level filtering.
@@ -172,7 +172,7 @@ Point at the model DLL:
 <!-- The server model, pointed at by path. NOT referenced. -->
 <ScryModelDll>$(MSBuildThisFileDirectory)..\Sample.Model\bin\$(Configuration)\net10.0\Sample.Model.dll</ScryModelDll>
 ```
-<sup><a href='/samples/Sample.Client/Sample.Client.csproj#L7-L10' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientModelPath' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Sample.WebClient.csproj#L7-L10' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientModelPath' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 and add a build-ordering-only project reference:
@@ -200,7 +200,7 @@ builder.Services.AddScryClient(
     _ => _.GetRequiredService<IHttpClientFactory>().CreateClient("scry"));
 builder.Services.AddScoped<ScryQuery>();
 ```
-<sup><a href='/samples/Sample.Client/Program.cs#L14-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Program.cs#L14-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddScryClient` registers a `ScryClient` that sends to the given endpoint using the `HttpClient` the delegate resolves — here a **named** one, so Scry's base address, and any handler pipeline it grows, stay separate from every other call the app makes. `ScryQuery` is generated into the `Scry.Generated` namespace.
@@ -223,7 +223,7 @@ services.AddScoped<ScryQuery>();
 <sup><a href='/samples/Sample.Tests/ClientRegistrationTests.cs#L19-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientWasmRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-That is a fair shortcut in WebAssembly, where the browser backs `HttpClient`, there is exactly one, and it already points at the app's own origin — so there is nothing for a name to disambiguate, and it saves the app a `Microsoft.Extensions.Http` reference it would otherwise carry into the browser. Prefer naming the client anywhere else: a bare `HttpClient` registration is discouraged outside WASM to begin with, and an ambient one may well belong to another API, which Scry would then quietly post to.
+That is a fair shortcut in WebAssembly, where the browser backs `HttpClient`, there is exactly one, and it already points at the app's own origin — so there is nothing for a name to disambiguate, and it saves the app a `Microsoft.Extensions.Http` reference it would otherwise carry into the browser. Prefer naming the client anywhere else: a bare `HttpClient` registration is discouraged outside WASM to begin with, and an ambient one may well belong to another API, which Scry would then quietly post to. A desktop or console client also has a socket pool and a DNS lifetime for the factory to manage, which the browser does not — see [Client hosts](clients.md).
 
 Either way the client is registered **scoped**, not transient. It records the schema stamp each response advertises and raises [`SchemaStaleDetected`](schema-versioning.md) at most once, so a fresh instance per injection would reset that and never report drift. That is also why a typed client (`AddHttpClient<ScryClient>`) is the wrong shape here: the factory registers those transient.
 
@@ -239,7 +239,7 @@ record EmployeeRow(string Name, Status Status, string? Manager, string Departmen
 
 record RegionSummary(string Region, decimal Total, int Count);
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L5-L9' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientProjectionTypes' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L5-L9' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientProjectionTypes' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 then write ordinary LINQ:
@@ -254,7 +254,7 @@ employees = await Query
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L48-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L48-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 That query is captured — never executed client-side — serialized to the wire AST, sent, validated against the allow-list on the server, rebound to the real `Employee` type, run through EF Core, and returned as exactly the four projected columns.

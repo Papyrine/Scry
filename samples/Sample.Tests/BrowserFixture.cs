@@ -1,5 +1,5 @@
 /// <summary>
-/// Launches the real Sample.Server — the same DLL <c>dotnet run</c> would execute — and a headless
+/// Launches the real Sample.WebServer — the same DLL <c>dotnet run</c> would execute — and a headless
 /// Chromium, for fixtures that drive the live WebAssembly UI.
 /// </summary>
 /// <remarks>
@@ -15,20 +15,37 @@ public abstract class BrowserFixture
     string workDir = null!;
     IBrowser browser = null!;
 
-    // What the page logged during the current test. Written from Playwright's own threads, so a
-    // concurrent collection rather than a List.
-    ConcurrentQueue<string> console = new();
+    /// <summary>
+    /// What one running test opened and what it logged.
+    /// </summary>
+    /// <remarks>
+    /// Held per test rather than as fields on the fixture because NUnit runs a fixture's parallel tests
+    /// against one instance of it: a field here would be every test in flight at once, and the page a
+    /// tear-down closed would be some other test's.
+    /// </remarks>
+    sealed class RunningTest
+    {
+        // What the page logged during the test. Written from Playwright's own threads, so a concurrent
+        // collection rather than a List.
+        public ConcurrentQueue<string> Console { get; } = new();
 
-    // Every page the current test opened. A page holds a fully booted WASM runtime — Roslyn included,
-    // untrimmed and interpreted, because the explorer needs the interpreter — and the browser keeps
-    // one alive until it is closed. Left open, a suite this size walks the agent out of memory: the
-    // failure lands as "MONO_WASM: sbrk failed to allocate", tens of tests after the one that spent
-    // the memory, and everything after it fails to boot at all. A bag rather than a field because a
-    // test may open a second page (a shared link opens one).
-    ConcurrentBag<IPage> pages = [];
+        // Every page the test opened. A page holds a fully booted WASM runtime — Roslyn included,
+        // untrimmed and interpreted, because the explorer needs the interpreter — and the browser keeps
+        // one alive until it is closed. Left open, a suite this size walks the agent out of memory: the
+        // failure lands as "MONO_WASM: sbrk failed to allocate", tens of tests after the one that spent
+        // the memory, and everything after it fails to boot at all. A bag rather than a field because a
+        // test may open a second page (a shared link opens one).
+        public ConcurrentBag<IPage> Pages { get; } = [];
 
-    // The contexts opened for pages that share storage; closed after their pages.
-    ConcurrentBag<IBrowserContext> contexts = [];
+        // The contexts opened for pages that share storage; closed after their pages.
+        public ConcurrentBag<IBrowserContext> Contexts { get; } = [];
+    }
+
+    // Keyed by NUnit's id for the test, which is what tells two tests running at once apart.
+    ConcurrentDictionary<string, RunningTest> running = new();
+
+    RunningTest Current =>
+        running.GetOrAdd(TestContext.CurrentContext.Test.ID, _ => new());
 
     /// <summary>The origin the sample server is listening on, with no trailing slash.</summary>
     protected string BaseUrl { get; private set; } = null!;
@@ -51,7 +68,7 @@ public abstract class BrowserFixture
     protected async Task<IBrowserContext> NewContextAsync()
     {
         var context = await browser.NewContextAsync();
-        contexts.Add(context);
+        Current.Contexts.Add(context);
         return context;
     }
 
@@ -60,15 +77,18 @@ public abstract class BrowserFixture
 
     IPage Track(IPage page)
     {
-        pages.Add(page);
-        page.Console += (_, message) => console.Enqueue($"[{message.Type}] {message.Text}");
-        page.PageError += (_, error) => console.Enqueue($"[pageerror] {error}");
+        // Resolved once, here, rather than inside the handlers: those run on Playwright's threads, where
+        // the test NUnit thinks is current is not this one.
+        var test = Current;
+        test.Pages.Add(page);
+        page.Console += (_, message) => test.Console.Enqueue($"[{message.Type}] {message.Text}");
+        page.PageError += (_, error) => test.Console.Enqueue($"[pageerror] {error}");
         return page;
     }
 
     [SetUp]
-    public void ClearConsole() =>
-        console.Clear();
+    public void StartTest() =>
+        running[TestContext.CurrentContext.Test.ID] = new();
 
     /// <summary>
     /// Reports what the page logged, but only for a test that failed.
@@ -84,10 +104,12 @@ public abstract class BrowserFixture
     [TearDown]
     public async Task EndTest()
     {
-        ReportConsoleOnFailure();
+        var test = Current;
+
+        ReportConsoleOnFailure(test);
 
         // After the reporting, which reads what the page logged.
-        while (pages.TryTake(out var page))
+        while (test.Pages.TryTake(out var page))
         {
             try
             {
@@ -100,7 +122,7 @@ public abstract class BrowserFixture
             }
         }
 
-        while (contexts.TryTake(out var context))
+        while (test.Contexts.TryTake(out var context))
         {
             try
             {
@@ -112,7 +134,10 @@ public abstract class BrowserFixture
             }
         }
 
-        RefuseContentSecurityPolicyViolations();
+        // Before the check, which throws on a refusal and would otherwise leave the entry behind.
+        running.TryRemove(TestContext.CurrentContext.Test.ID, out _);
+
+        RefuseContentSecurityPolicyViolations(test);
     }
 
     /// <summary>
@@ -122,14 +147,14 @@ public abstract class BrowserFixture
     /// tightened past what Monaco or the runtime needs fails here naming the refusal, rather than as a
     /// page that quietly stopped completing or booting somewhere else in the suite.
     /// </summary>
-    void RefuseContentSecurityPolicyViolations()
+    static void RefuseContentSecurityPolicyViolations(RunningTest test)
     {
         if (TestContext.CurrentContext.Result.Outcome.Status == TestStatus.Failed)
         {
             return;
         }
 
-        Assert.That(TakePolicyRefusals(), Is.Empty, "The browser refused something under the explorer's Content-Security-Policy.");
+        Assert.That(TakePolicyRefusals(test), Is.Empty, "The browser refused something under the explorer's Content-Security-Policy.");
     }
 
     /// <summary>
@@ -137,11 +162,14 @@ public abstract class BrowserFixture
     /// provokes a refusal on purpose, to prove the record sees them — taking them is what keeps that
     /// test from failing its own tear-down.
     /// </summary>
-    protected IReadOnlyList<string> TakePolicyRefusals()
+    protected IReadOnlyList<string> TakePolicyRefusals() =>
+        TakePolicyRefusals(Current);
+
+    static IReadOnlyList<string> TakePolicyRefusals(RunningTest test)
     {
         var refused = new List<string>();
         var kept = new List<string>();
-        while (console.TryDequeue(out var message))
+        while (test.Console.TryDequeue(out var message))
         {
             if (message.Contains("Content Security Policy", StringComparison.Ordinal))
             {
@@ -155,22 +183,22 @@ public abstract class BrowserFixture
 
         foreach (var message in kept)
         {
-            console.Enqueue(message);
+            test.Console.Enqueue(message);
         }
 
         return refused;
     }
 
-    void ReportConsoleOnFailure()
+    static void ReportConsoleOnFailure(RunningTest test)
     {
         if (TestContext.CurrentContext.Result.Outcome.Status != TestStatus.Failed ||
-            console.IsEmpty)
+            test.Console.IsEmpty)
         {
             return;
         }
 
         TestContext.Out.WriteLine($"Browser console during {TestContext.CurrentContext.Test.Name}:");
-        foreach (var message in console)
+        foreach (var message in test.Console)
         {
             TestContext.Out.WriteLine($"  {message}");
         }
@@ -258,7 +286,7 @@ public abstract class BrowserFixture
 
         var dir = baseDir;
         while (dir is not null &&
-               !Directory.Exists(Path.Combine(dir.FullName, "Sample.Server")))
+               !Directory.Exists(Path.Combine(dir.FullName, "Sample.WebServer")))
         {
             dir = dir.Parent;
         }
@@ -266,16 +294,16 @@ public abstract class BrowserFixture
         if (dir is null)
         {
             throw new DirectoryNotFoundException(
-                "Could not locate the Sample.Server project from the test output directory.");
+                "Could not locate the Sample.WebServer project from the test output directory.");
         }
 
-        var dll = Path.Combine(dir.FullName, "Sample.Server", "bin", config, tfm, "Sample.Server.dll");
+        var dll = Path.Combine(dir.FullName, "Sample.WebServer", "bin", config, tfm, "Sample.WebServer.dll");
         if (File.Exists(dll))
         {
             return dll;
         }
 
-        throw new FileNotFoundException("Sample.Server build output not found; build the sample first.", dll);
+        throw new FileNotFoundException("Sample.WebServer build output not found; build the sample first.", dll);
     }
 
     static int GetFreePort()
@@ -303,6 +331,6 @@ public abstract class BrowserFixture
             }
         }
 
-        throw new TimeoutException($"Sample.Server did not start listening on port {port}.");
+        throw new TimeoutException($"Sample.WebServer did not start listening on port {port}.");
     }
 }

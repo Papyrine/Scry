@@ -1,5 +1,5 @@
 using Bunit;
-using PermissionsPage = Sample.Client.Pages.Permissions;
+using PermissionsPage = Sample.WebClient.Pages.Permissions;
 
 /// <summary>
 /// Renders the real /permissions page against the real Scry pipeline and drives its three buttons,

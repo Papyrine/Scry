@@ -692,14 +692,14 @@ public sealed class ScryProcessor
         }
         catch (ScryValidationException exception)
         {
-            ResponseWriter.WriteEntry(json, exception.Message, HttpStatusCode.BadRequest, exception.StaleClient);
+            ResponseWriter.WriteEntry(json, exception.Message, HttpStatusCode.BadRequest, ErrorCodes.Classify(exception));
             return;
         }
         catch (ScryPermissionException exception)
         {
             // Per entry, like a rejection: one entry's rows being denied says nothing about the
             // others', and a batch that failed whole would make a denial impossible to attribute.
-            ResponseWriter.WriteEntry(json, exception.Message, HttpStatusCode.Forbidden, stale: false);
+            ResponseWriter.WriteEntry(json, exception.Message, HttpStatusCode.Forbidden, ScryErrorCode.Forbidden);
             return;
         }
         catch (OperationCanceledException)
@@ -717,7 +717,7 @@ public sealed class ScryProcessor
                 json,
                 "Query execution failed.",
                 HttpStatusCode.InternalServerError,
-                query.Stamp is { } stamp && stamp != schema.Stamp);
+                ErrorCodes.Failed(query.Stamp is { } stamp && stamp != schema.Stamp));
             return;
         }
 
@@ -755,7 +755,7 @@ public sealed class ScryProcessor
             {
                 Error = exception.Message,
                 Status = HttpStatusCode.BadRequest,
-                StaleClient = exception.StaleClient
+                Code = ErrorCodes.Classify(exception)
             };
         }
         catch (ScryPermissionException exception)
@@ -763,7 +763,8 @@ public sealed class ScryProcessor
             return new()
             {
                 Error = exception.Message,
-                Status = HttpStatusCode.Forbidden
+                Status = HttpStatusCode.Forbidden,
+                Code = ScryErrorCode.Forbidden
             };
         }
         catch (Exception)
@@ -774,7 +775,7 @@ public sealed class ScryProcessor
                 Status = HttpStatusCode.InternalServerError,
                 // A drifted client faulting the server is far more likely stale than the server broken,
                 // the same attribution the single-query endpoint makes for an execution failure.
-                StaleClient = query.Stamp is { } stamp && stamp != schema.Stamp
+                Code = ErrorCodes.Failed(query.Stamp is { } stamp && stamp != schema.Stamp)
             };
         }
     }

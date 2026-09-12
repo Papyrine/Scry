@@ -1,5 +1,5 @@
 using Bunit;
-using IndexPage = Sample.Client.Pages.Index;
+using IndexPage = Sample.WebClient.Pages.Index;
 
 // Renders the real Index page against the real Scry server pipeline (in-memory), then snapshots
 // the produced markup. This exercises the page, its controls, and the client/server round trip.

@@ -65,7 +65,7 @@ What moves the stamp is what changes the surface a client was built against, or 
 
 ## Detecting a stale client
 
-A generated client is bound to the model surface it was generated against. That is fine while the two move together, but a **deployed** client can outlive a server redeploy — most obviously a Blazor WASM app the browser has cached and the user has left open in a tab. If the model has since changed incompatibly, the first symptom is otherwise a query that starts returning `400`.
+A generated client is bound to the model surface it was generated against. That is fine while the two move together, but a **deployed** client can outlive a server redeploy — a Blazor WASM app the browser has cached and left open in a tab, and an installed desktop app still more so, since it can sit unpatched on a machine for months. If the model has since changed incompatibly, the first symptom is otherwise a query that starts returning `400`.
 
 Every response carries the server's [schema stamp](wire-format.md#schema-stamp), so the client can notice the drift *before* anything breaks. `ScryClient` exposes it three ways:
 
@@ -102,7 +102,7 @@ void OnSchemaStale(SchemaDrift value)
 void Reload() =>
     Navigation.Refresh(forceReload: true);
 ```
-<sup><a href='/samples/Sample.Client/StaleBanner.razor.cs#L12-L28' title='Snippet source file'>snippet source</a> | <a href='#snippet-detectSchemaDrift' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/StaleBanner.razor.cs#L12-L28' title='Snippet source file'>snippet source</a> | <a href='#snippet-detectSchemaDrift' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The prompt itself is ordinary markup — the banner renders only once drift has been seen:
@@ -118,7 +118,7 @@ The prompt itself is ordinary markup — the banner renders only once drift has 
     </div>
 }
 ```
-<sup><a href='/samples/Sample.Client/StaleBanner.razor#L4-L12' title='Snippet source file'>snippet source</a> | <a href='#snippet-staleBannerMarkup' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/StaleBanner.razor#L4-L12' title='Snippet source file'>snippet source</a> | <a href='#snippet-staleBannerMarkup' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Prefer prompting over reloading automatically. A forced reload discards whatever the user was in the middle of, and their current client still works — there is no reason to interrupt them mid-task for a change that has not broken anything yet.
@@ -130,8 +130,8 @@ Eventually a drifted client's query does fail — a member it still references w
 
 | Failure | Attributed by |
 | --- | --- |
-| The server rejects the query (`400`) | `"staleClient": true` on the [error body](server.md#error-handling) |
-| The query faults during execution (`500`) | the same marker — a drifted client's query can still fault in ways neither validation nor rebinding can name |
+| The server rejects the query (`400`) | `"code": "StaleClient"` on the [error body](server.md#error-handling), in place of the `Validation` it would otherwise carry |
+| The query faults during execution (`500`) | the same code, in place of `ExecutionFailed` — a drifted client's query can still fault in ways neither validation nor rebinding can name |
 | A result carries an enum value name the generated model lacks | the client's reader, after the [alias table](annotations.md#the-response-side) fails to resolve it |
 | A result cannot be read at all — a widened numeric that now overflows, a member that became nullable | the client, when the stamp already shows it drifted |
 
@@ -155,7 +155,7 @@ catch (ScryStaleClientException)
     stale = true;
 }
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor.cs#L116-L125' title='Snippet source file'>snippet source</a> | <a href='#snippet-handleStaleClient' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L116-L125' title='Snippet source file'>snippet source</a> | <a href='#snippet-handleStaleClient' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The stale branch renders a directed placeholder in place of the data — the fix is a reload, and the banner offering one is already visible above:
@@ -170,7 +170,7 @@ The stale branch renders a directed placeholder in place of the data — the fix
     </p>
 }
 ```
-<sup><a href='/samples/Sample.Client/Pages/Index.razor#L18-L25' title='Snippet source file'>snippet source</a> | <a href='#snippet-staleDataMarkup' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor#L18-L25' title='Snippet source file'>snippet source</a> | <a href='#snippet-staleDataMarkup' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The generic `catch` stays: a failure without the stale marker is an ordinary error and should keep looking like one. Order matters — `ScryStaleClientException` first, since the general handler would otherwise swallow it.

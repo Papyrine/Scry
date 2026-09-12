@@ -24,7 +24,7 @@
   <!--
     Scry generator wiring. Emits the client query models (EmployeeQueryModel, OrderQueryModel, ...),
     the re-emitted enums, and the ScryQuery entry point from the Sample.Model assembly, which is read
-    by path (never referenced by the generator). Mirrors the setup in samples/Sample.Client.
+    by path (never referenced by the generator). Mirrors the setup in samples/Sample.WebClient.
   -->
   <ItemGroup>
     <ProjectReference Include="..\src\Scry.SourceGenerator\Scry.SourceGenerator.csproj"

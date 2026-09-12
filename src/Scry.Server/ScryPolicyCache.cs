@@ -12,7 +12,7 @@ namespace Scry;
 /// </remarks>
 public sealed class ScryPolicyCache
 {
-    readonly Dictionary<Type, CachedPolicyRegistration> registrations;
+    Dictionary<Type, CachedPolicyRegistration> registrations;
 
     internal ScryPolicyCache(IEnumerable<CachedPolicyRegistration> registrations) =>
         this.registrations = registrations.ToDictionary(_ => _.Entity);

@@ -1,6 +1,8 @@
 # Debug sidecar
 
-`Scry.Client` ships an opt-in debug sidecar for Blazor apps: a panel that opens on the right of the running page and lists every Scry exchange the app has made — the wire request decoded and pretty-printed (including GET URLs, whose `q=` parameter is otherwise an opaque base64url blob), the response pretty-printed, and the request and response headers.
+`Scry.Client` ships an opt-in debug sidecar for Blazor apps. It is the one part of the client that is tied to a
+host: the sidecar is a Razor component, so a WPF, Windows Forms, or console client has no equivalent — everything
+else in `Scry.Client` works the same everywhere, as [Client hosts](clients.md) sets out. The panel opens on the right of the running page and lists every Scry exchange the app has made — the wire request decoded and pretty-printed (including GET URLs, whose `q=` parameter is otherwise an opaque base64url blob), the response pretty-printed, and the request and response headers.
 
 <img src="../samples/Sample.Tests/UiScreenshotTests.SampleSidecar.verified.png" border="1" alt="The sidecar open over the sample app: the captured exchanges, queries and attachment fetches alike, and one query's decoded request, response, and headers">
 
@@ -19,7 +21,7 @@ builder.Services
     .AddHttpClient("scry")
     .AddHttpMessageHandler<ScrySidecarHandler>();
 ```
-<sup><a href='/samples/Sample.Client/Program.cs#L46-L51' title='Snippet source file'>snippet source</a> | <a href='#snippet-sidecarRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Program.cs#L46-L51' title='Snippet source file'>snippet source</a> | <a href='#snippet-sidecarRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Then render the panel once, above the router:
@@ -29,7 +31,7 @@ Then render the panel once, above the router:
 ```razor
 <ScrySidecar />
 ```
-<sup><a href='/samples/Sample.Client/App.razor#L2-L4' title='Snippet source file'>snippet source</a> | <a href='#snippet-sidecarMarkup' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/App.razor#L2-L4' title='Snippet source file'>snippet source</a> | <a href='#snippet-sidecarMarkup' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The handler is attached explicitly rather than automatically so the sidecar observes exactly the client the app points it at, not every `HttpClient` in the container. If the app also uses the [caching handler](caching.md), register the sidecar's handler after it — what it records is then the real wire exchange, the `If-None-Match` request and the raw 304, rather than the cache's replay.

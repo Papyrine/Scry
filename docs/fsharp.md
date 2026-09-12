@@ -30,7 +30,7 @@ A C# class library with no source of its own. It points at the model DLL by path
 
 Everything the generator emits — the query model per source, the re-emitted enums, and the `ScryQuery` entry point — is this project's whole public surface. The generator wiring is the same as any C# client's: automatic with the NuGet package, written out in the sample because it uses project references ([Source generator](source-generator.md#wiring)).
 
-The generated types always land in the `Scry.Generated` namespace, so one consumer can see one such project. The sample's Blazor client generates its own copy, which is why the F# tests host the server themselves rather than referencing `Sample.Server`: it carries the Blazor client, and two copies of `Scry.Generated.ScryQuery` among one assembly's references is an ambiguity the compiler refuses.
+The generated types always land in the `Scry.Generated` namespace, so one consumer can see one such project. The sample's Blazor client generates its own copy, which is why the F# tests host the server themselves rather than referencing `Sample.WebServer`: it carries the Blazor client, and two copies of `Scry.Generated.ScryQuery` among one assembly's references is an ambiguity the compiler refuses.
 
 
 ## The F# project

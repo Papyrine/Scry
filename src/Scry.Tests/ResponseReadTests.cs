@@ -225,12 +225,12 @@ public class ResponseReadTests
     [Test]
     public void ReadsAnErrorBodyFromBytes()
     {
-        var error = ScryJson.TryDeserializeError(Utf8("""{"error":"Nope.","staleClient":true}"""));
+        var error = ScryJson.TryDeserializeError(Utf8("""{"error":"Nope.","code":"StaleClient"}"""));
 
         Assert.Multiple(() =>
         {
             Assert.That(error!.Error, Is.EqualTo("Nope."));
-            Assert.That(error.StaleClient, Is.True);
+            Assert.That(error.Code, Is.EqualTo(ScryErrorCode.StaleClient));
         });
     }
 

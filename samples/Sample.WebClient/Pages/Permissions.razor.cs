@@ -1,6 +1,6 @@
 using System.Net.Http.Json;
 
-namespace Sample.Client.Pages;
+namespace Sample.WebClient.Pages;
 
 public partial class Permissions
 {

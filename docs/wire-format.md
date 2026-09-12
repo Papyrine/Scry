@@ -19,7 +19,7 @@ All (de)serialization goes through `ScryJson`, whose options are part of the con
 
 ### The vocabulary is source-generated
 
-Because the vocabulary is closed, all of it can be emitted at compile time. `WireJsonContext` is a `System.Text.Json` `JsonSerializerContext` over the wire roots; the generator follows properties and `[JsonDerivedType]` from there, so every operator, node, and envelope is covered without being listed twice. Nothing on the wire is reflected over at run time — which matters most in the client's headline deployment, a trimmed Blazor WASM app that would otherwise pay to build that metadata on first query.
+Because the vocabulary is closed, all of it can be emitted at compile time. `WireJsonContext` is a `System.Text.Json` `JsonSerializerContext` over the wire roots; the generator follows properties and `[JsonDerivedType]` from there, so every operator, node, and envelope is covered without being listed twice. Nothing on the wire is reflected over at run time — which matters most in a trimmed or ahead-of-time-compiled client, a Blazor WASM app most of all, that would otherwise pay to build that metadata on first query.
 
 One thing cannot be generated here: the **payload**. Its type is the consumer's — a generated query model, an anonymous projection, a DTO of theirs — and this assembly has never seen it. So a reflection resolver sits *behind* the generated set in the chain and only ever answers what the wire does not name. A consumer wanting the payload generated too supplies their own types; nothing about the AST reaches reflection either way.
 
@@ -30,7 +30,7 @@ This is invisible on the wire. Reflection reads the same attributes and produces
 
 There is no API for supplying custom `JsonSerializerOptions`, and that is deliberate.
 
-**There is nothing to configure them *from*.** Unlike a normal ASP.NET application there is no single deployment holding both ends: the client is built separately, against a model DLL by path, and shipped somewhere else — a browser, another service, a third party's codebase. Any option would have to be set identically on both sides, out of band, with nothing verifying that it was. `version` catches a mismatched wire *format*; it cannot catch a client whose naming policy differs from the server's, which fails as an unexplained parse error or, worse, as a request the server reads as empty.
+**There is nothing to configure them *from*.** Unlike a normal ASP.NET application there is no single deployment holding both ends: the client is built separately, against a model DLL by path, and shipped somewhere else — a browser, a desktop app on someone's machine, another service, a third party's codebase. Any option would have to be set identically on both sides, out of band, with nothing verifying that it was. `version` catches a mismatched wire *format*; it cannot catch a client whose naming policy differs from the server's, which fails as an unexplained parse error or, worse, as a request the server reads as empty.
 
 **Several of the options are the security model, not a preference.** Fail-closed deserialization is what keeps the node vocabulary *closed*, and closed is what makes every request exhaustively validatable — see the [security model](security.md). Options handed in from outside can carry `UnmappedMemberHandling.Skip`, a custom `TypeInfoResolver`, a `ReferenceHandler`, or a converter that resurrects a type the AST does not name. Each of those reopens the vocabulary, and a setting that is able to disable an invariant is one that gets disabled by whoever is debugging a `400`.
 
@@ -130,7 +130,7 @@ GET {pattern}?q=eyJ2ZXJzaW9uIjoxLCJyb290IjoiRW1wbG95ZWUi...
 
 The form exists because a cache decides what it may store from the method and the URL, before it looks at anything else. A `POST` is uncacheable to every cache between the client and the server, and its body is part of no cache key; a `GET` carrying the query in its URL is an ordinary cacheable request, which is what makes [conditional requests](caching.md) work without both ends hand-implementing them.
 
-The request travels in the URL rather than in content on the `GET` for two reasons, both of which are about what survives the trip. A browser will not send content on a `GET` at all — the Fetch standard forbids it, which rules a body out for a WASM client and for the explorer. And an intermediary is permitted to drop the content of a `GET`, after which the request still looks well-formed — same method, same URL — but carries nothing to execute, so the server answers 400 and the client cannot distinguish that from a rejection it caused itself. A URL survives every hop by construction.
+The request travels in the URL rather than in content on the `GET` for two reasons, both of which are about what survives the trip. A browser will not send content on a `GET` at all — the Fetch standard forbids it, which rules a body out for a WASM client and for the explorer. A desktop or console client is not held to that rule, but the second reason applies everywhere, so the URL form is used uniformly rather than per host. An intermediary is permitted to drop the content of a `GET`, after which the request still looks well-formed — same method, same URL — but carries nothing to execute, so the server answers 400 and the client cannot distinguish that from a rejection it caused itself. A URL survives every hop by construction.
 
 base64url rather than the JSON percent-encoded: length is the binding constraint, and percent-encoding inflates JSON by about 1.84× where base64url costs 1.33×. It also has no reserved characters, so what the client writes is what the server reads.
 
@@ -801,6 +801,25 @@ The payload itself always carries the **current** name — the aliases are a tra
 That is the same trade the closing marker below exists for, arrived at through the transport rather than through the format. Past the threshold a failure has no way to become a `400` or a `500`, so the answer is truncated instead — but a truncated one is never mistakable for a complete one. The envelope's closing `stamp` is written only after the last row, and the host does not synthesize a valid ending: HTTP/1.1 closes the connection with no terminating chunk, HTTP/2 resets the stream. A reader must treat a body that ends early as a failure, exactly as it must treat a stream that ends without its marker. A response carrying [binary parts](#binary-transfer) is never sent early whatever the threshold says, because its parts have to precede the JSON that references them.
 
 
+### Error responses
+
+A request that was not answered with a result comes back as a `ScryError` instead, under the status [the endpoint chose](server.md#error-handling):
+
+```json
+{ "error": "Property 'Salary' is not allow-listed on 'Employee'.", "code": "Validation" }
+```
+
+| Field | Meaning |
+| --- | --- |
+| `error` | What was rejected, or the fixed execution-failure message for a `500`. Written for a person to read; bounded at 1024 characters, since a rejection often names the client's own text back to it. |
+| `code` | Which of the endpoint's answers this is — one of `WireFormat`, `Validation`, `StaleClient`, `Forbidden`, `UnsupportedMedia`, `ExecutionFailed`. This is the field a client branches on. Omitted when absent, which is how a body from a proxy rather than from the endpoint reads. |
+| `requiresBody` | Optional, `true` only when the query was refused for arriving as a URL while comparing a `[Sensitive]` member against a constant. A separate axis from `code`: it says what to do next — re-send the same request in a body — and can accompany any rejection code. Omitted when false. |
+
+The codes are deliberately coarse. One says which of the endpoint's own answers this is, never which member or which rule was involved, so a code reveals nothing the status and the fixed message did not already — which is what lets the fixed `500` body carry one at all.
+
+There is no error envelope for a failure found *after* the response has started: the status is committed by then, and a [stream](#streamed-results) reports it in its closing marker instead.
+
+
 ### Streamed results
 
 A request sent to the [`…/stream` endpoint](server.md#mapping-the-endpoint) comes back as newline-delimited JSON (`application/x-ndjson`) instead: one JSON value per line, a marker line opening and closing the rows.
@@ -847,7 +866,7 @@ The response answers each entry positionally, and is likewise an envelope around
   "stamp": "WsQ9hxzDNvqFuufg",
   "results": [
     { "response": { "version": 1, "kind": "Scalar", "payload": 4 } },
-    { "error": "Unknown source 'Secret'.", "status": 400 }
+    { "error": "Unknown source 'Secret'.", "status": 400, "code": "Validation" }
   ]
 }
 ```
@@ -857,7 +876,7 @@ The response answers each entry positionally, and is likewise an envelope around
 | `response` | The entry's result, when it succeeded — exactly what it would have been sent alone. |
 | `error` | Why the entry was rejected or failed; the specific message for a validation failure, and the same fixed text a `500` carries for anything else. |
 | `status` | What the entry would have returned on its own: `400` rejected, `500` failed. Entries are returned inside a successful envelope and so have no status to inherit, which is why it is carried. |
-| `staleClient` | As on a [single error](#response) — the rejection is attributed to a differing schema stamp. |
+| `code` | As on a [single error](#error-responses) — which of the endpoint's answers this entry is. `requiresBody` has no counterpart: it refuses a query for arriving in a URL, and a batch entry only ever arrives in a body. |
 
 **Entries are independent.** Each is validated, policy-filtered, and executed separately, so one being rejected leaves the rest answered — the envelope only fails for a fault of its own: an unreadable body, an unsupported version, or more entries than [`MaxBatchSize`](server.md#options). It is not a transaction, and the entries run sequentially. The schema stamp is carried once on the envelope, since one server answered all of them.
 
@@ -1054,7 +1073,7 @@ The stamp travels in three places:
 | Server → client | The `Scry-Schema-Stamp` response header, set on **every** response including rejections. `ScryClient` records it as `ServerSchemaStamp`, and `SchemaStale` is true once it differs from the client's own. |
 | Server → tooling | `schemaStamp` on [introspection](explorer.md). |
 
-The response header is what makes drift detectable *early*: a long-lived client — a cached WASM app — sees the mismatch while its queries are still succeeding, so it can prompt a reload before a breaking change reaches it, rather than discovering the problem as a failed query. See [Detecting a stale client](schema-versioning.md#detecting-a-stale-client) for the client-side API.
+The response header is what makes drift detectable *early*: a long-lived client — a cached WASM app, or an installed desktop app that has not been updated in months — sees the mismatch while its queries are still succeeding, so it can prompt a reload before a breaking change reaches it, rather than discovering the problem as a failed query. See [Detecting a stale client](schema-versioning.md#detecting-a-stale-client) for the client-side API.
 
 A mismatch is **not** rejected on its own — an additive model change leaves older clients working, and the stamp on a request is client-supplied so it is never a security input. On the server it is used only to explain a rejection: when validation fails *and* the request's stamp differs from the server's, the 400 adds that the client was generated against a different model surface and should be regenerated, instead of leaving a bare "not allow-listed" that reads identically to a hostile request.
 

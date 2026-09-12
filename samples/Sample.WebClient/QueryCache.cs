@@ -1,4 +1,4 @@
-namespace Sample.Client;
+namespace Sample.WebClient;
 
 /// <summary>
 /// What the client remembers of the responses it has already been given, so a <c>304</c> has something

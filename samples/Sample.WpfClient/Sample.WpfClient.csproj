@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- WPF builds on Windows alone. Elsewhere the project restores and produces an empty assembly,
+         so a non-Windows build of the samples solution succeeds rather than failing here. CI is
+         windows-latest, so this guard is for a local build on another OS. -->
+    <IsWindows>$([MSBuild]::IsOSPlatform('Windows'))</IsWindows>
+    <TargetFramework Condition="'$(IsWindows)' == 'true'">net10.0-windows</TargetFramework>
+    <TargetFramework Condition="'$(IsWindows)' == 'false'">net10.0</TargetFramework>
+    <OutputType Condition="'$(IsWindows)' == 'true'">WinExe</OutputType>
+    <UseWPF>$(IsWindows)</UseWPF>
+    <EnableDefaultItems>$(IsWindows)</EnableDefaultItems>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <!-- The server model, pointed at by path. NOT referenced. The net10.0 here is the model's target
+         framework, not this project's: a net10.0-windows client still reads a net10.0 model. -->
+    <ScryModelDll>$(MSBuildThisFileDirectory)..\Sample.Model\bin\$(Configuration)\net10.0\Sample.Model.dll</ScryModelDll>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <ProjectReference Include="..\..\src\Scry.Client\Scry.Client.csproj" />
+  </ItemGroup>
+
+  <!--
+    Generator wiring. When consuming the Scry.Client NuGet package this is automatic
+    (buildTransitive props); with project references it is set up explicitly here.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Scry.SourceGenerator\Scry.SourceGenerator.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Sample.Model\Sample.Model.csproj" ReferenceOutputAssembly="false" />
+    <CompilerVisibleProperty Include="ScryModelDll" />
+    <CompilerVisibleProperty Include="ScryModelStamp" />
+  </ItemGroup>
+
+  <!-- Resolved against the project before the compiler sees it, as the shipped targets do. -->
+  <PropertyGroup Condition="'$(ScryModelDll)' != ''">
+    <ScryModelDll>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(ScryModelDll)'))</ScryModelDll>
+  </PropertyGroup>
+
+  <Target Name="ComputeScryStamp"
+          AfterTargets="ResolveProjectReferences"
+          BeforeTargets="GenerateMSBuildEditorConfigFile;CoreCompile"
+          Condition="Exists('$(ScryModelDll)')">
+    <GetFileHash Files="$(ScryModelDll)" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="ScryModelStamp" />
+    </GetFileHash>
+  </Target>
+</Project>

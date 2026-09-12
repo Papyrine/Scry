@@ -188,7 +188,10 @@ public static class ScryExplorerExtensions
             !media.MediaType.Equals("application/json", StringComparison.OrdinalIgnoreCase))
         {
             return Results.Json(
-                new ScryError("A request body must be sent as application/json."),
+                new ScryError("A request body must be sent as application/json.")
+                {
+                    Code = ScryErrorCode.UnsupportedMedia
+                },
                 ScryJson.Options,
                 statusCode: StatusCodes.Status415UnsupportedMediaType);
         }
@@ -210,12 +213,29 @@ public static class ScryExplorerExtensions
         catch (Exception exception)
             when (exception is ScryValidationException or ScryWireException)
         {
-            return Results.Json(new ScryError(exception.Message), ScryJson.Options, statusCode: 400);
+            // Coded apart even though both are a 400 here: one says the request could not be read,
+            // the other that it was read and refused, which is the distinction the code exists for.
+            var code = exception is ScryWireException
+                ? ScryErrorCode.WireFormat
+                : ScryErrorCode.Validation;
+            return Results.Json(
+                new ScryError(exception.Message)
+                {
+                    Code = code
+                },
+                ScryJson.Options,
+                statusCode: 400);
         }
         catch (Exception)
         {
             // Same rule the query endpoint follows: nothing internal leaves the server.
-            return Results.Json(new ScryError("Reading the query's SQL failed."), ScryJson.Options, statusCode: 500);
+            return Results.Json(
+                new ScryError("Reading the query's SQL failed.")
+                {
+                    Code = ScryErrorCode.ExecutionFailed
+                },
+                ScryJson.Options,
+                statusCode: 500);
         }
     }
 

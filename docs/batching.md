@@ -1,6 +1,6 @@
 # Batching
 
-A page load rarely needs one query. A dashboard opens with a list, a count, and a lookup; each is a separate `POST`, and on a WebAssembly client over a real network the round-trips dominate — the queries themselves were never the slow part. A batch sends them together.
+A page load rarely needs one query. A dashboard opens with a list, a count, and a lookup; each is a separate `POST`, and on any remote client over a real network the round-trips dominate — the queries themselves were never the slow part. A batch sends them together.
 
 Batching is a **transport concern, not a query operator**. Nothing about it reaches the wire request, and the server sees each entry exactly as it would have arrived alone: same validation, same [row policies](policies.md), same [audit trail](observability.md). What changes is only how many requests carry them.
 

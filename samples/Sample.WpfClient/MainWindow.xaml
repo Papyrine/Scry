@@ -1,0 +1,13 @@
+<Window x:Class="Sample.WpfClient.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Scry - WPF sample" Height="480" Width="760">
+  <DockPanel Margin="12">
+    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+      <Button x:Name="RefreshButton" Content="Refresh" Padding="16,4" Click="OnRefreshClick" />
+      <TextBlock x:Name="StatusText" Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" />
+    </StackPanel>
+    <DataGrid x:Name="EmployeeGrid" AutoGenerateColumns="True" IsReadOnly="True"
+              HeadersVisibility="Column" GridLinesVisibility="Horizontal" />
+  </DockPanel>
+</Window>

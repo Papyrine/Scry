@@ -11,7 +11,8 @@
     },
     {
       "error": "Property \u0027Salary\u0027 is not allow-listed on \u0027Employee\u0027.",
-      "status": "BadRequest"
+      "status": "BadRequest",
+      "code": "Validation"
     },
     {
       "response": {

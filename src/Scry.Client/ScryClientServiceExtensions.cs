@@ -11,9 +11,11 @@ public static class ScryClientServiceExtensions
     /// <remarks>
     /// This takes whichever <see cref="HttpClient"/> the container happens to hold, which is what a
     /// Blazor WebAssembly app wants: there is exactly one, it points at the app's own origin, and it is
-    /// backed by the browser rather than by a socket pool. Anywhere else a bare <see cref="HttpClient"/>
-    /// registration is discouraged to begin with, and an ambient one may well belong to some other API —
-    /// so use the overload that names the client Scry should use.
+    /// backed by the browser rather than by a socket pool. Anywhere else — a WPF or Windows Forms app, a
+    /// console tool, a service — a bare <see cref="HttpClient"/> registration is discouraged to begin
+    /// with, and an ambient one may well belong to some other API, so use the overload that names the
+    /// client Scry should use. A host with no scope of its own opens one for as long as it runs, since
+    /// the client is registered scoped for the reason given on that overload.
     /// </remarks>
     public static IServiceCollection AddScryClient(this IServiceCollection services, string endpoint)
     {

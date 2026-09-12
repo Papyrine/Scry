@@ -23,7 +23,8 @@ public sealed class ScryValidationException(string message) :
     /// <summary>
     /// True when the rejection is attributed to the request's schema stamp differing from the
     /// server's — a stale client rather than an invalid query. Set by <see cref="ScryProcessor"/>;
-    /// the HTTP endpoint forwards it as <see cref="ScryError.StaleClient"/>.
+    /// the HTTP endpoint reports it as <see cref="ScryErrorCode.StaleClient"/> in place of
+    /// <see cref="ScryErrorCode.Validation"/>.
     /// </summary>
     public bool StaleClient { get; init; }
 

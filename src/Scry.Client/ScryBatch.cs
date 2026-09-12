@@ -136,20 +136,13 @@ public sealed class ScryBatch
             GetException(result, error));
     }
 
-    static Exception GetException(QueryBatchResult result, string error)
-    {
-        if (result.StaleClient)
+    static Exception GetException(QueryBatchResult result, string error) =>
+        result.Code switch
         {
-            return new ScryStaleClientException(error);
-        }
-
-        if (result.Status == HttpStatusCode.Forbidden)
-        {
-            return new ScryPermissionException(error);
-        }
-
-        return new ScryRequestException(result.Status, error);
-    }
+            ScryErrorCode.StaleClient => new ScryStaleClientException(error),
+            ScryErrorCode.Forbidden => new ScryPermissionException(error),
+            _ => new ScryRequestException(result.Status, result.Code, error)
+        };
 
     void Fault(Exception exception)
     {

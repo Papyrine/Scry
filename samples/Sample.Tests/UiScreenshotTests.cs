@@ -1,5 +1,6 @@
-﻿// Verify.Playwright snapshots of the two UIs the sample ships: the Blazor WASM client on /, and the
-// Scry explorer on /scry. Verifying an IPage or an ILocator captures the rendered markup *and* a
+﻿// Verify.Playwright snapshots of the two browser UIs the sample ships: the Blazor WASM client on /,
+// and the Scry explorer on /scry. The sample's desktop and console clients have no baselines here —
+// they are compile-checked by the samples build rather than screenshotted. Verifying an IPage or an ILocator captures the rendered markup *and* a
 // screenshot, so these guard what the UI looks like rather than only what it contains — the
 // behavioural assertions live in UiSnapshotTests. Two of them are also the images readme.md and
 // docs/explorer.md embed, which is why they are laid out at their own width — see the bottom of the

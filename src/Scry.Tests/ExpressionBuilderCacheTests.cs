@@ -20,7 +20,7 @@ public class ExpressionBuilderCacheTests
         Assert.Multiple(() =>
         {
             Assert.That(ExpressionBuilder.Property(typeof(DateTime), "Year"), Is.SameAs(ExpressionBuilder.Property(typeof(DateTime), "Year")));
-            Assert.That(ExpressionBuilder.Property(typeof(DateTime), "Year"), Is.Not.SameAs(ExpressionBuilder.Property(typeof(DateOnly), "Year")));
+            Assert.That(ExpressionBuilder.Property(typeof(DateTime), "Year"), Is.Not.SameAs(ExpressionBuilder.Property(typeof(Date), "Year")));
             Assert.That(ExpressionBuilder.Property(typeof(DateTime), "NoSuchPart"), Is.Null);
         });
 

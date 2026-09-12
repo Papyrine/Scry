@@ -733,8 +733,43 @@ public class HttpRoundTripTests
         {
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.UnsupportedMediaType));
             Assert.That(error!.Error, Does.Contain("application/json"));
+            Assert.That(error.Code, Is.EqualTo(ScryErrorCode.UnsupportedMedia));
             Assert.That(response.Headers.CacheControl!.NoStore, Is.True);
         });
+    }
+
+    /// <summary>
+    /// Every answer the endpoint gives carries the code for what it is, so a caller separates "this
+    /// query is invalid, never retry" from "execution failed, maybe transient" without matching on a
+    /// message the server deliberately keeps uninformative.
+    /// </summary>
+    [Test]
+    public async Task EachAnswerCarriesItsOwnCode()
+    {
+        var malformed = await Code(http.PostAsync("/api/query", Json("{\"version\":1,\"root\":")));
+
+        // Read as a request, refused by the allow-list.
+        var rejected = await Code(
+            http.PostAsync(
+                "/api/query",
+                Json("""{"version":1,"root":"Nope","pipeline":[{"$type":"count"}]}""")));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(malformed, Is.EqualTo(ScryErrorCode.WireFormat));
+            Assert.That(rejected, Is.EqualTo(ScryErrorCode.Validation));
+        });
+
+        return;
+
+        static StringContent Json(string body) =>
+            new(body, Encoding.UTF8, "application/json");
+
+        static async Task<ScryErrorCode?> Code(Task<HttpResponseMessage> send)
+        {
+            using var response = await send;
+            return ScryJson.TryDeserializeError(await response.Content.ReadAsByteArrayAsync())?.Code;
+        }
     }
 
     [TestCase("multipart/form-data")]
@@ -934,13 +969,13 @@ public class HttpRoundTripTests
         var body = await response.Content.ReadAsStringAsync();
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        Assert.That(body, Does.Contain("\"staleClient\":true"));
+        Assert.That(body, Does.Contain("\"code\":\"StaleClient\""));
     }
 
-    // The same rejection without a stamp makes no staleness claim — the marker is omitted entirely
-    // rather than sent as false.
+    // The same rejection without a stamp makes no staleness claim: it is coded for what it is, an
+    // ordinary rejection, since there is no stamp to attribute it with.
     [Test]
-    public async Task UnstampedRejectionBodyOmitsStaleClientMarker()
+    public async Task UnstampedRejectionBodyIsCodedAsAPlainValidationFailure()
     {
         using var content = new StringContent(
             """
@@ -956,7 +991,8 @@ public class HttpRoundTripTests
         var body = await response.Content.ReadAsStringAsync();
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        Assert.That(body, Does.Not.Contain("staleClient"));
+        Assert.That(body, Does.Contain("\"code\":\"Validation\""));
+        Assert.That(body, Does.Not.Contain("StaleClient"));
     }
 
     // A constant that fails to parse at rebind is also attributed: validation cannot catch a constant
@@ -997,7 +1033,7 @@ public class HttpRoundTripTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         Assert.That(body, Does.Contain("is not a valid Decimal value"));
         Assert.That(body, Does.Contain("regenerate the client"));
-        Assert.That(body, Does.Contain("\"staleClient\":true"));
+        Assert.That(body, Does.Contain("\"code\":\"StaleClient\""));
     }
 
     // A model frozen at a surface where ManagerId was still non-nullable. Alice has no manager, so the

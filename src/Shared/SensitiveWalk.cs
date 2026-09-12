@@ -101,7 +101,7 @@ static class SensitiveWalk
 
                 SelectManyOp selectMany => Flattened(selectMany, root),
                 JoinOp join => Joined(join, root),
-                SetOp set => Combined(set, root),
+                SetOp set => Combined(set),
 
                 // Carry no member path and no constant of a member's own, so there is nothing here to
                 // read. A terminal carrying no predicate reaches its own arm above and reads nothing
@@ -175,7 +175,7 @@ static class SensitiveWalk
             return null;
         }
 
-        string? Combined(SetOp op, string? root)
+        string? Combined(SetOp op)
         {
             if (op.Predicate is { } filter)
             {

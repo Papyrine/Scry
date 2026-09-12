@@ -44,7 +44,7 @@ if (page.HasMore)
         .ToPageAsync(20, page.Cursor);
 }
 ```
-<sup><a href='/samples/Sample.Client/Pages/PagingGrammar.cs#L10-L32' title='Snippet source file'>snippet source</a> | <a href='#snippet-pagingGrammar' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/PagingGrammar.cs#L10-L32' title='Snippet source file'>snippet source</a> | <a href='#snippet-pagingGrammar' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Roles of the pieces:

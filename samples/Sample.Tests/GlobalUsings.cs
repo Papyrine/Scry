@@ -21,4 +21,4 @@ global using VerifyTests.DiffPlex;
 global using static VerifyNUnit.Verifier;
 global using System.Buffers.Text;
 global using Delta;
-global using Sample.Client;
+global using Sample.WebClient;

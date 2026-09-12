@@ -1,9 +1,9 @@
 [
   {
-    "Name": "Sample.Server",
+    "Name": "Sample.WebServer",
     "Projects": [
       {
-        "Path": "Sample.Server\\Sample.Server.csproj",
+        "Path": "Sample.WebServer\\Sample.WebServer.csproj",
         "Action": "Start"
       }
     ]

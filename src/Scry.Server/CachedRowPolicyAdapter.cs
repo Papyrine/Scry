@@ -39,7 +39,7 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
         // Bound as one parameter rather than written into the statement, so a scope's keys do not
         // become part of the SQL text and one plan serves every caller.
         var predicate = Expression.Lambda<Func<TEntity, bool>>(
-            Expression.Call(Contains, Allowed(context, decisions, refresh), key.Body),
+            Expression.Call(contains, Allowed(context, decisions, refresh), key.Body),
             key.Parameters[0]);
 
         return source.Where(predicate);
@@ -326,7 +326,7 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
         var pending = current.PendingKeys.Cast<TKey>().ToArray();
         var invalidated = set.Where(
             Expression.Lambda<Func<TEntity, bool>>(
-                Expression.Call(Contains, Parameterization.Parameterize(pending, typeof(TKey[])), key.Body),
+                Expression.Call(contains, Parameterization.Parameterize(pending, typeof(TKey[])), key.Body),
                 key.Parameters[0]));
 
         return (changed, invalidated);
@@ -352,7 +352,7 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
             Expression.GreaterThan(version.Body, Parameterization.Parameterize(watermark, typeof(TVersion))),
             version.Parameters[0]);
 
-    static readonly MethodInfo Contains = typeof(Enumerable)
+    static MethodInfo contains = typeof(Enumerable)
         .GetMethods()
         .Single(_ => _.Name == nameof(Enumerable.Contains) && _.GetParameters().Length == 2)
         .MakeGenericMethod(typeof(TKey));
