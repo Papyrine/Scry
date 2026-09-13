@@ -11,11 +11,10 @@
     <WarningsAsErrors>$(WarningsAsErrors);NU1902;NU1903;NU1904</WarningsAsErrors>
   </PropertyGroup>
   <!-- Sample.Tests uses Verify, whose SponsorCheck fails the build (SC021) unless one of its licence
-       properties is set, and then warns (SC023) that the licence is being ignored.
-       src/Directory.Build.props carries the same pair for Scry.Tests; because MSBuild stops walking
-       at that file, the two trees each need their own copy. -->
+       properties is set. src/Directory.Build.props carries the same pair for Scry.Tests; because
+       MSBuild stops walking at that file, the two trees each need their own copy. -->
   <PropertyGroup>
-    <Verify_SponsorshipLicenseIgnored>true</Verify_SponsorshipLicenseIgnored>
-    <NoWarn>$(NoWarn);SC023</NoWarn>
+    <Verify_SponsorshipExemption>OpenSource</Verify_SponsorshipExemption>
+    <Verify_SponsorshipExemptionUntil>2027-08</Verify_SponsorshipExemptionUntil>
   </PropertyGroup>
 </Project>
