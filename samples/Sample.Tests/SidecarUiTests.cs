@@ -3,6 +3,7 @@
 /// queries, and linking into the explorer with the captured query pre-populated.
 /// </summary>
 [TestFixture]
+[Parallelizable(ParallelScope.Children)]
 [Category("Browser")]
 public class SidecarUiTests :
     BrowserFixture
