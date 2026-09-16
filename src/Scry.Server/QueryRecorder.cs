@@ -11,7 +11,8 @@ sealed class QueryRecorder(
     string source,
     string? member,
     bool streamed,
-    SensitiveSchema? sensitive)
+    SensitiveSchema? sensitive,
+    ScryOptions options)
 {
     static string? version = typeof(QueryRecorder).Assembly.GetName().Version?.ToString();
 
@@ -49,10 +50,11 @@ sealed class QueryRecorder(
     /// </summary>
     public static QueryRecorder Start(
         Schema schema,
+        ScryOptions options,
         QueryRequest request,
         IServiceProvider services,
         bool streamed = false) =>
-        new(request, attachment: null, services, Source(schema, request.Root), member: null, streamed, schema.Sensitive);
+        new(request, attachment: null, services, Source(schema, request.Root), member: null, streamed, schema.Sensitive, options);
 
     /// <summary>
     /// The same, for a fetch of one attachment. Recorded through the same path as a query — the
@@ -61,9 +63,10 @@ sealed class QueryRecorder(
     /// </summary>
     public static QueryRecorder StartAttachment(
         Schema schema,
+        ScryOptions options,
         AttachmentRequest request,
         IServiceProvider services) =>
-        new(request: null, request, services, Source(schema, request.Root), Member(schema, request), streamed: false, sensitive: null);
+        new(request: null, request, services, Source(schema, request.Root), Member(schema, request), streamed: false, sensitive: null, options);
 
     static string Source(Schema schema, string root)
     {
@@ -263,10 +266,25 @@ sealed class QueryRecorder(
                 // to read it.
                 Sensitive = request is not null &&
                             sensitive is not null &&
-                            SensitiveWalk.Inspect(request, sensitive.IsSensitive).InConstant
+                            SensitiveWalk.Inspect(request, sensitive.IsSensitive).InConstant,
+                ApproachedLimits = Approached(outcome)
             };
             auditor.Record(entry);
         }
+    }
+
+    // Walked here for the reason the sensitive flag is: only once an auditor exists to read it. A
+    // rejected query is left alone — it broke a limit rather than approached one, and measuring it
+    // would mean walking a request the gate has already refused.
+    IReadOnlyList<ApproachedLimit>? Approached(ScryQueryOutcome outcome)
+    {
+        if (request is null ||
+            outcome == ScryQueryOutcome.Rejected)
+        {
+            return null;
+        }
+
+        return LimitWatch.Measure(request, options);
     }
 
     // A stream folds its kind into the one tag value: it is list-shaped, but a row count means

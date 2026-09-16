@@ -131,6 +131,17 @@ public sealed record ScryAuditEntry(
     public string? Error { get; init; }
 
     /// <summary>
+    /// The limits this query came within <see cref="ScryOptions.LimitWatchFraction" /> of without
+    /// exceeding. Null unless that option is set, and null for a rejected query, which broke a limit
+    /// rather than approached one.
+    /// </summary>
+    /// <remarks>
+    /// What a limit that only rejects cannot report: how close the traffic it accepts runs to it.
+    /// Worth watching before tightening one.
+    /// </remarks>
+    public IReadOnlyList<ApproachedLimit>? ApproachedLimits { get; init; }
+
+    /// <summary>
     /// True when a rejection was attributed to a stale client (a schema stamp differing from the
     /// server's) rather than an invalid query — the benign explanation. A rejection without it is
     /// the one worth watching.
@@ -147,7 +158,7 @@ public sealed record ScryAuditEntry(
     public bool Sensitive { get; init; }
 }
 ```
-<sup><a href='/src/Scry.Server/ScryAuditEntry.cs#L19-L78' title='Snippet source file'>snippet source</a> | <a href='#snippet-auditEntry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryAuditEntry.cs#L19-L89' title='Snippet source file'>snippet source</a> | <a href='#snippet-auditEntry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Semantics:
@@ -159,6 +170,34 @@ Semantics:
 - **A batch is audited per entry, not per request.** The trail records what was asked, and a [batch](batching.md) asked more than once; there is no entry for the batch itself. The one exception is a batch refused at its envelope, which ran no entry: that is recorded once as a `Rejected` entry carrying `Batch`, since nothing else would show a client sending oversized batches.
 - **Malformed bodies are not audited.** A payload that fails deserialization never becomes a request object, so it appears in metrics only.
 - **`Request` is unredacted.** A constant compared against a [`[Sensitive]`](annotations.md#sensitive) member is in it as sent — the trail is the host's own, and reading the query is its point. The entry says so with `Sensitive`, for an auditor that forwards entries somewhere such a value must not go.
+
+
+## Watching the limits
+
+A [limit](security.md#limits) that only rejects says nothing about the traffic it accepts. The queries that stayed inside it are exactly the ones it leaves no trace of, so tightening one is a guess: too far, and legitimate clients start failing, and the first sign of it is a complaint.
+
+`LimitWatchFraction` is how to stop guessing. Set it to the fraction of a limit a query has to reach to be worth hearing about, and every query that reaches it is reported in `ApproachedLimits` — and still answered:
+
+```cs
+builder.Services.AddScry<SampleContext>(_ => _.LimitWatchFraction = 0.8);
+```
+
+An entry then carries the limit's name, what the query used, and the limit it was measured against, so a week of them says where the number belongs:
+
+```
+MaxExpressionNodes: 3310 of 4096
+MaxPipelineLength: 27 of 32
+```
+
+What it covers, and does not:
+
+- **Seven of the nine limits**: `MaxPipelineLength`, `MaxExpressionNodes`, `MaxCorrelatedSubqueries`, `MaxPageSize`, `MaxNavigationDepth`, `MaxProjectionMembers` and `MaxInValues`.
+- **Not `MaxBatchSize`.** A batch that stays inside it is audited per entry rather than as a batch, so there is no entry of its own to report it on.
+- **Not `MaxExpressionDepth`.** What the validator compares is how many times it recursed, not how deeply the request nests, and only some of its transitions recurse. That number could only be mirrored by repeating the shape of that walk, and a mirror that drifted would report a comfortable depth while the gate sat at its limit — worse than reporting nothing.
+- **Each reported count mirrors a rule the validator applies**, so both are pinned to the same number by `LimitWatchTests`: a request at the limit is reported, and the same request one past it is refused.
+- **Nothing is rejected.** Enforcement is unchanged; this only makes the approach visible.
+- **A rejected query is never measured.** It broke a limit rather than approached one, and measuring it would mean walking a request the gate has already refused.
+- **It costs one extra walk of the request**, paid only where the option is set and only once an auditor is registered to read the result. Leave it unset, or unregister the auditor, and it costs nothing.
 
 
 ## Hosting without HTTP

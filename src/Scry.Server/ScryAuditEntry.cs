@@ -60,6 +60,17 @@ public sealed record ScryAuditEntry(
     public string? Error { get; init; }
 
     /// <summary>
+    /// The limits this query came within <see cref="ScryOptions.LimitWatchFraction" /> of without
+    /// exceeding. Null unless that option is set, and null for a rejected query, which broke a limit
+    /// rather than approached one.
+    /// </summary>
+    /// <remarks>
+    /// What a limit that only rejects cannot report: how close the traffic it accepts runs to it.
+    /// Worth watching before tightening one.
+    /// </remarks>
+    public IReadOnlyList<ApproachedLimit>? ApproachedLimits { get; init; }
+
+    /// <summary>
     /// True when a rejection was attributed to a stale client (a schema stamp differing from the
     /// server's) rather than an invalid query — the benign explanation. A rejection without it is
     /// the one worth watching.

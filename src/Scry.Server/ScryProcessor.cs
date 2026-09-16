@@ -167,7 +167,7 @@ public sealed class ScryProcessor
     {
         var drifted = request.Stamp is { } requestStamp &&
                       requestStamp != schema.Stamp;
-        var recorder = QueryRecorder.StartAttachment(schema, request, services);
+        var recorder = QueryRecorder.StartAttachment(schema, options, request, services);
         try
         {
             var scope = new CallScope(services, requestHeaders, responseHeaders);
@@ -216,7 +216,7 @@ public sealed class ScryProcessor
     {
         var drifted = request.Stamp is { } requestStamp &&
                       requestStamp != schema.Stamp;
-        var recorder = QueryRecorder.StartAttachment(schema, request, services);
+        var recorder = QueryRecorder.StartAttachment(schema, options, request, services);
         try
         {
             var scope = new CallScope(services, requestHeaders, responseHeaders);
@@ -319,7 +319,7 @@ public sealed class ScryProcessor
     {
         var drifted = request.Stamp is { } requestStamp &&
                       requestStamp != schema.Stamp;
-        var recorder = QueryRecorder.Start(schema, request, services);
+        var recorder = QueryRecorder.Start(schema, options, request, services);
         try
         {
             ApplySensitivity(request, responseHeaders, fromUrl);
@@ -409,7 +409,7 @@ public sealed class ScryProcessor
     {
         var drifted = request.Stamp is { } requestStamp &&
                       requestStamp != schema.Stamp;
-        var recorder = QueryRecorder.Start(schema, request, services);
+        var recorder = QueryRecorder.Start(schema, options, request, services);
         try
         {
             ApplySensitivity(request, responseHeaders, fromUrl);
@@ -851,7 +851,7 @@ public sealed class ScryProcessor
         BinaryPartCollector? binary = null)
     {
         var drifted = request.Stamp is { } requestStamp && requestStamp != schema.Stamp;
-        var recorder = QueryRecorder.Start(schema, request, services, streamed: true);
+        var recorder = QueryRecorder.Start(schema, options, request, services, streamed: true);
         QueryExecutor.RowSet rows;
         try
         {
@@ -903,7 +903,7 @@ public sealed class ScryProcessor
         BinaryPartCollector? binary = null)
     {
         var drifted = request.Stamp is { } requestStamp && requestStamp != schema.Stamp;
-        var recorder = QueryRecorder.Start(schema, request, services, streamed: true);
+        var recorder = QueryRecorder.Start(schema, options, request, services, streamed: true);
         QueryExecutor.RowSet rows;
         try
         {

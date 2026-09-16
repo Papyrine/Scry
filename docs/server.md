@@ -215,8 +215,38 @@ public int? MaxStreamRows { get; set; }
 /// </para>
 /// </remarks>
 public int QueryUrlLimit { get; set; } = QueryUrl.MaxLength;
+
+/// <summary>
+/// Reports a query that used at least this fraction of a limit — <c>0.8</c> for eight tenths —
+/// to every registered <see cref="IScryAuditor"/>, as
+/// <see cref="ScryAuditEntry.ApproachedLimits"/>. Rejects nothing. Null, the default, reports
+/// nothing.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A limit can only be tightened once it is known how close real traffic runs to it, and a limit
+/// that does nothing but reject never says: the queries that stayed inside it are exactly the
+/// ones it leaves no trace of. Set this, watch for a while, then tighten on what came back.
+/// </para>
+/// <para>
+/// It covers <see cref="MaxPipelineLength" />, <see cref="MaxExpressionNodes" />,
+/// <see cref="MaxCorrelatedSubqueries" />, <see cref="MaxPageSize" />,
+/// <see cref="MaxNavigationDepth" />, <see cref="MaxProjectionMembers" /> and
+/// <see cref="MaxInValues" />. Two are left out. <see cref="MaxBatchSize" />, because a batch that
+/// stays inside it is audited per entry rather than as a batch, so there is no entry of its own to
+/// report it on. And <see cref="MaxExpressionDepth" />, because what the validator compares is how
+/// many times it recursed rather than how deeply the request nests — a number this could only
+/// mirror by repeating the shape of that walk, and would then misreport the day the two drifted.
+/// </para>
+/// <para>
+/// It costs one extra walk of the request, paid only where it is set, only once an auditor is
+/// registered to read the result, and only for a query that was not rejected — a refused request
+/// is never measured, so this cannot be used to make refusing cost more than it does.
+/// </para>
+/// </remarks>
+public double? LimitWatchFraction { get; set; }
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L119' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L149' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Every limit is enforced during validation, before any expression is rebound or executed.

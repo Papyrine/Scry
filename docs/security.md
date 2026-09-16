@@ -505,8 +505,38 @@ public int? MaxStreamRows { get; set; }
 /// </para>
 /// </remarks>
 public int QueryUrlLimit { get; set; } = QueryUrl.MaxLength;
+
+/// <summary>
+/// Reports a query that used at least this fraction of a limit — <c>0.8</c> for eight tenths —
+/// to every registered <see cref="IScryAuditor"/>, as
+/// <see cref="ScryAuditEntry.ApproachedLimits"/>. Rejects nothing. Null, the default, reports
+/// nothing.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A limit can only be tightened once it is known how close real traffic runs to it, and a limit
+/// that does nothing but reject never says: the queries that stayed inside it are exactly the
+/// ones it leaves no trace of. Set this, watch for a while, then tighten on what came back.
+/// </para>
+/// <para>
+/// It covers <see cref="MaxPipelineLength" />, <see cref="MaxExpressionNodes" />,
+/// <see cref="MaxCorrelatedSubqueries" />, <see cref="MaxPageSize" />,
+/// <see cref="MaxNavigationDepth" />, <see cref="MaxProjectionMembers" /> and
+/// <see cref="MaxInValues" />. Two are left out. <see cref="MaxBatchSize" />, because a batch that
+/// stays inside it is audited per entry rather than as a batch, so there is no entry of its own to
+/// report it on. And <see cref="MaxExpressionDepth" />, because what the validator compares is how
+/// many times it recursed rather than how deeply the request nests — a number this could only
+/// mirror by repeating the shape of that walk, and would then misreport the day the two drifted.
+/// </para>
+/// <para>
+/// It costs one extra walk of the request, paid only where it is set, only once an auditor is
+/// registered to read the result, and only for a query that was not rejected — a refused request
+/// is never measured, so this cannot be used to make refusing cost more than it does.
+/// </para>
+/// </remarks>
+public double? LimitWatchFraction { get; set; }
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L119' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L149' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 These bound the work a single request can ask for: how many rows, how deep a join chain, how long a pipeline — a join's inner side and a set operand each carry one of their own, held to the same length — how deeply nested an expression, and how wide a projection.
@@ -516,6 +546,8 @@ All but one are **per query**, which is what makes `MaxBatchSize` load-bearing: 
 Three bounds are the host's rather than Scry's, and a deployment should know it leans on them. The **size of a request body** is Kestrel's `MaxRequestBodySize` — 30 MB by default — which the endpoints do not tighten themselves: put a `RequestSizeLimit` on the builder `MapScry` returns, and every endpoint it mapped is held to it, answered by the host with a `413` before a handler reads a byte. A query is small — a few kilobytes is a long one — so a limit far under the default costs nothing and bounds what a body can carry before `MaxInValues` refuses it, since an `In` list is deserialized whole before it is counted. **JSON nesting** is bounded by the reader at 64 levels, its default, before `MaxExpressionDepth` could be reached; a document past it is a malformed body and a `400`. And the **URL** is bounded by `QueryUrlLimit` above, which the client also honours. `HostLimitTests` and `HttpRoundTripTests.ADeeplyNestedBodyIsRejected` pin the first two.
 
 [`ResponseSpillThreshold`](server.md#response-size) is deliberately not among them. It decides when a response stops being resident, not how large one may be: crossing it rejects nothing, and a request that would produce a gigabyte still produces a gigabyte. What it changes is where those bytes sit while they are produced.
+
+Tightening one of these is a guess until it is known how close accepted traffic runs to it — a limit that only rejects leaves no trace of the queries that stayed inside it. [`LimitWatchFraction`](observability.md#watching-the-limits) is how to find out: it reports a query that came within a fraction of a limit to the audit trail, rejects nothing, and covers the four counted for a request as a whole.
 
 
 ### 7. Contained errors
