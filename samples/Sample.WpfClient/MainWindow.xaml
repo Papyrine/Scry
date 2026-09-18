@@ -5,6 +5,8 @@
   <DockPanel Margin="12">
     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
       <Button x:Name="RefreshButton" Content="Refresh" Padding="16,4" Click="OnRefreshClick" />
+      <CheckBox x:Name="LiveCheckBox" Content="Live" Margin="12,0,0,0" VerticalAlignment="Center"
+                Checked="OnLiveChanged" Unchecked="OnLiveChanged" />
       <TextBlock x:Name="StatusText" Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" />
     </StackPanel>
     <DataGrid x:Name="EmployeeGrid" AutoGenerateColumns="True" IsReadOnly="True"

@@ -12,4 +12,8 @@
   <Project Path="Sample.ConsoleClient/Sample.ConsoleClient.csproj" />
   <Project Path="Sample.WpfClient/Sample.WpfClient.csproj" />
   <Project Path="Sample.WinFormsClient/Sample.WinFormsClient.csproj" />
+  <Project Path="Sample.RedisServer/Sample.RedisServer.csproj" />
+  <Project Path="Sample.MessagePipeServer/Sample.MessagePipeServer.csproj" />
+  <Project Path="Sample.NServiceBusServer/Sample.NServiceBusServer.csproj" />
+  <Project Path="Sample.NServiceBusWorker/Sample.NServiceBusWorker.csproj" />
 </Solution>

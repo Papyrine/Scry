@@ -140,9 +140,18 @@ builder.Services
         // database — so a grant changing outside it would move nothing, and a cache holding
         // the old rows would go on answering with rows the caller has since lost.
         _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
+
+        // Live queries: the /live pages. Off until a server says how many it will hold open,
+        // which is also what maps the route — see /docs/live-queries.md.
+        _.MaxSubscriptions = 100;
+
+        // The interceptor above reports this server's own saves, at once and by entity. This
+        // watches the database's change marker for everything it cannot see: a bulk update,
+        // another node, a script run by hand.
+        _.UseDeltaChanges<SampleContext>();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L31-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L39-L89' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddScry<TContext>` scans `typeof(TContext).Assembly` once at startup, builds the allow-list schema, and registers it as a singleton along with the `ScryProcessor`.
@@ -156,7 +165,7 @@ Then map the endpoint:
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L85-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L107-L109' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 That is a single HTTP endpoint which accepts a serialized query and returns the projected rows. It answers `POST`, where the query is the body, and `GET`, where the query [rides in the URL](wire-format.md#the-url-form) so the response can be cached and revalidated. See [Server](server.md) for all options, and [Row policies](policies.md) for row-level filtering.
@@ -200,7 +209,7 @@ builder.Services.AddScryClient(
     _ => _.GetRequiredService<IHttpClientFactory>().CreateClient("scry"));
 builder.Services.AddScoped<ScryQuery>();
 ```
-<sup><a href='/samples/Sample.WebClient/Program.cs#L14-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Program.cs#L16-L24' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddScryClient` registers a `ScryClient` that sends to the given endpoint using the `HttpClient` the delegate resolves — here a **named** one, so Scry's base address, and any handler pipeline it grows, stay separate from every other call the app makes. `ScryQuery` is generated into the `Scry.Generated` namespace.

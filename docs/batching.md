@@ -67,7 +67,7 @@ A rejected entry faults its own task with the same exception the query would hav
 - **Not a transaction.** Entries run sequentially against one `DbContext`, in order, with no shared transaction. An entry that fails leaves the entries before it answered.
 - **Not parallelism.** A batch saves round-trips, not database time. `DbContext` is not thread-safe and a batch has no reason to work around that — the win being chased is the network, not the server.
 - **Not a way around a limit.** Every [per-query limit](server.md#options) applies to every entry, and `MaxBatchSize` bounds how many entries there can be.
-- **Not for streaming.** [`ToAsyncEnumerable`](querying.md#streaming-rows) reads a response row by row; a batch is answered as one response. A streamed query inside a batch is refused rather than quietly sent on its own.
+- **Not for streaming.** [`ToAsyncEnumerable`](querying.md#streaming-rows) reads a response row by row; a batch is answered as one response. A streamed query inside a batch is refused rather than quietly sent on its own, and so is a [live](live-queries.md) one, which is answered for as long as it is held.
 - **Not for [per-query headers](querying.md#headers).** One request carries the batch, so its queries have none of their own to write a header onto. Attaching a header to a batched query is refused at the point it is attached; set it on the `HttpClient` instead.
 
 
@@ -77,7 +77,7 @@ A rejected entry faults its own task with the same exception the query would hav
 | --- | --- | --- |
 | `MaxBatchSize` | 20 | Maximum entries in one batch. Exceeded, the batch is rejected whole — before any entry runs. |
 
-A batch is the one place a single request costs more than one query, which makes it the one place worth bounding separately: every other limit is per query and would otherwise apply to an arbitrary number of them at once. As with the other limits, this bounds the *shape* of a request rather than its cost — see [what Scry does not do](security.md#what-scry-does-not-do).
+A batch is a single request that costs more than one query, which makes it worth bounding separately: every other limit is per query and would otherwise apply to an arbitrary number of them at once. (The other such request is a [live query](live-queries.md#what-it-costs-and-what-bounds-it), which has limits of its own.) As with the other limits, this bounds the *shape* of a request rather than its cost — see [what Scry does not do](security.md#what-scry-does-not-do).
 
 
 ## Observability

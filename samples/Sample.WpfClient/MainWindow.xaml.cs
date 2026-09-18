@@ -1,4 +1,5 @@
 using System.Net.Http;
+using System.Reactive.Linq;
 using System.Windows;
 
 namespace Sample.WpfClient;
@@ -58,4 +59,45 @@ public partial class MainWindow
 
     async void OnRefreshClick(object sender, RoutedEventArgs args) =>
         await LoadEmployees();
+
+    IDisposable? live;
+
+    // The same query, kept answered. AsObservable hands over a plain IObservable and captures no
+    // context, because saying where to be called is what an Rx pipeline does for itself: ObserveOn
+    // brings each answer to the dispatcher, where the grid may be touched.
+    // begin-snippet: wpfLive
+    void OnLiveChanged(object sender, RoutedEventArgs args)
+    {
+        live?.Dispose();
+        live = null;
+        RefreshButton.IsEnabled = LiveCheckBox.IsChecked != true;
+        if (LiveCheckBox.IsChecked != true)
+        {
+            return;
+        }
+
+        StatusText.Text = "Connecting...";
+        live = query
+            .Employee
+            .Where(_ => _.Active)
+            .OrderBy(_ => _.Name)
+            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
+            .Live()
+            .AsObservable()
+            .ObserveOn(SynchronizationContext.Current!)
+            .Subscribe(
+                rows =>
+                {
+                    EmployeeGrid.ItemsSource = rows;
+                    StatusText.Text = $"{rows.Count} active employees, live as of {DateTime.Now:T}";
+                },
+                exception => StatusText.Text = $"The live query ended: {exception.Message}");
+    }
+    // end-snippet
+
+    protected override void OnClosed(EventArgs args)
+    {
+        live?.Dispose();
+        base.OnClosed(args);
+    }
 }

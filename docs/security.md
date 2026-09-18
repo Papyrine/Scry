@@ -460,9 +460,11 @@ public int MaxInValues { get; set; } = 1000;
 /// Maximum number of queries one batch request may carry. Default 20.
 /// </summary>
 /// <remarks>
-/// A batch is the one place a single request costs more than one query, so this is the bound that
-/// keeps it from being an amplifier: every other limit is per query and would otherwise apply to an
-/// arbitrary number of them. A batch over the limit is rejected whole, before any entry runs.
+/// A batch is a single request that costs more than one query, so this is the bound that keeps it
+/// from being an amplifier: every other limit here is per query and would otherwise apply to an
+/// arbitrary number of them. A batch over the limit is rejected whole, before any entry runs. The
+/// other such request is a live query, which has bounds of its own —
+/// <see cref="MaxSubscriptions"/> and the options beside it.
 /// </remarks>
 public int MaxBatchSize { get; set; } = 20;
 
@@ -536,7 +538,7 @@ public int QueryUrlLimit { get; set; } = QueryUrl.MaxLength;
 /// </remarks>
 public double? LimitWatchFraction { get; set; }
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L149' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L151' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 These bound the work a single request can ask for: how many rows, how deep a join chain, how long a pipeline — a join's inner side and a set operand each carry one of their own, held to the same length — how deeply nested an expression, and how wide a projection.
@@ -598,6 +600,26 @@ public async Task DisallowedPropertyRejectedWith400()
 <!-- endSnippet -->
 
 
+## Live queries
+
+A [live query](live-queries.md) is the same request, answered more than once. Nothing above is relaxed for it, because nothing above is skipped: every answer is the query run again through validation, the allow-list and the row policies, and recorded by the auditors. It is never a cached result, and a run is never shared between two subscriptions — sharing one across callers is the leak a row policy exists to prevent.
+
+What is new is that the server chooses when to answer, so what has to be shown is that the choosing discloses nothing:
+
+- **An answer is compared before it is sent.** A write the caller may not see changes nothing in the rows they are allowed, so nothing goes out. When an answer arrives therefore says no more than asking again would have.
+- **A heartbeat is sent on a fixed clock**, from a task of its own. A run that found nothing to say cannot delay one, so a late heartbeat is not a signal that something the caller cannot see was written.
+- **What reports a change names entities, never rows.** Whoever can write to a [backplane](live-queries.md#more-than-one-server) can cause live queries to be asked again, which costs what the throttle lets it cost, and nothing else.
+- **A failure after the first answer is said as it would have been with a status**: the client's own doing in full, anything else as the fixed `"Query execution failed."`.
+
+Three things a live query holds for longer than a query asked once does, each bounded:
+
+- **The authorization decision.** ASP.NET Core authorizes a request once, and a live query is one request. The server ends every stream at `SubscriptionLifetime`, or when the authentication ticket that opened it expires if that is sooner, and the client asks again — as a new request, authorized as one.
+- **Scoped services.** A row policy resolved from the request's services lives as long as the subscription, and so does anything it remembered. A policy that loads a caller's grants once per scope sees a revoked grant at the next connection rather than the next run, unless the host says so: invalidating a [cached policy](policies.md) re-runs the live queries that read that entity.
+- **A policy input the query does not show.** A live query runs again when something it read was written. A policy that answers by a claim, the clock, or a list it loaded in C# reads nothing the server can watch, so a change there reaches a live query at its next poll: within `SubscriptionPollInterval`, thirty seconds by default, and never where that is set to null.
+
+The limits are in [What it costs, and what bounds it](live-queries.md#what-it-costs-and-what-bounds-it). They are enforced by the processor rather than the endpoint, so a [hub](live-queries.md#over-signalr-instead-of-http) or any other transport has them too. Requests cross a hub as strings read by `ScryJson`, for the reason given in [Hosting without the HTTP endpoint](server.md#hosting-without-the-http-endpoint): the strictness of the wire format is in its serializer options, and a hub's own serializer has none of it.
+
+
 ## What Scry does not do
 
 **Authentication and authorization.** Scry has no notion of a user. Put it on the endpoint:
@@ -607,7 +629,7 @@ app.MapScry("/api/query")
     .RequireAuthorization("Reader");
 ```
 
-**Rate limiting and cost control.** The limits bound the *shape* of a query, not its cost. An allow-listed query over a large unindexed table is still expensive, and `MaxPageSize` caps an explicit `Take` rather than implicitly paging an unbounded query. Apply ASP.NET Core rate limiting, a command timeout, and the usual database-side controls.
+**Rate limiting and cost control.** The limits bound the *shape* of a query, not its cost. An allow-listed query over a large unindexed table is still expensive, and `MaxPageSize` caps an explicit `Take` rather than implicitly paging an unbounded query. Apply ASP.NET Core rate limiting, a command timeout, and the usual database-side controls. A [live query](live-queries.md) is counted by rate limiting as the one request it is, whatever it goes on to run: the most it can ask of the database is bounded by `MaxSubscriptions` and `SubscriptionThrottle` rather than by a limiter, and is driven by other callers' writes.
 
 **Bound how long a slow reader can hold a connection.** A response past [`ResponseSpillThreshold`](server.md#response-size) is written as it is read, so it holds a connection *and* its database read open for as long as the client takes to read it. That exposure is not new — `…/stream` has always had it, and `MapScry` maps every endpoint together precisely so the surface is uniform rather than one endpoint being protected while its neighbours are not — but it now reaches `ToListAsync` as well, which `MaxStreamRows` does not bound. Set the threshold to zero to hold responses whole as they once were, at the cost of an unbounded result being resident. The improvement in the same change is that such a result is no longer resident *twice*, as rows and as serialized bytes.
 
@@ -641,3 +663,5 @@ app.MapScry("/api/query")
 - [ ] The [explorer](explorer.md) is either unmapped or behind a real guard in production.
 - [ ] If the explorer is exposed to anyone in production, its [SQL preview](explorer.md#sql-preview) is left off — the SQL discloses real table and column names and the shape of every row policy.
 - [ ] Rate limiting and a database command timeout are configured.
+- [ ] Where live queries are on, `SubscriptionCaller` reads the authenticated principal, never a header — a caller that names itself is bounded by nothing.
+- [ ] Where a row policy answers by something the query does not read — a claim, the clock, a list loaded in C# — `SubscriptionPollInterval` is as short as a revoked permission may be allowed to last.

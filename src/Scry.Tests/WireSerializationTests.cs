@@ -577,6 +577,62 @@ public class WireSerializationTests
     public void MalformedAttachmentRequestFailsClosed() =>
         Assert.Throws<ScryWireException>(() => ScryJson.DeserializeAttachmentRequest("{ not json"));
 
+    [Test]
+    public void LiveEndRoundTrips()
+    {
+        var bytes = ScryJson.SerializeToUtf8(
+            new ScryLiveEnd(true)
+            {
+                Reason = "lifetime"
+            });
+
+        Assert.That(Encoding.UTF8.GetString(bytes), Is.EqualTo("""{"reconnect":true,"reason":"lifetime"}"""));
+
+        var end = ScryJson.DeserializeLiveEnd(bytes);
+        Assert.Multiple(() =>
+        {
+            Assert.That(end.Reconnect, Is.True);
+            Assert.That(end.Reason, Is.EqualTo("lifetime"));
+        });
+    }
+
+    // A reason is for a log, so an end without one is whole.
+    [Test]
+    public void ALiveEndWithoutAReasonReadsBack()
+    {
+        var bytes = ScryJson.SerializeToUtf8(new ScryLiveEnd(false));
+
+        Assert.That(Encoding.UTF8.GetString(bytes), Is.EqualTo("""{"reconnect":false}"""));
+        Assert.That(ScryJson.DeserializeLiveEnd(bytes).Reason, Is.Null);
+    }
+
+    // Whether to ask again is the whole of what the event says, so an end that does not say it is
+    // refused rather than read as "do not".
+    [Test]
+    public void ALiveEndWithoutReconnectFailsClosed() =>
+        Assert.Throws<ScryWireException>(() => ScryJson.DeserializeLiveEnd("{}"u8));
+
+    // What a transport with no status line answers a failure with: the same body an endpoint writes.
+    [Test]
+    public void AnErrorWritesTheBodyAnEndpointAnswersWith()
+    {
+        var error = new ScryError("Too many live queries.")
+        {
+            Code = ScryErrorCode.SubscriptionLimit
+        };
+
+        var bytes = ScryJson.SerializeToUtf8(error);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                Encoding.UTF8.GetString(bytes),
+                Is.EqualTo("""{"error":"Too many live queries.","code":"SubscriptionLimit"}"""));
+            Assert.That(ScryJson.Serialize(error), Is.EqualTo(Encoding.UTF8.GetString(bytes)));
+            Assert.That(ScryJson.TryDeserializeError(bytes), Is.EqualTo(error));
+        });
+    }
+
     static Task VerifyRoundTrip(QueryRequest request)
     {
         var json = ScryJson.Serialize(request);

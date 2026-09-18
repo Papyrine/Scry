@@ -91,6 +91,22 @@ public class UiScreenshotTests :
             .PrettyPrintHtml();
     }
 
+    // The live page once both of its subscriptions have answered: the rows, and the count beside the
+    // heading. Nothing in this fixture writes, so what is captured is the seed.
+    [Test]
+    public async Task SampleLive()
+    {
+        var page = await NewSizedPageAsync();
+        await page.GotoAsync($"{BaseUrl}/live");
+        await page.WaitForSelectorAsync("#orders tbody tr");
+        await Assertions.Expect(page.Locator("#count")).ToHaveTextAsync("3 live");
+
+        // The body rather than the page: capturing a page waits for the network to go idle, which a
+        // page holding a live query open never does — that connection is the point of it.
+        await Verify(page.Locator("body"))
+            .PrettyPrintHtml();
+    }
+
     // Screenshot only. The explorer's markup is dominated by Monaco, whose DOM carries generated ids
     // and measurement spans that differ run to run — UiSnapshotTests.ExplorerShellMarkup snapshots the
     // markup with those reduced away, so what is worth capturing here is the rendering.

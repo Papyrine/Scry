@@ -100,6 +100,36 @@ public class SidecarTests
         Assert.That(entry.ResponseHeaders.Select(_ => _.Key), Does.Contain("Content-Type"));
     }
 
+    // A live query's response never ends, so buffering it would hold the first answer back for ever.
+    // Its request is an ordinary query and is worth showing; its path ends in neither /stream nor
+    // anything else passed through, and a JSON POST is otherwise exactly what is buffered.
+    [Test]
+    public async Task ALiveQueryIsNeverBuffered()
+    {
+        StreamContent? served = null;
+        var (store, client) = Stubbed(
+            _ =>
+            {
+                served = new(new MemoryStream("event: ping\ndata: \n\n"u8.ToArray()));
+                served.Headers.ContentType = new(ScryLive.ContentType);
+                return new(HttpStatusCode.OK) {Content = served};
+            });
+
+        var body = ScryJson.Serialize(QueryRequest.Create("Person", [new CountOp()]));
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/query/subscribe")
+        {
+            Content = JsonContent(body)
+        };
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+
+        Assert.That(response.Content, Is.SameAs(served));
+        var entry = store.Entries.Single();
+        Assert.That(entry.Kind, Is.EqualTo(ScrySidecarKind.Subscription));
+        Assert.That(entry.Request?.Root, Is.EqualTo("Person"));
+        Assert.That(entry.ResponseJson, Is.Null);
+        Assert.That(entry.Status, Is.EqualTo(200));
+    }
+
     // The download action re-sends the request, so the request body is kept; the response bytes
     // flow through untouched and are deliberately not.
     [Test]

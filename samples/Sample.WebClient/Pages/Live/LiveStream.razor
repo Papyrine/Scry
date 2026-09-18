@@ -1,0 +1,39 @@
+@page "/live/stream"
+@inherits LivePage
+
+<PageTitle>Scry Sample — Live query as a stream</PageTitle>
+
+<h1>Live query as a stream</h1>
+<LiveChrome Active="stream" />
+
+<h2>Orders</h2>
+<p>
+    <code>await foreach</code>: a live query is an <code>IAsyncEnumerable</code>, so it is read the way
+    any other is. The next answer is not read until the loop comes back for it, so a page that is
+    slow to render is handed the latest state when it is ready rather than a backlog.
+</p>
+
+@if (error is not null)
+{
+    <p class="error" role="alert">@error</p>
+}
+
+@if (orders is null)
+{
+    <p class="loading">Loading…</p>
+}
+else
+{
+    <p>Answers received: <strong id="answers">@answers</strong></p>
+    <table id="orders">
+        <thead>
+            <tr><th>Id</th><th>Region</th><th>Amount</th></tr>
+        </thead>
+        <tbody>
+        @foreach (var order in orders)
+        {
+            <tr><td>@order.Id</td><td>@order.Region</td><td>@order.Amount</td></tr>
+        }
+        </tbody>
+    </table>
+}

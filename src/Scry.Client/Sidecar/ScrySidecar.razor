@@ -99,9 +99,9 @@
                             <h3>Response</h3>
                             <pre data-testid="sidecar-response">@response</pre>
                         }
-                        else if (selected.Kind is ScrySidecarKind.Stream or ScrySidecarKind.Attachment)
+                        else if (selected.Kind is ScrySidecarKind.Stream or ScrySidecarKind.Attachment or ScrySidecarKind.Subscription)
                         {
-                            <p class="scry-sidecar-note">Body not captured — @(selected.Kind == ScrySidecarKind.Stream ? "streams are read row by row" : "attachment bytes are never cached; use Download").</p>
+                            <p class="scry-sidecar-note">Body not captured — @NotCaptured(selected.Kind).</p>
                         }
                         @if (selected.BinaryPartSizes is {Count: > 0} parts)
                         {

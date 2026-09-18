@@ -45,11 +45,23 @@ public sealed class ScryTestServer :
     /// Separates the databases of two servers a single member starts, which the caller info alone
     /// cannot tell apart.
     /// </param>
+    /// <param name="liveQueries">
+    /// Serves live queries, as <c>Program.cs</c> does, with the change interceptor on the server's own
+    /// contexts. Off by default, so the fixtures that share a server are wired as they always were.
+    /// Throttled lightly and never polled, so a test waits for the change it made and nothing else.
+    /// </param>
+    /// <param name="deltaChanges">
+    /// Watches the database's change marker for live queries, as <c>Program.cs</c> does. Apart from
+    /// <paramref name="liveQueries"/> so that a test can show it working alone: a write through
+    /// <see cref="NewContext"/> passes no interceptor, and only this sees it.
+    /// </param>
     public static async Task<ScryTestServer> StartAsync(
         bool conditionalRequests = false,
         string? environment = null,
         Action<ScryExplorerOptions>? explorer = null,
         string? databaseSuffix = null,
+        bool liveQueries = false,
+        bool deltaChanges = false,
         [CallerFilePath] string testFile = "",
         [CallerMemberName] string memberName = "")
     {
@@ -68,7 +80,15 @@ public sealed class ScryTestServer :
                 EnvironmentName = environment
             });
         builder.WebHost.UseTestServer();
-        builder.Services.AddDbContext<SampleContext>(_ => _.UseSqlServer(database.ConnectionString));
+        builder.Services.AddDbContext<SampleContext>(
+            (services, options) =>
+            {
+                options.UseSqlServer(database.ConnectionString);
+                if (liveQueries)
+                {
+                    options.AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>());
+                }
+            });
         builder.Services.AddSingleton<RegionGrants>();
         builder.Services.AddSingleton<RegionAccessPolicy>();
         builder.Services.AddScry<SampleContext>(options =>
@@ -83,10 +103,33 @@ public sealed class ScryTestServer :
                 options.UseDeltaFreshness<SampleContext>();
                 options.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
             }
+
+            if (liveQueries || deltaChanges)
+            {
+                options.MaxSubscriptions = 100;
+                options.SubscriptionThrottle = TimeSpan.FromMilliseconds(50);
+                options.SubscriptionPollInterval = null;
+            }
+
+            if (deltaChanges)
+            {
+                options.UseDeltaChanges<SampleContext>();
+                options.ChangeProbeInterval = TimeSpan.FromMilliseconds(100);
+            }
         });
+
+        if (liveQueries)
+        {
+            builder.Services.AddSignalR();
+        }
 
         var app = builder.Build();
         app.MapScry("/api/query");
+        if (liveQueries)
+        {
+            app.MapScryHub("/api/query-hub");
+        }
+
         if (explorer is not null)
         {
             app.MapScryExplorer(explorer);
@@ -114,6 +157,30 @@ public sealed class ScryTestServer :
 
             order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
             await data.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
+        // The two writes the /live pages drive, mirrored from Program.cs: one the interceptor sees,
+        // and one only the host can report.
+        app.MapPost("/api/orders/{id:int}/reprice", async (int id, SampleContext data) =>
+        {
+            var order = await data.Orders.FindAsync(id);
+            if (order is null)
+            {
+                return Results.NotFound();
+            }
+
+            order.Amount += 1;
+            order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
+            await data.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
+        app.MapPost("/api/orders/reprice-bulk", async (SampleContext data, ScryChanges changes) =>
+        {
+            await data.Orders.ExecuteUpdateAsync(
+                _ => _.SetProperty(order => order.Amount, order => order.Amount + 1));
+            changes.Notify<Order>();
             return Results.NoContent();
         });
 

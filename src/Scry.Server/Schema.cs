@@ -481,6 +481,8 @@ sealed class Schema
             throw new($"ScryOptions.{nameof(options.LimitWatchFraction)} must be greater than zero and at most one: it is the fraction of a limit a query has to reach to be reported, so 0.8 reports one that used eight tenths of it. Null reports nothing.");
         }
 
+        EnsureSubscriptionOptions(options);
+
         var schema = new Schema();
         var found = new List<(Type Type, string Name, SourceKind Kind)>();
 
@@ -950,6 +952,46 @@ sealed class Schema
         {
             throw new(
                 $"ScryOptions.{option} must be a plain collation name — letters, digits and underscores only. It is emitted into SQL rather than parameterized, so it has to be trusted configuration, never a value taken from a request or from anywhere a caller can influence.");
+        }
+    }
+
+    // Checked whether or not live queries are on, so a deployment that turns them on later finds out
+    // about a bad value at the startup that set it rather than at the one that enabled them.
+    static void EnsureSubscriptionOptions(ScryOptions options)
+    {
+        AtLeast(options.MaxSubscriptions, 0, nameof(options.MaxSubscriptions), "Zero maps no subscribe route.");
+        AtLeast(options.MaxSubscriptionsPerCaller, 1, nameof(options.MaxSubscriptionsPerCaller), "It is how many live queries one caller may hold.");
+        AtLeast(options.MaxSubscriptionBytes, 1, nameof(options.MaxSubscriptionBytes), "It is the largest answer a live query may hold.");
+        AtLeast(options.MaxConcurrentSubscriptionRuns, 1, nameof(options.MaxConcurrentSubscriptionRuns), "It is how many live queries may run at once.");
+        NotNegative(options.SubscriptionThrottle, nameof(options.SubscriptionThrottle));
+        Positive(options.SubscriptionPollInterval, nameof(options.SubscriptionPollInterval), "Null runs a live query only when a change is reported.");
+        Positive(options.SubscriptionHeartbeat, nameof(options.SubscriptionHeartbeat), "It is how often an idle live query is sent a heartbeat.");
+        Positive(options.SubscriptionLifetime, nameof(options.SubscriptionLifetime), "Null ends a live query only when its authentication ticket expires.");
+        Positive(options.ChangeProbeInterval, nameof(options.ChangeProbeInterval), "It is how often the change probe is asked.");
+    }
+
+    static void AtLeast(int value, int least, string option, string what)
+    {
+        if (value < least)
+        {
+            throw new($"ScryOptions.{option} must be {least} or greater. {what}");
+        }
+    }
+
+    static void NotNegative(TimeSpan value, string option)
+    {
+        if (value < TimeSpan.Zero)
+        {
+            throw new($"ScryOptions.{option} must not be negative. Zero runs a live query as often as changes are reported.");
+        }
+    }
+
+    static void Positive(TimeSpan? value, string option, string what)
+    {
+        if (value is { } span &&
+            span <= TimeSpan.Zero)
+        {
+            throw new($"ScryOptions.{option} must be greater than zero. {what}");
         }
     }
 

@@ -63,5 +63,12 @@ public enum ScryErrorCode
     /// The query passed validation and failed while executing. The message is the fixed text — nothing
     /// internal leaves the server — so this code is the whole of what is said about it.
     /// </summary>
-    ExecutionFailed
+    ExecutionFailed,
+
+    /// <summary>
+    /// A live query was refused because the server, or this caller's share of it, is already holding
+    /// as many as it allows. Nothing about the query was wrong, so asking again later is the remedy —
+    /// the one refusal here that is worth retrying unchanged.
+    /// </summary>
+    SubscriptionLimit
 }

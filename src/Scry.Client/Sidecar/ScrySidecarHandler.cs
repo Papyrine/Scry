@@ -40,8 +40,9 @@ public sealed class ScrySidecarHandler(ScrySidecarStore store, ScrySidecarOption
         }
 
         // A stream is read row by row above this handler and an attachment's bytes flow through
-        // unbuffered, so neither body can be captured without breaking the caller.
-        if (kind is ScrySidecarKind.Stream or ScrySidecarKind.Attachment or ScrySidecarKind.Other)
+        // unbuffered, so neither body can be captured without breaking the caller. A live query's
+        // body is the extreme of it: it has no end to read to.
+        if (kind is ScrySidecarKind.Stream or ScrySidecarKind.Attachment or ScrySidecarKind.Subscription or ScrySidecarKind.Other)
         {
             Record(WithResponse(entry, response) with {Duration = stopwatch.Elapsed});
             return response;
@@ -116,12 +117,13 @@ public sealed class ScrySidecarHandler(ScrySidecarStore store, ScrySidecarOption
 
             // Safe to read: ScryClient sends JSON bodies as ByteArrayContent, which re-reads.
             if (request.Content is not null &&
-                kind is ScrySidecarKind.Query or ScrySidecarKind.Batch or ScrySidecarKind.Attachment)
+                kind is ScrySidecarKind.Query or ScrySidecarKind.Batch or ScrySidecarKind.Attachment or ScrySidecarKind.Subscription)
             {
                 var body = await request.Content.ReadAsByteArrayAsync(cancel);
                 return entry with
                 {
-                    Request = kind == ScrySidecarKind.Query ? ScryJson.DeserializeRequest(body) : null,
+                    // A live query's request is an ordinary query, so it reads as one.
+                    Request = kind is ScrySidecarKind.Query or ScrySidecarKind.Subscription ? ScryJson.DeserializeRequest(body) : null,
                     RequestJson = SidecarJson.Prettify(body),
                     AttachmentRequestBody = kind == ScrySidecarKind.Attachment ? body : null
                 };
@@ -207,6 +209,13 @@ public sealed class ScrySidecarHandler(ScrySidecarStore store, ScrySidecarOption
         if (path.EndsWith("/stream", StringComparison.Ordinal))
         {
             return ScrySidecarKind.Stream;
+        }
+
+        // Ahead of the JSON-body rule below, which it would otherwise match: that rule buffers the
+        // response, and this one's never ends.
+        if (path.EndsWith($"/{ScryLive.Route}", StringComparison.Ordinal))
+        {
+            return ScrySidecarKind.Subscription;
         }
 
         if (request.Method == HttpMethod.Get &&

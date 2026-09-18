@@ -21,7 +21,7 @@ builder.Services
     .AddHttpClient("scry")
     .AddHttpMessageHandler<ScrySidecarHandler>();
 ```
-<sup><a href='/samples/Sample.WebClient/Program.cs#L46-L51' title='Snippet source file'>snippet source</a> | <a href='#snippet-sidecarRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Program.cs#L48-L53' title='Snippet source file'>snippet source</a> | <a href='#snippet-sidecarRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Then render the panel once, above the router:
@@ -110,6 +110,7 @@ The predicate is evaluated once, when the panel first loads. An answer that shou
 
 - **Queries and batches** are recorded whole: the decoded request, the pretty-printed response, and both header sets. Their bodies are safe to buffer because the client buffers them itself.
 - **Streams** are recorded as status and headers only. A streamed result is meant to be read a row at a time; buffering it to display it would stall the read.
+- **Live queries** are recorded the same way, as one entry per connection. A [live query](live-queries.md)'s response has no end to buffer up to, so reading it to display it would not stall the consumer so much as starve it.
 - **Attachments** are recorded as status, headers, and the *request* body. The bytes themselves are never cached — the **Download** action re-sends the captured request and hands the fresh bytes to the browser, so the server's policies answer every download anew. Supply `DownloadClient` when that re-send needs the app's handler pipeline (an auth header, say).
 - **Sensitive constants are shown.** A query comparing a `[Sensitive]` member against a constant travels as a POST body, and the panel shows bodies — the sidecar is a devtools-grade view of the app's own traffic, so wire it only in builds where opening the network tab would be equally acceptable.
 

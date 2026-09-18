@@ -18,6 +18,7 @@
   },
   Kind: Page,
   Streamed: false,
+  Subscribed: false,
   Rows: 2,
   StaleClient: false,
   Sensitive: false

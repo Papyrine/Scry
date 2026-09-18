@@ -172,6 +172,15 @@ public partial class ScrySidecar :
         }
     }
 
+    // Why an exchange shows no response body, for the kinds whose body is never read here.
+    static string NotCaptured(ScrySidecarKind kind) =>
+        kind switch
+        {
+            ScrySidecarKind.Stream => "streams are read row by row",
+            ScrySidecarKind.Subscription => "a live query's answers arrive for as long as it is open",
+            _ => "attachment bytes are never cached; use Download"
+        };
+
     static string Name(ScrySidecarEntry entry)
     {
         if (entry.Request is { } request)

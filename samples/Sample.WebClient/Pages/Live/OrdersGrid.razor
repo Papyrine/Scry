@@ -1,0 +1,39 @@
+@using MessagePipe
+@implements IDisposable
+@inject IBufferedSubscriber<OrdersChanged> Subscriber
+
+@* Knows nothing about Scry: it listens to the bus, and would render the same rows from anywhere. *@
+@if (orders is null)
+{
+    <p class="loading">Loading…</p>
+}
+else
+{
+    <table id="orders">
+        <thead>
+            <tr><th>Id</th><th>Region</th><th>Amount</th></tr>
+        </thead>
+        <tbody>
+        @foreach (var order in orders)
+        {
+            <tr><td>@order.Id</td><td>@order.Region</td><td>@order.Amount</td></tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code {
+    IReadOnlyList<OrderRow>? orders;
+    IDisposable? subscription;
+
+    protected override void OnInitialized() =>
+        subscription = Subscriber.Subscribe(
+            changed =>
+            {
+                orders = changed.Orders;
+                InvokeAsync(StateHasChanged);
+            });
+
+    public void Dispose() =>
+        subscription?.Dispose();
+}

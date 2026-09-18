@@ -125,7 +125,7 @@ public ScryBatch Batch()
         """);
 }
 ```
-<sup><a href='/src/Scry.Client/ScryClient.cs#L109-L162' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Client/ScryClient.cs#L130-L183' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryClientApi' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -291,6 +291,11 @@ var request = client.Source<Employee>("Employee")
 <!-- endSnippet -->
 
 which produces the wire request without contacting the server.
+
+
+### Live terminals
+
+Every terminal above asks once. `Live()`, `LiveCount()`, `LiveLongCount()`, `LiveAny()`, `LiveFirstOrDefault()` and `LiveSingleOrDefault()` ask the same question and are answered again whenever the answer changes — as a stream, through a callback, or as an `IObservable<T>`. They send the request their one-shot counterparts send, so everything on this page applies to them unchanged. See [Live queries](live-queries.md).
 
 
 ## Headers

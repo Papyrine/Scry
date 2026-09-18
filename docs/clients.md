@@ -30,11 +30,11 @@ past those two:
 ```cs
 using var http = new HttpClient
 {
-    BaseAddress = new(serverAddress)
+    BaseAddress = new(server)
 };
 var query = new ScryQuery(ScryClient.ForHttp(http, "/api/query"));
 ```
-<sup><a href='/samples/Sample.ConsoleClient/Program.cs#L10-L16' title='Snippet source file'>snippet source</a> | <a href='#snippet-consoleClientSetup' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.ConsoleClient/Program.cs#L17-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-consoleClientSetup' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The generated `ScryQuery` takes a `ScryClient` in its constructor, so no container is involved at any point. This is also how
@@ -110,10 +110,15 @@ detection. A client built by hand with `ScryClient.ForHttp` has the same require
 | HTTP cache | the browser's | none; the [304 handler](caching.md) supplies it | none; same handler |
 | [Debug sidecar](sidecar.md) | available | not available | not available |
 | Trimming | the reason the client carries no EF dependency | optional | optional |
+| A [live query](live-queries.md)'s callback | on the one thread there is; call `InvokeAsync(StateHasChanged)` | on the UI thread, with no `Invoke` | on a pool thread |
 
 Everything else — the generated models, the LINQ surface, [paging](paging.md), [batching](batching.md),
 [attachments](attachments.md), [row policies](policies.md), and every server-side guarantee — is identical, because the
 server sees the same wire request whichever host sent it.
+
+The last row is `Subscribe` capturing the `SynchronizationContext` it was called on, as `await` does. The stream and
+`AsObservable()` capture nothing: an `await foreach` resumes wherever its own awaits put it, and an observable is scheduled by
+whoever consumes it.
 
 
 ## The sidecar is the exception
@@ -131,14 +136,15 @@ holding the output and nothing else. See [F#](fsharp.md).
 
 ## The samples
 
-`/samples` carries one server and five clients against it, each writing the same query:
+`/samples` carries one server and five clients against it, each writing the same query, and each consuming it
+[live](live-queries.md#consuming-one) in the shape that host would reach for:
 
-| Project | Shape |
-| --- | --- |
-| `Sample.WebClient` | Blazor WebAssembly, ambient `HttpClient`, sidecar and 304 handler wired |
-| `Sample.ConsoleClient` | no container, `ScryClient.ForHttp`, rows written to stdout |
-| `Sample.WpfClient` | `IHttpClientFactory`, one app-lifetime scope, bound to a `DataGrid` |
-| `Sample.WinFormsClient` | the same registration, bound to a `DataGridView` |
-| `Sample.FSharp` | queries over `Sample.QueryModels`, run by `Sample.FSharp.Tests` |
+| Project | Shape | Live |
+| --- | --- | --- |
+| `Sample.WebClient` | Blazor WebAssembly, ambient `HttpClient`, sidecar and 304 handler wired | a page per shape under `/live`, over HTTP or SignalR |
+| `Sample.ConsoleClient` | no container, `ScryClient.ForHttp`, rows written to stdout | `--live`: an `await foreach` until Ctrl+C |
+| `Sample.WpfClient` | `IHttpClientFactory`, one app-lifetime scope, bound to a `DataGrid` | `AsObservable()` into System.Reactive |
+| `Sample.WinFormsClient` | the same registration, bound to a `DataGridView` | the callback, on the UI thread |
+| `Sample.FSharp` | queries over `Sample.QueryModels`, run by `Sample.FSharp.Tests` | `AsObservable()` into FSharp.Core's `Observable` |
 
 See [Sample](sample.md) for running them.

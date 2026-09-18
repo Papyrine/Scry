@@ -4,19 +4,30 @@
 /// The client entry point. Exposes allow-listed sources as <see cref="IQueryable{T}"/> and sends
 /// translated queries to the server via a pluggable transport.
 /// </summary>
-public sealed class ScryClient
+public sealed partial class ScryClient
 {
     Func<QueryRequest, ScryCall?, Cancel, Task<QueryResponse>> transport;
     Func<QueryRequest, ScryCall?, Cancel, IAsyncEnumerable<StreamedRow>>? streamTransport;
     Func<QueryBatchRequest, Cancel, Task<QueryBatchResponse>>? batchTransport;
     Func<AttachmentRequest, Cancel, Task<Stream?>>? attachmentTransport;
+    Func<QueryRequest, ScryCall?, string?, Cancel, IAsyncEnumerable<LiveFrame>>? liveTransport;
 
     /// <summary>
-    /// Creates a client over a custom transport. <paramref name="streamTransport"/> and
-    /// <paramref name="batchTransport"/> are optional: a transport that cannot stream simply has no
-    /// <c>ToAsyncEnumerable</c>, and one that cannot batch has no <see cref="Batch"/> — each says so
-    /// rather than quietly buffering the whole result, or sending a "batch" one query at a time.
+    /// Creates a client over a custom transport. <paramref name="streamTransport"/>,
+    /// <paramref name="batchTransport"/> and <paramref name="subscribeTransport"/> are optional: a
+    /// transport that cannot stream simply has no <c>ToAsyncEnumerable</c>, one that cannot batch has
+    /// no <see cref="Batch"/>, and one that cannot hold a query open has no <c>Live</c> — each says so
+    /// rather than quietly buffering the whole result, sending a "batch" one query at a time, or
+    /// polling and calling it live.
     /// </summary>
+    /// <param name="transport">Answers one query.</param>
+    /// <param name="streamTransport">Answers one query a row at a time.</param>
+    /// <param name="batchTransport">Answers several queries at once.</param>
+    /// <param name="subscribeTransport">
+    /// Answers one query, and then answers it again each time the answer changes, until cancelled. A
+    /// sequence that ends is asked for again under <see cref="Reconnect"/>, and one that throws ends
+    /// the live query unless the failure is one a later attempt could get past.
+    /// </param>
     /// <remarks>
     /// Per-query headers are HTTP's, so a transport supplied here does not receive them and a query
     /// carrying them is refused rather than sent without them. Use <see cref="ForHttp"/> for those.
@@ -24,9 +35,18 @@ public sealed class ScryClient
     public ScryClient(
         Func<QueryRequest, Cancel, Task<QueryResponse>> transport,
         Func<QueryRequest, Cancel, IAsyncEnumerable<JsonElement>>? streamTransport = null,
-        Func<QueryBatchRequest, Cancel, Task<QueryBatchResponse>>? batchTransport = null)
+        Func<QueryBatchRequest, Cancel, Task<QueryBatchResponse>>? batchTransport = null,
+        Func<QueryRequest, Cancel, IAsyncEnumerable<QueryResponse>>? subscribeTransport = null)
     {
         this.batchTransport = batchTransport;
+
+        liveTransport = subscribeTransport is null
+            ? null
+            : (request, call, _, cancel) =>
+            {
+                RefuseHeaders(call);
+                return Adapt(subscribeTransport(request, cancel), cancel);
+            };
 
         this.transport = (request, call, cancel) =>
         {
@@ -63,6 +83,7 @@ public sealed class ScryClient
         streamTransport = (request, call, cancel) => StreamAsync(http, $"{endpoint.TrimEnd('/')}/stream", request, call, cancel);
         batchTransport = (request, cancel) => PostBatchAsync(http, $"{endpoint.TrimEnd('/')}/batch", request, cancel);
         attachmentTransport = (request, cancel) => PostAttachmentAsync(http, $"{endpoint.TrimEnd('/')}/attachment", request, cancel);
+        liveTransport = (request, call, lastEventId, cancel) => LiveAsync(http, $"{endpoint.TrimEnd('/')}/{ScryLive.Route}", request, call, lastEventId, cancel);
     }
 
     // Sends the serializer's own UTF-8 rather than a string: StringContent would encode the body to UTF-8
@@ -464,15 +485,8 @@ public sealed class ScryClient
     /// row is not tokenised here: the caller materializes it into its own type, and reading every
     /// property to learn that none is the marker parsed each row twice.
     /// </summary>
-    static bool IsMarker(ReadOnlySpan<byte> line)
-    {
-        var reader = new Utf8JsonReader(line);
-        return reader.Read() &&
-               reader.TokenType == JsonTokenType.StartObject &&
-               reader.Read() &&
-               reader.TokenType == JsonTokenType.PropertyName &&
-               reader.ValueTextEquals(ScryStream.MarkerProperty);
-    }
+    static bool IsMarker(ReadOnlySpan<byte> line) =>
+        ScryJson.IsMarker(line);
 
     // The stream's own markers are consumed rather than surfaced: the opening one records the server's
     // stamp and its enum aliases, and the closing one decides whether the rows are the whole result.
@@ -494,6 +508,16 @@ public sealed class ScryClient
 
             case ScryStream.End:
                 return (true, aliases);
+
+            // A transport with no status line says which failure this is on the marker, and it then
+            // surfaces exactly as the same failure answered with a status would have.
+            case ScryStream.Error when marker.Code is { } code:
+                throw ResponseFailure.Read(
+                    ScryJson.SerializeToUtf8(
+                        new ScryError(marker.Error ?? "The server ended the stream early.")
+                        {
+                            Code = code
+                        }));
 
             case ScryStream.Error:
                 throw new ScryWireException(

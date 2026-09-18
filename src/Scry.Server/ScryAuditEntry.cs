@@ -50,6 +50,18 @@ public sealed record ScryAuditEntry(
     public bool Streamed { get; init; }
 
     /// <summary>
+    /// Whether this was one run of a live query rather than a query asked once. A live query is
+    /// recorded every time it runs, first run included — each is a query against the database, with
+    /// the policies applied again — so one subscription is as many entries as it had runs, whether or
+    /// not the answer had changed and was sent.
+    /// </summary>
+    /// <remarks>
+    /// What asked for the first run was the caller. What asked for each one after it was somebody
+    /// else's write, a poll, or a probe — which is the difference worth having when reading the trail.
+    /// </remarks>
+    public bool Subscribed { get; init; }
+
+    /// <summary>
     /// Rows delivered: a list or page's count, 0 or 1 for a single row, the rows read for a stream —
     /// including one that ended early. Null where rows are not the result (a scalar) or the query
     /// never ran.

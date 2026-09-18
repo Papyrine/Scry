@@ -14,7 +14,7 @@ builder.Services.AddOpenTelemetry()
     .WithTracing(_ => _.AddSource(ScryInstrumentation.ActivitySourceName))
     .WithMetrics(_ => _.AddMeter(ScryInstrumentation.MeterName));
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L74-L78' title='Snippet source file'>snippet source</a> | <a href='#snippet-openTelemetry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L96-L100' title='Snippet source file'>snippet source</a> | <a href='#snippet-openTelemetry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Nothing in Scry depends on OpenTelemetry — the traces are a plain `ActivitySource` and the metrics a plain `Meter`, so any `ActivityListener`/`MeterListener`-based collector works the same way.
@@ -31,6 +31,7 @@ One activity per query, named `scry.query {source}`, spanning validation through
 | `scry.result_kind` | `list`, `scalar`, `single`, `page`, or `stream`; absent when the query never produced a result. |
 | `scry.rows` | Rows delivered, where rows are the result. |
 | `scry.stale_client` | `true` when a rejection was attributed to a stale client ([schema versioning](schema-versioning.md)). |
+| `scry.subscription` | `true` on a run made for a [live query](live-queries.md); absent otherwise. |
 | `error.type` | The exception type, on any non-success. |
 
 A rejection or failure additionally sets the activity's status to error, carrying the same message the outcome does.
@@ -61,6 +62,20 @@ Every query records a duration, whatever its outcome, so query counts come off t
 A `rejected` rate that deployments do not explain is the signal worth alerting on. A generated client cannot produce an invalid request, so rejections are either stale clients — benign, marked by `scry.stale_client` and a `staleClient` audit entry, expected to spike right after a model change ships — or requests written by hand, which is probing. `malformed` is the same signal one layer earlier.
 
 A batch refused whole — more entries than `MaxBatchSize`, or a wire version the server does not speak — ran no entry, so it records one `rejected` duration of its own under the source `(batch)`, and its `scry.batch` span is marked as an entry's would have been.
+
+
+### Live queries
+
+A [live query](live-queries.md) is recorded once per run, not once per connection: each run is a query, with an activity, a duration, a row count and an [audit entry](#the-audit-hook) of its own, and a run that found nothing new to send is recorded like any other. Those runs carry `scry.subscription` = `true` on the duration histogram and the activity, which is what separates the load callers asked for from the load other callers' writes caused. After the first, a run has no request of its own to nest under, so its activity parents onto the long-lived one that opened the connection.
+
+Two instruments are the feature's own:
+
+| Instrument | Type | Unit | Tags |
+| --- | --- | --- | --- |
+| `scry.server.subscriptions.active` | up-down counter | `{subscription}` | |
+| `scry.server.subscription.signal.failures` | counter | `{failure}` | `scry.signal` (`probe` or `backplane`), `error.type` |
+
+The first is what to read against `MaxSubscriptions`. The second is the only place a failure in the background shows: neither a [change probe](live-queries.md#what-tells-a-live-query-to-run-again) nor a [backplane](live-queries.md#more-than-one-server) has a request to fail, and both fail quietly because the poll covers what they missed. A rate above zero means live queries are arriving late, by up to `SubscriptionPollInterval`.
 
 
 ## The audit hook
@@ -121,6 +136,18 @@ public sealed record ScryAuditEntry(
     public bool Streamed { get; init; }
 
     /// <summary>
+    /// Whether this was one run of a live query rather than a query asked once. A live query is
+    /// recorded every time it runs, first run included — each is a query against the database, with
+    /// the policies applied again — so one subscription is as many entries as it had runs, whether or
+    /// not the answer had changed and was sent.
+    /// </summary>
+    /// <remarks>
+    /// What asked for the first run was the caller. What asked for each one after it was somebody
+    /// else's write, a poll, or a probe — which is the difference worth having when reading the trail.
+    /// </remarks>
+    public bool Subscribed { get; init; }
+
+    /// <summary>
     /// Rows delivered: a list or page's count, 0 or 1 for a single row, the rows read for a stream —
     /// including one that ended early. Null where rows are not the result (a scalar) or the query
     /// never ran.
@@ -158,7 +185,7 @@ public sealed record ScryAuditEntry(
     public bool Sensitive { get; init; }
 }
 ```
-<sup><a href='/src/Scry.Server/ScryAuditEntry.cs#L19-L89' title='Snippet source file'>snippet source</a> | <a href='#snippet-auditEntry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryAuditEntry.cs#L19-L101' title='Snippet source file'>snippet source</a> | <a href='#snippet-auditEntry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Semantics:

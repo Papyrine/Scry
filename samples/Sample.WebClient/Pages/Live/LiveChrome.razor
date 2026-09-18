@@ -1,0 +1,34 @@
+@inject IHttpClientFactory Clients
+@inject LiveTransport Transport
+
+<p><a href="/">← Samples</a> · <a href="/scry">Explorer</a></p>
+<nav class="tabs" aria-label="Ways to consume a live query">
+    <a href="/live" class="@Class("callback")">Callback</a>
+    <a href="/live/stream" class="@Class("stream")">Stream</a>
+    <a href="/live/rx" class="@Class("rx")">Rx</a>
+    <a href="/live/messagepipe" class="@Class("messagepipe")">MessagePipe</a>
+</nav>
+<p>
+    The same live query on each tab, consumed a different way. Open this page in a second window and
+    press a button in either: both update, with no reload and no polling from the page.
+</p>
+
+<div class="pager">
+    <button id="reprice" @onclick="Reprice">Reprice an order</button>
+    <button id="reprice-bulk" @onclick="RepriceBulk">Reprice in bulk</button>
+    <fieldset class="transport" id="transport" data-transport="@(Transport.SignalR ? "signalr" : "sse")">
+        <legend>Transport</legend>
+        <label>
+            <input type="radio" name="transport" id="transport-sse" checked="@(!Transport.SignalR)" @onchange="_ => Use(signalR: false)"/>
+            SSE
+        </label>
+        <label>
+            <input type="radio" name="transport" id="transport-signalr" checked="@Transport.SignalR" @onchange="_ => Use(signalR: true)"/>
+            SignalR
+        </label>
+    </fieldset>
+</div>
+@if (error is not null)
+{
+    <p class="error" role="alert">@error</p>
+}

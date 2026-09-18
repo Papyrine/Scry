@@ -13,28 +13,41 @@ namespace Scry;
 public sealed class ScryPolicyCache
 {
     Dictionary<Type, CachedPolicyRegistration> registrations;
+    ScryChanges changes;
 
-    internal ScryPolicyCache(IEnumerable<CachedPolicyRegistration> registrations) =>
+    internal ScryPolicyCache(IEnumerable<CachedPolicyRegistration> registrations, ScryChanges changes)
+    {
         this.registrations = registrations.ToDictionary(_ => _.Entity);
+        this.changes = changes;
+    }
 
     /// <summary>
     /// Forgets everything decided for one caller, so the next query of theirs decides every row again.
     /// What to call when someone's role changed rather than one grant.
     /// </summary>
+    /// <remarks>
+    /// Also reported as a change to <typeparamref name="TEntity"/>, so a live query reading it is asked
+    /// again: no row was written, but which rows that caller may see is part of its answer.
+    /// </remarks>
     public void InvalidateScope<TEntity>(string scopeKey)
     {
         var registration = For<TEntity>();
         registration.Store.InvalidateScope(registration.Name, scopeKey);
+        changes.Notify<TEntity>();
     }
 
     /// <summary>
     /// Forgets what was decided about these rows, for every caller. What to call when a grant on the
     /// rows themselves changed — the version column cannot see that, so nothing else would.
     /// </summary>
+    /// <remarks>
+    /// Also reported as a change to <typeparamref name="TEntity"/>, as <see cref="InvalidateScope{TEntity}"/> is.
+    /// </remarks>
     public void InvalidateRows<TEntity>(IReadOnlyCollection<object> keys)
     {
         var registration = For<TEntity>();
         registration.Store.InvalidateRows(registration.Name, keys);
+        changes.Notify<TEntity>();
     }
 
     /// <summary>
