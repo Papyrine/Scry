@@ -67,9 +67,10 @@ jobs:
       - name: Test integration
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: dotnet test IntegrationTests/IntegrationTests.slnx -c Release --no-build --logger trx
+      # Capped as in ci.yml: eight WASM boots at once starves a four-core agent.
       - name: Test samples
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: dotnet test samples/Scry.Samples.slnx -c Release --no-build --logger trx
+        run: dotnet test samples/Scry.Samples.slnx -c Release --no-build --logger trx -- NUnit.NumberOfTestWorkers=4
 
       - name: Upload received snapshots on failure
         if: failure()

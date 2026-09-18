@@ -64,9 +64,13 @@ jobs:
         run: dotnet test IntegrationTests/IntegrationTests.slnx -c Release --no-build --logger trx
       # Includes the headless-browser tests; VerifyPlaywright.Initialize(installPlaywright: true)
       # fetches Chromium on a cache miss.
+      # NumberOfTestWorkers overrides the assembly's LevelOfParallelism(8), which is tuned for a
+      # developer machine: what a running test costs here is a booted WASM runtime, so the ceiling is
+      # memory rather than cores, and eight of them on a four-core agent starves the suite into
+      # 30-second navigation timeouts rather than failing outright.
       - name: Test samples
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: dotnet test samples/Scry.Samples.slnx -c Release --no-build --logger trx
+        run: dotnet test samples/Scry.Samples.slnx -c Release --no-build --logger trx -- NUnit.NumberOfTestWorkers=4
 
       - name: Upload test results
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
