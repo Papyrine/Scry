@@ -79,15 +79,14 @@ public sealed class ScryTestServer :
                 EnvironmentName = environment
             });
         builder.WebHost.UseTestServer();
-        builder.Services.AddDbContext<SampleContext>(
-            (services, options) =>
+        builder.Services.AddDbContext<SampleContext>((services, options) =>
+        {
+            options.UseSqlServer(database.ConnectionString);
+            if (liveQueries)
             {
-                options.UseSqlServer(database.ConnectionString);
-                if (liveQueries)
-                {
-                    options.AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>());
-                }
-            });
+                options.AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>());
+            }
+        });
         builder.Services.AddSingleton<RegionGrants>();
         builder.Services.AddSingleton<RegionAccessPolicy>();
         builder.Services.AddScry<SampleContext>(options =>
@@ -139,49 +138,56 @@ public sealed class ScryTestServer :
         app.MapGet("/api/grants", (RegionGrants grants) =>
             new GrantState([.. RegionGrants.Regions], [.. grants.For("sample")], grants.Lookups));
 
-        app.MapPost("/api/grants/{region}", (string region, bool allowed, RegionGrants grants, ScryPolicyCache cache) =>
-        {
-            grants.Set("sample", region, allowed);
-            cache.InvalidateScope<Order>("sample");
-            return Results.NoContent();
-        });
-
-        app.MapPost("/api/orders/{id:int}/touch", async (int id, SampleContext data) =>
-        {
-            var order = await data.Orders.FindAsync(id);
-            if (order is null)
+        app.MapPost(
+            "/api/grants/{region}",
+            (string region, bool allowed, RegionGrants grants, ScryPolicyCache cache) =>
             {
-                return Results.NotFound();
-            }
+                grants.Set("sample", region, allowed);
+                cache.InvalidateScope<Order>("sample");
+                return Results.NoContent();
+            });
 
-            order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
-            await data.SaveChangesAsync();
-            return Results.NoContent();
-        });
+        app.MapPost(
+            "/api/orders/{id:int}/touch",
+            async (int id, SampleContext data) =>
+            {
+                var order = await data.Orders.FindAsync(id);
+                if (order is null)
+                {
+                    return Results.NotFound();
+                }
+
+                order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
+                await data.SaveChangesAsync();
+                return Results.NoContent();
+            });
 
         // The two writes the /live pages drive, mirrored from Program.cs: one the interceptor sees,
         // and one only the host can report.
-        app.MapPost("/api/orders/{id:int}/reprice", async (int id, SampleContext data) =>
-        {
-            var order = await data.Orders.FindAsync(id);
-            if (order is null)
+        app.MapPost(
+            "/api/orders/{id:int}/reprice",
+            async (int id, SampleContext data) =>
             {
-                return Results.NotFound();
-            }
+                var order = await data.Orders.FindAsync(id);
+                if (order is null)
+                {
+                    return Results.NotFound();
+                }
 
-            order.Amount += 1;
-            order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
-            await data.SaveChangesAsync();
-            return Results.NoContent();
-        });
+                order.Amount += 1;
+                order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
+                await data.SaveChangesAsync();
+                return Results.NoContent();
+            });
 
-        app.MapPost("/api/orders/reprice-bulk", async (SampleContext data, ScryChanges changes) =>
-        {
-            await data.Orders.ExecuteUpdateAsync(
-                _ => _.SetProperty(_ => _.Amount, _ => _.Amount + 1));
-            changes.Notify<Order>();
-            return Results.NoContent();
-        });
+        app.MapPost(
+            "/api/orders/reprice-bulk",
+            async (SampleContext data, ScryChanges changes) =>
+            {
+                await data.Orders.ExecuteUpdateAsync(_ => _.SetProperty(_ => _.Amount, _ => _.Amount + 1));
+                changes.Notify<Order>();
+                return Results.NoContent();
+            });
 
         await app.StartAsync();
 
