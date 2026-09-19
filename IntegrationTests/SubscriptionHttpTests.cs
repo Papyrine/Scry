@@ -2,6 +2,7 @@
 // Core's own ToListAsync/CountAsync IQueryable extensions and collide with the Scry client terminals.
 using System.Net.ServerSentEvents;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
@@ -140,6 +141,28 @@ public class SubscriptionHttpTests
             Assert.That(last.EventType, Is.EqualTo(ScryLive.End));
             Assert.That(end.Reconnect, Is.True);
             Assert.That(end.Reason, Is.EqualTo("lifetime"));
+        });
+        Assert.That(await live.Ended(), Is.True);
+    }
+
+    // A host shutting down waits for its requests to finish, and a live query never would. So it is
+    // ended, and ended as something to ask again after: the next node along will answer.
+    [Test]
+    public async Task TheStreamEndsWhenTheServerIsStoppingAndSaysToAskAgain()
+    {
+        await using var server = await Server.Start(database);
+        await using var live = await LiveStream.Open(server.Http, Amounts("North"));
+        await live.Next();
+
+        server.BeginStopping();
+        var last = await live.Next();
+        var end = ScryJson.DeserializeLiveEnd(Encoding.UTF8.GetBytes(last.Data));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(last.EventType, Is.EqualTo(ScryLive.End));
+            Assert.That(end.Reconnect, Is.True);
+            Assert.That(end.Reason, Is.EqualTo("shutdown"));
         });
         Assert.That(await live.Ended(), Is.True);
     }
@@ -451,6 +474,74 @@ public class SubscriptionHttpTests
         }
     }
 
+    // A deployment, from where the consumer sits: the server goes away, there is nothing listening for
+    // a while, and another comes up on the same address. Over a real socket, since a refused connection
+    // is the part an in-memory server cannot produce. What was written while nothing was listening is
+    // the first thing the new server says.
+    [Test]
+    public async Task AServerThatRestartsIsFoundAgainWithoutTheConsumerNoticing()
+    {
+        var port = FreePort();
+        using var http = new HttpClient
+        {
+            BaseAddress = new($"http://127.0.0.1:{port}")
+        };
+        var client = ScryClient.ForHttp(http, "/api/query");
+        client.Reconnect = new Every(TimeSpan.FromMilliseconds(100));
+        List<int> counts = [];
+        List<ScrySubscriptionState> states = [];
+        List<Exception> errors = [];
+
+        var first = await Server.Start(database, port: port);
+        await using var subscription = new ScryQuery(client).Order
+            .LiveCount(_ => _.Region == "ServerRestart")
+            .Subscribe(
+                count =>
+                {
+                    lock (counts)
+                    {
+                        counts.Add(count);
+                    }
+                },
+                error =>
+                {
+                    lock (counts)
+                    {
+                        errors.Add(error);
+                    }
+                });
+        subscription.StateChanged += state =>
+        {
+            lock (states)
+            {
+                states.Add(state);
+            }
+        };
+        await Until(() => counts.Count == 1, counts);
+
+        await first.DisposeAsync();
+        await Until(() => states.Contains(ScrySubscriptionState.Reconnecting), states);
+        await using (var context = database.NewDbContext())
+        {
+            context.Orders.Add(
+                new()
+                {
+                    Region = "ServerRestart",
+                    Amount = 1m
+                });
+            await context.SaveChangesAsync();
+        }
+
+        await using var second = await Server.Start(database, port: port);
+        await Until(() => counts.Count == 2, counts);
+
+        lock (counts)
+        {
+            Assert.That(counts, Is.EqualTo([0, 1]));
+            Assert.That(errors, Is.Empty);
+        }
+    }
+
     [Test]
     public async Task AServerNotServingLiveQueriesIsSaidToBeOne()
     {
@@ -483,6 +574,21 @@ public class SubscriptionHttpTests
             Assert.That(DateTime.UtcNow - started, Is.LessThan(patience), "Waited too long.");
             await Task.Delay(20);
         }
+    }
+
+    // Free when asked, and nothing else on the machine is racing these tests for it.
+    static int FreePort()
+    {
+        using var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        return ((System.Net.IPEndPoint) listener.LocalEndpoint).Port;
+    }
+
+    sealed class Every(TimeSpan delay) :
+        IScryRetryPolicy
+    {
+        public TimeSpan? NextDelay(ScryRetryContext context) =>
+            delay;
     }
 
     // Only ever asked for a request, which is captured rather than sent.
@@ -584,10 +690,20 @@ public class SubscriptionHttpTests
             SqlDatabase<SampleContext> database,
             Action<ScryOptions>? configure = null,
             TimeSpan? ticketExpiresIn = null,
-            bool refuseEveryone = false)
+            bool refuseEveryone = false,
+            int? port = null)
         {
             var builder = WebApplication.CreateBuilder();
-            builder.WebHost.UseTestServer();
+            if (port is null)
+            {
+                builder.WebHost.UseTestServer();
+            }
+            else
+            {
+                // A real socket, for the one test about an address with nothing behind it.
+                builder.WebHost.ConfigureKestrel(_ => _.ListenLocalhost(port.Value));
+            }
+
             builder.Logging.ClearProviders();
 
             // The interceptor is what turns a save into a push, and is resolved rather than built so
@@ -632,8 +748,19 @@ public class SubscriptionHttpTests
             }
 
             await app.StartAsync();
-            return new(app, app.GetTestClient());
+            return new(
+                app,
+                port is null
+                    ? app.GetTestClient()
+                    : new()
+                    {
+                        BaseAddress = new($"http://127.0.0.1:{port}")
+                    });
         }
+
+        /// <summary>What a host does first when asked to stop: says so, and then waits for its requests.</summary>
+        public void BeginStopping() =>
+            app.Lifetime.StopApplication();
 
         public Task AddOrder(string region, decimal amount) =>
             Write(context =>

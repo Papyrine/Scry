@@ -1,4 +1,6 @@
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 /// <summary>
 /// A live query: the same request, answered again whenever the answer changes. What these pin is when
@@ -405,6 +407,383 @@ public class SubscriptionTests
 
         await processor.Changes.Reconciled;
         Assert.That(backplane.Subscriptions, Is.Zero);
+    }
+
+    // One write makes every live query due in the same instant. What the limit promises is that they
+    // reach the database as a queue.
+    [Test]
+    public async Task NoMoreRunAtOnceThanTheServerAllows()
+    {
+        var most = await MostAtTheDatabase("SubscriptionQueue", allowed: 1);
+
+        Assert.That(most, Is.EqualTo(1));
+    }
+
+    // The control for the test above: the same three, allowed to, do overlap — so a one there was the
+    // limit's doing and not the way these happened to be scheduled.
+    [Test]
+    public async Task AsManyRunAtOnceAsTheServerAllows()
+    {
+        var most = await MostAtTheDatabase("SubscriptionStampede", allowed: 3);
+
+        Assert.That(most, Is.GreaterThan(1));
+    }
+
+    static async Task<int> MostAtTheDatabase(string name, int allowed)
+    {
+        await using var database = await Seeded(name);
+        var processor = Live(options => options.MaxConcurrentSubscriptionRuns = allowed);
+        var gauge = new CommandGauge();
+        List<TestContext> contexts = [];
+        List<IAsyncEnumerator<QueryResponse>> held = [];
+        try
+        {
+            for (var index = 0; index < 3; index++)
+            {
+                var reading = new TestContext(
+                    new DbContextOptionsBuilder<TestContext>()
+                        .UseSqlServer(database.ConnectionString)
+                        .AddInterceptors(gauge)
+                        .Options);
+                contexts.Add(reading);
+                var answers = processor.Subscribe(Regions(), reading).GetAsyncEnumerator();
+                held.Add(answers);
+                await Next(answers);
+            }
+
+            gauge.Reset();
+            await Insert(database, processor, "West");
+            await Task.WhenAll(held.Select(Next));
+            return gauge.Most;
+        }
+        finally
+        {
+            foreach (var answers in held)
+            {
+                await answers.DisposeAsync();
+            }
+
+            foreach (var reading in contexts)
+            {
+                await reading.DisposeAsync();
+            }
+        }
+    }
+
+    [Test]
+    public async Task TheLiveQueriesHeldOpenAreCounted()
+    {
+        List<(string Instrument, object Value, Dictionary<string, object?> Tags)> measurements = [];
+        using var listener = ListenMeters(measurements);
+        await using var database = await Seeded("SubscriptionGauge");
+        await using var reading = database.NewDbContext();
+
+        await using (var answers = Live().Subscribe(Regions(), reading).GetAsyncEnumerator())
+        {
+            await Next(answers);
+
+            Assert.That(Active(measurements), Is.EqualTo([1L]));
+        }
+
+        Assert.That(Active(measurements), Is.EqualTo([1L, -1L]));
+    }
+
+    // Refused, it never held a place, so it must not be counted as having taken or given one back.
+    [Test]
+    public async Task ARefusedLiveQueryIsNotCountedAsOpen()
+    {
+        List<(string Instrument, object Value, Dictionary<string, object?> Tags)> measurements = [];
+        await using var database = await Seeded("SubscriptionGaugeRefused");
+        var processor = Live(options => options.MaxSubscriptions = 1);
+        await using var reading = database.NewDbContext();
+        await using var first = processor.Subscribe(Regions(), reading).GetAsyncEnumerator();
+        await Next(first);
+        using var listener = ListenMeters(measurements);
+        await using var refusedReading = database.NewDbContext();
+        await using var refused = processor.Subscribe(Regions(), refusedReading).GetAsyncEnumerator();
+
+        Assert.CatchAsync<ScrySubscriptionLimitException>(async () => await refused.MoveNextAsync());
+
+        Assert.That(Active(measurements), Is.Empty);
+    }
+
+    [Test]
+    public async Task AProbeThatThrowsIsCounted()
+    {
+        List<(string Instrument, object Value, Dictionary<string, object?> Tags)> measurements = [];
+        using var listener = ListenMeters(measurements);
+        await using var database = await Seeded("SubscriptionProbeCounted");
+        var processor = Live(options =>
+        {
+            options.ChangeProbe = (_, _) => throw new InvalidOperationException("The database is away.");
+            options.ChangeProbeInterval = TimeSpan.FromMilliseconds(20);
+        });
+        await using var services = Services(new());
+        await using var reading = database.NewDbContext();
+        using var ending = new CancelSource();
+        await using var answers = processor
+            .Subscribe(Regions(), reading, services, ending.Token)
+            .GetAsyncEnumerator();
+        await Next(answers);
+        var pending = answers.MoveNextAsync().AsTask();
+
+        var failure = await Eventually(
+            () => Snapshot(measurements).FirstOrDefault(_ => _.Instrument == "scry.server.subscription.signal.failures"),
+            _ => _.Instrument is not null);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(failure.Value, Is.EqualTo(1L));
+            Assert.That(failure.Tags["scry.signal"], Is.EqualTo("probe"));
+            Assert.That(failure.Tags["error.type"], Is.EqualTo(typeof(InvalidOperationException).FullName));
+        });
+        await End(ending, pending);
+    }
+
+    // What separates the load callers asked for from the load other callers' writes caused.
+    [Test]
+    public async Task EveryRunIsTaggedAsALiveQuerys()
+    {
+        List<(string Instrument, object Value, Dictionary<string, object?> Tags)> measurements = [];
+        List<Activity> stopped = [];
+        await using var database = await Seeded("SubscriptionTagged");
+        var processor = Live();
+        await using var reading = database.NewDbContext();
+        using (ListenMeters(measurements))
+        using (ListenActivities(stopped))
+        {
+            await using var answers = processor.Subscribe(Regions(), reading).GetAsyncEnumerator();
+            await Next(answers);
+            await Insert(database, processor, "West");
+            await Next(answers);
+        }
+
+        var durations = Snapshot(measurements)
+            .Where(_ => _.Instrument == "scry.server.query.duration")
+            .ToList();
+        Assert.Multiple(() =>
+        {
+            Assert.That(durations, Has.Count.EqualTo(2));
+            Assert.That(durations.Select(_ => _.Tags.GetValueOrDefault("scry.subscription")), Is.All.EqualTo(true));
+            Assert.That(stopped, Has.Count.EqualTo(2));
+            Assert.That(stopped.Select(_ => _.GetTagItem("scry.subscription")), Is.All.EqualTo(true));
+        });
+    }
+
+    [Test]
+    public void AQueryAskedOnceIsNotTaggedAsALiveQuerys()
+    {
+        List<(string Instrument, object Value, Dictionary<string, object?> Tags)> measurements = [];
+        List<Activity> stopped = [];
+        using var reading = TestContext.CreateSeeded();
+        using (ListenMeters(measurements))
+        using (ListenActivities(stopped))
+        {
+            Live().Execute(Regions(), reading);
+        }
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                measurements.Single(_ => _.Instrument == "scry.server.query.duration").Tags,
+                Does.Not.ContainKey("scry.subscription"));
+            Assert.That(stopped.Single().GetTagItem("scry.subscription"), Is.Null);
+        });
+    }
+
+    // A limit that made no sense would otherwise surface as a live query that never ran, or ran without
+    // pause — so it is refused where the mistake was made, at startup, naming the option.
+    [TestCaseSource(nameof(OptionsOutOfRange))]
+    public void AnOptionOutOfRangeIsRefusedAtStartup(string option, Action<ScryOptions> set)
+    {
+        var exception = Assert.Catch(() => Live(set))!;
+
+        Assert.That(exception.Message, Does.Contain($"ScryOptions.{option} "));
+    }
+
+    [TestCaseSource(nameof(OptionsAtTheirEdge))]
+    public void AnOptionAtTheEdgeOfItsRangeIsAccepted(string option, Action<ScryOptions> set) =>
+        Assert.DoesNotThrow(() => Live(set), option);
+
+    static IEnumerable<TestCaseData> OptionsOutOfRange()
+    {
+        yield return Case(nameof(ScryOptions.MaxSubscriptions), _ => _.MaxSubscriptions = -1);
+        yield return Case(nameof(ScryOptions.MaxSubscriptionsPerCaller), _ => _.MaxSubscriptionsPerCaller = 0);
+        yield return Case(nameof(ScryOptions.MaxSubscriptionBytes), _ => _.MaxSubscriptionBytes = 0);
+        yield return Case(nameof(ScryOptions.MaxConcurrentSubscriptionRuns), _ => _.MaxConcurrentSubscriptionRuns = 0);
+        yield return Case(nameof(ScryOptions.SubscriptionThrottle), _ => _.SubscriptionThrottle = TimeSpan.FromTicks(-1));
+        yield return Case(nameof(ScryOptions.SubscriptionPollInterval), _ => _.SubscriptionPollInterval = TimeSpan.Zero);
+        yield return Case(nameof(ScryOptions.SubscriptionHeartbeat), _ => _.SubscriptionHeartbeat = TimeSpan.Zero);
+        yield return Case(nameof(ScryOptions.SubscriptionLifetime), _ => _.SubscriptionLifetime = TimeSpan.Zero);
+        yield return Case(nameof(ScryOptions.ChangeProbeInterval), _ => _.ChangeProbeInterval = TimeSpan.Zero);
+    }
+
+    static IEnumerable<TestCaseData> OptionsAtTheirEdge()
+    {
+        yield return Case(nameof(ScryOptions.MaxSubscriptions), _ => _.MaxSubscriptions = 0);
+        yield return Case(nameof(ScryOptions.MaxSubscriptionsPerCaller), _ => _.MaxSubscriptionsPerCaller = 1);
+        yield return Case(nameof(ScryOptions.MaxSubscriptionBytes), _ => _.MaxSubscriptionBytes = 1);
+        yield return Case(nameof(ScryOptions.MaxConcurrentSubscriptionRuns), _ => _.MaxConcurrentSubscriptionRuns = 1);
+        yield return Case(nameof(ScryOptions.SubscriptionThrottle), _ => _.SubscriptionThrottle = TimeSpan.Zero);
+        yield return Case(nameof(ScryOptions.SubscriptionPollInterval), _ => _.SubscriptionPollInterval = null);
+        yield return Case(nameof(ScryOptions.SubscriptionLifetime), _ => _.SubscriptionLifetime = null);
+    }
+
+    static TestCaseData Case(string option, Action<ScryOptions> set) =>
+        new TestCaseData(option, set).SetArgDisplayNames(option);
+
+    static List<long> Active(List<(string Instrument, object Value, Dictionary<string, object?> Tags)> measurements) =>
+    [
+        .. Snapshot(measurements)
+            .Where(_ => _.Instrument == "scry.server.subscriptions.active")
+            .Select(_ => (long) _.Value)
+    ];
+
+    static List<(string Instrument, object Value, Dictionary<string, object?> Tags)> Snapshot(
+        List<(string Instrument, object Value, Dictionary<string, object?> Tags)> measurements)
+    {
+        lock (measurements)
+        {
+            return [.. measurements];
+        }
+    }
+
+    static async Task<TValue> Eventually<TValue>(Func<TValue> read, Func<TValue, bool> arrived)
+    {
+        var started = Stopwatch.GetTimestamp();
+        while (true)
+        {
+            var value = read();
+            if (arrived(value))
+            {
+                return value;
+            }
+
+            if (Stopwatch.GetElapsedTime(started) > patience)
+            {
+                Assert.Fail("What was waited for never arrived.");
+            }
+
+            await Task.Delay(20);
+        }
+    }
+
+    static MeterListener ListenMeters(List<(string Instrument, object Value, Dictionary<string, object?> Tags)> measurements)
+    {
+        var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Meter.Name == ScryInstrumentation.MeterName)
+                {
+                    meterListener.EnableMeasurementEvents(instrument);
+                }
+            }
+        };
+        listener.SetMeasurementEventCallback<double>((instrument, value, tags, _) => Add(measurements, instrument, value, tags));
+        listener.SetMeasurementEventCallback<long>((instrument, value, tags, _) => Add(measurements, instrument, value, tags));
+        listener.Start();
+        return listener;
+    }
+
+    static void Add(
+        List<(string Instrument, object Value, Dictionary<string, object?> Tags)> measurements,
+        Instrument instrument,
+        object value,
+        ReadOnlySpan<KeyValuePair<string, object?>> tags)
+    {
+        var read = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var tag in tags)
+        {
+            read[tag.Key] = tag.Value;
+        }
+
+        lock (measurements)
+        {
+            measurements.Add((instrument.Name, value, read));
+        }
+    }
+
+    static ActivityListener ListenActivities(List<Activity> stopped)
+    {
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = _ => _.Name == ScryInstrumentation.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+            ActivityStopped = activity =>
+            {
+                lock (stopped)
+                {
+                    stopped.Add(activity);
+                }
+            }
+        };
+        ActivitySource.AddActivityListener(listener);
+        return listener;
+    }
+
+    /// <summary>
+    /// How many commands were at the database at once. Each is held there long enough that two live
+    /// queries free to overlap would.
+    /// </summary>
+    sealed class CommandGauge :
+        DbCommandInterceptor
+    {
+        static TimeSpan held = TimeSpan.FromMilliseconds(200);
+        int current;
+        int most;
+
+        public int Most => Volatile.Read(ref most);
+
+        public void Reset() =>
+            Volatile.Write(ref most, 0);
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            Cancel cancel = default)
+        {
+            Entered();
+            await Task.Delay(held, cancel);
+            return result;
+        }
+
+        public override InterceptionResult<DbDataReader> ReaderExecuting(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result)
+        {
+            Entered();
+            Thread.Sleep(held);
+            return result;
+        }
+
+        public override ValueTask<DbDataReader> ReaderExecutedAsync(
+            DbCommand command,
+            CommandExecutedEventData eventData,
+            DbDataReader result,
+            Cancel cancel = default)
+        {
+            Interlocked.Decrement(ref current);
+            return new(result);
+        }
+
+        public override DbDataReader ReaderExecuted(DbCommand command, CommandExecutedEventData eventData, DbDataReader result)
+        {
+            Interlocked.Decrement(ref current);
+            return result;
+        }
+
+        void Entered()
+        {
+            var now = Interlocked.Increment(ref current);
+            int seen;
+            while (now > (seen = Volatile.Read(ref most)) &&
+                   Interlocked.CompareExchange(ref most, now, seen) != seen)
+            {
+            }
+        }
     }
 
     static TimeSpan patience = TimeSpan.FromSeconds(20);

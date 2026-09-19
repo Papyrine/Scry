@@ -70,16 +70,17 @@ public class IntrospectionTests
 
         // The complex type is a traversable member type, so it is a Type (for the generated model) but
         // never a Source (no entry point).
-        Assert.That(introspection.Types.Select(_ => _.Model), Does.Contain("AddressQueryModel"));
+        var types = introspection.Types;
+        Assert.That(types.Select(_ => _.Model), Does.Contain("AddressQueryModel"));
         Assert.That(introspection.Sources.Select(_ => _.Name), Does.Not.Contain("Address"));
 
         // Employee references it as a navigation-shaped member; [QueryIgnore] Zip stays hidden.
-        var address = introspection.Types.Single(_ => _.Model == "EmployeeQueryModel")
+        var address = types.Single(_ => _.Model == "EmployeeQueryModel")
             .Members.Single(_ => _.Name == "Address");
         Assert.That(address.IsNavigation, Is.True);
         Assert.That(address.TypeDisplay, Is.EqualTo("AddressQueryModel?"));
 
-        var addressModel = introspection.Types.Single(_ => _.Model == "AddressQueryModel");
+        var addressModel = types.Single(_ => _.Model == "AddressQueryModel");
         Assert.That(addressModel.Members.Select(_ => _.Name), Is.EquivalentTo(["City", "Country"]));
     }
 

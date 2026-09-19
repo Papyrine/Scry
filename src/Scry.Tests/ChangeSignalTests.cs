@@ -504,6 +504,148 @@ public class ChangeSignalTests
         });
     }
 
+    // A row the database nulled changed, so its type is named. It was not deleted, so what hangs off it
+    // is untouched — and a key the database refuses to act on changes nothing at all.
+    [Test]
+    public void ADeleteNamesWhatTheDatabaseNullsAndStopsThere()
+    {
+        using var context = new ShelvesContext(
+            new DbContextOptionsBuilder<ShelvesContext>()
+                .UseSqlServer("Server=(none)")
+                .Options);
+        var model = context.Model;
+        HashSet<string> names = [];
+
+        EntityNames.AddCascades(model.FindEntityType(typeof(Shelf))!, names);
+
+        Assert.That(names, Is.EquivalentTo([model.FindEntityType(typeof(Book))!.Name]));
+    }
+
+    [Test]
+    public void ABackplaneFailureIsCounted()
+    {
+        List<(string Instrument, long Value, Dictionary<string, object?> Tags)> measurements = [];
+        using var listener = Counters(measurements);
+        var (changes, _) = Listening(
+            new LoopbackBackplane
+            {
+                Failing = true
+            });
+
+        changes.NotifyAll();
+
+        var failure = measurements.Single(_ => _.Instrument == "scry.server.subscription.signal.failures");
+        Assert.Multiple(() =>
+        {
+            Assert.That(failure.Value, Is.EqualTo(1));
+            Assert.That(failure.Tags["scry.signal"], Is.EqualTo("backplane"));
+            Assert.That(failure.Tags["error.type"], Is.EqualTo(typeof(Exception).FullName));
+        });
+    }
+
+    // The three ways a host names its backplane, each ending as the one registration AddScry makes.
+    [Test]
+    public void ABackplaneNamedByTypeIsBuiltFromTheContainer()
+    {
+        using var provider = new ServiceCollection()
+            .AddSingleton(new BackplaneSetting("from the container"))
+            .AddScry<TestContext>(options =>
+            {
+                options.AddPocoSource<Holiday>(_ => Holiday.Seed());
+                options.UseBackplane<ConfiguredBackplane>();
+            })
+            .BuildServiceProvider();
+
+        var backplane = provider.GetRequiredService<IScryChangeBackplane>();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(backplane, Is.InstanceOf<ConfiguredBackplane>());
+            Assert.That(((ConfiguredBackplane) backplane).Setting.Value, Is.EqualTo("from the container"));
+            Assert.That(provider.GetRequiredService<IScryChangeBackplane>(), Is.SameAs(backplane));
+        });
+    }
+
+    [Test]
+    public void ABackplaneBuiltByAFactoryIsTheOneRegistered()
+    {
+        var built = new LoopbackBackplane();
+        using var provider = new ServiceCollection()
+            .AddScry<TestContext>(options =>
+            {
+                options.AddPocoSource<Holiday>(_ => Holiday.Seed());
+                options.UseBackplane(_ => built);
+            })
+            .BuildServiceProvider();
+
+        Assert.That(provider.GetRequiredService<IScryChangeBackplane>(), Is.SameAs(built));
+    }
+
+    [Test]
+    public void ABackplanesOwnServicesAreRegisteredBesideIt()
+    {
+        using var provider = new ServiceCollection()
+            .AddScry<TestContext>(options =>
+            {
+                options.AddPocoSource<Holiday>(_ => Holiday.Seed());
+                options.UseBackplane(
+                    _ => new ConfiguredBackplane(_.GetRequiredService<BackplaneSetting>()),
+                    _ => _.AddSingleton(new BackplaneSetting("shared")));
+            })
+            .BuildServiceProvider();
+
+        var backplane = (ConfiguredBackplane) provider.GetRequiredService<IScryChangeBackplane>();
+
+        Assert.That(backplane.Setting, Is.SameAs(provider.GetRequiredService<BackplaneSetting>()));
+    }
+
+    // What the registration is for: a change reported through the container's ScryChanges is published.
+    [Test]
+    public void TheRegisteredBackplaneIsTheOneChangesArePublishedOn()
+    {
+        var built = new LoopbackBackplane();
+        using var provider = new ServiceCollection()
+            .AddScry<TestContext>(options =>
+            {
+                options.AddPocoSource<Holiday>(_ => Holiday.Seed());
+                options.UseBackplane(_ => built);
+            })
+            .BuildServiceProvider();
+
+        provider.GetRequiredService<ScryChanges>().NotifyAll();
+
+        Assert.That(built.Published.Single().Everything, Is.True);
+    }
+
+    static MeterListener Counters(List<(string Instrument, long Value, Dictionary<string, object?> Tags)> measurements)
+    {
+        var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Meter.Name == ScryInstrumentation.MeterName)
+                {
+                    meterListener.EnableMeasurementEvents(instrument);
+                }
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((instrument, value, tags, _) =>
+        {
+            var read = new Dictionary<string, object?>(StringComparer.Ordinal);
+            foreach (var tag in tags)
+            {
+                read[tag.Key] = tag.Value;
+            }
+
+            lock (measurements)
+            {
+                measurements.Add((instrument.Name, value, read));
+            }
+        });
+        listener.Start();
+        return listener;
+    }
+
     static (ScryChanges Changes, List<ScryChange> Reported) Listening(IScryChangeBackplane? backplane = null)
     {
         var changes = new ScryChanges();
@@ -595,6 +737,65 @@ public class ChangeSignalTests
                 return ValueTask.CompletedTask;
             }
         }
+    }
+
+    sealed record BackplaneSetting(string Value);
+
+    sealed class ConfiguredBackplane(BackplaneSetting setting) :
+        IScryChangeBackplane
+    {
+        public BackplaneSetting Setting => setting;
+
+        public ValueTask PublishAsync(ScryChange change, Cancel cancel) =>
+            ValueTask.CompletedTask;
+
+        public ValueTask<IAsyncDisposable> SubscribeAsync(Func<ScryChange, Cancel, ValueTask> handler, Cancel cancel) =>
+            throw new NotSupportedException();
+    }
+
+    // A shelf's books are nulled off it, a book's pages go with the book, and a loan keeps its shelf
+    // from being deleted at all.
+    sealed class ShelvesContext(DbContextOptions<ShelvesContext> options) :
+        DbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            builder.Entity<Book>()
+                .HasOne(_ => _.Shelf)
+                .WithMany()
+                .OnDelete(DeleteBehavior.SetNull);
+            builder.Entity<Page>()
+                .HasOne(_ => _.Book)
+                .WithMany()
+                .OnDelete(DeleteBehavior.Cascade);
+            builder.Entity<Loan>()
+                .HasOne(_ => _.Shelf)
+                .WithMany()
+                .OnDelete(DeleteBehavior.Restrict);
+        }
+    }
+
+    sealed class Shelf
+    {
+        public int Id { get; set; }
+    }
+
+    sealed class Book
+    {
+        public int Id { get; set; }
+        public Shelf? Shelf { get; set; }
+    }
+
+    sealed class Page
+    {
+        public int Id { get; set; }
+        public Book Book { get; set; } = null!;
+    }
+
+    sealed class Loan
+    {
+        public int Id { get; set; }
+        public Shelf Shelf { get; set; } = null!;
     }
 
     sealed class ShapesContext(DbContextOptions<ShapesContext> options) :

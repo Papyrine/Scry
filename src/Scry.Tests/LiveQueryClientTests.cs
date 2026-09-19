@@ -231,6 +231,123 @@ public class LiveQueryClientTests
     }
 
     [Test]
+    public async Task ALongCountIsReadAsOne()
+    {
+        var large = (long) int.MaxValue + 1;
+        var script = new Script(Scalar("a", large) + End(reconnect: false));
+        List<long> counts = [];
+
+        await foreach (var count in Names(script.Client()).LiveLongCount())
+        {
+            counts.Add(count);
+        }
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(counts, Is.EqualTo([large]));
+            Assert.That(Terminal(script), Is.EqualTo("longCount"));
+        });
+    }
+
+    [Test]
+    public async Task WhetherThereAreAnyIsReadAsABoolean()
+    {
+        var script = new Script(Scalar("a", true) + Scalar("b", false) + End(reconnect: false));
+        List<bool> answers = [];
+
+        await foreach (var any in Names(script.Client()).LiveAny())
+        {
+            answers.Add(any);
+        }
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(answers, Is.EqualTo([true, false]));
+            Assert.That(Terminal(script), Is.EqualTo("any"));
+        });
+    }
+
+    // The predicate belongs to the terminal, as it does on the terminal asked once.
+    [Test]
+    public async Task APredicateGivenToALiveTerminalTravelsInIt()
+    {
+        var script = new Script(Scalar("a", true) + End(reconnect: false));
+
+        await foreach (var _ in Names(script.Client()).LiveAny(_ => _.Name == "Alice"))
+        {
+        }
+
+        using var request = JsonDocument.Parse(script.Bodies.Single());
+        var terminal = request.RootElement.GetProperty("pipeline").EnumerateArray().Last();
+        Assert.Multiple(() =>
+        {
+            Assert.That(terminal.GetProperty("$type").GetString(), Is.EqualTo("any"));
+            Assert.That(terminal.GetProperty("predicate").ValueKind, Is.EqualTo(JsonValueKind.Object));
+        });
+    }
+
+    [Test]
+    public async Task TheOnlyRowIsReadAsOneAndItsAbsenceAsNone()
+    {
+        var script = new Script(Single("a", "Alice") + Single("b", name: null) + End(reconnect: false));
+        List<string?> names = [];
+
+        await foreach (var row in Names(script.Client()).LiveSingleOrDefault())
+        {
+            names.Add(row?.Name);
+        }
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(names, Is.EqualTo(["Alice", null]));
+            Assert.That(Terminal(script), Is.EqualTo("single"));
+        });
+    }
+
+    // A stream the server ended on schedule is asked for again at once; only a run of failures is
+    // backed away from, and never further than the cap however long the outage.
+    [TestCase(0, 0)]
+    [TestCase(1, 1)]
+    [TestCase(2, 2)]
+    [TestCase(3, 4)]
+    [TestCase(4, 8)]
+    [TestCase(5, 16)]
+    [TestCase(6, 30)]
+    [TestCase(7, 30)]
+    [TestCase(1000, 30)]
+    [TestCase(int.MaxValue, 30)]
+    public void TheDefaultPolicyDoublesToItsCapAndNeverGivesUp(int failures, int seconds)
+    {
+        var policy = new ScryClient((_, _) => throw new("never sent")).Reconnect;
+
+        // Scattered, so asked often enough to see both ends of the scatter stay inside it.
+        for (var attempt = 0; attempt < 200; attempt++)
+        {
+            var delay = policy.NextDelay(new(failures, TimeSpan.FromHours(1), RetryReason: null));
+
+            Assert.That(delay, Is.Not.Null);
+            Assert.That(
+                delay!.Value.TotalSeconds,
+                Is.InRange(seconds * 0.8, seconds * 1.2));
+        }
+    }
+
+    // A server that restarts drops every live query it held at once. Without the scatter they would
+    // all come back at once too.
+    [Test]
+    public void TheDefaultPolicyDoesNotSendEveryClientBackTogether()
+    {
+        var policy = new ScryClient((_, _) => throw new("never sent")).Reconnect;
+
+        var delays = Enumerable.Range(0, 50)
+            .Select(_ => policy.NextDelay(new(3, TimeSpan.Zero, RetryReason: null)))
+            .Distinct()
+            .Count();
+
+        Assert.That(delays, Is.GreaterThan(1));
+    }
+
+    [Test]
     public void ABatchedQueryCannotBeLive()
     {
         var script = new Script();
@@ -521,7 +638,18 @@ public class LiveQueryClientTests
     static string Result(string id, params string[] names) =>
         Event(ScryLive.Result, id, ScryJson.Serialize(Rows(names)));
 
-    static string Scalar(string id, int value) =>
+    static string? Terminal(Script script)
+    {
+        using var request = JsonDocument.Parse(script.Bodies.Single());
+        return request.RootElement
+            .GetProperty("pipeline")
+            .EnumerateArray()
+            .Last()
+            .GetProperty("$type")
+            .GetString();
+    }
+
+    static string Scalar<TValue>(string id, TValue value) =>
         Event(ScryLive.Result, id, ScryJson.Serialize(QueryResponse.Create(ResultKind.Scalar, JsonSerializer.SerializeToElement(value))));
 
     static string Single(string id, string? name) =>
@@ -673,8 +801,8 @@ public class LiveQueryClientTests
             await pipe.Writer.FlushAsync();
         }
 
-        public async ValueTask DisposeAsync() =>
-            await pipe.Writer.CompleteAsync();
+        public ValueTask DisposeAsync() =>
+            pipe.Writer.CompleteAsync();
     }
 
     sealed class Immediate :

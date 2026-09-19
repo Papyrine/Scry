@@ -1,7 +1,3 @@
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using NServiceBus;
-
 /// <summary>
 /// The NServiceBus backplane between real endpoints: two that serve live queries and a worker that
 /// only writes, all in this process, over the learning transport — files in a temporary folder, so
