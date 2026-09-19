@@ -113,6 +113,12 @@
     border-bottom: 1px solid var(--scry-sidecar-border);
 }
 
+/* The list carries its own bottom border, so the last row's would stack under it — a rule twice as
+   thick as the ones between rows, which reads as the top edge of a row that is not there. */
+.scry-sidecar-entries > li:last-child {
+    border-bottom: 0;
+}
+
 /* One line of the log. A live query's row has its connections nested under it, so the line itself
    is inside the list item rather than being it. */
 .scry-sidecar-row {

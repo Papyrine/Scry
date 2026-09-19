@@ -205,8 +205,7 @@ protected override void OnModelCreating(ModelBuilder builder)
 <a id='snippet-serverRegistration'></a>
 ```cs
 builder.Services
-    .AddScry<SampleContext>(
-    _ =>
+    .AddScry<SampleContext>(_ =>
     {
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
         // [QueryablePoco] type must be registered here or AddScry throws at startup.
@@ -250,7 +249,7 @@ builder.Services
         _.UseDeltaChanges<SampleContext>();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L39-L89' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L38-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Holiday` has no table, so its data is registered explicitly — see [POCO sources](server.md#poco-sources). `MaxPageSize` is lowered from the default 1000 to 200.
@@ -260,22 +259,21 @@ builder.Services
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L107-L109' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L105-L107' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: mapExplorer -->
 <a id='snippet-mapExplorer'></a>
 ```cs
-app.MapScryExplorer(
-    _ =>
-    {
-        _.Route = "/scry";
-        // This sample always exposes the explorer. The default guard is Development-only — in a real
-        // app, run in Development or set EnableGuard to your own check (e.g. an admin authorization).
-        _.EnableGuard = _ => true;
-    });
+app.MapScryExplorer(_ =>
+{
+    _.Route = "/scry";
+    // This sample always exposes the explorer. The default guard is Development-only — in a real
+    // app, run in Development or set EnableGuard to your own check (e.g. an admin authorization).
+    _.EnableGuard = _ => true;
+});
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L190-L199' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L195-L203' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The sample always exposes the explorer so it can be browsed without setting an environment. A real app should leave the default Development-only guard in place, or replace it with an authorization check — see [Query explorer](explorer.md).
@@ -531,22 +529,24 @@ The second and third are the two halves worth understanding. Nothing is called f
 // A row changed. Nobody tells the cache anything here: the next query sees a revision past the
 // watermark this scope was decided up to, and decides that one row on the spot. An insert by
 // any writer at all is correct on its first read for the same reason.
-app.MapPost("/api/orders/{id:int}/touch", async (int id, SampleContext data) =>
-{
-    var order = await data.Orders.FindAsync(id);
-    if (order is null)
+app.MapPost(
+    "/api/orders/{id:int}/touch",
+    async (int id, SampleContext data) =>
     {
-        return Results.NotFound();
-    }
+        var order = await data.Orders.FindAsync(id);
+        if (order is null)
+        {
+            return Results.NotFound();
+        }
 
-    // Named explicitly: Scry's async terminals and EF's are both in scope here, and they are
-    // not the same method — this one has to run against the database.
-    order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
-    await data.SaveChangesAsync();
-    return Results.NoContent();
-});
+        // Named explicitly: Scry's async terminals and EF's are both in scope here, and they are
+        // not the same method — this one has to run against the database.
+        order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
+        await data.SaveChangesAsync();
+        return Results.NoContent();
+    });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L137-L155' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L135-L155' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The third has to be, or the change never reaches a query at all:
@@ -560,13 +560,13 @@ The third has to be, or the change never reaches a query at all:
 app.MapPost(
     "/api/grants/{region}",
     (string region, bool allowed, RegionGrants grants, ScryPolicyCache cache) =>
-{
-    grants.Set("sample", region, allowed);
-    cache.InvalidateScope<Order>("sample");
-    return Results.NoContent();
-});
+    {
+        grants.Set("sample", region, allowed);
+        cache.InvalidateScope<Order>("sample");
+        return Results.NoContent();
+    });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L123-L135' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L121-L133' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Order.Revision` is `[QueryIgnore]`d — a version column is server machinery, not query surface, and clients never see it. `Sample.Tests\CachedPolicyPageTests.cs` drives the page and asserts those three counts, so the table above is checked rather than claimed.
@@ -697,5 +697,5 @@ public async Task DisallowedPropertyRejectedWith400()
     Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L372-L399' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L374-L401' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->

@@ -233,8 +233,15 @@ protected override void Start() =>
         // From here down it is Rx. Each answer is the whole result, so an operator that wants
         // the difference between two of them folds them together itself.
         .AsObservable()
-        .Select(_ => new Totals(_.Count, _.Sum(order => order.Amount), Change: 0))
-        .Scan((previous, next) => next with {Change = next.Total - previous.Total})
+        .Select(_ =>
+            new Totals(
+                _.Count,
+                _.Sum(_ => _.Amount),
+                Change: 0))
+        .Scan((previous, next) => next with
+        {
+            Change = next.Total - previous.Total
+        })
         .DistinctUntilChanged()
         .Subscribe(
             next =>
@@ -255,7 +262,7 @@ protected override ValueTask Stop()
     return ValueTask.CompletedTask;
 }
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Live/LiveReactive.razor.cs#L11-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-liveReactive' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Live/LiveReactive.razor.cs#L11-L48' title='Snippet source file'>snippet source</a> | <a href='#snippet-liveReactive' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Calls to an observer never overlap, at most one of `OnError` and `OnCompleted` is made and nothing follows it, and nothing at all is called once the subscription's `Dispose` has returned. No synchronization context is captured, because saying where to be called is what a reactive pipeline does for itself:
@@ -353,7 +360,7 @@ _.MaxSubscriptions = 100;
 // another node, a script run by hand.
 _.UseDeltaChanges<SampleContext>();
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L78-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-liveQueryRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L76-L85' title='Snippet source file'>snippet source</a> | <a href='#snippet-liveQueryRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The route is `POST {pattern}/subscribe`, mapped inside `MapScry` beside the rest, so whatever authorization convention guards a query guards the stream of its answers.
@@ -466,12 +473,11 @@ Three things report a change, and a fourth covers what none of them can see.
 <a id='snippet-changeInterceptor'></a>
 ```cs
 builder.Services
-    .AddDbContext<SampleContext>(
-        (services, options) => options
-            .UseSqlServer(database.ConnectionString)
-            .AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>()));
+    .AddDbContext<SampleContext>((services, options) => options
+        .UseSqlServer(database.ConnectionString)
+        .AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>()));
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L26-L32' title='Snippet source file'>snippet source</a> | <a href='#snippet-changeInterceptor' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L26-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-changeInterceptor' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 **The host.** What never passes through `SaveChanges` — `ExecuteUpdate`, raw SQL, an import — no interceptor can see. `ScryChanges` is where the host says so:
@@ -482,15 +488,17 @@ builder.Services
 // A bulk update never passes through SaveChanges, so no interceptor can see it. The host
 // says what it wrote instead. Without that line the change marker would still catch it a
 // moment later, and the poll after that — but this is at once, and names the entity.
-app.MapPost("/api/orders/reprice-bulk", async (SampleContext data, ScryChanges changes) =>
-{
-    await data.Orders.ExecuteUpdateAsync(
-        _ => _.SetProperty(order => order.Amount, order => order.Amount + 1));
-    changes.Notify<Order>();
-    return Results.NoContent();
-});
+app.MapPost(
+    "/api/orders/reprice-bulk",
+    async (SampleContext data, ScryChanges changes) =>
+    {
+        var orders = data.Orders;
+        await orders.ExecuteUpdateAsync(_ => _.SetProperty(_ => _.Amount, _ => _.Amount + 1));
+        changes.Notify<Order>();
+        return Results.NoContent();
+    });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L177-L188' title='Snippet source file'>snippet source</a> | <a href='#snippet-changesNotify' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L180-L193' title='Snippet source file'>snippet source</a> | <a href='#snippet-changesNotify' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Invalidating a [cached policy](policies.md) reports a change too. No row was written, but which rows a caller may see is part of what a live query answers.
@@ -750,7 +758,7 @@ await connection.StartAsync();
 var client = ScrySignalRClient.Create(connection);
 hub = new(client);
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Live/LiveTransport.cs#L64-L72' title='Snippet source file'>snippet source</a> | <a href='#snippet-signalRTransport' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Live/LiveTransport.cs#L63-L71' title='Snippet source file'>snippet source</a> | <a href='#snippet-signalRTransport' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Everything written against a `ScryClient` works unchanged — the terminals, streaming, batching, live queries — and a failure surfaces as the same exception it does over HTTP. Requests and answers cross the hub as strings of the JSON the HTTP endpoints speak, read and written by `ScryJson`: a hub would otherwise bind its arguments with its own serializer, whose options know nothing of what makes the wire format fail closed. `MapScryHub` runs the startup checks `MapScry` runs, so a host that serves queries over a hub alone is held to the same ones.
@@ -767,7 +775,7 @@ static ScryClient ClientFor(ScryProcessor processor, TestContext context) =>
         (request, _) => Task.FromResult(processor.Execute(request, context)),
         subscribeTransport: (request, cancel) => processor.Subscribe(request, context, cancel));
 ```
-<sup><a href='/src/Scry.Tests/LiveQueryRoundTripTests.cs#L89-L94' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessLiveClient' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/LiveQueryRoundTripTests.cs#L91-L96' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessLiveClient' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 

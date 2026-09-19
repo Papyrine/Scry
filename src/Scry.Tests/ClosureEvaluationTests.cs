@@ -31,7 +31,8 @@ public class ClosureEvaluationTests
         var holder = new Counting();
         var take = 3;
 
-        var request = Client().Source<Order>("Order", ["Region"])
+        var request = Client()
+            .Source<Order>("Order", ["Region"])
             .Where(_ => _.Region == holder.Inner.Name && _.Amount > holder.Inner.Threshold)
             .Skip(holder.Inner.Offset)
             .Take(take)

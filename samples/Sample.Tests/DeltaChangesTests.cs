@@ -18,6 +18,7 @@ public class DeltaChangesTests
             .OrderBy(_ => _.Id)
             .Select(_ => new {_.Name})
             .Live()
+            // ReSharper disable once MethodSupportsCancellation
             .GetAsyncEnumerator();
         Assert.That(await Next(answers), Is.True);
         var before = answers.Current[0].Name;

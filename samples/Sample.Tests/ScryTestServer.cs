@@ -178,7 +178,7 @@ public sealed class ScryTestServer :
         app.MapPost("/api/orders/reprice-bulk", async (SampleContext data, ScryChanges changes) =>
         {
             await data.Orders.ExecuteUpdateAsync(
-                _ => _.SetProperty(order => order.Amount, order => order.Amount + 1));
+                _ => _.SetProperty(_ => _.Amount, _ => _.Amount + 1));
             changes.Notify<Order>();
             return Results.NoContent();
         });

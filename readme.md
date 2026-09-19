@@ -164,8 +164,7 @@ Register and map on the server:
 <a id='snippet-serverRegistration'></a>
 ```cs
 builder.Services
-    .AddScry<SampleContext>(
-    _ =>
+    .AddScry<SampleContext>(_ =>
     {
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
         // [QueryablePoco] type must be registered here or AddScry throws at startup.
@@ -209,7 +208,7 @@ builder.Services
         _.UseDeltaChanges<SampleContext>();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L39-L89' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L38-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddPocoSource` supplies the rows for a `[QueryablePoco]` type — see [POCO sources](docs/server.md#poco-sources).
@@ -219,7 +218,7 @@ builder.Services
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L107-L109' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L105-L107' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Point the client at the model by path — no reference:

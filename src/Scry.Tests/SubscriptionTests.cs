@@ -1,6 +1,11 @@
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+// These drive a live query's enumerator by hand and end it by disposing it, which is what the
+// await using below is for — a live query runs "until cancel is cancelled or the enumeration is
+// abandoned", and these abandon it. Where a token is wanted it goes to the call that opens the
+// query, whose own parameter carries it into the iterator.
+// ReSharper disable MethodSupportsCancellation
 
 /// <summary>
 /// A live query: the same request, answered again whenever the answer changes. What these pin is when
@@ -316,7 +321,7 @@ public class SubscriptionTests
         });
         await using var reading = database.NewDbContext();
         await using var answers = processor
-            .Subscribe(Regions(), reading, Services(new RunCounter()))
+            .Subscribe(Regions(), reading, Services(new()))
             .GetAsyncEnumerator();
         await Next(answers);
 

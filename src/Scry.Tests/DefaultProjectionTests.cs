@@ -12,7 +12,8 @@ public class DefaultProjectionTests
     [Test]
     public Task NoSelectProjectsTheClientsMemberNames()
     {
-        var request = Client().Source<Employee>("Employee", ["Name", "Status"])
+        var request = Client()
+            .Source<Employee>("Employee", ["Name", "Status"])
             .Where(_ => _.Active)
             .OrderBy(_ => _.Name)
             .ToScryRequest();
@@ -29,7 +30,8 @@ public class DefaultProjectionTests
         using var context = TestContext.CreateSeeded();
         var processor = SharedProcessor.Instance;
 
-        var request = Client().Source<Employee>("Employee", ["FullName"])
+        var request = Client()
+            .Source<Employee>("Employee", ["FullName"])
             .OrderBy(_ => _.Name)
             .ToScryRequest();
 
@@ -71,7 +73,8 @@ public class DefaultProjectionTests
     [Test]
     public void PredicatelessRowTerminalIsProjected()
     {
-        var request = Client().Source<Employee>("Employee", ["Name"])
+        var request = Client()
+            .Source<Employee>("Employee", ["Name"])
             .ToScryRequest(new FirstOp(OrDefault: false, Predicate: null));
 
         Assert.That(request.Pipeline.OfType<SelectOp>().Count(), Is.EqualTo(1));
@@ -80,7 +83,8 @@ public class DefaultProjectionTests
     [Test]
     public void ExplicitSelectIsNotDuplicated()
     {
-        var request = Client().Source<Employee>("Employee", ["Name", "Status"])
+        var request = Client()
+            .Source<Employee>("Employee", ["Name", "Status"])
             .Select(_ => new EmployeeRow(_.Name))
             .ToScryRequest();
 
@@ -100,7 +104,8 @@ public class DefaultProjectionTests
     [Test]
     public void ProjectionPrecedesTheTerminal()
     {
-        var request = Client().Source<Employee>("Employee", ["Name"])
+        var request = Client()
+            .Source<Employee>("Employee", ["Name"])
             .OrderBy(_ => _.Name)
             .ToScryRequest(new PageOp(Size: 2));
 

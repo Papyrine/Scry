@@ -1131,10 +1131,14 @@ var request = client.Source<Employee>("Employee")
                 _.Name.StartsWith(prefix))
     .OrderBy(_ => _.Name)
     .Take(take)
-    .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
+    .Select(_ =>
+        new EmployeeRow(
+            _.Name,
+            _.Status,
+            _.Manager!.Name))
     .ToScryRequest();
 ```
-<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L32-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-translateWithoutExecuting' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L32-L45' title='Snippet source file'>snippet source</a> | <a href='#snippet-translateWithoutExecuting' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 translates to:

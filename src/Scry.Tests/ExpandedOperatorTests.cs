@@ -62,7 +62,11 @@ public class ExpandedOperatorTests
     {
         await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
-        var ids = new List<int> { 1, 3 };
+        var ids = new List<int>
+        {
+            1,
+            3
+        };
 
         var count = await client.Source<Order>("Order")
             .Where(_ => ids.Contains(_.Id))
@@ -79,7 +83,10 @@ public class ExpandedOperatorTests
     {
         await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
-        var flags = new List<bool?> {null};
+        var flags = new List<bool?>
+        {
+            null
+        };
 
         var count = await client.Source<Employee>("Employee")
             .Where(_ => flags.Contains(_.Active))
@@ -93,7 +100,11 @@ public class ExpandedOperatorTests
     {
         await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
-        var managers = new List<int?> {null, 1};
+        var managers = new List<int?>
+        {
+            null,
+            1
+        };
 
         // Alice manages Aaron and Bob; Alice and Carol have no manager.
         var count = await client.Source<Employee>("Employee")
@@ -280,12 +291,11 @@ public class ExpandedOperatorTests
         var client = ClientFor(context);
 
         // Without an ordering the slice would be of an order the deduplication never defined.
-        var exception = Assert.ThrowsAsync<ScryValidationException>(
-            () => client.Source<Order>("Order")
-                .Select(_ => new RegionRow(_.Region))
-                .Distinct()
-                .Take(1)
-                .ToListAsync());
+        var exception = Assert.ThrowsAsync<ScryValidationException>(() => client.Source<Order>("Order")
+            .Select(_ => new RegionRow(_.Region))
+            .Distinct()
+            .Take(1)
+            .ToListAsync());
 
         Assert.That(exception!.Message, Does.Contain("requires an OrderBy"));
     }
@@ -299,13 +309,12 @@ public class ExpandedOperatorTests
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<ScryValidationException>(
-            () => client.Source<Order>("Order")
-                .OrderBy(_ => _.Placed)
-                .Select(_ => new RegionRow(_.Region))
-                .Distinct()
-                .Take(1)
-                .ToListAsync());
+        var exception = Assert.ThrowsAsync<ScryValidationException>(() => client.Source<Order>("Order")
+            .OrderBy(_ => _.Placed)
+            .Select(_ => new RegionRow(_.Region))
+            .Distinct()
+            .Take(1)
+            .ToListAsync());
 
         Assert.That(exception!.Message, Does.Contain("requires an OrderBy"));
     }
@@ -324,8 +333,7 @@ public class ExpandedOperatorTests
                 new OrderByOp(new MemberNode(["Amount"]), Descending: false)
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
-            () => SharedProcessor.Instance.Execute(request, context));
+        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
         Assert.That(exception!.Message, Does.Contain("projected member"));
     }
@@ -376,10 +384,9 @@ public class ExpandedOperatorTests
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<ScryValidationException>(
-            () => client.Source<Employee>("Employee")
-                .Select(_ => new NameRow(_.Name))
-                .LastAsync());
+        var exception = Assert.ThrowsAsync<ScryValidationException>(() => client.Source<Employee>("Employee")
+            .Select(_ => new NameRow(_.Name))
+            .LastAsync());
 
         Assert.That(exception!.Message, Does.Contain("ordered"));
     }
@@ -390,9 +397,10 @@ public class ExpandedOperatorTests
         await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        IQueryable<NameRow> Ordered() => client.Source<Employee>("Employee")
-            .OrderBy(_ => _.Name)
-            .Select(_ => new NameRow(_.Name));
+        IQueryable<NameRow> Ordered() =>
+            client.Source<Employee>("Employee")
+                .OrderBy(_ => _.Name)
+                .Select(_ => new NameRow(_.Name));
 
         var second = await Ordered().ElementAtAsync(1);
         var past = await Ordered().ElementAtOrDefaultAsync(99);
@@ -487,7 +495,7 @@ public class ExpandedOperatorTests
 
         IQueryable<Order> Orders() => client.Source<Order>("Order");
 
-        var bySqrt = await Orders().CountAsync(_ => Math.Sqrt((double)_.Amount) > 15d);
+        var bySqrt = await Orders().CountAsync(_ => Math.Sqrt((double) _.Amount) > 15d);
         var byPow = await Orders().CountAsync(_ => Math.Pow(_.Quantity, 2d) == 49d);
         var byTruncate = await Orders().CountAsync(_ => Math.Truncate(_.Amount / 3) == 33m);
 
@@ -571,10 +579,9 @@ public class ExpandedOperatorTests
 
         // A leaf that reads nothing from the row is a value the client already has, and EF rejects a
         // constant in a client projection outright — so it is reported as a rejection, not a fault.
-        var exception = Assert.ThrowsAsync<ScryValidationException>(
-            () => client.Source<Employee>("Employee")
-                .Select(_ => new NameRow("fixed"))
-                .ToListAsync());
+        var exception = Assert.ThrowsAsync<ScryValidationException>(() => client.Source<Employee>("Employee")
+            .Select(_ => new NameRow("fixed"))
+            .ToListAsync());
 
         Assert.That(exception!.Message, Does.Contain("must read at least one member"));
     }
@@ -686,8 +693,7 @@ public class ExpandedOperatorTests
                 ]))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
-            () => SharedProcessor.Instance.Execute(request, context));
+        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
         Assert.That(exception!.Message, Does.Contain("group key or aggregates"));
     }
@@ -762,8 +768,7 @@ public class ExpandedOperatorTests
                 new SelectOp(new([new("Region", new NodeValue(new MemberNode(["Region"])))]))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
-            () => SharedProcessor.Instance.Execute(request, context));
+        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
         Assert.That(exception!.Message, Does.Contain("group key or aggregates"));
     }
@@ -789,11 +794,10 @@ public class ExpandedOperatorTests
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<ScryValidationException>(
-            () => client.Source<Employee>("Employee")
-                .Reverse()
-                .Select(_ => new NameRow(_.Name))
-                .ToListAsync());
+        var exception = Assert.ThrowsAsync<ScryValidationException>(() => client.Source<Employee>("Employee")
+            .Reverse()
+            .Select(_ => new NameRow(_.Name))
+            .ToListAsync());
 
         Assert.That(exception!.Message, Does.Contain("ordered"));
     }
@@ -840,10 +844,9 @@ public class ExpandedOperatorTests
         var client = ClientFor(context);
 
         // A format specifier would change the value, and the database has no equivalent spelling.
-        var exception = Assert.ThrowsAsync<NotSupportedException>(
-            () => client.Source<Order>("Order")
-                .Select(_ => new NameRow($"{_.Amount:N2}"))
-                .ToListAsync());
+        var exception = Assert.ThrowsAsync<NotSupportedException>(() => client.Source<Order>("Order")
+            .Select(_ => new NameRow($"{_.Amount:N2}"))
+            .ToListAsync());
 
         Assert.That(exception!.Message, Does.Contain("plain holes").Or.Contain("string values"));
     }
@@ -992,8 +995,7 @@ public class ExpandedOperatorTests
                 new OrderByOp(new MemberNode(["Name"]), Descending: false)
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
-            () => SharedProcessor.Instance.Execute(request, context));
+        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
         Assert.That(exception!.Message, Does.Contain("nested projection member"));
     }

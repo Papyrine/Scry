@@ -79,8 +79,7 @@ Two settings, and nothing else:
 <a id='snippet-serverRegistration'></a>
 ```cs
 builder.Services
-    .AddScry<SampleContext>(
-    _ =>
+    .AddScry<SampleContext>(_ =>
     {
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
         // [QueryablePoco] type must be registered here or AddScry throws at startup.
@@ -124,7 +123,7 @@ builder.Services
         _.UseDeltaChanges<SampleContext>();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L39-L89' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L38-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `QueryFreshness` is what the rows are current as of. Null — the default — writes no `ETag` and answers nothing conditionally, so a server that never sets it behaves exactly as it did before any of this existed. Returning null from it skips one request rather than turning the feature off, so a source that cannot answer right now degrades to a full response.

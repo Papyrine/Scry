@@ -132,7 +132,8 @@ public class ClosureFoldTests
 
     static BinaryNode PredicateOf(Expression<Func<Order, bool>> predicate)
     {
-        var request = Client().Source<Order>("Order", ["Region"])
+        var request = Client()
+            .Source<Order>("Order", ["Region"])
             .Where(predicate)
             .ToScryRequest();
 

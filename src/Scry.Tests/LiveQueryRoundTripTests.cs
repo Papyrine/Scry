@@ -21,6 +21,7 @@ public class LiveQueryRoundTripTests
             .OrderBy(_ => _.Region)
             .Select(_ => new {_.Region})
             .Live()
+            // ReSharper disable once MethodSupportsCancellation
             .GetAsyncEnumerator();
 
         Assert.That(await Next(answers), Is.True);
@@ -43,6 +44,7 @@ public class LiveQueryRoundTripTests
         await using var answers = client
             .Source<Order>("Order")
             .LiveCount(_ => _.Region == "North")
+            // ReSharper disable once MethodSupportsCancellation
             .GetAsyncEnumerator();
 
         Assert.That(await Next(answers), Is.True);

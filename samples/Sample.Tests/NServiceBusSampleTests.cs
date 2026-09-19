@@ -46,6 +46,7 @@ public class NServiceBusSampleTests
                 .Where(_ => _.Id == 1)
                 .Select(_ => new {_.Amount})
                 .Live()
+                // ReSharper disable once MethodSupportsCancellation
                 .GetAsyncEnumerator();
 
             Assert.That(await Next(answers), Is.True);

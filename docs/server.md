@@ -9,8 +9,7 @@
 <a id='snippet-serverRegistration'></a>
 ```cs
 builder.Services
-    .AddScry<SampleContext>(
-    _ =>
+    .AddScry<SampleContext>(_ =>
     {
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
         // [QueryablePoco] type must be registered here or AddScry throws at startup.
@@ -54,7 +53,7 @@ builder.Services
         _.UseDeltaChanges<SampleContext>();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L39-L89' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L38-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddPocoSource` registers the data for a `[QueryablePoco]` type — see [POCO sources](#poco-sources) below. `MaxPageSize` is one of the [limits](#options).
@@ -82,7 +81,7 @@ Failures surface at startup, not at first request:
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L107-L109' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L105-L107' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Up to four routes, from the one call:
@@ -381,7 +380,7 @@ Because `ScryClient` takes an arbitrary transport delegate, the same processor a
 static ScryClient ClientFor(TestContext context) =>
     new((request, _) => Task.FromResult(SharedProcessor.Instance.Execute(request, context)));
 ```
-<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L501-L504' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessClient' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L556-L559' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessClient' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 

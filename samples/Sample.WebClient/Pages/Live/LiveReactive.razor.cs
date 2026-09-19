@@ -17,8 +17,15 @@ public partial class LiveReactive
             // From here down it is Rx. Each answer is the whole result, so an operator that wants
             // the difference between two of them folds them together itself.
             .AsObservable()
-            .Select(_ => new Totals(_.Count, _.Sum(order => order.Amount), Change: 0))
-            .Scan((previous, next) => next with {Change = next.Total - previous.Total})
+            .Select(_ =>
+                new Totals(
+                    _.Count,
+                    _.Sum(_ => _.Amount),
+                    Change: 0))
+            .Scan((previous, next) => next with
+            {
+                Change = next.Total - previous.Total
+            })
             .DistinctUntilChanged()
             .Subscribe(
                 next =>

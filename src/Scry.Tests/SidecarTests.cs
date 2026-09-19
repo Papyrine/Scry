@@ -128,7 +128,7 @@ public class SidecarTests
     {
         string[] chunks = ["event: re", "sult\nid: a3f1\ndata: {\"a\":1}\n", "\nevent: ping\ndata: \n\n"];
         var served = new ChunkStream(chunks);
-        var (store, client) = Stubbed(_ => Sse(served));
+        var (_, client) = Stubbed(_ => Sse(served));
 
         using var request = Subscribe();
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
@@ -143,7 +143,7 @@ public class SidecarTests
     [Test]
     public async Task ALiveQueryKeepsItsContentType()
     {
-        var (store, client) = Stubbed(_ => Sse(new ChunkStream(Ping())));
+        var (_, client) = Stubbed(_ => Sse(new ChunkStream(Ping())));
 
         using var request = Subscribe();
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);

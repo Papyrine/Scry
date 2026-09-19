@@ -12,7 +12,6 @@ namespace Sample.WebClient.Pages.Live;
 public sealed class LiveTransport :
     IAsyncDisposable
 {
-    ScryQuery http;
     NavigationManager navigation;
     ScrySidecarStore sidecar;
     HubConnection? connection;
@@ -20,7 +19,7 @@ public sealed class LiveTransport :
 
     public LiveTransport(ScryQuery http, ScryClient client, NavigationManager navigation, ScrySidecarStore sidecar)
     {
-        this.http = http;
+        Query = http;
         this.navigation = navigation;
         this.sidecar = sidecar;
 
@@ -32,7 +31,7 @@ public sealed class LiveTransport :
     public bool SignalR { get; private set; }
 
     /// <summary>The entry point over whichever transport is selected.</summary>
-    public ScryQuery Query => SignalR ? hub! : http;
+    public ScryQuery Query => SignalR ? hub! : field;
 
     /// <summary>Raised after the transport changed, for a page to ask again over the new one.</summary>
     public event Func<Task>? Changed;

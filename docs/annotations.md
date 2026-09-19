@@ -373,8 +373,7 @@ The server must supply the data:
 <a id='snippet-serverRegistration'></a>
 ```cs
 builder.Services
-    .AddScry<SampleContext>(
-    _ =>
+    .AddScry<SampleContext>(_ =>
     {
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
         // [QueryablePoco] type must be registered here or AddScry throws at startup.
@@ -418,7 +417,7 @@ builder.Services
         _.UseDeltaChanges<SampleContext>();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L39-L89' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L38-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The registered sequence is wrapped with `AsQueryable()`, so the pipeline runs in memory over LINQ to<!-- include: poco-in-memory. path: /docs/includes/poco-in-memory.include.md -->

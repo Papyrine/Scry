@@ -75,7 +75,7 @@ sealed partial class QueryTranslator
                     if (inner.Arguments[0] is not MethodCallExpression {Method.Name: "Select"})
                     {
                         throw new NotSupportedException(
-                            "Distinct over a group's rows is not supported by Scry: distinct rows are every row. Select the value first — Select(x => x.Amount).Distinct().Sum() — to fold distinct values.");
+                            "Distinct over a group's rows is not supported by Scry: distinct rows are every row. Select the value first — Select(_ => _.Amount).Distinct().Sum() — to fold distinct values.");
                     }
 
                     distinct = true;

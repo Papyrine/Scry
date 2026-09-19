@@ -503,7 +503,7 @@ Registered with the column that says a row has changed:
 // and needs deciding again — see /docs/policies.md and the /permissions page.
 _.AddCachedPolicy<Order, long, RegionAccessPolicy>(_ => _.Revision);
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L54-L59' title='Snippet source file'>snippet source</a> | <a href='#snippet-addCachedPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L52-L57' title='Snippet source file'>snippet source</a> | <a href='#snippet-addCachedPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The adapter is an ordinary `IReturnablePolicy<T>` underneath, so everything on this page still holds: it applies at the root, at a join's inner side, at a narrowing, at a membership test and at a traversal, it narrows alongside any other policy on the chain, and it takes the same `DeniedRowHandling`.
@@ -527,13 +527,13 @@ Invalidating is the one of the three a host has to remember, because nothing els
 app.MapPost(
     "/api/grants/{region}",
     (string region, bool allowed, RegionGrants grants, ScryPolicyCache cache) =>
-{
-    grants.Set("sample", region, allowed);
-    cache.InvalidateScope<Order>("sample");
-    return Results.NoContent();
-});
+    {
+        grants.Set("sample", region, allowed);
+        cache.InvalidateScope<Order>("sample");
+        return Results.NoContent();
+    });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L123-L135' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L121-L133' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Priming is `cache.Prime(scopeKey, rows, context)` alongside the write that produced them. `ScryPolicyCache` is registered as a singleton by `AddScry`, and is also `ScryProcessor.PolicyCache`.
@@ -557,22 +557,24 @@ Nothing has to be called for the first of the three. The sample moves a row's ve
 // A row changed. Nobody tells the cache anything here: the next query sees a revision past the
 // watermark this scope was decided up to, and decides that one row on the spot. An insert by
 // any writer at all is correct on its first read for the same reason.
-app.MapPost("/api/orders/{id:int}/touch", async (int id, SampleContext data) =>
-{
-    var order = await data.Orders.FindAsync(id);
-    if (order is null)
+app.MapPost(
+    "/api/orders/{id:int}/touch",
+    async (int id, SampleContext data) =>
     {
-        return Results.NotFound();
-    }
+        var order = await data.Orders.FindAsync(id);
+        if (order is null)
+        {
+            return Results.NotFound();
+        }
 
-    // Named explicitly: Scry's async terminals and EF's are both in scope here, and they are
-    // not the same method — this one has to run against the database.
-    order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
-    await data.SaveChangesAsync();
-    return Results.NoContent();
-});
+        // Named explicitly: Scry's async terminals and EF's are both in scope here, and they are
+        // not the same method — this one has to run against the database.
+        order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
+        await data.SaveChangesAsync();
+        return Results.NoContent();
+    });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L137-L155' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L135-L155' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `InvalidateRows<T>(keys)` is the narrower form of the second: it re-decides those rows in every scope, rather than emptying one scope entirely.

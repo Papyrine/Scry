@@ -145,16 +145,15 @@ public Func<HttpContext, bool> EnableSqlPreview { get; set; } = DevelopmentOnly;
 <!-- snippet: mapExplorer -->
 <a id='snippet-mapExplorer'></a>
 ```cs
-app.MapScryExplorer(
-    _ =>
-    {
-        _.Route = "/scry";
-        // This sample always exposes the explorer. The default guard is Development-only — in a real
-        // app, run in Development or set EnableGuard to your own check (e.g. an admin authorization).
-        _.EnableGuard = _ => true;
-    });
+app.MapScryExplorer(_ =>
+{
+    _.Route = "/scry";
+    // This sample always exposes the explorer. The default guard is Development-only — in a real
+    // app, run in Development or set EnableGuard to your own check (e.g. an admin authorization).
+    _.EnableGuard = _ => true;
+});
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L190-L199' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L195-L203' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 | Option | Default | Meaning |

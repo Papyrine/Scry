@@ -36,7 +36,7 @@ Run one test (NUnit + `dotnet test`):
 dotnet test src/Scry.slnx --filter "FullyQualifiedName~SecurityTests.RejectsIgnoredProperty"
 ```
 
-- .NET SDK is pinned via `global.json` (net10, prerelease allowed). Target framework is `net10.0`, `LangVersion 14`; the source generator additionally multi-targets `netstandard2.0`.
+- .NET SDK is pinned via `global.json` to the **.NET 11** SDK (`allowPrerelease: true`, `rollForward: latestFeature`). The **target framework is `net10.0`** — deliberately a major behind the SDK, so do not "fix" the mismatch. `LangVersion 14`; the source generator additionally multi-targets `netstandard2.0`.
 - `src/` builds with `TreatWarningsAsErrors` + `EnforceCodeStyleInBuild`, and NuGet audit (`NuGetAuditMode=all`) turns any package vulnerability advisory into a build error. Keep it clean.
 - Central Package Management: **never** put a version on a `PackageReference`; add/adjust the `PackageVersion` in the relevant `Directory.Packages.props`.
 

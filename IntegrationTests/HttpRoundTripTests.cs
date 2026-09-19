@@ -220,12 +220,14 @@ public class HttpRoundTripTests
             .OrderBy(_ => _.Name)
             .Select(_ => new NameRow(_.Name))
             .ToAsyncEnumerable()
+            // ReSharper disable once MethodSupportsCancellation
             .GetAsyncEnumerator();
 
         await using var departments = query.Department
             .OrderBy(_ => _.Name)
             .Select(_ => new NameRow(_.Name))
             .ToAsyncEnumerable()
+            // ReSharper disable once MethodSupportsCancellation
             .GetAsyncEnumerator();
 
         // Pulled alternately, so each row of one is read while the other stream is mid-flight.

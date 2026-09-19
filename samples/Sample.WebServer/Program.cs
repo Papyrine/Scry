@@ -25,10 +25,9 @@
         // place the server listens.
         // begin-snippet: changeInterceptor
         builder.Services
-            .AddDbContext<SampleContext>(
-                (services, options) => options
-                    .UseSqlServer(database.ConnectionString)
-                    .AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>()));
+            .AddDbContext<SampleContext>((services, options) => options
+                .UseSqlServer(database.ConnectionString)
+                .AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>()));
         // end-snippet
 
         // The sample's own authorization data, and the policy that reads it. The policy is resolved
@@ -38,8 +37,7 @@
 
         // begin-snippet: serverRegistration
         builder.Services
-            .AddScry<SampleContext>(
-            _ =>
+            .AddScry<SampleContext>(_ =>
             {
                 // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
                 // [QueryablePoco] type must be registered here or AddScry throws at startup.
@@ -127,31 +125,33 @@
         app.MapPost(
             "/api/grants/{region}",
             (string region, bool allowed, RegionGrants grants, ScryPolicyCache cache) =>
-        {
-            grants.Set("sample", region, allowed);
-            cache.InvalidateScope<Order>("sample");
-            return Results.NoContent();
-        });
+            {
+                grants.Set("sample", region, allowed);
+                cache.InvalidateScope<Order>("sample");
+                return Results.NoContent();
+            });
         // end-snippet
 
         // begin-snippet: cachedPolicyReadThrough
         // A row changed. Nobody tells the cache anything here: the next query sees a revision past the
         // watermark this scope was decided up to, and decides that one row on the spot. An insert by
         // any writer at all is correct on its first read for the same reason.
-        app.MapPost("/api/orders/{id:int}/touch", async (int id, SampleContext data) =>
-        {
-            var order = await data.Orders.FindAsync(id);
-            if (order is null)
+        app.MapPost(
+            "/api/orders/{id:int}/touch",
+            async (int id, SampleContext data) =>
             {
-                return Results.NotFound();
-            }
+                var order = await data.Orders.FindAsync(id);
+                if (order is null)
+                {
+                    return Results.NotFound();
+                }
 
-            // Named explicitly: Scry's async terminals and EF's are both in scope here, and they are
-            // not the same method — this one has to run against the database.
-            order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
-            await data.SaveChangesAsync();
-            return Results.NoContent();
-        });
+                // Named explicitly: Scry's async terminals and EF's are both in scope here, and they are
+                // not the same method — this one has to run against the database.
+                order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
+                await data.SaveChangesAsync();
+                return Results.NoContent();
+            });
         // end-snippet
 
         // What the /live pages drive. Two writes, because there are two kinds: one the interceptor
@@ -159,43 +159,47 @@
         // begin-snippet: liveSavedWrite
         // Saved through the context, so the interceptor reports it: the live queries reading Order
         // are asked again as soon as this commits, and nothing here has to say so.
-        app.MapPost("/api/orders/{id:int}/reprice", async (int id, SampleContext data) =>
-        {
-            var order = await data.Orders.FindAsync(id);
-            if (order is null)
+        app.MapPost(
+            "/api/orders/{id:int}/reprice",
+            async (int id, SampleContext data) =>
             {
-                return Results.NotFound();
-            }
+                var orders = data.Orders;
+                var order = await orders.FindAsync(id);
+                if (order is null)
+                {
+                    return Results.NotFound();
+                }
 
-            order.Amount += 1;
-            order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
-            await data.SaveChangesAsync();
-            return Results.NoContent();
-        });
+                order.Amount += 1;
+                order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(orders, _ => _.Revision) + 1;
+                await data.SaveChangesAsync();
+                return Results.NoContent();
+            });
         // end-snippet
 
         // begin-snippet: changesNotify
         // A bulk update never passes through SaveChanges, so no interceptor can see it. The host
         // says what it wrote instead. Without that line the change marker would still catch it a
         // moment later, and the poll after that — but this is at once, and names the entity.
-        app.MapPost("/api/orders/reprice-bulk", async (SampleContext data, ScryChanges changes) =>
-        {
-            await data.Orders.ExecuteUpdateAsync(
-                _ => _.SetProperty(order => order.Amount, order => order.Amount + 1));
-            changes.Notify<Order>();
-            return Results.NoContent();
-        });
+        app.MapPost(
+            "/api/orders/reprice-bulk",
+            async (SampleContext data, ScryChanges changes) =>
+            {
+                var orders = data.Orders;
+                await orders.ExecuteUpdateAsync(_ => _.SetProperty(_ => _.Amount, _ => _.Amount + 1));
+                changes.Notify<Order>();
+                return Results.NoContent();
+            });
         // end-snippet
 
         // begin-snippet: mapExplorer
-        app.MapScryExplorer(
-            _ =>
-            {
-                _.Route = "/scry";
-                // This sample always exposes the explorer. The default guard is Development-only — in a real
-                // app, run in Development or set EnableGuard to your own check (e.g. an admin authorization).
-                _.EnableGuard = _ => true;
-            });
+        app.MapScryExplorer(_ =>
+        {
+            _.Route = "/scry";
+            // This sample always exposes the explorer. The default guard is Development-only — in a real
+            // app, run in Development or set EnableGuard to your own check (e.g. an admin authorization).
+            _.EnableGuard = _ => true;
+        });
         // end-snippet
         app.MapFallbackToFile("index.html");
 

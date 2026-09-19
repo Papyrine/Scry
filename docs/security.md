@@ -596,7 +596,7 @@ public async Task DisallowedPropertyRejectedWith400()
     Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L372-L399' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L374-L401' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
