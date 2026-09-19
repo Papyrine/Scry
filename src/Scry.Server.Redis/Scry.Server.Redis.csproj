@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Scry</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PackageReadmeFile>nuget-readme.md</PackageReadmeFile>
+    <Description>Carries Scry change notifications between server nodes over Redis pub/sub, so a write on one node re-asks the live queries held by the others.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The part that talks to Redis is a dozen lines behind a two-method seam, so that everything
+         else — what is published, what is dropped, what a handler is given — is tested against a
+         fake rather than against a server the build agent does not have. -->
+    <InternalsVisibleTo Include="Scry.Backplane.Tests" Key="$(ScryPublicKey)" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="StackExchange.Redis" />
+    <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
+    <ProjectReference Include="..\Scry.Server\Scry.Server.csproj" />
+    <None Include="nuget-readme.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

@@ -39,6 +39,17 @@ public sealed class ScrySidecarHandler(ScrySidecarStore store, ScrySidecarOption
             throw;
         }
 
+        // A live query's body has no end to read to, so it is watched as it flows rather than
+        // buffered: the tee hands every read straight back and frames a copy on the way past. Only
+        // a live query that actually started — a refusal, or somebody else's answer on this route,
+        // falls through to be buffered and shown like any other failure.
+        if (kind == ScrySidecarKind.Subscription &&
+            response.IsSuccessStatusCode &&
+            response.Content.Headers.ContentType?.MediaType == ScryLive.ContentType)
+        {
+            return Tee(entry, request, response, stopwatch.Elapsed);
+        }
+
         // A stream is read row by row above this handler and an attachment's bytes flow through
         // unbuffered, so neither body can be captured without breaking the caller.
         if (kind is ScrySidecarKind.Stream or ScrySidecarKind.Attachment or ScrySidecarKind.Other)
@@ -72,6 +83,61 @@ public sealed class ScrySidecarHandler(ScrySidecarStore store, ScrySidecarOption
         response.Content.Dispose();
         response.Content = content;
         return response;
+    }
+
+    /// <summary>
+    /// Hands the live query's body back wrapped in <see cref="SseTee"/>, which watches it without
+    /// holding it up, and opens the row its events are recorded into.
+    /// </summary>
+    /// <remarks>
+    /// The connection is folded into the live query it belongs to by the identifier
+    /// <see cref="LiveSessionStamp"/> put beside the request, so a reconnect lands on the row it
+    /// resumed rather than starting one. A request that carries none was not sent by a
+    /// <see cref="ScryClient"/> — a hand-rolled POST on the same client — and gets a row of its own,
+    /// which is the most that can honestly be said about it.
+    /// </remarks>
+    HttpResponseMessage Tee(
+        ScrySidecarEntry entry,
+        HttpRequestMessage request,
+        HttpResponseMessage response,
+        TimeSpan toHeaders)
+    {
+        var original = response.Content;
+        try
+        {
+            var id = LiveSessionStamp.Read(request) ?? ScryClient.NextLiveSession();
+            var resumedFrom = request.Headers.TryGetValues(ScryLive.LastEventIdHeader, out var ids)
+                ? ids.FirstOrDefault()
+                : null;
+
+            var (session, connection) = store.OpenLive(
+                id,
+                WithResponse(entry, response) with {Duration = toHeaders},
+                resumedFrom);
+
+            connection.Status = (int) response.StatusCode;
+            connection.ResponseHeaders = Flatten(response.Headers, original.Headers);
+
+            // Synchronous, and no I/O: the network stream is already open and this only takes hold
+            // of it, so returning the response is not pushed behind another continuation.
+            var tee = new SseTee(original.ReadAsStream(), original, store, session, connection, options);
+            var content = new StreamContent(tee);
+            foreach (var header in original.Headers)
+            {
+                content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+
+            // The original is not disposed here: the tee is reading it, and disposes it in turn.
+            response.Content = content;
+            return response;
+        }
+        catch (Exception exception)
+        {
+            // A log that cannot watch the stream hands it back untouched, and says why.
+            Record(WithResponse(entry, response) with {Duration = toHeaders, Error = exception.Message});
+            response.Content = original;
+            return response;
+        }
     }
 
     // Recording must never turn a working query into a failure, so every capture path lands here.
@@ -116,12 +182,13 @@ public sealed class ScrySidecarHandler(ScrySidecarStore store, ScrySidecarOption
 
             // Safe to read: ScryClient sends JSON bodies as ByteArrayContent, which re-reads.
             if (request.Content is not null &&
-                kind is ScrySidecarKind.Query or ScrySidecarKind.Batch or ScrySidecarKind.Attachment)
+                kind is ScrySidecarKind.Query or ScrySidecarKind.Batch or ScrySidecarKind.Attachment or ScrySidecarKind.Subscription)
             {
                 var body = await request.Content.ReadAsByteArrayAsync(cancel);
                 return entry with
                 {
-                    Request = kind == ScrySidecarKind.Query ? ScryJson.DeserializeRequest(body) : null,
+                    // A live query's request is an ordinary query, so it reads as one.
+                    Request = kind is ScrySidecarKind.Query or ScrySidecarKind.Subscription ? ScryJson.DeserializeRequest(body) : null,
                     RequestJson = SidecarJson.Prettify(body),
                     AttachmentRequestBody = kind == ScrySidecarKind.Attachment ? body : null
                 };
@@ -207,6 +274,13 @@ public sealed class ScrySidecarHandler(ScrySidecarStore store, ScrySidecarOption
         if (path.EndsWith("/stream", StringComparison.Ordinal))
         {
             return ScrySidecarKind.Stream;
+        }
+
+        // Ahead of the JSON-body rule below, which it would otherwise match: that rule buffers the
+        // response, and this one's never ends.
+        if (path.EndsWith($"/{ScryLive.Route}", StringComparison.Ordinal))
+        {
+            return ScrySidecarKind.Subscription;
         }
 
         if (request.Method == HttpMethod.Get &&

@@ -157,6 +157,17 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         Cancel cancel)
     {
         var plan = Walk(request, db, scope);
+
+        // Read off the plan rather than the request: by now the policies are in the query, so a table
+        // only a policy reads is one the live query listens for. The probes apply subsets of the same
+        // policies, so they name nothing the query itself does not.
+        if (scope.Subscription is { } subscription)
+        {
+            subscription.Dependencies = DependencyWalker.Read(
+                db.Model,
+                [plan.Fold?.Query.Expression, plan.Fold?.Call, plan.Page?.Rows.Expression, plan.Rows?.Rows.Expression]);
+        }
+
         await PrepareAsync(plan, scope, cancel);
 
         // A terminal folded its rows away, so there is nothing to spill and permission stays withheld.

@@ -6,6 +6,8 @@ Scry caches nothing. Every query is executed, and every response is written in f
 
 All of that ships. A query short enough to fit in a URL is asked with `GET`, so the caches that already exist can identify the response; `Scry.Server` writes the `ETag` and answers the `304`; and the one thing it cannot know — whether anything has changed — comes from a delegate the host supplies. [`Scry.Server.Delta`](#the-freshness-source) supplies one in a line. None of it is on until that delegate is set.
 
+This page is about a client that asks again. One that would rather be told — a screen that should change when the data does — wants a [live query](live-queries.md), which turns the same proof around: `UseDeltaChanges` has the database's change marker tell the server when to run a query again, where `UseDeltaFreshness` has it tell the server a query need not be run. A host can use both.
+
 
 ## Why a query is a URL
 
@@ -28,7 +30,7 @@ The client decides, per query, before it sends anything. Nothing about it is con
 
 ```mermaid
 flowchart TD
-    Q[A query to send] --> T{"Streamed, batched,<br/>or an attachment fetch?"}
+    Q[A query to send] --> T{"Streamed, live, batched,<br/>or an attachment fetch?"}
     T -- Yes --> P["POST<br/>no URL to identify it,<br/>so never cached, never conditional"]
     T -- No --> S{"Compares a Sensitive member<br/>against a constant?"}
     S -- Yes --> P
@@ -77,8 +79,7 @@ Two settings, and nothing else:
 <a id='snippet-serverRegistration'></a>
 ```cs
 builder.Services
-    .AddScry<SampleContext>(
-    _ =>
+    .AddScry<SampleContext>(_ =>
     {
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
         // [QueryablePoco] type must be registered here or AddScry throws at startup.
@@ -111,9 +112,18 @@ builder.Services
         // database — so a grant changing outside it would move nothing, and a cache holding
         // the old rows would go on answering with rows the caller has since lost.
         _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
+
+        // Live queries: the /live pages. Off until a server says how many it will hold open,
+        // which is also what maps the route — see /docs/live-queries.md.
+        _.MaxSubscriptions = 100;
+
+        // The interceptor above reports this server's own saves, at once and by entity. This
+        // watches the database's change marker for everything it cannot see: a bulk update,
+        // another node, a script run by hand.
+        _.UseDeltaChanges<SampleContext>();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L31-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L38-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `QueryFreshness` is what the rows are current as of. Null — the default — writes no `ETag` and answers nothing conditionally, so a server that never sets it behaves exactly as it did before any of this existed. Returning null from it skips one request rather than turning the feature off, so a source that cannot answer right now degrades to a full response.

@@ -28,6 +28,10 @@
     <!-- Reference the whole app: builds the server (which the Playwright test launches) and
          exposes the generated ScryQuery + Index page (which the bUnit tests render). -->
     <ProjectReference Include="..\Sample.WebServer\Sample.WebServer.csproj" />
+    <!-- The NServiceBus pair is the one backplane sample that needs no infrastructure, so it is the
+         one hosted here: server and worker in this process, over a temporary transport folder. -->
+    <ProjectReference Include="..\Sample.NServiceBusServer\Sample.NServiceBusServer.csproj" />
+    <ProjectReference Include="..\Sample.NServiceBusWorker\Sample.NServiceBusWorker.csproj" />
     <ProjectReference Include="..\Sample.WebClient\Sample.WebClient.csproj" />
     <ProjectReference Include="..\Sample.Model\Sample.Model.csproj" />
   </ItemGroup>

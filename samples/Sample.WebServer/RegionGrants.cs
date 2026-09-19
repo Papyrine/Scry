@@ -12,7 +12,7 @@
 /// </remarks>
 public sealed class RegionGrants
 {
-    readonly ConcurrentDictionary<string, HashSet<string>> granted = new(StringComparer.Ordinal);
+    ConcurrentDictionary<string, HashSet<string>> granted = new(StringComparer.Ordinal);
 
     int lookups;
     int version;

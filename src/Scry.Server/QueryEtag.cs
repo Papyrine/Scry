@@ -119,9 +119,7 @@ static class QueryEtag
             return null;
         }
 
-        Span<byte> hash = stackalloc byte[SHA256.HashSizeInBytes];
-        SHA256.HashData(Encoding.UTF8.GetBytes(encoded), hash);
-        return Base64Url.EncodeToString(hash[..12]);
+        return Fingerprint.Of(encoded);
     }
 
     // The freshness token and the scope are hashed like the query is: a tag is stored by the
@@ -131,16 +129,9 @@ static class QueryEtag
     {
         if (scope is null)
         {
-            return $"\"{schemaStamp}-{Fingerprint(freshness)}-{query}\"";
+            return $"\"{schemaStamp}-{Fingerprint.Of(freshness)}-{query}\"";
         }
 
-        return $"\"{schemaStamp}-{Fingerprint(freshness)}-{query}-{Fingerprint(scope)}\"";
-    }
-
-    static string Fingerprint(string value)
-    {
-        Span<byte> hash = stackalloc byte[SHA256.HashSizeInBytes];
-        SHA256.HashData(Encoding.UTF8.GetBytes(value), hash);
-        return Base64Url.EncodeToString(hash[..12]);
+        return $"\"{schemaStamp}-{Fingerprint.Of(freshness)}-{query}-{Fingerprint.Of(scope)}\"";
     }
 }

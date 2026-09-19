@@ -38,6 +38,7 @@
   },
   Kind: List,
   Streamed: true,
+  Subscribed: false,
   Rows: 3,
   StaleClient: false,
   Sensitive: false

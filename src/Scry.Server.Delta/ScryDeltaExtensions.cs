@@ -52,4 +52,52 @@ public static class ScryDeltaExtensions
         return options;
     }
     // end-snippet
+
+    // begin-snippet: useDeltaChanges
+    /// <summary>
+    /// Runs every live query again when anything is written to <typeparamref name="TContext"/>'s
+    /// database, by watching the same change marker <see cref="UseDeltaFreshness{TContext}"/> reads.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The marker moves for every writer there is — another node, another system, a bulk update, raw
+    /// SQL — none of which has to know Scry exists. That makes the database the backplane: a
+    /// deployment of several nodes needs nothing else for a write on one to reach the live queries
+    /// held by the others.
+    /// </para>
+    /// <para>
+    /// What it cannot say is what changed, so every live query is run again rather than the ones that
+    /// read what was written. A run that finds its answer unchanged sends nothing, so the cost is
+    /// queries and not traffic — and it is paid only while a live query is open, since nothing probes
+    /// otherwise. Use it beside <see cref="ScryChangeInterceptor"/>, which does know what changed and
+    /// reports it at once: the interceptor makes this node's own writes fast and precise, and this
+    /// catches everything the interceptor cannot see.
+    /// </para>
+    /// <para>
+    /// The marker trails a commit by a couple of hundred milliseconds on SQL Server, and is asked
+    /// every <see cref="ScryOptions.ChangeProbeInterval"/>, so that is how far behind a write this
+    /// alone can be.
+    /// </para>
+    /// </remarks>
+    public static ScryOptions UseDeltaChanges<TContext>(this ScryOptions options)
+        where TContext : DbContext
+    {
+        options.ChangeProbe = async (services, cancel) =>
+        {
+            var data = services.GetRequiredService<TContext>();
+            var timeStamp = await data.GetLastTimeStamp(cancel);
+
+            // A marker that says nothing is not one to compare against: the probe is skipped this
+            // once rather than read as the database having moved.
+            if (timeStamp.Length == 0)
+            {
+                return null;
+            }
+
+            return timeStamp;
+        };
+
+        return options;
+    }
+    // end-snippet
 }

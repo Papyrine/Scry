@@ -9,8 +9,7 @@
 <a id='snippet-serverRegistration'></a>
 ```cs
 builder.Services
-    .AddScry<SampleContext>(
-    _ =>
+    .AddScry<SampleContext>(_ =>
     {
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
         // [QueryablePoco] type must be registered here or AddScry throws at startup.
@@ -43,9 +42,18 @@ builder.Services
         // database — so a grant changing outside it would move nothing, and a cache holding
         // the old rows would go on answering with rows the caller has since lost.
         _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
+
+        // Live queries: the /live pages. Off until a server says how many it will hold open,
+        // which is also what maps the route — see /docs/live-queries.md.
+        _.MaxSubscriptions = 100;
+
+        // The interceptor above reports this server's own saves, at once and by entity. This
+        // watches the database's change marker for everything it cannot see: a bulk update,
+        // another node, a script run by hand.
+        _.UseDeltaChanges<SampleContext>();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L31-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L38-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddPocoSource` registers the data for a `[QueryablePoco]` type — see [POCO sources](#poco-sources) below. `MaxPageSize` is one of the [limits](#options).
@@ -73,16 +81,17 @@ Failures surface at startup, not at first request:
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L85-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L105-L107' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-Three routes, from the one call:
+Up to four routes, from the one call:
 
 | Route | Method | Request | Response |
 | --- | --- | --- | --- |
 | the pattern given | `GET` or `POST` | [`QueryRequest`](wire-format.md), [in the URL](wire-format.md#the-url-form) or in the body | one `QueryResponse` |
 | `…/stream` | `POST` | the same `QueryRequest` | [newline-delimited rows](wire-format.md#streamed-results), for [`ToAsyncEnumerable`](querying.md#streaming-rows) |
 | `…/batch` | `POST` | [`QueryBatchRequest`](wire-format.md#batched-queries) | one result per entry, for [batching](batching.md) |
+| `…/subscribe` | `POST` | the same `QueryRequest` | [server-sent events](wire-format.md#live-queries), each a whole `QueryResponse`, for [live queries](live-queries.md) — mapped only where `MaxSubscriptions` is set |
 
 (Plus `…/attachment`, which [attachments](attachments.md) covers — mapped here so one authorization convention reaches it too.)
 
@@ -170,9 +179,11 @@ public int MaxInValues { get; set; } = 1000;
 /// Maximum number of queries one batch request may carry. Default 20.
 /// </summary>
 /// <remarks>
-/// A batch is the one place a single request costs more than one query, so this is the bound that
-/// keeps it from being an amplifier: every other limit is per query and would otherwise apply to an
-/// arbitrary number of them. A batch over the limit is rejected whole, before any entry runs.
+/// A batch is a single request that costs more than one query, so this is the bound that keeps it
+/// from being an amplifier: every other limit here is per query and would otherwise apply to an
+/// arbitrary number of them. A batch over the limit is rejected whole, before any entry runs. The
+/// other such request is a live query, which has bounds of its own —
+/// <see cref="MaxSubscriptions"/> and the options beside it.
 /// </remarks>
 public int MaxBatchSize { get; set; } = 20;
 
@@ -246,7 +257,7 @@ public int QueryUrlLimit { get; set; } = QueryUrl.MaxLength;
 /// </remarks>
 public double? LimitWatchFraction { get; set; }
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L149' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L151' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Every limit is enforced during validation, before any expression is rebound or executed.
@@ -355,6 +366,10 @@ Those reach [row policies](policies.md#reading-and-writing-headers) as `ScryPoli
 
 Note this is the only channel for headers: they are not part of the [wire request](wire-format.md), so the [per-query header operators](querying.md#headers) on the client work over HTTP alone and refuse a query sent through a custom transport delegate rather than dropping what they were asked to send.
 
+`processor.Subscribe(request, dbContext, services, …)` is the [live query](live-queries.md) form: an `IAsyncEnumerable<QueryResponse>` that a server-streaming call can return as it is. The limits on how many may be open are enforced there, so every transport has them.
+
+A transport that carries requests across a process boundary hands `ScryJson.DeserializeRequest` the bytes it received rather than binding a `QueryRequest` with a serializer of its own. What makes the wire format fail closed — an unknown member refused, a duplicated property refused, a null array element refused — is in `ScryJson.Options`, not on the types. It also calls `processor.EnsureReady(services)` once at startup, which is every check `MapScry` runs. [Scry.Server.SignalR](live-queries.md#over-signalr-instead-of-http) is a transport built this way.
+
 `processor.Describe()` returns the [introspection](explorer.md#introspection) contract.
 
 Because `ScryClient` takes an arbitrary transport delegate, the same processor also supports an in-process client — the whole pipeline, LINQ to rows, with no web host:
@@ -365,7 +380,7 @@ Because `ScryClient` takes an arbitrary transport delegate, the same processor a
 static ScryClient ClientFor(TestContext context) =>
     new((request, _) => Task.FromResult(SharedProcessor.Instance.Execute(request, context)));
 ```
-<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L501-L504' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessClient' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L556-L559' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessClient' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -399,6 +414,7 @@ The endpoint maps failures deliberately:
 | Malformed JSON, unknown discriminator, wrong shape (`ScryWireException`) | `400` | `WireFormat` | `{"error":"...","code":"WireFormat"}` |
 | Allow-list or limit violation (`ScryValidationException`) | `400` | `Validation` | `{"error":"...","code":"Validation"}` |
 | A [row policy](policies.md) denied the rows (`ScryPermissionException`) | `403` | `Forbidden` | `{"error":"...","code":"Forbidden"}` |
+| More live queries than the server (`503`) or this caller's share of it (`429`) allows | `503` / `429` | `SubscriptionLimit` | `{"error":"...","code":"SubscriptionLimit"}` |
 | Anything else | `500` | `ExecutionFailed` | `{"error":"Query execution failed.","code":"ExecutionFailed"}` |
 
 The `code` is what a client branches on; the message is for a person. It is deliberately coarser than the message behind it — which of the endpoint's own answers this is, never which member or which rule was involved — so it says nothing a caller could not already read off the status, and rides on the fixed `500` body as safely as on a rejection. The status alone will not do the job: a malformed query and an over-long `In` list are both `400`, and only one of them is worth a second look.

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\Shared\NServiceBusEndpoint.cs" Link="NServiceBusEndpoint.cs" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <!-- Scry.Server rather than a smaller package, for the interceptor and the change reporting it
+         feeds. It brings the ASP.NET Core shared framework with it — which is where this project's
+         generic host comes from too — so a worker then needs that runtime installed: the one cost of
+         reporting changes from a process that serves no queries. -->
+    <ProjectReference Include="..\..\src\Scry.Server\Scry.Server.csproj" />
+    <ProjectReference Include="..\..\src\Scry.Server.NServiceBus\Scry.Server.NServiceBus.csproj" />
+    <ProjectReference Include="..\Sample.Model\Sample.Model.csproj" />
+  </ItemGroup>
+</Project>

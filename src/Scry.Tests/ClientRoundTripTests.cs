@@ -36,7 +36,11 @@ public class ClientRoundTripTests
                         _.Name.StartsWith(prefix))
             .OrderBy(_ => _.Name)
             .Take(take)
-            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
+            .Select(_ =>
+                new EmployeeRow(
+                    _.Name,
+                    _.Status,
+                    _.Manager!.Name))
             .ToScryRequest();
         // end-snippet
 
@@ -54,7 +58,11 @@ public class ClientRoundTripTests
             .Where(_ => _.Status == Status.FullTime &&
                         _.Name.StartsWith(prefix))
             .OrderBy(_ => _.Name)
-            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
+            .Select(_ =>
+                new EmployeeRow(
+                    _.Name,
+                    _.Status,
+                    _.Manager!.Name))
             .ToListAsync();
 
         await Verify(rows)
@@ -95,7 +103,11 @@ public class ClientRoundTripTests
 
         var rows = await client.Source<Employee>("Employee")
             .Where(_ => _.Status == wanted)
-            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
+            .Select(_ =>
+                new EmployeeRow(
+                    _.Name,
+                    _.Status,
+                    _.Manager!.Name))
             .ToListAsync();
 
         await Verify(rows)
@@ -159,11 +171,20 @@ public class ClientRoundTripTests
         await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
         // A closure-captured byte[] exercises ConstantOf's base64 encoding of ClrTypeTag.Bytes.
-        var avatar = new byte[] { 0x01, 0x02, 0x03 };
+        var avatar = new byte[]
+        {
+            0x01,
+            0x02,
+            0x03
+        };
 
         var rows = await client.Source<Employee>("Employee")
             .Where(_ => _.Avatar == avatar)
-            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
+            .Select(_ =>
+                new EmployeeRow(
+                    _.Name,
+                    _.Status,
+                    _.Manager!.Name))
             .ToListAsync();
 
         await Verify(rows)
@@ -212,7 +233,11 @@ public class ClientRoundTripTests
 
         var query = client.Source<Employee>("Employee")
             .OrderBy(_ => _.Name)
-            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name));
+            .Select(_ =>
+                new EmployeeRow(
+                    _.Name,
+                    _.Status,
+                    _.Manager!.Name));
 
         // Every terminal sends the same list request and reshapes the four seeded rows client-side.
         var array = await query.ToArrayAsync();
@@ -241,13 +266,21 @@ public class ClientRoundTripTests
         // yields the first two with HasMore, then Skip(2) advances to the last two with HasMore false.
         var first = await client.Source<Employee>("Employee")
             .OrderBy(_ => _.Name)
-            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
+            .Select(_ =>
+                new EmployeeRow(
+                    _.Name,
+                    _.Status,
+                    _.Manager!.Name))
             .ToPageAsync(2);
 
         var second = await client.Source<Employee>("Employee")
             .OrderBy(_ => _.Name)
             .Skip(2)
-            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
+            .Select(_ =>
+                new EmployeeRow(
+                    _.Name,
+                    _.Status,
+                    _.Manager!.Name))
             .ToPageAsync(2);
 
         Assert.Multiple(() =>
@@ -269,9 +302,14 @@ public class ClientRoundTripTests
 
         // Ordered by Name: Aaron, Alice, Bob, Carol. Page 2 resumes past page 1 via the returned cursor
         // (a keyset seek), not an offset.
-        IQueryable<EmployeeRow> Ordered() => client.Source<Employee>("Employee")
-            .OrderBy(_ => _.Name)
-            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name));
+        IQueryable<EmployeeRow> Ordered() =>
+            client.Source<Employee>("Employee")
+                .OrderBy(_ => _.Name)
+                .Select(_ =>
+                    new EmployeeRow(
+                        _.Name,
+                        _.Status,
+                        _.Manager!.Name));
 
         var first = await Ordered().ToPageAsync(2);
         var second = await Ordered().ToPageAsync(2, first.Cursor);
@@ -298,9 +336,10 @@ public class ClientRoundTripTests
         await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        IQueryable<TicketName> Ordered() => client.Source<Ticket>("Ticket")
-            .OrderBy(_ => _.Token)
-            .Select(_ => new TicketName(_.Name));
+        IQueryable<TicketName> Ordered() =>
+            client.Source<Ticket>("Ticket")
+                .OrderBy(_ => _.Token)
+                .Select(_ => new TicketName(_.Name));
 
         var first = await Ordered().ToPageAsync(1);
         var second = await Ordered().ToPageAsync(1, first.Cursor);
@@ -324,9 +363,14 @@ public class ClientRoundTripTests
 
         // Ordered by Active alone; the primary key is appended as the tiebreaker, so every page seeks
         // past a bool and an int together.
-        IQueryable<EmployeeRow> Ordered() => client.Source<Employee>("Employee")
-            .OrderBy(_ => _.Active)
-            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name));
+        IQueryable<EmployeeRow> Ordered() =>
+            client.Source<Employee>("Employee")
+                .OrderBy(_ => _.Active)
+                .Select(_ =>
+                    new EmployeeRow(
+                        _.Name,
+                        _.Status,
+                        _.Manager!.Name));
 
         var names = new List<string>();
         var page = await Ordered().ToPageAsync(2);
@@ -351,7 +395,11 @@ public class ClientRoundTripTests
         // with one the next page would fault on.
         var page = await client.Source<Employee>("Employee")
             .OrderBy(_ => _.Avatar)
-            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
+            .Select(_ =>
+                new EmployeeRow(
+                    _.Name,
+                    _.Status,
+                    _.Manager!.Name))
             .ToPageAsync(2);
 
         Assert.Multiple(() =>
@@ -372,10 +420,15 @@ public class ClientRoundTripTests
 
         // A composite order (Status, then Name) exercises the multi-key lexicographic seek plus the
         // appended primary-key tiebreaker. Paging all the way through must visit every row exactly once.
-        IQueryable<EmployeeRow> Ordered() => client.Source<Employee>("Employee")
-            .OrderBy(_ => _.Status)
-            .ThenBy(_ => _.Name)
-            .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name));
+        IQueryable<EmployeeRow> Ordered() =>
+            client.Source<Employee>("Employee")
+                .OrderBy(_ => _.Status)
+                .ThenBy(_ => _.Name)
+                .Select(_ =>
+                    new EmployeeRow(
+                        _.Name,
+                        _.Status,
+                        _.Manager!.Name));
 
         var names = new List<string>();
         var page = await Ordered().ToPageAsync(2);
@@ -420,14 +473,13 @@ public class ClientRoundTripTests
 
         // This client is built over a single-response transport. Rather than quietly buffering the
         // whole result and calling it a stream, the terminal says so.
-        var exception = Assert.ThrowsAsync<NotSupportedException>(
-            async () =>
+        var exception = Assert.ThrowsAsync<NotSupportedException>(async () =>
+        {
+            await foreach (var _ in client.Source<Employee>("Employee").ToAsyncEnumerable())
             {
-                await foreach (var _ in client.Source<Employee>("Employee").ToAsyncEnumerable())
-                {
-                    Assert.Fail("No row should arrive over a transport that cannot stream.");
-                }
-            });
+                Assert.Fail("No row should arrive over a transport that cannot stream.");
+            }
+        });
 
         Assert.That(exception!.Message, Does.Contain("does not stream"));
     }
@@ -489,7 +541,10 @@ public class ClientRoundTripTests
         var exception = Assert.ThrowsAsync<NotSupportedException>(() =>
             client.Source<Employee>("Employee")
                 .Where(_ => Munge(_.Name) == "x")
-                .Select(_ => new {_.Name})
+                .Select(_ => new
+                {
+                    _.Name
+                })
                 .ToListAsync());
 
         Assert.That(exception!.Message, Does.Contain("ClientRoundTripTests.Munge"));

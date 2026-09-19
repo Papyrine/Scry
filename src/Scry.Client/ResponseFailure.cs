@@ -30,4 +30,23 @@ static class ResponseFailure
             _ => new ScryRequestException(status, error.Code, Encoding.UTF8.GetString(body))
         };
     }
+
+    /// <summary>
+    /// The exception for a failure reported after the status had already been sent — the event that
+    /// closes a live query. There is no status to read, so the one the same failure would have been
+    /// answered with is given: code that catches a rejection should not have to know whether it came
+    /// before the first answer or after the tenth.
+    /// </summary>
+    public static Exception Read(byte[] body) =>
+        Read(Status(ScryJson.TryDeserializeError(body)?.Code ?? ScryErrorCode.Unknown), body);
+
+    static HttpStatusCode Status(ScryErrorCode code) =>
+        code switch
+        {
+            ScryErrorCode.WireFormat or ScryErrorCode.Validation or ScryErrorCode.StaleClient => HttpStatusCode.BadRequest,
+            ScryErrorCode.Forbidden => HttpStatusCode.Forbidden,
+            ScryErrorCode.UnsupportedMedia => HttpStatusCode.UnsupportedMediaType,
+            ScryErrorCode.SubscriptionLimit => HttpStatusCode.ServiceUnavailable,
+            _ => HttpStatusCode.InternalServerError
+        };
 }

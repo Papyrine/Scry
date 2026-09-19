@@ -1,5 +1,3 @@
-using System.Net.Http.Json;
-
 namespace Sample.WebClient.Pages;
 
 public partial class Permissions

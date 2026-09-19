@@ -21,23 +21,23 @@ public class PagingPageTests
             TimeSpan.FromSeconds(10));
 
         // Re-read the DOM fresh each time so a post-click re-render is reflected.
-        string[] names() => [.. page.FindAll("tbody tr td:first-child").Select(_ => _.TextContent)];
+        string[] Names() => [.. page.FindAll("tbody tr td:first-child").Select(_ => _.TextContent)];
 
         string[] firstPage = ["Aaron", "Alice"];
         string[] secondPage = ["Bob", "Carol"];
 
         // Page 1 — ordered by Name: Aaron, Alice — with a further page available.
-        Assert.That(names(), Is.EqualTo(firstPage));
+        Assert.That(Names(), Is.EqualTo(firstPage));
         Assert.That(page.FindAll("button")[1].HasAttribute("disabled"), Is.False, "Next enabled on page 1");
         Assert.That(page.FindAll("button")[0].HasAttribute("disabled"), Is.True, "Previous disabled on page 1");
 
         await page.FindAll("button")[1].ClickAsync();
         await page.WaitForStateAsync(
-            () => names().FirstOrDefault() == "Bob",
+            () => Names().FirstOrDefault() == "Bob",
             TimeSpan.FromSeconds(10));
 
         // Page 2 — Bob, Carol — the last page, so Next is now disabled and Previous enabled.
-        Assert.That(names(), Is.EqualTo(secondPage));
+        Assert.That(Names(), Is.EqualTo(secondPage));
         Assert.That(page.FindAll("button")[1].HasAttribute("disabled"), Is.True, "Next disabled on last page");
         Assert.That(page.FindAll("button")[0].HasAttribute("disabled"), Is.False, "Previous enabled on page 2");
     }

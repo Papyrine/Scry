@@ -16,6 +16,11 @@
          at a line longer than that buffer, and at a stream that ends without a newline is worth testing
          directly rather than only through a stream that happens to produce those. -->
     <InternalsVisibleTo Include="Scry.Tests" Key="$(ScryPublicKey)" />
+    <!-- A second transport for the same client. What it needs that is not public is how a failure
+         becomes the exception this client raises for it, so that a query refused over a hub is
+         caught by the code that catches one refused over HTTP. Shipped with this package, so the
+         friendship is never between two versions. -->
+    <InternalsVisibleTo Include="Scry.Client.SignalR" Key="$(ScryPublicKey)" />
     <!-- The walk that decides whether a query may travel as a URL. Compiled into the server too: it
          chooses here and is enforced there, and two copies that drifted would refuse queries a client
          had no way to know about. -->

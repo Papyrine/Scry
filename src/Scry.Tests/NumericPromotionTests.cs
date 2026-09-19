@@ -69,7 +69,10 @@ public class NumericPromotionTests
                     new(
                     [
                         new("Region", new NodeValue(new MemberNode(["Region"]))),
-                        new("Total", new NodeValue(new AggregateNode(AggregateFn.Sum, new MemberNode(["Quantity"])) {Distinct = true}))
+                        new("Total", new NodeValue(new AggregateNode(AggregateFn.Sum, new MemberNode(["Quantity"]))
+                        {
+                            Distinct = true
+                        }))
                     ]))
             ]);
 
@@ -77,7 +80,11 @@ public class NumericPromotionTests
 
         var totals = response.Payload.EnumerateArray()
             .ToDictionary(_ => _.GetProperty("region").GetString()!, _ => _.GetProperty("total").GetInt64());
-        Assert.That(totals, Is.EqualTo(new Dictionary<string, long> {["North"] = 10, ["South"] = 1}));
+        Assert.That(totals, Is.EqualTo(new Dictionary<string, long>
+        {
+            ["North"] = 10,
+            ["South"] = 1
+        }));
     }
 
     // A member that is not numeric at all has no fold, and is refused as such rather than left to
@@ -172,7 +179,11 @@ public class NumericPromotionTests
 
         var rows = await client.Source<Order>("Order")
             .OrderBy(_ => _.Id)
-            .Select(_ => new {Half = (double)_.Quantity / 2, PerId = (double)_.Quantity / _.Id})
+            .Select(_ => new
+            {
+                Half = (double) _.Quantity / 2,
+                PerId = (double) _.Quantity / _.Id
+            })
             .ToListAsync();
 
         double[] halves = [1.5, 3.5, 0.5];
@@ -193,7 +204,10 @@ public class NumericPromotionTests
         var client = ClientFor(context);
 
         var request = client.Source<Order>("Order")
-            .Select(_ => new {Half = (double)_.Quantity / 2})
+            .Select(_ => new
+            {
+                Half = (double) _.Quantity / 2
+            })
             .ToScryRequest();
 
         return Verify(request);
@@ -208,7 +222,10 @@ public class NumericPromotionTests
         var client = ClientFor(context);
 
         var exception = Assert.Throws<NotSupportedException>(() => client.Source<Employee>("Employee")
-            .Select(_ => new {Code = (int)_.Status})
+            .Select(_ => new
+            {
+                Code = (int) _.Status
+            })
             .ToScryRequest());
 
         Assert.That(exception!.Message, Does.Contain("reads an enum as a number"));
@@ -221,7 +238,7 @@ public class NumericPromotionTests
         var client = ClientFor(context);
 
         var exception = Assert.Throws<NotSupportedException>(() => client.Source<Order>("Order")
-            .Where(_ => (int)_.Amount > 5)
+            .Where(_ => (int) _.Amount > 5)
             .ToScryRequest());
 
         Assert.That(exception!.Message, Does.Contain("narrows"));
@@ -335,7 +352,7 @@ public class NumericPromotionTests
         var client = ClientFor(context);
 
         var total = await client.Source<Order>("Order")
-            .SumAsync(_ => Math.Sqrt((double)_.Amount));
+            .SumAsync(_ => Math.Sqrt((double) _.Amount));
 
         Assert.That(total, Is.EqualTo(Math.Sqrt(100) + Math.Sqrt(250) + Math.Sqrt(75)).Within(1e-9));
     }

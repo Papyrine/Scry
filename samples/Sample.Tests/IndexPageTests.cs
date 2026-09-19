@@ -29,7 +29,7 @@ public class IndexPageTests
                 """
                 {
                   Instance: {},
-                  NodeCount: 176
+                  NodeCount: 179
                 }
                 """);
     }
@@ -62,7 +62,7 @@ public class IndexPageTests
                 """
                 {
                   Instance: {},
-                  NodeCount: 47
+                  NodeCount: 50
                 }
                 """);
     }
@@ -91,7 +91,7 @@ public class IndexPageTests
                 """
                 {
                   Instance: {},
-                  NodeCount: 47
+                  NodeCount: 50
                 }
                 """);
     }

@@ -1,0 +1,24 @@
+@using MessagePipe
+@implements IDisposable
+@inject IBufferedSubscriber<OrdersChanged> Subscriber
+
+@* A second listener on the same bus, fed by the same single server subscription as the grid. *@
+<p>Orders: <strong id="count">@count</strong> · Total: <strong id="total">@total</strong></p>
+
+@code {
+    int count;
+    decimal total;
+    IDisposable? subscription;
+
+    protected override void OnInitialized() =>
+        subscription = Subscriber.Subscribe(
+            changed =>
+            {
+                count = changed.Orders.Count;
+                total = changed.Orders.Sum(_ => _.Amount);
+                InvokeAsync(StateHasChanged);
+            });
+
+    public void Dispose() =>
+        subscription?.Dispose();
+}

@@ -32,7 +32,8 @@ public class NestedRowReadTests
     [Test]
     public void AGroupReadAsText() =>
         Assert.Throws<NotSupportedException>(
-            () => Client().Source<Order>("Order")
+            () => Client()
+                .Source<Order>("Order")
                 .GroupBy(_ => _.Region)
                 .Select(_ => new TextRow(_.ToString()!))
                 .ToScryRequest());

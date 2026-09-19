@@ -6,8 +6,7 @@ Server-side execution for [Scry](https://github.com/Papyrine/Scry). Validates an
 <a id='snippet-serverRegistration'></a>
 ```cs
 builder.Services
-    .AddScry<SampleContext>(
-    _ =>
+    .AddScry<SampleContext>(_ =>
     {
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
         // [QueryablePoco] type must be registered here or AddScry throws at startup.
@@ -40,9 +39,18 @@ builder.Services
         // database — so a grant changing outside it would move nothing, and a cache holding
         // the old rows would go on answering with rows the caller has since lost.
         _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
+
+        // Live queries: the /live pages. Off until a server says how many it will hold open,
+        // which is also what maps the route — see /docs/live-queries.md.
+        _.MaxSubscriptions = 100;
+
+        // The interceptor above reports this server's own saves, at once and by entity. This
+        // watches the database's change marker for everything it cannot see: a bulk update,
+        // another node, a script run by hand.
+        _.UseDeltaChanges<SampleContext>();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L31-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L38-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddPocoSource` supplies the rows for a `[QueryablePoco]` type — see [POCO sources](https://github.com/Papyrine/Scry/blob/main/docs/server.md#poco-sources).
@@ -52,7 +60,7 @@ builder.Services
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L85-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L105-L107' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Docs: [Server](https://github.com/Papyrine/Scry/blob/main/docs/server.md) · [Row policies](https://github.com/Papyrine/Scry/blob/main/docs/policies.md) · [Security model](https://github.com/Papyrine/Scry/blob/main/docs/security.md)
