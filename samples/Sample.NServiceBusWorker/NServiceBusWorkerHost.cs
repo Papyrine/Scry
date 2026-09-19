@@ -1,10 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using NServiceBus;
-using Sample.Model;
-using Scry;
-
 /// <summary>
 /// An endpoint that writes the data a Scry server reads and serves no queries itself. It maps no
 /// route and registers no <c>AddScry</c>: all it has of Scry is the means to say what it saved.

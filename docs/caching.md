@@ -266,7 +266,7 @@ builder.Services
     .AddHttpClient("scry")
     .AddHttpMessageHandler<QueryCacheHandler>();
 ```
-<sup><a href='/samples/Sample.WebClient/Program.cs#L37-L43' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCacheRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Program.cs#L35-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCacheRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Above the handler nothing changes: the same `ScryClient`, the same generated models, the same rows.

@@ -1,5 +1,3 @@
-﻿using MessagePipe;
-
 class Program
 {
     static Task Main(string[] args)

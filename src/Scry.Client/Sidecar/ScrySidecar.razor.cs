@@ -11,6 +11,10 @@ public partial class ScrySidecar :
     bool open;
     bool toggleButton;
     int selectedId;
+    int? selectedAttempt;
+    ScrySidecarEvent? selectedEvent;
+    HashSet<int> expanded = [];
+    bool dirty;
     string? note;
     IJSObjectReference? module;
     DotNetObjectReference<ScrySidecar>? reference;
@@ -19,11 +23,62 @@ public partial class ScrySidecar :
     ScrySidecarEntry? Selected =>
         Store.Entries.FirstOrDefault(_ => _.Id == selectedId);
 
-    protected override void OnInitialized() =>
-        Store.Changed += OnChanged;
+    ScrySidecarConnection? SelectedConnection =>
+        selectedAttempt is { } attempt
+            ? Selected?.Session?.Connections.FirstOrDefault(_ => _.Attempt == attempt)
+            : null;
 
-    void OnChanged() =>
-        InvokeAsync(StateHasChanged);
+    ScrySidecarEvent? SelectedEvent => selectedEvent;
+
+    protected override void OnInitialized()
+    {
+        Store.Changed += OnChanged;
+        Store.SessionChanged += OnSessionChanged;
+    }
+
+    // Nothing of the log renders while the panel is shut, so nothing needs re-rendering for it.
+    void OnChanged()
+    {
+        if (open)
+        {
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    // A live query reports every event it receives, which for a page holding several is far oftener
+    // than a panel can usefully repaint. The tick below picks these up in batches.
+    void OnSessionChanged() =>
+        dirty = true;
+
+    /// <summary>
+    /// Repaints the open panel on a fixed beat rather than per event: a floor on how often, not a
+    /// wait for quiet, because a live query answering steadily must still redraw. The beat also
+    /// brings the times a row shows up to date, which nothing else would — a live query that has
+    /// gone quiet is exactly the one whose "last event" needs to keep counting up.
+    /// </summary>
+    async Task Tick()
+    {
+        using var ticker = new PeriodicTimer(Options.LiveRefresh);
+        try
+        {
+            while (open &&
+                   await ticker.WaitForNextTickAsync())
+            {
+                if (!dirty &&
+                    !Store.Entries.Any(_ => _.Session is {Open: true}))
+                {
+                    continue;
+                }
+
+                dirty = false;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception)
+        {
+            // The panel was torn down under a repaint it had already scheduled.
+        }
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -57,20 +112,160 @@ public partial class ScrySidecar :
             open = !open;
             note = null;
             StateHasChanged();
+            if (open)
+            {
+                _ = Tick();
+            }
         });
 
     void Select(int id)
     {
         selectedId = id;
+        selectedAttempt = null;
+        selectedEvent = null;
         note = null;
     }
+
+    void Select(int id, int attempt)
+    {
+        selectedId = id;
+        selectedAttempt = attempt;
+        selectedEvent = null;
+        note = null;
+    }
+
+    void Show(ScrySidecarEvent captured) =>
+        selectedEvent = captured.Json is null || captured == selectedEvent ? null : captured;
+
+    void Expand(int id)
+    {
+        if (!expanded.Add(id))
+        {
+            expanded.Remove(id);
+            if (selectedId == id)
+            {
+                selectedAttempt = null;
+            }
+        }
+    }
+
+    bool Expanded(int id) =>
+        expanded.Contains(id);
+
+    string? Chosen(int id, int? attempt) =>
+        selectedId == id && selectedAttempt == attempt ? "scry-sidecar-selected" : null;
 
     void Clear()
     {
         Store.Clear();
         selectedId = 0;
+        selectedAttempt = null;
+        selectedEvent = null;
+        expanded.Clear();
         note = null;
     }
+
+    // Newest first: a live query that has been asked again several times is read from what it is
+    // doing now backwards. Its events stay in the order they arrived.
+    static IEnumerable<ScrySidecarConnection> Newest(ScrySidecarSession session) =>
+        session.Connections.Reverse();
+
+    static IEnumerable<ScrySidecarEvent> Listed(ScrySidecarConnection connection) =>
+        connection.Events;
+
+    static string Progress(ScrySidecarSession session) =>
+        session.State switch
+        {
+            ScrySubscriptionState.Connecting => "connecting",
+            ScrySubscriptionState.Live => "live",
+            ScrySubscriptionState.Reconnecting => session.Attempt > 1 ? $"retry ×{session.Attempt - 1}" : "retry",
+            ScrySubscriptionState.Closed => "closed",
+            _ => "failed"
+        };
+
+    static string StateClass(ScrySidecarSession session) =>
+        session.State switch
+        {
+            ScrySubscriptionState.Live => "scry-sidecar-state scry-sidecar-state-live",
+            ScrySubscriptionState.Faulted => "scry-sidecar-state scry-sidecar-status-error",
+            ScrySubscriptionState.Reconnecting => "scry-sidecar-state scry-sidecar-state-retry",
+            _ => "scry-sidecar-state"
+        };
+
+    // Answers, and how long since anything at all arrived. The second number is the one that says
+    // whether a live query with nothing to report is idle or hung.
+    static string Counts(ScrySidecarSession session) =>
+        $"{session.Answers} · {Ago(session.LastEvent)}";
+
+    static string Tally(ScrySidecarSession session) =>
+        $"{Plural(session.Answers, "answer")}, {Plural(session.Pings, "ping")}, {session.Unchanged} unchanged · last event {Ago(session.LastEvent)} ago";
+
+    static string Summary(ScrySidecarSession session)
+    {
+        var parts = new List<string>
+        {
+            session.Open ? $"Open {Ago(session.Started)}" : $"Ran {Ago(session.Started)}",
+            Plural(session.Connections.Count + session.DroppedConnections, "connection"),
+            Plural(session.Answers, "answer"),
+            Plural(session.Pings, "ping"),
+            $"{session.Unchanged} unchanged"
+        };
+
+        if (!session.OnTheWire)
+        {
+            parts.Add("reported by the client, which carries it somewhere this sidecar cannot watch");
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    static string Summary(ScrySidecarConnection connection)
+    {
+        var parts = new List<string> {connection.Status?.ToString() ?? "no status"};
+        if (connection.ResumedFrom is { } resumed)
+        {
+            parts.Add($"resumed from {resumed}");
+        }
+
+        parts.Add(
+            connection switch
+            {
+                {Ended: null} => $"open {Ago(connection.Started)}",
+                {Duration: { } held} => $"{connection.Ended} after {Elapsed(held)}",
+                var ended => ended.Ended!
+            });
+
+        return string.Join(" · ", parts);
+    }
+
+    static string Finish(ScrySidecarConnection connection) =>
+        connection.Ended ?? "open";
+
+    static string Size(int bytes) =>
+        bytes < 1024 ? $"{bytes} B" : $"{bytes / 1024d:0.#} KiB";
+
+    static string Ago(DateTimeOffset? at)
+    {
+        if (at is not { } when)
+        {
+            return "—";
+        }
+
+        var since = DateTimeOffset.Now - when;
+        return Elapsed(since < TimeSpan.Zero ? TimeSpan.Zero : since);
+    }
+
+    static string Elapsed(TimeSpan span) =>
+        span.TotalMinutes < 1 ? $"{span.TotalSeconds:0}s" :
+        span.TotalHours < 1 ? $"{(int) span.TotalMinutes}m {span.Seconds}s" :
+        $"{(int) span.TotalHours}h {span.Minutes}m";
+
+    static string Plural(int count, string what) =>
+        count == 1 ? $"1 {what}" : $"{count} {what}s";
+
+    // A live query's failure is the session's; everything else carries its own.
+    static string? Failure(ScrySidecarEntry entry) =>
+        entry.Error ?? entry.Session?.Error;
 
     async Task Copy(string text)
     {
@@ -172,12 +367,12 @@ public partial class ScrySidecar :
         }
     }
 
-    // Why an exchange shows no response body, for the kinds whose body is never read here.
+    // Why an exchange shows no response body, for the two kinds whose body is never read here. A
+    // live query's is read as it flows, so it has a session of its own to show instead.
     static string NotCaptured(ScrySidecarKind kind) =>
         kind switch
         {
             ScrySidecarKind.Stream => "streams are read row by row",
-            ScrySidecarKind.Subscription => "a live query's answers arrive for as long as it is open",
             _ => "attachment bytes are never cached; use Download"
         };
 
@@ -214,7 +409,9 @@ public partial class ScrySidecar :
 
     public async ValueTask DisposeAsync()
     {
+        open = false;
         Store.Changed -= OnChanged;
+        Store.SessionChanged -= OnSessionChanged;
         reference?.Dispose();
         fallbackDownloadClient?.Dispose();
         if (module is not null)

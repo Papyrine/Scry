@@ -1,8 +1,3 @@
-using MessagePipe;
-using Sample.Model;
-using Scry;
-using StackExchange.Redis;
-
 // A Scry server whose nodes tell each other what they wrote through MessagePipe. Run it twice, watch
 // one node with the console client, write to the other — see BackplaneHost for the commands. The
 // transport under MessagePipe here is Redis, so it needs one: docker run -p 6379:6379 redis

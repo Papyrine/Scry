@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Hosting;
 using Sample.Model;
 
 /// <summary>

@@ -10,7 +10,7 @@ public sealed partial class ScryClient
     Func<QueryRequest, ScryCall?, Cancel, IAsyncEnumerable<StreamedRow>>? streamTransport;
     Func<QueryBatchRequest, Cancel, Task<QueryBatchResponse>>? batchTransport;
     Func<AttachmentRequest, Cancel, Task<Stream?>>? attachmentTransport;
-    Func<QueryRequest, ScryCall?, string?, Cancel, IAsyncEnumerable<LiveFrame>>? liveTransport;
+    Func<QueryRequest, ScryCall?, string?, long, Cancel, IAsyncEnumerable<LiveFrame>>? liveTransport;
 
     /// <summary>
     /// Creates a client over a custom transport. <paramref name="streamTransport"/>,
@@ -42,7 +42,7 @@ public sealed partial class ScryClient
 
         liveTransport = subscribeTransport is null
             ? null
-            : (request, call, _, cancel) =>
+            : (request, call, _, _, cancel) =>
             {
                 RefuseHeaders(call);
                 return Adapt(subscribeTransport(request, cancel), cancel);
@@ -83,7 +83,7 @@ public sealed partial class ScryClient
         streamTransport = (request, call, cancel) => StreamAsync(http, $"{endpoint.TrimEnd('/')}/stream", request, call, cancel);
         batchTransport = (request, cancel) => PostBatchAsync(http, $"{endpoint.TrimEnd('/')}/batch", request, cancel);
         attachmentTransport = (request, cancel) => PostAttachmentAsync(http, $"{endpoint.TrimEnd('/')}/attachment", request, cancel);
-        liveTransport = (request, call, lastEventId, cancel) => LiveAsync(http, $"{endpoint.TrimEnd('/')}/{ScryLive.Route}", request, call, lastEventId, cancel);
+        liveTransport = (request, call, lastEventId, session, cancel) => LiveAsync(http, $"{endpoint.TrimEnd('/')}/{ScryLive.Route}", request, call, lastEventId, session, cancel);
     }
 
     // Sends the serializer's own UTF-8 rather than a string: StringContent would encode the body to UTF-8

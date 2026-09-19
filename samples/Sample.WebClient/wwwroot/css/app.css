@@ -29,32 +29,29 @@ thead {
     background: color-mix(in srgb, currentColor 8%, transparent);
 }
 
-.faces {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    gap: 1rem;
-    margin: 0.5rem 0 1.5rem;
-}
-
+/* The photo gallery: figures set inline so they run across the line and wrap at the edge, which is
+   the one place on these pages where a row is what is wanted rather than the normal flow. */
 .face {
-    margin: 0;
+    display: inline-block;
+    vertical-align: top;
     width: 5rem;
+    margin: 0.5rem 1rem 1rem 0;
     text-align: center;
 }
 
 .face img {
     display: block;
+    margin: 0 auto;
     border-radius: 50%;
 }
 
 .face-empty {
+    display: block;
     box-sizing: border-box;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    margin: 0 auto;
     width: 64px;
     height: 64px;
+    line-height: 62px;
     border: 1px dashed color-mix(in srgb, currentColor 35%, transparent);
     border-radius: 50%;
     font-size: 0.7rem;
@@ -71,19 +68,10 @@ thead {
 }
 
 .stale {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
     margin-bottom: 1.5rem;
     padding: 0.6rem 1rem;
     border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
     background: color-mix(in srgb, currentColor 8%, transparent);
-}
-
-.pager {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
 }
 
 .loading {
@@ -93,13 +81,13 @@ thead {
 /* The tabs between the live pages: each is a page of its own, so these are links rather than
    buttons, and the one that is current says so by weight and an underline rather than colour alone. */
 .tabs {
-    display: flex;
-    gap: 1.25rem;
     margin: 0.5rem 0 1rem;
     border-bottom: 1px solid #d0d7de;
 }
 
 .tabs a {
+    display: inline-block;
+    margin-right: 1.25rem;
     padding: 0.35rem 0;
     text-decoration: none;
     border-bottom: 2px solid transparent;
@@ -110,12 +98,11 @@ thead {
     border-bottom-color: currentColor;
 }
 
-/* The transport switch beside the write buttons: a group of its own, laid out in the row. */
+/* The transport switch, on its own line under the write buttons: a fieldset is a block, so it is
+   held to the width of what is in it rather than the width of the page. */
 .transport {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin: 0;
+    width: fit-content;
+    margin: 0 0 1rem;
     padding: 0.15rem 0.6rem;
     border: 1px solid #d0d7de;
     border-radius: 4px;
@@ -124,6 +111,10 @@ thead {
 .transport legend {
     padding: 0 0.3rem;
     font-size: 0.85em;
+}
+
+.transport label {
+    margin-right: 0.5rem;
 }
 
 #blazor-error-ui {

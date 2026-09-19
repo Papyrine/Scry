@@ -13,21 +13,21 @@
     press a button in either: both update, with no reload and no polling from the page.
 </p>
 
-<div class="pager">
+<p>
     <button id="reprice" @onclick="Reprice">Reprice an order</button>
     <button id="reprice-bulk" @onclick="RepriceBulk">Reprice in bulk</button>
-    <fieldset class="transport" id="transport" data-transport="@(Transport.SignalR ? "signalr" : "sse")">
-        <legend>Transport</legend>
-        <label>
-            <input type="radio" name="transport" id="transport-sse" checked="@(!Transport.SignalR)" @onchange="_ => Use(signalR: false)"/>
-            SSE
-        </label>
-        <label>
-            <input type="radio" name="transport" id="transport-signalr" checked="@Transport.SignalR" @onchange="_ => Use(signalR: true)"/>
-            SignalR
-        </label>
-    </fieldset>
-</div>
+</p>
+<fieldset class="transport" id="transport" data-transport="@(Transport.SignalR ? "signalr" : "sse")">
+    <legend>Transport</legend>
+    <label>
+        <input type="radio" name="transport" id="transport-sse" checked="@(!Transport.SignalR)" @onchange="_ => Use(signalR: false)"/>
+        SSE
+    </label>
+    <label>
+        <input type="radio" name="transport" id="transport-signalr" checked="@Transport.SignalR" @onchange="_ => Use(signalR: true)"/>
+        SignalR
+    </label>
+</fieldset>
 @if (error is not null)
 {
     <p class="error" role="alert">@error</p>

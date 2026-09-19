@@ -1,5 +1,4 @@
 using Bunit;
-using MessagePipe;
 using Sample.WebClient.Pages.Live;
 
 /// <summary>
@@ -128,6 +127,10 @@ public class LivePagesTests
         context.Services.AddSingleton<ScryQuery>();
         context.Services.AddSingleton<IHttpClientFactory>(new SingleClientFactory(server.CreateClient()));
         context.Services.AddMessagePipe(_ => _.EnableAutoRegistration = false);
+
+        // The app registers these, and the transport hands the sidecar its clients so that live
+        // queries carried on a hub are listed at all — see /docs/sidecar.md.
+        context.Services.AddScrySidecar();
 
         // Left on HTTP here: the switch needs a socket, which the browser suite has and this does not.
         context.Services.AddScoped<LiveTransport>();

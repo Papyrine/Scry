@@ -1,6 +1,3 @@
-using NServiceBus;
-using Sample.Model;
-
 /// <summary>
 /// What the two NServiceBus samples configure the same way, none of it to do with Scry: the transport,
 /// the serializer, and how a message is recognised. Linked into both so each <c>Program.cs</c> is left

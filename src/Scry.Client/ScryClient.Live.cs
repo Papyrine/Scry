@@ -12,14 +12,45 @@ public sealed partial class ScryClient
     public IScryRetryPolicy Reconnect { get; set; } = BackoffRetryPolicy.Instance;
 
     /// <summary>
+    /// Raised as this client's live queries connect, answer, reconnect and end. For watching rather
+    /// than driving: the debug sidecar renders it, and an app could log it. A handler that throws is
+    /// swallowed — watching a live query must not be able to end it.
+    /// </summary>
+    /// <remarks>
+    /// Raised over every transport, so it is the one place a live query carried on a hub connection
+    /// is observable at all. Raised from the live query's own pump, off the thread that started it.
+    /// </remarks>
+    public event Action<ScryLiveActivity>? LiveActivity;
+
+    // Across clients, not per client: two clients sharing one watcher would otherwise both start at
+    // one and their live queries would be indistinguishable.
+    static long liveSessions;
+
+    internal static long NextLiveSession() =>
+        Interlocked.Increment(ref liveSessions);
+
+    internal void ReportLive(ScryLiveActivity activity)
+    {
+        try
+        {
+            LiveActivity?.Invoke(activity);
+        }
+        catch
+        {
+            // A diagnostic that cannot be delivered has nothing useful to do about it, and the live
+            // query it describes is none the worse for it.
+        }
+    }
+
+    /// <summary>
     /// One connection's worth of a live query: its answers until the connection ends. Asking again
     /// when it does is <see cref="LivePump"/>'s, which is what every consumer goes through.
     /// </summary>
-    internal IAsyncEnumerable<LiveFrame> LiveAsync(QueryRequest request, ScryCall? call, string? lastEventId, Cancel cancel)
+    internal IAsyncEnumerable<LiveFrame> LiveAsync(QueryRequest request, ScryCall? call, string? lastEventId, long session, Cancel cancel)
     {
         if (liveTransport is { } live)
         {
-            return live(request, call, lastEventId, cancel);
+            return live(request, call, lastEventId, session, cancel);
         }
 
         throw new NotSupportedException(
@@ -53,6 +84,7 @@ public sealed partial class ScryClient
         QueryRequest request,
         ScryCall? call,
         string? lastEventId,
+        long session,
         [EnumeratorCancellation] Cancel cancel)
     {
         using var content = JsonBody(ScryJson.SerializeToUtf8(request));
@@ -65,6 +97,10 @@ public sealed partial class ScryClient
         {
             message.Headers.TryAddWithoutValidation(ScryLive.LastEventIdHeader, lastEventId);
         }
+
+        // Beside the request rather than on it, so a handler watching the wire can tell this
+        // connection's reconnects from a second live query asking the same thing.
+        LiveSessionStamp.Write(message, session);
 
         // In a browser the response is otherwise handed over only once it is complete, which for this
         // one is never. Set by name: the typed extension lives in the WebAssembly package, which this

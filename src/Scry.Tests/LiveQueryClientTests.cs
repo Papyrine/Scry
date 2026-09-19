@@ -540,6 +540,73 @@ public class LiveQueryClientTests
             Is.EqualTo([ScrySubscriptionState.Live, ScrySubscriptionState.Reconnecting, ScrySubscriptionState.Live, ScrySubscriptionState.Closed]));
     }
 
+    // Every consumer goes through the same pump, so a watcher on the client sees a live query
+    // whichever way the app chose to take it — and over any transport, which is the only way one
+    // carried on a hub connection is observable at all.
+    [Test]
+    public async Task TheActivityOfALiveQueryIsReported()
+    {
+        var body = new LiveBody();
+        var script = new Script(
+            body.Response(),
+            unchanged + End(reconnect: false));
+        var client = script.Client();
+        List<ScryLiveActivity> reported = [];
+        client.LiveActivity += activity =>
+        {
+            lock (reported)
+            {
+                reported.Add(activity);
+            }
+        };
+
+        var subscription = Names(client).Live().Subscribe(_ => { });
+        await body.Send(Result("a", "Alice"));
+
+        // Cut, rather than ended: no closing event, so it is asked for again.
+        await body.DisposeAsync();
+        await subscription.Completion.WaitAsync(patience);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                reported.Select(_ => _.State),
+                Is.EqualTo(
+                [
+                    ScrySubscriptionState.Connecting,
+                    ScrySubscriptionState.Live,
+                    ScrySubscriptionState.Reconnecting,
+                    ScrySubscriptionState.Live,
+                    ScrySubscriptionState.Closed
+                ]));
+
+            // One live query, however many connections it took.
+            Assert.That(reported.Select(_ => _.Session).Distinct().Count(), Is.EqualTo(1));
+            Assert.That(reported.Select(_ => _.Request).Distinct().Count(), Is.EqualTo(1));
+
+            // The answer rides on the report that delivered it, and only that one.
+            Assert.That(reported.Count(_ => _.Answer is not null), Is.EqualTo(1));
+            Assert.That(reported[^1].Attempt, Is.EqualTo(2));
+        });
+    }
+
+    // Watching a live query must not be able to end it.
+    [Test]
+    public async Task AWatcherThatThrowsDoesNotEndTheLiveQuery()
+    {
+        var script = new Script(Result("a", "Alice") + End(reconnect: false));
+        var client = script.Client();
+        client.LiveActivity += _ => throw new InvalidOperationException("Watching badly.");
+
+        List<string> answers = [];
+        await foreach (var rows in Names(client).Live())
+        {
+            answers.Add(string.Join(',', rows.Select(_ => _.Name)));
+        }
+
+        Assert.That(answers, Is.EqualTo(["Alice"]));
+    }
+
     // A callback made on a UI thread is handed its answers there, and may touch what that thread owns.
     [Test]
     public async Task ACallbackIsDeliveredWhereItWasSubscribed()

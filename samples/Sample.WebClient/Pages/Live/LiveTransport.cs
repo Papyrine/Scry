@@ -1,6 +1,3 @@
-using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.SignalR.Client;
-
 namespace Sample.WebClient.Pages.Live;
 
 /// <summary>
@@ -12,11 +9,25 @@ namespace Sample.WebClient.Pages.Live;
 /// Over HTTP each live query is a request held open, which HTTP/2 shares one connection between and
 /// HTTP/1.1 caps at six per origin. Over the hub every one of them shares the one socket.
 /// </remarks>
-public sealed class LiveTransport(ScryQuery http, NavigationManager navigation) :
+public sealed class LiveTransport :
     IAsyncDisposable
 {
+    ScryQuery http;
+    NavigationManager navigation;
+    ScrySidecarStore sidecar;
     HubConnection? connection;
     ScryQuery? hub;
+
+    public LiveTransport(ScryQuery http, ScryClient client, NavigationManager navigation, ScrySidecarStore sidecar)
+    {
+        this.http = http;
+        this.navigation = navigation;
+        this.sidecar = sidecar;
+
+        // What the client knows about its own live queries, which the wire does not say: whether a
+        // gap between two connections is really being retried. See /docs/sidecar.md.
+        sidecar.Observe(client);
+    }
 
     public bool SignalR { get; private set; }
 
@@ -48,23 +59,30 @@ public sealed class LiveTransport(ScryQuery http, NavigationManager navigation) 
 
     // The connection is the app's to build, start and dispose. A client made over it is an ordinary
     // ScryClient, so the generated entry point wraps it like any other.
-    // begin-snippet: signalRTransport
     async Task Connect()
     {
+        // begin-snippet: signalRTransport
         connection = new HubConnectionBuilder()
             .WithUrl(navigation.ToAbsoluteUri("/api/query-hub"))
             .WithAutomaticReconnect()
             .Build();
         await connection.StartAsync();
-        hub = new(ScrySignalRClient.Create(connection));
-    }
-    // end-snippet
+        var client = ScrySignalRClient.Create(connection);
+        hub = new(client);
+        // end-snippet
 
-    public async ValueTask DisposeAsync()
+        // A hub carries its live queries on one socket that never reaches the sidecar's HTTP
+        // handler, so this client is handed to the panel directly or they would not be listed.
+        sidecar.Observe(client);
+    }
+
+    public ValueTask DisposeAsync()
     {
         if (connection is not null)
         {
-            await connection.DisposeAsync();
+            return connection.DisposeAsync();
         }
+
+        return ValueTask.CompletedTask;
     }
 }

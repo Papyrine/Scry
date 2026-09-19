@@ -58,7 +58,7 @@ services.AddScryClient(
     _ => _.GetRequiredService<IHttpClientFactory>().CreateClient("scry"));
 services.AddScoped<ScryQuery>();
 ```
-<sup><a href='/samples/Sample.WpfClient/App.xaml.cs#L21-L29' title='Snippet source file'>snippet source</a> | <a href='#snippet-desktopClientRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WpfClient/App.xaml.cs#L17-L25' title='Snippet source file'>snippet source</a> | <a href='#snippet-desktopClientRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The factory is reached through a delegate rather than being a dependency of `Scry.Client`, so an app that does not otherwise
@@ -94,7 +94,7 @@ the app runs:
 scope = provider.CreateScope();
 var query = scope.ServiceProvider.GetRequiredService<ScryQuery>();
 ```
-<sup><a href='/samples/Sample.WpfClient/App.xaml.cs#L37-L40' title='Snippet source file'>snippet source</a> | <a href='#snippet-desktopClientScope' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WpfClient/App.xaml.cs#L33-L36' title='Snippet source file'>snippet source</a> | <a href='#snippet-desktopClientScope' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Resolving from the root provider instead would throw once scope validation is on, and a scope per window would lose drift

@@ -109,20 +109,25 @@
     border-bottom: 1px solid var(--scry-sidecar-border);
 }
 
-.scry-sidecar-entries li {
+.scry-sidecar-entries > li {
+    border-bottom: 1px solid var(--scry-sidecar-border);
+}
+
+/* One line of the log. A live query's row has its connections nested under it, so the line itself
+   is inside the list item rather than being it. */
+.scry-sidecar-row {
     display: flex;
     align-items: center;
     gap: 0.5rem;
     padding: 0.35rem 0.75rem;
     cursor: pointer;
-    border-bottom: 1px solid var(--scry-sidecar-border);
 }
 
-.scry-sidecar-entries li:hover {
+.scry-sidecar-row:hover {
     background: var(--scry-sidecar-panel);
 }
 
-.scry-sidecar-entries li.scry-sidecar-selected {
+.scry-sidecar-row.scry-sidecar-selected {
     background: color-mix(in srgb, var(--scry-sidecar-accent) 12%, transparent);
 }
 
@@ -134,6 +139,74 @@
     border: 1px solid var(--scry-sidecar-border);
     border-radius: 3px;
     padding: 0 0.3rem;
+    white-space: nowrap;
+}
+
+.scry-sidecar-kind-live {
+    color: var(--scry-sidecar-accent);
+    border-color: var(--scry-sidecar-accent);
+}
+
+.scry-sidecar-caret {
+    flex: none;
+    width: 0.9rem;
+    margin-left: -0.35rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--scry-sidecar-muted);
+    font-size: 0.55rem;
+    line-height: 1;
+    text-align: center;
+    cursor: pointer;
+}
+
+.scry-sidecar-caret:hover {
+    color: var(--scry-sidecar-accent);
+}
+
+.scry-sidecar-state {
+    font-size: 0.7rem;
+    white-space: nowrap;
+}
+
+.scry-sidecar-state-live {
+    color: var(--scry-sidecar-accent);
+}
+
+.scry-sidecar-state-retry {
+    color: var(--scry-sidecar-muted);
+}
+
+/* A live query's connections, under the row they belong to. */
+.scry-sidecar-connections {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.scry-sidecar-connections > li {
+    padding-left: 1.75rem;
+    font-size: 0.75rem;
+    color: var(--scry-sidecar-muted);
+}
+
+.scry-sidecar-event-id {
+    font-family: ui-monospace, monospace;
+    color: var(--scry-sidecar-muted);
+}
+
+.scry-sidecar-clickable {
+    cursor: pointer;
+}
+
+.scry-sidecar-clickable:hover th,
+.scry-sidecar-clickable:hover td {
+    color: var(--scry-sidecar-accent);
+}
+
+tr.scry-sidecar-selected {
+    background: color-mix(in srgb, var(--scry-sidecar-accent) 12%, transparent);
 }
 
 .scry-sidecar-name {

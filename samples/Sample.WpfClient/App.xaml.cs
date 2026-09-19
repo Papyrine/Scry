@@ -1,7 +1,3 @@
-using System.Net.Http;
-using System.Windows;
-using Microsoft.Extensions.DependencyInjection;
-
 namespace Sample.WpfClient;
 
 public partial class App

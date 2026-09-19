@@ -1,7 +1,3 @@
-using System.Net.Http;
-using System.Reactive.Linq;
-using System.Windows;
-
 namespace Sample.WpfClient;
 
 public partial class MainWindow

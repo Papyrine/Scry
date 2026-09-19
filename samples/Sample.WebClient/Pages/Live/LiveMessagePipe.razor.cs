@@ -23,11 +23,13 @@ public partial class LiveMessagePipe
                 });
     // end-snippet
 
-    protected override async ValueTask Stop()
+    protected override ValueTask Stop()
     {
         if (subscription is not null)
         {
-            await subscription.DisposeAsync();
+            return subscription.DisposeAsync();
         }
+
+        return ValueTask.CompletedTask;
     }
 }

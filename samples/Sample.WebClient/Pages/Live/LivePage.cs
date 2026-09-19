@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.Components;
-
 namespace Sample.WebClient.Pages.Live;
 
 /// <summary>

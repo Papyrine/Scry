@@ -1,7 +1,3 @@
-using Sample.Model;
-using Scry;
-using StackExchange.Redis;
-
 // A Scry server whose nodes tell each other what they wrote over Redis pub/sub. Run it twice, watch
 // one node with the console client, write to the other — see BackplaneHost for the commands. Needs a
 // Redis to talk to: docker run -p 6379:6379 redis

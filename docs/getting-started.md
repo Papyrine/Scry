@@ -209,7 +209,7 @@ builder.Services.AddScryClient(
     _ => _.GetRequiredService<IHttpClientFactory>().CreateClient("scry"));
 builder.Services.AddScoped<ScryQuery>();
 ```
-<sup><a href='/samples/Sample.WebClient/Program.cs#L16-L24' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Program.cs#L14-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddScryClient` registers a `ScryClient` that sends to the given endpoint using the `HttpClient` the delegate resolves — here a **named** one, so Scry's base address, and any handler pipeline it grows, stay separate from every other call the app makes. `ScryQuery` is generated into the `Scry.Generated` namespace.

@@ -1,7 +1,3 @@
-using NServiceBus;
-using Sample.Model;
-using Scry;
-
 /// <summary>
 /// A Scry server that hears, over NServiceBus, what other processes wrote. The write this sample
 /// exists to show is not made here at all: the server sends a command, a worker in another process

@@ -217,8 +217,8 @@ public class UiScreenshotTests :
         await page.WaitForSelectorAsync("[data-testid='faces'][data-fetched='true']");
 
         await page.Keyboard.PressAsync("Alt+KeyQ");
-        await page.WaitForSelectorAsync("[data-testid='sidecar-entries'] li", 10);
-        await page.Locator("[data-testid='sidecar-entries'] li").First.ClickAsync();
+        await page.WaitForSelectorAsync("[data-testid='sidecar-entries'] .scry-sidecar-row", 10);
+        await page.Locator("[data-testid='sidecar-entries'] .scry-sidecar-row").First.ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='sidecar-request']", 10);
 
         // The panel's stylesheet is injected on first open; capture only once it has applied.
@@ -250,6 +250,65 @@ public class UiScreenshotTests :
                     FullPage = true
                 },
                 screenshotOnly: true);
+    }
+
+    // The same panel over a page holding live queries, with one expanded to its connection and that
+    // connection's events — the capture docs/sidecar.md embeds beside the live query section.
+    [Test]
+    public async Task SampleSidecarLive()
+    {
+        var page = await NewSizedPageAsync(docsViewport);
+        await page.GotoAsync($"{BaseUrl}/live");
+        await page.WaitForSelectorAsync("#orders tbody tr");
+
+        await page.Keyboard.PressAsync("Alt+KeyQ");
+        await page.WaitForSelectorAsync("[data-testid='sidecar-session']", 10);
+        await page.Locator("[data-testid='sidecar-expand']").First.ClickAsync();
+        await page.WaitForSelectorAsync("[data-testid='sidecar-connection']", 10);
+        await page.Locator("[data-testid='sidecar-connection']").First.ClickAsync();
+        await page.WaitForSelectorAsync("[data-testid='sidecar-events']", 10);
+
+        await page.WaitForFunctionAsync(
+            "() => Array.from(document.styleSheets).some(_ => _.href && _.href.includes('scry-sidecar'))");
+
+        // How many answers have arrived by now, and how long ago, differ run to run — as do the event
+        // clock times, the test server's port, and the header values. Pin them so the capture is of
+        // the layout.
+        await page.EvaluateAsync(
+            """
+            () => {
+                for (const cell of document.querySelectorAll('[data-testid=sidecar-session-counts]')) {
+                    cell.textContent = '3 · 1s';
+                }
+
+                const url = document.querySelector('[data-testid=sidecar-url]');
+                if (url) {
+                    url.textContent = url.textContent.replace(/\/\/[^/]+\//, '//localhost/');
+                }
+
+                for (const row of document.querySelectorAll('[data-testid=sidecar-events] tr')) {
+                    row.querySelectorAll('td')[2].textContent = '12:04:31';
+                }
+
+                for (const row of document.querySelectorAll('[data-testid=sidecar-response-headers] tr')) {
+                    const key = row.querySelector('th')?.textContent?.toLowerCase();
+                    if (key === 'date' || key === 'etag' || key === 'scry-schema-stamp') {
+                        row.querySelector('td').textContent = '…';
+                    }
+                }
+
+                const summary = document.querySelector('[data-testid=sidecar-connection-summary]');
+                if (summary) {
+                    summary.textContent = summary.textContent.replace(/open .*$/, 'open 4m 12s');
+                }
+            }
+            """);
+
+        // The body rather than the page: capturing a page waits for the network to go idle, which a
+        // page holding a live query open never does. Screenshot only — the markup of this page is
+        // already snapshotted by SampleLive, and what is worth publishing here is the rendering.
+        await Verify(page.Locator("body"))
+            .LocatorScreenshotOptions(new(), screenshotOnly: true);
     }
 
     // The captures the docs embed. readme.md and docs/explorer.md point their <img> straight at these

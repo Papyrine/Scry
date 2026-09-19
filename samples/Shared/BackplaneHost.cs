@@ -1,7 +1,4 @@
-using EfLocalDb;
 using Microsoft.EntityFrameworkCore;
-using Sample.Model;
-using Scry;
 
 /// <summary>
 /// What the backplane sample servers have in common, none of it to do with a backplane: one database

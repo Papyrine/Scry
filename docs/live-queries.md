@@ -255,7 +255,7 @@ protected override ValueTask Stop()
     return ValueTask.CompletedTask;
 }
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Live/LiveReactive.razor.cs#L13-L43' title='Snippet source file'>snippet source</a> | <a href='#snippet-liveReactive' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Live/LiveReactive.razor.cs#L11-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-liveReactive' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Calls to an observer never overlap, at most one of `OnError` and `OnCompleted` is made and nothing follows it, and nothing at all is called once the subscription's `Dispose` has returned. No synchronization context is captured, because saying where to be called is what a reactive pipeline does for itself:
@@ -291,7 +291,7 @@ void OnLiveChanged(object sender, RoutedEventArgs args)
             exception => StatusText.Text = $"The live query ended: {exception.Message}");
 }
 ```
-<sup><a href='/samples/Sample.WpfClient/MainWindow.xaml.cs#L68-L96' title='Snippet source file'>snippet source</a> | <a href='#snippet-wpfLive' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WpfClient/MainWindow.xaml.cs#L64-L92' title='Snippet source file'>snippet source</a> | <a href='#snippet-wpfLive' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 F# needs no package at all. `FSharp.Core` has an `Observable` module of its own over the same interface:
@@ -586,7 +586,7 @@ builder.Services.AddScry<SampleContext>(
         _.UseRedisBackplane();
     });
 ```
-<sup><a href='/samples/Sample.RedisServer/Program.cs#L12-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleRedisBackplane' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.RedisServer/Program.cs#L8-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleRedisBackplane' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: sampleMessagePipeBackplane -->
@@ -606,7 +606,7 @@ builder.Services.AddScry<SampleContext>(
         _.UseMessagePipeBackplane();
     });
 ```
-<sup><a href='/samples/Sample.MessagePipeServer/Program.cs#L13-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleMessagePipeBackplane' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.MessagePipeServer/Program.cs#L8-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleMessagePipeBackplane' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 What travels names entities and never rows. Whoever can write to a backplane can cause live queries to be asked again — which costs what the throttle lets it cost — and nothing else: every answer still comes from running the query through its policies. Delivery may be at most once; a message a node misses costs a live query nothing worse than waiting for its poll.
@@ -648,7 +648,7 @@ var endpoint = NServiceBusEndpoint.Create("Sample.Worker", args);
 endpoint.UseScryChanges();
 builder.Services.AddNServiceBusEndpoint(endpoint);
 ```
-<sup><a href='/samples/Sample.NServiceBusWorker/NServiceBusWorkerHost.cs#L19-L35' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleNServiceBusWorker' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.NServiceBusWorker/NServiceBusWorkerHost.cs#L12-L28' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleNServiceBusWorker' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The handler is an ordinary one. Nothing in it mentions Scry: it saves, and the save is what gets reported.
@@ -672,7 +672,7 @@ public sealed class RepriceOrderHandler(SampleContext data) :
     }
 }
 ```
-<sup><a href='/samples/Sample.NServiceBusWorker/NServiceBusWorkerHost.cs#L54-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleNServiceBusHandler' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.NServiceBusWorker/NServiceBusWorkerHost.cs#L47-L63' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleNServiceBusHandler' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 What each incoming message's handlers saved is published once, after they are done, through that message's own context. So the event leaves with the rest of what the handler sent, and only if the handler's work was kept: with the outbox, after its transaction commits. A handler that throws publishes nothing, and one that is retried publishes once.
@@ -699,7 +699,7 @@ builder.Services.AddScry<SampleContext>(
 var endpoint = NServiceBusEndpoint.Create($"Sample.Web.{Port(args)}", args);
 builder.Services.AddNServiceBusEndpoint(endpoint);
 ```
-<sup><a href='/samples/Sample.NServiceBusServer/NServiceBusServerHost.cs#L18-L35' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleNServiceBusBackplane' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.NServiceBusServer/NServiceBusServerHost.cs#L14-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleNServiceBusBackplane' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 NServiceBus delivers an event to one instance of each logical endpoint, since instances compete for the endpoint's queue. A worker's changes therefore reach every server only where each server is an endpoint of its own, which is why the sample names its endpoint after its port. Scaled-out web nodes that share an endpoint name can leave the fan-out between themselves to `UseDeltaChanges` and use this for the worker's writes. A send-only endpoint receives nothing, so a server that is to hear changes cannot be one.
@@ -742,17 +742,15 @@ public static HubEndpointConventionBuilder MapScryHub<THub>(this IEndpointRouteB
 <!-- snippet: signalRTransport -->
 <a id='snippet-signalRTransport'></a>
 ```cs
-async Task Connect()
-{
-    connection = new HubConnectionBuilder()
-        .WithUrl(navigation.ToAbsoluteUri("/api/query-hub"))
-        .WithAutomaticReconnect()
-        .Build();
-    await connection.StartAsync();
-    hub = new(ScrySignalRClient.Create(connection));
-}
+connection = new HubConnectionBuilder()
+    .WithUrl(navigation.ToAbsoluteUri("/api/query-hub"))
+    .WithAutomaticReconnect()
+    .Build();
+await connection.StartAsync();
+var client = ScrySignalRClient.Create(connection);
+hub = new(client);
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Live/LiveTransport.cs#L51-L61' title='Snippet source file'>snippet source</a> | <a href='#snippet-signalRTransport' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Live/LiveTransport.cs#L64-L72' title='Snippet source file'>snippet source</a> | <a href='#snippet-signalRTransport' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Everything written against a `ScryClient` works unchanged — the terminals, streaming, batching, live queries — and a failure surfaces as the same exception it does over HTTP. Requests and answers cross the hub as strings of the JSON the HTTP endpoints speak, read and written by `ScryJson`: a hub would otherwise bind its arguments with its own serializer, whose options know nothing of what makes the wire format fail closed. `MapScryHub` runs the startup checks `MapScry` runs, so a host that serves queries over a hub alone is held to the same ones.
@@ -780,6 +778,8 @@ A connection that ends is asked for again, and the consumer sees no more than a 
 What is asked again after: a connection that was cut or refused to open, a server that failed or was at its limit, and a stream the server ended on purpose. What ends a live query for good is what asking again would not fix: a rejection, a denial, a client the server calls stale. `ScryClient.Reconnect` is the policy — by default at once, then after a second, doubling to thirty, for as long as it takes. A live query that gave up would be a page that went stale without saying so.
 
 The server ends every stream at `SubscriptionLifetime`, thirty minutes by default, or when the authentication ticket that opened it expires if that is sooner. Authorization is decided once per request, and a live query is one request: ending it is what makes a caller prove who they are again.
+
+Because all of this is meant to be invisible to the consumer, it is also hard to see when it misbehaves. The [debug sidecar](sidecar.md#live-queries) is where to look: it lists a live query as one row across every connection it took to hold it open, and under it every connection and every event — the answers with their identifiers and sizes, the heartbeats, and how each connection finished.
 
 
 ## What it costs, and what bounds it

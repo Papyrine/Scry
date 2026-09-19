@@ -16,21 +16,21 @@
   <p>
     The same live query on each tab, consumed a different way. Open this page in a second window and     press a button in either: both update, with no reload and no polling from the page.
   </p>
-  <div class="pager">
+  <p>
     <button id="reprice">Reprice an order</button>
     <button id="reprice-bulk">Reprice in bulk</button>
-    <fieldset class="transport" id="transport" data-transport="sse">
-      <legend>Transport</legend>
-      <label>
-        <input type="radio" name="transport" id="transport-sse">
-        SSE
-      </label>
-      <label>
-        <input type="radio" name="transport" id="transport-signalr">
-        SignalR
-      </label>
-    </fieldset>
-  </div>
+  </p>
+  <fieldset class="transport" id="transport" data-transport="sse">
+    <legend>Transport</legend>
+    <label>
+      <input type="radio" name="transport" id="transport-sse">
+      SSE
+    </label>
+    <label>
+      <input type="radio" name="transport" id="transport-signalr">
+      SignalR
+    </label>
+  </fieldset>
   <h2>Orders
     <small id="count">3 live</small>
   </h2>

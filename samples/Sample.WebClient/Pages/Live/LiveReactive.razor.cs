@@ -1,5 +1,3 @@
-using System.Reactive.Linq;
-
 namespace Sample.WebClient.Pages.Live;
 
 public partial class LiveReactive

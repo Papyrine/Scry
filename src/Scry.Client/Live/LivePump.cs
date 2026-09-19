@@ -14,6 +14,11 @@
 /// A connection that stops without the server having said it was ending was cut, and is asked for
 /// again exactly as one that failed to open is.
 /// </para>
+/// <para>
+/// Every consumer goes through here — enumerated, handed a callback, or taken as an observable — so
+/// this is also where a live query is reported to <see cref="ScryClient.LiveActivity"/>, over every
+/// transport and for every way of consuming one.
+/// </para>
 /// </remarks>
 static class LivePump
 {
@@ -27,82 +32,135 @@ static class LivePump
         string? lastId = null;
         QueryResponse? last = null;
         var failures = 0;
+        var attempt = 1;
         var quietSince = Stopwatch.GetTimestamp();
-        changed?.Invoke(ScrySubscriptionState.Connecting);
+        var session = ScryClient.NextLiveSession();
 
-        while (true)
+        // How this ended, for the one report that says so. Closed unless an exit says otherwise:
+        // running out, being disposed, and being cancelled are all ordinary endings.
+        var ending = ScrySubscriptionState.Closed;
+        Exception? ended = null;
+
+        changed?.Invoke(ScrySubscriptionState.Connecting);
+        Report(ScrySubscriptionState.Connecting);
+
+        try
         {
-            Exception? failure = null;
-            var reconnect = true;
-            var firstOfConnection = true;
-            var frames = client.LiveAsync(request, call, lastId, cancel).GetAsyncEnumerator(cancel);
-            try
+            while (true)
             {
-                while (true)
+                Exception? failure = null;
+                var reconnect = true;
+                var firstOfConnection = true;
+                var frames = client.LiveAsync(request, call, lastId, session, cancel).GetAsyncEnumerator(cancel);
+                try
                 {
-                    LiveFrame frame;
-                    try
+                    while (true)
                     {
-                        if (!await frames.MoveNextAsync())
+                        LiveFrame frame;
+                        try
                         {
+                            if (!await frames.MoveNextAsync())
+                            {
+                                break;
+                            }
+
+                            frame = frames.Current;
+                        }
+                        catch (Exception exception) when (WorthAskingAgain(exception, cancel))
+                        {
+                            failure = exception;
+                            break;
+                        }
+                        catch (Exception exception)
+                        {
+                            // Not one a later attempt could get past, so it ends the live query
+                            // rather than the connection. Caught only to say so before it leaves.
+                            ending = ScrySubscriptionState.Faulted;
+                            ended = exception;
+                            throw;
+                        }
+
+                        if (frame.Ended)
+                        {
+                            reconnect = frame.Reconnect;
                             break;
                         }
 
-                        frame = frames.Current;
-                    }
-                    catch (Exception exception) when (WorthAskingAgain(exception, cancel))
-                    {
-                        failure = exception;
-                        break;
-                    }
+                        failures = 0;
+                        quietSince = Stopwatch.GetTimestamp();
+                        changed?.Invoke(ScrySubscriptionState.Live);
 
-                    if (frame.Ended)
-                    {
-                        reconnect = frame.Reconnect;
-                        break;
+                        var repeated = firstOfConnection && Repeats(frame, last);
+                        firstOfConnection = false;
+                        if (frame.Response is not { } response ||
+                            repeated)
+                        {
+                            // The answer already held is still the answer. Worth reporting — it is
+                            // how a connection says it is answering again — but not an answer.
+                            Report(ScrySubscriptionState.Live);
+                            continue;
+                        }
+
+                        lastId = frame.Id;
+                        last = response;
+                        Report(ScrySubscriptionState.Live, answer: response);
+                        yield return response;
                     }
+                }
+                finally
+                {
+                    await frames.DisposeAsync();
+                }
 
-                    failures = 0;
-                    quietSince = Stopwatch.GetTimestamp();
-                    changed?.Invoke(ScrySubscriptionState.Live);
+                if (!reconnect)
+                {
+                    yield break;
+                }
 
-                    var repeated = firstOfConnection && Repeats(frame, last);
-                    firstOfConnection = false;
-                    if (frame.Response is not { } response ||
-                        repeated)
-                    {
-                        continue;
-                    }
+                var delay = client.Reconnect.NextDelay(new(failures, Stopwatch.GetElapsedTime(quietSince), failure));
+                if (delay is not { } wait)
+                {
+                    var refused = failure ??
+                                  new ScryWireException("The live query's connection ended, and the retry policy declined to ask again.");
+                    ending = ScrySubscriptionState.Faulted;
+                    ended = refused;
+                    throw refused;
+                }
 
-                    lastId = frame.Id;
-                    last = response;
-                    yield return response;
+                failures++;
+                attempt++;
+                changed?.Invoke(ScrySubscriptionState.Reconnecting);
+                Report(ScrySubscriptionState.Reconnecting, failure: failure);
+                if (wait > TimeSpan.Zero)
+                {
+                    await Task.Delay(wait, cancel);
                 }
             }
-            finally
-            {
-                await frames.DisposeAsync();
-            }
-
-            if (!reconnect)
-            {
-                yield break;
-            }
-
-            var delay = client.Reconnect.NextDelay(new(failures, Stopwatch.GetElapsedTime(quietSince), failure));
-            if (delay is not { } wait)
-            {
-                throw failure ??
-                      new ScryWireException("The live query's connection ended, and the retry policy declined to ask again.");
-            }
-
-            failures++;
-            changed?.Invoke(ScrySubscriptionState.Reconnecting);
-            if (wait > TimeSpan.Zero)
-            {
-                await Task.Delay(wait, cancel);
-            }
         }
+        finally
+        {
+            // A cancelled live query is one the consumer stopped, which is an ordinary ending
+            // however far into the loop the token was noticed.
+            if (cancel.IsCancellationRequested)
+            {
+                ending = ScrySubscriptionState.Closed;
+                ended = null;
+            }
+
+            Report(ending, failure: ended);
+        }
+
+        void Report(ScrySubscriptionState state, QueryResponse? answer = null, Exception? failure = null) =>
+            client.ReportLive(
+                new()
+                {
+                    Session = session,
+                    Request = request,
+                    State = state,
+                    Attempt = attempt,
+                    Answer = answer,
+                    Failure = failure
+                });
     }
 
     // A transport with no names for its answers re-sends the one already held each time it is asked
