@@ -223,6 +223,26 @@ public class AnalyzerTests
         Assert.That(Analyze(queries), Is.Empty);
     }
 
+    // A live query is enumerated the same way, and for the same reason is not a mistake: what is read
+    // is what the Live terminal returned. The terminals are told from anything else by the type that
+    // declares them, so these need no registration of their own — which is what this pins.
+    [Test]
+    public void ALiveQueryIsClean()
+    {
+        const string queries =
+            """
+            await foreach (var orders in Query.Order.Where(_ => _.Amount > 0).Live())
+            {
+            }
+
+            await foreach (var count in Query.Order.Where(_ => _.Amount > 0).LiveCount())
+            {
+            }
+            """;
+
+        Assert.That(Analyze(queries), Is.Empty);
+    }
+
     [Test]
     public Task UnorderedReverse() =>
         Verify(
@@ -632,6 +652,8 @@ public class AnalyzerTests
             {
                 public static Task<List<T>> ToListAsync<T>(this IQueryable<T> source) => null!;
                 public static IAsyncEnumerable<T> ToAsyncEnumerable<T>(this IQueryable<T> source) => null!;
+                public static IAsyncEnumerable<IReadOnlyList<T>> Live<T>(this IQueryable<T> source) => null!;
+                public static IAsyncEnumerable<int> LiveCount<T>(this IQueryable<T> source) => null!;
                 public static Task<T[]> ToArrayAsync<T>(this IQueryable<T> source) => null!;
                 public static Task<T> FirstAsync<T>(this IQueryable<T> source, Expression<Func<T, bool>> predicate) => null!;
                 public static Task<bool> AnyAsync<T>(this IQueryable<T> source) => null!;

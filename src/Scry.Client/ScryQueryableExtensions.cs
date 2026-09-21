@@ -1,7 +1,7 @@
 ﻿namespace Scry;
 
 /// <summary>Async terminal operators that execute a captured Scry query against the server.</summary>
-public static class ScryQueryableExtensions
+public static partial class ScryQueryableExtensions
 {
     /// <summary>Executes the query and returns all rows.</summary>
     public static async Task<List<T>> ToListAsync<T>(this IQueryable<T> source, Cancel cancel = default)

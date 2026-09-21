@@ -33,7 +33,11 @@ public class InitializerProjectionTests
 
         var rows = await client.Source<Employee>("Employee")
             .OrderBy(_ => _.Name)
-            .Select(_ => new EmployeeRow(_.Id) {Name = _.Name, Department = _.Department!.Name})
+            .Select(_ => new EmployeeRow(_.Id)
+            {
+                Name = _.Name,
+                Department = _.Department!.Name
+            })
             .ToListAsync();
 
         string[] names = ["Aaron", "Alice", "Bob", "Carol"];
@@ -80,9 +84,13 @@ public class InitializerProjectionTests
 
         // Legal C# — the positional member is init-only — but two values for one member is a
         // projection no wire member can carry, and a silent choice between them would be worse.
-        var exception = Assert.Throws<NotSupportedException>(() => client.Source<Employee>("Employee")
-            .Select(_ => new EmployeeRow(_.Id) {Id = _.DepartmentId})
-            .ToScryRequest());
+        var exception = Assert.Throws<NotSupportedException>(() =>
+            client.Source<Employee>("Employee")
+                .Select(_ => new EmployeeRow(_.Id)
+                {
+                    Id = _.DepartmentId
+                })
+                .ToScryRequest());
 
         Assert.That(exception!.Message, Does.Contain("projected twice"));
     }

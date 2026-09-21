@@ -18,6 +18,9 @@
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <ProjectReference Include="..\src\Scry.Server\Scry.Server.csproj" />
     <ProjectReference Include="..\src\Scry.Client\Scry.Client.csproj" />
+    <!-- The hub transport, both halves: the same generated queries round-tripped over a hub. -->
+    <ProjectReference Include="..\src\Scry.Server.SignalR\Scry.Server.SignalR.csproj" />
+    <ProjectReference Include="..\src\Scry.Client.SignalR\Scry.Client.SignalR.csproj" />
     <ProjectReference Include="..\samples\Sample.Model\Sample.Model.csproj" />
   </ItemGroup>
 

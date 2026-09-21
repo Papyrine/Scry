@@ -11,6 +11,7 @@ sealed class QueryRecorder(
     string source,
     string? member,
     bool streamed,
+    bool subscribed,
     SensitiveSchema? sensitive,
     ScryOptions options)
 {
@@ -40,6 +41,33 @@ sealed class QueryRecorder(
             HistogramBucketBoundaries = [1, 10, 100, 1_000, 10_000, 100_000]
         });
 
+    static UpDownCounter<long> activeSubscriptions = meter.CreateUpDownCounter<long>(
+        "scry.server.subscriptions.active",
+        unit: "{subscription}",
+        description: "Live queries currently held open.");
+
+    // The one place a failure in the background is visible: neither a probe nor a backplane has a
+    // request to fail, and both are left to fail quietly because what they feed is covered by a poll.
+    static Counter<long> signalFailures = meter.CreateCounter<long>(
+        "scry.server.subscription.signal.failures",
+        unit: "{failure}",
+        description: "Change probes and backplane operations that failed. A live query waits for its poll instead.");
+
+    public static void SubscriptionOpened() =>
+        activeSubscriptions.Add(1);
+
+    public static void SubscriptionClosed() =>
+        activeSubscriptions.Add(-1);
+
+    public static void SignalFailed(string signal, Exception exception) =>
+        signalFailures.Add(
+            1,
+            new TagList
+            {
+                { "scry.signal", signal },
+                { "error.type", exception.GetType().FullName }
+            });
+
     long started = Stopwatch.GetTimestamp();
     Activity? activity = StartActivity(source, member, request, attachment);
     bool completed;
@@ -53,8 +81,9 @@ sealed class QueryRecorder(
         ScryOptions options,
         QueryRequest request,
         IServiceProvider services,
-        bool streamed = false) =>
-        new(request, attachment: null, services, Source(schema, request.Root), member: null, streamed, schema.Sensitive, options);
+        bool streamed = false,
+        bool subscribed = false) =>
+        new(request, attachment: null, services, Source(schema, request.Root), member: null, streamed, subscribed, schema.Sensitive, options);
 
     /// <summary>
     /// The same, for a fetch of one attachment. Recorded through the same path as a query — the
@@ -66,7 +95,7 @@ sealed class QueryRecorder(
         ScryOptions options,
         AttachmentRequest request,
         IServiceProvider services) =>
-        new(request: null, request, services, Source(schema, request.Root), Member(schema, request), streamed: false, sensitive: null, options);
+        new(request: null, request, services, Source(schema, request.Root), Member(schema, request), streamed: false, subscribed: false, sensitive: null, options);
 
     static string Source(Schema schema, string root)
     {
@@ -192,6 +221,15 @@ sealed class QueryRecorder(
             tags.Add("error.type", exception.GetType().FullName);
         }
 
+        // Only where true, so a query asked once is tagged exactly as it always was. A live query's
+        // runs are driven by other people's writes rather than by its caller, which is the reason to
+        // be able to tell them apart on a dashboard.
+        if (subscribed)
+        {
+            tags.Add("scry.subscription", true);
+            activity?.SetTag("scry.subscription", true);
+        }
+
         queryDuration.Record(elapsed.TotalSeconds, tags);
 
         if (outcome == ScryQueryOutcome.Success &&
@@ -258,6 +296,7 @@ sealed class QueryRecorder(
                 Attachment = attachment,
                 Kind = kind,
                 Streamed = streamed,
+                Subscribed = subscribed,
                 Rows = rows,
                 Error = error,
                 StaleClient = staleClient,

@@ -87,10 +87,18 @@ public class TemporalConstantTests
     }
 
     static ConstNode ShiftConstant(Expression<Func<Shift, bool>> predicate) =>
-        ConstantIn(Client().Source<Shift>("Shift", ["Name"]).Where(predicate).ToScryRequest());
+        ConstantIn(
+            Client()
+                .Source<Shift>("Shift", ["Name"])
+                .Where(predicate)
+                .ToScryRequest());
 
     static ConstNode OrderConstant(Expression<Func<Order, bool>> predicate) =>
-        ConstantIn(Client().Source<Order>("Order", ["Region"]).Where(predicate).ToScryRequest());
+        ConstantIn(
+            Client()
+                .Source<Order>("Order", ["Region"])
+                .Where(predicate)
+                .ToScryRequest());
 
     static ConstNode ConstantIn(QueryRequest request) =>
         (ConstNode) ((BinaryNode) ((WhereOp) request.Pipeline[0]).Predicate).Right;

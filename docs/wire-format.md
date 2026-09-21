@@ -812,7 +812,7 @@ A request that was not answered with a result comes back as a `ScryError` instea
 | Field | Meaning |
 | --- | --- |
 | `error` | What was rejected, or the fixed execution-failure message for a `500`. Written for a person to read; bounded at 1024 characters, since a rejection often names the client's own text back to it. |
-| `code` | Which of the endpoint's answers this is — one of `WireFormat`, `Validation`, `StaleClient`, `Forbidden`, `UnsupportedMedia`, `ExecutionFailed`. This is the field a client branches on. Omitted when absent, which is how a body from a proxy rather than from the endpoint reads. |
+| `code` | Which of the endpoint's answers this is — one of `WireFormat`, `Validation`, `StaleClient`, `Forbidden`, `UnsupportedMedia`, `ExecutionFailed`, `SubscriptionLimit`. This is the field a client branches on. Omitted when absent, which is how a body from a proxy rather than from the endpoint reads. |
 | `requiresBody` | Optional, `true` only when the query was refused for arriving as a URL while comparing a `[Sensitive]` member against a constant. A separate axis from `code`: it says what to do next — re-send the same request in a body — and can accompany any rejection code. Omitted when false. |
 
 The codes are deliberately coarse. One says which of the endpoint's own answers this is, never which member or which rule was involved, so a code reveals nothing the status and the fixed message did not already — which is what lets the fixed `500` body carry one at all.
@@ -842,6 +842,50 @@ The rows between the markers are exactly the objects a `list` payload holds, so 
 ```
 
 carrying a validation message, which is the client's own doing, or a generic one — the same rule a non-streamed `500` follows, so nothing internal leaks either way.
+
+
+## Live queries
+
+A request sent to the [`…/subscribe` endpoint](server.md#mapping-the-endpoint) is an ordinary `QueryRequest`, and introduces no query vocabulary: a [live query](live-queries.md) is a query answered more than once. What comes back is `text/event-stream`, each event one of five:
+
+```
+event: result
+id: 3q2-7wEJk1xP…
+data: {"version":1,"kind":"list","payload":[…],"stamp":"WsQ9hxzDNvqFuufg"}
+
+event: ping
+data:
+
+event: end
+data: {"reconnect":true,"reason":"lifetime"}
+```
+
+| Event | `id` | `data` |
+| --- | --- | --- |
+| `result` | A fingerprint of the answer. Opaque: a client sends it back and never reads it. | A [`QueryResponse`](#response), byte for byte what the query endpoint would have answered. |
+| `unchanged` | | Empty. The first answer is the one the request named in `Last-Event-ID`, so it is not sent again. |
+| `ping` | | Empty. Keeps an idle connection open. |
+| `error` | | A [`ScryError`](#error-responses). Closes the stream after a failure. |
+| `end` | | `reconnect`, and an optional `reason` — `lifetime`, `expired` or `shutdown` — that is for a log and not for a branch. Closes a stream that had not failed. |
+
+**Every event carries a `data:` line**, the two with nothing to say included. A reader built on a platform's own parser is never shown an event without one, so a heartbeat written as a bare `event:` line would keep no connection open.
+
+**Exactly one of `error` and `end` closes a stream the server chose to close.** One that stops with neither was cut, and a reader must treat it as it treats a [stream without its closing marker](#streamed-results): as a failure of the transport, to be asked for again. `Last-Event-ID` on that request carries the `id` of the last `result` received.
+
+The first answer is made before the response is committed, so whatever a request can be refused for is still [an ordinary status with an ordinary body](#error-responses). One code is this endpoint's own: `SubscriptionLimit`, under a `503` where the server holds as many live queries as it allows and a `429` where the caller does.
+
+
+### Over a hub
+
+A transport with no status line — [a SignalR hub](live-queries.md#over-signalr-instead-of-http) is the one shipped — has the same four operations under the names in `ScryHubProtocol`: `Query`, `Batch`, `Stream` and `Subscribe`. Each takes the request as the JSON the matching endpoint takes and answers with the JSON it answers with, **as a string**, so that what reads and writes it is [this format's serializer](#serialization) and never the hub's own.
+
+A failure is answered as the [`error` marker](#streamed-results) a stream closes with, which for this purpose carries the `code` a status line would have implied:
+
+```
+{"$scry":"error","error":"Property 'Salary' is not allow-listed on 'Employee'.","code":"Validation"}
+```
+
+It is the whole answer to a `Query` or a `Batch`, and the last item of a `Stream` or a `Subscribe`. `code` is omitted by the `…/stream` endpoint, where the only failure left to report is one the status could no longer say.
 
 
 ## Batched queries
@@ -1087,10 +1131,14 @@ var request = client.Source<Employee>("Employee")
                 _.Name.StartsWith(prefix))
     .OrderBy(_ => _.Name)
     .Take(take)
-    .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
+    .Select(_ =>
+        new EmployeeRow(
+            _.Name,
+            _.Status,
+            _.Manager!.Name))
     .ToScryRequest();
 ```
-<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L32-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-translateWithoutExecuting' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L32-L45' title='Snippet source file'>snippet source</a> | <a href='#snippet-translateWithoutExecuting' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 translates to:

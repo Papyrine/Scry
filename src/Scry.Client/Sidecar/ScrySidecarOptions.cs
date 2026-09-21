@@ -34,8 +34,37 @@ public sealed class ScrySidecarOptions
     /// </summary>
     public string? ExplorerRoute { get; set; } = "/scry";
 
-    /// <summary>Captured entries kept; the oldest is evicted beyond this.</summary>
+    /// <summary>
+    /// Captured entries kept; the oldest is evicted beyond this. A live query still open is never
+    /// the one evicted — its row is the one thing still being written to.
+    /// </summary>
     public int MaxEntries { get; set; } = 100;
+
+    /// <summary>
+    /// How often a live query's row may redraw while it is open, and how often the times it shows
+    /// are brought up to date. A floor on the work, not a wait for quiet: a live query answering
+    /// steadily still redraws at this rate rather than never.
+    /// </summary>
+    public TimeSpan LiveRefresh { get; set; } = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>
+    /// Events kept per connection of a live query, heartbeats included; the oldest is dropped
+    /// beyond this, and the row says how many went.
+    /// </summary>
+    public int MaxSubscriptionEvents { get; set; } = 200;
+
+    /// <summary>
+    /// Answers whose body is kept for display, per connection, most recent first. A connection that
+    /// has been superseded keeps only its last — what an older connection answered is history the
+    /// moment a newer one has answered too.
+    /// </summary>
+    public int MaxRetainedAnswers { get; set; } = 3;
+
+    /// <summary>
+    /// The largest answer whose body is kept. A longer one is listed with its size, and the panel
+    /// says so rather than showing part of it as though it were the whole.
+    /// </summary>
+    public int MaxRetainedAnswerBytes { get; set; } = 16 * 1024;
 
     /// <summary>
     /// The client the attachment download action re-sends with. Defaults to a plain

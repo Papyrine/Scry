@@ -31,22 +31,70 @@
                 <ol class="scry-sidecar-entries" data-testid="sidecar-entries">
                     @foreach (var entry in Store.Entries)
                     {
-                        <li class="@(entry.Id == selectedId ? "scry-sidecar-selected" : null)" @key="entry.Id" @onclick="() => Select(entry.Id)">
-                            <span class="scry-sidecar-kind">@entry.Kind</span>
-                            <span>@entry.Method</span>
-                            <span class="scry-sidecar-name">@Name(entry)</span>
-                            <span class="@(entry.Error is null ? null : "scry-sidecar-status-error")">@(entry.Status?.ToString() ?? "—")</span>
-                            <span class="scry-sidecar-duration">@entry.Duration.TotalMilliseconds.ToString("0") ms</span>
+                        <li @key="entry.Id">
+                            @if (entry.Session is { } session)
+                            {
+                                <div class="scry-sidecar-row @Chosen(entry.Id, attempt: null)"
+                                     data-testid="sidecar-session"
+                                     @onclick="() => Select(entry.Id)">
+                                    <button type="button"
+                                            class="scry-sidecar-caret"
+                                            data-testid="sidecar-expand"
+                                            title="@(Expanded(entry.Id) ? "Hide" : "Show") this live query's connections"
+                                            aria-expanded="@Expanded(entry.Id)"
+                                            @onclick="() => Expand(entry.Id)"
+                                            @onclick:stopPropagation="true">@(Expanded(entry.Id) ? "▼" : "▶")</button>
+                                    <span class="scry-sidecar-kind @(session.Open ? "scry-sidecar-kind-live" : null)">@entry.Kind</span>
+                                    <span>@entry.Method</span>
+                                    <span class="scry-sidecar-name">@Name(entry)</span>
+                                    <span class="@StateClass(session)" data-testid="sidecar-session-state">@Progress(session)</span>
+                                    <span class="scry-sidecar-duration"
+                                          data-testid="sidecar-session-counts"
+                                          title="@Tally(session)">@Counts(session)</span>
+                                </div>
+                                @if (Expanded(entry.Id))
+                                {
+                                    <ol class="scry-sidecar-connections" data-testid="sidecar-connections">
+                                        @foreach (var connection in Newest(session))
+                                        {
+                                            <li @key="connection.Attempt"
+                                                class="scry-sidecar-row @Chosen(entry.Id, connection.Attempt)"
+                                                data-testid="sidecar-connection"
+                                                @onclick="() => Select(entry.Id, connection.Attempt)">
+                                                <span class="scry-sidecar-name">connection @connection.Attempt@(connection.ResumedFrom is null ? null : $" · resumed from {connection.ResumedFrom}")</span>
+                                                <span>@(connection.Status?.ToString() ?? "—")</span>
+                                                <span class="scry-sidecar-duration">@Finish(connection)</span>
+                                            </li>
+                                        }
+                                    </ol>
+                                }
+                            }
+                            else
+                            {
+                                <div class="scry-sidecar-row @Chosen(entry.Id, attempt: null)" @onclick="() => Select(entry.Id)">
+                                    <span class="scry-sidecar-kind">@entry.Kind</span>
+                                    <span>@entry.Method</span>
+                                    <span class="scry-sidecar-name">@Name(entry)</span>
+                                    <span class="@(entry.Error is null ? null : "scry-sidecar-status-error")">@(entry.Status?.ToString() ?? "—")</span>
+                                    <span class="scry-sidecar-duration">@entry.Duration.TotalMilliseconds.ToString("0") ms</span>
+                                </div>
+                            }
                         </li>
                     }
                 </ol>
                 @if (Selected is { } selected)
                 {
                     <div class="scry-sidecar-detail" data-testid="sidecar-detail">
-                        <h3>URL</h3>
-                        <p class="scry-sidecar-url" data-testid="sidecar-url">@selected.Url</p>
+                        @if (selected.Url.Length > 0)
+                        {
+                            <h3>URL</h3>
+                            <p class="scry-sidecar-url" data-testid="sidecar-url">@selected.Url</p>
+                        }
                         <div class="scry-sidecar-actions">
-                            <button type="button" data-testid="sidecar-copy-url" title="Copy the request URL" @onclick="() => Copy(selected.Url)">Copy URL</button>
+                            @if (selected.Url.Length > 0)
+                            {
+                                <button type="button" data-testid="sidecar-copy-url" title="Copy the request URL" @onclick="() => Copy(selected.Url)">Copy URL</button>
+                            }
                             @if (selected.RequestJson is { } requestJson)
                             {
                                 <button type="button" data-testid="sidecar-copy-request" title="Copy the wire request JSON" @onclick="() => Copy(requestJson)">Copy request</button>
@@ -64,56 +112,110 @@
                         {
                             <p class="scry-sidecar-note" data-testid="sidecar-note">@note</p>
                         }
-                        @if (selected.Error is { } error)
+                        @if (Failure(selected) is { } error)
                         {
                             <p class="scry-sidecar-error" data-testid="sidecar-error">@error</p>
                         }
-                        @if (selected.RequestHeaders.Count > 0)
+                        @if (SelectedConnection is { } connection)
                         {
-                            <h3>Request headers</h3>
-                            <table data-testid="sidecar-request-headers">
+                            <h3>Connection @connection.Attempt</h3>
+                            <p class="scry-sidecar-note" data-testid="sidecar-connection-summary">@Summary(connection)</p>
+                            <h3>Events</h3>
+                            <table data-testid="sidecar-events">
                                 <tbody>
-                                @foreach (var header in selected.RequestHeaders)
+                                @foreach (var captured in Listed(connection))
+                                {
+                                    <tr class="@(captured.Json is null ? null : "scry-sidecar-clickable") @(captured == SelectedEvent ? "scry-sidecar-selected" : null)"
+                                        @onclick="() => Show(captured)">
+                                        <th>@captured.Name</th>
+                                        <td class="scry-sidecar-event-id">@captured.EventId</td>
+                                        <td class="scry-sidecar-duration">@Size(captured.Bytes)</td>
+                                        <td class="scry-sidecar-duration">@captured.At.ToString("HH:mm:ss")</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                            @if (connection.Dropped > 0)
+                            {
+                                <p class="scry-sidecar-note">@connection.Dropped earlier @(connection.Dropped == 1 ? "event" : "events") dropped.</p>
+                            }
+                            @if (SelectedEvent?.Json is { } shown)
+                            {
+                                <h3>@SelectedEvent.Name</h3>
+                                <pre data-testid="sidecar-event-data">@shown</pre>
+                            }
+                            <h3>Response headers</h3>
+                            <table data-testid="sidecar-response-headers">
+                                <tbody>
+                                @foreach (var header in connection.ResponseHeaders)
                                 {
                                     <tr><th>@header.Key</th><td>@header.Value</td></tr>
                                 }
                                 </tbody>
                             </table>
                         }
-                        @if (selected.RequestJson is { } request)
+                        else
                         {
-                            <h3>Request</h3>
-                            <pre data-testid="sidecar-request">@request</pre>
-                        }
-                        <h3>Response headers</h3>
-                        <table data-testid="sidecar-response-headers">
-                            <tbody>
-                            @foreach (var header in selected.ResponseHeaders)
+                            @if (selected.Session is { } live)
                             {
-                                <tr><th>@header.Key</th><td>@header.Value</td></tr>
-                            }
-                            </tbody>
-                        </table>
-                        @if (selected.ResponseJson is { } response)
-                        {
-                            <h3>Response</h3>
-                            <pre data-testid="sidecar-response">@response</pre>
-                        }
-                        else if (selected.Kind is ScrySidecarKind.Stream or ScrySidecarKind.Attachment)
-                        {
-                            <p class="scry-sidecar-note">Body not captured — @(selected.Kind == ScrySidecarKind.Stream ? "streams are read row by row" : "attachment bytes are never cached; use Download").</p>
-                        }
-                        @if (selected.BinaryPartSizes is {Count: > 0} parts)
-                        {
-                            <h3>Binary parts</h3>
-                            <table data-testid="sidecar-binary-parts">
-                                <tbody>
-                                @for (var i = 0; i < parts.Count; i++)
+                                <h3>Live query</h3>
+                                <p class="scry-sidecar-note" data-testid="sidecar-session-summary">@Summary(live)</p>
+                                @if (live.LatestAnswer is { } latest)
                                 {
-                                    <tr><th>$bin @i</th><td>@parts[i] bytes</td></tr>
+                                    <h3>Latest answer</h3>
+                                    <pre data-testid="sidecar-latest-answer">@latest</pre>
                                 }
-                                </tbody>
-                            </table>
+                            }
+                            @if (selected.RequestHeaders.Count > 0)
+                            {
+                                <h3>Request headers</h3>
+                                <table data-testid="sidecar-request-headers">
+                                    <tbody>
+                                    @foreach (var header in selected.RequestHeaders)
+                                    {
+                                        <tr><th>@header.Key</th><td>@header.Value</td></tr>
+                                    }
+                                    </tbody>
+                                </table>
+                            }
+                            @if (selected.RequestJson is { } request)
+                            {
+                                <h3>Request</h3>
+                                <pre data-testid="sidecar-request">@request</pre>
+                            }
+                            @if (selected.Session is null)
+                            {
+                                <h3>Response headers</h3>
+                                <table data-testid="sidecar-response-headers">
+                                    <tbody>
+                                    @foreach (var header in selected.ResponseHeaders)
+                                    {
+                                        <tr><th>@header.Key</th><td>@header.Value</td></tr>
+                                    }
+                                    </tbody>
+                                </table>
+                                @if (selected.ResponseJson is { } response)
+                                {
+                                    <h3>Response</h3>
+                                    <pre data-testid="sidecar-response">@response</pre>
+                                }
+                                else if (selected.Kind is ScrySidecarKind.Stream or ScrySidecarKind.Attachment)
+                                {
+                                    <p class="scry-sidecar-note">Body not captured — @NotCaptured(selected.Kind).</p>
+                                }
+                                @if (selected.BinaryPartSizes is {Count: > 0} parts)
+                                {
+                                    <h3>Binary parts</h3>
+                                    <table data-testid="sidecar-binary-parts">
+                                        <tbody>
+                                        @for (var i = 0; i < parts.Count; i++)
+                                        {
+                                            <tr><th>$bin @i</th><td>@parts[i] bytes</td></tr>
+                                        }
+                                        </tbody>
+                                    </table>
+                                }
+                            }
                         }
                     </div>
                 }

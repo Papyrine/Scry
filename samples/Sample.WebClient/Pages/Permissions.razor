@@ -40,10 +40,10 @@ else
 
 <p>Expensive decisions made so far: <strong id="decisions">@decisions</strong></p>
 
-<div class="pager">
+<p>
     <button id="reload" @onclick="Reload">Run the query again</button>
     <button id="revise" disabled="@(orders is null or [])" @onclick="Revise">Revise an order</button>
-</div>
+</p>
 
 <h3>Grants</h3>
 <p>

@@ -307,7 +307,8 @@ public class ClosureReaderTests
     {
         var counting = new Counting();
 
-        var request = Client().Source<Order>("Order", ["Region"])
+        var request = Client()
+            .Source<Order>("Order", ["Region"])
             .Where(_ => counting.Ids.Where(_ => _ > 1).Contains(_.Id))
             .ToScryRequest();
 
@@ -324,7 +325,8 @@ public class ClosureReaderTests
     {
         var counting = new Counting();
 
-        Client().Source<Order>("Order", ["Region"])
+        Client()
+            .Source<Order>("Order", ["Region"])
             .Where(_ => counting.Ids.Contains(_.Id))
             .ToScryRequest();
 
@@ -350,7 +352,8 @@ public class ClosureReaderTests
     {
         int? maybe = 4;
 
-        var request = Client().Source<Order>("Order", ["Region"])
+        var request = Client()
+            .Source<Order>("Order", ["Region"])
             .Where(_ => _.Id == maybe.Value &&
                         // ReSharper disable once ConditionIsAlwaysTrueOrFalse
                         maybe.HasValue)
@@ -370,12 +373,14 @@ public class ClosureReaderTests
         Assert.Multiple(() =>
         {
             Assert.Throws<InvalidTimeZoneException>(
-                () => Client().Source<Order>("Order", ["Region"])
+                () => Client()
+                    .Source<Order>("Order", ["Region"])
                     .Where(_ => _.Region == counting.Throwing())
                     .ToScryRequest());
 
             Assert.Throws<InvalidTimeZoneException>(
-                () => Client().Source<Order>("Order", ["Region"])
+                () => Client()
+                    .Source<Order>("Order", ["Region"])
                     .Where(_ => new[] {"a"}.Select(text => counting.Throwing() + text).Contains(_.Region))
                     .ToScryRequest());
         });

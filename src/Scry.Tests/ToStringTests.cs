@@ -15,7 +15,11 @@ public class ToStringTests
         // begin-snippet: clientToString
         var rows = await client.Source<Order>("Order")
             .Where(_ => _.Region == "South")
-            .Select(_ => new {Quantity = _.Quantity.ToString(), Amount = _.Amount.ToString()})
+            .Select(_ => new
+            {
+                Quantity = _.Quantity.ToString(),
+                Amount = _.Amount.ToString()
+            })
             .ToListAsync();
         // end-snippet
 

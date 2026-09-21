@@ -35,6 +35,9 @@ public class HostLimitTests
                 options.AddPocoSource(_ => Sample.Model.Holiday.Seed());
                 options.AddAttachmentPolicy<Sample.Model.Department, AllowAttachmentPolicy>();
                 options.AddAttachmentPolicy<Sample.Model.Employee, AllowPhotoAttachmentPolicy>();
+
+                // Mapped only where live queries are on, and it reads a body like the rest.
+                options.MaxSubscriptions = 1;
             });
 
         app = builder.Build();
@@ -62,6 +65,7 @@ public class HostLimitTests
     [TestCase("/api/query/stream")]
     [TestCase("/api/query/batch")]
     [TestCase("/api/query/attachment")]
+    [TestCase("/api/query/subscribe")]
     public async Task ABodyPastTheHostLimitIsRefusedByTheHost(string endpoint)
     {
         var body = """{"version":1,"root":"Holiday","pipeline":[{"$type":"count"}]}""" + new string(' ', 4096);

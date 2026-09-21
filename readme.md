@@ -100,7 +100,12 @@ See [docs/security.md](docs/security.md) for the full threat model.
 | [Scry.Client](https://nuget.org/packages/Scry.Client/) | Client-side `IQueryable` provider (no EF dependency). Ships the source generator. |
 | [Scry.Server](https://nuget.org/packages/Scry.Server/) | Server-side validation + execution against EF Core. |
 | [Scry.Server.Explorer](https://nuget.org/packages/Scry.Server.Explorer/) | Opt-in, GraphiQL-style query explorer. |
-| [Scry.Server.Delta](https://nuget.org/packages/Scry.Server.Delta/) | Opt-in `304 Not Modified`, backed by [Delta](https://github.com/SimonCropp/Delta). |
+| [Scry.Server.Delta](https://nuget.org/packages/Scry.Server.Delta/) | Opt-in `304 Not Modified`, and a change probe for live queries, backed by [Delta](https://github.com/SimonCropp/Delta). |
+| [Scry.Server.SignalR](https://nuget.org/packages/Scry.Server.SignalR/) | Opt-in: the query surface over a SignalR hub, so many [live queries](docs/live-queries.md) share one connection. |
+| [Scry.Client.SignalR](https://nuget.org/packages/Scry.Client.SignalR/) | Opt-in: a `ScryClient` over a SignalR hub connection. |
+| [Scry.Server.Redis](https://nuget.org/packages/Scry.Server.Redis/) | Opt-in: carries live-query change notifications between server nodes over Redis pub/sub. |
+| [Scry.Server.MessagePipe](https://nuget.org/packages/Scry.Server.MessagePipe/) | Opt-in: the same over [MessagePipe](https://github.com/Cysharp/MessagePipe)'s distributed pub/sub. |
+| [Scry.Server.NServiceBus](https://nuget.org/packages/Scry.Server.NServiceBus/) | Opt-in: the same over [NServiceBus](https://docs.particular.net/nservicebus/), including what a worker endpoint's handlers save. |
 
 `Scry.SourceGenerator` is packed inside `Scry.Client` rather than published separately.
 
@@ -159,8 +164,7 @@ Register and map on the server:
 <a id='snippet-serverRegistration'></a>
 ```cs
 builder.Services
-    .AddScry<SampleContext>(
-    _ =>
+    .AddScry<SampleContext>(_ =>
     {
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
         // [QueryablePoco] type must be registered here or AddScry throws at startup.
@@ -193,9 +197,18 @@ builder.Services
         // database — so a grant changing outside it would move nothing, and a cache holding
         // the old rows would go on answering with rows the caller has since lost.
         _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
+
+        // Live queries: the /live pages. Off until a server says how many it will hold open,
+        // which is also what maps the route — see /docs/live-queries.md.
+        _.MaxSubscriptions = 100;
+
+        // The interceptor above reports this server's own saves, at once and by entity. This
+        // watches the database's change marker for everything it cannot see: a bulk update,
+        // another node, a script run by hand.
+        _.UseDeltaChanges<SampleContext>();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L31-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L38-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddPocoSource` supplies the rows for a `[QueryablePoco]` type — see [POCO sources](docs/server.md#poco-sources).
@@ -205,7 +218,7 @@ builder.Services
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L85-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L105-L107' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Point the client at the model by path — no reference:
@@ -233,6 +246,68 @@ employees = await Query
 ```
 <sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L48-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
+
+
+## Live queries
+
+Any query can be kept answered. `Live()` in place of `ToListAsync()` — or `LiveCount()`, `LiveAny()`, `LiveFirstOrDefault()` — is answered now, and again whenever its answer changes:
+
+<!-- snippet: liveCallback -->
+<a id='snippet-liveCallback'></a>
+```cs
+protected override void Start()
+{
+    // The LINQ is what it would be for ToListAsync. Live() in its place means the answer keeps
+    // arriving: now, and again whenever the rows it reads change.
+    rows = Query
+        .Order
+        .OrderBy(_ => _.Id)
+        .Select(_ => new OrderRow(_.Id, _.Region, _.Amount))
+        .Live()
+        .Subscribe(
+            answer =>
+            {
+                orders = answer;
+                InvokeAsync(StateHasChanged);
+            },
+            Failed);
+
+    // Any terminal can be live. This one is a second subscription of its own, and the server
+    // sends it a number rather than the rows.
+    counting = Query
+        .Order
+        .LiveCount()
+        .Subscribe(
+            answer =>
+            {
+                count = answer;
+                InvokeAsync(StateHasChanged);
+            },
+            Failed);
+}
+
+// A subscription outlives nothing: leaving the page ends it, and the server is told.
+protected override async ValueTask Stop()
+{
+    if (rows is not null)
+    {
+        await rows.DisposeAsync();
+    }
+
+    if (counting is not null)
+    {
+        await counting.DisposeAsync();
+    }
+}
+```
+<sup><a href='/samples/Sample.WebClient/Pages/Live/LiveCallback.razor.cs#L11-L56' title='Snippet source file'>snippet source</a> | <a href='#snippet-liveCallback' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+It is consumed as a stream (`await foreach`), with a callback, or as a plain `IObservable` for Rx, with no reactive library referenced by Scry. Every answer is the query run again through the allow-list and the row policies, sent only where it differs from the one before, so a change the caller may not see produces no answer. It is off until a server sets `MaxSubscriptions`.
+
+<img src="samples/Sample.Tests/UiScreenshotTests.SampleLive.verified.png" border="1" alt="The sample's live page: a table of orders and a live count, with buttons that write to the server and a switch between the SSE and SignalR transports">
+
+What tells one to run again is an EF `SaveChanges` interceptor, the host, the database's own change marker, and a poll beneath them all. Opt-in packages carry changes between server nodes over Redis, MessagePipe or NServiceBus, and serve the whole query surface over a SignalR hub. See [Live queries](docs/live-queries.md).
 
 
 ## Query explorer
@@ -264,6 +339,7 @@ A Blazor client has a companion: a [debug sidecar](docs/sidecar.md) that opens o
 - [Row policies](docs/policies.md)
 - [Attachments](docs/attachments.md)
 - [Batching](docs/batching.md)
+- [Live queries](docs/live-queries.md)
 - [Observability](docs/observability.md)
 - [Caching and 304](docs/caching.md)
 - [Performance](docs/performance.md)

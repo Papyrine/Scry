@@ -13,9 +13,13 @@ public class GroupedDistinctTests
     [Test]
     public void DistinctOverTheSelectedValuesFolds()
     {
-        var request = Client().Source<Order>("Order")
+        var request = Client()
+            .Source<Order>("Order")
             .GroupBy(_ => _.Region)
-            .Select(_ => new RegionTotal(_.Key, _.Select(x => x.Amount).Distinct().Sum()))
+            .Select(_ =>
+                new RegionTotal(
+                    _.Key,
+                    _.Select(_ => _.Amount).Distinct().Sum()))
             .ToScryRequest();
 
         var aggregate = (AggregateNode) ((NodeValue) ((SelectOp) request.Pipeline[1]).Projection.Members[1].Value).Node;
@@ -27,9 +31,10 @@ public class GroupedDistinctTests
     public void DistinctOverTheRowsIsRefused()
     {
         var exception = Assert.Throws<NotSupportedException>(
-            () => Client().Source<Order>("Order")
+            () => Client()
+                .Source<Order>("Order")
                 .GroupBy(_ => _.Region)
-                .Select(_ => new RegionTotal(_.Key, _.Distinct().Sum(x => x.Amount)))
+                .Select(_ => new RegionTotal(_.Key, _.Distinct().Sum(_ => _.Amount)))
                 .ToScryRequest());
 
         Assert.That(exception!.Message, Does.Contain("Select the value first"));

@@ -18,6 +18,7 @@
 [JsonSerializable(typeof(QueryBatchResponse))]
 [JsonSerializable(typeof(ScryIntrospection))]
 [JsonSerializable(typeof(ScryStreamMarker))]
+[JsonSerializable(typeof(ScryLiveEnd))]
 [JsonSerializable(typeof(ScryError))]
 sealed partial class WireJsonContext :
     JsonSerializerContext;

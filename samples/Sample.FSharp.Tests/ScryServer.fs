@@ -37,20 +37,31 @@ type ScryServer private (app: WebApplication, database: SqlDatabase<SampleContex
                     Task.CompletedTask),
             storage = Storage.FromSuffix<SampleContext> "FSharp")
 
-    static member StartAsync() =
+    /// A suffix gives a fixture that writes a database of its own, so the fixtures that snapshot the
+    /// seed never see what it changed.
+    static member StartAsync(?databaseSuffix: string) =
         task {
-            let! database = sqlInstance.Build()
+            let! database = sqlInstance.Build(databaseSuffix = defaultArg databaseSuffix null)
             let builder = WebApplication.CreateBuilder()
             builder.WebHost.UseTestServer() |> ignore
 
-            builder.Services.AddDbContext<SampleContext>(fun (options: DbContextOptionsBuilder) ->
-                options.UseSqlServer database.ConnectionString |> ignore)
+            // The interceptor reports what this context saves, which is what makes a live query hear
+            // of it. Resolved rather than constructed, so it reports to the place the server listens.
+            builder.Services.AddDbContext<SampleContext>(fun (services: IServiceProvider) (options: DbContextOptionsBuilder) ->
+                options
+                    .UseSqlServer(database.ConnectionString)
+                    .AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>())
+                |> ignore)
             |> ignore
 
             builder.Services.AddScry<SampleContext>(fun options ->
                 options.AddPocoSource(fun _ -> Holiday.Seed())
                 options.AddAttachmentPolicy<Department, HandbookPolicy>()
-                options.AddAttachmentPolicy<Employee, PhotoPolicy>())
+                options.AddAttachmentPolicy<Employee, PhotoPolicy>()
+
+                // Live queries are off until a server says how many it will hold open.
+                options.MaxSubscriptions <- 10
+                options.SubscriptionThrottle <- TimeSpan.Zero)
             |> ignore
 
             let app = builder.Build()
@@ -61,6 +72,20 @@ type ScryServer private (app: WebApplication, database: SqlDatabase<SampleContex
 
     /// The generated entry point over an HTTP client into the hosted server.
     member _.Query = ScryQuery(ScryClient.ForHttp(app.GetTestClient(), "/api/query"))
+
+    /// Renames an employee through the server's own context, as the application would.
+    member _.Rename(name: string, renamed: string) : Task =
+        task {
+            use scope = app.Services.CreateScope()
+            let context = scope.ServiceProvider.GetRequiredService<SampleContext>()
+            // Named explicitly: Scry's terminals and EF's are both in scope here, and they are not the
+            // same method — this one has to run against the database.
+            let! employee =
+                EntityFrameworkQueryableExtensions.FirstAsync(context.Employees, (fun employee -> employee.Name = name))
+            employee.Name <- renamed
+            let! _ = context.SaveChangesAsync()
+            return ()
+        }
 
     interface IAsyncDisposable with
         member _.DisposeAsync() =

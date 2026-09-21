@@ -30,5 +30,14 @@
     <!-- Under central package management the F# SDK drops its implicit FSharp.Core reference, so the
          F# projects reference it by hand and the version lives here like any other. -->
     <PackageVersion Include="FSharp.Core" Version="10.1.401" />
+    <!-- What the live-query samples show Scry working with. Neither is referenced by anything Scry
+         ships: a live query is an IAsyncEnumerable, a callback, or a BCL IObservable, and these are
+         what a consumer who already uses them plugs those into. -->
+    <PackageVersion Include="System.Reactive" Version="7.0.0" />
+    <PackageVersion Include="MessagePipe" Version="1.8.2" />
+    <!-- The transport under Sample.MessagePipeServer. MessagePipe's own, chosen by the host. -->
+    <PackageVersion Include="MessagePipe.Redis" Version="1.8.2" />
+    <!-- work around CVE: MessagePipe.Redis asks for MessagePack 3.1.4, which carries known advisories -->
+    <PackageVersion Include="MessagePack" Version="3.1.9" />
   </ItemGroup>
 </Project>

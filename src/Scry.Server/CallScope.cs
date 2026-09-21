@@ -31,4 +31,11 @@ readonly record struct CallScope(
     /// actually reads rows. Building a query without running it neither needs nor earns the work.
     /// </summary>
     public bool EnsureCachedFreshness { get; init; }
+
+    /// <summary>
+    /// Set when this call is one run of a live query, which wants to know what the query read so it
+    /// can tell which changes are worth running it again for. Null for every other call, which pays
+    /// nothing for the question.
+    /// </summary>
+    public SubscriptionRun? Subscription { get; init; }
 }

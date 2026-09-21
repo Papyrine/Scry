@@ -45,7 +45,7 @@ References the query models project, and through it `Scry.Client`. The model is 
   <ProjectReference Include="..\Sample.QueryModels\Sample.QueryModels.csproj" />
 </ItemGroup>
 ```
-<sup><a href='/samples/Sample.FSharp/Sample.FSharp.fsproj#L17-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpProjectReference' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.FSharp/Sample.FSharp.fsproj#L18-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpProjectReference' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 One F#-specific note: under central package management the F# SDK turns its implicit `FSharp.Core` reference off, so a project in such a tree references it by hand. Without it the assembly builds — the compiler falls back to the SDK's own copy — and then fails to load every type at runtime.
@@ -160,6 +160,46 @@ let activeCountAsync (query: ScryQuery) =
 <sup><a href='/samples/Sample.FSharp/Queries.fs#L68-L79' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpTerminals' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
+A [live query](live-queries.md) hands over the `IObservable<T>` that ships with .NET, which is the one FSharp.Core's `Observable` module is written against. So F# composes one with no reactive package at all:
+
+<!-- snippet: fsharpLiveObservable -->
+<a id='snippet-fsharpLiveObservable'></a>
+```fs
+/// A live query as an observable, composed with FSharp.Core's own Observable module. There is no
+/// reactive package here: Scry hands over the IObservable that ships with .NET, and F# already
+/// knows what to do with one. Each answer is the whole current result.
+let activeNames (query: ScryQuery) : IObservable<string list> =
+    (Queries.activeEmployees query).Live().AsObservable()
+    |> Observable.map (fun rows -> rows |> Seq.map _.Name |> List.ofSeq)
+```
+<sup><a href='/samples/Sample.FSharp/Live.fs#L10-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpLiveObservable' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Read as a stream it is an `IAsyncEnumerable<T>`, which F# has no `for` over inside a `task`, so the enumerator is pulled by hand:
+
+<!-- snippet: fsharpLiveStream -->
+<a id='snippet-fsharpLiveStream'></a>
+```fs
+/// The same live query read as a stream: an IAsyncEnumerable, pulled one answer at a time until
+/// the token is cancelled, which is also what tells the server the subscription is over.
+let watch (query: ScryQuery) (onAnswer: EmployeeRow list -> unit) (cancel: CancellationToken) =
+    task {
+        use answers =
+            (Queries.activeEmployees query).Live().GetAsyncEnumerator cancel
+
+        let mutable more = true
+
+        while more do
+            let! next = answers.MoveNextAsync()
+            more <- next
+
+            if more then
+                onAnswer (List.ofSeq answers.Current)
+    }
+```
+<sup><a href='/samples/Sample.FSharp/Live.fs#L19-L36' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpLiveStream' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
 
 ## What to avoid
 
@@ -192,20 +232,31 @@ type ScryServer private (app: WebApplication, database: SqlDatabase<SampleContex
                     Task.CompletedTask),
             storage = Storage.FromSuffix<SampleContext> "FSharp")
 
-    static member StartAsync() =
+    /// A suffix gives a fixture that writes a database of its own, so the fixtures that snapshot the
+    /// seed never see what it changed.
+    static member StartAsync(?databaseSuffix: string) =
         task {
-            let! database = sqlInstance.Build()
+            let! database = sqlInstance.Build(databaseSuffix = defaultArg databaseSuffix null)
             let builder = WebApplication.CreateBuilder()
             builder.WebHost.UseTestServer() |> ignore
 
-            builder.Services.AddDbContext<SampleContext>(fun (options: DbContextOptionsBuilder) ->
-                options.UseSqlServer database.ConnectionString |> ignore)
+            // The interceptor reports what this context saves, which is what makes a live query hear
+            // of it. Resolved rather than constructed, so it reports to the place the server listens.
+            builder.Services.AddDbContext<SampleContext>(fun (services: IServiceProvider) (options: DbContextOptionsBuilder) ->
+                options
+                    .UseSqlServer(database.ConnectionString)
+                    .AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>())
+                |> ignore)
             |> ignore
 
             builder.Services.AddScry<SampleContext>(fun options ->
                 options.AddPocoSource(fun _ -> Holiday.Seed())
                 options.AddAttachmentPolicy<Department, HandbookPolicy>()
-                options.AddAttachmentPolicy<Employee, PhotoPolicy>())
+                options.AddAttachmentPolicy<Employee, PhotoPolicy>()
+
+                // Live queries are off until a server says how many it will hold open.
+                options.MaxSubscriptions <- 10
+                options.SubscriptionThrottle <- TimeSpan.Zero)
             |> ignore
 
             let app = builder.Build()
@@ -217,6 +268,20 @@ type ScryServer private (app: WebApplication, database: SqlDatabase<SampleContex
     /// The generated entry point over an HTTP client into the hosted server.
     member _.Query = ScryQuery(ScryClient.ForHttp(app.GetTestClient(), "/api/query"))
 
+    /// Renames an employee through the server's own context, as the application would.
+    member _.Rename(name: string, renamed: string) : Task =
+        task {
+            use scope = app.Services.CreateScope()
+            let context = scope.ServiceProvider.GetRequiredService<SampleContext>()
+            // Named explicitly: Scry's terminals and EF's are both in scope here, and they are not the
+            // same method — this one has to run against the database.
+            let! employee =
+                EntityFrameworkQueryableExtensions.FirstAsync(context.Employees, (fun employee -> employee.Name = name))
+            employee.Name <- renamed
+            let! _ = context.SaveChangesAsync()
+            return ()
+        }
+
     interface IAsyncDisposable with
         member _.DisposeAsync() =
             ValueTask(
@@ -226,7 +291,7 @@ type ScryServer private (app: WebApplication, database: SqlDatabase<SampleContex
                 }
                 :> Task)
 ```
-<sup><a href='/samples/Sample.FSharp.Tests/ScryServer.fs#L24-L73' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpServer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.FSharp.Tests/ScryServer.fs#L24-L98' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpServer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Each query is snapshotted twice: the request as it would travel, and the rows the server returns for it.

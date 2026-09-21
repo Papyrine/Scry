@@ -22,7 +22,9 @@ public class SchemaDriftEventTests
         var raised = 0;
         client.SchemaStaleDetected += _ => Interlocked.Increment(ref raised);
 
-        await Task.WhenAll(Enumerable.Range(0, 64).Select(_ => client.Source<NameOnly>("Employee", ["Name"]).CountAsync()));
+        await Task.WhenAll(
+            Enumerable.Range(0, 64)
+                .Select(_ => client.Source<NameOnly>("Employee", ["Name"]).CountAsync()));
 
         Assert.Multiple(() =>
         {

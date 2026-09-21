@@ -16,6 +16,7 @@ Type-safe, serializable LINQ from a client to a server-side EF Core model.
 | [LINQ coverage](linq-coverage.md) | Scry vs the EF Core–translatable surface: what is supported, and why anything left out is left out. |
 | [Paging](paging.md) | The `ToPageAsync` page envelope and limits (offset paging); the keyset-cursor design (slices 2–3, pending). |
 | [Batching](batching.md) | Sending several queries as one request, and what stays per-entry. |
+| [Live queries](live-queries.md) | A query answered again whenever its answer changes: as a stream, a callback or an observable; what reports a change; backplanes, SignalR, and the limits. |
 | [Server](server.md) | `AddScry`, `MapScry`, `ScryOptions`, limits, POCO sources, hosting without HTTP, error handling. |
 | [Row policies](policies.md) | `IReturnablePolicy<T>` for tenant scoping, soft delete, and row-level security. |
 | [Attachments](attachments.md) | `[Attachment]`: a binary member fetched on demand by row key, not carried by the query. |
@@ -67,7 +68,12 @@ Sample.Model (EF Core + [Queryable])
 | [Scry.Client](https://nuget.org/packages/Scry.Client/) | Client-side `IQueryable` provider (no EF dependency). Ships the source generator. |
 | [Scry.Server](https://nuget.org/packages/Scry.Server/) | Server-side validation + execution against EF Core. |
 | [Scry.Server.Explorer](https://nuget.org/packages/Scry.Server.Explorer/) | Opt-in query explorer UI. |
-| [Scry.Server.Delta](https://nuget.org/packages/Scry.Server.Delta/) | Opt-in `304 Not Modified`, using Delta for the database's change marker. |
+| [Scry.Server.Delta](https://nuget.org/packages/Scry.Server.Delta/) | Opt-in `304 Not Modified`, and a change probe for live queries, using Delta for the database's change marker. |
+| [Scry.Server.SignalR](https://nuget.org/packages/Scry.Server.SignalR/) | Opt-in: the query surface over a SignalR hub, so many live queries share one connection. |
+| [Scry.Client.SignalR](https://nuget.org/packages/Scry.Client.SignalR/) | Opt-in: a `ScryClient` over a SignalR hub connection. |
+| [Scry.Server.Redis](https://nuget.org/packages/Scry.Server.Redis/) | Opt-in: carries live-query change notifications between server nodes over Redis pub/sub. |
+| [Scry.Server.MessagePipe](https://nuget.org/packages/Scry.Server.MessagePipe/) | Opt-in: the same over MessagePipe's distributed pub/sub, whichever transport backs it. |
+| [Scry.Server.NServiceBus](https://nuget.org/packages/Scry.Server.NServiceBus/) | Opt-in: the same over NServiceBus, including what a worker endpoint's handlers save. |
 
 `Scry.SourceGenerator` is not published on its own — it is packed inside `Scry.Client` as an analyzer, so referencing `Scry.Client` is all a client project needs.
 
@@ -75,7 +81,7 @@ Every package puts its public types in the single `Scry` namespace, so one `usin
 
 ## Requirements
 
-- .NET 10 (`net10.0`) for `Scry.Wire`, `Scry.Client`, `Scry.Server`, `Scry.Server.Explorer`, and `Scry.Server.Delta`.
+- .NET 10 (`net10.0`) for `Scry.Wire`, `Scry.Client`, `Scry.Server`, `Scry.Server.Explorer`, `Scry.Server.Delta`, and the SignalR and backplane packages.
 - `Scry.Annotations` targets `netstandard2.0`, so any model project can reference it.
 - EF Core on the server. The client has no EF dependency, which keeps it small under trimmed Blazor WebAssembly and light in a desktop or console app.
 

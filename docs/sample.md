@@ -14,6 +14,8 @@
 | `Sample.QueryModels` | A C# class library holding the generator's output for the sample model, for clients in other languages. |
 | `Sample.FSharp` | An F# client writing queries through `Sample.QueryModels`. See [F#](fsharp.md). |
 | `Sample.FSharp.Tests` | The F# queries run through the server, hosted in-process, with the requests and rows snapshotted. |
+| `Sample.RedisServer`, `Sample.MessagePipeServer` | A minimal server each, for running twice: a [backplane](#live-queries-across-more-than-one-process) carrying changes from one node to the other. |
+| `Sample.NServiceBusServer`, `Sample.NServiceBusWorker` | The same over NServiceBus, plus a worker whose handler writes from another process. |
 
 The three desktop and console clients are there to show that the client half is not tied to a browser.
 [Client hosts](clients.md) covers what each host needs and where they differ.
@@ -203,8 +205,7 @@ protected override void OnModelCreating(ModelBuilder builder)
 <a id='snippet-serverRegistration'></a>
 ```cs
 builder.Services
-    .AddScry<SampleContext>(
-    _ =>
+    .AddScry<SampleContext>(_ =>
     {
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
         // [QueryablePoco] type must be registered here or AddScry throws at startup.
@@ -237,9 +238,18 @@ builder.Services
         // database — so a grant changing outside it would move nothing, and a cache holding
         // the old rows would go on answering with rows the caller has since lost.
         _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
+
+        // Live queries: the /live pages. Off until a server says how many it will hold open,
+        // which is also what maps the route — see /docs/live-queries.md.
+        _.MaxSubscriptions = 100;
+
+        // The interceptor above reports this server's own saves, at once and by entity. This
+        // watches the database's change marker for everything it cannot see: a bulk update,
+        // another node, a script run by hand.
+        _.UseDeltaChanges<SampleContext>();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L31-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L38-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Holiday` has no table, so its data is registered explicitly — see [POCO sources](server.md#poco-sources). `MaxPageSize` is lowered from the default 1000 to 200.
@@ -249,22 +259,21 @@ builder.Services
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L85-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L105-L107' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: mapExplorer -->
 <a id='snippet-mapExplorer'></a>
 ```cs
-app.MapScryExplorer(
-    _ =>
-    {
-        _.Route = "/scry";
-        // This sample always exposes the explorer. The default guard is Development-only — in a real
-        // app, run in Development or set EnableGuard to your own check (e.g. an admin authorization).
-        _.EnableGuard = _ => true;
-    });
+app.MapScryExplorer(_ =>
+{
+    _.Route = "/scry";
+    // This sample always exposes the explorer. The default guard is Development-only — in a real
+    // app, run in Development or set EnableGuard to your own check (e.g. an admin authorization).
+    _.EnableGuard = _ => true;
+});
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L127-L136' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L195-L203' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The sample always exposes the explorer so it can be browsed without setting an environment. A real app should leave the default Development-only guard in place, or replace it with an authorization check — see [Query explorer](explorer.md).
@@ -310,7 +319,7 @@ The client half — re-asking with `If-None-Match` and replaying what the 304 st
   </GetFileHash>
 </Target>
 ```
-<sup><a href='/samples/Sample.WebClient/Sample.WebClient.csproj#L24-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGeneratorWiring' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Sample.WebClient.csproj#L29-L51' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGeneratorWiring' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Because the sample uses project references rather than the NuGet package, the generator wiring that `Scry.Client`'s `buildTransitive` props would normally supply is written out explicitly. See [Source generator](source-generator.md).
@@ -520,22 +529,24 @@ The second and third are the two halves worth understanding. Nothing is called f
 // A row changed. Nobody tells the cache anything here: the next query sees a revision past the
 // watermark this scope was decided up to, and decides that one row on the spot. An insert by
 // any writer at all is correct on its first read for the same reason.
-app.MapPost("/api/orders/{id:int}/touch", async (int id, SampleContext data) =>
-{
-    var order = await data.Orders.FindAsync(id);
-    if (order is null)
+app.MapPost(
+    "/api/orders/{id:int}/touch",
+    async (int id, SampleContext data) =>
     {
-        return Results.NotFound();
-    }
+        var order = await data.Orders.FindAsync(id);
+        if (order is null)
+        {
+            return Results.NotFound();
+        }
 
-    // Named explicitly: Scry's async terminals and EF's are both in scope here, and they are
-    // not the same method — this one has to run against the database.
-    order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
-    await data.SaveChangesAsync();
-    return Results.NoContent();
-});
+        // Named explicitly: Scry's async terminals and EF's are both in scope here, and they are
+        // not the same method — this one has to run against the database.
+        order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
+        await data.SaveChangesAsync();
+        return Results.NoContent();
+    });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L108-L126' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L135-L155' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The third has to be, or the change never reaches a query at all:
@@ -549,13 +560,13 @@ The third has to be, or the change never reaches a query at all:
 app.MapPost(
     "/api/grants/{region}",
     (string region, bool allowed, RegionGrants grants, ScryPolicyCache cache) =>
-{
-    grants.Set("sample", region, allowed);
-    cache.InvalidateScope<Order>("sample");
-    return Results.NoContent();
-});
+    {
+        grants.Set("sample", region, allowed);
+        cache.InvalidateScope<Order>("sample");
+        return Results.NoContent();
+    });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L94-L106' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L121-L133' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Order.Revision` is `[QueryIgnore]`d — a version column is server machinery, not query surface, and clients never see it. `Sample.Tests\CachedPolicyPageTests.cs` drives the page and asserts those three counts, so the table above is checked rather than claimed.
@@ -569,6 +580,55 @@ _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>
 ```
 
 `ConditionalQueryTests.RevokingAGrantInvalidatesTheEtagWithoutAWrite` pins it, and fails without that version. The page additionally asks for its own rows with `Cache-Control: no-cache`, since a 304 is the server *not* deciding anything and the counter would never move.
+
+
+## Live queries
+
+The **Live** link opens four pages over one query — open orders, and a count of them — each consuming a [live query](live-queries.md) in a different shape: a callback, an `await foreach`, an `IObservable<T>` under System.Reactive, and one subscription shared by two components through MessagePipe. None of those libraries is referenced by `Scry.Client`; the sample references them.
+
+<img src="/samples/Sample.Tests/UiScreenshotTests.SampleLive.verified.png" alt="The sample's live page: open orders, a count, the transport toggle and the two reprice buttons">
+
+Open a page in two tabs and press a button in one. Both change, and neither reloads.
+
+| Control | What it shows |
+| --- | --- |
+| **Reprice an order** | A `SaveChanges`, reported by `ScryChangeInterceptor` with nothing written for it. |
+| **Reprice in bulk** | An `ExecuteUpdate`, which no interceptor sees, followed by the `ScryChanges.Notify<Order>()` that says so. |
+| **SSE / SignalR** | The same pages over [a hub](live-queries.md#over-signalr-instead-of-http). The transport is the `ScryClient`'s, so no page changes. |
+| The region grants on the **Permissions** page | A [policy-cache invalidation](#a-policy-too-expensive-to-run-per-row): rows appear and leave with no write to them at all. |
+
+The server also sets `UseDeltaChanges`, so a write made by anything else — SQL Server Management Studio, say — arrives too, within a second.
+
+The other clients have the same query behind a **Live** checkbox (WPF, Windows Forms) or an argument:
+
+```bash
+dotnet run --project samples/Sample.ConsoleClient -- --live
+```
+
+
+### Live queries across more than one process
+
+A backplane is about several processes on one database, which `Sample.WebServer` cannot be run as: it builds a database of its own per launch. So each backplane has a minimal server whose `Program.cs` holds the registration and little else. The first one started builds the database and prints the command that starts the second against it.
+
+NServiceBus needs nothing installed, since the sample runs on the learning transport:
+
+```bash
+dotnet run --project samples/Sample.NServiceBusServer -- --urls http://localhost:5101
+```
+
+Start the worker with the command that prints, watch the server from the console client, and ask for a write the worker will make:
+
+```bash
+dotnet run --project samples/Sample.ConsoleClient -- --live --server http://localhost:5101
+```
+
+```bash
+curl -X POST http://localhost:5101/api/orders/1/reprice-via-worker
+```
+
+The console reprints, for a row written by a process that hosts no Scry endpoint. `NServiceBusSampleTests` runs the same exchange in-process.
+
+`Sample.RedisServer` and `Sample.MessagePipeServer` want a Redis on `localhost:6379`. Run one on `:5101`, a second on `:5102` with the printed command, watch the first and `POST /api/orders/1/reprice` to the second. They have the poll turned off, so what arrives can only have come over the backplane; a deployment leaves it on.
 
 
 ## What the traffic looks like
@@ -637,5 +697,5 @@ public async Task DisallowedPropertyRejectedWith400()
     Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L372-L399' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L374-L401' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
