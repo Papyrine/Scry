@@ -4,7 +4,7 @@
 <PageTitle>Scry Sample</PageTitle>
 
 <h1>Scry Sample</h1>
-<p><a href="/scry">Explorer</a> · <a href="/paging">Paging</a> · <a href="/keyset">Keyset</a> · <a href="/permissions">Cached policy</a></p>
+<p><a href="/scry">Explorer</a> · <a href="/paging">Paging</a> · <a href="/keyset">Keyset</a> · <a href="/permissions">Cached policy</a> · <a href="/live">Live</a> · <a href="/commands">Commands</a></p>
 <p>
     These tables are produced by writing ordinary LINQ in the browser. Scry serializes the query,
     sends it to the server, executes it against EF Core, and returns only the requested shape.
@@ -42,7 +42,7 @@ else
             <tr>
                 <td>@row.Name</td>
                 <td>@row.Status</td>
-                <td>@(row.Manager ?? "—")</td>
+                <td>@OrDash(row.Manager)</td>
                 <td>@row.Department</td>
             </tr>
         }
@@ -63,17 +63,17 @@ else
 }
 else
 {
-    <div class="faces" data-testid="faces" data-fetched="@(facesFetched ? "true" : "false")">
+    <div class="faces" data-testid="faces" data-fetched="@FacesFetchedText">
         @foreach (var photo in photos)
         {
             <figure class="face">
-                @if (faces.TryGetValue(photo.Id, out var face))
+                @if (Face(photo) is { } face)
                 {
                     <img src="@face" alt="@photo.Name" width="64" height="64" data-testid="face" />
                 }
                 else
                 {
-                    <div class="face-empty" data-testid="face-empty">@(facesFetched ? "no photo" : "…")</div>
+                    <div class="face-empty" data-testid="face-empty">@EmptyFace</div>
                 }
                 <figcaption>@photo.Name</figcaption>
             </figure>
@@ -115,7 +115,7 @@ else
         <tbody>
         @foreach (var row in fullTimers)
         {
-            <tr><td>@row.Name</td><td>@(row.Manager ?? "—")</td><td>@row.Department</td></tr>
+            <tr><td>@row.Name</td><td>@OrDash(row.Manager)</td><td>@row.Department</td></tr>
         }
         </tbody>
     </table>

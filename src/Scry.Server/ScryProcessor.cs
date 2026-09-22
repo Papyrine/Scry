@@ -5,18 +5,22 @@
 /// policies, and shaping. This is the programmatic entry point used by the HTTP endpoint and is also
 /// usable directly (other transports, tests).
 /// </summary>
-public sealed class ScryProcessor
+public sealed partial class ScryProcessor
 {
     QueryExecutor executor;
     Schema schema;
     ScryOptions options;
+    SubscriptionHub subscriptions;
 
     internal ScryProcessor(Schema schema, ScryOptions options)
     {
         this.schema = schema;
         this.options = options;
         executor = new(schema, options);
-        PolicyCache = new(schema.CachedPolicies);
+        Changes = new();
+        PolicyCache = new(schema.CachedPolicies, Changes);
+        subscriptions = new(options, Changes);
+        InitializeCommands();
     }
 
     /// <summary>
@@ -41,6 +45,13 @@ public sealed class ScryProcessor
     /// <c>AddScry</c>, which is how a host reaches it without holding the processor.
     /// </summary>
     public ScryPolicyCache PolicyCache { get; }
+
+    /// <summary>
+    /// Where a host reports that data changed, so the live queries reading it are asked again. Also
+    /// registered as a singleton by <c>AddScry</c>, which is how a host reaches it without holding the
+    /// processor.
+    /// </summary>
+    public ScryChanges Changes { get; }
 
     /// <summary>
     /// Confirms the model's annotations match its live EF mapping (e.g. a <c>[Queryable]</c> type is
@@ -108,6 +119,16 @@ public sealed class ScryProcessor
         {
             EnsureResolvable(services, registration.Policy, "Cached row policy", registration.Entity.Name);
         }
+
+        // Checked whether or not commands are served: a capability asks its command's policy on every
+        // query that reads it.
+        foreach (var command in schema.Commands)
+        {
+            if (command.Policy is { } policy)
+            {
+                EnsureResolvable(services, policy, "Command policy", command.Name);
+            }
+        }
     }
 
     static void EnsureResolvable(IServiceProvider services, Type policy, string kind, string source)
@@ -129,6 +150,44 @@ public sealed class ScryProcessor
     /// </summary>
     public void ProbePoliciedNavigations(DbContext data, IServiceProvider services) =>
         executor.ProbeNavigationPolicies(data, services);
+
+    /// <summary>
+    /// Everything a host has to establish before it serves a query, in one call: the annotations match
+    /// the live model, every source is mapped, every policy can be constructed and composes where it
+    /// is applied. Throws a directed error for the first that does not hold.
+    /// </summary>
+    /// <param name="services">
+    /// The host's root services. A scope is made from them for the checks that need a context, and
+    /// they are where a change backplane comes from.
+    /// </param>
+    /// <remarks>
+    /// What <c>MapScry</c> runs at startup, and what any other way of serving the same queries has to
+    /// run too — a hub, a gRPC service. They are the difference between a misconfiguration that fails
+    /// the deployment and one that fails a caller, and between a policy that was proved to apply and
+    /// one that was assumed to. In one method so that two transports cannot come to check different
+    /// things.
+    /// </remarks>
+    public void EnsureReady(IServiceProvider services)
+    {
+        using var scope = services.CreateScope();
+        var db = (DbContext)scope.ServiceProvider.GetRequiredService(options.ContextType);
+        ValidateAgainstModel(db);
+        EnsureSourcesMapped(db);
+        EnsureCommandTargetsMapped(db);
+        EnsurePoliciesResolvable(scope.ServiceProvider);
+        EnsureCommandsDispatchable(scope.ServiceProvider);
+        if (options.ProbePoliciedNavigations)
+        {
+            ProbePoliciedNavigations(db, scope.ServiceProvider);
+            ProbeCommandPolicies(db, scope.ServiceProvider);
+        }
+
+        // The model is what says which root a reported type's rows are read through, and the root
+        // provider is where a backplane comes from. Both are in hand here and neither is later: a
+        // host may report a change before anything has saved through the interceptor.
+        Changes.Attach(db.Model);
+        Changes.Attach(services);
+    }
 
     /// <summary>Builds a processor from configuration (e.g. for tests or non-DI hosting).</summary>
     public static ScryProcessor Create<TContext>(Action<ScryOptions> configure)
@@ -405,17 +464,19 @@ public sealed class ScryProcessor
         ResponseSpill? spill = null,
         BinaryPartCollector? binary = null,
         Cancel cancel = default,
-        bool fromUrl = false)
+        bool fromUrl = false,
+        SubscriptionRun? subscription = null)
     {
         var drifted = request.Stamp is { } requestStamp &&
                       requestStamp != schema.Stamp;
-        var recorder = QueryRecorder.Start(schema, options, request, services);
+        var recorder = QueryRecorder.Start(schema, options, request, services, subscribed: subscription is not null);
         try
         {
             ApplySensitivity(request, responseHeaders, fromUrl);
             var scope = new CallScope(services, requestHeaders, responseHeaders)
             {
-                Binary = binary
+                Binary = binary,
+                Subscription = subscription
             };
 
             // The alias table is carried on the envelope only for a drifted client; that rare envelope keeps

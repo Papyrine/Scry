@@ -45,13 +45,3 @@
         command palette, and multi-cursor, folding and comment toggling as in VS Code.
     </p>
 </DialogShell>
-
-@code
-{
-    /// <summary>Whether this server offers the SQL preview, which decides if its shortcut is listed.</summary>
-    [Parameter]
-    public bool SqlPreview { get; set; }
-
-    [Parameter]
-    public EventCallback OnClose { get; set; }
-}

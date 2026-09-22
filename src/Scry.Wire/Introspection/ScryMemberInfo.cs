@@ -65,4 +65,17 @@ public sealed record ScryMemberInfo(
     /// </remarks>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsSensitive { get; init; }
+
+    /// <summary>
+    /// True for a capability: the <c>bool</c> a targeted command adds to its target, saying row by row
+    /// whether the caller may send <see cref="Command"/> against that row. Queried like any other
+    /// scalar, and computed by the server from the command's policy.
+    /// </summary>
+    /// <remarks>Written only when true, so a model with no commands describes itself as it did before them.</remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsCapability { get; init; }
+
+    /// <summary>The command a capability answers for. Null on every other member.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Command { get; init; }
 }

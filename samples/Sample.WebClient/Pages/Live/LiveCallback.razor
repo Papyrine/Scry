@@ -1,0 +1,37 @@
+@page "/live"
+@inherits LivePage
+
+<PageTitle>Scry Sample — Live query</PageTitle>
+
+<h1>Live query</h1>
+<LiveChrome Active="callback" />
+
+<h2>Orders <small id="count">@CountText</small></h2>
+<p>
+    <code>Subscribe(callback)</code>: the simplest way to consume one. The callback is handed the whole
+    current result each time it changes, and the handle it returns is disposed with the page.
+</p>
+
+@if (error is not null)
+{
+    <p class="error" role="alert">@error</p>
+}
+
+@if (orders is null)
+{
+    <p class="loading">Loading…</p>
+}
+else
+{
+    <table id="orders">
+        <thead>
+            <tr><th>Id</th><th>Region</th><th>Amount</th></tr>
+        </thead>
+        <tbody>
+        @foreach (var order in orders)
+        {
+            <tr><td>@order.Id</td><td>@order.Region</td><td>@order.Amount</td></tr>
+        }
+        </tbody>
+    </table>
+}

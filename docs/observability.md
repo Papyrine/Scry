@@ -14,7 +14,7 @@ builder.Services.AddOpenTelemetry()
     .WithTracing(_ => _.AddSource(ScryInstrumentation.ActivitySourceName))
     .WithMetrics(_ => _.AddMeter(ScryInstrumentation.MeterName));
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L74-L78' title='Snippet source file'>snippet source</a> | <a href='#snippet-openTelemetry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L105-L109' title='Snippet source file'>snippet source</a> | <a href='#snippet-openTelemetry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Nothing in Scry depends on OpenTelemetry — the traces are a plain `ActivitySource` and the metrics a plain `Meter`, so any `ActivityListener`/`MeterListener`-based collector works the same way.
@@ -31,6 +31,7 @@ One activity per query, named `scry.query {source}`, spanning validation through
 | `scry.result_kind` | `list`, `scalar`, `single`, `page`, or `stream`; absent when the query never produced a result. |
 | `scry.rows` | Rows delivered, where rows are the result. |
 | `scry.stale_client` | `true` when a rejection was attributed to a stale client ([schema versioning](schema-versioning.md)). |
+| `scry.subscription` | `true` on a run made for a [live query](live-queries.md); absent otherwise. |
 | `error.type` | The exception type, on any non-success. |
 
 A rejection or failure additionally sets the activity's status to error, carrying the same message the outcome does.
@@ -61,6 +62,33 @@ Every query records a duration, whatever its outcome, so query counts come off t
 A `rejected` rate that deployments do not explain is the signal worth alerting on. A generated client cannot produce an invalid request, so rejections are either stale clients — benign, marked by `scry.stale_client` and a `staleClient` audit entry, expected to spike right after a model change ships — or requests written by hand, which is probing. `malformed` is the same signal one layer earlier.
 
 A batch refused whole — more entries than `MaxBatchSize`, or a wire version the server does not speak — ran no entry, so it records one `rejected` duration of its own under the source `(batch)`, and its `scry.batch` span is marked as an entry's would have been.
+
+
+### Live queries
+
+A [live query](live-queries.md) is recorded once per run, not once per connection: each run is a query, with an activity, a duration, a row count and an [audit entry](#the-audit-hook) of its own, and a run that found nothing new to send is recorded like any other. Those runs carry `scry.subscription` = `true` on the duration histogram and the activity, which is what separates the load callers asked for from the load other callers' writes caused. After the first, a run has no request of its own to nest under, so its activity parents onto the long-lived one that opened the connection.
+
+Two instruments are the feature's own:
+
+| Instrument | Type | Unit | Tags |
+| --- | --- | --- | --- |
+| `scry.server.subscriptions.active` | up-down counter | `{subscription}` | |
+| `scry.server.subscription.signal.failures` | counter | `{failure}` | `scry.signal` (`probe` or `backplane`), `error.type` |
+
+The first is what to read against `MaxSubscriptions`. The second is the only place a failure in the background shows: neither a [change probe](live-queries.md#what-tells-a-live-query-to-run-again) nor a [backplane](live-queries.md#more-than-one-server) has a request to fail, and both fail quietly because the poll covers what they missed. A rate above zero means live queries are arriving late, by up to `SubscriptionPollInterval`.
+
+
+### Commands
+
+A [command](commands.md) is an activity of its own, `scry.command {name}`, tagged `scry.command` with its name and `scry.outcome` with how it was answered: `completed`, `failed` or `pending` for one that was accepted, and `rejected`, `denied`, `not_found`, `limited`, `canceled` or `failed` for one that was refused. Three instruments are the feature's own:
+
+| Instrument | Type | Unit | Tags |
+| --- | --- | --- | --- |
+| `scry.server.command.duration` | histogram | `s` | `scry.command`, `scry.outcome` — from arrival to the first answer, refusals included |
+| `scry.server.command.handling.duration` | histogram | `s` | `scry.command`, `scry.outcome` — from acceptance to the outcome, however the command was carried |
+| `scry.server.commands.pending` | up-down counter | `{command}` | |
+
+The last is what to read against `MaxPendingCommands`. A gap between the two durations is time a command spent past its first answer — queued on a bus, or a handler that is slow.
 
 
 ## The audit hook
@@ -114,11 +142,40 @@ public sealed record ScryAuditEntry(
     /// </remarks>
     public QueryBatchRequest? Batch { get; init; }
 
+    /// <summary>
+    /// The command sent, when the entry describes one rather than a query: its name, id and payload as
+    /// the client sent them. Null for a query.
+    /// </summary>
+    /// <remarks>
+    /// A command answered pending is recorded twice: once when it is answered, with
+    /// <see cref="CommandStatus"/> <see cref="Scry.CommandStatus.Pending"/>, and once when it finishes —
+    /// from a service scope of its own, since the request that sent it is long gone.
+    /// </remarks>
+    public CommandRequest? Command { get; init; }
+
+    /// <summary>
+    /// Where the command stood when this entry was written: pending, completed, or failed. Null for a
+    /// command refused before it was accepted, and for a query.
+    /// </summary>
+    public CommandStatus? CommandStatus { get; init; }
+
     /// <summary>The result shape, when the query succeeded; null when it never produced one.</summary>
     public ResultKind? Kind { get; init; }
 
     /// <summary>Whether the rows were streamed rather than materialized into a response.</summary>
     public bool Streamed { get; init; }
+
+    /// <summary>
+    /// Whether this was one run of a live query rather than a query asked once. A live query is
+    /// recorded every time it runs, first run included — each is a query against the database, with
+    /// the policies applied again — so one subscription is as many entries as it had runs, whether or
+    /// not the answer had changed and was sent.
+    /// </summary>
+    /// <remarks>
+    /// What asked for the first run was the caller. What asked for each one after it was somebody
+    /// else's write, a poll, or a probe — which is the difference worth having when reading the trail.
+    /// </remarks>
+    public bool Subscribed { get; init; }
 
     /// <summary>
     /// Rows delivered: a list or page's count, 0 or 1 for a single row, the rows read for a stream —
@@ -158,7 +215,7 @@ public sealed record ScryAuditEntry(
     public bool Sensitive { get; init; }
 }
 ```
-<sup><a href='/src/Scry.Server/ScryAuditEntry.cs#L19-L89' title='Snippet source file'>snippet source</a> | <a href='#snippet-auditEntry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryAuditEntry.cs#L19-L118' title='Snippet source file'>snippet source</a> | <a href='#snippet-auditEntry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Semantics:
@@ -169,6 +226,7 @@ Semantics:
 - **Streams are recorded at completion**, with the rows actually delivered — including a `Canceled` entry when the read stopped partway.
 - **A batch is audited per entry, not per request.** The trail records what was asked, and a [batch](batching.md) asked more than once; there is no entry for the batch itself. The one exception is a batch refused at its envelope, which ran no entry: that is recorded once as a `Rejected` entry carrying `Batch`, since nothing else would show a client sending oversized batches.
 - **Malformed bodies are not audited.** A payload that fails deserialization never becomes a request object, so it appears in metrics only.
+- **A command is audited with `Command` set** — the `CommandRequest` as sent — and `CommandStatus`, and no `Request`. One answered at once has one entry; one answered as pending has a second when it finishes, from a scope of its own, since the request that sent it is long gone. A refusal is one entry with no `CommandStatus`. `Error` is the real failure where the client was shown a fixed message.
 - **`Request` is unredacted.** A constant compared against a [`[Sensitive]`](annotations.md#sensitive) member is in it as sent — the trail is the host's own, and reading the query is its point. The entry says so with `Sensitive`, for an auditor that forwards entries somewhere such a value must not go.
 
 

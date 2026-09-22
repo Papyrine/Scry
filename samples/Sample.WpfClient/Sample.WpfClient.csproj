@@ -20,6 +20,9 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Http" />
+    <!-- For the Live checkbox only: Scry hands over a plain IObservable, and Rx is what this app
+         chooses to compose it with. Scry references neither this nor any other reactive library. -->
+    <PackageReference Include="System.Reactive" />
     <ProjectReference Include="..\..\src\Scry.Client\Scry.Client.csproj" />
   </ItemGroup>
 

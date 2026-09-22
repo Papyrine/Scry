@@ -3,6 +3,7 @@
     <File Path="Directory.Packages.props" />
   </Folder>
   <Project Path="Sample.Model/Sample.Model.csproj" />
+  <Project Path="Sample.CommandHandlers/Sample.CommandHandlers.csproj" />
   <Project Path="Sample.WebServer/Sample.WebServer.csproj" />
   <Project Path="Sample.WebClient/Sample.WebClient.csproj" />
   <Project Path="Sample.Tests/Sample.Tests.csproj" />
@@ -12,4 +13,8 @@
   <Project Path="Sample.ConsoleClient/Sample.ConsoleClient.csproj" />
   <Project Path="Sample.WpfClient/Sample.WpfClient.csproj" />
   <Project Path="Sample.WinFormsClient/Sample.WinFormsClient.csproj" />
+  <Project Path="Sample.RedisServer/Sample.RedisServer.csproj" />
+  <Project Path="Sample.MessagePipeServer/Sample.MessagePipeServer.csproj" />
+  <Project Path="Sample.NServiceBusServer/Sample.NServiceBusServer.csproj" />
+  <Project Path="Sample.NServiceBusWorker/Sample.NServiceBusWorker.csproj" />
 </Solution>

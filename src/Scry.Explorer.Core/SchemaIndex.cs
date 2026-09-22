@@ -38,6 +38,33 @@ public sealed class SchemaIndex
     public IReadOnlyList<ScryEnumInfo> Enums =>
         Introspection.Enums;
 
+    /// <summary>The commands the server accepts, ordered by name as it publishes them.</summary>
+    public IReadOnlyList<ScryCommandInfo> Commands =>
+        Introspection.Commands;
+
+    /// <summary>The command of that name, or null.</summary>
+    public ScryCommandInfo? Command(string name) =>
+        Introspection.Commands.FirstOrDefault(_ => _.Name == name);
+
+    /// <summary>
+    /// The commands acting on rows of a model — targeting its source, or the source of a model it
+    /// derives from, whose capability it inherits.
+    /// </summary>
+    public IReadOnlyList<ScryCommandInfo> CommandsTargeting(string model)
+    {
+        var sources = new HashSet<string>(StringComparer.Ordinal);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var current = Type(model); current is not null && seen.Add(current.Model); current = current.Base is { } baseModel ? Type(baseModel) : null)
+        {
+            if (SourceFor(current.Model) is { } source)
+            {
+                sources.Add(source.Name);
+            }
+        }
+
+        return [.. Introspection.Commands.Where(_ => _.Target is { } target && sources.Contains(target))];
+    }
+
     public SchemaIndex(ScryIntrospection introspection)
     {
         Introspection = introspection;
@@ -235,18 +262,25 @@ public sealed class SchemaIndex
 
     /// <summary>Whether a starter query should offer this member. See <see cref="StarterQuery"/>.</summary>
     /// <remarks>
+    /// <para>
     /// Byte arrays go by their declared type rather than by a flag, because the contract publishes
     /// none: <c>[BinaryTransfer]</c> deliberately does not change the queryable surface — that is the
     /// whole of what the attribute claims, and why an attachment moves the schema stamp and a diverted
     /// <c>byte[]</c> does not. So a suggested query cannot tell a diverted one from an inline one, and
     /// has no reason to: both are bulk bytes, and the inline one is the worse of the two to open with.
+    /// </para>
+    /// <para>
+    /// A capability is left out too: it projects like any bool, but it is the command's policy run per
+    /// row, which is a cost a suggested query should not open with either.
+    /// </para>
     /// </remarks>
     static bool Suggestable(ScryMemberInfo member) =>
         member is
         {
             IsCollection: false,
             IsAttachment: false,
-            IsSensitive: false
+            IsSensitive: false,
+            IsCapability: false
         } &&
         member.TypeDisplay.TrimEnd('?') != "byte[]";
 

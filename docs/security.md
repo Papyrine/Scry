@@ -460,9 +460,11 @@ public int MaxInValues { get; set; } = 1000;
 /// Maximum number of queries one batch request may carry. Default 20.
 /// </summary>
 /// <remarks>
-/// A batch is the one place a single request costs more than one query, so this is the bound that
-/// keeps it from being an amplifier: every other limit is per query and would otherwise apply to an
-/// arbitrary number of them. A batch over the limit is rejected whole, before any entry runs.
+/// A batch is a single request that costs more than one query, so this is the bound that keeps it
+/// from being an amplifier: every other limit here is per query and would otherwise apply to an
+/// arbitrary number of them. A batch over the limit is rejected whole, before any entry runs. The
+/// other such request is a live query, which has bounds of its own —
+/// <see cref="MaxSubscriptions"/> and the options beside it.
 /// </remarks>
 public int MaxBatchSize { get; set; } = 20;
 
@@ -536,7 +538,7 @@ public int QueryUrlLimit { get; set; } = QueryUrl.MaxLength;
 /// </remarks>
 public double? LimitWatchFraction { get; set; }
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L149' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L11-L153' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 These bound the work a single request can ask for: how many rows, how deep a join chain, how long a pipeline — a join's inner side and a set operand each carry one of their own, held to the same length — how deeply nested an expression, and how wide a projection.
@@ -594,8 +596,43 @@ public async Task DisallowedPropertyRejectedWith400()
     Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L372-L399' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L376-L403' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
+
+
+## Live queries
+
+A [live query](live-queries.md) is the same request, answered more than once. Nothing above is relaxed for it, because nothing above is skipped: every answer is the query run again through validation, the allow-list and the row policies, and recorded by the auditors. It is never a cached result, and a run is never shared between two subscriptions — sharing one across callers is the leak a row policy exists to prevent.
+
+What is new is that the server chooses when to answer, so what has to be shown is that the choosing discloses nothing:
+
+- **An answer is compared before it is sent.** A write the caller may not see changes nothing in the rows they are allowed, so nothing goes out. When an answer arrives therefore says no more than asking again would have.
+- **A heartbeat is sent on a fixed clock**, from a task of its own. A run that found nothing to say cannot delay one, so a late heartbeat is not a signal that something the caller cannot see was written.
+- **What reports a change names entities, never rows.** Whoever can write to a [backplane](live-queries.md#more-than-one-server) can cause live queries to be asked again, which costs what the throttle lets it cost, and nothing else.
+- **A failure after the first answer is said as it would have been with a status**: the client's own doing in full, anything else as the fixed `"Query execution failed."`.
+
+Three things a live query holds for longer than a query asked once does, each bounded:
+
+- **The authorization decision.** ASP.NET Core authorizes a request once, and a live query is one request. The server ends every stream at `SubscriptionLifetime`, or when the authentication ticket that opened it expires if that is sooner, and the client asks again — as a new request, authorized as one.
+- **Scoped services.** A row policy resolved from the request's services lives as long as the subscription, and so does anything it remembered. A policy that loads a caller's grants once per scope sees a revoked grant at the next connection rather than the next run, unless the host says so: invalidating a [cached policy](policies.md) re-runs the live queries that read that entity.
+- **A policy input the query does not show.** A live query runs again when something it read was written. A policy that answers by a claim, the clock, or a list it loaded in C# reads nothing the server can watch, so a change there reaches a live query at its next poll: within `SubscriptionPollInterval`, thirty seconds by default, and never where that is set to null.
+
+The limits are in [What it costs, and what bounds it](live-queries.md#what-it-costs-and-what-bounds-it). They are enforced by the processor rather than the endpoint, so a [hub](live-queries.md#over-signalr-instead-of-http) or any other transport has them too. Requests cross a hub as strings read by `ScryJson`, for the reason given in [Hosting without the HTTP endpoint](server.md#hosting-without-the-http-endpoint): the strictness of the wire format is in its serializer options, and a hub's own serializer has none of it.
+
+
+## Commands
+
+A [command](commands.md) is a write, and it is held to what a query is held to, plus what writing asks for:
+
+- **Bound into the server's class.** The payload arrives as JSON and is bound into the server's own command class, through the properties the server allows — unknown members refused, `[CommandIgnore]` properties never read, enums by name only, nested depth bounded, nulls refused where the server's class says so, DataAnnotations checked. The command's name is looked up among the server's commands; nothing the client says about its own class is trusted.
+- **One answer for a target the caller may not act on.** A targeted command's row is checked in one query that composes the source's row policies with the command's own: a row that is absent, one the source hides, and one the command's policy refuses are all the same `404`, with the same body, so a caller probing keys learns nothing about rows it may not see.
+- **A refusal is decided before anything runs.** Everything a command can be refused for — malformed, unknown, denied, a target not there, one too many — is decided before the command is dispatched and before the response is committed, so each is an ordinary status and nothing ran.
+- **An outcome is given again only to its caller.** A command in flight, or finished within `CommandRetention`, is asked for again by its id. The answer goes only to the caller that sent it, by `ScryOptions.Caller`; anyone else, and an id this node does not hold, is told alike that it is not found.
+- **Capabilities are advisory.** The facade's `Can*` and each row's `Can*` member decide what a screen enables. The server decides again on every command, whatever the screen showed.
+- **Off by default.** `MaxPendingCommands` at zero maps no command route and reads every capability `false`. A server with commands on refuses to start while any command the model declares has nowhere to go.
+- **A handler's failure is contained.** A handler shows its caller only what it throws as `ScryCommandException`. Anything else is the fixed `"Command execution failed."`, and the real exception goes to the audit trail, as a query's does.
+
+A write over a [SignalR hub](live-queries.md#over-signalr-instead-of-http) is not guarded the way one over HTTP is: there is no JSON content type for a cross-site form to be unable to declare, and a WebSocket handshake is not subject to CORS. A hub that authenticates by cookie keeps that cookie at `SameSite=Lax` or `Strict`, or checks the handshake's `Origin`; one that authenticates by bearer token is not exposed, since a browser never attaches one on another site's behalf. A hub call also has no request of its own, so a policy that reads the caller reads it from a scoped service a hub filter fills rather than from `IHttpContextAccessor`.
 
 
 ## What Scry does not do
@@ -607,9 +644,11 @@ app.MapScry("/api/query")
     .RequireAuthorization("Reader");
 ```
 
-**Rate limiting and cost control.** The limits bound the *shape* of a query, not its cost. An allow-listed query over a large unindexed table is still expensive, and `MaxPageSize` caps an explicit `Take` rather than implicitly paging an unbounded query. Apply ASP.NET Core rate limiting, a command timeout, and the usual database-side controls.
+**Rate limiting and cost control.** The limits bound the *shape* of a query, not its cost. An allow-listed query over a large unindexed table is still expensive, and `MaxPageSize` caps an explicit `Take` rather than implicitly paging an unbounded query. Apply ASP.NET Core rate limiting, a command timeout, and the usual database-side controls. A [live query](live-queries.md) is counted by rate limiting as the one request it is, whatever it goes on to run: the most it can ask of the database is bounded by `MaxSubscriptions` and `SubscriptionThrottle` rather than by a limiter, and is driven by other callers' writes.
 
 **Bound how long a slow reader can hold a connection.** A response past [`ResponseSpillThreshold`](server.md#response-size) is written as it is read, so it holds a connection *and* its database read open for as long as the client takes to read it. That exposure is not new — `…/stream` has always had it, and `MapScry` maps every endpoint together precisely so the surface is uniform rather than one endpoint being protected while its neighbours are not — but it now reaches `ToListAsync` as well, which `MaxStreamRows` does not bound. Set the threshold to zero to hold responses whole as they once were, at the cost of an unbounded result being resident. The improvement in the same change is that such a result is no longer resident *twice*, as rows and as serialized bytes.
+
+**Retry, order, or deduplicate commands.** A refused command is the caller's to send again, a command whose outcome is `Unknown` may have run, and nothing orders two commands carried over a bus. A client that must not apply a command twice says so in the command — an idempotency key its handler checks — rather than relying on the transport.
 
 **Column-level authorization per user.** `[QueryIgnore]` is static: a column is exposed or it is not. There is no per-caller column masking. Expose a view containing only the permitted columns instead.
 
@@ -641,3 +680,8 @@ app.MapScry("/api/query")
 - [ ] The [explorer](explorer.md) is either unmapped or behind a real guard in production.
 - [ ] If the explorer is exposed to anyone in production, its [SQL preview](explorer.md#sql-preview) is left off — the SQL discloses real table and column names and the shape of every row policy.
 - [ ] Rate limiting and a database command timeout are configured.
+- [ ] Where live queries or commands are on, `Caller` reads the authenticated principal, never a header — a caller that names itself is bounded by nothing, and could ask for another's command outcome by its id.
+- [ ] Commands are on (`MaxPendingCommands`) only on the servers meant to accept writes.
+- [ ] Every targeted command has a policy that decides its rows for the caller, not merely one that returns true.
+- [ ] A SignalR hub that carries commands and authenticates by cookie keeps that cookie at `SameSite=Lax` or `Strict`, or checks the handshake's `Origin`.
+- [ ] Where a row policy answers by something the query does not read — a claim, the clock, a list loaded in C# — `SubscriptionPollInterval` is as short as a revoked permission may be allowed to last.

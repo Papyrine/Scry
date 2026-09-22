@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- One database for the nodes and the worker, the registration the model needs, a write to watch
+         arrive, and the endpoint settings both NServiceBus samples share: so Program.cs holds only
+         what Scry and NServiceBus have to do with each other. -->
+    <Compile Include="..\Shared\BackplaneHost.cs" Link="BackplaneHost.cs" />
+    <Compile Include="..\Shared\NServiceBusEndpoint.cs" Link="NServiceBusEndpoint.cs" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="EfLocalDb" />
+    <ProjectReference Include="..\..\src\Scry.Server\Scry.Server.csproj" />
+    <ProjectReference Include="..\..\src\Scry.Server.NServiceBus\Scry.Server.NServiceBus.csproj" />
+    <ProjectReference Include="..\Sample.Model\Sample.Model.csproj" />
+    <ProjectReference Include="..\Sample.CommandHandlers\Sample.CommandHandlers.csproj" />
+  </ItemGroup>
+</Project>

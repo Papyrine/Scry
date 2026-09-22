@@ -54,7 +54,7 @@ sealed class DeniedRowProbe
         }
     }
 
-    public async ValueTask EnsureAsync(Cancel cancel)
+    public async ValueTask EnsureAsync(Cancel cancel = default)
     {
         if (await DeniedAsync(cancel))
         {

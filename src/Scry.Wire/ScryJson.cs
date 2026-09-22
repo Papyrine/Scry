@@ -88,6 +88,7 @@ public static class ScryJson
         type == typeof(QueryBatchRequest) ||
         type == typeof(AttachmentRequest) ||
         type == typeof(AttachmentKey) ||
+        type == typeof(CommandRequest) ||
         type == typeof(JoinMember) ||
         type == typeof(Projection);
 
@@ -119,7 +120,11 @@ public static class ScryJson
     static JsonTypeInfo<QueryBatchResponse> batchResponseInfo = Info<QueryBatchResponse>();
     static JsonTypeInfo<ScryIntrospection> introspectionInfo = Info<ScryIntrospection>();
     static JsonTypeInfo<ScryStreamMarker> markerInfo = Info<ScryStreamMarker>();
+    static JsonTypeInfo<ScryLiveEnd> liveEndInfo = Info<ScryLiveEnd>();
     static JsonTypeInfo<ScryError> errorInfo = Info<ScryError>();
+    static JsonTypeInfo<CommandRequest> commandRequestInfo = Info<CommandRequest>();
+    static JsonTypeInfo<CommandReceipt> receiptInfo = Info<CommandReceipt>();
+    static JsonTypeInfo<CommandCapabilities> capabilitiesInfo = Info<CommandCapabilities>();
 
     static JsonTypeInfo<T> Info<T>() =>
         (JsonTypeInfo<T>)Options.GetTypeInfo(typeof(T));
@@ -250,6 +255,71 @@ public static class ScryJson
     public static string Serialize(ScryStreamMarker marker) =>
         JsonSerializer.Serialize(marker, markerInfo);
 
+    /// <summary>Writes the data of the event that closes a live query the server chose to end.</summary>
+    public static byte[] SerializeToUtf8(ScryLiveEnd end) =>
+        JsonSerializer.SerializeToUtf8Bytes(end, liveEndInfo);
+
+    /// <summary>
+    /// Writes a failure as the bytes an endpoint answers with. What a transport that is not an HTTP
+    /// status line has to say it with — the data of a live query's closing event, a reply over a hub.
+    /// </summary>
+    public static byte[] SerializeToUtf8(ScryError error) =>
+        JsonSerializer.SerializeToUtf8Bytes(error, errorInfo);
+
+    /// <inheritdoc cref="SerializeToUtf8(ScryError)"/>
+    public static string Serialize(ScryError error) =>
+        JsonSerializer.Serialize(error, errorInfo);
+
+    public static string Serialize(CommandRequest request) =>
+        JsonSerializer.Serialize(request, commandRequestInfo);
+
+    public static byte[] SerializeToUtf8(CommandRequest request) =>
+        JsonSerializer.SerializeToUtf8Bytes(request, commandRequestInfo);
+
+    public static string Serialize(CommandReceipt receipt) =>
+        JsonSerializer.Serialize(receipt, receiptInfo);
+
+    /// <summary>Writes a receipt as the bytes an endpoint answers with, or the data of one event of a streamed answer.</summary>
+    public static byte[] SerializeToUtf8(CommandReceipt receipt) =>
+        JsonSerializer.SerializeToUtf8Bytes(receipt, receiptInfo);
+
+    public static string Serialize(CommandCapabilities capabilities) =>
+        JsonSerializer.Serialize(capabilities, capabilitiesInfo);
+
+    public static byte[] SerializeToUtf8(CommandCapabilities capabilities) =>
+        JsonSerializer.SerializeToUtf8Bytes(capabilities, capabilitiesInfo);
+
+    /// <summary>
+    /// Reads a command. The version it carries is checked by the server as it is for a query, and the
+    /// payload is left as the JSON it arrived as: it is bound on the server, into the server's own
+    /// command type, and nowhere else.
+    /// </summary>
+    public static CommandRequest DeserializeCommandRequest([StringSyntax(StringSyntaxAttribute.Json)] string json) =>
+        Deserialize(json, commandRequestInfo, "command request");
+
+    /// <inheritdoc cref="DeserializeCommandRequest(string)"/>
+    public static CommandRequest DeserializeCommandRequest(ReadOnlySpan<byte> utf8) =>
+        Deserialize(utf8, commandRequestInfo, "command request");
+
+    /// <summary>
+    /// Reads a receipt, refusing one stamped with a newer version than this client reads: its result
+    /// would be in an encoding this client was not built against.
+    /// </summary>
+    public static CommandReceipt DeserializeReceipt([StringSyntax(StringSyntaxAttribute.Json)] string json) =>
+        Versioned(Deserialize(json, receiptInfo, "command receipt"));
+
+    /// <inheritdoc cref="DeserializeReceipt(string)"/>
+    public static CommandReceipt DeserializeReceipt(ReadOnlySpan<byte> utf8) =>
+        Versioned(Deserialize(utf8, receiptInfo, "command receipt"));
+
+    /// <summary>Reads the commands a caller may send, refusing a newer version as a receipt does.</summary>
+    public static CommandCapabilities DeserializeCapabilities([StringSyntax(StringSyntaxAttribute.Json)] string json) =>
+        Versioned(Deserialize(json, capabilitiesInfo, "command capabilities"));
+
+    /// <inheritdoc cref="DeserializeCapabilities(string)"/>
+    public static CommandCapabilities DeserializeCapabilities(ReadOnlySpan<byte> utf8) =>
+        Versioned(Deserialize(utf8, capabilitiesInfo, "command capabilities"));
+
     public static QueryRequest DeserializeRequest([StringSyntax(StringSyntaxAttribute.Json)] string json) =>
         Deserialize(json, requestInfo, "request");
 
@@ -279,6 +349,22 @@ public static class ScryJson
         Deserialize(json, introspectionInfo, "introspection");
 
     /// <summary>
+    /// Whether some JSON is one of a stream's own markers rather than a row or a response. A marker's
+    /// first property is its kind — declared first, and written first — so only the first property
+    /// name is read. What it is told apart from is not tokenised here: the caller reads that into a
+    /// type of its own, and reading every property to learn that none is the marker parsed it twice.
+    /// </summary>
+    public static bool IsMarker(ReadOnlySpan<byte> utf8)
+    {
+        var reader = new Utf8JsonReader(utf8);
+        return reader.Read() &&
+               reader.TokenType == JsonTokenType.StartObject &&
+               reader.Read() &&
+               reader.TokenType == JsonTokenType.PropertyName &&
+               reader.ValueTextEquals(ScryStream.MarkerProperty);
+    }
+
+    /// <summary>
     /// Reads one line of a streamed result as a marker. The caller has already established that the
     /// line carries <see cref="ScryStream.MarkerProperty"/>, so this is not a probe.
     /// </summary>
@@ -292,6 +378,10 @@ public static class ScryJson
         Versioned(
             JsonSerializer.Deserialize(line, markerInfo) ??
             throw new ScryWireException("Stream marker deserialized to null."));
+
+    /// <summary>Reads the data of the event that closes a live query the server chose to end.</summary>
+    public static ScryLiveEnd DeserializeLiveEnd(ReadOnlySpan<byte> utf8) =>
+        Deserialize(utf8, liveEndInfo, "subscription end");
 
     // An opening marker carrying a newer wire version fails closed as a response does: the rows
     // behind it are in an encoding this client does not read, and reading them anyway would answer
@@ -434,6 +524,29 @@ public static class ScryJson
 
         throw Unsupported(response.Version);
     }
+
+    static CommandReceipt Versioned(CommandReceipt receipt)
+    {
+        if (receipt.Version <= CommandRequest.CurrentVersion)
+        {
+            return receipt;
+        }
+
+        throw UnsupportedCommand(receipt.Version);
+    }
+
+    static CommandCapabilities Versioned(CommandCapabilities capabilities)
+    {
+        if (capabilities.Version <= CommandRequest.CurrentVersion)
+        {
+            return capabilities;
+        }
+
+        throw UnsupportedCommand(capabilities.Version);
+    }
+
+    static ScryWireException UnsupportedCommand(int version) =>
+        new($"Unsupported command wire version {version}; this client supports up to {CommandRequest.CurrentVersion}. The server is newer than the client.");
 
     static ScryWireException Unsupported(int version) =>
         new($"Unsupported response wire version {version}; this client supports up to {WireFormat.Version}. The server is newer than the client.");

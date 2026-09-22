@@ -129,7 +129,7 @@ When referencing the projects directly (as the sample and integration tests do),
   </GetFileHash>
 </Target>
 ```
-<sup><a href='/samples/Sample.WebClient/Sample.WebClient.csproj#L24-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGeneratorWiring' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Sample.WebClient.csproj#L29-L51' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGeneratorWiring' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 

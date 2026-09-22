@@ -3,20 +3,40 @@ class Program
     /// <summary>Where Sample.WebServer listens, per its launchSettings.json.</summary>
     const string serverAddress = "http://localhost:5000";
 
-    static async Task<int> Main()
+    /// <param name="args">
+    /// <c>--live</c> watches the orders instead of printing the tables and exiting.
+    /// <c>--reprice &lt;id&gt;</c> sends the <c>RepriceOrder</c> command and prints its outcome — the
+    /// write to make in one terminal while another runs <c>--live</c>.
+    /// <c>--server &lt;url&gt;</c> points at a server other than Sample.WebServer — one of the
+    /// backplane samples.
+    /// </param>
+    static async Task<int> Main(string[] args)
     {
+        var server = Value(args, "--server") ?? serverAddress;
+
         // A console app needs no container and no host. An HttpClient, the endpoint MapScry was given,
         // and the generated entry point are the whole of it.
         // begin-snippet: consoleClientSetup
         using var http = new HttpClient
         {
-            BaseAddress = new(serverAddress)
+            BaseAddress = new(server)
         };
         var query = new ScryQuery(ScryClient.ForHttp(http, "/api/query"));
         // end-snippet
 
         try
         {
+            if (args.Contains("--live"))
+            {
+                await WatchOrders(query);
+                return 0;
+            }
+
+            if (Value(args, "--reprice") is { } id)
+            {
+                return await Reprice(query, int.Parse(id, CultureInfo.InvariantCulture));
+            }
+
             await ShowActiveEmployees(query);
             await ShowRegions(query);
             await ShowActiveCount(query);
@@ -24,11 +44,91 @@ class Program
         }
         catch (HttpRequestException exception)
         {
-            await Console.Error.WriteLineAsync($"Cannot reach {serverAddress}: {exception.Message}");
+            await Console.Error.WriteLineAsync($"Cannot reach {server}: {exception.Message}");
             await Console.Error.WriteLineAsync("Start the server with: dotnet run --project samples/Sample.WebServer");
             return 1;
         }
     }
+
+    static string? Value(string[] args, string name)
+    {
+        var index = Array.IndexOf(args, name);
+        if (index < 0 ||
+            index + 1 >= args.Length)
+        {
+            return null;
+        }
+
+        return args[index + 1];
+    }
+
+    record OrderRow(int Id, string Region, decimal Amount);
+
+    // A live query is an IAsyncEnumerable, so it is read the way any other is. Each answer is the
+    // whole current result, and the loop runs until Ctrl+C cancels it — which is also what tells the
+    // server the subscription is over.
+    // begin-snippet: consoleLive
+    static async Task WatchOrders(ScryQuery query)
+    {
+        using var leaving = new CancelSource();
+        Console.CancelKeyPress += (_, pressed) =>
+        {
+            pressed.Cancel = true;
+            leaving.Cancel();
+        };
+
+        Console.WriteLine("Watching orders. Ctrl+C to stop.");
+        Console.WriteLine();
+        var orders = query
+            .Order
+            .OrderBy(_ => _.Id)
+            .Select(_ => new OrderRow(_.Id, _.Region, _.Amount))
+            .Live();
+
+        try
+        {
+            await foreach (var answer in orders.WithCancellation(leaving.Token))
+            {
+                Console.WriteLine($"{DateTime.Now:T}");
+                WriteTable(
+                    ["Id", "Region", "Amount"],
+                    [.. answer.Select(_ => new[] {_.Id.ToString(), _.Region, _.Amount.ToString("0.00")})]);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Ctrl+C.
+        }
+    }
+    // end-snippet
+
+    // A command, and its outcome. Most finish within the server's sync window and print at once; one
+    // still running when the client stops waiting is Pending, and the same outcome's Completion is
+    // what finishes it. A console has nowhere else to show pending work, so it simply waits.
+    // begin-snippet: consoleCommand
+    static async Task<int> Reprice(ScryQuery query, int id)
+    {
+        var outcome = await query.Commands.RepriceOrder(new() {Id = id});
+        if (outcome.Status == ScryCommandStatus.Pending)
+        {
+            Console.WriteLine($"Order {id} is being repriced…");
+            outcome = await outcome.Completion;
+        }
+
+        switch (outcome.Status)
+        {
+            case ScryCommandStatus.Completed:
+                Console.WriteLine($"Order {id} repriced.");
+                return 0;
+            case ScryCommandStatus.Failed:
+                await Console.Error.WriteLineAsync($"Order {id} was not repriced: {outcome.Error}");
+                return 1;
+            default:
+                await Console.Error.WriteLineAsync($"Whether order {id} was repriced is unknown: {outcome.Error}");
+                return 1;
+        }
+    }
+    // end-snippet
 
     // The shapes this app wants, declared here rather than anywhere the server knows about. The
     // response comes back keyed by these names.

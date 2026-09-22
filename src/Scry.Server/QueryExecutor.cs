@@ -157,6 +157,17 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         Cancel cancel)
     {
         var plan = Walk(request, db, scope);
+
+        // Read off the plan rather than the request: by now the policies are in the query, so a table
+        // only a policy reads is one the live query listens for. The probes apply subsets of the same
+        // policies, so they name nothing the query itself does not.
+        if (scope.Subscription is { } subscription)
+        {
+            subscription.Dependencies = DependencyWalker.Read(
+                db.Model,
+                [plan.Fold?.Query.Expression, plan.Fold?.Call, plan.Page?.Rows.Expression, plan.Rows?.Rows.Expression]);
+        }
+
         await PrepareAsync(plan, scope, cancel);
 
         // A terminal folded its rows away, so there is nothing to spill and permission stays withheld.
@@ -363,7 +374,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 schema,
                 db.Model,
                 (name, include) => ResolveSource(name, db, scope, include),
-                buildOnly ? null : probes));
+                buildOnly ? null : probes),
+            // Decides each command's capability once for this call, however often the query reads it.
+            new(schema, new(scope.Services, db, scope.RequestHeaders, scope.ResponseHeaders)));
 
         var query = source.Resolve(db, scope.Services);
         query = ApplyPolicy(query, source, db, scope);
@@ -990,7 +1003,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         for (var i = 0; i < keys.Count; i++)
         {
             var comparison = Expression.Equal(
-                Expression.Property(parameter, keys[i].Property),
+                Expression.Property(parameter, keys[i].ClrProperty),
                 Expression.Convert(Parameterization.Parameterize(values[i], values[i].GetType()), keys[i].Type));
             predicate = predicate is null ? comparison : Expression.AndAlso(predicate, comparison);
         }
@@ -1001,10 +1014,70 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         // asked for. Projected into object[] — the shape the rest of the executor reads — so a row
         // holding a null value stays distinguishable from no row at all.
         var selector = Expression.Lambda(
-            Expression.NewArrayInit(typeof(object), Expression.Convert(Expression.Property(parameter, member.Property), typeof(object))),
+            Expression.NewArrayInit(typeof(object), Expression.Convert(Expression.Property(parameter, member.ClrProperty), typeof(object))),
             parameter);
         var rows = ApplySelect(query, selector);
         return new(rows, QueryComposition.Call("SingleOrDefault", [typeof(object[])], rows.Expression), context.ContentType);
+    }
+
+    /// <summary>
+    /// Whether the row a targeted command names is there for its caller: read by its key through the
+    /// target's policies — the rows a query of it would return — and the command's own row condition.
+    /// One query and one answer, so a row that is absent, hidden, or denied all read as not there.
+    /// </summary>
+    public async ValueTask<bool> CommandTargetExistsAsync(
+        CommandMeta meta,
+        IReadOnlyList<object> keys,
+        LambdaExpression? rows,
+        DbContext db,
+        CallScope scope,
+        Cancel cancel)
+    {
+        // A command's row is read as a query's would be, so the policies deciding it answer from
+        // decisions as current as a query's.
+        scope = scope with {EnsureCachedFreshness = true};
+
+        var target = meta.Target!;
+        var query = ResolveSource(target.Name, db, scope);
+        var parameter = Expression.Parameter(target.ClrType, "_");
+        var predicate = KeyPredicate(parameter, meta.TargetKeys.Select(_ => _.Key).ToList(), keys);
+        if (rows is not null)
+        {
+            predicate = Expression.AndAlso(predicate, CapabilityContext.Inline(rows, parameter));
+        }
+
+        query = Apply(query, "Where", Expression.Lambda(predicate, parameter));
+        await scope.Cached.RefreshAsync(cancel);
+        var found = await Execution.RunAsync(query, QueryComposition.Call("Any", [target.ClrType], query.Expression), cancel);
+        return found is true;
+    }
+
+    /// <summary>
+    /// Translates a command policy's row condition over its target once, without running it — what
+    /// the startup probe asks, so one EF cannot translate fails the deployment instead of a caller.
+    /// </summary>
+    public static void ProbeCommandRows(CommandMeta meta, LambdaExpression rows, DbContext db, IServiceProvider services)
+    {
+        var target = meta.Target!;
+        var query = target.Resolve(db, services);
+        var parameter = Expression.Parameter(target.ClrType, "_");
+        query = Apply(query, "Where", Expression.Lambda(CapabilityContext.Inline(rows, parameter), parameter));
+        _ = query.ToQueryString();
+    }
+
+    // The row a key names: each key member equal to its value, each value bound as a parameter.
+    static Expression KeyPredicate(ParameterExpression row, IReadOnlyList<Member> members, IReadOnlyList<object> values)
+    {
+        Expression? predicate = null;
+        for (var i = 0; i < members.Count; i++)
+        {
+            var comparison = Expression.Equal(
+                Expression.Property(row, members[i].ClrProperty),
+                Expression.Convert(Parameterization.Parameterize(values[i], values[i].GetType()), members[i].Type));
+            predicate = predicate is null ? comparison : Expression.AndAlso(predicate, comparison);
+        }
+
+        return predicate!;
     }
 
     static (IQueryable<object[]> Query, ProjectionPlan Plan) BuildProjected(

@@ -6,6 +6,7 @@
 | --- | --- |
 | `Sample.Model` | EF Core model with the allow-list attributes. Referenced by the server, pointed at by path from the client. |
 | `Sample.WebServer` | ASP.NET Core host: `DbContext`, `MapScry`, `MapScryExplorer`, and the Blazor host page. The one back end every client below talks to. |
+| `Sample.CommandHandlers` | The handlers and policies for the model's [commands](commands.md), and the one registration every host with commands on shares. |
 | `Sample.WebClient` | Blazor WebAssembly UI that writes LINQ against the generated models. |
 | `Sample.ConsoleClient` | A console client: an `HttpClient`, `ScryClient.ForHttp`, and the generated entry point, with no container. |
 | `Sample.WpfClient` | A WPF client binding the same queries to a `DataGrid`, registered through `IHttpClientFactory`. |
@@ -14,6 +15,8 @@
 | `Sample.QueryModels` | A C# class library holding the generator's output for the sample model, for clients in other languages. |
 | `Sample.FSharp` | An F# client writing queries through `Sample.QueryModels`. See [F#](fsharp.md). |
 | `Sample.FSharp.Tests` | The F# queries run through the server, hosted in-process, with the requests and rows snapshotted. |
+| `Sample.RedisServer`, `Sample.MessagePipeServer` | A minimal server each, for running twice: a [backplane](#live-queries-across-more-than-one-process) carrying changes from one node to the other. |
+| `Sample.NServiceBusServer`, `Sample.NServiceBusWorker` | The same over NServiceBus, plus a worker whose handler writes from another process. |
 
 The three desktop and console clients are there to show that the client half is not tied to a browser.
 [Client hosts](clients.md) covers what each host needs and where they differ.
@@ -34,6 +37,10 @@ reports the command above rather than an unhandled exception when the server is 
 
 ```bash
 dotnet run --project samples/Sample.ConsoleClient
+```
+
+```bash
+dotnet run --project samples/Sample.ConsoleClient -- --reprice 1
 ```
 
 ```bash
@@ -203,8 +210,7 @@ protected override void OnModelCreating(ModelBuilder builder)
 <a id='snippet-serverRegistration'></a>
 ```cs
 builder.Services
-    .AddScry<SampleContext>(
-    _ =>
+    .AddScry<SampleContext>(_ =>
     {
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
         // [QueryablePoco] type must be registered here or AddScry throws at startup.
@@ -237,9 +243,23 @@ builder.Services
         // database — so a grant changing outside it would move nothing, and a cache holding
         // the old rows would go on answering with rows the caller has since lost.
         _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
+
+        // Live queries: the /live pages. Off until a server says how many it will hold open,
+        // which is also what maps the route — see /docs/live-queries.md.
+        _.MaxSubscriptions = 100;
+
+        // The interceptor above reports this server's own saves, at once and by entity. This
+        // watches the database's change marker for everything it cannot see: a bulk update,
+        // another node, a script run by hand.
+        _.UseDeltaChanges<SampleContext>();
+
+        // Commands: the /commands page and the /live pages' Reprice. Off until a server says
+        // how many it will have in flight, which is also what maps the routes — see
+        // /docs/commands.md.
+        _.UseSampleCommands();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L31-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L44-L98' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Holiday` has no table, so its data is registered explicitly — see [POCO sources](server.md#poco-sources). `MaxPageSize` is lowered from the default 1000 to 200.
@@ -249,22 +269,21 @@ builder.Services
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L85-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L116-L118' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: mapExplorer -->
 <a id='snippet-mapExplorer'></a>
 ```cs
-app.MapScryExplorer(
-    _ =>
-    {
-        _.Route = "/scry";
-        // This sample always exposes the explorer. The default guard is Development-only — in a real
-        // app, run in Development or set EnableGuard to your own check (e.g. an admin authorization).
-        _.EnableGuard = _ => true;
-    });
+app.MapScryExplorer(_ =>
+{
+    _.Route = "/scry";
+    // This sample always exposes the explorer. The default guard is Development-only — in a real
+    // app, run in Development or set EnableGuard to your own check (e.g. an admin authorization).
+    _.EnableGuard = _ => true;
+});
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L127-L136' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L185-L193' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The sample always exposes the explorer so it can be browsed without setting an environment. A real app should leave the default Development-only guard in place, or replace it with an authorization check — see [Query explorer](explorer.md).
@@ -310,7 +329,7 @@ The client half — re-asking with `If-None-Match` and replaying what the 304 st
   </GetFileHash>
 </Target>
 ```
-<sup><a href='/samples/Sample.WebClient/Sample.WebClient.csproj#L24-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGeneratorWiring' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Sample.WebClient.csproj#L29-L51' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGeneratorWiring' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Because the sample uses project references rather than the NuGet package, the generator wiring that `Scry.Client`'s `buildTransitive` props would normally supply is written out explicitly. See [Source generator](source-generator.md).
@@ -356,7 +375,7 @@ employees = await Query
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L48-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L89-L96' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A group-by with aggregates:
@@ -370,7 +389,7 @@ regions = await Query
     .Select(_ => new RegionSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L57-L63' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L98-L104' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 And a query parameterized by closure-captured locals — the values are evaluated client-side and sent as constants, which is how an app builds a filtered query at runtime:
@@ -386,7 +405,7 @@ fullTimers = await Query
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L65-L73' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L106-L114' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -416,7 +435,7 @@ photos = await Query
     .Select(_ => new EmployeePhoto(_.Id, _.Name, _.Photo))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L88-L97' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L129-L138' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The page renders the names off that response, and only then goes looking for the bytes — one request per face, each authorized by the server's `IAttachmentPolicy` on its own terms:
@@ -433,7 +452,7 @@ foreach (var photo in photos)
     }
 }
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L103-L112' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentFetch' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L144-L153' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentFetch' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: clientAttachmentOpen -->
@@ -459,7 +478,7 @@ static async Task<string?> FaceAsync(ScryAttachment photo)
     return $"data:image/svg+xml;base64,{Convert.ToBase64String(buffer.ToArray())}";
 }
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L132-L152' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentOpen' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L173-L193' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentOpen' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Employee.Photo` declares `ContentType = "image/svg+xml"`, so the fetch is served as that rather than as bytes — which is what lets the [explorer](explorer.md) and the [sidecar](sidecar.md) offer the download as `.svg`. `Department.Handbook` declares `text/plain` and downloads as `.txt`. See [Content type](attachments.md#content-type).
@@ -520,22 +539,24 @@ The second and third are the two halves worth understanding. Nothing is called f
 // A row changed. Nobody tells the cache anything here: the next query sees a revision past the
 // watermark this scope was decided up to, and decides that one row on the spot. An insert by
 // any writer at all is correct on its first read for the same reason.
-app.MapPost("/api/orders/{id:int}/touch", async (int id, SampleContext data) =>
-{
-    var order = await data.Orders.FindAsync(id);
-    if (order is null)
+app.MapPost(
+    "/api/orders/{id:int}/touch",
+    async (int id, SampleContext data) =>
     {
-        return Results.NotFound();
-    }
+        var order = await data.Orders.FindAsync(id);
+        if (order is null)
+        {
+            return Results.NotFound();
+        }
 
-    // Named explicitly: Scry's async terminals and EF's are both in scope here, and they are
-    // not the same method — this one has to run against the database.
-    order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
-    await data.SaveChangesAsync();
-    return Results.NoContent();
-});
+        // Named explicitly: Scry's async terminals and EF's are both in scope here, and they are
+        // not the same method — this one has to run against the database.
+        order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
+        await data.SaveChangesAsync();
+        return Results.NoContent();
+    });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L108-L126' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L146-L166' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The third has to be, or the change never reaches a query at all:
@@ -549,13 +570,13 @@ The third has to be, or the change never reaches a query at all:
 app.MapPost(
     "/api/grants/{region}",
     (string region, bool allowed, RegionGrants grants, ScryPolicyCache cache) =>
-{
-    grants.Set("sample", region, allowed);
-    cache.InvalidateScope<Order>("sample");
-    return Results.NoContent();
-});
+    {
+        grants.Set("sample", region, allowed);
+        cache.InvalidateScope<Order>("sample");
+        return Results.NoContent();
+    });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L94-L106' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L132-L144' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Order.Revision` is `[QueryIgnore]`d — a version column is server machinery, not query surface, and clients never see it. `Sample.Tests\CachedPolicyPageTests.cs` drives the page and asserts those three counts, so the table above is checked rather than claimed.
@@ -569,6 +590,168 @@ _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>
 ```
 
 `ConditionalQueryTests.RevokingAGrantInvalidatesTheEtagWithoutAWrite` pins it, and fails without that version. The page additionally asks for its own rows with `Cache-Control: no-cache`, since a 304 is the server *not* deciding anything and the counter would never move.
+
+
+## Live queries
+
+The **Live** link opens four pages over one query — open orders, and a count of them — each consuming a [live query](live-queries.md) in a different shape: a callback, an `await foreach`, an `IObservable<T>` under System.Reactive, and one subscription shared by two components through MessagePipe. None of those libraries is referenced by `Scry.Client`; the sample references them.
+
+<img src="/samples/Sample.Tests/UiScreenshotTests.SampleLive.verified.png" alt="The sample's live page: open orders, a count, the transport toggle and the two reprice buttons">
+
+Open a page in two tabs and press a button in one. Both change, and neither reloads.
+
+| Control | What it shows |
+| --- | --- |
+| **Reprice an order** | The `RepriceOrder` [command](commands.md), sent over whichever transport the switch selects. Its handler's `SaveChanges` is reported by `ScryChangeInterceptor`, with nothing written for it. |
+| **Reprice in bulk** | An `ExecuteUpdate`, which no interceptor sees, followed by the `ScryChanges.Notify<Order>()` that says so. |
+| **SSE / SignalR** | The same pages over [a hub](live-queries.md#over-signalr-instead-of-http). The transport is the `ScryClient`'s, so no page changes. |
+| The region grants on the **Permissions** page | A [policy-cache invalidation](#a-policy-too-expensive-to-run-per-row): rows appear and leave with no write to them at all. |
+
+The server also sets `UseDeltaChanges`, so a write made by anything else — SQL Server Management Studio, say — arrives too, within a second.
+
+The other clients have the same query behind a **Live** checkbox (WPF, Windows Forms) or an argument:
+
+```bash
+dotnet run --project samples/Sample.ConsoleClient -- --live
+```
+
+
+### Live queries across more than one process
+
+A backplane is about several processes on one database, which `Sample.WebServer` cannot be run as: it builds a database of its own per launch. So each backplane has a minimal server whose `Program.cs` holds the registration and little else. The first one started builds the database and prints the command that starts the second against it.
+
+NServiceBus needs nothing installed, since the sample runs on the learning transport:
+
+```bash
+dotnet run --project samples/Sample.NServiceBusServer -- --urls http://localhost:5101
+```
+
+Start the worker with the command that prints, watch the server from the console client, and send the command the worker handles from a second terminal:
+
+```bash
+dotnet run --project samples/Sample.ConsoleClient -- --live --server http://localhost:5101
+```
+
+```bash
+dotnet run --project samples/Sample.ConsoleClient -- --reprice 1 --server http://localhost:5101
+```
+
+The server sends `RepriceOrder` on to the worker rather than handling it, and the worker's reply finishes it. The first console reprints, for a row written by a process that hosts no Scry endpoint, and the second prints the outcome. `NServiceBusSampleTests` runs the same exchange in-process.
+
+`Sample.RedisServer` and `Sample.MessagePipeServer` want a Redis on `localhost:6379`. Run one on `:5101`, a second on `:5102` with the printed command, watch the first, and send `--reprice 1 --server http://localhost:5102` to the second. They have the poll turned off, so what arrives can only have come over the backplane; a deployment leaves it on.
+
+
+## Commands
+
+The **Commands** link opens a live table of employees with a button per [command](commands.md), and a form to hire. None of the buttons refreshes the table: it is a live query, so what each command writes arrives as its next answer.
+
+<img src="/samples/Sample.Tests/CommandUiTests.SampleCommands.verified.png" alt="The sample's commands page: a live table of employees, each row with Deactivate, Rename and Delete buttons, only the inactive row's Delete enabled, and a form to hire">
+
+| Try | What it shows |
+| --- | --- |
+| **Deactivate** a row | `SetEmployeeActive`. The row's Delete enables as the next answer arrives: it is the row's `CanDeleteEmployee`, the delete policy's condition decided in the database. |
+| **Delete** an inactive row | `DeleteEmployee`. The row leaves the table as the next answer. |
+| **Delete** Alice, once deactivated | The handler refuses, since Alice manages others: a `Failed` outcome carrying the handler's own words. |
+| **Rename** to a name containing "slow" | A handler that takes five seconds — past the server's sync window and the client's wait — so the pending-work panel opens and follows it until it lands. |
+| **Hire** | `CreateEmployee`, answering with the new row's id through the typed outcome. |
+
+Every other client shows a different angle. The console's `--reprice` prints the outcome, and awaits `Completion` when it is `Pending`. The Windows Forms client renames the selected row and lists `PendingWork`, whose changes arrive on the UI thread. The WPF client binds its Rename button to an `ICommand` whose `CanExecute` is the facade's `CanRenameEmployee` and the selection, raised again on `CapabilitiesChanged`. The F# client renames, and hires through the typed outcome.
+
+<!-- snippet: winFormsCommand -->
+<a id='snippet-winFormsCommand'></a>
+```cs
+async Task RenameSelected()
+{
+    if (grid.CurrentRow?.DataBoundItem is not EmployeeRow row)
+    {
+        status.Text = "Select an employee to rename.";
+        return;
+    }
+
+    try
+    {
+        var outcome = await query.Commands.RenameEmployee(new() {Id = row.Id, Name = renameTo.Text});
+        status.Text = outcome.Status switch
+        {
+            ScryCommandStatus.Completed => $"Renamed {row.Name} to {renameTo.Text}.",
+            ScryCommandStatus.Pending => "Still renaming. It is listed under pending work.",
+            _ => outcome.Error
+        };
+    }
+    catch (Exception exception) when (exception is HttpRequestException or ScryRequestException or ScryPermissionException)
+    {
+        status.Text = exception.Message;
+    }
+}
+
+// The store says it changed on the context the command was sent from — the UI thread, since
+// RenameSelected runs there — so the list is redrawn with no Invoke.
+void ShowPendingWork() =>
+    pending.DataSource = work.Items.Select(Describe).ToList();
+
+static string Describe(ScryPendingCommand item)
+{
+    var line = $"{item.Command} {string.Join(", ", item.Keys)}: {item.Status}, {item.Elapsed.TotalSeconds:0.0}s";
+    if (item.Error is { } error)
+    {
+        return $"{line} — {error}";
+    }
+
+    return line;
+}
+```
+<sup><a href='/samples/Sample.WinFormsClient/MainForm.cs#L183-L223' title='Snippet source file'>snippet source</a> | <a href='#snippet-winFormsCommand' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+<!-- snippet: wpfCommand -->
+<a id='snippet-wpfCommand'></a>
+```cs
+// The XAML shape of a capability: an ICommand whose CanExecute is what the server last said this
+// caller may send, and whether there is a row to send it against. WPF re-reads it whenever
+// CanExecuteChanged is raised, which the window does as either of those moves.
+sealed class RenameEmployeeCommand(
+    ScryQuery query,
+    Func<EmployeeRow?> selected,
+    Func<string> name,
+    Action<string?> report) :
+    ICommand
+{
+    public event EventHandler? CanExecuteChanged;
+
+    public bool CanExecute(object? parameter) =>
+        query.Commands.CanRenameEmployee &&
+        selected() is not null;
+
+    public async void Execute(object? parameter)
+    {
+        if (selected() is not { } row)
+        {
+            return;
+        }
+
+        try
+        {
+            var outcome = await query.Commands.RenameEmployee(new() {Id = row.Id, Name = name()});
+            report(
+                outcome.Status switch
+                {
+                    ScryCommandStatus.Completed => $"Renamed {row.Name}.",
+                    ScryCommandStatus.Pending => "Still renaming.",
+                    _ => outcome.Error
+                });
+        }
+        catch (Exception exception)
+        {
+            report(exception.Message);
+        }
+    }
+
+    public void Raise() =>
+        CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+}
+```
+<sup><a href='/samples/Sample.WpfClient/MainWindow.xaml.cs#L114-L158' title='Snippet source file'>snippet source</a> | <a href='#snippet-wpfCommand' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
 
 ## What the traffic looks like
@@ -601,6 +784,27 @@ _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>
 <!-- endSnippet -->
 
 Four projected columns requested, four returned. `Salary` is neither requested nor returnable.
+
+A command decided within the sync window is one request and one receipt:
+
+```
+POST /api/query/command
+{"version":1,"command":"SetEmployeeActive","id":"0b9d4f7e-3a51-4c2e-8f60-6d1a2e9c7b14","payload":{"id":4,"active":true},"stamp":"…"}
+
+200 application/json
+{"version":1,"id":"0b9d4f7e-3a51-4c2e-8f60-6d1a2e9c7b14","status":"Completed","stamp":"…"}
+```
+
+A slow rename is the same request, answered as a stream: the pending receipt at once, and the outcome when the handler is done.
+
+```
+200 text/event-stream
+event: result
+data: {"version":1,"id":"6e0f…","status":"Pending","stamp":"…"}
+
+event: result
+data: {"version":1,"id":"6e0f…","status":"Completed","stamp":"…"}
+```
 
 
 ## Integration tests
@@ -637,5 +841,7 @@ public async Task DisallowedPropertyRejectedWith400()
     Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L372-L399' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L376-L403' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
+
+`CommandRoundTripTests` does the same for commands: every generated command sent over HTTP to a host running the sample's own handlers — the typed result, the enum payload by name, a slow rename's streamed receipt, and a delete arriving as a live query's next answer. `CommandHttpTests` and `CommandHubTests` pin the command routes and hub methods themselves, against a model of their own.

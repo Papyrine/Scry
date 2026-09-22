@@ -1,0 +1,72 @@
+﻿<div id="app">
+  <button type="button" class="scry-sidecar-launcher" data-testid="sidecar-toggle" title="Open the Scry sidecar (Alt+Q)" aria-label="Open the Scry debug sidecar">Scry</button>
+  <link rel="stylesheet" href="_content/Scry.Client/scry-commands.css">
+  <h1 tabindex="-1">Live query</h1>
+  
+  <p>
+    <a href="/">← Samples</a>
+    ·
+    <a href="/scry">Explorer</a>
+  </p>
+  <nav class="tabs" aria-label="Ways to consume a live query">
+    <a href="/live" class="active">Callback</a>
+    <a href="/live/stream" class="">Stream</a>
+    <a href="/live/rx" class="">Rx</a>
+    <a href="/live/messagepipe" class="">MessagePipe</a>
+  </nav>
+  <p>
+    The same live query on each tab, consumed a different way. Open this page in a second window and     press a button in either: both update, with no reload and no polling from the page.
+  </p>
+  <p>
+    <button id="reprice">Reprice an order</button>
+    <button id="reprice-bulk">Reprice in bulk</button>
+  </p>
+  <fieldset class="transport" id="transport" data-transport="sse">
+    <legend>Transport</legend>
+    <label>
+      <input type="radio" name="transport" id="transport-sse">
+      SSE
+    </label>
+    <label>
+      <input type="radio" name="transport" id="transport-signalr">
+      SignalR
+    </label>
+  </fieldset>
+  <h2>Orders
+    <small id="count">3 live</small>
+  </h2>
+  <p>
+    <code>Subscribe(callback)</code>: the simplest way to consume one. The callback is handed the whole     current result each time it changes, and the handle it returns is disposed with the page.
+  </p>
+  <table id="orders">
+    <thead>
+      <tr>
+        <th>Id</th>
+        <th>Region</th>
+        <th>Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td>North</td>
+        <td>100.00</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>North</td>
+        <td>250.00</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td>South</td>
+        <td>75.00</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+<div id="blazor-error-ui">
+  An unhandled error has occurred.
+  <a href="" class="reload">Reload</a>
+</div>
+<script src="_framework/blazor.webassembly.js"></script>

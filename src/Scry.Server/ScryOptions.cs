@@ -1,4 +1,6 @@
-﻿namespace Scry;
+﻿using Microsoft.Extensions.DependencyInjection.Extensions;
+
+namespace Scry;
 
 /// <summary>
 /// Configures the server-side query executor: which model to expose, in-memory POCO sources,
@@ -71,9 +73,11 @@ public sealed class ScryOptions(Type contextType)
     /// Maximum number of queries one batch request may carry. Default 20.
     /// </summary>
     /// <remarks>
-    /// A batch is the one place a single request costs more than one query, so this is the bound that
-    /// keeps it from being an amplifier: every other limit is per query and would otherwise apply to an
-    /// arbitrary number of them. A batch over the limit is rejected whole, before any entry runs.
+    /// A batch is a single request that costs more than one query, so this is the bound that keeps it
+    /// from being an amplifier: every other limit here is per query and would otherwise apply to an
+    /// arbitrary number of them. A batch over the limit is rejected whole, before any entry runs. The
+    /// other such request is a live query, which has bounds of its own —
+    /// <see cref="MaxSubscriptions"/> and the options beside it.
     /// </remarks>
     public int MaxBatchSize { get; set; } = 20;
 
@@ -147,6 +151,173 @@ public sealed class ScryOptions(Type contextType)
     /// </remarks>
     public double? LimitWatchFraction { get; set; }
     // end-snippet
+
+    // begin-snippet: scryOptionsSubscriptions
+    /// <summary>
+    /// How many live queries this server holds open at once. Default zero, which maps no subscribe
+    /// route at all: a live query is a connection held and a query re-run on other people's writes, so
+    /// a deployment has one because it asked for one.
+    /// </summary>
+    /// <remarks>
+    /// One past the limit is answered <c>503</c> with a <c>Retry-After</c>, and nothing about it runs.
+    /// </remarks>
+    public int MaxSubscriptions { get; set; }
+
+    /// <summary>
+    /// How many of those one caller may hold, where <see cref="Caller"/> can say who is asking.
+    /// Default 20. One past it is answered <c>429</c>.
+    /// </summary>
+    public int MaxSubscriptionsPerCaller { get; set; } = 20;
+
+    /// <summary>
+    /// Who is asking: what a live query and a pending command are counted against, what a command is
+    /// handed as its caller and audited under, and whose a pending command's outcome is. The
+    /// authenticated name by default; null — an anonymous caller — is counted against nobody, so only
+    /// the server-wide limits bound it.
+    /// </summary>
+    /// <remarks>
+    /// Read from the authenticated principal or something derived from it, never from a header: a
+    /// caller that names itself names somebody new each time, is bounded by nothing, and could claim
+    /// somebody else's command.
+    /// </remarks>
+    public Func<HttpContext, string?> Caller { get; set; } = _ => _.User.Identity?.Name;
+
+    /// <summary>
+    /// The largest answer a live query may hold, in bytes. Default 1,048,576 (1 MB). An answer is
+    /// written whole before it is compared with the one before it, so this is what a subscription can
+    /// cost in memory — and one that outgrows it ends with a rejection saying so.
+    /// </summary>
+    public int MaxSubscriptionBytes { get; set; } = 1024 * 1024;
+
+    /// <summary>
+    /// How many live queries may be running against the database at once, across every subscription.
+    /// Default 8. One write can make thousands of them due in the same instant; this is what turns
+    /// that into a queue.
+    /// </summary>
+    public int MaxConcurrentSubscriptionRuns { get; set; } = 8;
+
+    /// <summary>
+    /// The least time between two runs of one live query. Default one second. Changes arriving inside
+    /// it are not lost and not queued: the query runs once when the time is up and answers for all of
+    /// them.
+    /// </summary>
+    public TimeSpan SubscriptionThrottle { get; set; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// How often a live query is run whether or not anything reported a change. Default thirty
+    /// seconds; null runs it only when told.
+    /// </summary>
+    /// <remarks>
+    /// Reports make a live query fast; this makes it correct. It is what catches everything nothing
+    /// reports — a bulk update nobody called <c>Notify</c> for, a write from another system, a policy
+    /// that answers by a claim or the clock, a row a view derives from a table this query never names.
+    /// A run that finds the answer unchanged sends nothing, so an idle poll costs a query and no
+    /// bandwidth.
+    /// </remarks>
+    public TimeSpan? SubscriptionPollInterval { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>How often an idle live query is sent a heartbeat. Default fifteen seconds.</summary>
+    public TimeSpan SubscriptionHeartbeat { get; set; } = TimeSpan.FromSeconds(15);
+
+    /// <summary>
+    /// How long one live query's connection may last before the server ends it and the client asks
+    /// again. Default thirty minutes; null ends it only when the authentication ticket expires.
+    /// </summary>
+    /// <remarks>
+    /// Authorization is decided once per request, and a live query is one request. Ending it is what
+    /// makes a caller prove who they are again — so this, or the ticket's expiry where that is sooner,
+    /// bounds how long a revoked caller keeps receiving answers.
+    /// </remarks>
+    public TimeSpan? SubscriptionLifetime { get; set; } = TimeSpan.FromMinutes(30);
+
+    /// <summary>
+    /// Something that moves whenever the database is written — a change marker, a log position. Asked
+    /// every <see cref="ChangeProbeInterval"/> while any live query is open, from a service scope of
+    /// its own; when the answer differs from the last one, every live query is run again. Null, the
+    /// default, asks nothing.
+    /// </summary>
+    /// <remarks>
+    /// This sees every writer there is — another node, another system, raw SQL — without any of them
+    /// knowing Scry exists, which makes the database the backplane. What it cannot say is which
+    /// entities changed, so it re-runs everything; a run that finds nothing new still sends nothing.
+    /// Returning null skips one probe. Scry.Server.Delta supplies one for a <c>DbContext</c> in a line.
+    /// </remarks>
+    public Func<IServiceProvider, Cancel, ValueTask<string?>>? ChangeProbe { get; set; }
+
+    /// <summary>How often <see cref="ChangeProbe"/> is asked. Default one second.</summary>
+    public TimeSpan ChangeProbeInterval { get; set; } = TimeSpan.FromSeconds(1);
+    // end-snippet
+
+    // begin-snippet: scryOptionsCommands
+    /// <summary>
+    /// How many commands may be in flight at once — accepted and not yet finished. Default zero, which
+    /// maps no command route at all: a server serves writes because it said it would, and one that has
+    /// not says nothing about the commands its model declares — every capability reads false.
+    /// </summary>
+    /// <remarks>
+    /// One past the limit is answered <c>503</c> with a <c>Retry-After</c>, and nothing about it runs.
+    /// When this is set, every command the model declares has to be handled — by a handler in the
+    /// container or a dispatcher that claims it — or the server refuses to start.
+    /// </remarks>
+    public int MaxPendingCommands { get; set; }
+
+    /// <summary>
+    /// How many of those one caller may have in flight, where <see cref="Caller"/> can say who is
+    /// asking. Default 20. One past it is answered <c>429</c>.
+    /// </summary>
+    public int MaxPendingCommandsPerCaller { get; set; } = 20;
+
+    /// <summary>
+    /// How long a command is waited for before it is answered as pending. Default one second. A command
+    /// finishing inside it is answered with its outcome in one response; one that does not is answered
+    /// with a stream: pending at once, then the outcome when it lands.
+    /// </summary>
+    public TimeSpan CommandSyncWindow { get; set; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// How long a finished command's outcome is kept for a client asking for it again by its id.
+    /// Default five minutes. A command still pending after twelve times this is failed as having
+    /// received no completion — a handler that never answers must not hold its place for ever.
+    /// </summary>
+    public TimeSpan CommandRetention { get; set; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// The largest command body read, in bytes. Default 65,536 (64 KiB). One declaring more is refused
+    /// with a <c>413</c> before it is read, and one sending more is refused once it passes the limit.
+    /// </summary>
+    public int MaxCommandBytes { get; set; } = 64 * 1024;
+    // end-snippet
+
+    internal List<Type> Dispatchers { get; } = [];
+
+    /// <summary>
+    /// Adds a dispatcher: something that carries commands elsewhere — a message bus, a queue — and
+    /// reports their outcome back. Resolved from the container, and asked in the order added which
+    /// commands it claims; a command no dispatcher claims is handled in-process, by the
+    /// <see cref="ICommandHandler{TCommand}"/> the container supplies, and one two dispatchers claim is
+    /// refused at startup.
+    /// </summary>
+    public void AddDispatcher<TDispatcher>()
+        where TDispatcher : class, ICommandDispatcher
+    {
+        if (!Dispatchers.Contains(typeof(TDispatcher)))
+        {
+            Dispatchers.Add(typeof(TDispatcher));
+        }
+    }
+
+    /// <summary>
+    /// The same, for a dispatcher built by <paramref name="factory"/> — which <c>AddScry</c> registers
+    /// as a singleton, so a bus adapter can bring its dispatcher along with its configuration.
+    /// </summary>
+    public void AddDispatcher<TDispatcher>(Func<IServiceProvider, TDispatcher> factory)
+        where TDispatcher : class, ICommandDispatcher
+    {
+        AddDispatcher<TDispatcher>();
+        DispatcherServices.Add(_ => _.TryAddSingleton(factory));
+    }
+
+    internal List<Action<IServiceCollection>> DispatcherServices { get; } = [];
 
     /// <summary>
     /// What the rows a query would return are current as of — a database change marker, typically.
@@ -356,6 +527,39 @@ public sealed class ScryOptions(Type contextType)
         where TPolicy : ICachedRowPolicy<TEntity> =>
         CachedPolicies[typeof(TEntity)] = (typeof(TPolicy), version, handling ?? DeniedRowHandling.Default);
 
+    internal Func<IServiceProvider, IScryChangeBackplane>? Backplane { get; private set; }
+
+    /// <summary>
+    /// Carries this node's changes to the deployment's other nodes, and theirs to this one, so a write
+    /// on any of them re-asks the live queries held by all. Unset — the default — a node hears only
+    /// its own writes, which is everything a single server needs.
+    /// </summary>
+    /// <remarks>
+    /// The backplane is built from the host's services, so it may take whatever it needs from them —
+    /// a connection multiplexer, a message session. A deployment whose database can say when it was
+    /// last written needs none: see <c>ChangeProbe</c>.
+    /// </remarks>
+    public void UseBackplane<TBackplane>()
+        where TBackplane : class, IScryChangeBackplane =>
+        Backplane = ActivatorUtilities.GetServiceOrCreateInstance<TBackplane>;
+
+    /// <summary>The same, built by <paramref name="factory"/> rather than by its constructor.</summary>
+    public void UseBackplane(Func<IServiceProvider, IScryChangeBackplane> factory) =>
+        Backplane = factory;
+
+    /// <summary>
+    /// The same, for a backplane that needs services of its own beside it — something its transport
+    /// resolves from the container and the backplane has to share, as a message handler and the
+    /// backplane it hands its messages to do. <paramref name="services"/> is run by <c>AddScry</c>.
+    /// </summary>
+    public void UseBackplane(Func<IServiceProvider, IScryChangeBackplane> factory, Action<IServiceCollection> services)
+    {
+        Backplane = factory;
+        BackplaneServices = services;
+    }
+
+    internal Action<IServiceCollection>? BackplaneServices { get; private set; }
+
     internal Dictionary<Type, Type> AttachmentPolicies { get; } = [];
 
     /// <summary>
@@ -366,4 +570,16 @@ public sealed class ScryOptions(Type contextType)
     public void AddAttachmentPolicy<TEntity, TPolicy>()
         where TPolicy : IAttachmentPolicy<TEntity> =>
         AttachmentPolicies[typeof(TEntity)] = typeof(TPolicy);
+
+    internal Dictionary<Type, Type> CommandPolicies { get; } = [];
+
+    /// <summary>
+    /// Attaches the policy deciding who may send a command — and, where it also implements
+    /// <see cref="ICommandPolicy{TCommand, TEntity}"/>, against which rows — replacing any
+    /// <c>[Command(Policy = ...)]</c> on the command. A command with no policy may be sent by anyone
+    /// its endpoint admits.
+    /// </summary>
+    public void AddCommandPolicy<TCommand, TPolicy>()
+        where TPolicy : ICommandPolicy<TCommand> =>
+        CommandPolicies[typeof(TCommand)] = typeof(TPolicy);
 }

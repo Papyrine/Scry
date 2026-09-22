@@ -45,7 +45,7 @@ References the query models project, and through it `Scry.Client`. The model is 
   <ProjectReference Include="..\Sample.QueryModels\Sample.QueryModels.csproj" />
 </ItemGroup>
 ```
-<sup><a href='/samples/Sample.FSharp/Sample.FSharp.fsproj#L17-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpProjectReference' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.FSharp/Sample.FSharp.fsproj#L19-L24' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpProjectReference' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 One F#-specific note: under central package management the F# SDK turns its implicit `FSharp.Core` reference off, so a project in such a tree references it by hand. Without it the assembly builds — the compiler falls back to the SDK's own copy — and then fails to load every type at runtime.
@@ -160,6 +160,75 @@ let activeCountAsync (query: ScryQuery) =
 <sup><a href='/samples/Sample.FSharp/Queries.fs#L68-L79' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpTerminals' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
+A [live query](live-queries.md) hands over the `IObservable<T>` that ships with .NET, which is the one FSharp.Core's `Observable` module is written against. So F# composes one with no reactive package at all:
+
+<!-- snippet: fsharpLiveObservable -->
+<a id='snippet-fsharpLiveObservable'></a>
+```fs
+/// A live query as an observable, composed with FSharp.Core's own Observable module. There is no
+/// reactive package here: Scry hands over the IObservable that ships with .NET, and F# already
+/// knows what to do with one. Each answer is the whole current result.
+let activeNames (query: ScryQuery) : IObservable<string list> =
+    (Queries.activeEmployees query).Live().AsObservable()
+    |> Observable.map (fun rows -> rows |> Seq.map _.Name |> List.ofSeq)
+```
+<sup><a href='/samples/Sample.FSharp/Live.fs#L10-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpLiveObservable' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Read as a stream it is an `IAsyncEnumerable<T>`, which F# has no `for` over inside a `task`, so the enumerator is pulled by hand:
+
+<!-- snippet: fsharpLiveStream -->
+<a id='snippet-fsharpLiveStream'></a>
+```fs
+/// The same live query read as a stream: an IAsyncEnumerable, pulled one answer at a time until
+/// the token is cancelled, which is also what tells the server the subscription is over.
+let watch (query: ScryQuery) (onAnswer: EmployeeRow list -> unit) (cancel: CancellationToken) =
+    task {
+        use answers =
+            (Queries.activeEmployees query).Live().GetAsyncEnumerator cancel
+
+        let mutable more = true
+
+        while more do
+            let! next = answers.MoveNextAsync()
+            more <- next
+
+            if more then
+                onAnswer (List.ofSeq answers.Current)
+    }
+```
+<sup><a href='/samples/Sample.FSharp/Live.fs#L19-L36' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpLiveStream' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+
+## Sending commands
+
+A [command](commands.md) is sent from F# as from C#: the generated class, its properties set in the constructor call, and the facade method awaited like any `Task`. A command with a result is read through the typed outcome.
+
+<!-- snippet: fsharpCommand -->
+<a id='snippet-fsharpCommand'></a>
+```fs
+/// A command from F#: the generated class, its properties set in the constructor call, sent through
+/// the generated facade. The outcome is a Task like any other — Completed where the server decided
+/// it within its sync window, Pending with its Completion to await where it did not.
+let rename (query: ScryQuery) (id: int) (name: string) =
+    query.Commands.RenameEmployee(RenameEmployee(Id = id, Name = name))
+
+/// A command that answers with a result: the typed outcome's Value is the class the handler
+/// answered with, read only once EnsureCompleted has said the command did complete.
+let hire (query: ScryQuery) (name: string) (departmentId: int) =
+    task {
+        let! outcome =
+            query.Commands.CreateEmployee(CreateEmployee(Name = name, DepartmentId = departmentId, Status = Status.FullTime))
+
+        return outcome.EnsureCompleted().Value.Id
+    }
+```
+<sup><a href='/samples/Sample.FSharp/Commands.fs#L8-L24' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpCommand' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+`Sample.FSharp.Tests/CommandTests.fs` sends both against the sample's own handlers, and watches a live query hear the rename.
+
 
 ## What to avoid
 
@@ -192,20 +261,36 @@ type ScryServer private (app: WebApplication, database: SqlDatabase<SampleContex
                     Task.CompletedTask),
             storage = Storage.FromSuffix<SampleContext> "FSharp")
 
-    static member StartAsync() =
+    /// A suffix gives a fixture that writes a database of its own, so the fixtures that snapshot the
+    /// seed never see what it changed.
+    static member StartAsync(?databaseSuffix: string) =
         task {
-            let! database = sqlInstance.Build()
+            let! database = sqlInstance.Build(databaseSuffix = defaultArg databaseSuffix null)
             let builder = WebApplication.CreateBuilder()
             builder.WebHost.UseTestServer() |> ignore
 
-            builder.Services.AddDbContext<SampleContext>(fun (options: DbContextOptionsBuilder) ->
-                options.UseSqlServer database.ConnectionString |> ignore)
+            // The interceptor reports what this context saves, which is what makes a live query hear
+            // of it. Resolved rather than constructed, so it reports to the place the server listens.
+            builder.Services.AddDbContext<SampleContext>(fun (services: IServiceProvider) (options: DbContextOptionsBuilder) ->
+                options
+                    .UseSqlServer(database.ConnectionString)
+                    .AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>())
+                |> ignore)
             |> ignore
+
+            // The sample's command handlers: the C# project every host with commands on shares.
+            builder.Services.AddSampleCommandHandlers() |> ignore
 
             builder.Services.AddScry<SampleContext>(fun options ->
                 options.AddPocoSource(fun _ -> Holiday.Seed())
                 options.AddAttachmentPolicy<Department, HandbookPolicy>()
-                options.AddAttachmentPolicy<Employee, PhotoPolicy>())
+                options.AddAttachmentPolicy<Employee, PhotoPolicy>()
+
+                // Live queries are off until a server says how many it will hold open, and commands
+                // until it says how many it may have in flight.
+                options.MaxSubscriptions <- 10
+                options.SubscriptionThrottle <- TimeSpan.Zero
+                options.UseSampleCommands() |> ignore)
             |> ignore
 
             let app = builder.Build()
@@ -215,7 +300,10 @@ type ScryServer private (app: WebApplication, database: SqlDatabase<SampleContex
         }
 
     /// The generated entry point over an HTTP client into the hosted server.
-    member _.Query = ScryQuery(ScryClient.ForHttp(app.GetTestClient(), "/api/query"))
+    member this.Query = ScryQuery(ScryClient.ForHttp(this.Http, "/api/query"))
+
+    /// An HTTP client into the hosted server.
+    member _.Http = app.GetTestClient()
 
     interface IAsyncDisposable with
         member _.DisposeAsync() =
@@ -226,7 +314,7 @@ type ScryServer private (app: WebApplication, database: SqlDatabase<SampleContex
                 }
                 :> Task)
 ```
-<sup><a href='/samples/Sample.FSharp.Tests/ScryServer.fs#L24-L73' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpServer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.FSharp.Tests/ScryServer.fs#L25-L93' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpServer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Each query is snapshotted twice: the request as it would travel, and the rows the server returns for it.

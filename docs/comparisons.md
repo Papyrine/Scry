@@ -54,7 +54,7 @@ Two more sit outside the table:
 | Type systems to keep in sync | one (C#) | two (C# ↔ SDL) | two (C# ↔ EDM) | two (server DTO ↔ client DTO) | two (C# ↔ proto) |
 | New query shape for a new screen | client-only | free if the fields exist, else a new field + resolver | free if the option is enabled | new endpoint + DTO + test + deploy | new method + messages |
 | Exposure default | deny — opt in per type and member | the schema is the allow-list, by construction | the convention model builder exposes every property of a registered entity set | whatever the DTO carries | whatever the message carries |
-| Reads / writes | read-only | queries, mutations, subscriptions | full CRUD | anything | anything |
+| Reads / writes | queries, once or [live](live-queries.md); writes as [commands](commands.md) | queries, mutations, subscriptions | full CRUD | anything | anything |
 | Non-.NET clients | no | yes | yes | yes | yes |
 | Suits a public, multi-consumer contract | no | yes | yes | yes | yes |
 | Per-field resolution | none — one translated EF query | resolver per field; needs DataLoader to avoid N+1 | none — one translated query | none | none |
@@ -77,7 +77,7 @@ employees = await Query
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L48-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L89-L96' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 GraphQL, with Hot Chocolate's filtering and sorting conventions:
@@ -127,7 +127,7 @@ Where they differ:
 - **One type system, not two.** GraphQL's SDL is a second type system that has to be mapped to and from C#, and a second codegen step on the client. Scry's client types are generated from the model dll itself, so a renamed property is a **compile error** in the UI rather than a runtime "field not found". See [Source generator](source-generator.md).
 - **The query language is the host language.** The UI writes LINQ, in the file it already lives in, with IntelliSense and refactoring support that came free. GraphQL documents are strings that tooling has to be taught about.
 - **Nothing to resolve.** A resolver per field is what lets GraphQL federate — and what makes DataLoader necessary. Scry's pipeline is one translated EF query, so there is no resolver layer to N+1 in.
-- **Read-only, one model.** Mutations, subscriptions, federation, and stitching across back ends are all GraphQL and none of them Scry.
+- **Commands, not mutations; one model.** A GraphQL mutation is a field that writes and then answers with a selection. A Scry write is a [command](commands.md): a class the model declares, validated and authorized on the server, with an outcome and no selection — what it wrote reaches the screen through the queries that read it. Federation and stitching across back ends are GraphQL and not Scry. A GraphQL subscription is an event stream the server defines, which Scry has no counterpart to; what it has is a [live query](live-queries.md) — any query the client can write, answered again when its answer changes.
 - **Evolution.** GraphQL is built to be a long-lived contract for consumers the publishing team does not deploy: deprecate, never break. Scry assumes client and server ship together, and instead carries a [schema stamp](schema-versioning.md) so a *stale* client is detected rather than tolerated.
 
 **Choose GraphQL when** there is more than one consumer, any consumer is not .NET, the same graph also needs writes, or services need to federate.
@@ -155,14 +155,14 @@ The cost is one endpoint, one DTO, one test, and one deploy per screen — conce
 
 Scry's trade is that the endpoint count stops growing, in exchange for a surface that has to be reasoned about as a whole rather than one endpoint at a time. Reading a controller is replaced by reviewing the allow-list — which is what the [review checklist](security.md#review-checklist) is for.
 
-This is the one comparison that is **not** either/or. Scry is read-only, so commands, writes, and anything with server-side business rules stay ordinary endpoints. The realistic end state is hand-written endpoints for writes alongside Scry for reads.
+This is the one comparison that is **not** either/or. Scry's queries never write, and its [commands](commands.md) cover writes that are messages — a class with a handler, a policy and an outcome. Anything that does not fit that shape — a file upload, a webhook, a workflow with its own protocol — stays an ordinary endpoint. The realistic end state is Scry for reads and most writes, alongside hand-written endpoints for the rest.
 
 
 ## gRPC and contract-first RPC
 
 Not really a competitor in kind. gRPC is a transport plus a contract-first RPC model: excellent codegen, efficient binary framing, streaming, and genuinely cross-language. But it shares the property that matters here with hand-written endpoints — **one method per use case** — so query shaping stays a server-side concern and the churn stays server-side too.
 
-Worth noting that the two are not exclusive: Scry is not tied to HTTP and JSON. `ScryProcessor.Execute` is the single choke point for validation and execution, so a gRPC or SignalR method can carry a `QueryRequest` as readily as the mapped endpoint does. See [Hosting without the HTTP endpoint](server.md#hosting-without-the-http-endpoint).
+Worth noting that the two are not exclusive: Scry is not tied to HTTP and JSON. `ScryProcessor.Execute` is the single choke point for validation and execution, so a gRPC or SignalR method can carry a `QueryRequest` as readily as the mapped endpoint does. For SignalR that is a package rather than an exercise: see [Over SignalR instead of HTTP](live-queries.md#over-signalr-instead-of-http), and [Hosting without the HTTP endpoint](server.md#hosting-without-the-http-endpoint) for anything else.
 
 
 ## Expression-tree serializers and dynamic LINQ
@@ -210,7 +210,7 @@ tRPC, from the TypeScript world, is the closest relative: one language on both s
 
 - **The API is a public contract**, or serves consumers on a release cycle the team does not control. A generated client is bound to the surface it was generated against; that is a deliberate coupling, not an oversight.
 - **Any client is not .NET.** There is no non-.NET client story, and a hand-written wire request is not one.
-- **Writes are in scope.** Scry is read-only by design — see [Out of scope](linq-coverage.md#out-of-scope). Pair it with ordinary endpoints.
+- **Writes need more than a message.** Scry's writes are [commands](commands.md): a payload of scalars, one handler, an outcome. Writes that need uploads, nested documents, or a transaction across several of them are ordinary endpoints — pair Scry with those.
 - **The read model is not EF Core.** Non-EF data can be surfaced as a [`[QueryablePoco]` source](server.md#poco-sources), but that runs the pipeline in memory over the supplied sequence — fine for lookup tables, not for a primary data path.
 - **The query shapes are few and stable.** Four endpoints that rarely change are not a problem worth a query engine.
 - **The queries need operators Scry does not carry.** The vocabulary is closed and covers most of what EF Core translates — joins, set operations, grouping, subqueries and collection aggregates included — but it is a fixed set rather than arbitrary LINQ, and it grows one audited addition at a time. Check [LINQ coverage](linq-coverage.md) against real queries before committing.

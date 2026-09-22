@@ -1,0 +1,25 @@
+@page "/live/messagepipe"
+@using MessagePipe
+@inherits LivePage
+@inject IBufferedPublisher<OrdersChanged> Publisher
+
+<PageTitle>Scry Sample — Live query with MessagePipe</PageTitle>
+
+<h1>Live query with MessagePipe</h1>
+<LiveChrome Active="messagepipe" />
+
+<h2>Orders</h2>
+<p>
+    One live query, published into an in-process bus, and two components that know nothing about Scry
+    subscribing to the bus. Each consumer of a live query opens a server subscription of its own, so
+    this is how several parts of a page share one: the page owns the subscription, and everything
+    else listens to what it publishes.
+</p>
+
+@if (error is not null)
+{
+    <p class="error" role="alert">@error</p>
+}
+
+<OrdersBadge />
+<OrdersGrid />

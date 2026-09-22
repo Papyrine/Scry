@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <!--
+    The command adapters for the buses that carry commands and nothing else, each against its own
+    in-process transport: MassTransit's in-memory one, a shared Rebus in-memory network, Wolverine's
+    local queues. Apart from the backplane tests, so a restore problem in one of these dependency
+    chains stays out of those.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NUnit" />
+    <PackageReference Include="NUnit3TestAdapter" />
+    <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Rebus.ServiceProvider" />
+    <PackageReference Include="WolverineFx.RuntimeCompilation" />
+    <ProjectReference Include="..\Scry.Server\Scry.Server.csproj" />
+    <ProjectReference Include="..\Scry.Server.MassTransit\Scry.Server.MassTransit.csproj" />
+    <ProjectReference Include="..\Scry.Server.Rebus\Scry.Server.Rebus.csproj" />
+    <ProjectReference Include="..\Scry.Server.Wolverine\Scry.Server.Wolverine.csproj" />
+  </ItemGroup>
+</Project>

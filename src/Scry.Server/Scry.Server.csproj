@@ -20,6 +20,15 @@
          reaching directly rather than contriving a request that happens to hit them. Named by key for
          the reason given on Scry.Client's friend. -->
     <InternalsVisibleTo Include="Scry.Tests" Key="$(ScryPublicKey)" />
+    <!-- The hub is a second way of serving the same queries, and serves them the way the endpoints
+         do: through the buffered paths, which hand back finished bytes rather than objects to
+         serialize again. Those are internal because their buffers are only valid until the next
+         call, which is a contract for code in this repository and not for a consumer's. Versioned
+         and shipped with this package, so the friendship is never between two versions. -->
+    <InternalsVisibleTo Include="Scry.Server.SignalR" Key="$(ScryPublicKey)" />
+    <!-- A backplane is tested by raising a change on one node and watching for it on another, and
+         both ends of that are internal: a host reports changes by type, and only a live query listens. -->
+    <InternalsVisibleTo Include="Scry.Backplane.Tests" Key="$(ScryPublicKey)" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="HttpMultipart" PrivateAssets="all" />

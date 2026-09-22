@@ -57,7 +57,7 @@ sealed class ResponseSpill(HttpContext context, int threshold) :
     /// A no-op without permission, so the fail-closed direction of a caller draining when it should not
     /// is that the response stays whole — which is what it was before this type existed.
     /// </remarks>
-    public async ValueTask DrainAsync(Cancel cancel)
+    public async ValueTask DrainAsync(Cancel cancel = default)
     {
         if (!allowed)
         {
@@ -82,7 +82,7 @@ sealed class ResponseSpill(HttpContext context, int threshold) :
     /// bytes are the entire body and a length can be declared. Kestrel never infers one from what an
     /// application buffered, so a response that says nothing here is chunked.
     /// </remarks>
-    public async Task CompleteAsync(Cancel cancel)
+    public async Task CompleteAsync(Cancel cancel = default)
     {
         if (!committed)
         {

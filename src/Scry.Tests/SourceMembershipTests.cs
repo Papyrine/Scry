@@ -46,7 +46,7 @@ public class SourceMembershipTests
             .CountAsync(_ =>
                 client
                     .Source<Employee>("Employee")
-                    .Select(_ => (int?)_.Id)
+                    .Select(_ => (int?) _.Id)
                     .Contains(_.ManagerId));
 
         Assert.That(count, Is.EqualTo(2));
@@ -105,8 +105,7 @@ public class SourceMembershipTests
                     new MemberNode(["Id"])))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
-            () => SharedProcessor.Instance.Execute(request, context));
+        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
         Assert.That(exception!.Message, Does.Contain("Unknown source"));
     }

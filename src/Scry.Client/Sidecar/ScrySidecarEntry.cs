@@ -4,7 +4,8 @@ namespace Scry;
 /// <remarks>
 /// Note what a logical query is not: one entry. The client retries a refused GET as a POST, so one
 /// <c>ToListAsync()</c> can appear twice; a batch collapses several queries into one entry; a stream
-/// is one entry producing many rows.
+/// is one entry producing many rows. A live query goes the other way — one entry however many
+/// connections it took to hold it open, with the connections on its <see cref="Session"/>.
 /// </remarks>
 public sealed record ScrySidecarEntry
 {
@@ -14,7 +15,9 @@ public sealed record ScrySidecarEntry
 
     /// <summary>
     /// Time to the buffered body for queries and batches. Streams and attachments are never
-    /// buffered, so theirs is time to response headers only.
+    /// buffered, so theirs is time to response headers only. A command listed from the client's
+    /// reports alone has no exchange to time: its duration runs from its send to its outcome, and is
+    /// zero until it has one.
     /// </summary>
     public required TimeSpan Duration { get; init; }
 
@@ -60,4 +63,19 @@ public sealed record ScrySidecarEntry
     /// The response bytes are deliberately not kept — downloading always re-asks the server.
     /// </summary>
     public byte[]? AttachmentRequestBody { get; init; }
+
+    /// <summary>
+    /// The live query this entry heads, for a subscription. The one part of a captured exchange that
+    /// goes on changing after it was recorded: a live query is open for as long as the app wants it,
+    /// across however many connections that takes, so what its row shows cannot be settled when the
+    /// row is added. Null for every other kind.
+    /// </summary>
+    public ScrySidecarSession? Session { get; init; }
+
+    /// <summary>
+    /// The command this entry is, for a command sent or reported. Changes after it was recorded, as a
+    /// session does: a pending command's outcome arrives later, and asking for it again folds into
+    /// this row. Null for every other entry, the capabilities read included.
+    /// </summary>
+    public ScrySidecarCommand? Command { get; init; }
 }

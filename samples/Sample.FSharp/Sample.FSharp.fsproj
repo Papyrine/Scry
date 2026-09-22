@@ -6,6 +6,8 @@
 
   <ItemGroup>
     <Compile Include="Queries.fs" />
+    <Compile Include="Live.fs" />
+    <Compile Include="Commands.fs" />
   </ItemGroup>
 
   <ItemGroup>

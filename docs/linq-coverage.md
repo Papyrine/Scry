@@ -108,7 +108,7 @@ regions = await Query
     .Select(_ => new RegionSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L57-L63' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L98-L104' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 …and as a **terminal folding the whole sequence** to one scalar, which needs no `GroupBy`:
@@ -120,7 +120,7 @@ var sum = await client.Source<Order>("Order")
     .Where(_ => _.Region == "North")
     .SumAsync(_ => _.Amount);
 ```
-<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L168-L172' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAggregateTerminal' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L179-L183' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAggregateTerminal' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The other two positions EF Core allows an aggregate in are both reachable as well:
@@ -205,7 +205,7 @@ Listed in EF's `QueryableMethods`, and on `Queryable` rather than only `Enumerab
 
 Server-side EF surface that intentionally has no client-facing equivalent:
 
-- **Write operations** (`ExecuteUpdate`, `ExecuteDelete`, `SaveChanges`) — Scry is read-only.
+- **Write operations** (`ExecuteUpdate`, `ExecuteDelete`, `SaveChanges`) — a query never writes. Writes are [commands](commands.md), declared in the model and handled on the server.
 - **Tracking and shaping** (`Include`, `AsNoTracking`, `AsSplitQuery`, …) — server execution details; clients shape results with `Select`.
 - **Raw SQL** (`FromSql`, `EF.Functions.*`) — free-form SQL or provider functions from a hostile client is exactly what the closed vocabulary exists to prevent.
 

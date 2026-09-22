@@ -26,6 +26,7 @@ public sealed class ScrySidecarHandler(ScrySidecarStore store, ScrySidecarOption
 
         var kind = Classify(request);
         var entry = await CaptureRequest(request, kind, cancellationToken);
+        var command = await Identify(request, kind, cancellationToken);
         var stopwatch = Stopwatch.StartNew();
 
         HttpResponseMessage response;
@@ -35,8 +36,36 @@ public sealed class ScrySidecarHandler(ScrySidecarStore store, ScrySidecarOption
         }
         catch (Exception exception)
         {
-            Record(entry with {Duration = stopwatch.Elapsed, Error = exception.Message});
+            entry = entry with {Duration = stopwatch.Elapsed, Error = exception.Message};
+            if (command is { } unanswered)
+            {
+                RecordCommand(unanswered, entry, _ => _.Saw(ScryCommandActivityKind.Refused, exception.Message));
+                throw;
+            }
+
+            Record(entry);
             throw;
+        }
+
+        // A command answered as a stream of receipts is read by the client above, which reports its
+        // outcome; the stream itself passes through untouched.
+        if (command is { } streamed &&
+            response.IsSuccessStatusCode &&
+            response.Content.Headers.ContentType?.MediaType == ScryLive.ContentType)
+        {
+            RecordCommand(streamed, WithResponse(entry, response) with {Duration = stopwatch.Elapsed}, _ => _.Saw(ScryCommandActivityKind.Pending, null));
+            return response;
+        }
+
+        // A live query's body has no end to read to, so it is watched as it flows rather than
+        // buffered: the tee hands every read straight back and frames a copy on the way past. Only
+        // a live query that actually started — a refusal, or somebody else's answer on this route,
+        // falls through to be buffered and shown like any other failure.
+        if (kind == ScrySidecarKind.Subscription &&
+            response.IsSuccessStatusCode &&
+            response.Content.Headers.ContentType?.MediaType == ScryLive.ContentType)
+        {
+            return Tee(entry, request, response, stopwatch.Elapsed);
         }
 
         // A stream is read row by row above this handler and an attachment's bytes flow through
@@ -58,8 +87,15 @@ public sealed class ScrySidecarHandler(ScrySidecarStore store, ScrySidecarOption
             throw;
         }
 
-        entry = WithResponse(entry, response) with {Duration = stopwatch.Elapsed};
-        Record(await CaptureBody(entry, response, body, cancellationToken));
+        entry = await CaptureBody(WithResponse(entry, response) with {Duration = stopwatch.Elapsed}, response, body, cancellationToken);
+        if (command is { } answered)
+        {
+            RecordCommand(answered, entry, _ => Answered(_, answered, response, body, entry.Error));
+        }
+        else
+        {
+            Record(entry);
+        }
 
         // The content has been read to the end, so the response is handed back over the bytes
         // rather than over the stream they came out of.
@@ -72,6 +108,132 @@ public sealed class ScrySidecarHandler(ScrySidecarStore store, ScrySidecarOption
         response.Content.Dispose();
         response.Content = content;
         return response;
+    }
+
+    /// <summary>
+    /// Hands the live query's body back wrapped in <see cref="SseTee"/>, which watches it without
+    /// holding it up, and opens the row its events are recorded into.
+    /// </summary>
+    /// <remarks>
+    /// The connection is folded into the live query it belongs to by the identifier
+    /// <see cref="LiveSessionStamp"/> put beside the request, so a reconnect lands on the row it
+    /// resumed rather than starting one. A request that carries none was not sent by a
+    /// <see cref="ScryClient"/> — a hand-rolled POST on the same client — and gets a row of its own,
+    /// which is the most that can honestly be said about it.
+    /// </remarks>
+    HttpResponseMessage Tee(
+        ScrySidecarEntry entry,
+        HttpRequestMessage request,
+        HttpResponseMessage response,
+        TimeSpan toHeaders)
+    {
+        var original = response.Content;
+        try
+        {
+            var id = LiveSessionStamp.Read(request) ?? ScryClient.NextLiveSession();
+            var resumedFrom = request.Headers.TryGetValues(ScryLive.LastEventIdHeader, out var ids)
+                ? ids.FirstOrDefault()
+                : null;
+
+            var (session, connection) = store.OpenLive(
+                id,
+                WithResponse(entry, response) with {Duration = toHeaders},
+                resumedFrom);
+
+            connection.Status = (int) response.StatusCode;
+            connection.ResponseHeaders = Flatten(response.Headers, original.Headers);
+
+            // Synchronous, and no I/O: the network stream is already open and this only takes hold
+            // of it, so returning the response is not pushed behind another continuation.
+            var tee = new SseTee(original.ReadAsStream(), original, store, session, connection, options);
+            var content = new StreamContent(tee);
+            foreach (var header in original.Headers)
+            {
+                content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+
+            // The original is not disposed here: the tee is reading it, and disposes it in turn.
+            response.Content = content;
+            return response;
+        }
+        catch (Exception exception)
+        {
+            // A log that cannot watch the stream hands it back untouched, and says why.
+            Record(WithResponse(entry, response) with {Duration = toHeaders, Error = exception.Message});
+            response.Content = original;
+            return response;
+        }
+    }
+
+    void RecordCommand(CommandIdentity command, ScrySidecarEntry entry, Action<ScrySidecarCommand> update)
+    {
+        try
+        {
+            store.CommandExchange(command.Id, command.Name, command.Reattach, entry, update);
+        }
+        catch
+        {
+            // A debug log that cannot record has nothing useful to do about it.
+        }
+    }
+
+    // What a command's whole answer says about it: its receipt, or why there was none. A missing
+    // target is an outcome of the command; not being found when asked for again is losing track of it.
+    static void Answered(ScrySidecarCommand command, CommandIdentity identity, HttpResponseMessage response, byte[] body, string? error)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            command.Receipt(ScryJson.DeserializeReceipt(body));
+            return;
+        }
+
+        if (response.StatusCode != HttpStatusCode.NotFound)
+        {
+            command.Saw(ScryCommandActivityKind.Refused, error);
+            return;
+        }
+
+        if (identity.Reattach)
+        {
+            command.Saw(ScryCommandActivityKind.Unknown, error);
+            return;
+        }
+
+        command.Saw(ScryCommandActivityKind.Failed, error);
+    }
+
+    readonly record struct CommandIdentity(Guid Id, string? Name, bool Reattach);
+
+    // Which command an exchange is about: the one a POST carries, or the one a GET asks for again by
+    // the id in its path. Nothing for the capabilities read, which is about no one command.
+    static async Task<CommandIdentity?> Identify(HttpRequestMessage request, ScrySidecarKind kind, Cancel cancel)
+    {
+        if (kind != ScrySidecarKind.Command)
+        {
+            return null;
+        }
+
+        try
+        {
+            if (request.Method == HttpMethod.Post &&
+                request.Content is not null)
+            {
+                var sent = ScryJson.DeserializeCommandRequest(await request.Content.ReadAsByteArrayAsync(cancel));
+                return new CommandIdentity(sent.Id, sent.Command, Reattach: false);
+            }
+
+            var path = request.RequestUri?.AbsolutePath ?? "";
+            if (Guid.TryParse(path[(path.LastIndexOf('/') + 1)..], out var id))
+            {
+                return new CommandIdentity(id, Name: null, Reattach: true);
+            }
+        }
+        catch
+        {
+            // An unreadable command is still listed, as an exchange of its own.
+        }
+
+        return null;
     }
 
     // Recording must never turn a working query into a failure, so every capture path lands here.
@@ -116,12 +278,13 @@ public sealed class ScrySidecarHandler(ScrySidecarStore store, ScrySidecarOption
 
             // Safe to read: ScryClient sends JSON bodies as ByteArrayContent, which re-reads.
             if (request.Content is not null &&
-                kind is ScrySidecarKind.Query or ScrySidecarKind.Batch or ScrySidecarKind.Attachment)
+                kind is ScrySidecarKind.Query or ScrySidecarKind.Batch or ScrySidecarKind.Attachment or ScrySidecarKind.Subscription or ScrySidecarKind.Command)
             {
                 var body = await request.Content.ReadAsByteArrayAsync(cancel);
                 return entry with
                 {
-                    Request = kind == ScrySidecarKind.Query ? ScryJson.DeserializeRequest(body) : null,
+                    // A live query's request is an ordinary query, so it reads as one.
+                    Request = kind is ScrySidecarKind.Query or ScrySidecarKind.Subscription ? ScryJson.DeserializeRequest(body) : null,
                     RequestJson = SidecarJson.Prettify(body),
                     AttachmentRequestBody = kind == ScrySidecarKind.Attachment ? body : null
                 };
@@ -209,6 +372,20 @@ public sealed class ScrySidecarHandler(ScrySidecarStore store, ScrySidecarOption
             return ScrySidecarKind.Stream;
         }
 
+        // Ahead of the JSON-body rule below, which it would otherwise match: that rule buffers the
+        // response, and this one's never ends.
+        if (path.EndsWith($"/{ScryLive.Route}", StringComparison.Ordinal))
+        {
+            return ScrySidecarKind.Subscription;
+        }
+
+        // Ahead of it too, for the same reason: a command's answer may be a stream of receipts.
+        if (IsCommand(path) ||
+            path.EndsWith($"/{ScryCommandProtocol.CapabilitiesRoute}", StringComparison.Ordinal))
+        {
+            return ScrySidecarKind.Command;
+        }
+
         if (request.Method == HttpMethod.Get &&
             Encoded(request.RequestUri) is not null)
         {
@@ -222,6 +399,21 @@ public sealed class ScrySidecarHandler(ScrySidecarStore store, ScrySidecarOption
         }
 
         return ScrySidecarKind.Other;
+    }
+
+    // A command sent, or one asked for again by the id its path ends in.
+    static bool IsCommand(string path)
+    {
+        var route = $"/{ScryCommandProtocol.Route}";
+        if (path.EndsWith(route, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        var slash = path.LastIndexOf('/');
+        return slash > 0 &&
+               Guid.TryParse(path.AsSpan(slash + 1), out _) &&
+               path.AsSpan(0, slash).EndsWith(route, StringComparison.Ordinal);
     }
 
     /// <summary>The URL's <see cref="QueryUrl.Parameter"/> value, when present.</summary>

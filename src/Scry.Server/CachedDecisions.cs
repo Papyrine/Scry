@@ -50,5 +50,5 @@ interface IPendingDecision
 {
     void Run();
 
-    ValueTask RunAsync(Cancel cancel);
+    ValueTask RunAsync(Cancel cancel = default);
 }

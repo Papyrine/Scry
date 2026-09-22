@@ -23,7 +23,7 @@ Paging is expressed through a single client terminal, `ToPageAsync`; everything 
 <a id='snippet-pagingGrammar'></a>
 ```cs
 // Page 1 — an ordered query with a page size.
-var page = await Query.Employee
+var page = await query.Employee
     .Where(_ => _.Active)
     .OrderBy(_ => _.Created)
     .ThenBy(_ => _.Id)
@@ -37,7 +37,7 @@ foreach (var row in page.Items)
 // Page 2 — the same query, resumed with the previous page's cursor (a keyset seek).
 if (page.HasMore)
 {
-    var next = await Query.Employee
+    var next = await query.Employee
         .Where(_ => _.Active)
         .OrderBy(_ => _.Created)
         .ThenBy(_ => _.Id)

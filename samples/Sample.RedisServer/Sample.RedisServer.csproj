@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- One database for two nodes, the registration the model needs, and a write to watch arrive:
+         shared by every backplane sample, so Program.cs holds only the backplane. -->
+    <Compile Include="..\Shared\BackplaneHost.cs" Link="BackplaneHost.cs" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="EfLocalDb" />
+    <ProjectReference Include="..\..\src\Scry.Server\Scry.Server.csproj" />
+    <ProjectReference Include="..\..\src\Scry.Server.Redis\Scry.Server.Redis.csproj" />
+    <ProjectReference Include="..\Sample.Model\Sample.Model.csproj" />
+    <ProjectReference Include="..\Sample.CommandHandlers\Sample.CommandHandlers.csproj" />
+  </ItemGroup>
+</Project>

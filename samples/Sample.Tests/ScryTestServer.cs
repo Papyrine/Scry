@@ -1,5 +1,5 @@
-using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Sample.CommandHandlers;
 using Sample.Model;
 
 /// <summary>
@@ -45,11 +45,34 @@ public sealed class ScryTestServer :
     /// Separates the databases of two servers a single member starts, which the caller info alone
     /// cannot tell apart.
     /// </param>
+    /// <param name="liveQueries">
+    /// Serves live queries, as <c>Program.cs</c> does, with the change interceptor on the server's own
+    /// contexts. Off by default, so the fixtures that share a server are wired as they always were.
+    /// Throttled lightly and never polled, so a test waits for the change it made and nothing else.
+    /// </param>
+    /// <param name="deltaChanges">
+    /// Watches the database's change marker for live queries, as <c>Program.cs</c> does. Apart from
+    /// <paramref name="liveQueries"/> so that a test can show it working alone: a write through
+    /// <see cref="NewContext"/> passes no interceptor, and only this sees it.
+    /// </param>
+    /// <param name="commands">
+    /// Serves the model's commands with the sample's handlers, as <c>Program.cs</c> does. Off by
+    /// default, as it is on every server that does not say otherwise. With <paramref name="liveQueries"/>
+    /// a handler's save reaches the live queries through the interceptor, and only through it: the poll
+    /// is off, so a change signal that went missing fails a test rather than hiding behind the poll.
+    /// </param>
+    /// <param name="slowDelay">How long a rename to a name containing "slow" takes, where not the sample's five seconds.</param>
+    /// <param name="allowCreate">Whether the create policy lets anyone hire.</param>
     public static async Task<ScryTestServer> StartAsync(
         bool conditionalRequests = false,
         string? environment = null,
         Action<ScryExplorerOptions>? explorer = null,
         string? databaseSuffix = null,
+        bool liveQueries = false,
+        bool deltaChanges = false,
+        bool commands = false,
+        TimeSpan? slowDelay = null,
+        bool allowCreate = true,
         [CallerFilePath] string testFile = "",
         [CallerMemberName] string memberName = "")
     {
@@ -68,9 +91,27 @@ public sealed class ScryTestServer :
                 EnvironmentName = environment
             });
         builder.WebHost.UseTestServer();
-        builder.Services.AddDbContext<SampleContext>(_ => _.UseSqlServer(database.ConnectionString));
+        builder.Services.AddDbContext<SampleContext>((services, options) =>
+        {
+            options.UseSqlServer(database.ConnectionString);
+            if (liveQueries)
+            {
+                options.AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>());
+            }
+        });
         builder.Services.AddSingleton<RegionGrants>();
         builder.Services.AddSingleton<RegionAccessPolicy>();
+        if (commands)
+        {
+            builder.Services.AddSampleCommandHandlers();
+            builder.Services.Configure<SampleCommandOptions>(
+                _ =>
+                {
+                    _.SlowDelay = slowDelay ?? _.SlowDelay;
+                    _.AllowCreate = allowCreate;
+                });
+        }
+
         builder.Services.AddScry<SampleContext>(options =>
         {
             options.AddPocoSource(_ => Holiday.Seed());
@@ -83,10 +124,38 @@ public sealed class ScryTestServer :
                 options.UseDeltaFreshness<SampleContext>();
                 options.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
             }
+
+            if (liveQueries || deltaChanges)
+            {
+                options.MaxSubscriptions = 100;
+                options.SubscriptionThrottle = TimeSpan.FromMilliseconds(50);
+                options.SubscriptionPollInterval = null;
+            }
+
+            if (deltaChanges)
+            {
+                options.UseDeltaChanges<SampleContext>();
+                options.ChangeProbeInterval = TimeSpan.FromMilliseconds(100);
+            }
+
+            if (commands)
+            {
+                options.UseSampleCommands();
+            }
         });
+
+        if (liveQueries)
+        {
+            builder.Services.AddSignalR();
+        }
 
         var app = builder.Build();
         app.MapScry("/api/query");
+        if (liveQueries)
+        {
+            app.MapScryHub("/api/query-hub");
+        }
+
         if (explorer is not null)
         {
             app.MapScryExplorer(explorer);
@@ -97,25 +166,40 @@ public sealed class ScryTestServer :
         app.MapGet("/api/grants", (RegionGrants grants) =>
             new GrantState([.. RegionGrants.Regions], [.. grants.For("sample")], grants.Lookups));
 
-        app.MapPost("/api/grants/{region}", (string region, bool allowed, RegionGrants grants, ScryPolicyCache cache) =>
-        {
-            grants.Set("sample", region, allowed);
-            cache.InvalidateScope<Order>("sample");
-            return Results.NoContent();
-        });
-
-        app.MapPost("/api/orders/{id:int}/touch", async (int id, SampleContext data) =>
-        {
-            var order = await data.Orders.FindAsync(id);
-            if (order is null)
+        app.MapPost(
+            "/api/grants/{region}",
+            (string region, bool allowed, RegionGrants grants, ScryPolicyCache cache) =>
             {
-                return Results.NotFound();
-            }
+                grants.Set("sample", region, allowed);
+                cache.InvalidateScope<Order>("sample");
+                return Results.NoContent();
+            });
 
-            order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
-            await data.SaveChangesAsync();
-            return Results.NoContent();
-        });
+        app.MapPost(
+            "/api/orders/{id:int}/touch",
+            async (int id, SampleContext data) =>
+            {
+                var order = await data.Orders.FindAsync(id);
+                if (order is null)
+                {
+                    return Results.NotFound();
+                }
+
+                order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
+                await data.SaveChangesAsync();
+                return Results.NoContent();
+            });
+
+        // The write the /live pages drive besides the RepriceOrder command, mirrored from Program.cs:
+        // one only the host can report.
+        app.MapPost(
+            "/api/orders/reprice-bulk",
+            async (SampleContext data, ScryChanges changes) =>
+            {
+                await data.Orders.ExecuteUpdateAsync(_ => _.SetProperty(_ => _.Amount, _ => _.Amount + 1));
+                changes.Notify<Order>();
+                return Results.NoContent();
+            });
 
         await app.StartAsync();
 

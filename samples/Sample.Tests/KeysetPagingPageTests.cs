@@ -20,22 +20,22 @@ public class KeysetPagingPageTests
             () => page.FindAll("tbody tr").Count > 0,
             TimeSpan.FromSeconds(10));
 
-        string[] names() => [.. page.FindAll("tbody tr td:first-child").Select(_ => _.TextContent)];
+        string[] Names() => [.. page.FindAll("tbody tr td:first-child").Select(_ => _.TextContent)];
 
         string[] firstPage = ["Aaron", "Alice"];
         string[] secondPage = ["Bob", "Carol"];
 
         // Page 1 — Aaron, Alice — with a further page reachable by cursor.
-        Assert.That(names(), Is.EqualTo(firstPage));
+        Assert.That(Names(), Is.EqualTo(firstPage));
         Assert.That(page.FindAll("button")[0].HasAttribute("disabled"), Is.False, "Next enabled on page 1");
 
         await page.FindAll("button")[0].ClickAsync();
         await page.WaitForStateAsync(
-            () => names().FirstOrDefault() == "Bob",
+            () => Names().FirstOrDefault() == "Bob",
             TimeSpan.FromSeconds(10));
 
         // Page 2 — Bob, Carol — the last page, so Next is disabled (no cursor to resume from).
-        Assert.That(names(), Is.EqualTo(secondPage));
+        Assert.That(Names(), Is.EqualTo(secondPage));
         Assert.That(page.FindAll("button")[0].HasAttribute("disabled"), Is.True, "Next disabled on last page");
     }
 }

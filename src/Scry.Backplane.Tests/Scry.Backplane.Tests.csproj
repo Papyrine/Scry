@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <!--
+    The change backplanes, each against the smallest thing that stands in for its transport: a fake of
+    the two-method seam for Redis, MessagePipe's own in-memory broker, NServiceBus's learning
+    transport. None needs infrastructure, so all of it runs wherever the rest of the suite does. A
+    project of its own so that the adapters' dependencies stay out of Scry.Tests.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NUnit" />
+    <PackageReference Include="NUnit3TestAdapter" />
+    <!-- For the command tests' context, whose model is all it is ever asked for. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
+    <ProjectReference Include="..\Scry.Server\Scry.Server.csproj" />
+    <ProjectReference Include="..\Scry.Server.Redis\Scry.Server.Redis.csproj" />
+    <ProjectReference Include="..\Scry.Server.MessagePipe\Scry.Server.MessagePipe.csproj" />
+    <ProjectReference Include="..\Scry.Server.NServiceBus\Scry.Server.NServiceBus.csproj" />
+  </ItemGroup>
+</Project>

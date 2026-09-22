@@ -4,6 +4,8 @@ using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 // ReSharper disable NotAccessedPositionalProperty.Local
 
 [TestFixture]
+// First among the assembly's fixtures, for AClientThatDoesNotKnowRetriesInABody: see there.
+[Order(1)]
 public class HttpRoundTripTests
 {
     static readonly SqlInstance<Sample.Model.SampleContext> sqlInstance = new(
@@ -220,12 +222,14 @@ public class HttpRoundTripTests
             .OrderBy(_ => _.Name)
             .Select(_ => new NameRow(_.Name))
             .ToAsyncEnumerable()
+            // ReSharper disable once MethodSupportsCancellation
             .GetAsyncEnumerator();
 
         await using var departments = query.Department
             .OrderBy(_ => _.Name)
             .Select(_ => new NameRow(_.Name))
             .ToAsyncEnumerable()
+            // ReSharper disable once MethodSupportsCancellation
             .GetAsyncEnumerator();
 
         // Pulled alternately, so each row of one is read while the other stream is mid-flight.
@@ -561,7 +565,12 @@ public class HttpRoundTripTests
     // What a client generated before the member was marked does: it reads its own model, sees nothing
     // sensitive, and asks in a URL. The refusal is one it can act on without a person reading it, so
     // the query still returns — one round trip later, in a body — rather than failing.
+    //
+    // First in the assembly, since what a client believes is sensitive is the union of every model any
+    // client in the process opened a source as: once anything here opens the generated Employee, which
+    // marks Password, no client in this process can be stale about it, and this asks in a body at once.
     [Test]
+    [Order(1)]
     public async Task AClientThatDoesNotKnowRetriesInABody()
     {
         var stale = ScryClient.ForHttp(http, "/api/query");

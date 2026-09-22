@@ -23,10 +23,18 @@ static class SchemaStamp
     /// </summary>
     const int stampBytes = 12;
 
+    /// <remarks>
+    /// Commands and results are hashed after everything else, and only where there are some: a model
+    /// declaring none produces exactly the text it did before commands existed, and so the same stamp,
+    /// while a line naming a command could never have appeared in a stamp without one — so no header
+    /// bump is needed to keep the two forms from colliding.
+    /// </remarks>
     public static string Compute(
         List<(string Name, string Kind, string Model)> sources,
         List<(string Model, string? Base, List<(string Name, string Type)> Members)> types,
-        List<(string Name, string Underlying, bool Flags, List<(string Name, string Value)> Members)> enums)
+        List<(string Name, string Underlying, bool Flags, List<(string Name, string Value)> Members)> enums,
+        List<(string Name, string? Target, List<(string Name, string Type)> Members)>? commands = null,
+        List<(string Name, List<(string Name, string Type)> Members)>? results = null)
     {
         var builder = new StringBuilder();
         // Versions the canonical form itself, so a future change to what is hashed cannot silently
@@ -65,9 +73,38 @@ static class SchemaStamp
             }
         }
 
+        if (commands is not null)
+        {
+            commands.Sort((left, right) => string.CompareOrdinal(left.Name, right.Name));
+            foreach (var (name, target, members) in commands)
+            {
+                builder.Append(target is null ? $"command {name}\n" : $"command {name} : {target}\n");
+                AppendMembers(builder, members);
+            }
+        }
+
+        if (results is not null)
+        {
+            results.Sort((left, right) => string.CompareOrdinal(left.Name, right.Name));
+            foreach (var (name, members) in results)
+            {
+                builder.Append($"result {name}\n");
+                AppendMembers(builder, members);
+            }
+        }
+
         var bytes = Encoding.UTF8.GetBytes(builder.ToString());
 
         return Encode(SHA256.HashData(bytes));
+    }
+
+    static void AppendMembers(StringBuilder builder, List<(string Name, string Type)> members)
+    {
+        members.Sort((left, right) => string.CompareOrdinal(left.Name, right.Name));
+        foreach (var (name, type) in members)
+        {
+            builder.Append($"  {name} {type}\n");
+        }
     }
 
     // Base64url (RFC 4648 §5) over the leading StampBytes: the stamp travels in a JSON body, an HTTP

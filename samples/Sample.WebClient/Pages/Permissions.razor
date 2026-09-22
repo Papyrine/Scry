@@ -40,10 +40,10 @@ else
 
 <p>Expensive decisions made so far: <strong id="decisions">@decisions</strong></p>
 
-<div class="pager">
+<p>
     <button id="reload" @onclick="Reload">Run the query again</button>
-    <button id="revise" disabled="@(orders is null or [])" @onclick="Revise">Revise an order</button>
-</div>
+    <button id="revise" disabled="@NothingToRevise" @onclick="Revise">Revise an order</button>
+</p>
 
 <h3>Grants</h3>
 <p>
@@ -59,9 +59,9 @@ else
             <li>
                 <label>
                     <input type="checkbox"
-                           id="@($"grant-{region}")"
+                           id="grant-@region"
                            checked="@grants.Granted.Contains(region)"
-                           @onchange="_ => Set(region, (bool)_.Value!)"/>
+                           @onchange="_ => Grant(region, _)"/>
                     @region
                 </label>
             </li>

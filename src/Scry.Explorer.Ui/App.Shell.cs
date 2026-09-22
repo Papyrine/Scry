@@ -48,6 +48,47 @@ public partial class App
         activeOutput = open.Contains(preferred) ? preferred : open[0];
     }
 
+    void SelectOutput(OutputTab tab) =>
+        activeOutput = tab;
+
+    bool HasOutput => OpenTabs.Count > 0;
+
+    // With nothing to show and nothing refused, the column says what to do, or that the schema is
+    // still on its way.
+    bool ShowsHint => OpenTabs.Count == 0 && error is null;
+
+    // The result table, while the result view is the one showing.
+    ResultTable? ShownTable
+    {
+        get
+        {
+            if (activeOutput != OutputTab.Result)
+            {
+                return null;
+            }
+
+            return result;
+        }
+    }
+
+    // The scalar a count or an aggregate answered, while the result view is the one showing.
+    string? ShownScalar
+    {
+        get
+        {
+            if (activeOutput != OutputTab.Result)
+            {
+                return null;
+            }
+
+            return scalarResult;
+        }
+    }
+
+    bool ShowsResponse => activeOutput == OutputTab.Response && resultJson is not null;
+
+    bool ShowsSql => activeOutput == OutputTab.Sql && sqlText is not null;
+
     // ---- Tabs ----
 
     async Task ActivateTab(int index)
@@ -151,6 +192,112 @@ public partial class App
         SchedulePersist();
     }
 
+    bool PluginClosed => visiblePlugin is null;
+
+    bool WireHidden => wireJson is null;
+
+    // The session column takes whatever the plugin column leaves.
+    string SessionStyle
+    {
+        get
+        {
+            if (visiblePlugin is null)
+            {
+                return PaneState.Grow(1);
+            }
+
+            return PaneState.Grow(1 - pluginPane.Ratio);
+        }
+    }
+
+    string OutputStyle => PaneState.Grow(1 - sessionPane.Ratio);
+
+    // The editor shares its column with the wire pane only while that pane is open and has a request
+    // in it; otherwise it takes the whole column.
+    string EditorSectionStyle
+    {
+        get
+        {
+            if (wireJson is not null &&
+                wireExpanded)
+            {
+                return wirePane.Grow();
+            }
+
+            return "flex: 1 1 0%";
+        }
+    }
+
+    // The space before "collapsed" is written whether or not it follows, as the markup always wrote it.
+    string WireClass
+    {
+        get
+        {
+            if (wireExpanded)
+            {
+                return "wire-pane ";
+            }
+
+            return "wire-pane collapsed";
+        }
+    }
+
+    string WireStyle
+    {
+        get
+        {
+            if (wireExpanded)
+            {
+                return PaneState.Grow(1 - wirePane.Ratio);
+            }
+
+            return "flex: 0 0 auto";
+        }
+    }
+
+    // A string rather than a bool: a bool would render the attribute bare, or not at all.
+    string WireExpandedText
+    {
+        get
+        {
+            if (wireExpanded)
+            {
+                return "true";
+            }
+
+            return "false";
+        }
+    }
+
+    string WireToggleTitle
+    {
+        get
+        {
+            if (wireExpanded)
+            {
+                return "Hide the wire request";
+            }
+
+            return "Show the wire request";
+        }
+    }
+
+    string Chevron
+    {
+        get
+        {
+            if (wireExpanded)
+            {
+                return "chevron-down";
+            }
+
+            return "chevron-up";
+        }
+    }
+
+    void ToggleWire() =>
+        wireExpanded = !wireExpanded;
+
     // Raised from JS on every animation frame of a drag. The size is the container's extent on the
     // dragged axis, which is what lets a threshold be in pixels rather than in a share of a container
     // whose own width is what the drag is changing.
@@ -232,6 +379,18 @@ public partial class App
     }
 
     // ---- Dialogs ----
+
+    void OpenSettings() =>
+        settingsOpen = true;
+
+    void CloseSettings() =>
+        settingsOpen = false;
+
+    void OpenShortKeys() =>
+        shortKeysOpen = true;
+
+    void CloseShortKeys() =>
+        shortKeysOpen = false;
 
     async Task SelectTheme(string mode)
     {

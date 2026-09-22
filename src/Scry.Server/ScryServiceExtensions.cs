@@ -1,9 +1,10 @@
-﻿using Microsoft.Net.Http.Headers;
+﻿using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Net.Http.Headers;
 
 namespace Scry;
 
 /// <summary>Registration and endpoint wiring for the Scry server.</summary>
-public static class ScryServiceExtensions
+public static partial class ScryServiceExtensions
 {
     /// <summary>Registers the query executor and builds the allow-list schema from the model.</summary>
     public static IServiceCollection AddScry<TContext>(this IServiceCollection services, Action<ScryOptions> configure)
@@ -17,6 +18,38 @@ public static class ScryServiceExtensions
         services.AddSingleton(options);
         services.AddSingleton(processor);
         services.AddSingleton(processor.PolicyCache);
+
+        // Through a factory rather than as the instance, so that whoever resolves it — the interceptor
+        // first, usually — has also handed it the services its backplane comes from.
+        services.AddSingleton(_ => processor.Changes.Attach(_));
+        services.TryAddSingleton<ScryChangeInterceptor>();
+        if (options.Backplane is { } backplane)
+        {
+            services.AddSingleton(backplane);
+        }
+
+        options.BackplaneServices?.Invoke(services);
+        foreach (var register in options.DispatcherServices)
+        {
+            register(services);
+        }
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers change reporting on its own, for a process that writes the data a Scry server reads
+    /// but serves no queries itself — a worker handling messages, an importer. With
+    /// <see cref="ScryChangeInterceptor"/> on its contexts and an <see cref="IScryChangeBackplane"/>
+    /// registered, what it saves reaches the live queries held by the nodes that do serve them.
+    /// </summary>
+    /// <remarks>
+    /// <c>AddScry</c> registers the same two services, so a host calling that needs nothing from this.
+    /// </remarks>
+    public static IServiceCollection AddScryChanges(this IServiceCollection services)
+    {
+        services.TryAddSingleton(_ => new ScryChanges().Attach(_));
+        services.TryAddSingleton<ScryChangeInterceptor>();
         return services;
     }
 
@@ -31,15 +64,7 @@ public static class ScryServiceExtensions
         {
             options = scope.ServiceProvider.GetRequiredService<ScryOptions>();
             var processor = scope.ServiceProvider.GetRequiredService<ScryProcessor>();
-            var db = (DbContext)scope.ServiceProvider.GetRequiredService(options.ContextType);
-            processor.ValidateAgainstModel(db);
-            processor.EnsureSourcesMapped(db);
-            processor.EnsurePoliciesResolvable(scope.ServiceProvider);
-            if (options.ProbePoliciedNavigations)
-            {
-                processor.ProbePoliciedNavigations(db, scope.ServiceProvider);
-            }
-
+            processor.EnsureReady(endpoints.ServiceProvider);
             RefuseUnscopedCaching(options, processor);
         }
 
@@ -73,6 +98,26 @@ public static class ScryServiceExtensions
         if (options.QueryUrlLimit > 0)
         {
             builders.Insert(1, endpoints.MapGet(pattern, Handle));
+        }
+
+        // A live query: the same query surface again, answered more than once. Mapped only where the
+        // deployment has said how many it will hold, for the reason a zero URL limit maps no GET — a
+        // capability that is absent has no handler for anyone to reach. In the same list as the rest,
+        // so whatever guards a query guards the stream of its answers.
+        if (options.MaxSubscriptions > 0)
+        {
+            builders.Add(endpoints.MapPost($"{pattern.TrimEnd('/')}/{ScryLive.Route}", HandleSubscribe));
+        }
+
+        // Commands: the one write surface, mapped only where the deployment said how many it will have in
+        // flight — a server serves writes because it asked to. In the same list as the rest, so whatever
+        // guards a query guards a write, and whatever guards a command guards asking for it again.
+        if (options.MaxPendingCommands > 0)
+        {
+            var root = pattern.TrimEnd('/');
+            builders.Add(endpoints.MapPost($"{root}/{ScryCommandProtocol.Route}", HandleCommand));
+            builders.Add(endpoints.MapGet($"{root}/{ScryCommandProtocol.Route}/{{id:guid}}", HandleReceipt));
+            builders.Add(endpoints.MapGet($"{root}/{ScryCommandProtocol.CapabilitiesRoute}", HandleCapabilities));
         }
 
         return new Endpoints(builders);

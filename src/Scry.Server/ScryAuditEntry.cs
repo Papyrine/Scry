@@ -43,11 +43,40 @@ public sealed record ScryAuditEntry(
     /// </remarks>
     public QueryBatchRequest? Batch { get; init; }
 
+    /// <summary>
+    /// The command sent, when the entry describes one rather than a query: its name, id and payload as
+    /// the client sent them. Null for a query.
+    /// </summary>
+    /// <remarks>
+    /// A command answered pending is recorded twice: once when it is answered, with
+    /// <see cref="CommandStatus"/> <see cref="Scry.CommandStatus.Pending"/>, and once when it finishes —
+    /// from a service scope of its own, since the request that sent it is long gone.
+    /// </remarks>
+    public CommandRequest? Command { get; init; }
+
+    /// <summary>
+    /// Where the command stood when this entry was written: pending, completed, or failed. Null for a
+    /// command refused before it was accepted, and for a query.
+    /// </summary>
+    public CommandStatus? CommandStatus { get; init; }
+
     /// <summary>The result shape, when the query succeeded; null when it never produced one.</summary>
     public ResultKind? Kind { get; init; }
 
     /// <summary>Whether the rows were streamed rather than materialized into a response.</summary>
     public bool Streamed { get; init; }
+
+    /// <summary>
+    /// Whether this was one run of a live query rather than a query asked once. A live query is
+    /// recorded every time it runs, first run included — each is a query against the database, with
+    /// the policies applied again — so one subscription is as many entries as it had runs, whether or
+    /// not the answer had changed and was sent.
+    /// </summary>
+    /// <remarks>
+    /// What asked for the first run was the caller. What asked for each one after it was somebody
+    /// else's write, a poll, or a probe — which is the difference worth having when reading the trail.
+    /// </remarks>
+    public bool Subscribed { get; init; }
 
     /// <summary>
     /// Rows delivered: a list or page's count, 0 or 1 for a single row, the rows read for a stream —

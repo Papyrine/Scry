@@ -1,0 +1,49 @@
+@page "/commands"
+
+<PageTitle>Scry Sample — Commands</PageTitle>
+
+<h1>Commands</h1>
+<p><a href="/">← Samples</a> · <a href="/scry">Explorer</a></p>
+<p>
+    Every button sends a command, and none of them refreshes the table: it is a live query, so what a
+    command writes arrives as its next answer — here, in a second window, or from anyone else. Only an
+    inactive employee may be deleted; a name containing "slow" takes a while, and waits in the pending
+    work panel until it lands.
+</p>
+
+<!-- begin-snippet: commandsPageMarkup -->
+<form id="create" @onsubmit="Create">
+    <input id="create-name" @bind="hireName" placeholder="Name" aria-label="Name to hire"/>
+    <button id="create-submit" type="submit" disabled="@(!Query.Commands.CanCreateEmployee)">Hire</button>
+</form>
+<p>
+    <label>Rename to <input id="rename-to" @bind="renameTo" aria-label="Rename to"/></label>
+</p>
+
+<table id="employees" data-ready="@Ready">
+    <thead>
+        <tr><th>Id</th><th>Name</th><th>Active</th><th></th></tr>
+    </thead>
+    <tbody>
+    @foreach (var row in rows)
+    {
+        <tr data-id="@row.Id">
+            <td>@row.Id</td>
+            <td class="name">@row.Name</td>
+            <td class="active">@ActiveText(row)</td>
+            <td class="actions">
+                <button class="toggle" @onclick="() => SetActive(row)">@ToggleText(row)</button>
+                <button class="rename" disabled="@(!Query.Commands.CanRenameEmployee)" @onclick="() => Rename(row)">Rename</button>
+                <button class="delete" disabled="@(!row.CanDeleteEmployee)" @onclick="() => Delete(row)">Delete</button>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+<!-- end-snippet -->
+
+<p class="command-status" data-testid="command-status" role="status">@status</p>
+@if (error is not null)
+{
+    <p class="error" role="alert">@error</p>
+}

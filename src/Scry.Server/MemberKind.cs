@@ -19,5 +19,12 @@ enum MemberKind
     /// orderable, traversable, or projectable — because no query ever reads its value: it is fetched
     /// by its row's key through the attachment endpoint instead.
     /// </summary>
-    Attachment
+    Attachment,
+
+    /// <summary>
+    /// The <c>bool</c> a targeted command adds to its target: whether the caller may send it against
+    /// the row. Read like a scalar — compared, ordered, projected — but backed by no property: the
+    /// server computes it from the command's policy, in the query, and it is never traversed.
+    /// </summary>
+    Capability
 }

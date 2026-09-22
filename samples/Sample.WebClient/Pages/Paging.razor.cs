@@ -10,6 +10,11 @@ public partial class Paging
 
     int pageIndex;
     ScryPage<EmployeeRow>? page;
+
+    bool OnFirstPage => pageIndex == 0;
+
+    // Counted from one, as a reader counts pages.
+    int PageNumber => pageIndex + 1;
     string? error;
 
     protected override Task OnInitializedAsync() => Load();

@@ -76,6 +76,247 @@ public class SidecarComponentTests
         Assert.That(component.FindAll("[data-testid=sidecar-toggle]"), Is.Empty);
     }
 
+    // Two kinds of exchange are shown without a body, each for a reason of its own, and the panel
+    // says which — an empty pane would read as a response that was empty.
+    [TestCase("/api/query/stream", "application/x-ndjson", "streams are read row by row")]
+    [TestCase("/api/query/attachment", "application/octet-stream", "attachment bytes are never cached")]
+    public async Task AnExchangeWhoseBodyIsNeverReadSaysWhy(string path, string contentType, string why)
+    {
+        var options = new ScrySidecarOptions();
+        var store = new ScrySidecarStore(options);
+        using var client = new HttpClient(
+            new ScrySidecarHandler(store, options)
+            {
+                InnerHandler = new Served(contentType)
+            })
+        {
+            BaseAddress = new("http://localhost")
+        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, path)
+        {
+            Content = new StringContent(
+                path.EndsWith("attachment")
+                    ? """{"version":1,"root":"Employee","member":"Photo","keys":[]}"""
+                    : ScryJson.Serialize(QueryRequest.Create("Employee", [])),
+                Encoding.UTF8,
+                "application/json")
+        };
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+
+        await using var context = new BunitContext();
+        var component = await Panel(context, options, store);
+        await component.Find("[data-testid=sidecar-entries] .scry-sidecar-row").ClickAsync(new());
+
+        var detail = component.Find("[data-testid=sidecar-detail]");
+        Assert.Multiple(() =>
+        {
+            Assert.That(detail.TextContent, Does.Contain($"Body not captured — {why}"));
+            Assert.That(component.FindAll("[data-testid=sidecar-response]"), Is.Empty);
+        });
+    }
+
+    // A live query is a session rather than an exchange, so its row shows what state it is in and
+    // how much has arrived, in place of a status and a latency that stopped being true immediately.
+    [Test]
+    public async Task ALiveQueryRendersAsASession()
+    {
+        var (options, store) = await Live();
+
+        await using var context = new BunitContext();
+        var component = await Panel(context, options, store);
+        var row = component.Find("[data-testid=sidecar-session]");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(row.TextContent, Does.Contain("Order"));
+            Assert.That(component.Find("[data-testid=sidecar-session-state]").TextContent, Is.EqualTo("closed"));
+
+            // One answer, and how long since anything last arrived.
+            Assert.That(component.Find("[data-testid=sidecar-session-counts]").TextContent, Does.StartWith("1 ·"));
+        });
+    }
+
+    // The pane the panel could never fill before: a live query's answer.
+    [Test]
+    public async Task ALiveQueryShowsItsLatestAnswer()
+    {
+        var (options, store) = await Live();
+
+        await using var context = new BunitContext();
+        var component = await Panel(context, options, store);
+        await component.Find("[data-testid=sidecar-session]").ClickAsync(new());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(component.Find("[data-testid=sidecar-session-summary]").TextContent, Does.Contain("1 answer"));
+            Assert.That(component.Find("[data-testid=sidecar-latest-answer]").TextContent, Does.Contain("\"kind\""));
+        });
+    }
+
+    // The connections are under the row they held open, and each one's events under it.
+    [Test]
+    public async Task ALiveQueryExpandsToItsConnectionsAndTheirEvents()
+    {
+        var (options, store) = await Live();
+        await using var context = new BunitContext();
+        var component = await Panel(context, options, store);
+
+        Assert.That(component.FindAll("[data-testid=sidecar-connection]"), Is.Empty);
+        await component.Find("[data-testid=sidecar-expand]").ClickAsync(new());
+
+        var connections = component.FindAll("[data-testid=sidecar-connection]");
+        Assert.That(connections, Has.Count.EqualTo(1));
+        await connections[0].ClickAsync(new());
+
+        var events = component.Find("[data-testid=sidecar-events]").TextContent;
+        Assert.Multiple(() =>
+        {
+            Assert.That(events, Does.Contain(ScryLive.Result));
+            Assert.That(events, Does.Contain(ScryLive.Ping));
+            Assert.That(events, Does.Contain("a3f1"));
+            Assert.That(component.Find("[data-testid=sidecar-connection-summary]").TextContent, Does.Contain("lifetime"));
+        });
+
+        // An answer that was kept opens onto itself; a heartbeat has nothing to open onto.
+        Assert.That(component.FindAll("[data-testid=sidecar-event-data]"), Is.Empty);
+        await component.FindAll("[data-testid=sidecar-events] tr")[0].ClickAsync(new());
+        Assert.That(component.Find("[data-testid=sidecar-event-data]").TextContent, Does.Contain("\"kind\""));
+
+        await component.FindAll("[data-testid=sidecar-events] tr")[1].ClickAsync(new());
+        Assert.That(component.FindAll("[data-testid=sidecar-event-data]"), Is.Empty);
+    }
+
+    // A command is named by what it is rather than by the path it was posted to, and its row says
+    // where it got to in place of a status that stopped being the point once the outcome arrived.
+    [Test]
+    public async Task NamesACommandEntry()
+    {
+        var options = new ScrySidecarOptions();
+        var store = new ScrySidecarStore(options);
+        var stub = new CommandStub(CommandStub.Json(CommandStatus.Completed, new {id = 3}));
+        using var http = new HttpClient(
+            new ScrySidecarHandler(store, options)
+            {
+                InnerHandler = stub.Handler()
+            })
+        {
+            BaseAddress = new("http://localhost")
+        };
+        await ScryClient.ForHttp(http, "/api/query").SendCommandAsync(new RenameThing {Id = 5, Name = "Renamed"});
+
+        await using var context = new BunitContext();
+        var component = await Panel(context, options, store);
+        var row = component.Find("[data-testid=sidecar-entries] .scry-sidecar-row");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(row.TextContent, Does.Contain("RenameThing"));
+            Assert.That(component.Find("[data-testid=sidecar-command-state]").TextContent, Is.EqualTo("completed"));
+        });
+
+        await row.ClickAsync(new());
+        Assert.Multiple(() =>
+        {
+            Assert.That(component.Find("[data-testid=sidecar-command-summary]").TextContent, Does.Contain(stub.LastId.ToString("D")));
+            Assert.That(component.Find("[data-testid=sidecar-command-result]").TextContent, Does.Contain("\"id\": 3"));
+        });
+    }
+
+    // A command sent somewhere the handler cannot watch — a hub connection, here a transport of the
+    // test's own — is listed from what the client reports, and says that is where it came from.
+    [Test]
+    public async Task ListsACommandSentOverTheHub()
+    {
+        var options = new ScrySidecarOptions();
+        var store = new ScrySidecarStore(options);
+        var client = new ScryClient(
+            (_, _) => throw new NotSupportedException(),
+            commandTransport: (request, _) => Receipts(CommandStub.Receipt(request.Id, CommandStatus.Completed)));
+        store.Observe(client);
+        await client.SendCommandAsync(new RenameThing {Id = 5, Name = "Renamed"});
+
+        await using var context = new BunitContext();
+        var component = await Panel(context, options, store);
+        var row = component.Find("[data-testid=sidecar-entries] .scry-sidecar-row");
+        await row.ClickAsync(new());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(row.TextContent, Does.Contain("COMMAND"));
+            Assert.That(component.Find("[data-testid=sidecar-command-state]").TextContent, Is.EqualTo("completed"));
+            Assert.That(component.Find("[data-testid=sidecar-command-summary]").TextContent, Does.Contain("reported by the client"));
+        });
+    }
+
+    static async IAsyncEnumerable<CommandReceipt> Receipts(params CommandReceipt[] receipts)
+    {
+        foreach (var receipt in receipts)
+        {
+            yield return receipt;
+        }
+
+        await Task.CompletedTask;
+    }
+
+    // One answer, a heartbeat, and the server saying it had reached the connection's lifetime.
+    static async Task<(ScrySidecarOptions Options, ScrySidecarStore Store)> Live()
+    {
+        var options = new ScrySidecarOptions();
+        var store = new ScrySidecarStore(options);
+        var answer = ScryJson.Serialize(
+            QueryResponse.Create(ResultKind.List, JsonSerializer.SerializeToElement(Array.Empty<int>())));
+        var end = Encoding.UTF8.GetString(ScryJson.SerializeToUtf8(new ScryLiveEnd(false) {Reason = "lifetime"}));
+        var body = $"event: result\nid: a3f1\ndata: {answer}\n\nevent: ping\ndata: \n\nevent: end\ndata: {end}\n\n";
+
+        using var client = new HttpClient(
+            new ScrySidecarHandler(store, options)
+            {
+                InnerHandler = new Served(ScryLive.ContentType, Encoding.UTF8.GetBytes(body))
+            })
+        {
+            BaseAddress = new("http://localhost")
+        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/query/subscribe")
+        {
+            Content = new StringContent(
+                ScryJson.Serialize(QueryRequest.Create("Order", [])),
+                Encoding.UTF8,
+                "application/json")
+        };
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+
+        // Nothing is read ahead of the consumer, so the events are only framed once they are pulled.
+        await response.Content.ReadAsByteArrayAsync();
+        return (options, store);
+    }
+
+    static async Task<IRenderedComponent<ScrySidecar>> Panel(
+        BunitContext context,
+        ScrySidecarOptions options,
+        ScrySidecarStore store)
+    {
+        context.JSInterop.Mode = JSRuntimeMode.Loose;
+        context.Services.AddSingleton(options);
+        context.Services.AddSingleton(store);
+        var component = context.Render<ScrySidecar>();
+        await component.WaitForStateAsync(
+            () => component.FindAll("[data-testid=sidecar-toggle]").Count == 1,
+            TimeSpan.FromSeconds(10));
+        await component.Find("[data-testid=sidecar-toggle]").ClickAsync(new());
+        return component;
+    }
+
+    sealed class Served(string contentType, byte[]? body = null) :
+        HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, Cancel cancel)
+        {
+            var content = new StreamContent(new MemoryStream(body ?? [1, 2, 3]));
+            content.Headers.ContentType = new(contentType);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) {Content = content});
+        }
+    }
+
     record FakeCurrentUser(bool IsDeveloper);
 
     static BunitContext Context(ScrySidecarOptions options)

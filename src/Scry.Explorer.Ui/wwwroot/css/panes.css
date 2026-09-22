@@ -301,6 +301,15 @@
     border-color: color-mix(in srgb, light-dark(#8a6d1f, #d8b45a) 40%, var(--border));
 }
 
+.badge-command {
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.schema-command {
+    font-family: var(--mono);
+}
+
 .schema-facts {
     display: grid;
     grid-template-columns: auto 1fr;

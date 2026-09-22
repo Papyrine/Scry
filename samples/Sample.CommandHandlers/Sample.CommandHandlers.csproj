@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The sample's command handlers and policies, and the one registration that routes every command.
+    A project rather than a linked folder: the F# test server cannot compile a linked C# file, and a
+    host with commands on must route every command, so each host takes all of these or none. It runs no
+    generator, so it adds no Scry.Generated copy to anything that references it.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Scry.Server\Scry.Server.csproj" />
+    <ProjectReference Include="..\Sample.Model\Sample.Model.csproj" />
+  </ItemGroup>
+</Project>

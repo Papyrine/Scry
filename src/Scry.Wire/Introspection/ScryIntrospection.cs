@@ -12,8 +12,11 @@ public sealed record ScryIntrospection(
     IReadOnlyList<ScryTypeInfo> Types,
     IReadOnlyList<ScryEnumInfo> Enums)
 {
-    /// <summary>Current introspection contract version.</summary>
-    public const int CurrentVersion = 1;
+    /// <summary>Current introspection contract version. Two since commands, which <see cref="Commands"/> describes.</summary>
+    public const int CurrentVersion = 2;
+
+    /// <summary>The commands a client may send, ordered by name. Empty for a model that declares none.</summary>
+    public IReadOnlyList<ScryCommandInfo> Commands { get; init; } = [];
 
     /// <summary>The query endpoint the explorer sends translated requests to (set by the explorer host).</summary>
     public string QueryEndpoint { get; init; } = "/api/query";

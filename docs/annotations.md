@@ -373,8 +373,7 @@ The server must supply the data:
 <a id='snippet-serverRegistration'></a>
 ```cs
 builder.Services
-    .AddScry<SampleContext>(
-    _ =>
+    .AddScry<SampleContext>(_ =>
     {
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
         // [QueryablePoco] type must be registered here or AddScry throws at startup.
@@ -407,9 +406,23 @@ builder.Services
         // database — so a grant changing outside it would move nothing, and a cache holding
         // the old rows would go on answering with rows the caller has since lost.
         _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
+
+        // Live queries: the /live pages. Off until a server says how many it will hold open,
+        // which is also what maps the route — see /docs/live-queries.md.
+        _.MaxSubscriptions = 100;
+
+        // The interceptor above reports this server's own saves, at once and by entity. This
+        // watches the database's change marker for everything it cannot see: a bulk update,
+        // another node, a script run by hand.
+        _.UseDeltaChanges<SampleContext>();
+
+        // Commands: the /commands page and the /live pages' Reprice. Off until a server says
+        // how many it will have in flight, which is also what maps the routes — see
+        // /docs/commands.md.
+        _.UseSampleCommands();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L31-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L44-L98' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The registered sequence is wrapped with `AsQueryable()`, so the pipeline runs in memory over LINQ to<!-- include: poco-in-memory. path: /docs/includes/poco-in-memory.include.md -->
@@ -456,7 +469,7 @@ builder.Entity<Employee>()
     .ComplexProperty(_ => _.Address)
     .ToJson();
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L766-L770' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L841-L845' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A complex type is **not a root source**: it produces no property on the generated `ScryQuery` and no server resolver. It is reachable only by traversing into it from an opted-in entity/view/POCO — for example `Employee.Address.City`. Its members follow the same exposure rules as any other type (`[QueryIgnore]` still hides `Zip`), and the traversal is bounded by `MaxNavigationDepth` like any navigation. How EF stores the type — a JSON column or separate columns — is transparent to Scry; the server rebinds the member path onto EF, which translates it either way.
@@ -484,7 +497,7 @@ builder.Entity<Employee>()
     .ComplexCollection(_ => _.PreviousAddresses)
     .ToJson();
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L772-L776' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexCollectionToJson' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L847-L851' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexCollectionToJson' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The element type being a complex type rather than a source changes nothing a client can see: the array is aggregable and flattenable exactly like a collection of entities, and the wire request is indistinguishable from one over a collection navigation. Because a complex type is never a source, it can carry no [row policy](policies.md) — attaching one is refused at startup rather than silently ignored, since a policy that cannot run reads as protection it is not providing:
@@ -675,6 +688,28 @@ public class Employee { ... }
 Names an `IReturnablePolicy<T>` implementation that the server applies to the source **before** any client operator. It is server-only: the generator ignores it and the client never sees it. See [Row policies](policies.md).
 
 A policy registered in code via `ScryOptions.AddPolicy<TEntity, TPolicy>()` takes precedence over the attribute on the same type.
+
+
+## `[Command]`
+
+```cs
+[Command(typeof(Employee))]
+public class DeleteEmployee { public int Id { get; set; } }
+```
+
+Declares a [command](commands.md): a write, sent by the client through the generated `Query.Commands` and bound on the server into this class. Its public read-write properties are its payload — scalars, enums, `byte[]`, nullables of those, and lists of those.
+
+- The type, where given, is the source the command acts on. The command carries that source's key as a property named like the key member or `{Target}{Key}`, and the target's query model gains a `bool` capability member, `Can{Command}`, computed from the command's policy.
+- `Name` renames the command on the wire.
+- `Result` names the class the command answers with.
+- `Policy` names an `ICommandPolicy<TCommand>` or `ICommandPolicy<TCommand, TEntity>`. Server-only, like `[ReturnableWith]`: the generator ignores it. `ScryOptions.AddCommandPolicy` takes precedence.
+
+A command class is not a source: it opts nothing into the query surface, and a type may not carry both.
+
+
+## `[CommandIgnore]`
+
+Keeps a command property out of the payload, for the server to fill: a client cannot send it, and the generated command class does not have it. A property carrying `[QueryIgnore]` instead is refused, since that attribute hides a member of a *source*.
 
 
 ## Which members are exposed

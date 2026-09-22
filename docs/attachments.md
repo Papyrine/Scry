@@ -45,7 +45,7 @@ public sealed class UnsealedContractsPolicy :
         context.KeyValues is not [SealedId];
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L603-L613' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L678-L688' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Registered by the attribute above, or in code:
@@ -191,7 +191,7 @@ That is the signal worth alerting on: an attachment endpoint is reached by row k
 
 **Caching.** No `ETag`, no `Cache-Control`, no conditional requests. Every open is a fetch, and every fetch is authorized — which is the conservative default, since a cached attachment is one the policy no longer sees. Ordinary ASP.NET Core middleware can add caching where a deployment wants it.
 
-**Uploads.** Attachments are read-only, like the rest of Scry.
+**Uploads.** Attachments are read-only, like every query. A write is a [command](commands.md), and a command's payload is scalars rather than a stream: an upload is an ordinary endpoint, or a command carrying where the bytes were put.
 
 **A second copy of the allow-list.** An attachment member is invisible to queries and reachable only through its own endpoint. It is not a back door into an unexposed column: the member is allow-listed exactly as any other is, and `[QueryIgnore]` still hides it completely.
 

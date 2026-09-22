@@ -99,10 +99,29 @@ public class ScryGenerator :
     static DiagnosticDescriptor conflictingOptIn = new(
         "SCRY008",
         "A type opts in more than once",
-        "{0}. A type opts in as exactly one of [Queryable], [QueryableView], [QueryablePoco], or [QueryableComplex].",
+        "{0}. A type opts in as exactly one of [Queryable], [QueryableView], [QueryablePoco], [QueryableComplex], or [Command].",
         "Scry",
         DiagnosticSeverity.Error,
         true);
+
+    // The command diagnostics carry their whole message: the reader composes it, since only the reader
+    // knows which of a rule's several failures it met.
+    static Dictionary<string, DiagnosticDescriptor> commandProblems = new[]
+        {
+            Problem("SCRY009", "A command's target is not a queryable entity"),
+            Problem("SCRY010", "A command's key is not bound"),
+            Problem("SCRY011", "A generated name is used twice"),
+            Problem("SCRY012", "Scry command name cannot be a C# member name"),
+            Problem("SCRY013", "[QueryIgnore] on a command property"),
+            Problem("SCRY014", "A command property is not a type a command can carry"),
+            Problem("SCRY015", "A command's result is not a class a result can be"),
+            Problem("SCRY016", "A capability collides with a member of its target"),
+            Problem("SCRY017", "A command is not a concrete class")
+        }
+        .ToDictionary(_ => _.Id, StringComparer.Ordinal);
+
+    static DiagnosticDescriptor Problem(string id, string title) =>
+        new(id, title, "{0}", "Scry", DiagnosticSeverity.Error, true);
 
     static void Emit(SourceProductionContext context, ModelExtract extract)
     {
@@ -124,7 +143,20 @@ public class ScryGenerator :
             return;
         }
 
-        if (extract.Sources.Length == 0)
+        // A misdeclared command is refused at startup by the server too, and nothing is emitted for the
+        // same reason a conflicting opt-in emits nothing.
+        if (extract.Problems.Length > 0)
+        {
+            foreach (var problem in extract.Problems)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(commandProblems[problem.Id], Location.None, problem.Message));
+            }
+
+            return;
+        }
+
+        if (extract.Sources.Length == 0 &&
+            extract.Commands.Length == 0)
         {
             return;
         }
@@ -169,6 +201,8 @@ public class ScryGenerator :
             }
         }
 
+        invalid |= ValidateGeneratedNames(context, extract);
+
         if (invalid)
         {
             return;
@@ -184,7 +218,83 @@ public class ScryGenerator :
             context.AddSource("ScryEnums.g.cs", EmitEnums(extract.Enums));
         }
 
+        if (extract.Commands.Length > 0)
+        {
+            context.AddSource("ScryCommands.g.cs", EmitCommands(extract));
+        }
+
         context.AddSource("ScryQuery.g.cs", EmitQuery(extract));
+    }
+
+    /// <summary>
+    /// Reports a name the generated code would declare twice. Commands, results, query models and enums
+    /// are all classes in one namespace beside <c>ScryQuery</c> and <c>ScryCommands</c>, and the facade
+    /// declares a method and a <c>Can</c> property per command — emitting either twice would surface as
+    /// a compile error in code the consumer cannot edit.
+    /// </summary>
+    /// <remarks>
+    /// A model with no commands declares nothing new here, and its own duplicates are reported as SCRY002
+    /// above, so this only ever speaks about a model that has commands.
+    /// </remarks>
+    static bool ValidateGeneratedNames(SourceProductionContext context, ModelExtract extract)
+    {
+        if (extract.Commands.Length == 0)
+        {
+            return false;
+        }
+
+        var types = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["ScryQuery"] = "the query entry point",
+            ["ScryCommands"] = "the command facade"
+        };
+        var invalid = false;
+
+        void Declare(Dictionary<string, string> declared, string name, string what)
+        {
+            if (declared.TryGetValue(name, out var previous))
+            {
+                context.ReportDiagnostic(
+                    Diagnostic.Create(
+                        commandProblems["SCRY011"],
+                        Location.None,
+                        $"The name '{name}' is generated twice: as {previous} and as {what}. Every command, result class, query model and enum is emitted into Scry.Generated, and every command adds a method and a 'Can' property to the facade, so each needs a name of its own. Set [Command(Name = \"...\")] on the command, or rename one of the two."));
+                invalid = true;
+                return;
+            }
+
+            declared[name] = what;
+        }
+
+        // Two query models sharing a name were reported as SCRY002 above, so one taking the other's place
+        // here is not reported again.
+        foreach (var source in extract.Sources)
+        {
+            if (!types.ContainsKey(source.ModelName))
+            {
+                types[source.ModelName] = $"the query model for '{source.SourceName}'";
+            }
+        }
+
+        foreach (var enumeration in extract.Enums)
+        {
+            Declare(types, enumeration.Name, "an enum");
+        }
+
+        foreach (var result in extract.Results)
+        {
+            Declare(types, result.Name, "a result class");
+        }
+
+        var members = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var command in extract.Commands)
+        {
+            Declare(types, command.Name, $"the command '{command.ClrName}'");
+            Declare(members, command.Name, $"the facade method for '{command.ClrName}'");
+            Declare(members, $"Can{command.Name}", $"the facade capability for '{command.ClrName}'");
+        }
+
+        return invalid;
     }
 
     /// <summary>
@@ -263,6 +373,11 @@ public class ScryGenerator :
         foreach (var property in source.Properties)
         {
             var initializer = property.NeedsNullDefault || property.IsAttachment ? " = null!;" : "";
+            if (property.Capability is { } command)
+            {
+                builder.AppendLine($"    /// <summary>Whether this caller may send '{command}' against this row, as the server's policy for it decides.</summary>");
+            }
+
             builder.Append(Obsolete(property.Obsolete, indent: "    "));
             builder.Append(Sensitive(property.IsSensitive, indent: "    "));
             builder.AppendLine($"    public {Display(property)} {CSharpIdentifier.Escape(property.Name)} {{ get; init; }}{initializer}");
@@ -391,9 +506,124 @@ public class ScryGenerator :
         return builder.ToString();
     }
 
+    /// <summary>
+    /// The classes a client sends commands as and reads results into, and the facade sending them. Each
+    /// command class carries <c>[ScryCommand]</c>, which is what names it on the wire; the facade's
+    /// methods are plain instance methods returning a task, so any .NET language can call them.
+    /// </summary>
+    static string EmitCommands(ModelExtract extract)
+    {
+        var builder = Header();
+        foreach (var command in extract.Commands)
+        {
+            builder.AppendLine($"/// <summary>The '{command.Name}' command, sent through <c>ScryCommands</c>.</summary>");
+            builder.Append(Obsolete(command.Obsolete));
+            builder.AppendLine($"[global::Scry.ScryCommand({CommandArguments(command)})]");
+            builder.AppendLine($"public sealed class {command.Name}");
+            builder.AppendLine("{");
+            AppendValueProperties(builder, command.Properties);
+            builder.AppendLine("}");
+            builder.AppendLine();
+        }
+
+        foreach (var result in extract.Results)
+        {
+            builder.AppendLine($"/// <summary>What a command answers with: '{result.Name}'.</summary>");
+            builder.AppendLine($"public sealed class {result.Name}");
+            builder.AppendLine("{");
+            AppendValueProperties(builder, result.Properties);
+            builder.AppendLine("}");
+            builder.AppendLine();
+        }
+
+        builder.AppendLine(
+            """
+            /// <summary>The commands this client may send, each answered with its outcome.</summary>
+            public sealed class ScryCommands
+            {
+                global::Scry.ScryClient client;
+
+                public ScryCommands(global::Scry.ScryClient client) =>
+                    this.client = client;
+            """);
+        foreach (var command in extract.Commands)
+        {
+            // Fully qualified: the method and the class it sends share a name, and inside this class the
+            // bare name is the method.
+            var type = $"global::Scry.Generated.{command.Name}";
+            builder.AppendLine();
+            builder.AppendLine($"    /// <summary>Sends '{command.Name}', answering with its outcome.</summary>");
+            builder.Append(Obsolete(command.Obsolete, indent: "    "));
+            if (command.ResultName is { } resultName)
+            {
+                var result = $"global::Scry.Generated.{resultName}";
+                builder.AppendLine(
+                    $"""
+                        public global::System.Threading.Tasks.Task<global::Scry.ScryCommandOutcome<{result}>> {command.Name}(
+                            {type} command,
+                            global::System.Threading.CancellationToken cancel = default) =>
+                            client.SendCommandAsync<{type}, {result}>(command, cancel);
+                    """);
+            }
+            else
+            {
+                builder.AppendLine(
+                    $"""
+                        public global::System.Threading.Tasks.Task<global::Scry.ScryCommandOutcome> {command.Name}(
+                            {type} command,
+                            global::System.Threading.CancellationToken cancel = default) =>
+                            client.SendCommandAsync(command, cancel);
+                    """);
+            }
+
+            builder.AppendLine();
+            builder.AppendLine(
+                $"""
+                    /// <summary>
+                    /// Whether this caller may send '{command.Name}' at all, as the server last said. Advisory:
+                    /// the server decides again on every command. False until the server has answered.
+                    /// </summary>
+                    public bool Can{command.Name} => client.Can({Literal(command.Name)});
+                """);
+        }
+
+        builder.AppendLine("}");
+        return builder.ToString();
+    }
+
+    // The [ScryCommand] arguments: the wire name, and for a targeted command the source it acts on and
+    // the payload properties carrying that source's key, and the result class where there is one.
+    static string CommandArguments(CommandInfo command)
+    {
+        var arguments = new List<string> {Literal(command.Name)};
+        if (command.Target is { } target)
+        {
+            arguments.Add($"Target = {Literal(target)}");
+            arguments.Add($"Keys = new[] {{{string.Join(", ", command.Keys.Select(Literal))}}}");
+        }
+
+        if (command.ResultName is { } result)
+        {
+            arguments.Add($"Result = typeof(global::Scry.Generated.{result})");
+        }
+
+        return string.Join(", ", arguments);
+    }
+
+    static void AppendValueProperties(StringBuilder builder, EquatableArray<PropertyInfo> properties)
+    {
+        foreach (var property in properties)
+        {
+            var initializer = property.NeedsNullDefault ? " = null!;" : "";
+            builder.Append(Obsolete(property.Obsolete, indent: "    "));
+            builder.AppendLine($"    public {property.TypeDisplay} {CSharpIdentifier.Escape(property.Name)} {{ get; init; }}{initializer}");
+        }
+    }
+
     static string EmitQuery(ModelExtract extract)
     {
         var builder = Header();
+        var commands = extract.Commands.Length > 0;
         builder.AppendLine(
             $$"""
             /// <summary>Entry point for writing LINQ queries against the allow-listed sources.</summary>
@@ -410,9 +640,18 @@ public class ScryGenerator :
                 public ScryQuery(global::Scry.ScryClient client)
                 {
                     this.client = client;
-                    client.SchemaStamp = SchemaStamp;
+                    client.SchemaStamp = SchemaStamp;{{(commands ? $"{Environment.NewLine}        Commands = new(client);" : "")}}
                 }
             """);
+        if (commands)
+        {
+            builder.AppendLine(
+                """
+
+                    /// <summary>The commands this client may send, each answered with its outcome.</summary>
+                    public ScryCommands Commands { get; }
+                """);
+        }
         foreach (var source in extract.Sources)
         {
             // Complex types are traversable member types, not roots — they get no entry point.
@@ -462,7 +701,36 @@ public class ScryGenerator :
                 _.IsFlags,
                 _.Members.ToList().Zip(_.Values.ToList(), (name, value) => (name, value)).ToList()))
             .ToList();
-        return SchemaStamp.Compute(sources, types, enums);
+        var commands = extract.Commands
+            .Select(_ => (_.Name, _.Target, StampCommandMembers(_)))
+            .ToList();
+        var results = extract.Results
+            .Select(_ => (_.Name, _.Properties.Select(property => (property.Name, property.TypeDisplay)).ToList()))
+            .ToList();
+        return SchemaStamp.Compute(sources, types, enums, commands, results);
+    }
+
+    /// <summary>
+    /// The members a command contributes to the stamp: its payload, plus synthetic members naming the
+    /// payload properties its target's key is bound to and the class it answers with. Mirrored by
+    /// <c>Schema.StampCommandMembers</c>, byte for byte.
+    /// </summary>
+    static List<(string, string)> StampCommandMembers(CommandInfo command)
+    {
+        var members = command.Properties
+            .Select(_ => (_.Name, _.TypeDisplay))
+            .ToList();
+        if (command.Keys.Length > 0)
+        {
+            members.Add(("~keys", string.Join(" ", command.Keys)));
+        }
+
+        if (command.ResultName is { } result)
+        {
+            members.Add(("~result", result));
+        }
+
+        return members;
     }
 
     /// <summary>

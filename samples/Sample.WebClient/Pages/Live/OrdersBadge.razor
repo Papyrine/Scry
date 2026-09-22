@@ -1,0 +1,5 @@
+@using MessagePipe
+@inject IBufferedSubscriber<OrdersChanged> Subscriber
+
+@* A second listener on the same bus, fed by the same single server subscription as the grid. *@
+<p>Orders: <strong id="count">@count</strong> · Total: <strong id="total">@total</strong></p>

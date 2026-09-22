@@ -1535,7 +1535,10 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
             }
         }
 
-        if (requireScalar && member!.Kind != MemberKind.Scalar)
+        // A capability is read as a scalar is — compared, ordered, grouped, projected — and computed rather
+        // than stored, which is the builder's concern and not the caller's.
+        if (requireScalar &&
+            member!.Kind is not (MemberKind.Scalar or MemberKind.Capability))
         {
             throw Reject($"{what} must reference a scalar value.");
         }

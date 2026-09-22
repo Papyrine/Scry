@@ -19,32 +19,3 @@
         <div class="dialog-body">@ChildContent</div>
     </div>
 </div>
-
-@code
-{
-    [Parameter]
-    [EditorRequired]
-    public string Title { get; set; } = "";
-
-    [Parameter]
-    public string? TestId { get; set; }
-
-    [Parameter]
-    public EventCallback OnClose { get; set; }
-
-    [Parameter]
-    public RenderFragment? ChildContent { get; set; }
-
-    ElementReference panel;
-
-    Task OnKeyDown(KeyboardEventArgs args) =>
-        args.Key == "Escape" ? OnClose.InvokeAsync() : Task.CompletedTask;
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            await panel.FocusAsync();
-        }
-    }
-}

@@ -9,6 +9,8 @@
     <!-- The snapshot scrubbers, shared with Scry.Tests: they keep the same unrelated churn out of
          both projects' verified files, and two copies would eventually stop agreeing on what churn is. -->
     <Compile Include="..\..\src\Shared\SnapshotScrubbers.cs" Link="SnapshotScrubbers.cs" />
+    <!-- The scripted command server, shared with Scry.Tests' client tests, for the pending-work panel's. -->
+    <Compile Include="..\..\src\Scry.Tests\CommandStub.cs" Link="CommandStub.cs" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="AngleSharp" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
@@ -28,6 +30,10 @@
     <!-- Reference the whole app: builds the server (which the Playwright test launches) and
          exposes the generated ScryQuery + Index page (which the bUnit tests render). -->
     <ProjectReference Include="..\Sample.WebServer\Sample.WebServer.csproj" />
+    <!-- The NServiceBus pair is the one backplane sample that needs no infrastructure, so it is the
+         one hosted here: server and worker in this process, over a temporary transport folder. -->
+    <ProjectReference Include="..\Sample.NServiceBusServer\Sample.NServiceBusServer.csproj" />
+    <ProjectReference Include="..\Sample.NServiceBusWorker\Sample.NServiceBusWorker.csproj" />
     <ProjectReference Include="..\Sample.WebClient\Sample.WebClient.csproj" />
     <ProjectReference Include="..\Sample.Model\Sample.Model.csproj" />
   </ItemGroup>

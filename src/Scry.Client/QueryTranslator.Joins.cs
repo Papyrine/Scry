@@ -14,7 +14,11 @@ sealed partial class QueryTranslator
             throw new NotSupportedException($"'{call.Method.Name}' with an equality comparer is not supported by Scry.");
         }
 
-        if (Evaluate(call.Arguments[1]) is not IQueryable {Provider: QueryProvider provider} queryable)
+        if (Evaluate(call.Arguments[1])
+            is not IQueryable
+            {
+                Provider: QueryProvider provider
+            } queryable)
         {
             throw new NotSupportedException($"The other side of '{call.Method.Name}' must be a Scry source.");
         }
@@ -57,15 +61,16 @@ sealed partial class QueryTranslator
     /// </summary>
     JoinOp TranslateJoin(MethodCallExpression call, JoinKind kind)
     {
-        if (call.Arguments.Count != 5)
+        var arguments = call.Arguments;
+        if (arguments.Count != 5)
         {
             throw new NotSupportedException("A join must supply an inner source, both key selectors, and a result selector.");
         }
 
-        var (root, innerPredicate, innerOps) = InnerSource(call.Arguments[1]);
-        var outerKey = Lambda(call.Arguments[2]);
-        var innerKey = Lambda(call.Arguments[3]);
-        var result = Lambda(call.Arguments[4]);
+        var (root, innerPredicate, innerOps) = InnerSource(arguments[1]);
+        var outerKey = Lambda(arguments[2]);
+        var innerKey = Lambda(arguments[3]);
+        var result = Lambda(arguments[4]);
 
         if (result.Parameters.Count != 2)
         {

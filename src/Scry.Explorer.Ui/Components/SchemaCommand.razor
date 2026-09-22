@@ -1,0 +1,20 @@
+@namespace Scry
+
+@*
+    A command as a signature a reader recognises: its name, the payload it carries, what it acts on and
+    what it answers with. The first two spans share a line so that no text sits between them, as none
+    did when this was a fragment of the schema pane.
+*@
+<span class="schema-command" data-testid="schema-command">@Command.Name</span><span class="muted mono">(@Payload)</span>
+@if (Command.Target is not null)
+{
+    <span class="muted"> on @Command.Target</span>
+}
+@if (Command.Result is not null)
+{
+    <span class="muted"> → @Command.Result.Name</span>
+}
+@if (Command.Obsolete is not null)
+{
+    <span class="badge badge-obsolete" title="@Command.Obsolete">obsolete</span>
+}

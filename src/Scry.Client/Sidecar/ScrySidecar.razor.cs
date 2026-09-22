@@ -11,6 +11,10 @@ public partial class ScrySidecar :
     bool open;
     bool toggleButton;
     int selectedId;
+    int? selectedAttempt;
+    ScrySidecarEvent? selectedEvent;
+    HashSet<int> expanded = [];
+    bool dirty;
     string? note;
     IJSObjectReference? module;
     DotNetObjectReference<ScrySidecar>? reference;
@@ -19,11 +23,78 @@ public partial class ScrySidecar :
     ScrySidecarEntry? Selected =>
         Store.Entries.FirstOrDefault(_ => _.Id == selectedId);
 
-    protected override void OnInitialized() =>
-        Store.Changed += OnChanged;
+    ScrySidecarConnection? SelectedConnection =>
+        selectedAttempt is { } attempt
+            ? Selected?.Session?.Connections.FirstOrDefault(_ => _.Attempt == attempt)
+            : null;
 
-    void OnChanged() =>
-        InvokeAsync(StateHasChanged);
+    // The selected event, where it carries data to show.
+    ScrySidecarEvent? ShownEvent
+    {
+        get
+        {
+            if (selectedEvent?.Json is null)
+            {
+                return null;
+            }
+
+            return selectedEvent;
+        }
+    }
+
+    bool ShowsLauncher => !open && toggleButton;
+
+    bool Empty => Store.Entries.Count == 0;
+
+    protected override void OnInitialized()
+    {
+        Store.Changed += OnChanged;
+        Store.SessionChanged += OnSessionChanged;
+    }
+
+    // Nothing of the log renders while the panel is shut, so nothing needs re-rendering for it.
+    void OnChanged()
+    {
+        if (open)
+        {
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    // A live query reports every event it receives, which for a page holding several is far oftener
+    // than a panel can usefully repaint. The tick below picks these up in batches.
+    void OnSessionChanged() =>
+        dirty = true;
+
+    /// <summary>
+    /// Repaints the open panel on a fixed beat rather than per event: a floor on how often, not a
+    /// wait for quiet, because a live query answering steadily must still redraw. The beat also
+    /// brings the times a row shows up to date, which nothing else would — a live query that has
+    /// gone quiet is exactly the one whose "last event" needs to keep counting up.
+    /// </summary>
+    async Task Tick()
+    {
+        using var ticker = new PeriodicTimer(Options.LiveRefresh);
+        try
+        {
+            while (open &&
+                   await ticker.WaitForNextTickAsync())
+            {
+                if (!dirty &&
+                    !Store.Entries.Any(_ => _.Session is {Open: true}))
+                {
+                    continue;
+                }
+
+                dirty = false;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception)
+        {
+            // The panel was torn down under a repaint it had already scheduled.
+        }
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -57,19 +128,310 @@ public partial class ScrySidecar :
             open = !open;
             note = null;
             StateHasChanged();
+            if (open)
+            {
+                _ = Tick();
+            }
         });
 
     void Select(int id)
     {
         selectedId = id;
+        selectedAttempt = null;
+        selectedEvent = null;
         note = null;
     }
+
+    void Select(int id, int attempt)
+    {
+        selectedId = id;
+        selectedAttempt = attempt;
+        selectedEvent = null;
+        note = null;
+    }
+
+    void Show(ScrySidecarEvent captured) =>
+        selectedEvent = captured.Json is null || captured == selectedEvent ? null : captured;
+
+    void Expand(int id)
+    {
+        if (!expanded.Add(id))
+        {
+            expanded.Remove(id);
+            if (selectedId == id)
+            {
+                selectedAttempt = null;
+            }
+        }
+    }
+
+    bool Expanded(int id) =>
+        expanded.Contains(id);
+
+    string CaretTitle(int id)
+    {
+        if (Expanded(id))
+        {
+            return "Hide this live query's connections";
+        }
+
+        return "Show this live query's connections";
+    }
+
+    string Caret(int id)
+    {
+        if (Expanded(id))
+        {
+            return "▼";
+        }
+
+        return "▶";
+    }
+
+    // Both halves always written, with the space between, as the markup always wrote them.
+    string EventClass(ScrySidecarEvent captured)
+    {
+        var clickable = captured.Json is null ? null : "scry-sidecar-clickable";
+        var chosen = captured == selectedEvent ? "scry-sidecar-selected" : null;
+        return $"{clickable} {chosen}";
+    }
+
+    string? Chosen(int id, int? attempt) =>
+        selectedId == id && selectedAttempt == attempt ? "scry-sidecar-selected" : null;
 
     void Clear()
     {
         Store.Clear();
         selectedId = 0;
+        selectedAttempt = null;
+        selectedEvent = null;
+        expanded.Clear();
         note = null;
+    }
+
+    // Newest first: a live query that has been asked again several times is read from what it is
+    // doing now backwards. Its events stay in the order they arrived.
+    static IEnumerable<ScrySidecarConnection> Newest(ScrySidecarSession session) =>
+        session.Connections.Reverse();
+
+    static IEnumerable<ScrySidecarEvent> Listed(ScrySidecarConnection connection) =>
+        connection.Events;
+
+    static string Progress(ScrySidecarSession session) =>
+        session.State switch
+        {
+            ScrySubscriptionState.Connecting => "connecting",
+            ScrySubscriptionState.Live => "live",
+            ScrySubscriptionState.Reconnecting => session.Attempt > 1 ? $"retry ×{session.Attempt - 1}" : "retry",
+            ScrySubscriptionState.Closed => "closed",
+            _ => "failed"
+        };
+
+    static string StateClass(ScrySidecarSession session) =>
+        session.State switch
+        {
+            ScrySubscriptionState.Live => "scry-sidecar-state scry-sidecar-state-live",
+            ScrySubscriptionState.Faulted => "scry-sidecar-state scry-sidecar-status-error",
+            ScrySubscriptionState.Reconnecting => "scry-sidecar-state scry-sidecar-state-retry",
+            _ => "scry-sidecar-state"
+        };
+
+    // Answers, and how long since anything at all arrived. The second number is the one that says
+    // whether a live query with nothing to report is idle or hung.
+    static string Counts(ScrySidecarSession session) =>
+        $"{session.Answers} · {Ago(session.LastEvent)}";
+
+    static string Tally(ScrySidecarSession session) =>
+        $"{Plural(session.Answers, "answer")}, {Plural(session.Pings, "ping")}, {session.Unchanged} unchanged · last event {Ago(session.LastEvent)} ago";
+
+    static string Summary(ScrySidecarSession session)
+    {
+        var parts = new List<string>
+        {
+            session.Open ? $"Open {Ago(session.Started)}" : $"Ran {Ago(session.Started)}",
+            Plural(session.Connections.Count + session.DroppedConnections, "connection"),
+            Plural(session.Answers, "answer"),
+            Plural(session.Pings, "ping"),
+            $"{session.Unchanged} unchanged"
+        };
+
+        if (!session.OnTheWire)
+        {
+            parts.Add("reported by the client, which carries it somewhere this sidecar cannot watch");
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    static string Summary(ScrySidecarConnection connection)
+    {
+        var parts = new List<string> {connection.Status?.ToString() ?? "no status"};
+        if (connection.ResumedFrom is { } resumed)
+        {
+            parts.Add($"resumed from {resumed}");
+        }
+
+        parts.Add(
+            connection switch
+            {
+                {Ended: null} => $"open {Ago(connection.Started)}",
+                {Duration: { } held} => $"{connection.Ended} after {Elapsed(held)}",
+                var ended => ended.Ended!
+            });
+
+        return string.Join(" · ", parts);
+    }
+
+    static string Finish(ScrySidecarConnection connection) =>
+        connection.Ended ?? "open";
+
+    // The trailing space where the session is not open is kept: the markup always wrote one.
+    static string KindClass(ScrySidecarSession session)
+    {
+        if (session.Open)
+        {
+            return "scry-sidecar-kind scry-sidecar-kind-live";
+        }
+
+        return "scry-sidecar-kind ";
+    }
+
+    static string ConnectionName(ScrySidecarConnection connection)
+    {
+        if (connection.ResumedFrom is { } resumed)
+        {
+            return $"connection {connection.Attempt} · resumed from {resumed}";
+        }
+
+        return $"connection {connection.Attempt}";
+    }
+
+    static string StatusText(ScrySidecarConnection connection) =>
+        connection.Status?.ToString(CultureInfo.CurrentCulture) ?? "—";
+
+    static string StatusText(ScrySidecarEntry entry) =>
+        entry.Status?.ToString(CultureInfo.CurrentCulture) ?? "—";
+
+    // Null leaves the attribute off, which is what an exchange that did not fail gets.
+    static string? ErrorClass(ScrySidecarEntry entry)
+    {
+        if (entry.Error is null)
+        {
+            return null;
+        }
+
+        return "scry-sidecar-status-error";
+    }
+
+    static string Milliseconds(ScrySidecarEntry entry) =>
+        entry.Duration.TotalMilliseconds.ToString("0", CultureInfo.CurrentCulture);
+
+    static string Time(ScrySidecarEvent captured) =>
+        captured.At.ToString("HH:mm:ss", CultureInfo.CurrentCulture);
+
+    static string? DroppedNote(ScrySidecarConnection connection)
+    {
+        if (connection.Dropped <= 0)
+        {
+            return null;
+        }
+
+        if (connection.Dropped == 1)
+        {
+            return "1 earlier event dropped.";
+        }
+
+        return $"{connection.Dropped} earlier events dropped.";
+    }
+
+    static bool HasUrl(ScrySidecarEntry entry) =>
+        entry.Url.Length > 0;
+
+    static bool HasRequestHeaders(ScrySidecarEntry entry) =>
+        entry.RequestHeaders.Count > 0;
+
+    static bool Downloadable(ScrySidecarEntry entry) =>
+        entry is {Kind: ScrySidecarKind.Attachment, AttachmentRequestBody: not null};
+
+    // The kinds whose body is never read here, and a command that was answered at all.
+    static bool BodyNotCaptured(ScrySidecarEntry entry) =>
+        entry.Kind is ScrySidecarKind.Stream or ScrySidecarKind.Attachment ||
+        entry is {Kind: ScrySidecarKind.Command, Status: not null};
+
+    static bool HasBinaryParts(ScrySidecarEntry entry) =>
+        entry.BinaryPartSizes is {Count: > 0};
+
+    static IEnumerable<(int Index, int Bytes)> BinaryParts(ScrySidecarEntry entry)
+    {
+        var sizes = entry.BinaryPartSizes ?? [];
+        for (var index = 0; index < sizes.Count; index++)
+        {
+            yield return (index, sizes[index]);
+        }
+    }
+
+    static string Size(int bytes) =>
+        bytes < 1024 ? $"{bytes} B" : $"{bytes / 1024d:0.#} KiB";
+
+    static string Ago(DateTimeOffset? at)
+    {
+        if (at is not { } when)
+        {
+            return "—";
+        }
+
+        var since = DateTimeOffset.Now - when;
+        return Elapsed(since < TimeSpan.Zero ? TimeSpan.Zero : since);
+    }
+
+    static string Elapsed(TimeSpan span) =>
+        span.TotalMinutes < 1 ? $"{span.TotalSeconds:0}s" :
+        span.TotalHours < 1 ? $"{(int) span.TotalMinutes}m {span.Seconds}s" :
+        $"{(int) span.TotalHours}h {span.Minutes}m";
+
+    static string Plural(int count, string what) =>
+        count == 1 ? $"1 {what}" : $"{count} {what}s";
+
+    // A live query's failure is the session's, and a command's its own; everything else carries its own.
+    static string? Failure(ScrySidecarEntry entry) =>
+        entry.Error ?? entry.Session?.Error ?? entry.Command?.Error;
+
+    static string CommandState(ScrySidecarCommand command) =>
+        command.State switch
+        {
+            ScryCommandActivityKind.Sent => "sent",
+            ScryCommandActivityKind.Refused => "refused",
+            ScryCommandActivityKind.Pending => "pending",
+            ScryCommandActivityKind.Reattaching => $"retry ×{command.Attempt - 1}",
+            ScryCommandActivityKind.Completed => "completed",
+            ScryCommandActivityKind.Failed => "failed",
+            _ => "unknown"
+        };
+
+    static string CommandClass(ScrySidecarCommand command) =>
+        command.State switch
+        {
+            ScryCommandActivityKind.Completed => "scry-sidecar-state scry-sidecar-state-live",
+            ScryCommandActivityKind.Pending or ScryCommandActivityKind.Reattaching => "scry-sidecar-state scry-sidecar-state-retry",
+            ScryCommandActivityKind.Refused or ScryCommandActivityKind.Failed or ScryCommandActivityKind.Unknown => "scry-sidecar-state scry-sidecar-status-error",
+            _ => "scry-sidecar-state"
+        };
+
+    static string Summary(ScrySidecarCommand command)
+    {
+        var parts = new List<string>
+        {
+            $"{CommandState(command)} {Ago(command.Updated)} ago",
+            $"id {command.Id:D}",
+            Plural(command.Attempt, "connection")
+        };
+
+        if (!command.OnTheWire)
+        {
+            parts.Add("reported by the client, which sends it somewhere this sidecar cannot watch");
+        }
+
+        return string.Join(" · ", parts);
     }
 
     async Task Copy(string text)
@@ -172,11 +534,26 @@ public partial class ScrySidecar :
         }
     }
 
+    // Why an exchange shows no response body, for the two kinds whose body is never read here. A
+    // live query's is read as it flows, so it has a session of its own to show instead.
+    static string NotCaptured(ScrySidecarKind kind) =>
+        kind switch
+        {
+            ScrySidecarKind.Stream => "streams are read row by row",
+            ScrySidecarKind.Command => "its receipts are read by the client as they stream, and its state is what the client reports",
+            _ => "attachment bytes are never cached; use Download"
+        };
+
     static string Name(ScrySidecarEntry entry)
     {
         if (entry.Request is { } request)
         {
             return request.Root;
+        }
+
+        if (entry.Command is { } command)
+        {
+            return command.Name;
         }
 
         if (entry is
@@ -205,7 +582,9 @@ public partial class ScrySidecar :
 
     public async ValueTask DisposeAsync()
     {
+        open = false;
         Store.Changed -= OnChanged;
+        Store.SessionChanged -= OnSessionChanged;
         reference?.Dispose();
         fallbackDownloadClient?.Dispose();
         if (module is not null)

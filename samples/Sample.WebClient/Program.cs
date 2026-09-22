@@ -1,4 +1,4 @@
-﻿class Program
+class Program
 {
     static Task Main(string[] args)
     {
@@ -49,6 +49,16 @@
             .AddHttpClient("scry")
             .AddHttpMessageHandler<ScrySidecarHandler>();
         // end-snippet
+
+        // For the /live/messagepipe page, and nothing to do with Scry: an in-process bus the page
+        // publishes a live query's answers into. Told not to scan, which is slow in a browser and
+        // finds nothing here — the page subscribes with a delegate rather than a handler class.
+        // begin-snippet: messagePipeRegistration
+        builder.Services.AddMessagePipe(_ => _.EnableAutoRegistration = false);
+        // end-snippet
+
+        // Which transport the /live pages ask over, for the switch they share.
+        builder.Services.AddScoped<Sample.WebClient.Pages.Live.LiveTransport>();
 
         return builder.Build().RunAsync();
     }

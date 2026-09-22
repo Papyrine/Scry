@@ -44,9 +44,10 @@ public class TemporalPartTests
         var client = ClientFor(context);
 
         // The cursor spells the key the way a constant is spelled, and the seek reads it back the same way.
-        IQueryable<DurationRow> Ordered() => client.Source<Shift>("Shift")
-            .OrderBy(_ => _.Duration)
-            .Select(_ => new DurationRow(_.Duration));
+        IQueryable<DurationRow> Ordered() =>
+            client.Source<Shift>("Shift")
+                .OrderBy(_ => _.Duration)
+                .Select(_ => new DurationRow(_.Duration));
 
         var first = await Ordered().ToPageAsync(1);
         var second = await Ordered().ToPageAsync(1, first.Cursor);
@@ -233,11 +234,10 @@ public class TemporalPartTests
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<ScryValidationException>(
-            () => client.Source<Shift>("Shift")
-                .Where(_ => _.Duration.TotalHours > 1)
-                .Select(_ => new ShiftRow(_.Name))
-                .ToListAsync());
+        var rows = client.Source<Shift>("Shift")
+            .Where(_ => _.Duration.TotalHours > 1)
+            .Select(_ => new ShiftRow(_.Name));
+        var exception = Assert.ThrowsAsync<ScryValidationException>(() => rows.ToListAsync());
 
         Assert.That(exception!.Message, Does.Contain("Duration"));
     }

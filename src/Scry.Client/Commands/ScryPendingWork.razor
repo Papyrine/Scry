@@ -1,0 +1,39 @@
+@namespace Scry
+
+<ScryCommandStyles Href="@StylesHref" />
+@if (Showing)
+{
+    if (open)
+    {
+        <aside class="scry-commands" data-testid="pending-work" aria-label="Pending work">
+            <header class="scry-commands-header">
+                <h2>Pending work <span class="scry-commands-count" data-testid="pending-work-count">@PendingCount</span></h2>
+                <button type="button" data-testid="pending-work-clear" title="Drop everything that has finished" @onclick="ClearFinished">Clear finished</button>
+                <button type="button" data-testid="pending-work-close" title="Hide the panel" @onclick="Close">Close</button>
+            </header>
+            <ol class="scry-commands-items" data-testid="pending-work-items">
+                @foreach (var item in items)
+                {
+                    <li @key="item.Id" class="scry-commands-item" data-status="@Status(item)" data-command="@item.Command">
+                        <span class="scry-commands-name">@Name(item)</span>
+                        <span class="scry-commands-state">@Status(item)</span>
+                        <span class="scry-commands-elapsed">@Elapsed(item)</span>
+                        @if (item.Error is not null)
+                        {
+                            <p class="scry-commands-error" data-testid="pending-work-error">@item.Error</p>
+                        }
+                    </li>
+                }
+            </ol>
+        </aside>
+    }
+    else
+    {
+        <button type="button"
+                class="scry-commands-launcher"
+                data-testid="pending-work-toggle"
+                title="Show pending work"
+                aria-label="Show pending work"
+                @onclick="Open">Work <span class="scry-commands-count" data-testid="pending-work-count">@PendingCount</span></button>
+    }
+}

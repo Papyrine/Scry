@@ -17,6 +17,8 @@ static class MetadataModelReader
     const string keyAttribute = "System.ComponentModel.DataAnnotations.KeyAttribute";
     const string sensitiveAttribute = "Scry.SensitiveAttribute";
     const string flagsAttribute = "System.FlagsAttribute";
+    const string commandAttribute = "Scry.CommandAttribute";
+    const string commandIgnoreAttribute = "Scry.CommandIgnoreAttribute";
 
     public static ModelExtract Read(string? dllPath)
     {
@@ -33,9 +35,9 @@ static class MetadataModelReader
         {
             return new(
                 $"ScryModelDll '{dllPath}' is a relative path. The generator runs inside the compiler process, whose working directory is not the project's, so the path must be absolute: resolve it with $([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(ScryModelDll)')) before it becomes compiler-visible, as the Scry.Client targets do.",
-                new([]),
-                new([]),
-                new([]));
+                [],
+                [],
+                []);
         }
 
         if (!File.Exists(dllPath))
@@ -54,6 +56,7 @@ static class MetadataModelReader
             var decoder = new SignatureDecoder();
             var discovered = new List<Discovered>();
             var conflicts = ImmutableArray.CreateBuilder<string>();
+            var commandTypes = new List<TypeDefinition>();
             foreach (var handle in reader.TypeDefinitions)
             {
                 var type = reader.GetTypeDefinition(handle);
@@ -62,6 +65,10 @@ static class MetadataModelReader
                     if (conflict is not null)
                     {
                         conflicts.Add($"'{reader.GetString(type.Name)}' carries {conflict}");
+                    }
+                    else if (HasAttribute(reader, type.GetCustomAttributes(), commandAttribute))
+                    {
+                        commandTypes.Add(type);
                     }
 
                     continue;
@@ -103,12 +110,572 @@ static class MetadataModelReader
                         IsSensitive: entry.IsSensitive));
             }
 
-            return new(null, new(DeriveKeys(WithoutInheritedMembers(sources))), new(enums.Values.ToImmutableArray()), new(conflicts.ToImmutable()));
+            var catalog = ReadCommands(reader, commandTypes, decoder, sources, discoveredByFullName, enums);
+            return new(
+                null,
+                new(DeriveKeys(WithoutInheritedMembers(sources))),
+                new(enums.Values.ToImmutableArray()),
+                new(conflicts.ToImmutable()),
+                new(catalog.Commands),
+                new(catalog.Results),
+                new(catalog.Problems));
         }
         catch (Exception exception)
         {
             return new($"Failed to read model assembly '{dllPath}': {exception.Message}", new([]), new([]), new([]));
         }
+    }
+
+    /// <summary>
+    /// Reads every <c>[Command]</c> class: its name, payload, target and result. A targeted command's
+    /// key is bound to payload properties, and the capability member it earns is added to its target.
+    /// Every way one is misdeclared is recorded as a problem rather than guessed past — the server
+    /// refuses the same model at startup, and the two readers have to agree about what a command is.
+    /// </summary>
+    /// <remarks>
+    /// Must stay in lockstep with <c>Schema</c>'s command catalog, which reads the same attribute over
+    /// reflection. Run before <see cref="WithoutInheritedMembers"/>, so a capability is declared by its
+    /// target and inherited by the target's derived models.
+    /// </remarks>
+    static (ImmutableArray<CommandInfo> Commands, ImmutableArray<ResultInfo> Results, ImmutableArray<CommandProblem> Problems) ReadCommands(
+        MetadataReader reader,
+        List<TypeDefinition> commandTypes,
+        SignatureDecoder decoder,
+        ImmutableArray<SourceInfo>.Builder sources,
+        Dictionary<string, Discovered> discovered,
+        Dictionary<string, EnumInfo> enums)
+    {
+        var problems = ImmutableArray.CreateBuilder<CommandProblem>();
+        if (commandTypes.Count == 0)
+        {
+            return ([], [], problems.ToImmutable());
+        }
+
+        var definitions = new Dictionary<string, TypeDefinition>(StringComparer.Ordinal);
+        foreach (var handle in reader.TypeDefinitions)
+        {
+            var definition = reader.GetTypeDefinition(handle);
+            definitions[FullName(reader, definition)] = definition;
+        }
+
+        var commands = new List<CommandInfo>();
+        var results = new Dictionary<string, (string FullName, ResultInfo Info)>(StringComparer.Ordinal);
+
+        // Ordered by name, so the capabilities a target gains land in the same order on every build.
+        var ordered = commandTypes
+            .Select(_ => (Type: _, Arguments: CommandArguments(reader, _, decoder)))
+            .OrderBy(_ => _.Arguments.Name ?? reader.GetString(_.Type.Name), StringComparer.Ordinal)
+            .ToList();
+        foreach (var (type, arguments) in ordered)
+        {
+            var clrName = reader.GetString(type.Name);
+            var name = arguments.Name ?? clrName;
+
+            if (!IsConcrete(reader, type, decoder))
+            {
+                problems.Add(
+                    new(
+                        "SCRY017",
+                        $"'{clrName}' carries [Command] but is not a concrete class with a public parameterless constructor. A command is bound into a new instance of its class on the server, so it has to be a class that can be created: not abstract, not generic, not a struct."));
+                continue;
+            }
+
+            if (!CSharpIdentifier.IsValid(name))
+            {
+                problems.Add(
+                    new(
+                        "SCRY012",
+                        $"The command name '{name}' on '{clrName}' cannot be written as a C# member name, so the facade method sending it cannot be generated. Set [Command(Name = \"...\")] to a plain identifier that is not a reserved keyword."));
+                continue;
+            }
+
+            var before = problems.Count;
+            var properties = ReadCommandProperties(reader, type, decoder, enums, clrName, problems);
+
+            string? target = null;
+            var keys = ImmutableArray<string>.Empty;
+            SourceInfo? targetSource = null;
+            if (arguments.Target is { } targetName)
+            {
+                if (!discovered.TryGetValue(targetName, out var entry) ||
+                    entry.Kind != SourceKind.Entity)
+                {
+                    problems.Add(
+                        new(
+                            "SCRY009",
+                            $"'{clrName}' targets '{SimpleName(targetName)}', which is not a [Queryable] entity. A targeted command acts on one row, read by its key through the entity's policies, so its target has to be an opted-in entity: a view, a POCO or a complex type has no key to read the row by."));
+                    continue;
+                }
+
+                var byModel = ByModel(sources);
+                var source = byModel[entry.ModelName];
+                keys = BindKeys(clrName, source, Inherited(source, byModel), properties, problems);
+                target = entry.SourceName;
+                targetSource = source;
+            }
+
+            string? resultName = null;
+            if (arguments.Result is { } resultType)
+            {
+                resultName = ReadResult(reader, resultType, clrName, definitions, decoder, enums, results, problems);
+            }
+
+            if (problems.Count > before)
+            {
+                continue;
+            }
+
+            if (targetSource is { } capabilityTarget &&
+                !AddCapability(sources, capabilityTarget, name, clrName, problems))
+            {
+                continue;
+            }
+
+            commands.Add(
+                new(
+                    name,
+                    clrName,
+                    target,
+                    new(keys),
+                    new(properties),
+                    resultName,
+                    ObsoleteOf(reader, type.GetCustomAttributes(), decoder)));
+        }
+
+        return (
+            [.. commands.OrderBy(_ => _.Name, StringComparer.Ordinal)],
+            [.. results.Values.Select(_ => _.Info).OrderBy(_ => _.Name, StringComparer.Ordinal)],
+            problems.ToImmutable());
+    }
+
+    static Dictionary<string, SourceInfo> ByModel(ImmutableArray<SourceInfo>.Builder sources)
+    {
+        var byModel = new Dictionary<string, SourceInfo>(StringComparer.Ordinal);
+        foreach (var source in sources)
+        {
+            byModel[source.ModelName] = source;
+        }
+
+        return byModel;
+    }
+
+    /// <summary>
+    /// The <c>[Command]</c> attribute's arguments: the name override, the target's full name, and the
+    /// result's. Any the attribute does not carry — or a blob that cannot be read — is null.
+    /// </summary>
+    static (string? Name, string? Target, string? Result) CommandArguments(MetadataReader reader, TypeDefinition type, SignatureDecoder decoder)
+    {
+        foreach (var handle in type.GetCustomAttributes())
+        {
+            var attribute = reader.GetCustomAttribute(handle);
+            if (AttributeTypeName(reader, attribute) != commandAttribute)
+            {
+                continue;
+            }
+
+            try
+            {
+                var value = attribute.DecodeValue(decoder);
+                string? target = null;
+                if (value.FixedArguments is [{Value: SerializedTypeDecoded {FullName: { } targetName}} _])
+                {
+                    target = targetName;
+                }
+
+                string? name = null;
+                string? result = null;
+                foreach (var argument in value.NamedArguments)
+                {
+                    if (argument is {Name: "Name", Value: string configured} &&
+                        !string.IsNullOrWhiteSpace(configured))
+                    {
+                        name = configured;
+                    }
+                    else if (argument is {Name: "Result", Value: SerializedTypeDecoded {FullName: { } resultName}})
+                    {
+                        result = resultName;
+                    }
+                }
+
+                return (name, target, result);
+            }
+            catch (BadImageFormatException)
+            {
+            }
+        }
+
+        return (null, null, null);
+    }
+
+    // A class the server can create: not an interface, not abstract (a static class is both abstract and
+    // sealed), not generic, not a value type, and carrying a public constructor that takes nothing.
+    static bool IsConcrete(MetadataReader reader, TypeDefinition type, SignatureDecoder decoder)
+    {
+        if ((type.Attributes & (TypeAttributes.Interface | TypeAttributes.Abstract)) != 0 ||
+            type.GetGenericParameters().Count > 0 ||
+            TypeName(reader, type.BaseType) is "System.ValueType" or "System.Enum")
+        {
+            return false;
+        }
+
+        foreach (var handle in type.GetMethods())
+        {
+            var method = reader.GetMethodDefinition(handle);
+            if (reader.GetString(method.Name) == ".ctor" &&
+                (method.Attributes & MethodAttributes.MemberAccessMask) == MethodAttributes.Public &&
+                (method.Attributes & MethodAttributes.Static) == 0 &&
+                method.DecodeSignature(decoder, genericContext: null).ParameterTypes.Length == 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// A command's payload: its public readable and writable instance properties, and those of every
+    /// base in this assembly, less any marked <c>[CommandIgnore]</c>. Base-most first, a name declared
+    /// more than once being one property described by its nearest declaration, as reflection reads it.
+    /// </summary>
+    static ImmutableArray<PropertyInfo> ReadCommandProperties(
+        MetadataReader reader,
+        TypeDefinition type,
+        SignatureDecoder decoder,
+        Dictionary<string, EnumInfo> enums,
+        string clrName,
+        ImmutableArray<CommandProblem>.Builder problems)
+    {
+        var properties = ImmutableArray.CreateBuilder<PropertyInfo>();
+        foreach (var (property, attributes) in PropertiesAlongTheChain(reader, type))
+        {
+            if (!HasPublicInstanceGetter(reader, property) ||
+                !HasPublicInstanceSetter(reader, property) ||
+                HasAttribute(reader, attributes, commandIgnoreAttribute))
+            {
+                continue;
+            }
+
+            var signature = property.DecodeSignature(decoder, genericContext: null);
+            if (signature.ParameterTypes.Length > 0)
+            {
+                continue;
+            }
+
+            var name = reader.GetString(property.Name);
+            if (HasAttribute(reader, attributes, queryIgnoreAttribute))
+            {
+                problems.Add(
+                    new(
+                        "SCRY013",
+                        $"'{clrName}.{name}' carries [QueryIgnore], which hides a member from queries and means nothing on a command. Use [CommandIgnore] to keep a property out of the payload."));
+                continue;
+            }
+
+            if (ClassifyValue(reader, signature.ReturnType, enums) is not { } classified)
+            {
+                problems.Add(
+                    new(
+                        "SCRY014",
+                        $"'{clrName}.{name}' is not a type a command can carry. A payload property is a scalar, an enum declared in the model, a byte[], a nullable of those, or a list of them; anything the server fills itself belongs behind [CommandIgnore]."));
+                continue;
+            }
+
+            properties.Add(
+                classified with
+                {
+                    Name = name,
+                    Obsolete = ObsoleteOf(reader, attributes, decoder)
+                });
+        }
+
+        return properties.ToImmutable();
+    }
+
+    // Every property of the type and of its bases in this assembly, base-most first. A name declared more
+    // than once is one property, described by its nearest declaration and carrying every declaration's
+    // attributes — the walk DeclaredProperties makes, without its stop at an opted-in base.
+    static List<(PropertyDefinition Property, List<CustomAttributeHandle> Attributes)> PropertiesAlongTheChain(
+        MetadataReader reader,
+        TypeDefinition type)
+    {
+        var levels = new List<List<(PropertyDefinition, List<CustomAttributeHandle>)>>();
+        var byName = new Dictionary<string, List<CustomAttributeHandle>>(StringComparer.Ordinal);
+        var current = type;
+        while (true)
+        {
+            var level = new List<(PropertyDefinition, List<CustomAttributeHandle>)>();
+            foreach (var handle in current.GetProperties())
+            {
+                var property = reader.GetPropertyDefinition(handle);
+                var name = reader.GetString(property.Name);
+                var attributes = property.GetCustomAttributes().ToList();
+                if (byName.TryGetValue(name, out var nearer))
+                {
+                    nearer.AddRange(attributes);
+                    continue;
+                }
+
+                byName[name] = attributes;
+                level.Add((property, attributes));
+            }
+
+            levels.Add(level);
+            if (current.BaseType.IsNil ||
+                current.BaseType.Kind != HandleKind.TypeDefinition)
+            {
+                break;
+            }
+
+            current = reader.GetTypeDefinition((TypeDefinitionHandle)current.BaseType);
+        }
+
+        levels.Reverse();
+        return levels.SelectMany(_ => _).ToList();
+    }
+
+    /// <summary>
+    /// How a command or result property is spelled in generated code, or null for a type neither can
+    /// carry: a scalar, an enum from this assembly, a byte[], a nullable of those, or a list of them.
+    /// Spelled exactly as the same value would be on a query model, which is what keeps the server's
+    /// description of it identical.
+    /// </summary>
+    static PropertyInfo? ClassifyValue(MetadataReader reader, DecodedType type, Dictionary<string, EnumInfo> enums)
+    {
+        if (Classify(reader, type, noModels, enums, collectionOptIn: false) is {IsNavigation: false, IsCollection: false} scalar)
+        {
+            return scalar;
+        }
+
+        if (type is CollectionDecoded collection &&
+            Classify(reader, collection.Element, noModels, enums, collectionOptIn: false) is {IsNavigation: false, IsCollection: false} element)
+        {
+            return new("", $"global::System.Collections.Generic.IReadOnlyList<{element.TypeDisplay}>", NeedsNullDefault: true);
+        }
+
+        return null;
+    }
+
+    static Dictionary<string, string> noModels = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The payload properties carrying the target's key, in the target's key order: for each key member,
+    /// the one property named like it or prefixed with the target's type name, typed as it is.
+    /// </summary>
+    static ImmutableArray<string> BindKeys(
+        string clrName,
+        SourceInfo target,
+        List<PropertyInfo> targetMembers,
+        ImmutableArray<PropertyInfo> properties,
+        ImmutableArray<CommandProblem>.Builder problems)
+    {
+        var keys = Keys(target, targetMembers);
+        if (keys.Length == 0)
+        {
+            problems.Add(
+                new(
+                    "SCRY010",
+                    $"'{clrName}' targets '{target.ClrName}', which has no derivable key. A targeted command names its row by key: mark the key member(s) with [Key], or name a member 'Id' or '{target.ClrName}Id'."));
+            return [];
+        }
+
+        var bound = ImmutableArray.CreateBuilder<string>();
+        foreach (var key in keys)
+        {
+            var member = targetMembers.First(_ => _.Name == key);
+            var prefixed = $"{target.ClrName}{key}";
+            var candidates = properties
+                .Where(_ => _.Name == key || _.Name == prefixed)
+                .ToList();
+            if (candidates.Count > 1)
+            {
+                problems.Add(
+                    new(
+                        "SCRY010",
+                        $"'{clrName}' carries both '{key}' and '{prefixed}', so which one is the key of '{target.ClrName}' is ambiguous. Keep one, or mark the other [CommandIgnore]."));
+                continue;
+            }
+
+            if (candidates is not [var candidate] ||
+                candidate.TypeDisplay != member.TypeDisplay)
+            {
+                problems.Add(
+                    new(
+                        "SCRY010",
+                        $"'{clrName}' targets '{target.ClrName}', keyed by '{key}', but carries no '{member.TypeDisplay}' property named '{key}' or '{prefixed}'. A targeted command carries its row's key, named after the key member or prefixed with the entity's name, and typed as the key is."));
+                continue;
+            }
+
+            bound.Add(candidate.Name);
+        }
+
+        return bound.ToImmutable();
+    }
+
+    /// <summary>
+    /// Reads the class a command answers with, or records why it cannot be one, returning the name it is
+    /// emitted as. A class several commands share is read once.
+    /// </summary>
+    static string? ReadResult(
+        MetadataReader reader,
+        string resultFullName,
+        string clrName,
+        Dictionary<string, TypeDefinition> definitions,
+        SignatureDecoder decoder,
+        Dictionary<string, EnumInfo> enums,
+        Dictionary<string, (string FullName, ResultInfo Info)> results,
+        ImmutableArray<CommandProblem>.Builder problems)
+    {
+        if (!definitions.TryGetValue(resultFullName, out var type))
+        {
+            problems.Add(
+                new(
+                    "SCRY015",
+                    $"'{clrName}' answers with '{SimpleName(resultFullName)}', which is not declared in the model assembly. A client is generated from that assembly alone, so a result class has to be declared there too."));
+            return null;
+        }
+
+        var name = reader.GetString(type.Name);
+        if (results.TryGetValue(name, out var existing))
+        {
+            if (existing.FullName == resultFullName)
+            {
+                return name;
+            }
+
+            problems.Add(
+                new(
+                    "SCRY011",
+                    $"Two result classes are named '{name}'. Every result class is emitted into Scry.Generated by its simple name, so each needs a name of its own."));
+            return null;
+        }
+
+        var properties = ImmutableArray.CreateBuilder<PropertyInfo>();
+        var valid = true;
+        foreach (var (property, attributes) in PropertiesAlongTheChain(reader, type))
+        {
+            if (!HasPublicInstanceGetter(reader, property))
+            {
+                continue;
+            }
+
+            var signature = property.DecodeSignature(decoder, genericContext: null);
+            if (signature.ParameterTypes.Length > 0)
+            {
+                continue;
+            }
+
+            var propertyName = reader.GetString(property.Name);
+            if (ClassifyValue(reader, signature.ReturnType, enums) is not { } classified)
+            {
+                problems.Add(
+                    new(
+                        "SCRY015",
+                        $"'{clrName}' answers with '{name}', whose property '{propertyName}' is not a type a result can carry. A result property is a scalar, an enum declared in the model, a byte[], a nullable of those, or a list of them."));
+                valid = false;
+                continue;
+            }
+
+            properties.Add(
+                classified with
+                {
+                    Name = propertyName,
+                    Obsolete = ObsoleteOf(reader, attributes, decoder)
+                });
+        }
+
+        if (!valid)
+        {
+            return null;
+        }
+
+        results[name] = (resultFullName, new(name, new(properties.ToImmutable())));
+        return name;
+    }
+
+    /// <summary>
+    /// Adds <c>Can{Command}</c> to the target's declared members, or records why it cannot be added: a
+    /// member of that name on the target, a base of it, or a model deriving from it.
+    /// </summary>
+    static bool AddCapability(
+        ImmutableArray<SourceInfo>.Builder sources,
+        SourceInfo target,
+        string command,
+        string clrName,
+        ImmutableArray<CommandProblem>.Builder problems)
+    {
+        var capability = $"Can{command}";
+        var byModel = ByModel(sources);
+        var current = byModel[target.ModelName];
+        var collides = Inherited(current, byModel).Any(_ => _.Name == capability) ||
+                       sources.Any(_ => _.ModelName != target.ModelName &&
+                                        DerivesFrom(_, target.ModelName, byModel) &&
+                                        _.Properties.Any(property => property.Name == capability));
+        if (collides)
+        {
+            problems.Add(
+                new(
+                    "SCRY016",
+                    $"'{clrName}' would add '{capability}' to '{target.ClrName}', which already has a member of that name. Rename the member, or give the command a different Name."));
+            return false;
+        }
+
+        for (var i = 0; i < sources.Count; i++)
+        {
+            if (sources[i].ModelName != target.ModelName)
+            {
+                continue;
+            }
+
+            sources[i] = current with
+            {
+                Properties = [with(current.Properties.Array.Add(new(capability, "bool", NeedsNullDefault: false, Capability: command)))]
+            };
+            break;
+        }
+
+        return true;
+    }
+
+    static bool DerivesFrom(SourceInfo source, string model, Dictionary<string, SourceInfo> byModel)
+    {
+        var current = source;
+        while (current.BaseModelName is { } baseName &&
+               byModel.TryGetValue(baseName, out var baseSource))
+        {
+            if (baseName == model)
+            {
+                return true;
+            }
+
+            current = baseSource;
+        }
+
+        return false;
+    }
+
+    static string SimpleName(string fullName)
+    {
+        var dot = fullName.LastIndexOf('.');
+        if (dot < 0)
+        {
+            return fullName;
+        }
+
+        return fullName.Substring(dot + 1);
+    }
+
+    static bool HasPublicInstanceSetter(MetadataReader reader, PropertyDefinition property)
+    {
+        var setter = property.GetAccessors().Setter;
+        if (setter.IsNil)
+        {
+            return false;
+        }
+
+        var attributes = reader.GetMethodDefinition(setter).Attributes;
+        return (attributes & MethodAttributes.MemberAccessMask) == MethodAttributes.Public &&
+               (attributes & MethodAttributes.Static) == 0;
     }
 
     /// <summary>
@@ -150,12 +717,13 @@ static class MetadataModelReader
     }
 
     // A member of the row's key is a scalar the client can name and read: an attachment is neither, and
-    // a navigation or collection is not a value. [Key] wins where it is written, since it is the only
-    // one of the three that was stated rather than inferred.
+    // a navigation or collection is not a value. Nor is a capability, which the server computes rather
+    // than stores. [Key] wins where it is written, since it is the only one of the three that was
+    // stated rather than inferred.
     static ImmutableArray<string> Keys(SourceInfo source, List<PropertyInfo> members)
     {
         var candidates = members
-            .Where(_ => _ is {IsNavigation: false, IsCollection: false, IsAttachment: false})
+            .Where(_ => _ is {IsNavigation: false, IsCollection: false, IsAttachment: false, Capability: null})
             .ToList();
 
         var declared = candidates
@@ -536,6 +1104,11 @@ static class MetadataModelReader
                     break;
                 case keylessAttribute:
                     keyless = true;
+                    break;
+                case commandAttribute:
+                    // Counted so a type that is both a source and a command is refused as a conflict.
+                    // A command alone is not a source, and is read apart from them.
+                    (optIns ??= []).Add("[Command]");
                     break;
             }
         }

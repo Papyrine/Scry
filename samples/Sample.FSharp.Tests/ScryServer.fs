@@ -7,6 +7,7 @@ open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.TestHost
 open Microsoft.EntityFrameworkCore
 open Microsoft.Extensions.DependencyInjection
+open Sample.CommandHandlers
 open Sample.Model
 open Scry
 open Scry.Generated
@@ -37,20 +38,36 @@ type ScryServer private (app: WebApplication, database: SqlDatabase<SampleContex
                     Task.CompletedTask),
             storage = Storage.FromSuffix<SampleContext> "FSharp")
 
-    static member StartAsync() =
+    /// A suffix gives a fixture that writes a database of its own, so the fixtures that snapshot the
+    /// seed never see what it changed.
+    static member StartAsync(?databaseSuffix: string) =
         task {
-            let! database = sqlInstance.Build()
+            let! database = sqlInstance.Build(databaseSuffix = defaultArg databaseSuffix null)
             let builder = WebApplication.CreateBuilder()
             builder.WebHost.UseTestServer() |> ignore
 
-            builder.Services.AddDbContext<SampleContext>(fun (options: DbContextOptionsBuilder) ->
-                options.UseSqlServer database.ConnectionString |> ignore)
+            // The interceptor reports what this context saves, which is what makes a live query hear
+            // of it. Resolved rather than constructed, so it reports to the place the server listens.
+            builder.Services.AddDbContext<SampleContext>(fun (services: IServiceProvider) (options: DbContextOptionsBuilder) ->
+                options
+                    .UseSqlServer(database.ConnectionString)
+                    .AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>())
+                |> ignore)
             |> ignore
+
+            // The sample's command handlers: the C# project every host with commands on shares.
+            builder.Services.AddSampleCommandHandlers() |> ignore
 
             builder.Services.AddScry<SampleContext>(fun options ->
                 options.AddPocoSource(fun _ -> Holiday.Seed())
                 options.AddAttachmentPolicy<Department, HandbookPolicy>()
-                options.AddAttachmentPolicy<Employee, PhotoPolicy>())
+                options.AddAttachmentPolicy<Employee, PhotoPolicy>()
+
+                // Live queries are off until a server says how many it will hold open, and commands
+                // until it says how many it may have in flight.
+                options.MaxSubscriptions <- 10
+                options.SubscriptionThrottle <- TimeSpan.Zero
+                options.UseSampleCommands() |> ignore)
             |> ignore
 
             let app = builder.Build()
@@ -60,7 +77,10 @@ type ScryServer private (app: WebApplication, database: SqlDatabase<SampleContex
         }
 
     /// The generated entry point over an HTTP client into the hosted server.
-    member _.Query = ScryQuery(ScryClient.ForHttp(app.GetTestClient(), "/api/query"))
+    member this.Query = ScryQuery(ScryClient.ForHttp(this.Http, "/api/query"))
+
+    /// An HTTP client into the hosted server.
+    member _.Http = app.GetTestClient()
 
     interface IAsyncDisposable with
         member _.DisposeAsync() =

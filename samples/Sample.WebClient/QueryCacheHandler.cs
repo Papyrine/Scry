@@ -16,11 +16,11 @@ public sealed class QueryCacheHandler(QueryCache cache) :
 {
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
-        CancellationToken cancellationToken)
+        Cancel cancel)
     {
         if (Key(request) is not { } key)
         {
-            return await base.SendAsync(request, cancellationToken);
+            return await base.SendAsync(request, cancel);
         }
 
         var cached = cache.Get(key);
@@ -29,7 +29,7 @@ public sealed class QueryCacheHandler(QueryCache cache) :
             request.Headers.TryAddWithoutValidation("If-None-Match", cached.ETag);
         }
 
-        var response = await base.SendAsync(request, cancellationToken);
+        var response = await base.SendAsync(request, cancel);
 
         if (response.StatusCode == HttpStatusCode.NotModified &&
             cached is not null)
@@ -48,7 +48,7 @@ public sealed class QueryCacheHandler(QueryCache cache) :
             return response;
         }
 
-        var body = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        var body = await response.Content.ReadAsByteArrayAsync(cancel);
         cache.Store(key, new(etag, body, "application/json", Stamp(response)));
 
         // The content has been read to the end, so the response is handed back over the bytes rather
@@ -107,13 +107,28 @@ public sealed class QueryCacheHandler(QueryCache cache) :
     /// <summary>
     /// The cache key: the URL, which is the query. Null for anything else — a query too long for a URL
     /// travels as a body, and a body is part of no cache key here any more than it is anywhere else, so
-    /// this handler leaves it alone rather than inventing an identity for it.
+    /// this handler leaves it alone rather than inventing an identity for it. So too a GET that is not
+    /// a query: a pending command asked for again, or what this caller may send, are answers about
+    /// the caller and the moment, never to be replayed.
     /// </summary>
     /// <remarks>
     /// That the URL is the key is the whole point of asking as one: it is also why a browser answers a
     /// repeat out of its own cache without this handler existing at all. This exists for the hosts that
     /// have no such cache — a console app, a service, the tests — and the sample runs in both.
     /// </remarks>
-    static string? Key(HttpRequestMessage request) =>
-        request.Method == HttpMethod.Get ? request.RequestUri?.ToString() : null;
+    static string? Key(HttpRequestMessage request)
+    {
+        if (request.Method != HttpMethod.Get ||
+            request.RequestUri is not { } uri ||
+            !IsQuery(uri.Query))
+        {
+            return null;
+        }
+
+        return uri.ToString();
+    }
+
+    static bool IsQuery(string query) =>
+        query.StartsWith($"?{QueryUrl.Parameter}=", StringComparison.Ordinal) ||
+        query.Contains($"&{QueryUrl.Parameter}=", StringComparison.Ordinal);
 }

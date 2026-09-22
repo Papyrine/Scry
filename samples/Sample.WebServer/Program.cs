@@ -20,18 +20,30 @@
         // Serve the Blazor client's static web assets even when not running in the Development environment.
         builder.WebHost.UseStaticWebAssets();
 
+        // The interceptor reports what this context saves, so the live queries reading it are asked
+        // again at once. Resolved rather than constructed: AddScry registers it, wired to the same
+        // place the server listens.
+        // begin-snippet: changeInterceptor
         builder.Services
-            .AddDbContext<SampleContext>(_ => _.UseSqlServer(database.ConnectionString));
+            .AddDbContext<SampleContext>((services, options) => options
+                .UseSqlServer(database.ConnectionString)
+                .AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>()));
+        // end-snippet
 
         // The sample's own authorization data, and the policy that reads it. The policy is resolved
         // from here rather than constructed, which is what lets it take a dependency at all.
         builder.Services.AddSingleton<RegionGrants>();
         builder.Services.AddSingleton<RegionAccessPolicy>();
 
+        // begin-snippet: sampleCommandHandlers
+        // The handlers for the model's commands — every one of them, since a server with commands on
+        // routes them all — and what they are tuned by, from the Sample:Commands section.
+        builder.Services.AddSampleCommandHandlers(builder.Configuration);
+        // end-snippet
+
         // begin-snippet: serverRegistration
         builder.Services
-            .AddScry<SampleContext>(
-            _ =>
+            .AddScry<SampleContext>(_ =>
             {
                 // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
                 // [QueryablePoco] type must be registered here or AddScry throws at startup.
@@ -66,8 +78,27 @@
                 // database — so a grant changing outside it would move nothing, and a cache holding
                 // the old rows would go on answering with rows the caller has since lost.
                 _.CacheScope = _ => $"sample-{_.RequestServices.GetRequiredService<RegionGrants>().Version}";
+
+                // begin-snippet: liveQueryRegistration
+                // Live queries: the /live pages. Off until a server says how many it will hold open,
+                // which is also what maps the route — see /docs/live-queries.md.
+                _.MaxSubscriptions = 100;
+
+                // The interceptor above reports this server's own saves, at once and by entity. This
+                // watches the database's change marker for everything it cannot see: a bulk update,
+                // another node, a script run by hand.
+                _.UseDeltaChanges<SampleContext>();
+                // end-snippet
+
+                // Commands: the /commands page and the /live pages' Reprice. Off until a server says
+                // how many it will have in flight, which is also what maps the routes — see
+                // /docs/commands.md.
+                _.UseSampleCommands();
             });
         // end-snippet
+
+        // For MapScryHub below. Scry.Server.SignalR needs nothing registered beyond SignalR itself.
+        builder.Services.AddSignalR();
 
         // Scry's telemetry is dormant until something subscribes; opting in is one AddSource and one
         // AddMeter. See /docs/observability.md for the spans, instruments, and tags.
@@ -86,6 +117,13 @@
         app.MapScry("/api/query");
         // end-snippet
 
+        // The same queries over a SignalR hub, beside the HTTP endpoints rather than instead of them.
+        // What the transport switch on the /live pages connects to: every live query a page holds
+        // then shares the one connection. Optional — see /docs/live-queries.md.
+        // begin-snippet: mapScryHubSample
+        app.MapScryHub("/api/query-hub");
+        // end-snippet
+
         // What the /permissions page drives. None of it is Scry's — it is the sample standing in for
         // the two things only a host can know about a cached policy.
         app.MapGet("/api/grants", (RegionGrants grants) =>
@@ -98,41 +136,60 @@
         app.MapPost(
             "/api/grants/{region}",
             (string region, bool allowed, RegionGrants grants, ScryPolicyCache cache) =>
-        {
-            grants.Set("sample", region, allowed);
-            cache.InvalidateScope<Order>("sample");
-            return Results.NoContent();
-        });
+            {
+                grants.Set("sample", region, allowed);
+                cache.InvalidateScope<Order>("sample");
+                return Results.NoContent();
+            });
         // end-snippet
 
         // begin-snippet: cachedPolicyReadThrough
         // A row changed. Nobody tells the cache anything here: the next query sees a revision past the
         // watermark this scope was decided up to, and decides that one row on the spot. An insert by
         // any writer at all is correct on its first read for the same reason.
-        app.MapPost("/api/orders/{id:int}/touch", async (int id, SampleContext data) =>
-        {
-            var order = await data.Orders.FindAsync(id);
-            if (order is null)
+        app.MapPost(
+            "/api/orders/{id:int}/touch",
+            async (int id, SampleContext data) =>
             {
-                return Results.NotFound();
-            }
+                var order = await data.Orders.FindAsync(id);
+                if (order is null)
+                {
+                    return Results.NotFound();
+                }
 
-            // Named explicitly: Scry's async terminals and EF's are both in scope here, and they are
-            // not the same method — this one has to run against the database.
-            order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
-            await data.SaveChangesAsync();
-            return Results.NoContent();
-        });
-        // end-snippet
-        // begin-snippet: mapExplorer
-        app.MapScryExplorer(
-            _ =>
-            {
-                _.Route = "/scry";
-                // This sample always exposes the explorer. The default guard is Development-only — in a real
-                // app, run in Development or set EnableGuard to your own check (e.g. an admin authorization).
-                _.EnableGuard = _ => true;
+                // Named explicitly: Scry's async terminals and EF's are both in scope here, and they are
+                // not the same method — this one has to run against the database.
+                order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(data.Orders, _ => _.Revision) + 1;
+                await data.SaveChangesAsync();
+                return Results.NoContent();
             });
+        // end-snippet
+
+        // What the /live pages drive besides the RepriceOrder command, which a client sends and the
+        // sample's handler saves through the context: a write the interceptor cannot see.
+        // begin-snippet: changesNotify
+        // A bulk update never passes through SaveChanges, so no interceptor can see it. The host
+        // says what it wrote instead. Without that line the change marker would still catch it a
+        // moment later, and the poll after that — but this is at once, and names the entity.
+        app.MapPost(
+            "/api/orders/reprice-bulk",
+            async (SampleContext data, ScryChanges changes) =>
+            {
+                var orders = data.Orders;
+                await orders.ExecuteUpdateAsync(_ => _.SetProperty(_ => _.Amount, _ => _.Amount + 1));
+                changes.Notify<Order>();
+                return Results.NoContent();
+            });
+        // end-snippet
+
+        // begin-snippet: mapExplorer
+        app.MapScryExplorer(_ =>
+        {
+            _.Route = "/scry";
+            // This sample always exposes the explorer. The default guard is Development-only — in a real
+            // app, run in Development or set EnableGuard to your own check (e.g. an admin authorization).
+            _.EnableGuard = _ => true;
+        });
         // end-snippet
         app.MapFallbackToFile("index.html");
 

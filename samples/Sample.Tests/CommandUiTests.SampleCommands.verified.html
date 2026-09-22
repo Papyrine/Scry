@@ -1,0 +1,82 @@
+﻿<div id="app">
+  <button type="button" class="scry-sidecar-launcher" data-testid="sidecar-toggle" title="Open the Scry sidecar (Alt+Q)" aria-label="Open the Scry debug sidecar">Scry</button>
+  <link rel="stylesheet" href="_content/Scry.Client/scry-commands.css">
+  <h1 tabindex="-1">Commands</h1>
+  
+  <p>
+    <a href="/">← Samples</a>
+    ·
+    <a href="/scry">Explorer</a>
+  </p>
+  
+  <p>
+    Every button sends a command, and none of them refreshes the table: it is a live query, so what a     command writes arrives as its next answer — here, in a second window, or from anyone else. Only an     inactive employee may be deleted; a name containing "slow" takes a while, and waits in the pending     work panel until it lands.
+  </p>
+  <form id="create">
+    <input id="create-name" placeholder="Name" aria-label="Name to hire">
+    <button id="create-submit" type="submit">Hire</button>
+  </form>
+  <p>
+    <label>Rename to
+      <input id="rename-to" aria-label="Rename to">
+    </label>
+  </p>
+  <table id="employees" data-ready="true">
+    <thead>
+      <tr>
+        <th>Id</th>
+        <th>Name</th>
+        <th>Active</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr data-id="1">
+        <td>1</td>
+        <td class="name">Alice</td>
+        <td class="active">yes</td>
+        <td class="actions">
+          <button class="toggle">Deactivate</button>
+          <button class="rename">Rename</button>
+          <button class="delete" disabled="">Delete</button>
+        </td>
+      </tr>
+      <tr data-id="2">
+        <td>2</td>
+        <td class="name">Carol</td>
+        <td class="active">yes</td>
+        <td class="actions">
+          <button class="toggle">Deactivate</button>
+          <button class="rename">Rename</button>
+          <button class="delete" disabled="">Delete</button>
+        </td>
+      </tr>
+      <tr data-id="3">
+        <td>3</td>
+        <td class="name">Aaron</td>
+        <td class="active">yes</td>
+        <td class="actions">
+          <button class="toggle">Deactivate</button>
+          <button class="rename">Rename</button>
+          <button class="delete" disabled="">Delete</button>
+        </td>
+      </tr>
+      <tr data-id="4">
+        <td>4</td>
+        <td class="name">Bob</td>
+        <td class="active">no</td>
+        <td class="actions">
+          <button class="toggle">Reactivate</button>
+          <button class="rename">Rename</button>
+          <button class="delete">Delete</button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="command-status" data-testid="command-status" role="status"></p>
+  </div>
+<div id="blazor-error-ui">
+  An unhandled error has occurred.
+  <a href="" class="reload">Reload</a>
+</div>
+<script src="_framework/blazor.webassembly.js"></script>

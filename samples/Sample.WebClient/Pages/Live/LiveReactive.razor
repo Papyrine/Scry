@@ -1,0 +1,34 @@
+@page "/live/rx"
+@inherits LivePage
+
+<PageTitle>Scry Sample — Live query with Rx</PageTitle>
+
+<h1>Live query with Rx</h1>
+<LiveChrome Active="rx" />
+
+<h2>Order totals</h2>
+<p>
+    <code>AsObservable()</code>: a live query as a plain <code>IObservable</code>, which is all
+    System.Reactive needs. Scry references no reactive library — the operators below are Rx's own,
+    composed over an interface that ships with .NET.
+</p>
+
+@if (error is not null)
+{
+    <p class="error" role="alert">@error</p>
+}
+
+@if (totals is null)
+{
+    <p class="loading">Loading…</p>
+}
+else
+{
+    <table id="totals">
+        <tbody>
+            <tr><th>Orders</th><td id="orders">@totals.Orders</td></tr>
+            <tr><th>Total</th><td id="total">@totals.Total</td></tr>
+            <tr><th>Last change</th><td id="change">@Change(totals)</td></tr>
+        </tbody>
+    </table>
+}
