@@ -540,6 +540,45 @@ public class LiveQueryClientTests
             Is.EqualTo([ScrySubscriptionState.Live, ScrySubscriptionState.Reconnecting, ScrySubscriptionState.Live, ScrySubscriptionState.Closed]));
     }
 
+    // A context need not run what is posted to it in order — the default one runs each post on the
+    // pool, and so does NUnit's — and the changes still arrive in the order they happened, with the one
+    // that ends the subscription last and all of them in before it is complete.
+    [Test]
+    public async Task TheStatesArriveInOrderWhateverTheContextDoesWithThem()
+    {
+        var body = new LiveBody();
+        var script = new Script(
+            body.Response(),
+            unchanged + End(reconnect: false));
+        List<ScrySubscriptionState> states = [];
+        var previous = SynchronizationContext.Current;
+        ScrySubscription subscription;
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(new LaterPostsFirstContext());
+            subscription = Names(script.Client()).Live().Subscribe(_ => { });
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        subscription.StateChanged += state =>
+        {
+            lock (states)
+            {
+                states.Add(state);
+            }
+        };
+        await body.Send(Result("a", "Alice"));
+        await body.DisposeAsync();
+        await subscription.Completion.WaitAsync(patience);
+
+        Assert.That(
+            states,
+            Is.EqualTo([ScrySubscriptionState.Live, ScrySubscriptionState.Reconnecting, ScrySubscriptionState.Live, ScrySubscriptionState.Closed]));
+    }
+
     // Every consumer goes through the same pump, so a watcher on the client sees a live query
     // whichever way the app chose to take it — and over any transport, which is the only way one
     // carried on a hub connection is observable at all.
@@ -909,6 +948,25 @@ public class LiveQueryClientTests
         {
             Interlocked.Increment(ref posted);
             ThreadPool.QueueUserWorkItem(_ => callback(state));
+        }
+    }
+
+    // Runs each post on the pool after a delay that shrinks with every post, so that posts made in quick
+    // succession run in the reverse of the order they were made.
+    sealed class LaterPostsFirstContext :
+        SynchronizationContext
+    {
+        int posted;
+
+        public override void Post(SendOrPostCallback callback, object? state)
+        {
+            var delay = Math.Max(0, 90 - 30 * Interlocked.Increment(ref posted));
+            _ = Task.Run(
+                async () =>
+                {
+                    await Task.Delay(delay);
+                    callback(state);
+                });
         }
     }
 
