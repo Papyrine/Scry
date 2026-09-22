@@ -35,9 +35,9 @@ static class MetadataModelReader
         {
             return new(
                 $"ScryModelDll '{dllPath}' is a relative path. The generator runs inside the compiler process, whose working directory is not the project's, so the path must be absolute: resolve it with $([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(ScryModelDll)')) before it becomes compiler-visible, as the Scry.Client targets do.",
-                new([]),
-                new([]),
-                new([]));
+                [],
+                [],
+                []);
         }
 
         if (!File.Exists(dllPath))
@@ -277,8 +277,7 @@ static class MetadataModelReader
             {
                 var value = attribute.DecodeValue(decoder);
                 string? target = null;
-                if (value.FixedArguments.Length == 1 &&
-                    value.FixedArguments[0].Value is SerializedTypeDecoded {FullName: { } targetName})
+                if (value.FixedArguments is [{Value: SerializedTypeDecoded {FullName: { } targetName}} _])
                 {
                     target = targetName;
                 }

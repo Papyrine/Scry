@@ -41,6 +41,47 @@ public partial class Index
     string? error;
     bool stale;
 
+    // A string rather than a bool: a bool would render the attribute bare, or not at all.
+    string FacesFetchedText
+    {
+        get
+        {
+            if (facesFetched)
+            {
+                return "true";
+            }
+
+            return "false";
+        }
+    }
+
+    // What a face with no image says: nothing to show once fetched, and a wait until then.
+    string EmptyFace
+    {
+        get
+        {
+            if (facesFetched)
+            {
+                return "no photo";
+            }
+
+            return "…";
+        }
+    }
+
+    string? Face(EmployeePhoto photo)
+    {
+        if (faces.TryGetValue(photo.Id, out var face))
+        {
+            return face;
+        }
+
+        return null;
+    }
+
+    static string OrDash(string? value) =>
+        value ?? "—";
+
     protected override async Task OnInitializedAsync()
     {
         try

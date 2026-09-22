@@ -1,6 +1,3 @@
-using System.Collections.Concurrent;
-using System.Text.Json;
-using NServiceBus;
 using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 
 /// <summary>
@@ -244,7 +241,7 @@ public class NServiceBusCommandTests
             var services = scope.ServiceProvider;
             var request = CommandRequest.Create(command, id ?? Guid.NewGuid(), JsonSerializer.SerializeToElement(payload, ScryJson.Options));
             List<CommandReceipt> receipts = [];
-            using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            using var patience = new CancelSource(TimeSpan.FromSeconds(60));
             await foreach (var receipt in Processor.SendCommand(request, services.GetRequiredService<BusContext>(), services, new Microsoft.AspNetCore.Http.HeaderDictionary(), caller, patience.Token))
             {
                 receipts.Add(receipt);
@@ -294,7 +291,7 @@ public class NServiceBusCommandTests
     {
         public bool CanDispatch(Type command) => true;
 
-        public Task Dispatch(CommandEnvelope envelope, CancellationToken cancel) =>
+        public Task Dispatch(CommandEnvelope envelope, Cancel cancel) =>
             Task.CompletedTask;
     }
 
@@ -359,7 +356,7 @@ public sealed class LocalChore;
 public sealed class LocalChoreHandler :
     ICommandHandler<LocalChore>
 {
-    public Task Handle(LocalChore command, ScryCommandContext context, CancellationToken cancel) =>
+    public Task Handle(LocalChore command, ScryCommandContext context, Cancel cancel) =>
         Task.CompletedTask;
 }
 

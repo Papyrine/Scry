@@ -9,6 +9,8 @@ public partial class Permissions
     List<OrderRow>? orders;
     GrantState? grants;
     int decisions;
+
+    bool NothingToRevise => orders is null or [];
     string? error;
 
     protected override Task OnInitializedAsync() =>
@@ -68,6 +70,10 @@ public partial class Permissions
         await Post($"/api/grants/{region}?allowed={allowed}");
         await Load();
     }
+
+    // A checkbox's change carries its new state as the value.
+    Task Grant(string region, ChangeEventArgs args) =>
+        Set(region, (bool)args.Value!);
 
     async Task Post(string url)
     {

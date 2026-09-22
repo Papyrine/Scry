@@ -35,8 +35,8 @@ else
     </table>
 
     <p>
-        <button disabled="@(pageIndex == 0)" @onclick="PreviousPage">← Previous</button>
-        <span>Page @(pageIndex + 1)</span>
+        <button disabled="@OnFirstPage" @onclick="PreviousPage">← Previous</button>
+        <span>Page @PageNumber</span>
         <button disabled="@(!page.HasMore)" @onclick="NextPage">Next →</button>
     </p>
 }

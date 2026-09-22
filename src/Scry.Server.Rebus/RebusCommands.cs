@@ -65,7 +65,7 @@ sealed class CompletionSender(ISerializer serializer, ITransport transport, IMes
             [Headers.Type] = typeNames.GetTypeName(typeof(RebusCommandCompleted)),
             [Headers.Intent] = Headers.IntentOptions.PointToPoint
         };
-        var message = await serializer.Serialize(new Message(headers, completion));
+        var message = await serializer.Serialize(new(headers, completion));
         await transport.Send(replyTo, message, transaction);
     }
 }
@@ -85,7 +85,7 @@ sealed class CompletionStep(CompletionSender sender) :
         {
             await sender.Send(
                 replyTo,
-                new RebusCommandCompleted
+                new()
                 {
                     Id = id,
                     Succeeded = true,
@@ -119,7 +119,7 @@ sealed class CompletionErrorHandler(IErrorHandler inner, CompletionSender sender
         using var scope = new RebusTransactionScope();
         await sender.Send(
             replyTo,
-            new RebusCommandCompleted
+            new()
             {
                 Id = id,
                 Succeeded = false,

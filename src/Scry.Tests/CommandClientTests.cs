@@ -342,13 +342,16 @@ public class CommandClientTests
                 accepted.TrySetResult();
             }
         };
-        using var stopping = new CancelSource();
-
-        var sending = client.SendCommandAsync(Rename, stopping.Token);
-        await Until(() => stub.Requests.Count == 1);
-        await held.Send(CommandStub.Result(CommandStatus.Pending));
-        await accepted.Task.WaitAsync(patience);
-        await stopping.CancelAsync();
+        // The token is the sender's, and ends with the sending: nothing after the cancel can use it.
+        Task<ScryCommandOutcome> sending;
+        using (var stopping = new CancelSource())
+        {
+            sending = client.SendCommandAsync(Rename, stopping.Token);
+            await Until(() => stub.Requests.Count == 1);
+            await held.Send(CommandStub.Result(CommandStatus.Pending));
+            await accepted.Task.WaitAsync(patience, stopping.Token);
+            await stopping.CancelAsync();
+        }
 
         Assert.CatchAsync<OperationCanceledException>(() => sending);
         var listed = client.PendingWork.Items.Single();

@@ -376,7 +376,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 (name, include) => ResolveSource(name, db, scope, include),
                 buildOnly ? null : probes),
             // Decides each command's capability once for this call, however often the query reads it.
-            new CapabilityContext(schema, new(scope.Services, db, scope.RequestHeaders, scope.ResponseHeaders)));
+            new(schema, new(scope.Services, db, scope.RequestHeaders, scope.ResponseHeaders)));
 
         var query = source.Resolve(db, scope.Services);
         query = ApplyPolicy(query, source, db, scope);

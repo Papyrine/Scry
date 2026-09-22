@@ -76,7 +76,7 @@ public static partial class ScryServiceExtensions
     }
 
     /// <summary>The commands this caller may send at all, for a UI to enable its controls by.</summary>
-    static async Task HandleCapabilities(HttpContext context)
+    static Task HandleCapabilities(HttpContext context)
     {
         var services = context.RequestServices;
         var options = services.GetRequiredService<ScryOptions>();
@@ -84,7 +84,7 @@ public static partial class ScryServiceExtensions
 
         Advertise(context, processor, options);
         var db = (DbContext) services.GetRequiredService(options.ContextType);
-        await WriteCommandJson(context, ScryJson.SerializeToUtf8(processor.Capabilities(db, services, context.Request.Headers)));
+        return WriteCommandJson(context, ScryJson.SerializeToUtf8(processor.Capabilities(db, services, context.Request.Headers)));
     }
 
     // A final first receipt is a response of its own; a pending one is the first event of a stream that

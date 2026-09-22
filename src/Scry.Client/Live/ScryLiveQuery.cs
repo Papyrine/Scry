@@ -98,7 +98,7 @@ public sealed class ScryLiveQuery<TResult> :
 
     async IAsyncEnumerable<TResult> Answers(Action<ScrySubscriptionState>? changed, [EnumeratorCancellation] Cancel cancel)
     {
-        await foreach (var response in LivePump.Answers(client, request, call, changed, cancel).WithCancellation(cancel))
+        await foreach (var response in LivePump.Answers(client, request, call, changed, cancel))
         {
             yield return read(response);
         }

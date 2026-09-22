@@ -115,7 +115,7 @@ sealed class CachedRowPolicyAdapter<TEntity, TKey, TVersion>(
         public void Run() =>
             slot.Value = adapter.Bounded(adapter.Refresh(policy, scopeKey, context));
 
-        public async ValueTask RunAsync(Cancel cancel) =>
+        public async ValueTask RunAsync(Cancel cancel = default) =>
             slot.Value = adapter.Bounded(await adapter.RefreshAsync(policy, scopeKey, context, cancel));
     }
 

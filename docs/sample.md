@@ -375,7 +375,7 @@ employees = await Query
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L48-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L89-L96' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A group-by with aggregates:
@@ -389,7 +389,7 @@ regions = await Query
     .Select(_ => new RegionSummary(_.Key, _.Sum(_ => _.Amount), _.Count()))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L57-L63' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L98-L104' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupBy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 And a query parameterized by closure-captured locals — the values are evaluated client-side and sent as constants, which is how an app builds a filtered query at runtime:
@@ -405,7 +405,7 @@ fullTimers = await Query
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L65-L73' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L106-L114' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientClosureCapture' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -435,7 +435,7 @@ photos = await Query
     .Select(_ => new EmployeePhoto(_.Id, _.Name, _.Photo))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L88-L97' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L129-L138' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The page renders the names off that response, and only then goes looking for the bytes — one request per face, each authorized by the server's `IAttachmentPolicy` on its own terms:
@@ -452,7 +452,7 @@ foreach (var photo in photos)
     }
 }
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L103-L112' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentFetch' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L144-L153' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentFetch' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: clientAttachmentOpen -->
@@ -478,7 +478,7 @@ static async Task<string?> FaceAsync(ScryAttachment photo)
     return $"data:image/svg+xml;base64,{Convert.ToBase64String(buffer.ToArray())}";
 }
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L132-L152' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentOpen' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L173-L193' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientAttachmentOpen' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Employee.Photo` declares `ContentType = "image/svg+xml"`, so the fetch is served as that rather than as bytes — which is what lets the [explorer](explorer.md) and the [sidecar](sidecar.md) offer the download as `.svg`. `Department.Handbook` declares `text/plain` and downloads as `.txt`. See [Content type](attachments.md#content-type).

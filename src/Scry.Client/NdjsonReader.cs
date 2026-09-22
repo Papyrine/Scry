@@ -24,7 +24,7 @@ sealed class NdjsonReader(Stream stream) :
     public bool Unterminated { get; private set; }
 
     /// <summary>The next line, or null at the end of the stream. Empty lines are returned as empty.</summary>
-    public async ValueTask<ReadOnlyMemory<byte>?> ReadLineAsync(Cancel cancel)
+    public async ValueTask<ReadOnlyMemory<byte>?> ReadLineAsync(Cancel cancel = default)
     {
         while (true)
         {

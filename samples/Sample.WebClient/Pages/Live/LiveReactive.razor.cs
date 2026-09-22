@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Sample.WebClient.Pages.Live;
 
 public partial class LiveReactive
@@ -7,6 +9,10 @@ public partial class LiveReactive
     Totals? totals;
     string? error;
     IDisposable? subscription;
+
+    // Signed, so that a rise and a fall read differently.
+    static string Change(Totals totals) =>
+        totals.Change.ToString("+0.00;-0.00;0.00", CultureInfo.CurrentCulture);
 
     // begin-snippet: liveReactive
     protected override void Start() =>

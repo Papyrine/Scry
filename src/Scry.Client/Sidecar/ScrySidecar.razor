@@ -4,7 +4,7 @@
 @inject IJSRuntime JS
 @inject IServiceProvider Services
 
-@if (!open && toggleButton)
+@if (ShowsLauncher)
 {
     <button type="button"
             class="scry-sidecar-launcher"
@@ -22,7 +22,7 @@
             <button type="button" data-testid="sidecar-close" title="Hide the sidecar (@Options.ToggleShortcut)" @onclick="Toggle">Close</button>
         </header>
         <div class="scry-sidecar-body">
-            @if (Store.Entries.Count == 0)
+            @if (Empty)
             {
                 <p class="scry-sidecar-empty" data-testid="sidecar-empty">No Scry exchanges captured yet.</p>
             }
@@ -40,11 +40,11 @@
                                     <button type="button"
                                             class="scry-sidecar-caret"
                                             data-testid="sidecar-expand"
-                                            title="@(Expanded(entry.Id) ? "Hide" : "Show") this live query's connections"
+                                            title="@CaretTitle(entry.Id)"
                                             aria-expanded="@Expanded(entry.Id)"
                                             @onclick="() => Expand(entry.Id)"
-                                            @onclick:stopPropagation="true">@(Expanded(entry.Id) ? "▼" : "▶")</button>
-                                    <span class="scry-sidecar-kind @(session.Open ? "scry-sidecar-kind-live" : null)">@entry.Kind</span>
+                                            @onclick:stopPropagation="true">@Caret(entry.Id)</button>
+                                    <span class="@KindClass(session)">@entry.Kind</span>
                                     <span>@entry.Method</span>
                                     <span class="scry-sidecar-name">@Name(entry)</span>
                                     <span class="@StateClass(session)" data-testid="sidecar-session-state">@Progress(session)</span>
@@ -61,8 +61,8 @@
                                                 class="scry-sidecar-row @Chosen(entry.Id, connection.Attempt)"
                                                 data-testid="sidecar-connection"
                                                 @onclick="() => Select(entry.Id, connection.Attempt)">
-                                                <span class="scry-sidecar-name">connection @connection.Attempt@(connection.ResumedFrom is null ? null : $" · resumed from {connection.ResumedFrom}")</span>
-                                                <span>@(connection.Status?.ToString() ?? "—")</span>
+                                                <span class="scry-sidecar-name">@ConnectionName(connection)</span>
+                                                <span>@StatusText(connection)</span>
                                                 <span class="scry-sidecar-duration">@Finish(connection)</span>
                                             </li>
                                         }
@@ -81,9 +81,9 @@
                                     }
                                     else
                                     {
-                                        <span class="@(entry.Error is null ? null : "scry-sidecar-status-error")">@(entry.Status?.ToString() ?? "—")</span>
+                                        <span class="@ErrorClass(entry)">@StatusText(entry)</span>
                                     }
-                                    <span class="scry-sidecar-duration">@entry.Duration.TotalMilliseconds.ToString("0") ms</span>
+                                    <span class="scry-sidecar-duration">@Milliseconds(entry) ms</span>
                                 </div>
                             }
                         </li>
@@ -92,13 +92,13 @@
                 @if (Selected is { } selected)
                 {
                     <div class="scry-sidecar-detail" data-testid="sidecar-detail">
-                        @if (selected.Url.Length > 0)
+                        @if (HasUrl(selected))
                         {
                             <h3>URL</h3>
                             <p class="scry-sidecar-url" data-testid="sidecar-url">@selected.Url</p>
                         }
                         <div class="scry-sidecar-actions">
-                            @if (selected.Url.Length > 0)
+                            @if (HasUrl(selected))
                             {
                                 <button type="button" data-testid="sidecar-copy-url" title="Copy the request URL" @onclick="() => Copy(selected.Url)">Copy URL</button>
                             }
@@ -110,7 +110,7 @@
                             {
                                 <a data-testid="sidecar-explorer-link" href="@href" target="_blank" rel="noopener" title="Open this query in the explorer, in a new tab">Open in explorer</a>
                             }
-                            @if (selected is {Kind: ScrySidecarKind.Attachment, AttachmentRequestBody: not null})
+                            @if (Downloadable(selected))
                             {
                                 <button type="button" data-testid="sidecar-download" title="Re-send the attachment request and save the bytes" @onclick="() => Download(selected)">Download</button>
                             }
@@ -132,24 +132,24 @@
                                 <tbody>
                                 @foreach (var captured in Listed(connection))
                                 {
-                                    <tr class="@(captured.Json is null ? null : "scry-sidecar-clickable") @(captured == SelectedEvent ? "scry-sidecar-selected" : null)"
+                                    <tr class="@EventClass(captured)"
                                         @onclick="() => Show(captured)">
                                         <th>@captured.Name</th>
                                         <td class="scry-sidecar-event-id">@captured.EventId</td>
                                         <td class="scry-sidecar-duration">@Size(captured.Bytes)</td>
-                                        <td class="scry-sidecar-duration">@captured.At.ToString("HH:mm:ss")</td>
+                                        <td class="scry-sidecar-duration">@Time(captured)</td>
                                     </tr>
                                 }
                                 </tbody>
                             </table>
-                            @if (connection.Dropped > 0)
+                            @if (DroppedNote(connection) is { } dropped)
                             {
-                                <p class="scry-sidecar-note">@connection.Dropped earlier @(connection.Dropped == 1 ? "event" : "events") dropped.</p>
+                                <p class="scry-sidecar-note">@dropped</p>
                             }
-                            @if (SelectedEvent?.Json is { } shown)
+                            @if (ShownEvent is { } shown)
                             {
-                                <h3>@SelectedEvent.Name</h3>
-                                <pre data-testid="sidecar-event-data">@shown</pre>
+                                <h3>@shown.Name</h3>
+                                <pre data-testid="sidecar-event-data">@shown.Json</pre>
                             }
                             <h3>Response headers</h3>
                             <table data-testid="sidecar-response-headers">
@@ -183,7 +183,7 @@
                                     <pre data-testid="sidecar-latest-answer">@latest</pre>
                                 }
                             }
-                            @if (selected.RequestHeaders.Count > 0)
+                            @if (HasRequestHeaders(selected))
                             {
                                 <h3>Request headers</h3>
                                 <table data-testid="sidecar-request-headers">
@@ -216,19 +216,18 @@
                                     <h3>Response</h3>
                                     <pre data-testid="sidecar-response">@response</pre>
                                 }
-                                else if (selected.Kind is ScrySidecarKind.Stream or ScrySidecarKind.Attachment ||
-                                         selected is {Kind: ScrySidecarKind.Command, Status: not null})
+                                else if (BodyNotCaptured(selected))
                                 {
                                     <p class="scry-sidecar-note">Body not captured — @NotCaptured(selected.Kind).</p>
                                 }
-                                @if (selected.BinaryPartSizes is {Count: > 0} parts)
+                                @if (HasBinaryParts(selected))
                                 {
                                     <h3>Binary parts</h3>
                                     <table data-testid="sidecar-binary-parts">
                                         <tbody>
-                                        @for (var i = 0; i < parts.Count; i++)
+                                        @foreach (var part in BinaryParts(selected))
                                         {
-                                            <tr><th>$bin @i</th><td>@parts[i] bytes</td></tr>
+                                            <tr><th>$bin @part.Index</th><td>@part.Bytes bytes</td></tr>
                                         }
                                         </tbody>
                                     </table>

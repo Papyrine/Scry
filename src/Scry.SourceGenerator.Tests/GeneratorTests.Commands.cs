@@ -231,15 +231,11 @@ public partial class GeneratorTests
         "'Touch' targets 'Employee', keyed by 'Id', but carries no 'int' property named 'Id' or 'EmployeeId'.")]
     [TestCase(
         "SCRY010",
-        """
-        [Command(typeof(Employee))] public class Touch { public long Id { get; set; } }
-        """,
+        "[Command(typeof(Employee))] public class Touch { public long Id { get; set; } }",
         "'Touch' targets 'Employee', keyed by 'Id', but carries no 'int' property named 'Id' or 'EmployeeId'.")]
     [TestCase(
         "SCRY010",
-        """
-        [Command(typeof(Employee))] public class Touch { public int Id { get; set; } public int EmployeeId { get; set; } }
-        """,
+        "[Command(typeof(Employee))] public class Touch { public int Id { get; set; } public int EmployeeId { get; set; } }",
         "'Touch' carries both 'Id' and 'EmployeeId', so which one is the key of 'Employee' is ambiguous.")]
     [TestCase(
         "SCRY011",
@@ -264,21 +260,15 @@ public partial class GeneratorTests
         "The command name 'class' on 'Touch' cannot be written as a C# member name")]
     [TestCase(
         "SCRY013",
-        """
-        [Command] public class Touch { [QueryIgnore] public int Id { get; set; } }
-        """,
+        "[Command] public class Touch { [QueryIgnore] public int Id { get; set; } }",
         "'Touch.Id' carries [QueryIgnore], which hides a member from queries and means nothing on a command.")]
     [TestCase(
         "SCRY014",
-        """
-        [Command] public class Touch { public Employee? Employee { get; set; } }
-        """,
+        "[Command] public class Touch { public Employee? Employee { get; set; } }",
         "'Touch.Employee' is not a type a command can carry.")]
     [TestCase(
         "SCRY014",
-        """
-        [Command] public class Touch { public object? Anything { get; set; } }
-        """,
+        "[Command] public class Touch { public object? Anything { get; set; } }",
         "'Touch.Anything' is not a type a command can carry.")]
     [TestCase(
         "SCRY015",
@@ -289,9 +279,7 @@ public partial class GeneratorTests
         "'Touch' answers with 'Touched', whose property 'Anything' is not a type a result can carry.")]
     [TestCase(
         "SCRY015",
-        """
-        [Command(Result = typeof(System.Uri))] public class Touch { public int Id { get; set; } }
-        """,
+        "[Command(Result = typeof(System.Uri))] public class Touch { public int Id { get; set; } }",
         "'Touch' answers with 'Uri', which is not declared in the model assembly.")]
     [TestCase(
         "SCRY016",
@@ -302,21 +290,15 @@ public partial class GeneratorTests
         "'Touch' would add 'CanTouch' to 'Badge', which already has a member of that name.")]
     [TestCase(
         "SCRY017",
-        """
-        [Command] public abstract class Touch { public int Id { get; set; } }
-        """,
+        "[Command] public abstract class Touch { public int Id { get; set; } }",
         "'Touch' carries [Command] but is not a concrete class with a public parameterless constructor.")]
     [TestCase(
         "SCRY017",
-        """
-        [Command] public class Touch { public Touch(int id) => Id = id; public int Id { get; set; } }
-        """,
+        "[Command] public class Touch { public Touch(int id) => Id = id; public int Id { get; set; } }",
         "'Touch' carries [Command] but is not a concrete class with a public parameterless constructor.")]
     [TestCase(
         "SCRY008",
-        """
-        [Queryable] [Command] public class Both { public int Id { get; set; } }
-        """,
+        "[Queryable] [Command] public class Both { public int Id { get; set; } }",
         "'Both' carries [Queryable] and [Command].")]
     public void AMisdeclaredCommandIsReported(string id, string declarations, string message)
     {

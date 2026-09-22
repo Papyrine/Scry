@@ -30,9 +30,9 @@
         <tr data-id="@row.Id">
             <td>@row.Id</td>
             <td class="name">@row.Name</td>
-            <td class="active">@(row.Active ? "yes" : "no")</td>
+            <td class="active">@ActiveText(row)</td>
             <td class="actions">
-                <button class="toggle" @onclick="() => SetActive(row)">@(row.Active ? "Deactivate" : "Reactivate")</button>
+                <button class="toggle" @onclick="() => SetActive(row)">@ToggleText(row)</button>
                 <button class="rename" disabled="@(!Query.Commands.CanRenameEmployee)" @onclick="() => Rename(row)">Rename</button>
                 <button class="delete" disabled="@(!row.CanDeleteEmployee)" @onclick="() => Delete(row)">Delete</button>
             </td>

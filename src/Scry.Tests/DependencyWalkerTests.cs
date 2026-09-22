@@ -66,13 +66,13 @@ public class DependencyWalkerTests
 
     // Whatever the terminal, the rows folded are the same rows.
     [Test]
-    public async Task ATerminalReadsWhatItsQueryDoes()
+    public Task ATerminalReadsWhatItsQueryDoes()
     {
         var orders = Capture()
             .Source<Order>("Order")
             .Where(_ => _.Lines.Any());
 
-        Assert.Multiple(async () =>
+        return Assert.MultipleAsync(async () =>
         {
             Assert.That(await Read(orders.ToScryRequest(new CountOp())), Is.EquivalentTo(Names<Order, OrderLine>()));
             Assert.That(await Read(orders.ToScryRequest(new AnyOp(Predicate: null))), Is.EquivalentTo(Names<Order, OrderLine>()));

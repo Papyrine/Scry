@@ -163,6 +163,24 @@ public partial class App
     /// </summary>
     bool CanExport => result is { Rows.Count: > 0 };
 
+    // Written once the page can answer a completion; null leaves the attribute off until then.
+    string? ReadyFlag
+    {
+        get
+        {
+            if (ready)
+            {
+                return "true";
+            }
+
+            return null;
+        }
+    }
+
+    bool NoSchema => introspection is null;
+
+    bool SqlPreview => introspection?.SqlPreview == true;
+
     /// <summary>Downloads the result table as CSV — the rows as rendered, in their displayed order.</summary>
     async Task DownloadCsv()
     {
@@ -740,6 +758,27 @@ public partial class App
         }
 
         StateHasChanged();
+    }
+
+    // Each pane's copy button. A pane is drawn only with text in it, but a run can clear it between
+    // that render and the click.
+    Task CopyWire() =>
+        CopyIfAny(wireJson, "wire");
+
+    Task CopyResponse() =>
+        CopyIfAny(resultJson, "response");
+
+    Task CopySql() =>
+        CopyIfAny(sqlText, "sql");
+
+    Task CopyIfAny(string? text, string key)
+    {
+        if (text is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        return Copy(text, key);
     }
 
     // The label on a pane's copy button: what the last click did, or the offer.

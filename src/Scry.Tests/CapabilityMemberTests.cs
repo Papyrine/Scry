@@ -33,7 +33,7 @@ public class CapabilityMemberTests
             .ToListAsync();
 
         // The sealed contract is refused by the policy's row condition; the others pass it.
-        Assert.That(rows.Select(_ => (_.Id, _.CanSealContract)), Is.EqualTo(new[] {(1, true), (2, true), (UnsealedContractsPolicy.SealedId, false)}));
+        Assert.That(rows.Select(_ => (_.Id, _.CanSealContract)), Is.EqualTo([(1, true), (2, true), (UnsealedContractsPolicy.SealedId, false)]));
     }
 
     [Test]
@@ -77,7 +77,7 @@ public class CapabilityMemberTests
             .Select(_ => new {_.Key, Count = _.Count()})
             .ToListAsync();
 
-        Assert.That(groups.OrderBy(_ => _.Key).Select(_ => (_.Key, _.Count)), Is.EqualTo(new[] {(false, 1), (true, 2)}));
+        Assert.That(groups.OrderBy(_ => _.Key).Select(_ => (_.Key, _.Count)), Is.EqualTo([(false, 1), (true, 2)]));
     }
 
     // A caller the policy refuses outright may send the command against no row, so every row says so —
@@ -96,6 +96,40 @@ public class CapabilityMemberTests
             .ToListAsync();
 
         Assert.That(rows.Select(_ => _.CanSealContract), Is.EqualTo([false, false, false]));
+    }
+
+    // The row condition is the policy's, asked with this call's context: a caller whose desk holds one
+    // contract may seal that one and no other, and a caller whose desk holds another reads the reverse —
+    // on one processor, one after the other, so neither answer is the other caller's.
+    [Test]
+    public async Task EachCallerReadsTheirOwnRows()
+    {
+        await using var context = TestContext.CreateSeeded();
+        await using var first = new ServiceCollection()
+            .AddSingleton(new SealDesk {Contract = 1})
+            .BuildServiceProvider();
+        await using var second = new ServiceCollection()
+            .AddSingleton(new SealDesk {Contract = 2})
+            .BuildServiceProvider();
+
+        var forFirst = await Capabilities(context, first);
+        var forSecond = await Capabilities(context, second);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(forFirst, Is.EqualTo([(1, true), (2, false), (UnsealedContractsPolicy.SealedId, false)]));
+            Assert.That(forSecond, Is.EqualTo([(1, false), (2, true), (UnsealedContractsPolicy.SealedId, false)]));
+        });
+    }
+
+    static async Task<List<(int Id, bool CanSeal)>> Capabilities(TestContext context, IServiceProvider services)
+    {
+        var rows = await Client(context, services)
+            .Source<ContractModel>("Contract", contractMembers)
+            .OrderBy(_ => _.Id)
+            .Select(_ => new {_.Id, _.CanSealContract})
+            .ToListAsync();
+        return rows.Select(_ => (_.Id, _.CanSealContract)).ToList();
     }
 
     [Test]

@@ -211,6 +211,35 @@ public class CommandPipelineTests
         });
     }
 
+    // The row check is the same policy, asked with the command's own context: one contract, refused to a
+    // caller whose desk holds another — with the answer a missing row gets — and accepted from the caller
+    // whose desk holds it.
+    [Test]
+    public async Task TheRowCheckIsThisCallers()
+    {
+        await using var host = await CommandHost.Start("CommandRowsPerCaller", register: _ => _.AddScoped<SealDesk>());
+        await using var mine = Call(host, contract: 1);
+        await using var theirs = Call(host, contract: 2);
+
+        var refused = Assert.ThrowsAsync<ScryCommandNotFoundException>(() => host.Send("SealContract", new {contractId = 1}, services: theirs.ServiceProvider));
+        var receipts = await host.Send("SealContract", new {contractId = 1}, services: mine.ServiceProvider);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(refused!.Message, Is.EqualTo(ScryCommandNotFoundException.TargetMessage));
+            Assert.That(receipts[^1].Status, Is.EqualTo(CommandStatus.Completed));
+            Assert.That(host.Script.Seen.Select(_ => _.Keys), Is.EqualTo([new object[] {1}]));
+        });
+    }
+
+    // A call's own scope with the caller's desk filled in, as an app's middleware fills in the current user.
+    static AsyncServiceScope Call(CommandHost host, int contract)
+    {
+        var scope = host.Services.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<SealDesk>().Contract = contract;
+        return scope;
+    }
+
     [Test]
     public async Task ADuplicateIdIsRejected()
     {

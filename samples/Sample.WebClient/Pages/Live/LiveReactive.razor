@@ -28,7 +28,7 @@ else
         <tbody>
             <tr><th>Orders</th><td id="orders">@totals.Orders</td></tr>
             <tr><th>Total</th><td id="total">@totals.Total</td></tr>
-            <tr><th>Last change</th><td id="change">@totals.Change.ToString("+0.00;-0.00;0.00")</td></tr>
+            <tr><th>Last change</th><td id="change">@Change(totals)</td></tr>
         </tbody>
     </table>
 }

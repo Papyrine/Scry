@@ -57,14 +57,14 @@ sealed class FailedCommands
     public void Use(IMessageSession? current) =>
         session = current;
 
-    public async Task Answer(FailedMessage failed, Cancel cancel)
+    public Task Answer(FailedMessage failed, Cancel cancel)
     {
         if (session is null ||
             !failed.Headers.TryGetValue(ScryCommandHeaders.CommandId, out var header) ||
             !Guid.TryParse(header, out var id) ||
             !failed.Headers.TryGetValue(Headers.ReplyToAddress, out var replyTo))
         {
-            return;
+            return Task.CompletedTask;
         }
 
         var options = new SendOptions();
@@ -72,7 +72,7 @@ sealed class FailedCommands
 
         // The fixed text: what failed is in the error queue, with the exception that failed it, and a
         // caller is owed the fact rather than the stack.
-        await session.Send(
+        return session.Send(
             new ScryCommandCompleted
             {
                 Id = id,

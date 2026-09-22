@@ -43,19 +43,19 @@ public static class ScryCommandMiddleware
     static ConditionalWeakTable<Envelope, string> results = new();
 
     /// <summary>Responds with how the command ended, once its handler has returned.</summary>
-    public static async Task AfterAsync(Envelope envelope, IMessageContext context)
+    public static Task AfterAsync(Envelope envelope, IMessageContext context)
     {
         if (!TryRead(envelope, out var id))
         {
-            return;
+            return Task.CompletedTask;
         }
 
         results.TryGetValue(envelope, out var json);
         results.Remove(envelope);
-        await Respond(
+        return Respond(
             context,
             envelope,
-            new WolverineCommandCompleted
+            new()
             {
                 Id = id,
                 Succeeded = true,

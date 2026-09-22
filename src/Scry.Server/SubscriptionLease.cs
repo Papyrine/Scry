@@ -73,7 +73,7 @@ sealed class SubscriptionLease(SubscriptionHub hub, string? caller, ScryOptions 
     /// Completes when the query should run again: a change it listens for was reported or its poll
     /// came round, and the throttle since its last run has passed.
     /// </summary>
-    public async ValueTask WaitUntilDue(Cancel cancel)
+    public async ValueTask WaitUntilDue(Cancel cancel = default)
     {
         Task signal;
         lock (gate)

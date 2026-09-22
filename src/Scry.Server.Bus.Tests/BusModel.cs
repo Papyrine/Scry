@@ -1,6 +1,3 @@
-using System.Collections.Concurrent;
-using System.Text.Json;
-using Microsoft.AspNetCore.Http;
 using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 
 /// <summary>
@@ -33,7 +30,7 @@ static class ScryServer
         var services = scope.ServiceProvider;
         var request = CommandRequest.Create(command, id ?? Guid.NewGuid(), JsonSerializer.SerializeToElement(payload, ScryJson.Options));
         List<CommandReceipt> receipts = [];
-        using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        using var patience = new CancelSource(TimeSpan.FromSeconds(60));
         await foreach (var receipt in services
                            .GetRequiredService<ScryProcessor>()
                            .SendCommand(request, services.GetRequiredService<BusContext>(), services, new HeaderDictionary(), caller, patience.Token))
@@ -65,7 +62,7 @@ sealed class ClaimsEverything :
 {
     public bool CanDispatch(Type command) => true;
 
-    public Task Dispatch(CommandEnvelope envelope, CancellationToken cancel) =>
+    public Task Dispatch(CommandEnvelope envelope, Cancel cancel) =>
         Task.CompletedTask;
 }
 
@@ -103,7 +100,7 @@ namespace Parcels
     public sealed class LocalChoreHandler :
         ICommandHandler<LocalChore>
     {
-        public Task Handle(LocalChore command, ScryCommandContext context, CancellationToken cancel) =>
+        public Task Handle(LocalChore command, ScryCommandContext context, Cancel cancel) =>
             Task.CompletedTask;
     }
 }

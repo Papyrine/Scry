@@ -17,7 +17,7 @@
     <button id="reprice" @onclick="Reprice">Reprice an order</button>
     <button id="reprice-bulk" @onclick="RepriceBulk">Reprice in bulk</button>
 </p>
-<fieldset class="transport" id="transport" data-transport="@(Transport.SignalR ? "signalr" : "sse")">
+<fieldset class="transport" id="transport" data-transport="@TransportName">
     <legend>Transport</legend>
     <label>
         <input type="radio" name="transport" id="transport-sse" checked="@(!Transport.SignalR)" @onchange="_ => Use(signalR: false)"/>

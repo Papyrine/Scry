@@ -21,6 +21,19 @@ public partial class LiveChrome
     string Class(string tab) =>
         tab == Active ? "active" : "";
 
+    string TransportName
+    {
+        get
+        {
+            if (Transport.SignalR)
+            {
+                return "signalr";
+            }
+
+            return "sse";
+        }
+    }
+
     /// <summary>
     /// The <c>RepriceOrder</c> command, which the server's handler saves through its context, and its
     /// change interceptor reports.

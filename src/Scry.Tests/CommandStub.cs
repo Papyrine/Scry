@@ -55,7 +55,7 @@ sealed class CommandStub
         return client;
     }
 
-    async Task<HttpResponseMessage> Respond(HttpRequestMessage request, CancellationToken cancel)
+    async Task<HttpResponseMessage> Respond(HttpRequestMessage request, Cancel cancel)
     {
         var path = request.RequestUri!.AbsolutePath;
         if (path.EndsWith($"/{ScryCommandProtocol.CapabilitiesRoute}", StringComparison.Ordinal))
@@ -174,7 +174,7 @@ sealed class CommandStub
     sealed class StubHandler(CommandStub stub) :
         HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancel) =>
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, Cancel cancel) =>
             stub.Respond(request, cancel);
     }
 

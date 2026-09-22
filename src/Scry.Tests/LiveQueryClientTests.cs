@@ -498,6 +498,9 @@ public class LiveQueryClientTests
         await body.Send(Result("a", "Alice"));
         await first.Task.WaitAsync(patience);
 
+        // Dispose rather than DisposeAsync, which also waits for the pump to end: what is pinned is that
+        // nothing is delivered once the synchronous call has returned.
+        // ReSharper disable once MethodHasAsyncOverload
         subscription.Dispose();
         await body.Send(Result("b", "Bob"));
         await subscription.Completion.WaitAsync(patience);

@@ -8,6 +8,20 @@ public partial class LiveCallback
     ScrySubscription? rows;
     ScrySubscription? counting;
 
+    // Nothing until the count has come in, then the number, marked as live.
+    string CountText
+    {
+        get
+        {
+            if (count is null)
+            {
+                return "";
+            }
+
+            return $"{count} live";
+        }
+    }
+
     // begin-snippet: liveCallback
     protected override void Start()
     {

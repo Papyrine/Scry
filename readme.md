@@ -257,7 +257,7 @@ employees = await Query
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L48-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L89-L96' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Then send a command, and read what came of it:
@@ -344,7 +344,7 @@ protected override async ValueTask Stop()
     }
 }
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Live/LiveCallback.razor.cs#L11-L56' title='Snippet source file'>snippet source</a> | <a href='#snippet-liveCallback' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Live/LiveCallback.razor.cs#L25-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-liveCallback' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 It is consumed as a stream (`await foreach`), with a callback, or as a plain `IObservable` for Rx, with no reactive library referenced by Scry. Every answer is the query run again through the allow-list and the row policies, sent only where it differs from the one before, so a change the caller may not see produces no answer. It is off until a server sets `MaxSubscriptions`.

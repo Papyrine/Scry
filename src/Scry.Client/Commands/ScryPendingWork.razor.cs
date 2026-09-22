@@ -20,6 +20,15 @@ public partial class ScryPendingWork :
     CancelSource? ticking;
     ScryPendingWorkStore? work;
 
+    // What the store listed at its last change. Taken once per change rather than read from the store
+    // as the markup draws, which would copy it for every read and could draw a count and rows that
+    // disagree. The elapsed times tick without it: each row reads its own.
+    IReadOnlyList<ScryPendingCommand> items = [];
+
+    bool Showing => items.Count > 0;
+
+    int PendingCount => items.Count(_ => _.Status == ScryCommandStatus.Pending);
+
     [Inject]
     IServiceProvider Services { get; set; } = null!;
 
@@ -55,7 +64,8 @@ public partial class ScryPendingWork :
         work?.Changed -= OnChanged;
         work = next;
         work.Changed += OnChanged;
-        pendingSeen = work.PendingCount;
+        items = work.Items;
+        pendingSeen = PendingCount;
         Tick();
     }
 
@@ -65,7 +75,8 @@ public partial class ScryPendingWork :
         InvokeAsync(
             () =>
             {
-                var pending = work!.PendingCount;
+                items = work!.Items;
+                var pending = PendingCount;
                 if (AutoOpen &&
                     pending > pendingSeen)
                 {
@@ -151,8 +162,9 @@ public partial class ScryPendingWork :
         return $"{item.Command} · {target} {string.Join(", ", item.Keys)}";
     }
 
-    static string Elapsed(TimeSpan span)
+    static string Elapsed(ScryPendingCommand item)
     {
+        var span = item.Elapsed;
         if (span.TotalMinutes < 1)
         {
             return string.Create(CultureInfo.InvariantCulture, $"{span.TotalSeconds:0.0}s");

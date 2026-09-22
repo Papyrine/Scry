@@ -14,7 +14,7 @@ public class ResponseSpillTests
         spill.AllowSpill(true);
 
         Fill(spill.Output, 100);
-        await spill.CompleteAsync(default);
+        await spill.CompleteAsync();
 
         Assert.Multiple(() =>
         {
@@ -34,9 +34,9 @@ public class ResponseSpillTests
         spill.AllowSpill(true);
 
         Fill(spill.Output, 150);
-        await spill.DrainAsync(default);
+        await spill.DrainAsync();
         Fill(spill.Output, 50);
-        await spill.CompleteAsync(default);
+        await spill.CompleteAsync();
 
         Assert.Multiple(() =>
         {
@@ -61,10 +61,10 @@ public class ResponseSpillTests
             payload.CopyTo(spill.Output.GetSpan(payload.Length));
             spill.Output.Advance(payload.Length);
             written.AddRange(payload);
-            await spill.DrainAsync(default);
+            await spill.DrainAsync();
         }
 
-        await spill.CompleteAsync(default);
+        await spill.CompleteAsync();
 
         Assert.That(body.ToArray(), Is.EqualTo(written.ToArray()));
     }
@@ -77,7 +77,7 @@ public class ResponseSpillTests
         using var spill = new ResponseSpill(context, 10);
 
         Fill(spill.Output, 500);
-        await spill.DrainAsync(default);
+        await spill.DrainAsync();
 
         Assert.Multiple(() =>
         {
@@ -124,10 +124,10 @@ public class ResponseSpillTests
         spill.AllowSpill(true);
 
         Fill(spill.Output, 32);
-        await spill.DrainAsync(default);
+        await spill.DrainAsync();
         context.Response.ContentType = "changed/by-nobody";
         Fill(spill.Output, 32);
-        await spill.DrainAsync(default);
+        await spill.DrainAsync();
 
         // Re-set on the first drain only: past that the headers are the response's own and are fixed.
         Assert.That(context.Response.ContentType, Is.EqualTo("changed/by-nobody"));
@@ -149,12 +149,12 @@ public class ResponseSpillTests
             // The flush is what puts the writer's bytes in the buffer; draining before it would reset
             // the array out from under the span the writer is still holding.
             await json.FlushAsync();
-            await spill.DrainAsync(default);
+            await spill.DrainAsync();
         }
 
         json.WriteEndArray();
         await json.FlushAsync();
-        await spill.CompleteAsync(default);
+        await spill.CompleteAsync();
 
         Assert.That(
             Encoding.UTF8.GetString(body.ToArray()),

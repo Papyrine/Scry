@@ -76,7 +76,7 @@ sealed class ScryCommandFilter<TMessage>(IBus bus) :
     public async Task Send(ConsumeContext<TMessage> context, IPipe<ConsumeContext<TMessage>> next)
     {
         if (!context.Headers.TryGetHeader(ScryCommandHeaders.CommandId, out var header) ||
-            !Guid.TryParse(header?.ToString(), out var id))
+            !Guid.TryParse(header.ToString(), out var id))
         {
             await next.Send(context);
             return;

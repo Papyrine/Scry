@@ -105,7 +105,7 @@ public static class ScrySignalRClient
         try
         {
             var lines = connection.StreamAsync<string>(ScryHubProtocol.Stream, ScryJson.Serialize(request), stopping.Token);
-            await foreach (var line in lines.WithCancellation(stopping.Token))
+            await foreach (var line in lines)
             {
                 var bytes = Encoding.UTF8.GetBytes(line);
                 if (!ScryJson.IsMarker(bytes))
@@ -144,7 +144,7 @@ public static class ScrySignalRClient
         try
         {
             var answers = connection.StreamAsync<string>(ScryHubProtocol.Subscribe, ScryJson.Serialize(request), stopping.Token);
-            await foreach (var answer in answers.WithCancellation(stopping.Token))
+            await foreach (var answer in answers)
             {
                 yield return ScryJson.DeserializeResponse((ReadOnlyMemory<byte>)Answer(answer));
             }

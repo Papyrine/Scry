@@ -123,7 +123,7 @@ public class LockstepTests
 
         var keys = Schema.BindCommandKeys(typeof(PrefixedKeyCommand), target, payload);
 
-        Assert.That(keys.Select(_ => (_.Key.Name, _.Payload.Name)), Is.EqualTo(new[] {("Id", "BadgeId")}));
+        Assert.That(keys.Select(_ => (_.Key.Name, _.Payload.Name)), Is.EqualTo([("Id", "BadgeId")]));
     }
 
     [Test]

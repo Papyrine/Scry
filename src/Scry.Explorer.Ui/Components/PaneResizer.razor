@@ -6,26 +6,8 @@
     get wired. Double-click restores the default split.
 *@
 <div id="@Id"
-     class="resizer resizer-@Direction @(Hidden ? "hidden" : null)"
+     class="@Class"
      data-testid="@Id"
      role="separator"
-     aria-orientation="@(Direction == "x" ? "vertical" : "horizontal")"
+     aria-orientation="@Orientation"
      @ondblclick="OnReset"></div>
-
-@code
-{
-    [Parameter]
-    [EditorRequired]
-    public string Id { get; set; } = "";
-
-    /// <summary>"x" for a bar between side-by-side panes, "y" for one between stacked panes.</summary>
-    [Parameter]
-    [EditorRequired]
-    public string Direction { get; set; } = "x";
-
-    [Parameter]
-    public bool Hidden { get; set; }
-
-    [Parameter]
-    public EventCallback OnReset { get; set; }
-}

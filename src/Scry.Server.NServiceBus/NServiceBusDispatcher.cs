@@ -16,7 +16,7 @@ sealed class NServiceBusDispatcher(IServiceProvider services, BusCommands claims
     public bool CanDispatch(Type command) =>
         claims.Claims(command, typeof(ICommand).IsAssignableFrom);
 
-    public async Task Dispatch(CommandEnvelope envelope, Cancel cancel)
+    public Task Dispatch(CommandEnvelope envelope, Cancel cancel)
     {
         var options = new SendOptions();
         options.SetHeader(ScryCommandHeaders.CommandId, envelope.Id.ToString("D"));
@@ -27,7 +27,7 @@ sealed class NServiceBusDispatcher(IServiceProvider services, BusCommands claims
 
         // Resolved when first needed rather than when this is built: the session exists once the
         // endpoint has started, which is after the container has.
-        await services
+        return services
             .GetRequiredService<IMessageSession>()
             .Send(envelope.Command, options, cancel);
     }

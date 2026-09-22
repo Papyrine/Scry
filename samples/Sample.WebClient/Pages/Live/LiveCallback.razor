@@ -6,7 +6,7 @@
 <h1>Live query</h1>
 <LiveChrome Active="callback" />
 
-<h2>Orders <small id="count">@(count is null ? "" : $"{count} live")</small></h2>
+<h2>Orders <small id="count">@CountText</small></h2>
 <p>
     <code>Subscribe(callback)</code>: the simplest way to consume one. The callback is handed the whole
     current result each time it changes, and the handle it returns is disposed with the page.

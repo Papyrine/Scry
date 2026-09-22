@@ -44,11 +44,18 @@ sealed partial class QueryTranslator
         type == typeof(string) ||
         IsTemporal(type) ||
         (!type.IsEnum &&
-         Type.GetTypeCode(type) is TypeCode.Byte or TypeCode.SByte
-             or TypeCode.Int16 or TypeCode.UInt16
-             or TypeCode.Int32 or TypeCode.UInt32
-             or TypeCode.Int64 or TypeCode.UInt64
-             or TypeCode.Single or TypeCode.Double or TypeCode.Decimal);
+         Type.GetTypeCode(type) is
+             TypeCode.Byte or
+             TypeCode.SByte or
+             TypeCode.Int16 or
+             TypeCode.UInt16 or
+             TypeCode.Int32 or
+             TypeCode.UInt32 or
+             TypeCode.Int64 or
+             TypeCode.UInt64 or
+             TypeCode.Single or
+             TypeCode.Double or
+             TypeCode.Decimal);
 
     // The two operands of an Equals that means ==: the instance and its one argument, or the two
     // arguments of the static spelling. Any other shape is an overload the set does not carry.
@@ -127,7 +134,8 @@ sealed partial class QueryTranslator
         // What the closure threw is what the query wrote, and DynamicInvoke wraps it. Unwrapped here
         // as the reader unwraps it, so which shape a closure happened to be does not change the
         // exception a query raises.
-        catch (TargetInvocationException exception) when (exception.InnerException is { } inner)
+        catch (TargetInvocationException exception)
+            when (exception.InnerException is { } inner)
         {
             ExceptionDispatchInfo.Capture(inner).Throw();
             throw;

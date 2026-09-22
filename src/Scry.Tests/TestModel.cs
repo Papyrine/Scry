@@ -599,7 +599,8 @@ public class SignedContract : Contract
 /// <summary>
 /// A targeted command on <see cref="Contract"/>, renamed on the wire, whose signer the server fills
 /// rather than the client. Its policy refuses, row by row, the contract already sealed and any contract
-/// with no name — and every row where a <see cref="CommandGate"/> in the call's services is shut.
+/// with no name — and every row where a <see cref="CommandGate"/> in the call's services is shut, and
+/// for a caller with a <see cref="SealDesk"/>, every contract but the one on it.
 /// </summary>
 [Command(typeof(Contract), Name = "SealContract", Policy = typeof(SealPolicy))]
 public class Seal
@@ -616,6 +617,15 @@ public sealed class CommandGate
     public bool Open { get; init; } = true;
 }
 
+/// <summary>
+/// The one contract a caller may seal, which a test puts in the call's services as an app puts the
+/// caller's own grants there: what <see cref="SealPolicy"/> decides its rows from.
+/// </summary>
+public sealed class SealDesk
+{
+    public int Contract { get; set; }
+}
+
 public sealed class SealPolicy :
     ICommandPolicy<Seal, Contract>
 {
@@ -623,9 +633,19 @@ public sealed class SealPolicy :
         context.Services.GetService<CommandGate>()?.Open ?? true;
 
     // A name is what a live test changes to flip a row's capability; the sealed id is a literal, which
-    // the server binds as a parameter rather than writing into the statement.
-    public Expression<Func<Contract, bool>> Rows(ScryPolicyContext context) =>
-        _ => _.Id != UnsealedContractsPolicy.SealedId && _.Name != "";
+    // the server binds as a parameter rather than writing into the statement. A caller with a desk may
+    // seal only the contract on it, read from this call's services and captured into the expression, so
+    // it is bound for this call rather than for whichever caller asked first.
+    public Expression<Func<Contract, bool>> Rows(ScryPolicyContext context)
+    {
+        if (context.Services.GetService<SealDesk>() is { } desk)
+        {
+            var only = desk.Contract;
+            return _ => _.Id == only && _.Id != UnsealedContractsPolicy.SealedId && _.Name != "";
+        }
+
+        return _ => _.Id != UnsealedContractsPolicy.SealedId && _.Name != "";
+    }
 }
 
 /// <summary>A targeted command with no policy, deprecated: its capability reads true on every row.</summary>

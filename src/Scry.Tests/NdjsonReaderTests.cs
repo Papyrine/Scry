@@ -43,7 +43,7 @@ public class NdjsonReaderTests
     {
         using var reader = new NdjsonReader(new DribbleStream(Encoding.UTF8.GetBytes(body), perRead));
         var lines = new List<string>();
-        while (await reader.ReadLineAsync(default) is { } line)
+        while (await reader.ReadLineAsync() is { } line)
         {
             lines.Add(Encoding.UTF8.GetString(line.Span));
         }

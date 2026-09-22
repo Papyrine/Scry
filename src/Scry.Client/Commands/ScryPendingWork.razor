@@ -1,14 +1,13 @@
 @namespace Scry
-@implements IDisposable
 
 <ScryCommandStyles Href="@StylesHref" />
-@if (work is not null && work.Items is {Count: > 0} items)
+@if (Showing)
 {
     if (open)
     {
         <aside class="scry-commands" data-testid="pending-work" aria-label="Pending work">
             <header class="scry-commands-header">
-                <h2>Pending work <span class="scry-commands-count" data-testid="pending-work-count">@work.PendingCount</span></h2>
+                <h2>Pending work <span class="scry-commands-count" data-testid="pending-work-count">@PendingCount</span></h2>
                 <button type="button" data-testid="pending-work-clear" title="Drop everything that has finished" @onclick="ClearFinished">Clear finished</button>
                 <button type="button" data-testid="pending-work-close" title="Hide the panel" @onclick="Close">Close</button>
             </header>
@@ -18,10 +17,10 @@
                     <li @key="item.Id" class="scry-commands-item" data-status="@Status(item)" data-command="@item.Command">
                         <span class="scry-commands-name">@Name(item)</span>
                         <span class="scry-commands-state">@Status(item)</span>
-                        <span class="scry-commands-elapsed">@Elapsed(item.Elapsed)</span>
-                        @if (item.Error is { } error)
+                        <span class="scry-commands-elapsed">@Elapsed(item)</span>
+                        @if (item.Error is not null)
                         {
-                            <p class="scry-commands-error" data-testid="pending-work-error">@error</p>
+                            <p class="scry-commands-error" data-testid="pending-work-error">@item.Error</p>
                         }
                     </li>
                 }
@@ -35,6 +34,6 @@
                 data-testid="pending-work-toggle"
                 title="Show pending work"
                 aria-label="Show pending work"
-                @onclick="Open">Work <span class="scry-commands-count" data-testid="pending-work-count">@work.PendingCount</span></button>
+                @onclick="Open">Work <span class="scry-commands-count" data-testid="pending-work-count">@PendingCount</span></button>
     }
 }

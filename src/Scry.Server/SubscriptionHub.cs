@@ -96,7 +96,7 @@ sealed class SubscriptionHub(ScryOptions options, ScryChanges changes)
     /// same instant; this is what makes that a queue rather than a stampede, and the first run of a
     /// reconnecting client waits in it like any other.
     /// </summary>
-    public async ValueTask<IDisposable> RunSlot(Cancel cancel)
+    public async ValueTask<IDisposable> RunSlot(Cancel cancel = default)
     {
         await slots.WaitAsync(cancel);
         return new Slot(slots);

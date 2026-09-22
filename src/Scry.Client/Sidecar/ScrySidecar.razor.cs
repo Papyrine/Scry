@@ -28,7 +28,23 @@ public partial class ScrySidecar :
             ? Selected?.Session?.Connections.FirstOrDefault(_ => _.Attempt == attempt)
             : null;
 
-    ScrySidecarEvent? SelectedEvent => selectedEvent;
+    // The selected event, where it carries data to show.
+    ScrySidecarEvent? ShownEvent
+    {
+        get
+        {
+            if (selectedEvent?.Json is null)
+            {
+                return null;
+            }
+
+            return selectedEvent;
+        }
+    }
+
+    bool ShowsLauncher => !open && toggleButton;
+
+    bool Empty => Store.Entries.Count == 0;
 
     protected override void OnInitialized()
     {
@@ -152,6 +168,34 @@ public partial class ScrySidecar :
     bool Expanded(int id) =>
         expanded.Contains(id);
 
+    string CaretTitle(int id)
+    {
+        if (Expanded(id))
+        {
+            return "Hide this live query's connections";
+        }
+
+        return "Show this live query's connections";
+    }
+
+    string Caret(int id)
+    {
+        if (Expanded(id))
+        {
+            return "▼";
+        }
+
+        return "▶";
+    }
+
+    // Both halves always written, with the space between, as the markup always wrote them.
+    string EventClass(ScrySidecarEvent captured)
+    {
+        var clickable = captured.Json is null ? null : "scry-sidecar-clickable";
+        var chosen = captured == selectedEvent ? "scry-sidecar-selected" : null;
+        return $"{clickable} {chosen}";
+    }
+
     string? Chosen(int id, int? attempt) =>
         selectedId == id && selectedAttempt == attempt ? "scry-sidecar-selected" : null;
 
@@ -240,6 +284,91 @@ public partial class ScrySidecar :
 
     static string Finish(ScrySidecarConnection connection) =>
         connection.Ended ?? "open";
+
+    // The trailing space where the session is not open is kept: the markup always wrote one.
+    static string KindClass(ScrySidecarSession session)
+    {
+        if (session.Open)
+        {
+            return "scry-sidecar-kind scry-sidecar-kind-live";
+        }
+
+        return "scry-sidecar-kind ";
+    }
+
+    static string ConnectionName(ScrySidecarConnection connection)
+    {
+        if (connection.ResumedFrom is { } resumed)
+        {
+            return $"connection {connection.Attempt} · resumed from {resumed}";
+        }
+
+        return $"connection {connection.Attempt}";
+    }
+
+    static string StatusText(ScrySidecarConnection connection) =>
+        connection.Status?.ToString(CultureInfo.CurrentCulture) ?? "—";
+
+    static string StatusText(ScrySidecarEntry entry) =>
+        entry.Status?.ToString(CultureInfo.CurrentCulture) ?? "—";
+
+    // Null leaves the attribute off, which is what an exchange that did not fail gets.
+    static string? ErrorClass(ScrySidecarEntry entry)
+    {
+        if (entry.Error is null)
+        {
+            return null;
+        }
+
+        return "scry-sidecar-status-error";
+    }
+
+    static string Milliseconds(ScrySidecarEntry entry) =>
+        entry.Duration.TotalMilliseconds.ToString("0", CultureInfo.CurrentCulture);
+
+    static string Time(ScrySidecarEvent captured) =>
+        captured.At.ToString("HH:mm:ss", CultureInfo.CurrentCulture);
+
+    static string? DroppedNote(ScrySidecarConnection connection)
+    {
+        if (connection.Dropped <= 0)
+        {
+            return null;
+        }
+
+        if (connection.Dropped == 1)
+        {
+            return "1 earlier event dropped.";
+        }
+
+        return $"{connection.Dropped} earlier events dropped.";
+    }
+
+    static bool HasUrl(ScrySidecarEntry entry) =>
+        entry.Url.Length > 0;
+
+    static bool HasRequestHeaders(ScrySidecarEntry entry) =>
+        entry.RequestHeaders.Count > 0;
+
+    static bool Downloadable(ScrySidecarEntry entry) =>
+        entry is {Kind: ScrySidecarKind.Attachment, AttachmentRequestBody: not null};
+
+    // The kinds whose body is never read here, and a command that was answered at all.
+    static bool BodyNotCaptured(ScrySidecarEntry entry) =>
+        entry.Kind is ScrySidecarKind.Stream or ScrySidecarKind.Attachment ||
+        entry is {Kind: ScrySidecarKind.Command, Status: not null};
+
+    static bool HasBinaryParts(ScrySidecarEntry entry) =>
+        entry.BinaryPartSizes is {Count: > 0};
+
+    static IEnumerable<(int Index, int Bytes)> BinaryParts(ScrySidecarEntry entry)
+    {
+        var sizes = entry.BinaryPartSizes ?? [];
+        for (var index = 0; index < sizes.Count; index++)
+        {
+            yield return (index, sizes[index]);
+        }
+    }
 
     static string Size(int bytes) =>
         bytes < 1024 ? $"{bytes} B" : $"{bytes / 1024d:0.#} KiB";

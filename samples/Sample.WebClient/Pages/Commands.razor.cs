@@ -36,6 +36,27 @@ public partial class Commands :
         }
     }
 
+    static string ActiveText(EmployeeRow row)
+    {
+        if (row.Active)
+        {
+            return "yes";
+        }
+
+        return "no";
+    }
+
+    // The toggle offers the opposite of what the row is.
+    static string ToggleText(EmployeeRow row)
+    {
+        if (row.Active)
+        {
+            return "Deactivate";
+        }
+
+        return "Reactivate";
+    }
+
     // begin-snippet: commandsPageQuery
     protected override async Task OnInitializedAsync()
     {

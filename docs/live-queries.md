@@ -176,7 +176,7 @@ protected override async ValueTask Stop()
     }
 }
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Live/LiveCallback.razor.cs#L11-L56' title='Snippet source file'>snippet source</a> | <a href='#snippet-liveCallback' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Live/LiveCallback.razor.cs#L25-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-liveCallback' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A subscription made where there is a `SynchronizationContext` — a WPF or Windows Forms UI thread, a Blazor Server circuit — delivers on it, so a callback may touch what that context owns with no marshalling. The reading and deserializing happen off it.
@@ -262,7 +262,7 @@ protected override ValueTask Stop()
     return ValueTask.CompletedTask;
 }
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Live/LiveReactive.razor.cs#L11-L48' title='Snippet source file'>snippet source</a> | <a href='#snippet-liveReactive' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Live/LiveReactive.razor.cs#L17-L54' title='Snippet source file'>snippet source</a> | <a href='#snippet-liveReactive' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Calls to an observer never overlap, at most one of `OnError` and `OnCompleted` is made and nothing follows it, and nothing at all is called once the subscription's `Dispose` has returned. No synchronization context is captured, because saying where to be called is what a reactive pipeline does for itself:

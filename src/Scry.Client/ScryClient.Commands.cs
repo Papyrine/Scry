@@ -598,7 +598,7 @@ public sealed partial class ScryClient :
     /// <summary>As <see cref="Dispose"/>, and waits for every pending command's outcome to be settled.</summary>
     public async ValueTask DisposeAsync()
     {
-        disposing.Cancel();
+        await disposing.CancelAsync().ConfigureAwait(false);
         await Task.WhenAll(following.Values).ConfigureAwait(false);
     }
 

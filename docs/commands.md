@@ -168,7 +168,7 @@ async Task Send(Func<Task<ScryCommandOutcome>> send, string? done)
     }
 }
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Commands.razor.cs#L74-L127' title='Snippet source file'>snippet source</a> | <a href='#snippet-commandsPageSend' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Commands.razor.cs#L95-L148' title='Snippet source file'>snippet source</a> | <a href='#snippet-commandsPageSend' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 What comes back is a `ScryCommandOutcome`:
@@ -214,9 +214,9 @@ Two things say whether a button should be enabled, and both are advisory: the se
         <tr data-id="@row.Id">
             <td>@row.Id</td>
             <td class="name">@row.Name</td>
-            <td class="active">@(row.Active ? "yes" : "no")</td>
+            <td class="active">@ActiveText(row)</td>
             <td class="actions">
-                <button class="toggle" @onclick="() => SetActive(row)">@(row.Active ? "Deactivate" : "Reactivate")</button>
+                <button class="toggle" @onclick="() => SetActive(row)">@ToggleText(row)</button>
                 <button class="rename" disabled="@(!Query.Commands.CanRenameEmployee)" @onclick="() => Rename(row)">Rename</button>
                 <button class="delete" disabled="@(!row.CanDeleteEmployee)" @onclick="() => Delete(row)">Delete</button>
             </td>
@@ -348,7 +348,7 @@ public interface ICommandPolicy<TCommand, TEntity> :
     Expression<Func<TEntity, bool>> Rows(ScryPolicyContext context);
 }
 ```
-<sup><a href='/src/Scry.Server/ICommandPolicy.cs#L14-L34' title='Snippet source file'>snippet source</a> | <a href='#snippet-commandPolicyInterface' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ICommandPolicy.cs#L15-L35' title='Snippet source file'>snippet source</a> | <a href='#snippet-commandPolicyInterface' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Allow` decides the whole command for the caller: a refusal is a `403`, and the facade's `Can*` reads `false`. `Rows` decides it row by row, as an expression the server composes into SQL: a row it refuses is answered exactly as a row that is not there — one `404`, whether the row is absent, hidden by the source's row policies, or refused by the command's — so a caller probing keys learns nothing about rows it may not see. It is also what the row's `Can*` member reads.
@@ -470,7 +470,7 @@ protected override async Task OnInitializedAsync()
     capable = true;
 }
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Commands.razor.cs#L39-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-commandsPageQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Commands.razor.cs#L60-L90' title='Snippet source file'>snippet source</a> | <a href='#snippet-commandsPageQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A handler's save is reported by the interceptor on the context it saved through, a bulk write by the handler calling `ScryChanges.Notify`, and whatever else by the change probe or the poll. A targeted command that completes also reports its target changed, which covers a handler that writes with `ExecuteUpdate` and a worker that reports nothing; where the interceptor reported too, the two are one run.
