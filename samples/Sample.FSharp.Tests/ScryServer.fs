@@ -7,6 +7,7 @@ open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.TestHost
 open Microsoft.EntityFrameworkCore
 open Microsoft.Extensions.DependencyInjection
+open Sample.CommandHandlers
 open Sample.Model
 open Scry
 open Scry.Generated
@@ -54,14 +55,19 @@ type ScryServer private (app: WebApplication, database: SqlDatabase<SampleContex
                 |> ignore)
             |> ignore
 
+            // The sample's command handlers: the C# project every host with commands on shares.
+            builder.Services.AddSampleCommandHandlers() |> ignore
+
             builder.Services.AddScry<SampleContext>(fun options ->
                 options.AddPocoSource(fun _ -> Holiday.Seed())
                 options.AddAttachmentPolicy<Department, HandbookPolicy>()
                 options.AddAttachmentPolicy<Employee, PhotoPolicy>()
 
-                // Live queries are off until a server says how many it will hold open.
+                // Live queries are off until a server says how many it will hold open, and commands
+                // until it says how many it may have in flight.
                 options.MaxSubscriptions <- 10
-                options.SubscriptionThrottle <- TimeSpan.Zero)
+                options.SubscriptionThrottle <- TimeSpan.Zero
+                options.UseSampleCommands() |> ignore)
             |> ignore
 
             let app = builder.Build()
@@ -71,21 +77,10 @@ type ScryServer private (app: WebApplication, database: SqlDatabase<SampleContex
         }
 
     /// The generated entry point over an HTTP client into the hosted server.
-    member _.Query = ScryQuery(ScryClient.ForHttp(app.GetTestClient(), "/api/query"))
+    member this.Query = ScryQuery(ScryClient.ForHttp(this.Http, "/api/query"))
 
-    /// Renames an employee through the server's own context, as the application would.
-    member _.Rename(name: string, renamed: string) : Task =
-        task {
-            use scope = app.Services.CreateScope()
-            let context = scope.ServiceProvider.GetRequiredService<SampleContext>()
-            // Named explicitly: Scry's terminals and EF's are both in scope here, and they are not the
-            // same method — this one has to run against the database.
-            let! employee =
-                EntityFrameworkQueryableExtensions.FirstAsync(context.Employees, (fun employee -> employee.Name = name))
-            employee.Name <- renamed
-            let! _ = context.SaveChangesAsync()
-            return ()
-        }
+    /// An HTTP client into the hosted server.
+    member _.Http = app.GetTestClient()
 
     interface IAsyncDisposable with
         member _.DisposeAsync() =

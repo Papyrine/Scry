@@ -46,7 +46,9 @@ static class ResponseFailure
             ScryErrorCode.WireFormat or ScryErrorCode.Validation or ScryErrorCode.StaleClient => HttpStatusCode.BadRequest,
             ScryErrorCode.Forbidden => HttpStatusCode.Forbidden,
             ScryErrorCode.UnsupportedMedia => HttpStatusCode.UnsupportedMediaType,
-            ScryErrorCode.SubscriptionLimit => HttpStatusCode.ServiceUnavailable,
+            ScryErrorCode.SubscriptionLimit or ScryErrorCode.CommandLimit => HttpStatusCode.ServiceUnavailable,
+            ScryErrorCode.NotFound => HttpStatusCode.NotFound,
+            ScryErrorCode.PayloadTooLarge => HttpStatusCode.RequestEntityTooLarge,
             _ => HttpStatusCode.InternalServerError
         };
 }

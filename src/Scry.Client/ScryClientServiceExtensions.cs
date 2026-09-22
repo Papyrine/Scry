@@ -20,7 +20,7 @@ public static class ScryClientServiceExtensions
     public static IServiceCollection AddScryClient(this IServiceCollection services, string endpoint)
     {
         services.AddScoped(_ => ScryClient.ForHttp(_.GetRequiredService<HttpClient>(), endpoint));
-        return services;
+        return AddClientStores(services);
     }
 
     /// <summary>
@@ -39,7 +39,7 @@ public static class ScryClientServiceExtensions
     /// advertises and raises <see cref="ScryClient.SchemaStaleDetected"/> at most once, so a fresh
     /// instance per injection would reset that and never report drift. That is also why a typed client
     /// (<c>AddHttpClient&lt;ScryClient&gt;</c>) is the wrong shape here: the factory registers those
-    /// transient.
+    /// transient. Its <see cref="ScryClient.PendingWork"/> is registered beside it, at the same lifetime.
     /// </para>
     /// </remarks>
     public static IServiceCollection AddScryClient(
@@ -48,6 +48,14 @@ public static class ScryClientServiceExtensions
         Func<IServiceProvider, HttpClient> httpClient)
     {
         services.AddScoped(_ => ScryClient.ForHttp(httpClient(_), endpoint));
+        return AddClientStores(services);
+    }
+
+    // Off the client rather than beside it, so a component injecting the store sees the commands of the
+    // client it would be handed, for exactly as long as that client lives.
+    static IServiceCollection AddClientStores(IServiceCollection services)
+    {
+        services.AddScoped(_ => _.GetRequiredService<ScryClient>().PendingWork);
         return services;
     }
 }

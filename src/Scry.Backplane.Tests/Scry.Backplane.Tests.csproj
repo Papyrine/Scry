@@ -13,6 +13,8 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="NUnit" />
     <PackageReference Include="NUnit3TestAdapter" />
+    <!-- For the command tests' context, whose model is all it is ever asked for. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
     <ProjectReference Include="..\Scry.Server\Scry.Server.csproj" />
     <ProjectReference Include="..\Scry.Server.Redis\Scry.Server.Redis.csproj" />

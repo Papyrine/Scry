@@ -281,6 +281,78 @@ public class SchemaIndexTests
         Assert.That(index.StarterQuery(index.Sources[0]), Does.Not.Contain("Photos"));
     }
 
+    // A command acts on its target's rows and on the rows of anything deriving from it, which inherits
+    // the capability; the others are listed only on the pane's first page.
+    [Test]
+    public void ListsCommandsTargetingAModel()
+    {
+        var index = Commanded();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(index.CommandsTargeting("AssetQueryModel").Select(_ => _.Name), Is.EqualTo(["Retire"]));
+            Assert.That(index.CommandsTargeting("VehicleQueryModel").Select(_ => _.Name), Is.EqualTo(["Retire"]));
+            Assert.That(index.CommandsTargeting("DepotQueryModel"), Is.Empty);
+            Assert.That(index.Command("Order")!.Result!.Name, Is.EqualTo("Ordered"));
+        });
+    }
+
+    // A capability projects like any bool, but it is the command's policy run per row — a cost a
+    // suggested query should not open with.
+    [Test]
+    public void LeavesCapabilitiesOutOfAStarterQuery()
+    {
+        var index = Commanded();
+
+        var query = index.StarterQuery(index.Sources.Single(_ => _.Name == "Asset"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(query, Does.Contain("_.Name"));
+            Assert.That(query, Does.Not.Contain("CanRetire"));
+        });
+    }
+
+    static SchemaIndex Commanded() =>
+        new(
+            new(
+                2,
+                200,
+                [
+                    new("Asset", "Entity", "AssetQueryModel"),
+                    new("Vehicle", "Entity", "VehicleQueryModel"),
+                    new("Depot", "Entity", "DepotQueryModel")
+                ],
+                [
+                    new("AssetQueryModel",
+                    [
+                        new("Id", "int", false, false),
+                        new("Name", "string", true, false),
+                        new("CanRetire", "bool", false, false)
+                        {
+                            IsCapability = true,
+                            Command = "Retire"
+                        }
+                    ]),
+                    new("VehicleQueryModel", [new("Wheels", "int", false, false)]) {Base = "AssetQueryModel"},
+                    new("DepotQueryModel", [new("Id", "int", false, false)])
+                ],
+                [])
+            {
+                Commands =
+                [
+                    new("Order", [new("Name", "string", true, false)])
+                    {
+                        Result = new("Ordered", [new("Id", "int", false, false)])
+                    },
+                    new("Retire", [new("Id", "int", false, false)])
+                    {
+                        Target = "Asset",
+                        Keys = ["Id"]
+                    }
+                ]
+            });
+
     [Test]
     public void BuildsABareQueryForASourceWithNothingProjectable()
     {

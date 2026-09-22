@@ -26,6 +26,13 @@ sealed record OtherDecoded :
     DecodedType;
 
 /// <summary>
+/// The value of a <c>typeof(...)</c> attribute argument: the type's full name as the attribute blob
+/// spells it, less any assembly qualification, or null for a null argument.
+/// </summary>
+sealed record SerializedTypeDecoded(string? FullName) :
+    DecodedType;
+
+/// <summary>
 /// Decodes property type signatures into <see cref="DecodedType"/> using
 /// <see cref="System.Reflection.Metadata"/>, recognizing only the shapes Scry cares about. Also
 /// serves as the custom-attribute type provider, which is only ever asked to decode the
@@ -106,16 +113,39 @@ sealed class SignatureDecoder :
 
     public DecodedType GetTypeFromSpecification(MetadataReader r, object? genericContext, TypeSpecificationHandle handle, byte rawTypeKind) => other;
 
-    // ICustomAttributeTypeProvider. Scry only reads string and bool arguments, so the members that
-    // exist for System.Type and enum-valued arguments never need to produce anything useful.
+    // ICustomAttributeTypeProvider. Scry reads string, bool and System.Type arguments; the member that
+    // exists for enum-valued ones never needs to produce anything useful.
 
-    public DecodedType GetSystemType() => other;
+    static NamedDecoded systemType = new("System.Type", default, IsDefinition: false);
 
-    public DecodedType GetTypeFromSerializedName(string name) => other;
+    public DecodedType GetSystemType() => systemType;
+
+    // A type in the attribute's own assembly is written by its full name; one from anywhere else is
+    // assembly-qualified, so the name is cut at the first comma. A nested type's '+' is kept: no type
+    // Scry reads by name is nested, so one that is simply matches nothing.
+    public DecodedType GetTypeFromSerializedName(string? name)
+    {
+        if (name is null)
+        {
+            return new SerializedTypeDecoded(null);
+        }
+
+        var comma = name.IndexOf(',');
+        if (comma < 0)
+        {
+            return new SerializedTypeDecoded(name.Trim());
+        }
+
+        return new SerializedTypeDecoded(name.Substring(0, comma).Trim());
+    }
 
     public PrimitiveTypeCode GetUnderlyingEnumType(DecodedType type) => PrimitiveTypeCode.Int32;
 
-    public bool IsSystemType(DecodedType type) => false;
+    // A fixed argument's type comes from the constructor signature, where System.Type is an ordinary
+    // type reference. Recognizing it here is what makes the reader parse the argument as a serialized
+    // type name; answering false left it parsed as an enum, which is what a typeof(...) would misread as.
+    public bool IsSystemType(DecodedType type) =>
+        type is NamedDecoded {FullName: "System.Type"};
 
     static string Combine(string ns, string name)
     {

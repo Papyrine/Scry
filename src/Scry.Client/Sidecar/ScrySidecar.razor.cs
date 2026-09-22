@@ -263,9 +263,47 @@ public partial class ScrySidecar :
     static string Plural(int count, string what) =>
         count == 1 ? $"1 {what}" : $"{count} {what}s";
 
-    // A live query's failure is the session's; everything else carries its own.
+    // A live query's failure is the session's, and a command's its own; everything else carries its own.
     static string? Failure(ScrySidecarEntry entry) =>
-        entry.Error ?? entry.Session?.Error;
+        entry.Error ?? entry.Session?.Error ?? entry.Command?.Error;
+
+    static string CommandState(ScrySidecarCommand command) =>
+        command.State switch
+        {
+            ScryCommandActivityKind.Sent => "sent",
+            ScryCommandActivityKind.Refused => "refused",
+            ScryCommandActivityKind.Pending => "pending",
+            ScryCommandActivityKind.Reattaching => $"retry ×{command.Attempt - 1}",
+            ScryCommandActivityKind.Completed => "completed",
+            ScryCommandActivityKind.Failed => "failed",
+            _ => "unknown"
+        };
+
+    static string CommandClass(ScrySidecarCommand command) =>
+        command.State switch
+        {
+            ScryCommandActivityKind.Completed => "scry-sidecar-state scry-sidecar-state-live",
+            ScryCommandActivityKind.Pending or ScryCommandActivityKind.Reattaching => "scry-sidecar-state scry-sidecar-state-retry",
+            ScryCommandActivityKind.Refused or ScryCommandActivityKind.Failed or ScryCommandActivityKind.Unknown => "scry-sidecar-state scry-sidecar-status-error",
+            _ => "scry-sidecar-state"
+        };
+
+    static string Summary(ScrySidecarCommand command)
+    {
+        var parts = new List<string>
+        {
+            $"{CommandState(command)} {Ago(command.Updated)} ago",
+            $"id {command.Id:D}",
+            Plural(command.Attempt, "connection")
+        };
+
+        if (!command.OnTheWire)
+        {
+            parts.Add("reported by the client, which sends it somewhere this sidecar cannot watch");
+        }
+
+        return string.Join(" · ", parts);
+    }
 
     async Task Copy(string text)
     {
@@ -373,6 +411,7 @@ public partial class ScrySidecar :
         kind switch
         {
             ScrySidecarKind.Stream => "streams are read row by row",
+            ScrySidecarKind.Command => "its receipts are read by the client as they stream, and its state is what the client reports",
             _ => "attachment bytes are never cached; use Download"
         };
 
@@ -381,6 +420,11 @@ public partial class ScrySidecar :
         if (entry.Request is { } request)
         {
             return request.Root;
+        }
+
+        if (entry.Command is { } command)
+        {
+            return command.Name;
         }
 
         if (entry is

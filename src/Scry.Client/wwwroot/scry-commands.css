@@ -1,0 +1,144 @@
+/* Pending-work panel. Linked by ScryCommandStyles as a plain stylesheet rather than shipped as scoped
+   CSS, so it reaches the page on hosts that never link {App}.styles.css. Every class is
+   scry-commands-prefixed to stay out of the host app's way. Bottom left, since the sidecar's launcher
+   is bottom right. */
+
+.scry-commands-launcher {
+    position: fixed;
+    left: 0.75rem;
+    bottom: 0.75rem;
+    z-index: 2147482000;
+    padding: 0.3rem 0.7rem;
+    border: 1px solid light-dark(#d8dbe0, #2c3039);
+    border-radius: 999px;
+    background: light-dark(#f6f7f9, #1d2027);
+    color: light-dark(#1c1e22, #d7dae0);
+    font: 600 12px/1.4 system-ui, sans-serif;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.scry-commands-launcher:hover {
+    color: light-dark(#0b62c4, #6cb2ff);
+    border-color: light-dark(#0b62c4, #6cb2ff);
+}
+
+.scry-commands {
+    --scry-commands-bg: light-dark(#ffffff, #16181d);
+    --scry-commands-panel: light-dark(#f6f7f9, #1d2027);
+    --scry-commands-border: light-dark(#d8dbe0, #2c3039);
+    --scry-commands-text: light-dark(#1c1e22, #d7dae0);
+    --scry-commands-muted: light-dark(#6a707b, #8a919d);
+    --scry-commands-accent: light-dark(#0b62c4, #6cb2ff);
+    --scry-commands-done: light-dark(#1a7f37, #56d364);
+    --scry-commands-error: light-dark(#b42318, #ff8a80);
+
+    position: fixed;
+    left: 0.75rem;
+    bottom: 0.75rem;
+    z-index: 2147482000;
+    width: min(24rem, calc(100vw - 1.5rem));
+    max-height: min(24rem, 60vh);
+    display: flex;
+    flex-direction: column;
+    background: var(--scry-commands-bg);
+    color: var(--scry-commands-text);
+    border: 1px solid var(--scry-commands-border);
+    border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+    font: 13px/1.45 system-ui, sans-serif;
+}
+
+.scry-commands *,
+.scry-commands *::before,
+.scry-commands *::after {
+    box-sizing: border-box;
+}
+
+.scry-commands-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--scry-commands-border);
+    background: var(--scry-commands-panel);
+    border-radius: 8px 8px 0 0;
+}
+
+.scry-commands-header h2 {
+    margin: 0;
+    flex: 1;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.scry-commands-count {
+    color: var(--scry-commands-muted);
+    font-weight: 400;
+}
+
+.scry-commands button {
+    background: none;
+    border: 1px solid var(--scry-commands-border);
+    border-radius: 4px;
+    color: inherit;
+    font: inherit;
+    padding: 0.1rem 0.5rem;
+    cursor: pointer;
+}
+
+.scry-commands button:hover {
+    border-color: var(--scry-commands-accent);
+    color: var(--scry-commands-accent);
+}
+
+.scry-commands-items {
+    list-style: none;
+    margin: 0;
+    padding: 0.25rem 0;
+    overflow-y: auto;
+}
+
+.scry-commands-item {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 0.25rem 0.75rem;
+    align-items: baseline;
+    padding: 0.35rem 0.75rem;
+    border-bottom: 1px solid var(--scry-commands-border);
+}
+
+.scry-commands-item:last-child {
+    border-bottom: none;
+}
+
+.scry-commands-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.scry-commands-state,
+.scry-commands-elapsed {
+    color: var(--scry-commands-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.scry-commands-item[data-status="pending"] .scry-commands-state {
+    color: var(--scry-commands-accent);
+}
+
+.scry-commands-item[data-status="done"] .scry-commands-state {
+    color: var(--scry-commands-done);
+}
+
+.scry-commands-item[data-status="failed"] .scry-commands-state,
+.scry-commands-item[data-status="unknown"] .scry-commands-state {
+    color: var(--scry-commands-error);
+}
+
+.scry-commands-error {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: var(--scry-commands-error);
+}

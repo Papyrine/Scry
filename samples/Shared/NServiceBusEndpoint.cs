@@ -8,17 +8,19 @@ static class NServiceBusEndpoint
     /// <summary>
     /// The learning transport: files in a folder, so the sample needs nothing installed. Both
     /// endpoints have to be pointed at the same folder, which by default is one under the temporary
-    /// directory and can be moved with <c>--transport-storage</c>.
+    /// directory and can be moved with <c>--transport-storage</c>. A <c>RepriceOrder</c> goes to the
+    /// worker, whoever sends it.
     /// </summary>
     public static EndpointConfiguration Create(string name, string[] args)
     {
         var configuration = new EndpointConfiguration(name);
         configuration.UseSerialization<SystemJsonSerializer>();
-        configuration.UseTransport(
+        var routing = configuration.UseTransport(
             new LearningTransport
             {
                 StorageDirectory = Storage(args)
             });
+        routing.RouteToEndpoint(typeof(RepriceOrder), "Sample.Worker");
         configuration.SendFailedMessagesTo("Sample.Error");
         configuration.EnableInstallers();
 

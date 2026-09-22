@@ -5,8 +5,10 @@ class Program
 
     /// <param name="args">
     /// <c>--live</c> watches the orders instead of printing the tables and exiting.
+    /// <c>--reprice &lt;id&gt;</c> sends the <c>RepriceOrder</c> command and prints its outcome — the
+    /// write to make in one terminal while another runs <c>--live</c>.
     /// <c>--server &lt;url&gt;</c> points at a server other than Sample.WebServer — one of the
-    /// backplane samples, which serve queries and nothing else.
+    /// backplane samples.
     /// </param>
     static async Task<int> Main(string[] args)
     {
@@ -28,6 +30,11 @@ class Program
             {
                 await WatchOrders(query);
                 return 0;
+            }
+
+            if (Value(args, "--reprice") is { } id)
+            {
+                return await Reprice(query, int.Parse(id, CultureInfo.InvariantCulture));
             }
 
             await ShowActiveEmployees(query);
@@ -91,6 +98,34 @@ class Program
         catch (OperationCanceledException)
         {
             // Ctrl+C.
+        }
+    }
+    // end-snippet
+
+    // A command, and its outcome. Most finish within the server's sync window and print at once; one
+    // still running when the client stops waiting is Pending, and the same outcome's Completion is
+    // what finishes it. A console has nowhere else to show pending work, so it simply waits.
+    // begin-snippet: consoleCommand
+    static async Task<int> Reprice(ScryQuery query, int id)
+    {
+        var outcome = await query.Commands.RepriceOrder(new() {Id = id});
+        if (outcome.Status == ScryCommandStatus.Pending)
+        {
+            Console.WriteLine($"Order {id} is being repriced…");
+            outcome = await outcome.Completion;
+        }
+
+        switch (outcome.Status)
+        {
+            case ScryCommandStatus.Completed:
+                Console.WriteLine($"Order {id} repriced.");
+                return 0;
+            case ScryCommandStatus.Failed:
+                await Console.Error.WriteLineAsync($"Order {id} was not repriced: {outcome.Error}");
+                return 1;
+            default:
+                await Console.Error.WriteLineAsync($"Whether order {id} was repriced is unknown: {outcome.Error}");
+                return 1;
         }
     }
     // end-snippet

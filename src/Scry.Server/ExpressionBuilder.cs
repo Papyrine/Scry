@@ -8,13 +8,16 @@
 /// membership test against another source. Null where no such node can occur, which makes the
 /// omission a rejection rather than an unfiltered read. <c>navigations</c> is the same idea for a
 /// member path that steps into a policied source, and is omitted on the same terms.
+/// <c>capabilities</c> decides a capability member for the call; where it is omitted a capability reads
+/// as false, which is the answer that grants nothing.
 /// </remarks>
 [SuppressMessage("Performance", "CA1822:Mark members as static")]
 sealed class ExpressionBuilder(
     Schema schema,
     ScryOptions options,
     Func<string, IQueryable>? sources = null,
-    NavigationPolicy? navigations = null)
+    NavigationPolicy? navigations = null,
+    CapabilityContext? capabilities = null)
 {
     /// <summary>Builds a predicate lambda <c>TElement =&gt; bool</c>.</summary>
     public LambdaExpression BuildPredicate(Node predicate, Type type)
@@ -130,9 +133,9 @@ sealed class ExpressionBuilder(
                 throw new ScryValidationException($"Type '{schema.WireName(type)}' is not queryable.");
             }
 
-            foreach (var member in meta.Members.Values.Where(_ => _.Kind == MemberKind.Scalar))
+            foreach (var member in meta.Members.Values.Where(_ => _.Kind is MemberKind.Scalar or MemberKind.Capability))
             {
-                leaves.Add(Expression.Property(parameter, member.Property));
+                leaves.Add(Leaf(parameter, member));
                 shape.Add([member.Name]);
                 binary.Add(member.BinaryTransfer);
             }
@@ -332,15 +335,38 @@ sealed class ExpressionBuilder(
         var leaves = new List<Expression>();
         var shape = new List<IReadOnlyList<string>>();
         var binary = new List<bool>();
-        foreach (var member in meta.Members.Values.Where(_ => _.Kind == MemberKind.Scalar))
+        foreach (var member in meta.Members.Values.Where(_ => _.Kind is MemberKind.Scalar or MemberKind.Capability))
         {
-            leaves.Add(Expression.Property(parameter, member.Property));
+            leaves.Add(Leaf(parameter, member));
             shape.Add([member.Name]);
             binary.Add(member.BinaryTransfer);
         }
 
         var selector = Expression.Lambda(ToObjectArray(leaves), parameter);
         return new(selector, shape, Normalize(binary));
+    }
+
+    // A scalar of the row read off it, or a capability decided for it.
+    Expression Leaf(ParameterExpression row, Member member)
+    {
+        if (member.Kind == MemberKind.Capability)
+        {
+            return Capability(member, row);
+        }
+
+        return Expression.Property(row, member.ClrProperty);
+    }
+
+    // A capability's value for the row an expression reads. Without a context to decide it — a context
+    // that cannot ask a policy — it reads as false, which grants nothing.
+    Expression Capability(Member member, Expression owner)
+    {
+        if (capabilities is null)
+        {
+            return CapabilityContext.Fixed(false);
+        }
+
+        return capabilities.Evaluate(member, owner);
     }
 
     /// <summary>
@@ -1099,6 +1125,14 @@ sealed class ExpressionBuilder(
                 expression = Expression.Property(expression, NullableValue(expression.Type));
             }
 
+            // Computed for the row the path has reached rather than read off it, and never traversed —
+            // the validator refuses a path continuing past one, and a bool has no members to continue to.
+            if (member.Kind == MemberKind.Capability)
+            {
+                expression = Capability(member, expression);
+                continue;
+            }
+
             if (member.Kind == MemberKind.Navigation)
             {
                 // The member's own unwrap, for the same reason the owner was unwrapped: an optional
@@ -1142,7 +1176,7 @@ sealed class ExpressionBuilder(
                 }
             }
 
-            expression = Expression.Property(expression, member.Property);
+            expression = Expression.Property(expression, member.ClrProperty);
         }
 
         // A policied traversal yields SQL NULL for a row the policy hides, so a non-nullable value read

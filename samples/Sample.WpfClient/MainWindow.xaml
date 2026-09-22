@@ -9,7 +9,14 @@
                 Checked="OnLiveChanged" Unchecked="OnLiveChanged" />
       <TextBlock x:Name="StatusText" Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" />
     </StackPanel>
-    <DataGrid x:Name="EmployeeGrid" AutoGenerateColumns="True" IsReadOnly="True"
-              HeadersVisibility="Column" GridLinesVisibility="Horizontal" />
+    <!-- begin-snippet: wpfCommandMarkup -->
+    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+      <TextBox x:Name="RenameText" Text="Renamed" Width="200" VerticalContentAlignment="Center" />
+      <Button Content="Rename selected" Padding="16,4" Margin="8,0,0,0" Command="{Binding Rename}" />
+    </StackPanel>
+    <!-- end-snippet -->
+    <DataGrid x:Name="EmployeeGrid" AutoGenerateColumns="True" IsReadOnly="True" SelectionMode="Single"
+              HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+              AutoGeneratingColumn="OnAutoGeneratingColumn" />
   </DockPanel>
 </Window>

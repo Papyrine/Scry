@@ -14,5 +14,6 @@
     <ProjectReference Include="..\..\src\Scry.Server\Scry.Server.csproj" />
     <ProjectReference Include="..\..\src\Scry.Server.Redis\Scry.Server.Redis.csproj" />
     <ProjectReference Include="..\Sample.Model\Sample.Model.csproj" />
+    <ProjectReference Include="..\Sample.CommandHandlers\Sample.CommandHandlers.csproj" />
   </ItemGroup>
 </Project>

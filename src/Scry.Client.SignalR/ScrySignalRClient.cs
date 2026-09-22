@@ -9,8 +9,8 @@ public static class ScrySignalRClient
     // begin-snippet: signalRClient
     /// <summary>
     /// Creates a client over <paramref name="connection"/>. Everything written against a
-    /// <see cref="ScryClient"/> works unchanged — the terminals, streaming, batching, live queries —
-    /// and every live query shares the one connection.
+    /// <see cref="ScryClient"/> works unchanged — the terminals, streaming, batching, live queries,
+    /// commands — and every live query and pending command shares the one connection.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -29,8 +29,56 @@ public static class ScrySignalRClient
             (request, cancel) => Query(connection, request, cancel),
             (request, cancel) => Rows(connection, request, cancel),
             (request, cancel) => Batch(connection, request, cancel),
-            (request, cancel) => Answers(connection, request, cancel));
+            (request, cancel) => Answers(connection, request, cancel),
+            (request, cancel) => Receipts(connection, ScryHubProtocol.Command, ScryJson.Serialize(request), cancel),
+            (id, cancel) => Receipts(connection, ScryHubProtocol.Receipt, id.ToString("D"), cancel),
+            cancel => Capabilities(connection, cancel));
     // end-snippet
+
+    // A command's receipts, or one it was sent before asked for again by its id. The client asks for a
+    // pending one again whenever this ends before its outcome — including while the connection is
+    // down, which is said as the connection failure it is rather than as a mistake in the call, so that
+    // it is asked again once the connection is back rather than given up on.
+    static async IAsyncEnumerable<CommandReceipt> Receipts(
+        HubConnection connection,
+        string method,
+        string argument,
+        [EnumeratorCancellation] Cancel cancel)
+    {
+        using var stopping = CancelSource.CreateLinkedTokenSource(cancel);
+        try
+        {
+            await using var receipts = connection
+                .StreamAsync<string>(method, argument, stopping.Token)
+                .GetAsyncEnumerator(stopping.Token);
+            while (true)
+            {
+                try
+                {
+                    if (!await receipts.MoveNextAsync())
+                    {
+                        break;
+                    }
+                }
+                catch (InvalidOperationException exception) when (connection.State != HubConnectionState.Connected)
+                {
+                    throw new IOException("The hub connection is not connected.", exception);
+                }
+
+                yield return ScryJson.DeserializeReceipt(Answer(receipts.Current));
+            }
+        }
+        finally
+        {
+            await Stop(stopping);
+        }
+    }
+
+    static async Task<CommandCapabilities> Capabilities(HubConnection connection, Cancel cancel)
+    {
+        var answer = await connection.InvokeAsync<string>(ScryHubProtocol.Capabilities, cancel);
+        return ScryJson.DeserializeCapabilities(Answer(answer));
+    }
 
     static async Task<QueryResponse> Query(HubConnection connection, QueryRequest request, Cancel cancel)
     {

@@ -21,9 +21,11 @@ public static class NServiceBusWorkerHost
                 .AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>()));
 
         // What each message's handlers saved is published once they are done, through that message's
-        // own context — so it leaves only if the handler's work was kept.
+        // own context — so it leaves only if the handler's work was kept. A message a Scry server sent
+        // as a command is replied to the same way, which is what finishes the command there.
         var endpoint = NServiceBusEndpoint.Create("Sample.Worker", args);
         endpoint.UseScryChanges();
+        endpoint.UseScryCommands();
         builder.Services.AddNServiceBusEndpoint(endpoint);
         // end-snippet
 

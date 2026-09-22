@@ -186,6 +186,78 @@ public class SidecarComponentTests
         Assert.That(component.FindAll("[data-testid=sidecar-event-data]"), Is.Empty);
     }
 
+    // A command is named by what it is rather than by the path it was posted to, and its row says
+    // where it got to in place of a status that stopped being the point once the outcome arrived.
+    [Test]
+    public async Task NamesACommandEntry()
+    {
+        var options = new ScrySidecarOptions();
+        var store = new ScrySidecarStore(options);
+        var stub = new CommandStub(CommandStub.Json(CommandStatus.Completed, new {id = 3}));
+        using var http = new HttpClient(
+            new ScrySidecarHandler(store, options)
+            {
+                InnerHandler = stub.Handler()
+            })
+        {
+            BaseAddress = new("http://localhost")
+        };
+        await ScryClient.ForHttp(http, "/api/query").SendCommandAsync(new RenameThing {Id = 5, Name = "Renamed"});
+
+        await using var context = new BunitContext();
+        var component = await Panel(context, options, store);
+        var row = component.Find("[data-testid=sidecar-entries] .scry-sidecar-row");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(row.TextContent, Does.Contain("RenameThing"));
+            Assert.That(component.Find("[data-testid=sidecar-command-state]").TextContent, Is.EqualTo("completed"));
+        });
+
+        await row.ClickAsync(new());
+        Assert.Multiple(() =>
+        {
+            Assert.That(component.Find("[data-testid=sidecar-command-summary]").TextContent, Does.Contain(stub.LastId.ToString("D")));
+            Assert.That(component.Find("[data-testid=sidecar-command-result]").TextContent, Does.Contain("\"id\": 3"));
+        });
+    }
+
+    // A command sent somewhere the handler cannot watch — a hub connection, here a transport of the
+    // test's own — is listed from what the client reports, and says that is where it came from.
+    [Test]
+    public async Task ListsACommandSentOverTheHub()
+    {
+        var options = new ScrySidecarOptions();
+        var store = new ScrySidecarStore(options);
+        var client = new ScryClient(
+            (_, _) => throw new NotSupportedException(),
+            commandTransport: (request, _) => Receipts(CommandStub.Receipt(request.Id, CommandStatus.Completed)));
+        store.Observe(client);
+        await client.SendCommandAsync(new RenameThing {Id = 5, Name = "Renamed"});
+
+        await using var context = new BunitContext();
+        var component = await Panel(context, options, store);
+        var row = component.Find("[data-testid=sidecar-entries] .scry-sidecar-row");
+        await row.ClickAsync(new());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(row.TextContent, Does.Contain("COMMAND"));
+            Assert.That(component.Find("[data-testid=sidecar-command-state]").TextContent, Is.EqualTo("completed"));
+            Assert.That(component.Find("[data-testid=sidecar-command-summary]").TextContent, Does.Contain("reported by the client"));
+        });
+    }
+
+    static async IAsyncEnumerable<CommandReceipt> Receipts(params CommandReceipt[] receipts)
+    {
+        foreach (var receipt in receipts)
+        {
+            yield return receipt;
+        }
+
+        await Task.CompletedTask;
+    }
+
     // One answer, a heartbeat, and the server saying it had reached the connection's lifetime.
     static async Task<(ScrySidecarOptions Options, ScrySidecarStore Store)> Live()
     {

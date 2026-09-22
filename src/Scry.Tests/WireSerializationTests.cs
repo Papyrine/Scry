@@ -633,6 +633,109 @@ public class WireSerializationTests
         });
     }
 
+    static Guid commandId = new("a3f1c0de-0000-4000-8000-000000000001");
+
+    [Test]
+    public void CommandRequestRoundTrips()
+    {
+        var payload = JsonSerializer.SerializeToElement(new {id = 7, name = "Carol"});
+        var request = CommandRequest.Create("RenameEmployee", commandId, payload, "SEJsUtm-XMA5VNZu");
+
+        var json = ScryJson.Serialize(request);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                json,
+                Is.EqualTo("""{"version":1,"command":"RenameEmployee","id":"a3f1c0de-0000-4000-8000-000000000001","payload":{"id":7,"name":"Carol"},"stamp":"SEJsUtm-XMA5VNZu"}"""));
+            Assert.That(ScryJson.Serialize(ScryJson.DeserializeCommandRequest(json)), Is.EqualTo(json));
+            Assert.That(Encoding.UTF8.GetString(ScryJson.SerializeToUtf8(request)), Is.EqualTo(json));
+        });
+    }
+
+    // A command names only what the vocabulary names, as a query does: a member nothing reads is
+    // refused rather than skipped.
+    [Test]
+    public void AnUnknownMemberOnACommandRequestFailsClosed() =>
+        Assert.Throws<ScryWireException>(
+            () => ScryJson.DeserializeCommandRequest(
+                """{"version":1,"command":"RenameEmployee","id":"a3f1c0de-0000-4000-8000-000000000001","payload":{},"pad":"="}"""));
+
+    [Test]
+    public void ACommandRequestWithoutAPayloadFailsClosed() =>
+        Assert.Throws<ScryWireException>(
+            () => ScryJson.DeserializeCommandRequest("""{"version":1,"command":"RenameEmployee","id":"a3f1c0de-0000-4000-8000-000000000001"}"""u8));
+
+    [Test]
+    public void ACommandRequestWithAMalformedIdFailsClosed() =>
+        Assert.Throws<ScryWireException>(
+            () => ScryJson.DeserializeCommandRequest("""{"version":1,"command":"RenameEmployee","id":"7","payload":{}}"""));
+
+    [Test]
+    public void CommandReceiptRoundTrips()
+    {
+        var receipt = CommandReceipt.Create(commandId, CommandStatus.Completed) with
+        {
+            Result = JsonSerializer.SerializeToElement(new {id = 12}),
+            Stamp = "SEJsUtm-XMA5VNZu"
+        };
+
+        var json = ScryJson.Serialize(receipt);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                json,
+                Is.EqualTo("""{"version":1,"id":"a3f1c0de-0000-4000-8000-000000000001","status":"Completed","result":{"id":12},"stamp":"SEJsUtm-XMA5VNZu"}"""));
+            Assert.That(ScryJson.Serialize(ScryJson.DeserializeReceipt(json)), Is.EqualTo(json));
+            Assert.That(ScryJson.Serialize(ScryJson.DeserializeReceipt(ScryJson.SerializeToUtf8(receipt))), Is.EqualTo(json));
+        });
+    }
+
+    // A pending receipt says only where the command is: nothing optional is written, and it reads back.
+    [Test]
+    public void APendingReceiptCarriesNoResultOrError()
+    {
+        var json = ScryJson.Serialize(CommandReceipt.Create(commandId, CommandStatus.Pending));
+
+        Assert.That(json, Is.EqualTo("""{"version":1,"id":"a3f1c0de-0000-4000-8000-000000000001","status":"Pending"}"""));
+        var receipt = ScryJson.DeserializeReceipt(json);
+        Assert.Multiple(() =>
+        {
+            Assert.That(receipt.Status, Is.EqualTo(CommandStatus.Pending));
+            Assert.That(receipt.Result, Is.Null);
+            Assert.That(receipt.Error, Is.Null);
+        });
+    }
+
+    [Test]
+    public void AFailedReceiptCarriesItsError() =>
+        Assert.That(
+            ScryJson.Serialize(CommandReceipt.Create(commandId, CommandStatus.Failed) with {Error = "Command execution failed."}),
+            Is.EqualTo("""{"version":1,"id":"a3f1c0de-0000-4000-8000-000000000001","status":"Failed","error":"Command execution failed."}"""));
+
+    // A receipt from a newer server is refused as a newer response is: its result is in an encoding
+    // this client was not built against.
+    [Test]
+    public void ANewerReceiptVersionFailsClosed() =>
+        Assert.Throws<ScryWireException>(
+            () => ScryJson.DeserializeReceipt("""{"version":2,"id":"a3f1c0de-0000-4000-8000-000000000001","status":"Completed"}"""));
+
+    [Test]
+    public void CommandCapabilitiesRoundTrip()
+    {
+        var capabilities = CommandCapabilities.Create(["DeleteEmployee", "RenameEmployee"], "SEJsUtm-XMA5VNZu");
+
+        var json = ScryJson.Serialize(capabilities);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(json, Is.EqualTo("""{"version":1,"commands":["DeleteEmployee","RenameEmployee"],"stamp":"SEJsUtm-XMA5VNZu"}"""));
+            Assert.That(ScryJson.DeserializeCapabilities(json).Commands, Is.EqualTo(capabilities.Commands));
+            Assert.That(ScryJson.DeserializeCapabilities(ScryJson.SerializeToUtf8(capabilities)).Stamp, Is.EqualTo("SEJsUtm-XMA5VNZu"));
+        });
+    }
+
     static Task VerifyRoundTrip(QueryRequest request)
     {
         var json = ScryJson.Serialize(request);

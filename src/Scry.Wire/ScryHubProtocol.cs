@@ -24,4 +24,16 @@ public static class ScryHubProtocol
 
     /// <summary>One query, answered again whenever its answer changes: a stream of responses.</summary>
     public const string Subscribe = "Subscribe";
+
+    /// <summary>
+    /// One command, answered with a stream of receipts: the final one alone where the command finished
+    /// within the sync window, otherwise a pending one and then the final one.
+    /// </summary>
+    public const string Command = "Command";
+
+    /// <summary>A command already sent, asked for again by its id: the same stream of receipts.</summary>
+    public const string Receipt = "Receipt";
+
+    /// <summary>The commands this caller may send, as the capabilities endpoint answers.</summary>
+    public const string Capabilities = "Capabilities";
 }

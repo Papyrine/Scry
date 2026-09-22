@@ -812,7 +812,7 @@ A request that was not answered with a result comes back as a `ScryError` instea
 | Field | Meaning |
 | --- | --- |
 | `error` | What was rejected, or the fixed execution-failure message for a `500`. Written for a person to read; bounded at 1024 characters, since a rejection often names the client's own text back to it. |
-| `code` | Which of the endpoint's answers this is — one of `WireFormat`, `Validation`, `StaleClient`, `Forbidden`, `UnsupportedMedia`, `ExecutionFailed`, `SubscriptionLimit`. This is the field a client branches on. Omitted when absent, which is how a body from a proxy rather than from the endpoint reads. |
+| `code` | Which of the endpoint's answers this is — one of `WireFormat`, `Validation`, `StaleClient`, `Forbidden`, `UnsupportedMedia`, `ExecutionFailed`, `SubscriptionLimit`, and for [commands](#commands) `NotFound`, `PayloadTooLarge` and `CommandLimit`. This is the field a client branches on. Omitted when absent, which is how a body from a proxy rather than from the endpoint reads. |
 | `requiresBody` | Optional, `true` only when the query was refused for arriving as a URL while comparing a `[Sensitive]` member against a constant. A separate axis from `code`: it says what to do next — re-send the same request in a body — and can accompany any rejection code. Omitted when false. |
 
 The codes are deliberately coarse. One says which of the endpoint's own answers this is, never which member or which rule was involved, so a code reveals nothing the status and the fixed message did not already — which is what lets the fixed `500` body carry one at all.
@@ -886,6 +886,97 @@ A failure is answered as the [`error` marker](#streamed-results) a stream closes
 ```
 
 It is the whole answer to a `Query` or a `Batch`, and the last item of a `Stream` or a `Subscribe`. `code` is omitted by the `…/stream` endpoint, where the only failure left to report is one the status could no longer say.
+
+
+## Commands
+
+A [command](commands.md) is `POST`ed to `…/command` as a `CommandRequest`, versioned apart from the query wire, which it does not touch:
+
+<!-- snippet: wireCommandRequest -->
+<a id='snippet-wireCommandRequest'></a>
+```cs
+public sealed record CommandRequest(int Version, string Command, Guid Id, JsonElement Payload)
+{
+    /// <summary>The current command request version. Versioned apart from the query wire, which this does not touch.</summary>
+    public const int CurrentVersion = 1;
+
+    /// <summary>Creates a request stamped with <see cref="CurrentVersion"/>.</summary>
+    public static CommandRequest Create(string command, Guid id, JsonElement payload, string? stamp = null) =>
+        new(CurrentVersion, command, id, payload)
+        {
+            Stamp = stamp
+        };
+
+    /// <summary>
+    /// The schema stamp of the generated client model the command came from, when known. Read for the
+    /// same reason <see cref="QueryRequest.Stamp"/> is — to attribute a rejection to a stale client —
+    /// and never as an authorization input.
+    /// </summary>
+    public string? Stamp { get; init; }
+}
+```
+<sup><a href='/src/Scry.Wire/CommandRequest.cs#L12-L32' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireCommandRequest' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+```json
+{"version":1,"command":"RenameEmployee","id":"8c5b3f0e-6a0c-4b8e-9f4e-2d7f1c0b9a31","payload":{"id":3,"name":"Aaron Renamed"},"stamp":"WsQ9hxzDNvqFuufg"}
+```
+
+`id` is minted by the client and is what the command is known by from then on: its receipts carry it, a client asks for it again by it, and the audit trail records it. `payload` is the command's properties, camel-cased, bound on the server into the server's own class. A duplicate `id` is refused.
+
+What comes back is a `CommandReceipt`:
+
+<!-- snippet: wireCommandReceipt -->
+<a id='snippet-wireCommandReceipt'></a>
+```cs
+public sealed record CommandReceipt(int Version, Guid Id, CommandStatus Status)
+{
+    /// <summary>Creates a receipt stamped with <see cref="CommandRequest.CurrentVersion"/>.</summary>
+    public static CommandReceipt Create(Guid id, CommandStatus status) =>
+        new(CommandRequest.CurrentVersion, id, status);
+
+    /// <summary>What the handler answered with, for a completed command that has a result.</summary>
+    public JsonElement? Result { get; init; }
+
+    /// <summary>
+    /// Why a failed command failed: the message a handler chose to show, or a fixed one. Nothing
+    /// internal leaves the server this way.
+    /// </summary>
+    public string? Error { get; init; }
+
+    /// <summary>The server's schema stamp, as every response carries it.</summary>
+    public string? Stamp { get; init; }
+}
+```
+<sup><a href='/src/Scry.Wire/CommandReceipt.cs#L12-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-wireCommandReceipt' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+| `status` | Means |
+| --- | --- |
+| `Pending` | Accepted and still being handled. The outcome follows. |
+| `Completed` | Handled. `result` holds what the handler answered with, for a command that has one. |
+| `Failed` | Accepted and then not done. `error` holds the handler's own message where it chose one, and otherwise a fixed text. |
+
+A command decided within the server's sync window is answered with its final receipt as `application/json`. One that is not is answered `200 text/event-stream`, framed as a [live query's](#live-queries) answers are: a `result` event whose data is the `Pending` receipt, at once; a `result` whose data is the final receipt, when it lands; then the end of the stream. `ping` and `end` are as they are there. There is no event `id` and no `Last-Event-ID`: asking again answers the current receipt, which is already idempotent. A stream that closes before the final receipt with neither `error` nor `end` was cut.
+
+**Asking again.** `GET …/command/{id}` answers exactly as the command's own response would have — the final receipt, or the stream while the command is in flight — for the caller that sent it. For anyone else, and for an id this node does not hold, it is a `404` with the body an unknown id gets.
+
+**Capabilities.** `GET …/capabilities` answers `CommandCapabilities`: `version`, `commands` — the names this caller's policies allow — and `stamp`. It is advisory, and sent `no-store`.
+
+Everything a command can be refused for is decided before the response is committed, so each is an [ordinary status](#error-responses):
+
+| Status | `code` | For |
+| --- | --- | --- |
+| `400` | `WireFormat`, `Validation`, `StaleClient` | A body that does not read, an unknown command, a payload that does not bind |
+| `403` | `Forbidden` | A caller the command's policy refuses outright |
+| `404` | `NotFound` | A target that is absent, hidden, or refused by the command's row policy — one answer for all three |
+| `413` | `PayloadTooLarge` | A body past `MaxCommandBytes` |
+| `415` | `UnsupportedMedia` | A body that is not `application/json` |
+| `503` / `429` | `CommandLimit` | As many commands in flight as the server allows, or as the caller does; both carry `Retry-After` |
+
+Over a hub, `ScryHubProtocol` adds `Command` (the request, answering with receipts as strings), `Receipt` (an id, the same) and `Capabilities` (nothing, answering the capabilities document), with a refusal as the coded `error` marker.
+
+A command's name, payload and result are part of the [schema stamp](#schema-stamp), so a client generated before a command changed is told it is stale.
 
 
 ## Batched queries
@@ -1099,7 +1190,7 @@ The `ScryJson` options, the `$type` discriminator strings, and the enum member n
 
 `version` covers the *format*. The **schema stamp** covers the *model* — the allow-listed surface a client was generated against.
 
-The stamp is a SHA-256 over a canonical description of the queryable surface — sources with their kinds, query-model types with their members and type displays, and re-emitted enums with their values, each list sorted ordinal — truncated to 96 bits and base64url-encoded, giving a 16-character string. The generator computes it from the model DLL's metadata and bakes it into the generated `ScryQuery` as `SchemaStamp`; the server computes it from the real model by reflection. Both sides compile the same source, so equal surfaces produce equal stamps.
+The stamp is a SHA-256 over a canonical description of the queryable surface — sources with their kinds, query-model types with their members and type displays, re-emitted enums with their values, and commands with their payloads, keys and results, each list sorted ordinal — truncated to 96 bits and base64url-encoded, giving a 16-character string. The generator computes it from the model DLL's metadata and bakes it into the generated `ScryQuery` as `SchemaStamp`; the server computes it from the real model by reflection. Both sides compile the same source, so equal surfaces produce equal stamps.
 
 Truncation is safe because the stamp is a **fingerprint, not a security boundary**. Nothing trusts it — every request is re-validated against the real schema whatever stamp arrives, so a forged one buys an attacker nothing but the suppression of their own reload prompt. And it is only ever compared pairwise, one client's against one server's, so the birthday bound does not apply: the chance two genuinely different surfaces collide is 2⁻⁹⁶, and the cost if they did is a missed reload prompt.
 

@@ -1,4 +1,6 @@
-﻿namespace Scry;
+﻿using Microsoft.Extensions.DependencyInjection.Extensions;
+
+namespace Scry;
 
 /// <summary>
 /// Configures the server-side query executor: which model to expose, in-memory POCO sources,
@@ -162,20 +164,23 @@ public sealed class ScryOptions(Type contextType)
     public int MaxSubscriptions { get; set; }
 
     /// <summary>
-    /// How many of those one caller may hold, where <see cref="SubscriptionCaller"/> can say who is
-    /// asking. Default 20. One past it is answered <c>429</c>.
+    /// How many of those one caller may hold, where <see cref="Caller"/> can say who is asking.
+    /// Default 20. One past it is answered <c>429</c>.
     /// </summary>
     public int MaxSubscriptionsPerCaller { get; set; } = 20;
 
     /// <summary>
-    /// Who a live query is counted against. The authenticated name by default; null — an anonymous
-    /// caller — is counted against nobody, so only <see cref="MaxSubscriptions"/> bounds it.
+    /// Who is asking: what a live query and a pending command are counted against, what a command is
+    /// handed as its caller and audited under, and whose a pending command's outcome is. The
+    /// authenticated name by default; null — an anonymous caller — is counted against nobody, so only
+    /// the server-wide limits bound it.
     /// </summary>
     /// <remarks>
     /// Read from the authenticated principal or something derived from it, never from a header: a
-    /// caller that names itself names somebody new each time, and is bounded by nothing.
+    /// caller that names itself names somebody new each time, is bounded by nothing, and could claim
+    /// somebody else's command.
     /// </remarks>
-    public Func<HttpContext, string?> SubscriptionCaller { get; set; } = _ => _.User.Identity?.Name;
+    public Func<HttpContext, string?> Caller { get; set; } = _ => _.User.Identity?.Name;
 
     /// <summary>
     /// The largest answer a live query may hold, in bytes. Default 1,048,576 (1 MB). An answer is
@@ -242,6 +247,77 @@ public sealed class ScryOptions(Type contextType)
     /// <summary>How often <see cref="ChangeProbe"/> is asked. Default one second.</summary>
     public TimeSpan ChangeProbeInterval { get; set; } = TimeSpan.FromSeconds(1);
     // end-snippet
+
+    // begin-snippet: scryOptionsCommands
+    /// <summary>
+    /// How many commands may be in flight at once — accepted and not yet finished. Default zero, which
+    /// maps no command route at all: a server serves writes because it said it would, and one that has
+    /// not says nothing about the commands its model declares — every capability reads false.
+    /// </summary>
+    /// <remarks>
+    /// One past the limit is answered <c>503</c> with a <c>Retry-After</c>, and nothing about it runs.
+    /// When this is set, every command the model declares has to be handled — by a handler in the
+    /// container or a dispatcher that claims it — or the server refuses to start.
+    /// </remarks>
+    public int MaxPendingCommands { get; set; }
+
+    /// <summary>
+    /// How many of those one caller may have in flight, where <see cref="Caller"/> can say who is
+    /// asking. Default 20. One past it is answered <c>429</c>.
+    /// </summary>
+    public int MaxPendingCommandsPerCaller { get; set; } = 20;
+
+    /// <summary>
+    /// How long a command is waited for before it is answered as pending. Default one second. A command
+    /// finishing inside it is answered with its outcome in one response; one that does not is answered
+    /// with a stream: pending at once, then the outcome when it lands.
+    /// </summary>
+    public TimeSpan CommandSyncWindow { get; set; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// How long a finished command's outcome is kept for a client asking for it again by its id.
+    /// Default five minutes. A command still pending after twelve times this is failed as having
+    /// received no completion — a handler that never answers must not hold its place for ever.
+    /// </summary>
+    public TimeSpan CommandRetention { get; set; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// The largest command body read, in bytes. Default 65,536 (64 KiB). One declaring more is refused
+    /// with a <c>413</c> before it is read, and one sending more is refused once it passes the limit.
+    /// </summary>
+    public int MaxCommandBytes { get; set; } = 64 * 1024;
+    // end-snippet
+
+    internal List<Type> Dispatchers { get; } = [];
+
+    /// <summary>
+    /// Adds a dispatcher: something that carries commands elsewhere — a message bus, a queue — and
+    /// reports their outcome back. Resolved from the container, and asked in the order added which
+    /// commands it claims; a command no dispatcher claims is handled in-process, by the
+    /// <see cref="ICommandHandler{TCommand}"/> the container supplies, and one two dispatchers claim is
+    /// refused at startup.
+    /// </summary>
+    public void AddDispatcher<TDispatcher>()
+        where TDispatcher : class, ICommandDispatcher
+    {
+        if (!Dispatchers.Contains(typeof(TDispatcher)))
+        {
+            Dispatchers.Add(typeof(TDispatcher));
+        }
+    }
+
+    /// <summary>
+    /// The same, for a dispatcher built by <paramref name="factory"/> — which <c>AddScry</c> registers
+    /// as a singleton, so a bus adapter can bring its dispatcher along with its configuration.
+    /// </summary>
+    public void AddDispatcher<TDispatcher>(Func<IServiceProvider, TDispatcher> factory)
+        where TDispatcher : class, ICommandDispatcher
+    {
+        AddDispatcher<TDispatcher>();
+        DispatcherServices.Add(_ => _.TryAddSingleton(factory));
+    }
+
+    internal List<Action<IServiceCollection>> DispatcherServices { get; } = [];
 
     /// <summary>
     /// What the rows a query would return are current as of — a database change marker, typically.
@@ -494,4 +570,16 @@ public sealed class ScryOptions(Type contextType)
     public void AddAttachmentPolicy<TEntity, TPolicy>()
         where TPolicy : IAttachmentPolicy<TEntity> =>
         AttachmentPolicies[typeof(TEntity)] = typeof(TPolicy);
+
+    internal Dictionary<Type, Type> CommandPolicies { get; } = [];
+
+    /// <summary>
+    /// Attaches the policy deciding who may send a command — and, where it also implements
+    /// <see cref="ICommandPolicy{TCommand, TEntity}"/>, against which rows — replacing any
+    /// <c>[Command(Policy = ...)]</c> on the command. A command with no policy may be sent by anyone
+    /// its endpoint admits.
+    /// </summary>
+    public void AddCommandPolicy<TCommand, TPolicy>()
+        where TPolicy : ICommandPolicy<TCommand> =>
+        CommandPolicies[typeof(TCommand)] = typeof(TPolicy);
 }

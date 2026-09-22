@@ -3,6 +3,7 @@
     <File Path="Directory.Packages.props" />
   </Folder>
   <Project Path="Sample.Model/Sample.Model.csproj" />
+  <Project Path="Sample.CommandHandlers/Sample.CommandHandlers.csproj" />
   <Project Path="Sample.WebServer/Sample.WebServer.csproj" />
   <Project Path="Sample.WebClient/Sample.WebClient.csproj" />
   <Project Path="Sample.Tests/Sample.Tests.csproj" />

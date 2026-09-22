@@ -99,6 +99,10 @@ and a diverted `byte[]` does not.
 
 Naming any of the four explicitly still works; only the suggestion leaves them out.
 
+A [command](commands.md)'s capability member — `CanDeleteEmployee` on `Employee` — is listed with a `command` badge naming the command it answers for, and projects like any `bool`. The suggestion leaves it out too: it is computed from a policy on every row, which is a cost a query should ask for by name.
+
+The root page lists the model's commands under **Commands**, each with its payload's properties, the source it targets or the class it answers with, and a model's page lists the commands that target it. The explorer runs queries only: a command is sent through `Query.Commands` from an application, not from here, so the list is there to read.
+
 
 ## Mapping it
 
@@ -153,7 +157,7 @@ app.MapScryExplorer(_ =>
     _.EnableGuard = _ => true;
 });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L195-L203' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L185-L193' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 | Option | Default | Meaning |
@@ -305,7 +309,7 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
 <a id='snippet-IntrospectionTests.Describe.verified.txt'></a>
 ```txt
 {
-  Version: 1,
+  Version: 2,
   MaxPageSize: 1000,
   Sources: [
     {
@@ -441,7 +445,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Country,
@@ -450,7 +455,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       IsSensitive: true
@@ -465,7 +471,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       Base: PostQueryModel,
@@ -481,7 +488,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Name,
@@ -490,7 +498,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       IsSensitive: false
@@ -505,7 +514,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       Base: AssetQueryModel,
@@ -515,6 +525,17 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Model: ContractQueryModel,
       Members: [
         {
+          Name: CanSealContract,
+          TypeDisplay: bool,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: true,
+          Command: SealContract
+        },
+        {
           Name: Document,
           TypeDisplay: global::Scry.ScryAttachment,
           NeedsNullDefault: true,
@@ -522,7 +543,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCollection: false,
           IsAttachment: true,
           ContentType: application/pdf,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Id,
@@ -531,7 +553,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Name,
@@ -540,7 +563,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       Keys: [
@@ -558,7 +582,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Name,
@@ -567,7 +592,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       IsSensitive: false
@@ -582,7 +608,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Headcount,
@@ -592,7 +619,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsCollection: false,
           Obsolete: Counts open roles too; use the Region rollup.,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       IsSensitive: false
@@ -607,7 +635,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Address,
@@ -616,7 +645,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: true,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Avatar,
@@ -625,7 +655,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: true
+          IsSensitive: true,
+          IsCapability: false
         },
         {
           Name: Department,
@@ -634,7 +665,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: true,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: DepartmentId,
@@ -643,7 +675,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Id,
@@ -652,7 +685,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Manager,
@@ -661,7 +695,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: true,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: ManagerId,
@@ -670,7 +705,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Name,
@@ -679,7 +715,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Perks,
@@ -688,7 +725,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: PreviousAddresses,
@@ -697,7 +735,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: true,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Status,
@@ -706,7 +745,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Workstation,
@@ -715,7 +755,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: true,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       IsSensitive: false
@@ -730,7 +771,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Machines,
@@ -739,7 +781,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: true,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Name,
@@ -748,7 +791,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       IsSensitive: false
@@ -763,7 +807,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       Base: PressQueryModel,
@@ -779,7 +824,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Name,
@@ -788,7 +834,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       IsSensitive: false
@@ -803,7 +850,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Id,
@@ -812,7 +860,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Notes,
@@ -821,7 +870,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Number,
@@ -830,7 +880,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Reviewer,
@@ -839,7 +890,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: true
+          IsSensitive: true,
+          IsCapability: false
         },
         {
           Name: Tags,
@@ -848,7 +900,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: true,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Weights,
@@ -857,7 +910,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: true,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       IsSensitive: false
@@ -872,7 +926,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Id,
@@ -881,7 +936,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Name,
@@ -890,7 +946,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       IsSensitive: false
@@ -905,7 +962,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Audited,
@@ -914,7 +972,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Code,
@@ -923,7 +982,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Discount,
@@ -932,7 +992,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Grade,
@@ -941,7 +1002,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Id,
@@ -950,7 +1012,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Lines,
@@ -959,7 +1022,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: true,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Placed,
@@ -968,7 +1032,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Priorities,
@@ -977,7 +1042,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: true,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Quantity,
@@ -986,7 +1052,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Region,
@@ -995,7 +1062,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Scores,
@@ -1004,7 +1072,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: true,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Sku,
@@ -1013,7 +1082,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Tags,
@@ -1022,7 +1092,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: true,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       IsSensitive: false
@@ -1037,7 +1108,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Order,
@@ -1046,7 +1118,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: true,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: OrderId,
@@ -1055,7 +1128,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Price,
@@ -1064,7 +1138,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Quantity,
@@ -1073,7 +1148,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Sku,
@@ -1082,7 +1158,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Units,
@@ -1091,7 +1168,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       IsSensitive: false
@@ -1106,7 +1184,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Name,
@@ -1115,7 +1194,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Published,
@@ -1124,7 +1204,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       IsSensitive: false
@@ -1139,7 +1220,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       Base: MachineQueryModel,
@@ -1155,7 +1237,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       Base: HolidayQueryModel,
@@ -1171,7 +1254,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Total,
@@ -1180,7 +1264,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       Obsolete: ,
@@ -1196,7 +1281,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Name,
@@ -1205,7 +1291,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       IsSensitive: false
@@ -1214,13 +1301,25 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Model: ShiftQueryModel,
       Members: [
         {
+          Name: CanRenameShift,
+          TypeDisplay: bool,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: true,
+          Command: RenameShift
+        },
+        {
           Name: Day,
           TypeDisplay: global::System.DateOnly,
           NeedsNullDefault: false,
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Duration,
@@ -1229,7 +1328,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Id,
@@ -1238,7 +1338,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Name,
@@ -1247,7 +1348,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Signature,
@@ -1256,7 +1358,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Stamped,
@@ -1265,7 +1368,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Start,
@@ -1274,7 +1378,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       IsSensitive: false
@@ -1289,7 +1394,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       Base: ContractQueryModel,
@@ -1308,7 +1414,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: IsOpen,
@@ -1317,7 +1424,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Name,
@@ -1326,7 +1434,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         },
         {
           Name: Token,
@@ -1335,7 +1444,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       IsSensitive: false
@@ -1350,7 +1460,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       Base: AssetQueryModel,
@@ -1366,7 +1477,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: true
+          IsSensitive: true,
+          IsCapability: false
         },
         {
           Name: Room,
@@ -1375,7 +1487,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       IsSensitive: false
@@ -1390,7 +1503,8 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
           IsNavigation: false,
           IsCollection: false,
           IsAttachment: false,
-          IsSensitive: false
+          IsSensitive: false,
+          IsCapability: false
         }
       ],
       Base: FleetQueryModel,
@@ -1444,13 +1558,114 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Underlying: int
     }
   ],
+  Commands: [
+    {
+      Name: CreateShift,
+      Properties: [
+        {
+          Name: Day,
+          TypeDisplay: global::System.DateOnly,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Perks,
+          TypeDisplay: global::System.Collections.Generic.IReadOnlyList<Perks>,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        }
+      ],
+      Result: {
+        Name: ShiftCreated,
+        Properties: [
+          {
+            Name: Id,
+            TypeDisplay: int,
+            NeedsNullDefault: false,
+            IsNavigation: false,
+            IsCollection: false,
+            IsAttachment: false,
+            IsSensitive: false,
+            IsCapability: false
+          }
+        ]
+      }
+    },
+    {
+      Name: RenameShift,
+      Properties: [
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        }
+      ],
+      Target: Shift,
+      Keys: [
+        Id
+      ],
+      Obsolete: Shifts are renamed through the rota.
+    },
+    {
+      Name: SealContract,
+      Properties: [
+        {
+          Name: ContractId,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        }
+      ],
+      Target: Contract,
+      Keys: [
+        ContractId
+      ]
+    }
+  ],
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: v18ww6qgOkR4k_FE
+  SchemaStamp: _iDxyfe9QHEMpW7p
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L1145' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L1356' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names, member names with the exact C# type spelling the source generator would emit, and the re-emitted enums. It carries **no** policies, resolvers, connection details, or CLR internals.

@@ -117,6 +117,23 @@ thead {
     margin-right: 0.5rem;
 }
 
+/* The commands page: a row's buttons on one line, and the outcome of the last command under the table. */
+#employees .actions {
+    white-space: nowrap;
+}
+
+#employees .actions button {
+    margin-right: 0.3rem;
+}
+
+#create {
+    margin-bottom: 0.5rem;
+}
+
+.command-status {
+    min-height: 1.5em;
+}
+
 #blazor-error-ui {
     display: none;
     position: fixed;

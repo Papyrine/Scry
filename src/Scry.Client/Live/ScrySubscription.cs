@@ -8,7 +8,8 @@ namespace Scry;
 /// <para>
 /// Answers are delivered one at a time, in order, and the next is not read until the callback for the
 /// last has returned — so a callback that is slow is never handed a backlog, only the latest state
-/// when it is ready for one.
+/// when it is ready for one. State changes take their places in the same line, in the order they
+/// happened, whatever the context does with what is posted to it.
 /// </para>
 /// <para>
 /// A subscription made where there is a <see cref="SynchronizationContext"/> — a WPF or Windows Forms
@@ -25,6 +26,12 @@ public sealed class ScrySubscription :
     Lock gate = new();
     bool stopped;
 
+    // The delivery handed out last, which the next waits for. A UI thread runs what is posted to it in
+    // order, but the default context runs each post on the pool, and so does at least one test
+    // runner's, so the order is kept here rather than left to the context.
+    Task delivering = Task.CompletedTask;
+    Lock ordering = new();
+
     ScrySubscription(SynchronizationContext? context) =>
         this.context = context;
 
@@ -37,7 +44,10 @@ public sealed class ScrySubscription :
     /// </summary>
     public Exception? Error { get; private set; }
 
-    /// <summary>Raised when <see cref="State"/> changes, where answers are delivered.</summary>
+    /// <summary>
+    /// Raised when <see cref="State"/> changes, where answers are delivered and in order with them —
+    /// the change that ends the subscription always last.
+    /// </summary>
     public event Action<ScrySubscriptionState>? StateChanged;
 
     /// <summary>
@@ -88,7 +98,8 @@ public sealed class ScrySubscription :
         }
     }
 
-    // The pump reports from wherever it is running, and a state change is delivered like an answer.
+    // The pump reports from wherever it is running, and a state change is delivered like an answer, in
+    // its place among them.
     void Report(ScrySubscriptionState state)
     {
         if (State == state)
@@ -100,8 +111,8 @@ public sealed class ScrySubscription :
         _ = Quietly(state);
     }
 
-    // Not awaited by the pump, which has an answer to get on with — so a handler that throws is
-    // caught here rather than left on a task nobody looks at.
+    // Not awaited by the pump, which has an answer to get on with — the next delivery waits for it
+    // instead — so a handler that throws is caught here rather than left on a task nobody looks at.
     async Task Quietly(ScrySubscriptionState state)
     {
         try
@@ -140,11 +151,45 @@ public sealed class ScrySubscription :
     }
 
     /// <summary>
+    /// Runs a callback where answers are delivered, once everything handed out before it has been, and
+    /// completes when it has. The call itself only takes a place in line and never waits for what is
+    /// ahead, so a state change reported while a handler runs does not hold up the pump. With nothing
+    /// ahead and no context, the callback has run by the time this returns, as it always had.
+    /// </summary>
+    Task Deliver(Func<Task> callback)
+    {
+        var released = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Task ahead;
+        lock (ordering)
+        {
+            ahead = delivering;
+            delivering = released.Task;
+        }
+
+        return After(ahead, callback, released);
+    }
+
+    // What is ahead never faults — each place is released however its callback ended — so a callback
+    // that threw fails its own delivery and nobody else's.
+    async Task After(Task ahead, Func<Task> callback, TaskCompletionSource released)
+    {
+        try
+        {
+            await ahead.ConfigureAwait(false);
+            await DeliverNow(callback).ConfigureAwait(false);
+        }
+        finally
+        {
+            released.SetResult();
+        }
+    }
+
+    /// <summary>
     /// Runs a callback where answers are delivered, and completes when it has. Held under the same
     /// gate <see cref="Dispose"/> takes, which is what makes "nothing is delivered after Dispose
     /// returns" true rather than likely.
     /// </summary>
-    Task Deliver(Func<Task> callback)
+    Task DeliverNow(Func<Task> callback)
     {
         if (context is null)
         {

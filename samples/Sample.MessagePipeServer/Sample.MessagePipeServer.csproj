@@ -19,5 +19,6 @@
     <ProjectReference Include="..\..\src\Scry.Server\Scry.Server.csproj" />
     <ProjectReference Include="..\..\src\Scry.Server.MessagePipe\Scry.Server.MessagePipe.csproj" />
     <ProjectReference Include="..\Sample.Model\Sample.Model.csproj" />
+    <ProjectReference Include="..\Sample.CommandHandlers\Sample.CommandHandlers.csproj" />
   </ItemGroup>
 </Project>

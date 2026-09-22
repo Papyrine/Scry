@@ -21,6 +21,13 @@ public enum ScrySidecarKind
     /// </summary>
     Subscription,
 
+    /// <summary>
+    /// A command sent or asked for again by its id, or the commands this caller may send. A command
+    /// answered at once is recorded whole; one answered as a stream of receipts is recorded to its
+    /// headers, since the stream is read by the client above.
+    /// </summary>
+    Command,
+
     /// <summary>Traffic on the same HttpClient that is not a Scry exchange. Metadata only.</summary>
     Other
 }

@@ -1,5 +1,5 @@
 ﻿[TestFixture]
-public class GeneratorTests
+public partial class GeneratorTests
 {
     [Test]
     public Task EntitiesViewPocoAndEnum()

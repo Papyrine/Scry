@@ -140,6 +140,7 @@ The predicate is evaluated once, when the panel first loads. An answer that shou
 - **Queries and batches** are recorded whole: the decoded request, the pretty-printed response, and both header sets. Their bodies are safe to buffer because the client buffers them itself.
 - **Streams** are recorded as status and headers only. A streamed result is meant to be read a row at a time; buffering it to display it would stall the read.
 - **Live queries** are recorded as one entry each, however many connections it took to hold one open, with every event that came back. A [live query](live-queries.md)'s response has no end to buffer up to, so it is watched as it flows instead — see [Live queries](#live-queries) below.
+- **Commands** are recorded as one entry each, named by the command: the request, and the receipt where the command was answered at once. One answered as a stream of receipts is recorded to its headers, since the client reads the stream above the handler, and asking for it again by its id folds into the same row. Its state — sent, pending, completed, failed, unknown — is what the client reported, where the store observes the client. The capabilities read is listed as a command exchange about no one command.
 - **Attachments** are recorded as status, headers, and the *request* body. The bytes themselves are never cached — the **Download** action re-sends the captured request and hands the fresh bytes to the browser, so the server's policies answer every download anew. Supply `DownloadClient` when that re-send needs the app's handler pipeline (an auth header, say).
 - **Sensitive constants are shown.** A query comparing a `[Sensitive]` member against a constant travels as a POST body, and the panel shows bodies — the sidecar is a devtools-grade view of the app's own traffic, so wire it only in builds where opening the network tab would be equally acceptable.
 
@@ -173,6 +174,8 @@ store.Observe(client);
 ```
 
 `Observe` mirrors what the client itself knows about its live queries: the states, the answers, and which attempt it is on. For a live query carried on a hub that is the whole account — there are no connections, no event identifiers and no sizes, and the row says so. For one over HTTP it is the authoritative half of an account the wire already fills in: without it a live query is still listed, still folds its reconnects into one row and still shows every event, but the gap between two connections reads as `retry` without the client having confirmed it is really going to ask again.
+
+`Observe` lists the client's [commands](commands.md) the same way, from `CommandActivity`: a command sent over a hub never reaches the handler, and one sent over HTTP gets the client's own account of its outcome on the row the exchange added. The two are one row, keyed by the command's id.
 
 It is separate from `AddScrySidecar` because the app builds its own `ScryClient` — registration has nothing to attach it to.
 

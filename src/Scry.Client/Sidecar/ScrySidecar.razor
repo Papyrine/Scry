@@ -75,7 +75,14 @@
                                     <span class="scry-sidecar-kind">@entry.Kind</span>
                                     <span>@entry.Method</span>
                                     <span class="scry-sidecar-name">@Name(entry)</span>
-                                    <span class="@(entry.Error is null ? null : "scry-sidecar-status-error")">@(entry.Status?.ToString() ?? "—")</span>
+                                    @if (entry.Command is { } command)
+                                    {
+                                        <span class="@CommandClass(command)" data-testid="sidecar-command-state">@CommandState(command)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="@(entry.Error is null ? null : "scry-sidecar-status-error")">@(entry.Status?.ToString() ?? "—")</span>
+                                    }
                                     <span class="scry-sidecar-duration">@entry.Duration.TotalMilliseconds.ToString("0") ms</span>
                                 </div>
                             }
@@ -156,6 +163,16 @@
                         }
                         else
                         {
+                            @if (selected.Command is { } sent)
+                            {
+                                <h3>Command</h3>
+                                <p class="scry-sidecar-note" data-testid="sidecar-command-summary">@Summary(sent)</p>
+                                @if (sent.ResultJson is { } result)
+                                {
+                                    <h3>Result</h3>
+                                    <pre data-testid="sidecar-command-result">@result</pre>
+                                }
+                            }
                             @if (selected.Session is { } live)
                             {
                                 <h3>Live query</h3>
@@ -199,7 +216,8 @@
                                     <h3>Response</h3>
                                     <pre data-testid="sidecar-response">@response</pre>
                                 }
-                                else if (selected.Kind is ScrySidecarKind.Stream or ScrySidecarKind.Attachment)
+                                else if (selected.Kind is ScrySidecarKind.Stream or ScrySidecarKind.Attachment ||
+                                         selected is {Kind: ScrySidecarKind.Command, Status: not null})
                                 {
                                     <p class="scry-sidecar-note">Body not captured — @NotCaptured(selected.Kind).</p>
                                 }

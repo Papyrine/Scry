@@ -5,6 +5,10 @@ namespace Sample.WebClient.Pages.Live;
 /// show. Neither write tells the page anything — each page hears about it the way any client would,
 /// from the server, because the rows its query reads changed.
 /// </summary>
+/// <remarks>
+/// The reprice is a command, sent over whichever transport the switch selects: over the hub, the
+/// command and every live query share the one connection.
+/// </remarks>
 public partial class LiveChrome
 {
     string? error;
@@ -17,9 +21,26 @@ public partial class LiveChrome
     string Class(string tab) =>
         tab == Active ? "active" : "";
 
-    /// <summary>Saved through the server's context, which its change interceptor reports.</summary>
-    Task Reprice() =>
-        Post("/api/orders/1/reprice");
+    /// <summary>
+    /// The <c>RepriceOrder</c> command, which the server's handler saves through its context, and its
+    /// change interceptor reports.
+    /// </summary>
+    async Task Reprice()
+    {
+        error = null;
+        try
+        {
+            var outcome = await Transport.Query.Commands.RepriceOrder(new() {Id = 1});
+            if (outcome.Status is ScryCommandStatus.Failed or ScryCommandStatus.Unknown)
+            {
+                error = outcome.Error;
+            }
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+        }
+    }
 
     /// <summary>
     /// A bulk update, which no interceptor can see. The server says what it wrote instead.

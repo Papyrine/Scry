@@ -3,7 +3,7 @@
 /// generator and the server derive the same surface from the same attributes; this is the runtime
 /// source of truth that every incoming query is validated against.
 /// </summary>
-sealed class Schema
+sealed partial class Schema
 {
     Dictionary<string, ScrySource> sources = new(StringComparer.Ordinal);
     Dictionary<Type, TypeMeta> types = [];
@@ -164,11 +164,12 @@ sealed class Schema
     /// </summary>
     public ScryIntrospection Describe(ScryOptions options)
     {
-        var (sourceInfos, typeInfos, enumInfos) = DescribeSurface();
+        var (sourceInfos, typeInfos, enumInfos, commandInfos) = DescribeSurface();
         return new(ScryIntrospection.CurrentVersion, options.MaxPageSize, sourceInfos, typeInfos, enumInfos)
         {
             SchemaStamp = Stamp,
-            QueryUrlLimit = options.QueryUrlLimit
+            QueryUrlLimit = options.QueryUrlLimit,
+            Commands = commandInfos
         };
     }
 
@@ -185,11 +186,41 @@ sealed class Schema
         // Deprecation is deliberately not hashed, matching the generator: [Obsolete] leaves the
         // queryable surface exactly as it was, and hashing it would report every deployed client as
         // stale over what is only a note to whoever next rebuilds one.
-        var (sourceInfos, typeInfos, enumInfos) = DescribeSurface();
+        var (sourceInfos, typeInfos, enumInfos, commandInfos) = DescribeSurface();
         return SchemaStamp.Compute(
             sourceInfos.Select(_ => (_.Name, _.Kind, _.Model)).ToList(),
             typeInfos.Select(_ => (_.Model, _.Base, StampMembers(_))).ToList(),
-            enumInfos.Select(_ => (_.Name, _.Underlying, _.IsFlags, StampEnumMembers(_))).ToList());
+            enumInfos.Select(_ => (_.Name, _.Underlying, _.IsFlags, StampEnumMembers(_))).ToList(),
+            commandInfos.Select(_ => (_.Name, _.Target, StampCommandMembers(_))).ToList(),
+            commandInfos
+                .Select(_ => _.Result)
+                .OfType<ScryResultInfo>()
+                .DistinctBy(_ => _.Name, StringComparer.Ordinal)
+                .Select(_ => (_.Name, _.Properties.Select(property => (property.Name, property.TypeDisplay)).ToList()))
+                .ToList());
+    }
+
+    /// <summary>
+    /// The members a command contributes to the stamp: its payload, plus synthetic members naming the
+    /// payload properties its target's key is bound to and the class it answers with. Mirrors
+    /// <c>ScryGenerator.StampCommandMembers</c>, byte for byte.
+    /// </summary>
+    static List<(string, string)> StampCommandMembers(ScryCommandInfo command)
+    {
+        var members = command.Properties
+            .Select(_ => (_.Name, _.TypeDisplay))
+            .ToList();
+        if (command.Keys is {Count: > 0} keys)
+        {
+            members.Add(("~keys", string.Join(" ", keys)));
+        }
+
+        if (command.Result is { } result)
+        {
+            members.Add(("~result", result.Name));
+        }
+
+        return members;
     }
 
     static List<(string Name, string Value)> StampEnumMembers(ScryEnumInfo enumeration) =>
@@ -247,7 +278,7 @@ sealed class Schema
         return string.Join(' ', names);
     }
 
-    (List<ScrySourceInfo> Sources, List<ScryTypeInfo> Types, List<ScryEnumInfo> Enums) DescribeSurface()
+    (List<ScrySourceInfo> Sources, List<ScryTypeInfo> Types, List<ScryEnumInfo> Enums, List<ScryCommandInfo> Commands) DescribeSurface()
     {
         var enums = new Dictionary<string, ScryEnumInfo>(StringComparer.Ordinal);
 
@@ -280,11 +311,15 @@ sealed class Schema
             })
             .ToList();
 
+        // Before the enums are listed: an enum a command's payload or result names is re-emitted to
+        // clients as surely as one a query model does.
+        var commandInfos = DescribeCommands(enums);
+
         var enumInfos = enums.Values
             .OrderBy(_ => _.Name, StringComparer.Ordinal)
             .ToList();
 
-        return (sourceInfos, typeInfos, enumInfos);
+        return (sourceInfos, typeInfos, enumInfos, commandInfos);
     }
 
     // The members a type contributes itself: everything it exposes, less whatever its allow-listed
@@ -300,12 +335,25 @@ sealed class Schema
         return meta.Members.Values.Where(_ => !baseMeta.Members.ContainsKey(_.Name));
     }
 
-    static ScryMemberInfo DescribeMember(Member member, Dictionary<string, ScryEnumInfo> enums) =>
-        DescribeShape(member, enums) with
+    static ScryMemberInfo DescribeMember(Member member, Dictionary<string, ScryEnumInfo> enums)
+    {
+        // A capability is backed by no property, so it has no deprecation or sensitivity of its own to
+        // publish — only the command it answers for. Mirrors the generator's capability member.
+        if (member.Kind == MemberKind.Capability)
         {
-            Obsolete = ObsoleteOf(member.Property),
+            return new(member.Name, "bool", NeedsNullDefault: false, IsNavigation: false)
+            {
+                IsCapability = true,
+                Command = member.Command
+            };
+        }
+
+        return DescribeShape(member, enums) with
+        {
+            Obsolete = ObsoleteOf(member.ClrProperty),
             IsSensitive = member.Sensitive
         };
+    }
 
     static ScryMemberInfo DescribeShape(Member member, Dictionary<string, ScryEnumInfo> enums)
     {
@@ -481,6 +529,7 @@ sealed class Schema
         }
 
         EnsureSubscriptionOptions(options);
+        EnsureCommandOptions(options);
 
         var schema = new Schema();
         var found = new List<(Type Type, string Name, SourceKind Kind)>();
@@ -608,6 +657,11 @@ sealed class Schema
                     $"'{complex.Name}.{member.Name}' is an [Attachment] on a [QueryableComplex] type, which has no row of its own to fetch it from. Move it to the entity that owns the complex member.");
             }
         }
+
+        // Pass 2c: the commands, which need every source registered — a targeted one names its target's
+        // source and is bound to its key — and which add their capability members to the types above
+        // before anything describes, stamps, or walks them.
+        BuildCommands(schema, contextType, options);
 
         // Pass 3: register the previous names sources still answer to. Deferred until every current
         // name is known, so a previous name can never shadow a live source whatever the discovery order.
@@ -803,6 +857,7 @@ sealed class Schema
         }
 
         ValidateAttachmentKeys(model, contextType);
+        ValidateCommandKeys(model, contextType);
     }
 
     /// <summary>
@@ -907,9 +962,14 @@ sealed class Schema
             (optIns ??= []).Add("[QueryableComplex]");
         }
 
+        if (type.HasAttribute<CommandAttribute>(inherit: false))
+        {
+            (optIns ??= []).Add("[Command]");
+        }
+
         if (optIns is {Count: > 1})
         {
-            throw new($"'{type.Name}' carries {string.Join(" and ", optIns)}. A type opts in as exactly one of [Queryable], [QueryableView], [QueryablePoco], or [QueryableComplex].");
+            throw new($"'{type.Name}' carries {string.Join(" and ", optIns)}. A type opts in as exactly one of [Queryable], [QueryableView], [QueryablePoco], [QueryableComplex], or [Command].");
         }
     }
 
@@ -967,6 +1027,20 @@ sealed class Schema
         Positive(options.SubscriptionHeartbeat, nameof(options.SubscriptionHeartbeat), "It is how often an idle live query is sent a heartbeat.");
         Positive(options.SubscriptionLifetime, nameof(options.SubscriptionLifetime), "Null ends a live query only when its authentication ticket expires.");
         Positive(options.ChangeProbeInterval, nameof(options.ChangeProbeInterval), "It is how often the change probe is asked.");
+    }
+
+    // Checked whether or not commands are on, for the reason the subscription options are.
+    static void EnsureCommandOptions(ScryOptions options)
+    {
+        AtLeast(options.MaxPendingCommands, 0, nameof(options.MaxPendingCommands), "Zero maps no command route.");
+        AtLeast(options.MaxPendingCommandsPerCaller, 1, nameof(options.MaxPendingCommandsPerCaller), "It is how many commands one caller may have in flight.");
+        AtLeast(options.MaxCommandBytes, 1, nameof(options.MaxCommandBytes), "It is the largest command body read.");
+        if (options.CommandSyncWindow < TimeSpan.Zero)
+        {
+            throw new($"ScryOptions.{nameof(options.CommandSyncWindow)} must not be negative. Zero answers every command as pending.");
+        }
+
+        Positive(options.CommandRetention, nameof(options.CommandRetention), "It is how long a finished command's outcome is kept for a client asking again.");
     }
 
     static void AtLeast(int value, int least, string option, string what)
@@ -1078,7 +1152,7 @@ sealed class Schema
             }
 
             var parameter = Expression.Parameter(entity, "e");
-            var key = Expression.Lambda(Expression.Property(parameter, keys[0].Property), parameter);
+            var key = Expression.Lambda(Expression.Property(parameter, keys[0].ClrProperty), parameter);
 
             var registration = new CachedPolicyRegistration(entity, policy, options.CachedPolicyStore, options.MaxCachedPolicyKeys, options.MaxCachedPolicyRows);
             var adapter = typeof(CachedRowPolicyAdapter<,,>).MakeGenericType(entity, keys[0].Type, version.ReturnType);
@@ -1144,7 +1218,7 @@ sealed class Schema
             .ToList();
 
         var declared = candidates
-            .Where(_ => _.Property.HasAttribute<KeyAttribute>())
+            .Where(_ => _.ClrProperty.HasAttribute<KeyAttribute>())
             .OrderBy(_ => _.Name, StringComparer.Ordinal)
             .ToList();
         if (declared.Count > 0)
@@ -1428,7 +1502,7 @@ sealed class Schema
     static void RegisterMemberPreviousNames(TypeMeta meta, Member member)
     {
         var owner = meta.ClrType.Name;
-        foreach (var previous in PreviousNamesOf(member.Property))
+        foreach (var previous in PreviousNamesOf(member.ClrProperty))
         {
             EnsureNotBlank(previous, $"'{owner}.{member.Name}'");
 

@@ -91,6 +91,11 @@ flowchart TB
 See [docs/security.md](docs/security.md) for the full threat model.
 
 
+### Writes — commands
+
+Queries never write. Writes are [commands](docs/commands.md): a class in the model marked `[Command]`, generated into the client beside the query models and sent through `Query.Commands`. The server binds the payload into its own class, decides it with the command's policy — row by row, for a command that targets a row — and hands it to an in-process handler or a message bus. A command decided within a second answers at once; one that takes longer answers `Pending` and streams its outcome on the same response. What it wrote reaches every screen through the live queries that read it.
+
+
 ## Packages
 
 | Package | Purpose |
@@ -105,7 +110,10 @@ See [docs/security.md](docs/security.md) for the full threat model.
 | [Scry.Client.SignalR](https://nuget.org/packages/Scry.Client.SignalR/) | Opt-in: a `ScryClient` over a SignalR hub connection. |
 | [Scry.Server.Redis](https://nuget.org/packages/Scry.Server.Redis/) | Opt-in: carries live-query change notifications between server nodes over Redis pub/sub. |
 | [Scry.Server.MessagePipe](https://nuget.org/packages/Scry.Server.MessagePipe/) | Opt-in: the same over [MessagePipe](https://github.com/Cysharp/MessagePipe)'s distributed pub/sub. |
-| [Scry.Server.NServiceBus](https://nuget.org/packages/Scry.Server.NServiceBus/) | Opt-in: the same over [NServiceBus](https://docs.particular.net/nservicebus/), including what a worker endpoint's handlers save. |
+| [Scry.Server.NServiceBus](https://nuget.org/packages/Scry.Server.NServiceBus/) | Opt-in: the same over [NServiceBus](https://docs.particular.net/nservicebus/), including what a worker endpoint's handlers save — and [commands](docs/commands.md) carried to a worker and answered when it replies. |
+| [Scry.Server.MassTransit](https://nuget.org/packages/Scry.Server.MassTransit/) | Opt-in: [commands](docs/commands.md) carried over [MassTransit](https://masstransit.io/). |
+| [Scry.Server.Rebus](https://nuget.org/packages/Scry.Server.Rebus/) | Opt-in: [commands](docs/commands.md) carried over [Rebus](https://github.com/rebus-org/Rebus). |
+| [Scry.Server.Wolverine](https://nuget.org/packages/Scry.Server.Wolverine/) | Opt-in: [commands](docs/commands.md) carried over [Wolverine](https://wolverinefx.net/). |
 
 `Scry.SourceGenerator` is packed inside `Scry.Client` rather than published separately.
 
@@ -206,9 +214,14 @@ builder.Services
         // watches the database's change marker for everything it cannot see: a bulk update,
         // another node, a script run by hand.
         _.UseDeltaChanges<SampleContext>();
+
+        // Commands: the /commands page and the /live pages' Reprice. Off until a server says
+        // how many it will have in flight, which is also what maps the routes — see
+        // /docs/commands.md.
+        _.UseSampleCommands();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L38-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L44-L98' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddPocoSource` supplies the rows for a `[QueryablePoco]` type — see [POCO sources](docs/server.md#poco-sources).
@@ -218,7 +231,7 @@ builder.Services
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L105-L107' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L116-L118' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Point the client at the model by path — no reference:
@@ -245,6 +258,37 @@ employees = await Query
     .ToListAsync();
 ```
 <sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L48-L55' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+Then send a command, and read what came of it:
+
+<!-- snippet: consoleCommand -->
+<a id='snippet-consoleCommand'></a>
+```cs
+static async Task<int> Reprice(ScryQuery query, int id)
+{
+    var outcome = await query.Commands.RepriceOrder(new() {Id = id});
+    if (outcome.Status == ScryCommandStatus.Pending)
+    {
+        Console.WriteLine($"Order {id} is being repriced…");
+        outcome = await outcome.Completion;
+    }
+
+    switch (outcome.Status)
+    {
+        case ScryCommandStatus.Completed:
+            Console.WriteLine($"Order {id} repriced.");
+            return 0;
+        case ScryCommandStatus.Failed:
+            await Console.Error.WriteLineAsync($"Order {id} was not repriced: {outcome.Error}");
+            return 1;
+        default:
+            await Console.Error.WriteLineAsync($"Whether order {id} was repriced is unknown: {outcome.Error}");
+            return 1;
+    }
+}
+```
+<sup><a href='/samples/Sample.ConsoleClient/Program.cs#L108-L131' title='Snippet source file'>snippet source</a> | <a href='#snippet-consoleCommand' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -310,6 +354,62 @@ It is consumed as a stream (`await foreach`), with a callback, or as a plain `IO
 What tells one to run again is an EF `SaveChanges` interceptor, the host, the database's own change marker, and a poll beneath them all. Opt-in packages carry changes between server nodes over Redis, MessagePipe or NServiceBus, and serve the whole query surface over a SignalR hub. See [Live queries](docs/live-queries.md).
 
 
+## Commands
+
+A write is a class the model marks `[Command]`. The client sends it through the generated `Query.Commands`, and the server binds it into its own class, decides it with the command's policy and hands it to a handler:
+
+<!-- snippet: commandMessages -->
+<a id='snippet-commandMessages'></a>
+```cs
+/// <summary>Deletes one employee — an inactive one, by the sample's policy.</summary>
+[Command(typeof(Employee))]
+public class DeleteEmployee
+{
+    public int Id { get; set; }
+}
+
+/// <summary>Renames one employee. A name containing "slow" takes a while, to show a command going pending.</summary>
+[Command(typeof(Employee))]
+public class RenameEmployee
+{
+    public int Id { get; set; }
+
+    [StringLength(100, MinimumLength = 1)]
+    public string Name { get; set; } = "";
+}
+
+/// <summary>Deactivates or reactivates one employee: what makes a row deletable, and deletable again.</summary>
+[Command(typeof(Employee))]
+public class SetEmployeeActive
+{
+    public int Id { get; set; }
+    public bool Active { get; set; }
+}
+
+/// <summary>Hires an employee, answering with the new row's id.</summary>
+[Command(Result = typeof(EmployeeCreated))]
+public class CreateEmployee
+{
+    [StringLength(100, MinimumLength = 1)]
+    public string Name { get; set; } = "";
+
+    public int DepartmentId { get; set; }
+    public Status Status { get; set; }
+}
+
+public class EmployeeCreated
+{
+    public int Id { get; set; }
+}
+```
+<sup><a href='/samples/Sample.Model/Commands/EmployeeCommands.cs#L5-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-commandMessages' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+A targeted command adds a `Can{Command}` member to its target's query model, computed from the command's policy in the database, so a screen enables a row's button from the row itself — and inside a live query that is decided again on every answer. A command that takes longer than the server's sync window is answered `Pending`, followed to its end on the same response, and listed in a pending-work panel. What it wrote reaches the screen through the live queries that read it. Commands are off until a server sets `MaxPendingCommands`, and can be carried to a worker over NServiceBus, MassTransit, Rebus or Wolverine. See [Commands](docs/commands.md).
+
+<img src="samples/Sample.Tests/CommandUiTests.SampleCommands.verified.png" border="1" alt="The sample's commands page: a live table of employees, each row with Deactivate, Rename and Delete buttons, only the inactive row's Delete enabled, and a form to hire">
+
+
 ## Query explorer
 
 An opt-in, GraphiQL-style explorer ships in `Scry.Server.Explorer`. It runs Roslyn in the browser, giving real IntelliSense and diagnostics against the allow-listed schema, and shows exactly what goes on the wire:
@@ -340,6 +440,7 @@ A Blazor client has a companion: a [debug sidecar](docs/sidecar.md) that opens o
 - [Attachments](docs/attachments.md)
 - [Batching](docs/batching.md)
 - [Live queries](docs/live-queries.md)
+- [Commands](docs/commands.md)
 - [Observability](docs/observability.md)
 - [Caching and 304](docs/caching.md)
 - [Performance](docs/performance.md)

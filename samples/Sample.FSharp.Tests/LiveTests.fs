@@ -1,9 +1,12 @@
 namespace Sample.FSharp.Tests
 
 open System
+open System.Linq
 open System.Threading
 open System.Threading.Tasks
 open NUnit.Framework
+open Scry
+open Scry.Generated
 open Sample.FSharp
 
 /// A live query from F#: the same LINQ, kept answered. A database of its own, because these write.
@@ -44,7 +47,11 @@ type LiveTests() =
             Assert.That(first, Is.True, "The first answer never arrived.")
             let before = lock answers (fun () -> answers[0])
 
-            do! server.Rename(before.Head, "Aaron Renamed")
+            // Written the way a client writes: a command, whose handler's save reaches the live query
+            // through the server's change interceptor.
+            let! rows = server.Query.Employee.Where(fun e -> e.Name = before.Head).Select(fun e -> {| Id = e.Id |}).ToListAsync()
+            let! renamed = Commands.rename server.Query rows[0].Id "Aaron Renamed"
+            Assert.That(renamed.Status, Is.EqualTo ScryCommandStatus.Completed)
 
             let! second = heard.WaitAsync patience
             Assert.That(second, Is.True, "The change never arrived.")

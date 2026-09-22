@@ -43,6 +43,23 @@ public sealed record ScryAuditEntry(
     /// </remarks>
     public QueryBatchRequest? Batch { get; init; }
 
+    /// <summary>
+    /// The command sent, when the entry describes one rather than a query: its name, id and payload as
+    /// the client sent them. Null for a query.
+    /// </summary>
+    /// <remarks>
+    /// A command answered pending is recorded twice: once when it is answered, with
+    /// <see cref="CommandStatus"/> <see cref="Scry.CommandStatus.Pending"/>, and once when it finishes —
+    /// from a service scope of its own, since the request that sent it is long gone.
+    /// </remarks>
+    public CommandRequest? Command { get; init; }
+
+    /// <summary>
+    /// Where the command stood when this entry was written: pending, completed, or failed. Null for a
+    /// command refused before it was accepted, and for a query.
+    /// </summary>
+    public CommandStatus? CommandStatus { get; init; }
+
     /// <summary>The result shape, when the query succeeded; null when it never produced one.</summary>
     public ResultKind? Kind { get; init; }
 
