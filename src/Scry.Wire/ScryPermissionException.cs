@@ -13,6 +13,9 @@ namespace Scry;
 public sealed class ScryPermissionException(string message) :
     Exception(message)
 {
-    /// <summary>The only message this exception ever carries, on either side of the wire.</summary>
+    /// <summary>The message a denied query carries, on either side of the wire.</summary>
     public const string DeniedMessage = "The query was denied by a server policy.";
+
+    /// <summary>The message a command denied outright carries — the caller may not send it at all.</summary>
+    public const string CommandDeniedMessage = "The command was denied by a server policy.";
 }

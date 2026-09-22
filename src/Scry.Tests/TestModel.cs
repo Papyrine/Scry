@@ -597,6 +597,61 @@ public class SignedContract : Contract
 }
 
 /// <summary>
+/// A targeted command on <see cref="Contract"/>, renamed on the wire, whose signer the server fills
+/// rather than the client. Its policy refuses, row by row, the contract already sealed and any contract
+/// with no name — and every row where a <see cref="CommandGate"/> in the call's services is shut.
+/// </summary>
+[Command(typeof(Contract), Name = "SealContract", Policy = typeof(SealPolicy))]
+public class Seal
+{
+    public int ContractId { get; set; }
+
+    [CommandIgnore]
+    public string SealedBy { get; set; } = "";
+}
+
+/// <summary>A switch a test puts in the call's services to deny a command outright.</summary>
+public sealed class CommandGate
+{
+    public bool Open { get; init; } = true;
+}
+
+public sealed class SealPolicy :
+    ICommandPolicy<Seal, Contract>
+{
+    public bool Allow(ScryPolicyContext context) =>
+        context.Services.GetService<CommandGate>()?.Open ?? true;
+
+    // A name is what a live test changes to flip a row's capability; the sealed id is a literal, which
+    // the server binds as a parameter rather than writing into the statement.
+    public Expression<Func<Contract, bool>> Rows(ScryPolicyContext context) =>
+        _ => _.Id != UnsealedContractsPolicy.SealedId && _.Name != "";
+}
+
+/// <summary>A targeted command with no policy, deprecated: its capability reads true on every row.</summary>
+[Command(typeof(Shift))]
+[Obsolete("Shifts are renamed through the rota.")]
+public class RenameShift
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+}
+
+/// <summary>An untargeted command answering with a result, carrying an enum list and a date.</summary>
+[Command(Result = typeof(ShiftCreated))]
+public class CreateShift
+{
+    public string Name { get; set; } = "";
+    public Date Day { get; set; }
+    public List<Perks> Perks { get; set; } = [];
+}
+
+public class ShiftCreated
+{
+    public int Id { get; set; }
+}
+
+/// <summary>
 /// <see cref="Contract"/>'s attachment check: everything but the sealed contract, whose document is
 /// refused however the row is reached.
 /// </summary>

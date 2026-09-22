@@ -22,6 +22,8 @@
     <ProjectReference Include="..\src\Scry.Server.SignalR\Scry.Server.SignalR.csproj" />
     <ProjectReference Include="..\src\Scry.Client.SignalR\Scry.Client.SignalR.csproj" />
     <ProjectReference Include="..\samples\Sample.Model\Sample.Model.csproj" />
+    <!-- The sample's command handlers, which CommandRoundTripTests hosts as every sample server does. -->
+    <ProjectReference Include="..\samples\Sample.CommandHandlers\Sample.CommandHandlers.csproj" />
   </ItemGroup>
 
   <!--

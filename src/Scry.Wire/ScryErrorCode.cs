@@ -70,5 +70,21 @@ public enum ScryErrorCode
     /// as many as it allows. Nothing about the query was wrong, so asking again later is the remedy —
     /// the one refusal here that is worth retrying unchanged.
     /// </summary>
-    SubscriptionLimit
+    SubscriptionLimit,
+
+    /// <summary>
+    /// What a command was sent against is not there for this caller — absent, hidden by a policy, or
+    /// denied row by row, all answered alike — or a command asked for again by its id is not one this
+    /// server holds for this caller.
+    /// </summary>
+    NotFound,
+
+    /// <summary>The body was larger than the server reads, so it was refused before being read.</summary>
+    PayloadTooLarge,
+
+    /// <summary>
+    /// A command was refused because the server, or this caller's share of it, already has as many in
+    /// flight as it allows. Nothing ran, so sending it again later is safe.
+    /// </summary>
+    CommandLimit
 }

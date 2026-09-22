@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <PackageReadmeFile>nuget-readme.md</PackageReadmeFile>
-    <Description>Carries Scry change notifications over NServiceBus, so what a message handler in another process saves re-asks the live queries that read it.</Description>
+    <Description>Scry over NServiceBus: change notifications, so what a message handler in another process saves re-asks the live queries that read it, and commands, carried to the workers that handle them and answered when they reply.</Description>
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Scry.Backplane.Tests" Key="$(ScryPublicKey)" />

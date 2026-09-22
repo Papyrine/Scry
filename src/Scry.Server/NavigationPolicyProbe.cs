@@ -113,7 +113,7 @@ static class NavigationPolicyProbe
             return correlated;
         }
 
-        Expression leaf = Expression.Property(correlated, scalar.Property);
+        Expression leaf = Expression.Property(correlated, scalar.ClrProperty);
         if (leaf.Type.IsValueType &&
             Nullable.GetUnderlyingType(leaf.Type) is null)
         {

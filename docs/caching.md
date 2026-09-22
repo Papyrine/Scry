@@ -121,9 +121,14 @@ builder.Services
         // watches the database's change marker for everything it cannot see: a bulk update,
         // another node, a script run by hand.
         _.UseDeltaChanges<SampleContext>();
+
+        // Commands: the /commands page and the /live pages' Reprice. Off until a server says
+        // how many it will have in flight, which is also what maps the routes — see
+        // /docs/commands.md.
+        _.UseSampleCommands();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L38-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L44-L98' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `QueryFreshness` is what the rows are current as of. Null — the default — writes no `ETag` and answers nothing conditionally, so a server that never sets it behaves exactly as it did before any of this existed. Returning null from it skips one request rather than turning the feature off, so a source that cannot answer right now degrades to a full response.
@@ -333,6 +338,8 @@ A URL-borne query reads the freshness token before doing anything else. That rea
 ## The sharp edges
 
 **A write is not visible instantly.** On SQL Server the log position Delta reads trails a committed transaction — a couple of hundred milliseconds on LocalDB. Inside that window a client that has written can still be told its cached copy is current. A client that needs read-after-write sends `Cache-Control: no-cache`, which skips the comparison and re-executes; that is the standard escape and it is honoured. Beyond it, this suits data whose update frequency is low relative to reads, which is the assumption Delta states outright.
+
+**A command's write is a write like any other.** What a [command](commands.md) saved moves the freshness token as any save does, so a repeat of a query it affected re-executes once the token moves — subject to the same lag. A screen that reads its own write the moment the outcome arrives either sends `no-cache` or reads it through a [live query](live-queries.md), which hears of the save at once and never goes through a conditional GET at all. A command's own routes are never answered conditionally: a receipt and a caller's capabilities are sent `no-store`, and the sample's handler keeps only URLs carrying a query.
 
 **One token invalidates everything.** A write to anything at all moves the freshness token, so it empties the whole cache rather than the entries that write affected. Correct, and the reason the trade collapses on a write-heavy database.
 

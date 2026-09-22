@@ -120,7 +120,7 @@ static async Task WatchOrders(ScryQuery query)
     }
 }
 ```
-<sup><a href='/samples/Sample.ConsoleClient/Program.cs#L63-L96' title='Snippet source file'>snippet source</a> | <a href='#snippet-consoleLive' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.ConsoleClient/Program.cs#L70-L103' title='Snippet source file'>snippet source</a> | <a href='#snippet-consoleLive' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -199,7 +199,7 @@ void OnLiveChanged()
         .Employee
         .Where(_ => _.Active)
         .OrderBy(_ => _.Name)
-        .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
+        .Select(_ => new EmployeeRow(_.Id, _.Name, _.Status, _.Manager!.Name, _.Department!.Name))
         .Live()
         .Subscribe(
             rows =>
@@ -210,7 +210,7 @@ void OnLiveChanged()
             exception => status.Text = $"The live query ended: {exception.Message}");
 }
 ```
-<sup><a href='/samples/Sample.WinFormsClient/MainForm.cs#L106-L132' title='Snippet source file'>snippet source</a> | <a href='#snippet-winFormsLive' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WinFormsClient/MainForm.cs#L153-L179' title='Snippet source file'>snippet source</a> | <a href='#snippet-winFormsLive' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A callback that awaits has an overload of its own, `Subscribe(Func<T, Task>)`, so that `async rows => …` is awaited before the next answer is read. Bound to the `Action` form it would be an `async void` whose failures go nowhere.
@@ -285,7 +285,7 @@ void OnLiveChanged(object sender, RoutedEventArgs args)
         .Employee
         .Where(_ => _.Active)
         .OrderBy(_ => _.Name)
-        .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
+        .Select(_ => new EmployeeRow(_.Id, _.Name, _.Status, _.Manager!.Name, _.Department!.Name))
         .Live()
         .AsObservable()
         .ObserveOn(SynchronizationContext.Current!)
@@ -298,7 +298,7 @@ void OnLiveChanged(object sender, RoutedEventArgs args)
             exception => StatusText.Text = $"The live query ended: {exception.Message}");
 }
 ```
-<sup><a href='/samples/Sample.WpfClient/MainWindow.xaml.cs#L64-L92' title='Snippet source file'>snippet source</a> | <a href='#snippet-wpfLive' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WpfClient/MainWindow.xaml.cs#L78-L106' title='Snippet source file'>snippet source</a> | <a href='#snippet-wpfLive' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 F# needs no package at all. `FSharp.Core` has an `Observable` module of its own over the same interface:
@@ -360,7 +360,7 @@ _.MaxSubscriptions = 100;
 // another node, a script run by hand.
 _.UseDeltaChanges<SampleContext>();
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L76-L85' title='Snippet source file'>snippet source</a> | <a href='#snippet-liveQueryRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L82-L91' title='Snippet source file'>snippet source</a> | <a href='#snippet-liveQueryRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The route is `POST {pattern}/subscribe`, mapped inside `MapScry` beside the rest, so whatever authorization convention guards a query guards the stream of its answers.
@@ -379,20 +379,23 @@ The route is `POST {pattern}/subscribe`, mapped inside `MapScry` beside the rest
 public int MaxSubscriptions { get; set; }
 
 /// <summary>
-/// How many of those one caller may hold, where <see cref="SubscriptionCaller"/> can say who is
-/// asking. Default 20. One past it is answered <c>429</c>.
+/// How many of those one caller may hold, where <see cref="Caller"/> can say who is asking.
+/// Default 20. One past it is answered <c>429</c>.
 /// </summary>
 public int MaxSubscriptionsPerCaller { get; set; } = 20;
 
 /// <summary>
-/// Who a live query is counted against. The authenticated name by default; null — an anonymous
-/// caller — is counted against nobody, so only <see cref="MaxSubscriptions"/> bounds it.
+/// Who is asking: what a live query and a pending command are counted against, what a command is
+/// handed as its caller and audited under, and whose a pending command's outcome is. The
+/// authenticated name by default; null — an anonymous caller — is counted against nobody, so only
+/// the server-wide limits bound it.
 /// </summary>
 /// <remarks>
 /// Read from the authenticated principal or something derived from it, never from a header: a
-/// caller that names itself names somebody new each time, and is bounded by nothing.
+/// caller that names itself names somebody new each time, is bounded by nothing, and could claim
+/// somebody else's command.
 /// </remarks>
-public Func<HttpContext, string?> SubscriptionCaller { get; set; } = _ => _.User.Identity?.Name;
+public Func<HttpContext, string?> Caller { get; set; } = _ => _.User.Identity?.Name;
 
 /// <summary>
 /// The largest answer a live query may hold, in bytes. Default 1,048,576 (1 MB). An answer is
@@ -459,7 +462,7 @@ public Func<IServiceProvider, Cancel, ValueTask<string?>>? ChangeProbe { get; se
 /// <summary>How often <see cref="ChangeProbe"/> is asked. Default one second.</summary>
 public TimeSpan ChangeProbeInterval { get; set; } = TimeSpan.FromSeconds(1);
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L153-L244' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsSubscriptions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L155-L249' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsSubscriptions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -498,7 +501,7 @@ app.MapPost(
         return Results.NoContent();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L180-L193' title='Snippet source file'>snippet source</a> | <a href='#snippet-changesNotify' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L170-L183' title='Snippet source file'>snippet source</a> | <a href='#snippet-changesNotify' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Invalidating a [cached policy](policies.md) reports a change too. No row was written, but which rows a caller may see is part of what a live query answers.
@@ -562,6 +565,13 @@ public static ScryOptions UseDeltaChanges<TContext>(this ScryOptions options)
 A reported change does not run every live query. Each one listens for the entities its last run read — read off the query as it ran, so a table only a row policy names counts as much as one the client named. A view, a POCO source, or anything else whose rows cannot be traced to a table listens for everything.
 
 Changes arriving close together are not queued. `SubscriptionThrottle` is the least time between two runs of one live query, and whatever arrives inside it is answered by one run when the time is up. `MaxConcurrentSubscriptionRuns` bounds how many live queries are at the database at once, which is what turns one write making thousands of them due into a queue.
+
+
+## Writes made through commands
+
+A [command](commands.md)'s handler saves through the host's own context, so its save is reported by the interceptor like any other — the live query hears of it because the rows it reads changed, not because anything told it about the command. A targeted command also reports its target when it completes, which covers a handler that writes in bulk and a worker that reports nothing; where both report, the live query runs once. The sample's Reprice button is a command, sent over whichever transport the page's switch selects.
+
+The command's outcome and the live query's next answer arrive in no set order. A screen takes its status from the outcome and its rows from the live query.
 
 
 ## More than one server
@@ -651,12 +661,14 @@ builder.Services.AddDbContext<SampleContext>(
         .AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>()));
 
 // What each message's handlers saved is published once they are done, through that message's
-// own context — so it leaves only if the handler's work was kept.
+// own context — so it leaves only if the handler's work was kept. A message a Scry server sent
+// as a command is replied to the same way, which is what finishes the command there.
 var endpoint = NServiceBusEndpoint.Create("Sample.Worker", args);
 endpoint.UseScryChanges();
+endpoint.UseScryCommands();
 builder.Services.AddNServiceBusEndpoint(endpoint);
 ```
-<sup><a href='/samples/Sample.NServiceBusWorker/NServiceBusWorkerHost.cs#L12-L28' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleNServiceBusWorker' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.NServiceBusWorker/NServiceBusWorkerHost.cs#L12-L30' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleNServiceBusWorker' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The handler is an ordinary one. Nothing in it mentions Scry: it saves, and the save is what gets reported.
@@ -680,7 +692,7 @@ public sealed class RepriceOrderHandler(SampleContext data) :
     }
 }
 ```
-<sup><a href='/samples/Sample.NServiceBusWorker/NServiceBusWorkerHost.cs#L47-L63' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleNServiceBusHandler' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.NServiceBusWorker/NServiceBusWorkerHost.cs#L49-L65' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleNServiceBusHandler' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 What each incoming message's handlers saved is published once, after they are done, through that message's own context. So the event leaves with the rest of what the handler sent, and only if the handler's work was kept: with the outbox, after its transaction commits. A handler that throws publishes nothing, and one that is retried publishes once.
@@ -698,17 +710,25 @@ builder.Services.AddScry<SampleContext>(
         // Hears the ScryChanged events other endpoints publish, and publishes this node's own
         // saves as one. The endpoint below is what it hears them through.
         _.UseNServiceBusBackplane();
+
+        // RepriceOrder goes to the worker rather than to the in-process handler BackplaneHost
+        // registered: a dispatcher's claim comes first. The endpoint's routing says where it goes,
+        // and the worker's reply to this endpoint is what finishes it.
+        _.UseNServiceBusCommands(_ => _.For<RepriceOrder>());
     });
 
 // An endpoint of its own for each node. NServiceBus hands an event to one instance of each
 // endpoint, so nodes sharing a name would share the changes out between them rather than
-// each hearing all of them. And a full endpoint rather than a send-only one, which could
-// send the command below and would hear nothing back.
+// each hearing all of them — and a worker's reply comes back to the node that sent the
+// command. A full endpoint rather than a send-only one, which could send commands and would
+// hear nothing back.
 var endpoint = NServiceBusEndpoint.Create($"Sample.Web.{Port(args)}", args);
 builder.Services.AddNServiceBusEndpoint(endpoint);
 ```
-<sup><a href='/samples/Sample.NServiceBusServer/NServiceBusServerHost.cs#L14-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleNServiceBusBackplane' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.NServiceBusServer/NServiceBusServerHost.cs#L15-L40' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleNServiceBusBackplane' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
+
+The same endpoint carries [commands](commands.md): `UseNServiceBusCommands` claims `RepriceOrder`, sends it to the worker, and finishes it when the worker's `UseScryCommands` replies — beside the `ScryChanged` publish, through the same message context, after the same handlers. The client that sent the command gets its outcome; every client reading orders gets the new rows.
 
 NServiceBus delivers an event to one instance of each logical endpoint, since instances compete for the endpoint's queue. A worker's changes therefore reach every server only where each server is an endpoint of its own, which is why the sample names its endpoint after its port. Scaled-out web nodes that share an endpoint name can leave the fan-out between themselves to `UseDeltaChanges` and use this for the worker's writes. A send-only endpoint receives nothing, so a server that is to hear changes cannot be one.
 
@@ -727,9 +747,19 @@ Over HTTP each live query is a request held open. HTTP/2 shares one connection b
 /// <c>AddSignalR</c>, and may be mapped beside <c>MapScry</c> or instead of it.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Runs the same startup checks <c>MapScry</c> does, so a host that serves queries over a hub
 /// alone is held to what one serving them over HTTP is. Authorization goes on what this returns,
 /// or on a hub derived from <see cref="ScryHub"/> mapped with the generic overload.
+/// </para>
+/// <para>
+/// Where commands are on, the hub carries writes, and a write over a hub is not guarded the way
+/// one over HTTP is: there is no JSON content type for a cross-site form to be unable to declare,
+/// and a WebSocket handshake is not subject to CORS. A hub that authenticates by cookie therefore
+/// needs that cookie at <c>SameSite=Lax</c> or <c>Strict</c>, or the host to check the handshake's
+/// <c>Origin</c>. One that authenticates by bearer token is not exposed, since a browser never
+/// attaches one on another site's behalf.
+/// </para>
 /// </remarks>
 public static HubEndpointConventionBuilder MapScryHub(this IEndpointRouteBuilder endpoints, string pattern) =>
     endpoints.MapScryHub<ScryHub>(pattern);
@@ -744,7 +774,7 @@ public static HubEndpointConventionBuilder MapScryHub<THub>(this IEndpointRouteB
     return endpoints.MapHub<THub>(pattern);
 }
 ```
-<sup><a href='/src/Scry.Server.SignalR/ScrySignalRExtensions.cs#L6-L28' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScryHub' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.SignalR/ScrySignalRExtensions.cs#L6-L38' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScryHub' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: signalRTransport -->

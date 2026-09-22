@@ -262,7 +262,7 @@ public class SubscriptionHttpTests
             options =>
             {
                 options.MaxSubscriptionsPerCaller = 1;
-                options.SubscriptionCaller = _ => "alice";
+                options.Caller = _ => "alice";
             });
         await using var held = await LiveStream.Open(server.Http, Amounts("North"));
         await held.Next();

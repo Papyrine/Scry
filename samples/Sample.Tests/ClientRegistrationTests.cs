@@ -91,4 +91,29 @@ public class ClientRegistrationTests
 
         Assert.That(second.ServerSchemaStamp, Is.Not.Null);
     }
+
+    // The pending-work store is the client's own, registered off it, so a component injecting the store
+    // lists the commands of exactly the client it would be handed — for exactly as long as that lives.
+    [Test]
+    public async Task RegistersTheStoresAtTheClientsLifetime()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped(
+            _ => new HttpClient
+            {
+                BaseAddress = new("https://localhost")
+            });
+        services.AddScryClient("/api/query");
+
+        await using var provider = services.BuildServiceProvider();
+        await using var first = provider.CreateAsyncScope();
+        await using var second = provider.CreateAsyncScope();
+
+        var store = first.ServiceProvider.GetRequiredService<ScryPendingWorkStore>();
+        Assert.Multiple(() =>
+        {
+            Assert.That(store, Is.SameAs(first.ServiceProvider.GetRequiredService<ScryClient>().PendingWork));
+            Assert.That(store, Is.Not.SameAs(second.ServiceProvider.GetRequiredService<ScryPendingWorkStore>()));
+        });
+    }
 }

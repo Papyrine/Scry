@@ -15,7 +15,9 @@ public sealed record ScrySidecarEntry
 
     /// <summary>
     /// Time to the buffered body for queries and batches. Streams and attachments are never
-    /// buffered, so theirs is time to response headers only.
+    /// buffered, so theirs is time to response headers only. A command listed from the client's
+    /// reports alone has no exchange to time: its duration runs from its send to its outcome, and is
+    /// zero until it has one.
     /// </summary>
     public required TimeSpan Duration { get; init; }
 
@@ -69,4 +71,11 @@ public sealed record ScrySidecarEntry
     /// row is added. Null for every other kind.
     /// </summary>
     public ScrySidecarSession? Session { get; init; }
+
+    /// <summary>
+    /// The command this entry is, for a command sent or reported. Changes after it was recorded, as a
+    /// session does: a pending command's outcome arrives later, and asking for it again folds into
+    /// this row. Null for every other entry, the capabilities read included.
+    /// </summary>
+    public ScrySidecarCommand? Command { get; init; }
 }

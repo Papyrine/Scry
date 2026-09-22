@@ -14,6 +14,15 @@
     <PackageVersion Include="StackExchange.Redis" Version="3.3.0" />
     <PackageVersion Include="MessagePipe" Version="1.8.2" />
     <PackageVersion Include="NServiceBus" Version="10.2.9" />
+    <!-- 8.x on purpose: the 8.5 line is the last under Apache-2.0, and MassTransit 9 needs a commercial
+         licence. Do not move it to 9 without deciding that. -->
+    <PackageVersion Include="MassTransit" Version="8.5.10" />
+    <PackageVersion Include="Rebus" Version="8.9.4" />
+    <PackageVersion Include="Rebus.ServiceProvider" Version="10.7.2" />
+    <PackageVersion Include="WolverineFx" Version="6.39.1" />
+    <!-- Core Wolverine no longer compiles handler chains at runtime. The adapter needs neither; the tests
+         run in dynamic mode, so they bring the compiler. A host picks this or static codegen itself. -->
+    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.39.1" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
     <PackageVersion Include="Delta.EF" Version="9.0.1" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
@@ -44,6 +53,11 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Features" Version="5.3.0" Pinned="true" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.3.0" Pinned="true" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="5.3.0" Pinned="true" />
+    <!-- The same pin, for the parts of Roslyn only WolverineFx.RuntimeCompilation brings in, and only to
+         Scry.Server.Bus.Tests: Wolverine compiles its handler chains at runtime, and without these two the
+         runtime compiler's own floor of 5.0.0 would resolve the rest of the family off the pin. -->
+    <PackageVersion Include="Microsoft.CodeAnalysis" Version="5.3.0" Pinned="true" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Scripting" Version="5.3.0" Pinned="true" />
     <PackageVersion Include="Basic.Reference.Assemblies.Net100" Version="1.8.12" />
     <PackageVersion Include="BlazorMonaco" Version="3.5.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />

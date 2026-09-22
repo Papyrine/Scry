@@ -51,9 +51,14 @@ builder.Services
         // watches the database's change marker for everything it cannot see: a bulk update,
         // another node, a script run by hand.
         _.UseDeltaChanges<SampleContext>();
+
+        // Commands: the /commands page and the /live pages' Reprice. Off until a server says
+        // how many it will have in flight, which is also what maps the routes — see
+        // /docs/commands.md.
+        _.UseSampleCommands();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L38-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L44-L98' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddPocoSource` registers the data for a `[QueryablePoco]` type — see [POCO sources](#poco-sources) below. `MaxPageSize` is one of the [limits](#options).
@@ -81,10 +86,10 @@ Failures surface at startup, not at first request:
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L105-L107' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L116-L118' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-Up to four routes, from the one call:
+Up to seven routes, from the one call:
 
 | Route | Method | Request | Response |
 | --- | --- | --- | --- |
@@ -92,6 +97,9 @@ Up to four routes, from the one call:
 | `…/stream` | `POST` | the same `QueryRequest` | [newline-delimited rows](wire-format.md#streamed-results), for [`ToAsyncEnumerable`](querying.md#streaming-rows) |
 | `…/batch` | `POST` | [`QueryBatchRequest`](wire-format.md#batched-queries) | one result per entry, for [batching](batching.md) |
 | `…/subscribe` | `POST` | the same `QueryRequest` | [server-sent events](wire-format.md#live-queries), each a whole `QueryResponse`, for [live queries](live-queries.md) — mapped only where `MaxSubscriptions` is set |
+| `…/command` | `POST` | [`CommandRequest`](wire-format.md#commands) | the command's receipt, or a stream of them for one that takes longer, for [commands](commands.md) — mapped only where `MaxPendingCommands` is set |
+| `…/command/{id}` | `GET` | the command's id | the same answer again, for the caller that sent it |
+| `…/capabilities` | `GET` | nothing | the commands this caller may send |
 
 (Plus `…/attachment`, which [attachments](attachments.md) covers — mapped here so one authorization convention reaches it too.)
 
@@ -111,6 +119,8 @@ Authentication and authorization are **not** Scry's job — put them on the endp
 
 
 ## Options
+
+[Commands](commands.md#turning-commands-on) have options of their own — `MaxPendingCommands`, which turns them on, and the per-caller limit, the sync window, retention and the body limit beside it.
 
 <!-- snippet: scryOptionsLimits -->
 <a id='snippet-scryOptionsLimits'></a>
@@ -257,7 +267,7 @@ public int QueryUrlLimit { get; set; } = QueryUrl.MaxLength;
 /// </remarks>
 public double? LimitWatchFraction { get; set; }
 ```
-<sup><a href='/src/Scry.Server/ScryOptions.cs#L9-L151' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryOptions.cs#L11-L153' title='Snippet source file'>snippet source</a> | <a href='#snippet-scryOptionsLimits' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Every limit is enforced during validation, before any expression is rebound or executed.
@@ -368,6 +378,8 @@ Note this is the only channel for headers: they are not part of the [wire reques
 
 `processor.Subscribe(request, dbContext, services, …)` is the [live query](live-queries.md) form: an `IAsyncEnumerable<QueryResponse>` that a server-streaming call can return as it is. The limits on how many may be open are enforced there, so every transport has them.
 
+`processor.SendCommand(request, dbContext, services, requestHeaders, caller)` is the [command](commands.md) form: it validates, authorizes, checks the target and the limits, dispatches, and yields the receipts — the final one alone, or a pending one and then the final one — throwing for each refusal before anything is dispatched. `Receipt(id, caller)` asks for one again, and `Capabilities(...)` answers what a caller may send. `CompleteCommand` and `FailCommand` are what a dispatcher calls when the other end says how a command ended.
+
 A transport that carries requests across a process boundary hands `ScryJson.DeserializeRequest` the bytes it received rather than binding a `QueryRequest` with a serializer of its own. What makes the wire format fail closed — an unknown member refused, a duplicated property refused, a null array element refused — is in `ScryJson.Options`, not on the types. It also calls `processor.EnsureReady(services)` once at startup, which is every check `MapScry` runs. [Scry.Server.SignalR](live-queries.md#over-signalr-instead-of-http) is a transport built this way.
 
 `processor.Describe()` returns the [introspection](explorer.md#introspection) contract.
@@ -415,7 +427,10 @@ The endpoint maps failures deliberately:
 | Allow-list or limit violation (`ScryValidationException`) | `400` | `Validation` | `{"error":"...","code":"Validation"}` |
 | A [row policy](policies.md) denied the rows (`ScryPermissionException`) | `403` | `Forbidden` | `{"error":"...","code":"Forbidden"}` |
 | More live queries than the server (`503`) or this caller's share of it (`429`) allows | `503` / `429` | `SubscriptionLimit` | `{"error":"...","code":"SubscriptionLimit"}` |
-| Anything else | `500` | `ExecutionFailed` | `{"error":"Query execution failed.","code":"ExecutionFailed"}` |
+| A command's target is absent, hidden, or refused by the command's row policy | `404` | `NotFound` | `{"error":"The command's target was not found.","code":"NotFound"}` |
+| A command body past `MaxCommandBytes` | `413` | `PayloadTooLarge` | `{"error":"...","code":"PayloadTooLarge"}` |
+| More commands in flight than the server (`503`) or this caller's share of it (`429`) allows | `503` / `429` | `CommandLimit` | `{"error":"...","code":"CommandLimit"}` |
+| Anything else | `500` | `ExecutionFailed` | `{"error":"Query execution failed.","code":"ExecutionFailed"}` — `Command dispatch failed.` on the command route |
 
 The `code` is what a client branches on; the message is for a person. It is deliberately coarser than the message behind it — which of the endpoint's own answers this is, never which member or which rule was involved — so it says nothing a caller could not already read off the status, and rides on the fixed `500` body as safely as on a rejection. The status alone will not do the job: a malformed query and an over-long `In` list are both `400`, and only one of them is worth a second look.
 

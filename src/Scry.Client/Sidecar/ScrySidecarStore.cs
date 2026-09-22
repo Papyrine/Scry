@@ -10,6 +10,7 @@ public sealed class ScrySidecarStore(ScrySidecarOptions options)
     Lock sync = new();
     List<ScrySidecarEntry> entries = [];
     Dictionary<long, ScrySidecarSession> sessions = [];
+    Dictionary<Guid, ScrySidecarCommand> commands = [];
     int nextId;
 
     /// <summary>Raised after an entry is added or the log is cleared.</summary>
@@ -153,9 +154,102 @@ public sealed class ScrySidecarStore(ScrySidecarOptions options)
     }
 
     /// <summary>
-    /// Mirrors a client's live queries into the log, so that the ones carried somewhere this sidecar
-    /// cannot watch — a hub connection, or a transport of the app's own — are listed too, and the
-    /// ones it can watch are labelled with what the client itself says about them.
+    /// Records a command's exchange into its row. Sending it adds the row, or takes over the one the
+    /// client's report added a moment before; asking for it again folds into that row rather than
+    /// adding one, as a live query's reconnect does.
+    /// </summary>
+    internal void CommandExchange(Guid id, string? name, bool reattach, ScrySidecarEntry seen, Action<ScrySidecarCommand> update)
+    {
+        lock (sync)
+        {
+            if (!commands.TryGetValue(id, out var command))
+            {
+                command = new(id, name ?? $"command {id:D}");
+                commands[id] = command;
+                entries.Add(seen with {Id = ++nextId, Command = command});
+                Evict();
+            }
+            else if (reattach)
+            {
+                command.AskedAgain();
+            }
+            else if (!command.OnTheWire)
+            {
+                var index = entries.FindIndex(_ => ReferenceEquals(_.Command, command));
+                if (index >= 0)
+                {
+                    entries[index] = seen with {Id = entries[index].Id, Command = command};
+                }
+            }
+
+            command.OnTheWire = true;
+            update(command);
+        }
+
+        Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// The row a command reported itself under, adding one where nothing has been seen on the wire —
+    /// which is every command sent somewhere this sidecar cannot watch, and every command reported
+    /// before its exchange reaches the handler.
+    /// </summary>
+    ScrySidecarCommand ReportedCommand(ScryCommandActivity activity, out bool added)
+    {
+        lock (sync)
+        {
+            added = !commands.TryGetValue(activity.Id, out var command);
+            if (command is null)
+            {
+                command = new(activity.Id, activity.Command);
+                commands[activity.Id] = command;
+                entries.Add(
+                    new()
+                    {
+                        Id = ++nextId,
+                        Started = DateTimeOffset.Now,
+                        Duration = TimeSpan.Zero,
+
+                        // No request of its own: this command is being reported rather than watched.
+                        Method = "COMMAND",
+                        Url = "",
+                        Kind = ScrySidecarKind.Command,
+                        RequestJson = SidecarJson.Prettify(ScryJson.Serialize(activity.Request)),
+                        RequestHeaders = [],
+                        Command = command
+                    });
+                Evict();
+            }
+
+            command.Report(activity);
+
+            // With no exchange of its own to time, a reported command's row is timed from its send to
+            // its outcome.
+            if (!command.OnTheWire &&
+                IsOutcome(activity.Kind))
+            {
+                var index = entries.FindIndex(_ => ReferenceEquals(_.Command, command));
+                if (index >= 0)
+                {
+                    var entry = entries[index];
+                    entries[index] = entry with {Duration = DateTimeOffset.Now - entry.Started};
+                }
+            }
+
+            return command;
+        }
+    }
+
+    static bool IsOutcome(ScryCommandActivityKind kind) =>
+        kind is ScryCommandActivityKind.Refused or
+            ScryCommandActivityKind.Completed or
+            ScryCommandActivityKind.Failed or
+            ScryCommandActivityKind.Unknown;
+
+    /// <summary>
+    /// Mirrors a client's live queries and commands into the log, so that the ones carried somewhere
+    /// this sidecar cannot watch — a hub connection, or a transport of the app's own — are listed too,
+    /// and the ones it can watch are labelled with what the client itself says about them.
     /// </summary>
     /// <remarks>
     /// Optional, and separate from <see cref="ScrySidecarServiceExtensions.AddScrySidecar"/> because
@@ -164,8 +258,35 @@ public sealed class ScrySidecarStore(ScrySidecarOptions options)
     /// and still shows every event — what is lost is the client's own account of the states between
     /// connections, and every live query that never touches HTTP.
     /// </remarks>
-    public void Observe(ScryClient client) =>
+    public void Observe(ScryClient client)
+    {
         client.LiveActivity += Report;
+        client.CommandActivity += Report;
+    }
+
+    void Report(ScryCommandActivity activity)
+    {
+        if (!options.Enabled)
+        {
+            return;
+        }
+
+        try
+        {
+            ReportedCommand(activity, out var added);
+            if (added)
+            {
+                Changed?.Invoke();
+                return;
+            }
+
+            Touch();
+        }
+        catch
+        {
+            // A debug log that cannot record has nothing useful to do about it.
+        }
+    }
 
     void Report(ScryLiveActivity activity)
     {
@@ -232,6 +353,11 @@ public sealed class ScrySidecarStore(ScrySidecarOptions options)
 
     void Forget(ScrySidecarEntry entry)
     {
+        if (entry.Command is { } command)
+        {
+            commands.Remove(command.Id);
+        }
+
         if (entry.Session is not { } session)
         {
             return;

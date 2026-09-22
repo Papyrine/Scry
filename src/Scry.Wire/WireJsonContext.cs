@@ -20,5 +20,8 @@
 [JsonSerializable(typeof(ScryStreamMarker))]
 [JsonSerializable(typeof(ScryLiveEnd))]
 [JsonSerializable(typeof(ScryError))]
+[JsonSerializable(typeof(CommandRequest))]
+[JsonSerializable(typeof(CommandReceipt))]
+[JsonSerializable(typeof(CommandCapabilities))]
 sealed partial class WireJsonContext :
     JsonSerializerContext;

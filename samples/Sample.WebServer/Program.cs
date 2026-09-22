@@ -35,6 +35,12 @@
         builder.Services.AddSingleton<RegionGrants>();
         builder.Services.AddSingleton<RegionAccessPolicy>();
 
+        // begin-snippet: sampleCommandHandlers
+        // The handlers for the model's commands — every one of them, since a server with commands on
+        // routes them all — and what they are tuned by, from the Sample:Commands section.
+        builder.Services.AddSampleCommandHandlers(builder.Configuration);
+        // end-snippet
+
         // begin-snippet: serverRegistration
         builder.Services
             .AddScry<SampleContext>(_ =>
@@ -83,6 +89,11 @@
                 // another node, a script run by hand.
                 _.UseDeltaChanges<SampleContext>();
                 // end-snippet
+
+                // Commands: the /commands page and the /live pages' Reprice. Off until a server says
+                // how many it will have in flight, which is also what maps the routes — see
+                // /docs/commands.md.
+                _.UseSampleCommands();
             });
         // end-snippet
 
@@ -154,29 +165,8 @@
             });
         // end-snippet
 
-        // What the /live pages drive. Two writes, because there are two kinds: one the interceptor
-        // sees, and one it cannot.
-        // begin-snippet: liveSavedWrite
-        // Saved through the context, so the interceptor reports it: the live queries reading Order
-        // are asked again as soon as this commits, and nothing here has to say so.
-        app.MapPost(
-            "/api/orders/{id:int}/reprice",
-            async (int id, SampleContext data) =>
-            {
-                var orders = data.Orders;
-                var order = await orders.FindAsync(id);
-                if (order is null)
-                {
-                    return Results.NotFound();
-                }
-
-                order.Amount += 1;
-                order.Revision = await EntityFrameworkQueryableExtensions.MaxAsync(orders, _ => _.Revision) + 1;
-                await data.SaveChangesAsync();
-                return Results.NoContent();
-            });
-        // end-snippet
-
+        // What the /live pages drive besides the RepriceOrder command, which a client sends and the
+        // sample's handler saves through the context: a write the interceptor cannot see.
         // begin-snippet: changesNotify
         // A bulk update never passes through SaveChanges, so no interceptor can see it. The host
         // says what it wrote instead. Without that line the change marker would still catch it a

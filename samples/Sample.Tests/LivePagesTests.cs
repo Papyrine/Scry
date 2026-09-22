@@ -17,7 +17,7 @@ public class LivePagesTests
 
     [OneTimeSetUp]
     public async Task StartServer() =>
-        server = await ScryTestServer.StartAsync(liveQueries: true);
+        server = await ScryTestServer.StartAsync(liveQueries: true, commands: true);
 
     [OneTimeTearDown]
     public async Task StopServer() =>

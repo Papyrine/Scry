@@ -28,6 +28,19 @@ public sealed partial class ScryClient
     /// sequence that ends is asked for again under <see cref="Reconnect"/>, and one that throws ends
     /// the live query unless the failure is one a later attempt could get past.
     /// </param>
+    /// <param name="commandTransport">
+    /// Sends a command and yields its receipts: the final one alone, or a pending one and then the
+    /// final one. A refusal throws before the first. A sequence that ends before the final receipt was
+    /// cut, and the command is asked for again through <paramref name="receiptTransport"/>.
+    /// </param>
+    /// <param name="receiptTransport">
+    /// Asks for a command already sent, by its id, yielding its receipts as
+    /// <paramref name="commandTransport"/> does. Without it, a pending command whose connection ends
+    /// is <see cref="ScryCommandStatus.Unknown"/>.
+    /// </param>
+    /// <param name="capabilitiesTransport">
+    /// Reads the commands this caller may send. Without it <see cref="Can"/> answers false.
+    /// </param>
     /// <remarks>
     /// Per-query headers are HTTP's, so a transport supplied here does not receive them and a query
     /// carrying them is refused rather than sent without them. Use <see cref="ForHttp"/> for those.
@@ -36,9 +49,18 @@ public sealed partial class ScryClient
         Func<QueryRequest, Cancel, Task<QueryResponse>> transport,
         Func<QueryRequest, Cancel, IAsyncEnumerable<JsonElement>>? streamTransport = null,
         Func<QueryBatchRequest, Cancel, Task<QueryBatchResponse>>? batchTransport = null,
-        Func<QueryRequest, Cancel, IAsyncEnumerable<QueryResponse>>? subscribeTransport = null)
+        Func<QueryRequest, Cancel, IAsyncEnumerable<QueryResponse>>? subscribeTransport = null,
+        Func<CommandRequest, Cancel, IAsyncEnumerable<CommandReceipt>>? commandTransport = null,
+        Func<Guid, Cancel, IAsyncEnumerable<CommandReceipt>>? receiptTransport = null,
+        Func<Cancel, Task<CommandCapabilities>>? capabilitiesTransport = null)
     {
         this.batchTransport = batchTransport;
+        this.commandTransport = commandTransport;
+        this.receiptTransport = receiptTransport;
+        if (capabilitiesTransport is not null)
+        {
+            this.capabilitiesTransport = async cancel => await capabilitiesTransport(cancel);
+        }
 
         liveTransport = subscribeTransport is null
             ? null
@@ -84,6 +106,10 @@ public sealed partial class ScryClient
         batchTransport = (request, cancel) => PostBatchAsync(http, $"{endpoint.TrimEnd('/')}/batch", request, cancel);
         attachmentTransport = (request, cancel) => PostAttachmentAsync(http, $"{endpoint.TrimEnd('/')}/attachment", request, cancel);
         liveTransport = (request, call, lastEventId, session, cancel) => LiveAsync(http, $"{endpoint.TrimEnd('/')}/{ScryLive.Route}", request, call, lastEventId, session, cancel);
+        var command = $"{endpoint.TrimEnd('/')}/{ScryCommandProtocol.Route}";
+        commandTransport = (request, cancel) => PostCommandAsync(http, command, request, cancel);
+        receiptTransport = (id, cancel) => GetReceiptAsync(http, command, id, cancel);
+        capabilitiesTransport = cancel => GetCapabilitiesAsync(http, $"{endpoint.TrimEnd('/')}/{ScryCommandProtocol.CapabilitiesRoute}", cancel);
     }
 
     // Sends the serializer's own UTF-8 rather than a string: StringContent would encode the body to UTF-8

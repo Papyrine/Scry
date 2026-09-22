@@ -71,6 +71,18 @@
                 </ul>
             }
 
+            @if (Index.Commands.Count > 0)
+            {
+                <h4>Commands</h4>
+                <p class="muted">Sent through <code>Query.Commands</code>; the explorer runs queries only.</p>
+                <ul class="schema-list" data-testid="schema-commands">
+                    @foreach (var command in Index.Commands)
+                    {
+                        <li>@CommandLine(command)</li>
+                    }
+                </ul>
+            }
+
             @if (Index.Enums.Count > 0)
             {
                 <h4>Enums</h4>
@@ -189,6 +201,10 @@
                             {
                                 <span class="badge badge-sensitive" title="Comparing against this sends the request as a body rather than a URL, and projecting it answers no-store">sensitive</span>
                             }
+                            @if (member.IsCapability)
+                            {
+                                <span class="badge badge-command" title="Whether this caller may send @member.Command against the row, decided by the server's policy">command</span>
+                            }
                             @if (indexed.DeclaringModel != current)
                             {
                                 <span class="badge muted" title="Declared by @indexed.DeclaringModel">inherited</span>
@@ -203,6 +219,17 @@
                 }
                 </tbody>
             </table>
+
+            @if (Index.CommandsTargeting(current) is { Count: > 0 } commands)
+            {
+                <h4>Commands</h4>
+                <ul class="schema-list" data-testid="schema-type-commands">
+                    @foreach (var command in commands)
+                    {
+                        <li>@CommandLine(command)</li>
+                    }
+                </ul>
+            }
         </div>
     }
 </div>
@@ -240,4 +267,25 @@
         current = stack[^1];
         stack.RemoveAt(stack.Count - 1);
     }
+
+    // A command as a signature a reader recognises: its name, the payload it carries, what it acts on
+    // and what it answers with.
+    static RenderFragment CommandLine(ScryCommandInfo command) =>
+        __builder =>
+        {
+            <span class="schema-command" data-testid="schema-command">@command.Name</span>
+            <span class="muted mono">(@string.Join(", ", command.Properties.Select(_ => $"{_.Name}")))</span>
+            @if (command.Target is not null)
+            {
+                <span class="muted"> on @command.Target</span>
+            }
+            @if (command.Result is not null)
+            {
+                <span class="muted"> → @command.Result.Name</span>
+            }
+            @if (command.Obsolete is not null)
+            {
+                <span class="badge badge-obsolete" title="@command.Obsolete">obsolete</span>
+            }
+        };
 }

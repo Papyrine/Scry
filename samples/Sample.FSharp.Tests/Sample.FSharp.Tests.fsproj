@@ -9,6 +9,7 @@
     <Compile Include="Setup.fs" />
     <Compile Include="QueryTests.fs" />
     <Compile Include="LiveTests.fs" />
+    <Compile Include="CommandTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -27,6 +28,7 @@
          of the generated models would collide with the one Sample.FSharp reads. -->
     <ProjectReference Include="..\Sample.FSharp\Sample.FSharp.fsproj" />
     <ProjectReference Include="..\Sample.Model\Sample.Model.csproj" />
+    <ProjectReference Include="..\Sample.CommandHandlers\Sample.CommandHandlers.csproj" />
     <ProjectReference Include="..\..\src\Scry.Server\Scry.Server.csproj" />
   </ItemGroup>
 </Project>

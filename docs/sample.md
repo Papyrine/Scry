@@ -6,6 +6,7 @@
 | --- | --- |
 | `Sample.Model` | EF Core model with the allow-list attributes. Referenced by the server, pointed at by path from the client. |
 | `Sample.WebServer` | ASP.NET Core host: `DbContext`, `MapScry`, `MapScryExplorer`, and the Blazor host page. The one back end every client below talks to. |
+| `Sample.CommandHandlers` | The handlers and policies for the model's [commands](commands.md), and the one registration every host with commands on shares. |
 | `Sample.WebClient` | Blazor WebAssembly UI that writes LINQ against the generated models. |
 | `Sample.ConsoleClient` | A console client: an `HttpClient`, `ScryClient.ForHttp`, and the generated entry point, with no container. |
 | `Sample.WpfClient` | A WPF client binding the same queries to a `DataGrid`, registered through `IHttpClientFactory`. |
@@ -36,6 +37,10 @@ reports the command above rather than an unhandled exception when the server is 
 
 ```bash
 dotnet run --project samples/Sample.ConsoleClient
+```
+
+```bash
+dotnet run --project samples/Sample.ConsoleClient -- --reprice 1
 ```
 
 ```bash
@@ -247,9 +252,14 @@ builder.Services
         // watches the database's change marker for everything it cannot see: a bulk update,
         // another node, a script run by hand.
         _.UseDeltaChanges<SampleContext>();
+
+        // Commands: the /commands page and the /live pages' Reprice. Off until a server says
+        // how many it will have in flight, which is also what maps the routes — see
+        // /docs/commands.md.
+        _.UseSampleCommands();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L38-L87' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L44-L98' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Holiday` has no table, so its data is registered explicitly — see [POCO sources](server.md#poco-sources). `MaxPageSize` is lowered from the default 1000 to 200.
@@ -259,7 +269,7 @@ builder.Services
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L105-L107' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L116-L118' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: mapExplorer -->
@@ -273,7 +283,7 @@ app.MapScryExplorer(_ =>
     _.EnableGuard = _ => true;
 });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L195-L203' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L185-L193' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The sample always exposes the explorer so it can be browsed without setting an environment. A real app should leave the default Development-only guard in place, or replace it with an authorization check — see [Query explorer](explorer.md).
@@ -546,7 +556,7 @@ app.MapPost(
         return Results.NoContent();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L135-L155' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L146-L166' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The third has to be, or the change never reaches a query at all:
@@ -566,7 +576,7 @@ app.MapPost(
         return Results.NoContent();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L121-L133' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L132-L144' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Order.Revision` is `[QueryIgnore]`d — a version column is server machinery, not query surface, and clients never see it. `Sample.Tests\CachedPolicyPageTests.cs` drives the page and asserts those three counts, so the table above is checked rather than claimed.
@@ -592,7 +602,7 @@ Open a page in two tabs and press a button in one. Both change, and neither relo
 
 | Control | What it shows |
 | --- | --- |
-| **Reprice an order** | A `SaveChanges`, reported by `ScryChangeInterceptor` with nothing written for it. |
+| **Reprice an order** | The `RepriceOrder` [command](commands.md), sent over whichever transport the switch selects. Its handler's `SaveChanges` is reported by `ScryChangeInterceptor`, with nothing written for it. |
 | **Reprice in bulk** | An `ExecuteUpdate`, which no interceptor sees, followed by the `ScryChanges.Notify<Order>()` that says so. |
 | **SSE / SignalR** | The same pages over [a hub](live-queries.md#over-signalr-instead-of-http). The transport is the `ScryClient`'s, so no page changes. |
 | The region grants on the **Permissions** page | A [policy-cache invalidation](#a-policy-too-expensive-to-run-per-row): rows appear and leave with no write to them at all. |
@@ -616,19 +626,132 @@ NServiceBus needs nothing installed, since the sample runs on the learning trans
 dotnet run --project samples/Sample.NServiceBusServer -- --urls http://localhost:5101
 ```
 
-Start the worker with the command that prints, watch the server from the console client, and ask for a write the worker will make:
+Start the worker with the command that prints, watch the server from the console client, and send the command the worker handles from a second terminal:
 
 ```bash
 dotnet run --project samples/Sample.ConsoleClient -- --live --server http://localhost:5101
 ```
 
 ```bash
-curl -X POST http://localhost:5101/api/orders/1/reprice-via-worker
+dotnet run --project samples/Sample.ConsoleClient -- --reprice 1 --server http://localhost:5101
 ```
 
-The console reprints, for a row written by a process that hosts no Scry endpoint. `NServiceBusSampleTests` runs the same exchange in-process.
+The server sends `RepriceOrder` on to the worker rather than handling it, and the worker's reply finishes it. The first console reprints, for a row written by a process that hosts no Scry endpoint, and the second prints the outcome. `NServiceBusSampleTests` runs the same exchange in-process.
 
-`Sample.RedisServer` and `Sample.MessagePipeServer` want a Redis on `localhost:6379`. Run one on `:5101`, a second on `:5102` with the printed command, watch the first and `POST /api/orders/1/reprice` to the second. They have the poll turned off, so what arrives can only have come over the backplane; a deployment leaves it on.
+`Sample.RedisServer` and `Sample.MessagePipeServer` want a Redis on `localhost:6379`. Run one on `:5101`, a second on `:5102` with the printed command, watch the first, and send `--reprice 1 --server http://localhost:5102` to the second. They have the poll turned off, so what arrives can only have come over the backplane; a deployment leaves it on.
+
+
+## Commands
+
+The **Commands** link opens a live table of employees with a button per [command](commands.md), and a form to hire. None of the buttons refreshes the table: it is a live query, so what each command writes arrives as its next answer.
+
+<img src="/samples/Sample.Tests/CommandUiTests.SampleCommands.verified.png" alt="The sample's commands page: a live table of employees, each row with Deactivate, Rename and Delete buttons, only the inactive row's Delete enabled, and a form to hire">
+
+| Try | What it shows |
+| --- | --- |
+| **Deactivate** a row | `SetEmployeeActive`. The row's Delete enables as the next answer arrives: it is the row's `CanDeleteEmployee`, the delete policy's condition decided in the database. |
+| **Delete** an inactive row | `DeleteEmployee`. The row leaves the table as the next answer. |
+| **Delete** Alice, once deactivated | The handler refuses, since Alice manages others: a `Failed` outcome carrying the handler's own words. |
+| **Rename** to a name containing "slow" | A handler that takes five seconds — past the server's sync window and the client's wait — so the pending-work panel opens and follows it until it lands. |
+| **Hire** | `CreateEmployee`, answering with the new row's id through the typed outcome. |
+
+Every other client shows a different angle. The console's `--reprice` prints the outcome, and awaits `Completion` when it is `Pending`. The Windows Forms client renames the selected row and lists `PendingWork`, whose changes arrive on the UI thread. The WPF client binds its Rename button to an `ICommand` whose `CanExecute` is the facade's `CanRenameEmployee` and the selection, raised again on `CapabilitiesChanged`. The F# client renames, and hires through the typed outcome.
+
+<!-- snippet: winFormsCommand -->
+<a id='snippet-winFormsCommand'></a>
+```cs
+async Task RenameSelected()
+{
+    if (grid.CurrentRow?.DataBoundItem is not EmployeeRow row)
+    {
+        status.Text = "Select an employee to rename.";
+        return;
+    }
+
+    try
+    {
+        var outcome = await query.Commands.RenameEmployee(new() {Id = row.Id, Name = renameTo.Text});
+        status.Text = outcome.Status switch
+        {
+            ScryCommandStatus.Completed => $"Renamed {row.Name} to {renameTo.Text}.",
+            ScryCommandStatus.Pending => "Still renaming. It is listed under pending work.",
+            _ => outcome.Error
+        };
+    }
+    catch (Exception exception) when (exception is HttpRequestException or ScryRequestException or ScryPermissionException)
+    {
+        status.Text = exception.Message;
+    }
+}
+
+// The store says it changed on the context the command was sent from — the UI thread, since
+// RenameSelected runs there — so the list is redrawn with no Invoke.
+void ShowPendingWork() =>
+    pending.DataSource = work.Items.Select(Describe).ToList();
+
+static string Describe(ScryPendingCommand item)
+{
+    var line = $"{item.Command} {string.Join(", ", item.Keys)}: {item.Status}, {item.Elapsed.TotalSeconds:0.0}s";
+    if (item.Error is { } error)
+    {
+        return $"{line} — {error}";
+    }
+
+    return line;
+}
+```
+<sup><a href='/samples/Sample.WinFormsClient/MainForm.cs#L183-L223' title='Snippet source file'>snippet source</a> | <a href='#snippet-winFormsCommand' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+<!-- snippet: wpfCommand -->
+<a id='snippet-wpfCommand'></a>
+```cs
+// The XAML shape of a capability: an ICommand whose CanExecute is what the server last said this
+// caller may send, and whether there is a row to send it against. WPF re-reads it whenever
+// CanExecuteChanged is raised, which the window does as either of those moves.
+sealed class RenameEmployeeCommand(
+    ScryQuery query,
+    Func<EmployeeRow?> selected,
+    Func<string> name,
+    Action<string?> report) :
+    ICommand
+{
+    public event EventHandler? CanExecuteChanged;
+
+    public bool CanExecute(object? parameter) =>
+        query.Commands.CanRenameEmployee &&
+        selected() is not null;
+
+    public async void Execute(object? parameter)
+    {
+        if (selected() is not { } row)
+        {
+            return;
+        }
+
+        try
+        {
+            var outcome = await query.Commands.RenameEmployee(new() {Id = row.Id, Name = name()});
+            report(
+                outcome.Status switch
+                {
+                    ScryCommandStatus.Completed => $"Renamed {row.Name}.",
+                    ScryCommandStatus.Pending => "Still renaming.",
+                    _ => outcome.Error
+                });
+        }
+        catch (Exception exception)
+        {
+            report(exception.Message);
+        }
+    }
+
+    public void Raise() =>
+        CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+}
+```
+<sup><a href='/samples/Sample.WpfClient/MainWindow.xaml.cs#L114-L158' title='Snippet source file'>snippet source</a> | <a href='#snippet-wpfCommand' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
 
 
 ## What the traffic looks like
@@ -661,6 +784,27 @@ The console reprints, for a row written by a process that hosts no Scry endpoint
 <!-- endSnippet -->
 
 Four projected columns requested, four returned. `Salary` is neither requested nor returnable.
+
+A command decided within the sync window is one request and one receipt:
+
+```
+POST /api/query/command
+{"version":1,"command":"SetEmployeeActive","id":"0b9d4f7e-3a51-4c2e-8f60-6d1a2e9c7b14","payload":{"id":4,"active":true},"stamp":"…"}
+
+200 application/json
+{"version":1,"id":"0b9d4f7e-3a51-4c2e-8f60-6d1a2e9c7b14","status":"Completed","stamp":"…"}
+```
+
+A slow rename is the same request, answered as a stream: the pending receipt at once, and the outcome when the handler is done.
+
+```
+200 text/event-stream
+event: result
+data: {"version":1,"id":"6e0f…","status":"Pending","stamp":"…"}
+
+event: result
+data: {"version":1,"id":"6e0f…","status":"Completed","stamp":"…"}
+```
 
 
 ## Integration tests
@@ -697,5 +841,7 @@ public async Task DisallowedPropertyRejectedWith400()
     Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L374-L401' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L376-L403' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
+
+`CommandRoundTripTests` does the same for commands: every generated command sent over HTTP to a host running the sample's own handlers — the typed result, the enum payload by name, a slow rename's streamed receipt, and a delete arriving as a live query's next answer. `CommandHttpTests` and `CommandHubTests` pin the command routes and hub methods themselves, against a model of their own.

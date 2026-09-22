@@ -20,6 +20,7 @@ public sealed partial class ScryProcessor
         Changes = new();
         PolicyCache = new(schema.CachedPolicies, Changes);
         subscriptions = new(options, Changes);
+        InitializeCommands();
     }
 
     /// <summary>
@@ -118,6 +119,16 @@ public sealed partial class ScryProcessor
         {
             EnsureResolvable(services, registration.Policy, "Cached row policy", registration.Entity.Name);
         }
+
+        // Checked whether or not commands are served: a capability asks its command's policy on every
+        // query that reads it.
+        foreach (var command in schema.Commands)
+        {
+            if (command.Policy is { } policy)
+            {
+                EnsureResolvable(services, policy, "Command policy", command.Name);
+            }
+        }
     }
 
     static void EnsureResolvable(IServiceProvider services, Type policy, string kind, string source)
@@ -162,10 +173,13 @@ public sealed partial class ScryProcessor
         var db = (DbContext)scope.ServiceProvider.GetRequiredService(options.ContextType);
         ValidateAgainstModel(db);
         EnsureSourcesMapped(db);
+        EnsureCommandTargetsMapped(db);
         EnsurePoliciesResolvable(scope.ServiceProvider);
+        EnsureCommandsDispatchable(scope.ServiceProvider);
         if (options.ProbePoliciedNavigations)
         {
             ProbePoliciedNavigations(db, scope.ServiceProvider);
+            ProbeCommandPolicies(db, scope.ServiceProvider);
         }
 
         // The model is what says which root a reported type's rows are read through, and the root

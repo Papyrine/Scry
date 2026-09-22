@@ -37,6 +37,125 @@ public class LockstepTests
         }
     }
 
+    // Command by command, for the same reason: the generator's payload is what a client sends and the
+    // server's is what it binds, and the key and result they name have to be the same ones.
+    [Test]
+    public void GeneratorAndServerAgreeOnEveryCommand()
+    {
+        var extract = MetadataModelReader.Read(typeof(TestContext).Assembly.Location);
+        var described = SharedProcessor.Instance.Describe();
+
+        Assert.That(extract.Problems, Is.Empty);
+        Assert.That(extract.Commands.Select(_ => _.Name), Is.EqualTo(described.Commands.Select(_ => _.Name)));
+        foreach (var command in described.Commands)
+        {
+            var generated = extract.Commands.Single(_ => _.Name == command.Name);
+            Assert.Multiple(() =>
+            {
+                Assert.That(generated.Target, Is.EqualTo(command.Target), command.Name);
+                Assert.That(generated.Keys, Is.EqualTo(command.Keys ?? []), command.Name);
+                Assert.That(
+                    generated.Properties.Select(_ => $"{_.Name} {_.TypeDisplay}").Order(StringComparer.Ordinal),
+                    Is.EqualTo(command.Properties.Select(_ => $"{_.Name} {_.TypeDisplay}").Order(StringComparer.Ordinal)),
+                    command.Name);
+                Assert.That(generated.ResultName, Is.EqualTo(command.Result?.Name), command.Name);
+                Assert.That(generated.Obsolete, Is.EqualTo(command.Obsolete), command.Name);
+            });
+        }
+
+        foreach (var result in described.Commands.Select(_ => _.Result).OfType<ScryResultInfo>())
+        {
+            var generated = extract.Results.Single(_ => _.Name == result.Name);
+            Assert.That(
+                generated.Properties.Select(_ => $"{_.Name} {_.TypeDisplay}").Order(StringComparer.Ordinal),
+                Is.EqualTo(result.Properties.Select(_ => $"{_.Name} {_.TypeDisplay}").Order(StringComparer.Ordinal)),
+                result.Name);
+        }
+    }
+
+    // What the server refuses of a command, each of which the generator reports as a diagnostic. Plain
+    // fixture types, opted into nothing, so they poison no schema built over this assembly.
+    [Test]
+    public void RefusesACommandThatCannotBeCreated()
+    {
+        var exception = Assert.Throws<Exception>(() => Schema.EnsureConcreteCommand(typeof(AbstractCommand)));
+
+        Assert.That(exception!.Message, Does.Contain("is not a concrete class with a public parameterless constructor"));
+    }
+
+    [Test]
+    public void RefusesQueryIgnoreOnACommandProperty()
+    {
+        var exception = Assert.Throws<Exception>(() => Schema.CommandPayload(typeof(QueryIgnoredCommand), typeof(LockstepTests).Assembly));
+
+        Assert.That(exception!.Message, Does.Contain("carries [QueryIgnore], which hides a member from queries and means nothing on a command"));
+    }
+
+    [Test]
+    public void RefusesAPayloadPropertyNoCommandCanCarry()
+    {
+        var exception = Assert.Throws<Exception>(() => Schema.CommandPayload(typeof(ObjectCommand), typeof(LockstepTests).Assembly));
+
+        Assert.That(exception!.Message, Does.Contain("'ObjectCommand.Anything' is a 'Object', which a command cannot carry"));
+    }
+
+    [Test]
+    public void RefusesAPayloadEnumFromAnotherAssembly()
+    {
+        var exception = Assert.Throws<Exception>(() => Schema.CommandPayload(typeof(ForeignEnumCommand), typeof(LockstepTests).Assembly));
+
+        Assert.That(exception!.Message, Does.Contain("'ForeignEnumCommand.Day' is a 'DayOfWeek', which a command cannot carry"));
+    }
+
+    [Test]
+    public void KeepsIgnoredAndReadOnlyPropertiesOutOfThePayload()
+    {
+        var payload = Schema.CommandPayload(typeof(MixedCommand), typeof(LockstepTests).Assembly);
+
+        Assert.That(payload.Select(_ => _.Name), Is.EqualTo(["Id", "Name"]));
+    }
+
+    [Test]
+    public void BindsTheTypeNameKeyConvention()
+    {
+        var target = Schema.BuildTypeMeta(typeof(Badge), []);
+        var payload = Schema.CommandPayload(typeof(PrefixedKeyCommand), typeof(LockstepTests).Assembly);
+
+        var keys = Schema.BindCommandKeys(typeof(PrefixedKeyCommand), target, payload);
+
+        Assert.That(keys.Select(_ => (_.Key.Name, _.Payload.Name)), Is.EqualTo(new[] {("Id", "BadgeId")}));
+    }
+
+    [Test]
+    public void RefusesAnAmbiguousKey()
+    {
+        var target = Schema.BuildTypeMeta(typeof(Badge), []);
+        var payload = Schema.CommandPayload(typeof(AmbiguousKeyCommand), typeof(LockstepTests).Assembly);
+
+        var exception = Assert.Throws<Exception>(() => Schema.BindCommandKeys(typeof(AmbiguousKeyCommand), target, payload));
+
+        Assert.That(exception!.Message, Does.Contain("carries both 'Id' and 'BadgeId', so which one is the key of 'Badge' is ambiguous"));
+    }
+
+    [Test]
+    public void RefusesAKeyOfTheWrongType()
+    {
+        var target = Schema.BuildTypeMeta(typeof(Badge), []);
+        var payload = Schema.CommandPayload(typeof(WrongKeyCommand), typeof(LockstepTests).Assembly);
+
+        var exception = Assert.Throws<Exception>(() => Schema.BindCommandKeys(typeof(WrongKeyCommand), target, payload));
+
+        Assert.That(exception!.Message, Does.Contain("keyed by 'Id', but carries no 'int' property named 'Id' or 'BadgeId'"));
+    }
+
+    [Test]
+    public void RefusesAResultFromAnotherAssembly()
+    {
+        var exception = Assert.Throws<Exception>(() => Schema.ResultProperties(typeof(MixedCommand), typeof(Uri), typeof(LockstepTests).Assembly));
+
+        Assert.That(exception!.Message, Does.Contain("answers with 'Uri', which is declared in assembly"));
+    }
+
     // The base's members are the derived type's own on both sides; the override is described once,
     // the indexer never, and an array is a collection of its element.
     [Test]
@@ -123,6 +242,59 @@ public class LockstepTests
     {
         [QueryableCollection]
         public SortedSet<int> Values { get; set; } = [];
+    }
+
+    abstract class AbstractCommand
+    {
+        public int Id { get; set; }
+    }
+
+    class QueryIgnoredCommand
+    {
+        [QueryIgnore]
+        public int Id { get; set; }
+    }
+
+    class ObjectCommand
+    {
+        public object? Anything { get; set; }
+    }
+
+    class ForeignEnumCommand
+    {
+        public DayOfWeek Day { get; set; }
+    }
+
+    class MixedCommand
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+
+        [CommandIgnore]
+        public string By { get; set; } = "";
+
+        public int ReadOnly => Id;
+    }
+
+    class Badge
+    {
+        public int Id { get; set; }
+    }
+
+    class PrefixedKeyCommand
+    {
+        public int BadgeId { get; set; }
+    }
+
+    class AmbiguousKeyCommand
+    {
+        public int Id { get; set; }
+        public int BadgeId { get; set; }
+    }
+
+    class WrongKeyCommand
+    {
+        public long Id { get; set; }
     }
     // ReSharper restore UnusedMember.Local
 }

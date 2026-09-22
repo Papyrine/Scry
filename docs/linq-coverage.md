@@ -205,7 +205,7 @@ Listed in EF's `QueryableMethods`, and on `Queryable` rather than only `Enumerab
 
 Server-side EF surface that intentionally has no client-facing equivalent:
 
-- **Write operations** (`ExecuteUpdate`, `ExecuteDelete`, `SaveChanges`) — Scry is read-only.
+- **Write operations** (`ExecuteUpdate`, `ExecuteDelete`, `SaveChanges`) — a query never writes. Writes are [commands](commands.md), declared in the model and handled on the server.
 - **Tracking and shaping** (`Include`, `AsNoTracking`, `AsSplitQuery`, …) — server execution details; clients shape results with `Select`.
 - **Raw SQL** (`FromSql`, `EF.Functions.*`) — free-form SQL or provider functions from a hostile client is exactly what the closed vocabulary exists to prevent.
 

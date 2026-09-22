@@ -8,14 +8,46 @@
 /// Such a type is read as nothing: the two sides would otherwise classify it differently, so it is
 /// reported instead of guessed at.
 /// </param>
+/// <param name="Commands">The <c>[Command]</c> classes, ordered by command name.</param>
+/// <param name="Results">The classes those commands answer with, one per class however many commands share it.</param>
+/// <param name="Problems">
+/// Every way a command was found to be misdeclared, each with the diagnostic it is reported as. A model
+/// carrying any is emitted as nothing, as one carrying a conflicting opt-in is.
+/// </param>
 record struct ModelExtract(
     string? Error,
     EquatableArray<SourceInfo> Sources,
     EquatableArray<EnumInfo> Enums,
-    EquatableArray<string> Conflicts)
+    EquatableArray<string> Conflicts,
+    EquatableArray<CommandInfo> Commands = default,
+    EquatableArray<ResultInfo> Results = default,
+    EquatableArray<CommandProblem> Problems = default)
 {
     public static readonly ModelExtract Empty = new(null, new([]), new([]), new([]));
 }
+
+/// <summary>
+/// A command a client may send: its wire name, its class's simple name, the payload properties, and for
+/// a targeted command the source it acts on and the payload properties carrying that source's key.
+/// </summary>
+/// <param name="Keys">
+/// The payload properties bound to the target's key, in the target's key order — ordinal by key member
+/// name, as attachment keys travel. Empty for an untargeted command.
+/// </param>
+record struct CommandInfo(
+    string Name,
+    string ClrName,
+    string? Target,
+    EquatableArray<string> Keys,
+    EquatableArray<PropertyInfo> Properties,
+    string? ResultName,
+    string? Obsolete);
+
+/// <summary>A class a command answers with, by the name it is emitted as.</summary>
+record struct ResultInfo(string Name, EquatableArray<PropertyInfo> Properties);
+
+/// <summary>A misdeclared command, as the diagnostic it is reported as and the text that fills it.</summary>
+record struct CommandProblem(string Id, string Message);
 
 /// <summary>A queryable source: its wire name, the generated model name, and its members.</summary>
 /// <remarks>
@@ -74,6 +106,10 @@ record struct SourceInfo(
 /// may not have projected into a cacheable response. Re-emitted as <c>[ScrySensitive]</c> so the client
 /// can make the first of those choices before it sends anything.
 /// </param>
+/// <param name="Capability">
+/// The command a capability answers for: the <c>bool</c> a targeted command adds to its target, saying
+/// row by row whether the caller may send it. Null on every member the model declares itself.
+/// </param>
 record struct PropertyInfo(
     string Name,
     string TypeDisplay,
@@ -84,7 +120,8 @@ record struct PropertyInfo(
     bool IsAttachment = false,
     bool HasBinaryTransfer = false,
     bool IsKey = false,
-    bool IsSensitive = false);
+    bool IsSensitive = false,
+    string? Capability = null);
 
 /// <summary>An enum referenced by a model, re-emitted so the client needs no server reference.</summary>
 /// <summary>

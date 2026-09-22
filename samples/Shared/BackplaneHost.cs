@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Sample.CommandHandlers;
 
 /// <summary>
 /// What the backplane sample servers have in common, none of it to do with a backplane: one database
@@ -9,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 /// A backplane is about several nodes, so these are run twice on different ports. The first node
 /// builds the database and prints how to start the second, which attaches to it. Watch either with
 /// <c>dotnet run --project samples/Sample.ConsoleClient -- --live --server &lt;url&gt;</c>, write to
-/// the other, and the console reprints.
+/// the other — <c>--reprice 1 --server &lt;other url&gt;</c> — and the console reprints.
 /// </remarks>
 static class BackplaneHost
 {
@@ -53,45 +54,40 @@ static class BackplaneHost
     }
 
     /// <summary>
-    /// The context, with the interceptor that reports what it saves. What is reported reaches this
-    /// node's live queries directly and every other node's through the backplane.
+    /// The context, with the interceptor that reports what it saves, and the handlers for the model's
+    /// commands. What is reported reaches this node's live queries directly and every other node's
+    /// through the backplane.
     /// </summary>
-    public static void AddData(IServiceCollection services, string connectionString) =>
+    public static void AddData(IServiceCollection services, string connectionString)
+    {
         services.AddDbContext<SampleContext>(
             (provider, options) => options
                 .UseSqlServer(connectionString)
                 .AddInterceptors(provider.GetRequiredService<ScryChangeInterceptor>()));
+        services.AddSampleCommandHandlers();
+    }
 
-    /// <summary>What the model needs before a server will start, and live queries turned on.</summary>
+    /// <summary>
+    /// What the model needs before a server will start, with live queries and commands turned on — the
+    /// commands being the write to make on the node that is not being watched:
+    /// <c>dotnet run --project samples/Sample.ConsoleClient -- --reprice 1 --server &lt;url&gt;</c>.
+    /// </summary>
     public static void Configure(ScryOptions options)
     {
         options.AddPocoSource(_ => Holiday.Seed());
         options.AddAttachmentPolicy<Department, AllowHandbook>();
         options.AddAttachmentPolicy<Employee, AllowPhoto>();
         options.MaxSubscriptions = 100;
+        options.UseSampleCommands();
 
         // Off, so that what reaches the other node can only have come over the backplane. A real
         // deployment leaves the poll on: it is what covers a message the backplane dropped.
         options.SubscriptionPollInterval = null;
     }
 
-    /// <summary>The query endpoints, and one write to make on the node that is not being watched.</summary>
-    public static void Map(WebApplication app)
-    {
+    /// <summary>The query and command endpoints.</summary>
+    public static void Map(WebApplication app) =>
         app.MapScry("/api/query");
-        app.MapPost("/api/orders/{id:int}/reprice", async (int id, SampleContext data) =>
-        {
-            var order = await data.Orders.FindAsync(id);
-            if (order is null)
-            {
-                return Results.NotFound();
-            }
-
-            order.Amount += 1;
-            await data.SaveChangesAsync();
-            return Results.NoContent();
-        });
-    }
 
     sealed class AllowHandbook :
         IAttachmentPolicy<Department>

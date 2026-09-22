@@ -45,7 +45,7 @@ References the query models project, and through it `Scry.Client`. The model is 
   <ProjectReference Include="..\Sample.QueryModels\Sample.QueryModels.csproj" />
 </ItemGroup>
 ```
-<sup><a href='/samples/Sample.FSharp/Sample.FSharp.fsproj#L18-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpProjectReference' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.FSharp/Sample.FSharp.fsproj#L19-L24' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpProjectReference' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 One F#-specific note: under central package management the F# SDK turns its implicit `FSharp.Core` reference off, so a project in such a tree references it by hand. Without it the assembly builds — the compiler falls back to the SDK's own copy — and then fails to load every type at runtime.
@@ -201,6 +201,35 @@ let watch (query: ScryQuery) (onAnswer: EmployeeRow list -> unit) (cancel: Cance
 <!-- endSnippet -->
 
 
+## Sending commands
+
+A [command](commands.md) is sent from F# as from C#: the generated class, its properties set in the constructor call, and the facade method awaited like any `Task`. A command with a result is read through the typed outcome.
+
+<!-- snippet: fsharpCommand -->
+<a id='snippet-fsharpCommand'></a>
+```fs
+/// A command from F#: the generated class, its properties set in the constructor call, sent through
+/// the generated facade. The outcome is a Task like any other — Completed where the server decided
+/// it within its sync window, Pending with its Completion to await where it did not.
+let rename (query: ScryQuery) (id: int) (name: string) =
+    query.Commands.RenameEmployee(RenameEmployee(Id = id, Name = name))
+
+/// A command that answers with a result: the typed outcome's Value is the class the handler
+/// answered with, read only once EnsureCompleted has said the command did complete.
+let hire (query: ScryQuery) (name: string) (departmentId: int) =
+    task {
+        let! outcome =
+            query.Commands.CreateEmployee(CreateEmployee(Name = name, DepartmentId = departmentId, Status = Status.FullTime))
+
+        return outcome.EnsureCompleted().Value.Id
+    }
+```
+<sup><a href='/samples/Sample.FSharp/Commands.fs#L8-L24' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpCommand' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+`Sample.FSharp.Tests/CommandTests.fs` sends both against the sample's own handlers, and watches a live query hear the rename.
+
+
 ## What to avoid
 
 **`query { }`.** F#'s query builder rewrites a `select` of a record or a tuple into two `Select`s — one onto an intermediate object of its own and one back — and the server accepts one `Select` per query, so the request is rejected. A `query { }` that only filters and orders translates; a projection needs the extension methods.
@@ -249,14 +278,19 @@ type ScryServer private (app: WebApplication, database: SqlDatabase<SampleContex
                 |> ignore)
             |> ignore
 
+            // The sample's command handlers: the C# project every host with commands on shares.
+            builder.Services.AddSampleCommandHandlers() |> ignore
+
             builder.Services.AddScry<SampleContext>(fun options ->
                 options.AddPocoSource(fun _ -> Holiday.Seed())
                 options.AddAttachmentPolicy<Department, HandbookPolicy>()
                 options.AddAttachmentPolicy<Employee, PhotoPolicy>()
 
-                // Live queries are off until a server says how many it will hold open.
+                // Live queries are off until a server says how many it will hold open, and commands
+                // until it says how many it may have in flight.
                 options.MaxSubscriptions <- 10
-                options.SubscriptionThrottle <- TimeSpan.Zero)
+                options.SubscriptionThrottle <- TimeSpan.Zero
+                options.UseSampleCommands() |> ignore)
             |> ignore
 
             let app = builder.Build()
@@ -266,21 +300,10 @@ type ScryServer private (app: WebApplication, database: SqlDatabase<SampleContex
         }
 
     /// The generated entry point over an HTTP client into the hosted server.
-    member _.Query = ScryQuery(ScryClient.ForHttp(app.GetTestClient(), "/api/query"))
+    member this.Query = ScryQuery(ScryClient.ForHttp(this.Http, "/api/query"))
 
-    /// Renames an employee through the server's own context, as the application would.
-    member _.Rename(name: string, renamed: string) : Task =
-        task {
-            use scope = app.Services.CreateScope()
-            let context = scope.ServiceProvider.GetRequiredService<SampleContext>()
-            // Named explicitly: Scry's terminals and EF's are both in scope here, and they are not the
-            // same method — this one has to run against the database.
-            let! employee =
-                EntityFrameworkQueryableExtensions.FirstAsync(context.Employees, (fun employee -> employee.Name = name))
-            employee.Name <- renamed
-            let! _ = context.SaveChangesAsync()
-            return ()
-        }
+    /// An HTTP client into the hosted server.
+    member _.Http = app.GetTestClient()
 
     interface IAsyncDisposable with
         member _.DisposeAsync() =
@@ -291,7 +314,7 @@ type ScryServer private (app: WebApplication, database: SqlDatabase<SampleContex
                 }
                 :> Task)
 ```
-<sup><a href='/samples/Sample.FSharp.Tests/ScryServer.fs#L24-L98' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpServer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.FSharp.Tests/ScryServer.fs#L25-L93' title='Snippet source file'>snippet source</a> | <a href='#snippet-fsharpServer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Each query is snapshotted twice: the request as it would travel, and the rows the server returns for it.

@@ -16,6 +16,9 @@
   <Project Path="Scry.Server.Delta/Scry.Server.Delta.csproj" />
   <Project Path="Scry.Server.MessagePipe/Scry.Server.MessagePipe.csproj" />
   <Project Path="Scry.Server.NServiceBus/Scry.Server.NServiceBus.csproj" />
+  <Project Path="Scry.Server.MassTransit/Scry.Server.MassTransit.csproj" />
+  <Project Path="Scry.Server.Rebus/Scry.Server.Rebus.csproj" />
+  <Project Path="Scry.Server.Wolverine/Scry.Server.Wolverine.csproj" />
   <Project Path="Scry.Server.Redis/Scry.Server.Redis.csproj" />
   <Project Path="Scry.Server.SignalR/Scry.Server.SignalR.csproj" />
     <Project Path="Scry.Server.Explorer/Scry.Server.Explorer.csproj" />
@@ -24,5 +27,6 @@
   <Project Path="Scry.SourceGenerator.Tests/Scry.SourceGenerator.Tests.csproj" />
   <Project Path="Scry.Tests/Scry.Tests.csproj" />
   <Project Path="Scry.Backplane.Tests/Scry.Backplane.Tests.csproj" />
+  <Project Path="Scry.Server.Bus.Tests/Scry.Server.Bus.Tests.csproj" />
   <Project Path="Scry.Explorer.Tests/Scry.Explorer.Tests.csproj" />
 </Solution>

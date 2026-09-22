@@ -35,7 +35,7 @@ public partial class App
         var query = scope.ServiceProvider.GetRequiredService<ScryQuery>();
         // end-snippet
 
-        new MainWindow(query).Show();
+        new MainWindow(query, scope.ServiceProvider.GetRequiredService<ScryClient>()).Show();
     }
 
     protected override void OnExit(ExitEventArgs e)

@@ -29,6 +29,11 @@ public static partial class ScryServiceExtensions
         }
 
         options.BackplaneServices?.Invoke(services);
+        foreach (var register in options.DispatcherServices)
+        {
+            register(services);
+        }
+
         return services;
     }
 
@@ -102,6 +107,17 @@ public static partial class ScryServiceExtensions
         if (options.MaxSubscriptions > 0)
         {
             builders.Add(endpoints.MapPost($"{pattern.TrimEnd('/')}/{ScryLive.Route}", HandleSubscribe));
+        }
+
+        // Commands: the one write surface, mapped only where the deployment said how many it will have in
+        // flight — a server serves writes because it asked to. In the same list as the rest, so whatever
+        // guards a query guards a write, and whatever guards a command guards asking for it again.
+        if (options.MaxPendingCommands > 0)
+        {
+            var root = pattern.TrimEnd('/');
+            builders.Add(endpoints.MapPost($"{root}/{ScryCommandProtocol.Route}", HandleCommand));
+            builders.Add(endpoints.MapGet($"{root}/{ScryCommandProtocol.Route}/{{id:guid}}", HandleReceipt));
+            builders.Add(endpoints.MapGet($"{root}/{ScryCommandProtocol.CapabilitiesRoute}", HandleCapabilities));
         }
 
         return new Endpoints(builders);

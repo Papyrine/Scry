@@ -29,6 +29,10 @@ static class Program
         // SchemaStaleDetected at most once, so a fresh instance per form would never report drift.
         using var scope = provider.CreateScope();
 
-        Application.Run(new MainForm(scope.ServiceProvider.GetRequiredService<ScryQuery>()));
+        // The pending-work store is the client's own, registered beside it by AddScryClient.
+        Application.Run(
+            new MainForm(
+                scope.ServiceProvider.GetRequiredService<ScryQuery>(),
+                scope.ServiceProvider.GetRequiredService<ScryPendingWorkStore>()));
     }
 }
