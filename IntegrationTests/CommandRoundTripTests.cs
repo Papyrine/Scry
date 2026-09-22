@@ -129,7 +129,7 @@ public class CommandRoundTripTests
 
         var final = await outcome.Completion.WaitAsync(patience);
 
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(final.Status, Is.EqualTo(ScryCommandStatus.Completed));
             Assert.That(await Name(id), Is.EqualTo("Slowly renamed"));
@@ -150,7 +150,7 @@ public class CommandRoundTripTests
 
         Assert.That(
             rows.Select(_ => (_.Name, _.CanDeleteEmployee, _.CanRenameEmployee)),
-            Is.EqualTo(new[] {("Bob", true, true), ("Carol", false, true)}));
+            Is.EqualTo([("Bob", true, true), ("Carol", false, true)]));
     }
 
     [Test]
@@ -227,7 +227,7 @@ public class CommandRoundTripTests
 
         var outcome = await query.Commands.RepriceOrder(new() {Id = 1});
 
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(outcome.Status, Is.EqualTo(ScryCommandStatus.Completed));
             Assert.That(await Amount(1), Is.EqualTo(before + 1));

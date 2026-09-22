@@ -86,7 +86,7 @@ public class SignalRTests
             .CountAsync();
         await batch.SendAsync();
 
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That((await names).Select(_ => _.Name), Is.EqualTo(["Aaron", "Alice", "Carol"]));
             Assert.That(await count, Is.EqualTo(2));

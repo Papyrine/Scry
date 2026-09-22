@@ -309,7 +309,7 @@ public class SidecarComponentTests
     sealed class Served(string contentType, byte[]? body = null) :
         HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancel)
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, Cancel cancel)
         {
             var content = new StreamContent(new MemoryStream(body ?? [1, 2, 3]));
             content.Headers.ContentType = new(contentType);

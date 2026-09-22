@@ -55,7 +55,7 @@ public class NServiceBusSampleTests
             // The server writes nothing here: it sends the command on, and the worker saves. The
             // learning transport's round trip usually outlasts the server's sync window, so this is the
             // streamed receipt too, over a real bus: pending, then finished by the worker's reply.
-            var outcome = await query.Commands.RepriceOrder(new Scry.Generated.RepriceOrder {Id = 1});
+            var outcome = await query.Commands.RepriceOrder(new() {Id = 1});
             var final = await outcome.Completion.WaitAsync(TimeSpan.FromSeconds(60));
             Assert.That(final.Status, Is.EqualTo(ScryCommandStatus.Completed));
 

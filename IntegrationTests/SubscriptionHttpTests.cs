@@ -584,9 +584,9 @@ public class SubscriptionHttpTests
     // Free when asked, and nothing else on the machine is racing these tests for it.
     static int FreePort()
     {
-        using var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        using var listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
         listener.Start();
-        return ((System.Net.IPEndPoint) listener.LocalEndpoint).Port;
+        return ((IPEndPoint) listener.LocalEndpoint).Port;
     }
 
     sealed class Every(TimeSpan delay) :

@@ -1,5 +1,4 @@
 using System.Linq.Expressions;
-using System.Net.Http.Headers;
 using System.Net.ServerSentEvents;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
@@ -94,7 +93,7 @@ public class CommandHttpTests
         Assert.That(ScryJson.DeserializeReceipt((await again.Next()).Data).Status, Is.EqualTo(CommandStatus.Completed));
 
         using var finished = await server.Http.GetAsync($"/api/query/command/{id:D}");
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(finished.StatusCode, Is.EqualTo(HttpStatusCode.OK));
             Assert.That(ScryJson.DeserializeReceipt(await finished.Content.ReadAsStringAsync()).Status, Is.EqualTo(CommandStatus.Completed));
@@ -116,7 +115,7 @@ public class CommandHttpTests
         using var unknown = await server.Get($"/api/query/command/{Guid.NewGuid():D}", "bob");
         using var own = await server.Get($"/api/query/command/{id:D}", "alice");
 
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(stranger.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
             Assert.That(await stranger.Content.ReadAsStringAsync(), Is.EqualTo(await unknown.Content.ReadAsStringAsync()));
@@ -142,7 +141,7 @@ public class CommandHttpTests
         await stream.Next();
         var end = await stream.Next();
         Assert.That(end.EventType, Is.EqualTo(ScryLive.End));
-        Assert.That(ScryJson.DeserializeLiveEnd(System.Text.Encoding.UTF8.GetBytes(end.Data)).Reconnect, Is.True);
+        Assert.That(ScryJson.DeserializeLiveEnd(Encoding.UTF8.GetBytes(end.Data)).Reconnect, Is.True);
 
         gate.SetResult();
         await using var again = await server.StreamReceipt(id);
@@ -155,7 +154,7 @@ public class CommandHttpTests
         Assert.That(receipt.Status, Is.EqualTo(CommandStatus.Completed));
     }
 
-    [TestCase("""{ not json""", ScryErrorCode.WireFormat, "Invalid query command request")]
+    [TestCase("{ not json", ScryErrorCode.WireFormat, "Invalid query command request")]
     [TestCase("""{"version":1,"command":"Teleport","id":"a3f1c0de-0000-4000-8000-000000000001","payload":{}}""", ScryErrorCode.Validation, "Unknown command 'Teleport'.")]
     [TestCase("""{"version":1,"command":"RenameLedger","id":"a3f1c0de-0000-4000-8000-000000000001","payload":{"id":1,"name":"x","renamedBy":"m"}}""", ScryErrorCode.Validation, "carries 'renamedBy', which the command does not have.")]
     [TestCase("""{"version":1,"command":"RenameLedger","id":"a3f1c0de-0000-4000-8000-000000000001","payload":{"name":"x"}}""", ScryErrorCode.Validation, "is missing 'id'.")]
@@ -211,7 +210,7 @@ public class CommandHttpTests
     {
         await using var server = await Server.Start(database);
 
-        using var content = new StringContent(ScryJson.Serialize(Command("OpenLedger", new {name = "x"})), System.Text.Encoding.UTF8, "text/plain");
+        using var content = new StringContent(ScryJson.Serialize(Command("OpenLedger", new {name = "x"})), Encoding.UTF8, "text/plain");
         using var response = await server.Http.PostAsync("/api/query/command", content);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.UnsupportedMediaType));
@@ -242,7 +241,7 @@ public class CommandHttpTests
         using var denied = await server.Post(Command("RenameLedger", new {id = 3, name = "Unlocked"}));
         using var missing = await server.Post(Command("RenameLedger", new {id = 999, name = "Found"}));
 
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(denied.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
             Assert.That(missing.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
@@ -272,7 +271,7 @@ public class CommandHttpTests
         using var carol = await server.Post(Command("RenameLedger", new {id = 2, name = "Bank"}), "carol");
         gate.SetResult();
 
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(aliceAgain.StatusCode, Is.EqualTo(HttpStatusCode.TooManyRequests));
             Assert.That(aliceAgain.Headers.RetryAfter, Is.Not.Null);
@@ -305,7 +304,7 @@ public class CommandHttpTests
         using var alice = await server.Get("/api/query/capabilities", "alice");
         using var mallory = await server.Get("/api/query/capabilities", "mallory");
 
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(alice.Headers.CacheControl!.NoStore, Is.True);
             Assert.That(ScryJson.DeserializeCapabilities(await alice.Content.ReadAsStringAsync()).Commands, Is.EqualTo(["OpenLedger", "RenameLedger"]));
@@ -324,8 +323,8 @@ public class CommandHttpTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(alice, Is.EqualTo(new[] {(1, true), (2, true), (3, false)}));
-            Assert.That(mallory, Is.EqualTo(new[] {(1, false), (2, false), (3, false)}));
+            Assert.That(alice, Is.EqualTo([(1, true), (2, true), (3, false)]));
+            Assert.That(mallory, Is.EqualTo([(1, false), (2, false), (3, false)]));
         });
     }
 
@@ -598,19 +597,22 @@ public class CommandHttpTests
             Send(HttpMethod.Post, "/api/query/command", ScryJson.SerializeToUtf8(request), user);
 
         public Task<HttpResponseMessage> PostRaw(string body) =>
-            Send(HttpMethod.Post, "/api/query/command", System.Text.Encoding.UTF8.GetBytes(body), user: null);
+            Send(HttpMethod.Post, "/api/query/command", Encoding.UTF8.GetBytes(body), user: null);
 
         public Task<HttpResponseMessage> Get(string path, string? user = null) =>
             Send(HttpMethod.Get, path, body: null, user);
 
-        async Task<HttpResponseMessage> Send(HttpMethod method, string path, byte[]? body, string? user, HttpCompletionOption completion = HttpCompletionOption.ResponseContentRead)
+        Task<HttpResponseMessage> Send(HttpMethod method, string path, byte[]? body, string? user, HttpCompletionOption completion = HttpCompletionOption.ResponseContentRead)
         {
             var message = new HttpRequestMessage(method, path);
             if (body is not null)
             {
                 message.Content = new ByteArrayContent(body)
                 {
-                    Headers = {ContentType = new MediaTypeHeaderValue("application/json")}
+                    Headers =
+                    {
+                        ContentType = new("application/json")
+                    }
                 };
             }
 
@@ -619,7 +621,7 @@ public class CommandHttpTests
                 message.Headers.Add(userHeader, user);
             }
 
-            return await http.SendAsync(message, completion);
+            return http.SendAsync(message, completion);
         }
 
         public async Task<Events> Stream(CommandRequest request, string? user = null)

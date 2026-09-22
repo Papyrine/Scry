@@ -52,7 +52,9 @@ public sealed class RepriceOrderHandler(SampleContext data) :
 {
     public async Task Handle(RepriceOrder message, IMessageHandlerContext context)
     {
-        var order = await data.Orders.FindAsync([message.Id], context.CancellationToken);
+        var order = await data
+            .Orders
+            .FindAsync([message.Id], context.CancellationToken);
         if (order is null)
         {
             return;

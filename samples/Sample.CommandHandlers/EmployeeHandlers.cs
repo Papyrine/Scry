@@ -7,7 +7,7 @@ namespace Sample.CommandHandlers;
 public sealed class DeleteEmployeeHandler(SampleContext data) :
     ICommandHandler<DeleteEmployee>
 {
-    public async Task Handle(DeleteEmployee command, ScryCommandContext context, CancellationToken cancel)
+    public async Task Handle(DeleteEmployee command, ScryCommandContext context, Cancel cancel)
     {
         if (await data.Employees.AnyAsync(_ => _.ManagerId == command.Id, cancel))
         {
@@ -27,7 +27,7 @@ public sealed class DeleteEmployeeHandler(SampleContext data) :
 public sealed class RenameEmployeeHandler(SampleContext data, IOptions<SampleCommandOptions> options) :
     ICommandHandler<RenameEmployee>
 {
-    public async Task Handle(RenameEmployee command, ScryCommandContext context, CancellationToken cancel)
+    public async Task Handle(RenameEmployee command, ScryCommandContext context, Cancel cancel)
     {
         // Stands in for work that takes a while: long enough past the sync window that the command is
         // answered as pending, and the client's pending-work panel shows it until it lands.
@@ -45,7 +45,7 @@ public sealed class RenameEmployeeHandler(SampleContext data, IOptions<SampleCom
 public sealed class SetEmployeeActiveHandler(SampleContext data) :
     ICommandHandler<SetEmployeeActive>
 {
-    public async Task Handle(SetEmployeeActive command, ScryCommandContext context, CancellationToken cancel)
+    public async Task Handle(SetEmployeeActive command, ScryCommandContext context, Cancel cancel)
     {
         var employee = await data.Employees.SingleAsync(_ => _.Id == command.Id, cancel);
         employee.Active = command.Active;
@@ -56,7 +56,7 @@ public sealed class SetEmployeeActiveHandler(SampleContext data) :
 public sealed class CreateEmployeeHandler(SampleContext data) :
     ICommandHandler<CreateEmployee, EmployeeCreated>
 {
-    public async Task<EmployeeCreated> Handle(CreateEmployee command, ScryCommandContext context, CancellationToken cancel)
+    public async Task<EmployeeCreated> Handle(CreateEmployee command, ScryCommandContext context, Cancel cancel)
     {
         if (!await data.Departments.AnyAsync(_ => _.Id == command.DepartmentId, cancel))
         {
@@ -88,7 +88,7 @@ public sealed class CreateEmployeeHandler(SampleContext data) :
 public sealed class RepriceOrderHandler(SampleContext data) :
     ICommandHandler<RepriceOrder>
 {
-    public async Task Handle(RepriceOrder command, ScryCommandContext context, CancellationToken cancel)
+    public async Task Handle(RepriceOrder command, ScryCommandContext context, Cancel cancel)
     {
         var orders = data.Orders;
         var order = await orders.SingleAsync(_ => _.Id == command.Id, cancel);

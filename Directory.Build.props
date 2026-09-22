@@ -17,4 +17,10 @@
     <Verify_SponsorshipExemption>OpenSource</Verify_SponsorshipExemption>
     <Verify_SponsorshipExemptionUntil>2027-08</Verify_SponsorshipExemptionUntil>
   </PropertyGroup>
+  <ItemGroup>
+    <Using Include="System.Threading.CancellationToken"
+           Alias="Cancel" />
+    <Using Include="System.Threading.CancellationTokenSource"
+           Alias="CancelSource" />
+  </ItemGroup>
 </Project>

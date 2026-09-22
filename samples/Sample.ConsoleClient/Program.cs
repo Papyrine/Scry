@@ -70,7 +70,7 @@ class Program
     // begin-snippet: consoleLive
     static async Task WatchOrders(ScryQuery query)
     {
-        using var leaving = new CancellationTokenSource();
+        using var leaving = new CancelSource();
         Console.CancelKeyPress += (_, pressed) =>
         {
             pressed.Cancel = true;

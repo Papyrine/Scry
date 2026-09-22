@@ -112,7 +112,10 @@ sealed class CommandStub
     public static Func<Guid, HttpResponseMessage> Events(params Func<Guid, string>[] events) =>
         id => new(HttpStatusCode.OK)
         {
-            Content = new StringContent(string.Concat(events.Select(_ => _(id))), Encoding.UTF8, ScryLive.ContentType)
+            Content = new StringContent(
+                string.Concat(events.Select(_ => _(id))),
+                Encoding.UTF8,
+                ScryLive.ContentType)
         };
 
     /// <summary>The <c>result</c> event carrying a receipt.</summary>

@@ -1,5 +1,3 @@
-using System.Runtime.ExceptionServices;
-
 /// <summary>
 /// Reads a closure expression into the value it stands for, without compiling it into a delegate.
 /// </summary>
