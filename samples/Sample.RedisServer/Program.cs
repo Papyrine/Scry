@@ -7,10 +7,12 @@ BackplaneHost.AddData(builder.Services, database);
 
 // begin-snippet: sampleRedisBackplane
 // The connection is the host's own, registered the way it would be for anything else that uses Redis.
-builder.Services.AddSingleton<IConnectionMultiplexer>(
-    _ => ConnectionMultiplexer.Connect(builder.Configuration["Redis"] ?? "localhost:6379"));
+builder.Services
+    .AddSingleton<IConnectionMultiplexer>(
+        _ => ConnectionMultiplexer.Connect(builder.Configuration["Redis"] ?? "localhost:6379"));
 
-builder.Services.AddScry<SampleContext>(
+builder.Services
+    .AddScry<SampleContext>(
     _ =>
     {
         BackplaneHost.Configure(_);
