@@ -216,11 +216,11 @@ public sealed class QueryCacheHandler(QueryCache cache) :
 {
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
-        CancellationToken cancellationToken)
+        Cancel cancel)
     {
         if (Key(request) is not { } key)
         {
-            return await base.SendAsync(request, cancellationToken);
+            return await base.SendAsync(request, cancel);
         }
 
         var cached = cache.Get(key);
@@ -229,7 +229,7 @@ public sealed class QueryCacheHandler(QueryCache cache) :
             request.Headers.TryAddWithoutValidation("If-None-Match", cached.ETag);
         }
 
-        var response = await base.SendAsync(request, cancellationToken);
+        var response = await base.SendAsync(request, cancel);
 
         if (response.StatusCode == HttpStatusCode.NotModified &&
             cached is not null)
@@ -248,7 +248,7 @@ public sealed class QueryCacheHandler(QueryCache cache) :
             return response;
         }
 
-        var body = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        var body = await response.Content.ReadAsByteArrayAsync(cancel);
         cache.Store(key, new(etag, body, "application/json", Stamp(response)));
 
         // The content has been read to the end, so the response is handed back over the bytes rather

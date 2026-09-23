@@ -28,6 +28,8 @@ public static partial class ScryServiceExtensions
     /// sends a heartbeat when none has arrived for a while, until the client goes,
     /// <paramref name="deliver"/> says to stop, or the server has a reason of its own to end it.
     /// </summary>
+    /// <param name="context">The request being answered. Its abort, or the expiry of the ticket that authenticated it, ends the hold.</param>
+    /// <param name="options">Supplies the heartbeat interval, and the lifetime after which the hold ends.</param>
     /// <param name="pending">The item being waited for: true once one is ready to be delivered.</param>
     /// <param name="deliver">Writes the item that arrived. False to stop holding.</param>
     static async Task Hold(HttpContext context, ScryOptions options, Func<Task<bool>> pending, Func<Task<bool>> deliver)

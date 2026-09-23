@@ -12,7 +12,7 @@
 /// <para>
 /// A row arrives either as the UTF-8 line it was read from — the HTTP transport, which has the bytes
 /// and no reason to build a document out of them — or as a <see cref="JsonElement"/>, which is the
-/// shape a transport supplied to <see cref="ScryClient(Func{QueryRequest, Cancel, Task{QueryResponse}}, Func{QueryRequest, Cancel, IAsyncEnumerable{JsonElement}}?, Func{QueryBatchRequest, Cancel, Task{QueryBatchResponse}}?, Func{QueryRequest, Cancel, IAsyncEnumerable{QueryResponse}}?)"/>
+/// shape a transport supplied to <see cref="ScryClient(Func{QueryRequest, Cancel, Task{QueryResponse}}, Func{QueryRequest, Cancel, IAsyncEnumerable{JsonElement}}?, Func{QueryBatchRequest, Cancel, Task{QueryBatchResponse}}?, Func{QueryRequest, Cancel, IAsyncEnumerable{QueryResponse}}?, Func{CommandRequest, Cancel, IAsyncEnumerable{CommandReceipt}}?, Func{Guid, Cancel, IAsyncEnumerable{CommandReceipt}}?, Func{Cancel, Task{CommandCapabilities}}?)"/>
 /// produces. <see cref="Utf8"/> is only valid until the next row is pulled.
 /// </para>
 /// </remarks>

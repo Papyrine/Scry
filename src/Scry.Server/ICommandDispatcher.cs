@@ -3,7 +3,7 @@ namespace Scry;
 /// <summary>
 /// Carries commands somewhere else to be handled — a message bus, a queue, another process — and reports
 /// each one's outcome back through <see cref="ScryProcessor.CompleteCommand"/> or
-/// <see cref="ScryProcessor.FailCommand"/>. Registered with <see cref="ScryOptions.AddDispatcher{TDispatcher}"/>.
+/// <see cref="ScryProcessor.FailCommand"/>. Registered with <see cref="ScryOptions.AddDispatcher{TDispatcher}()"/>.
 /// </summary>
 /// <remarks>
 /// A command reaches a dispatcher already bound into the server's own class, authorized, its target

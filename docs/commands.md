@@ -260,7 +260,7 @@ public interface ICommandHandler<in TCommand, TResult>
 public sealed class RenameEmployeeHandler(SampleContext data, IOptions<SampleCommandOptions> options) :
     ICommandHandler<RenameEmployee>
 {
-    public async Task Handle(RenameEmployee command, ScryCommandContext context, CancellationToken cancel)
+    public async Task Handle(RenameEmployee command, ScryCommandContext context, Cancel cancel)
     {
         // Stands in for work that takes a while: long enough past the sync window that the command is
         // answered as pending, and the client's pending-work panel shows it until it lands.

@@ -89,7 +89,7 @@ A live query is an `IAsyncEnumerable`, so it is read the way any other is. The n
 ```cs
 static async Task WatchOrders(ScryQuery query)
 {
-    using var leaving = new CancellationTokenSource();
+    using var leaving = new CancelSource();
     Console.CancelKeyPress += (_, pressed) =>
     {
         pressed.Cancel = true;
@@ -590,10 +590,12 @@ Where the database can say when it was last written, it already does: `UseDeltaC
 <a id='snippet-sampleRedisBackplane'></a>
 ```cs
 // The connection is the host's own, registered the way it would be for anything else that uses Redis.
-builder.Services.AddSingleton<IConnectionMultiplexer>(
-    _ => ConnectionMultiplexer.Connect(builder.Configuration["Redis"] ?? "localhost:6379"));
+builder.Services
+    .AddSingleton<IConnectionMultiplexer>(
+        _ => ConnectionMultiplexer.Connect(builder.Configuration["Redis"] ?? "localhost:6379"));
 
-builder.Services.AddScry<SampleContext>(
+builder.Services
+    .AddScry<SampleContext>(
     _ =>
     {
         BackplaneHost.Configure(_);
@@ -604,7 +606,7 @@ builder.Services.AddScry<SampleContext>(
         _.UseRedisBackplane();
     });
 ```
-<sup><a href='/samples/Sample.RedisServer/Program.cs#L8-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleRedisBackplane' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.RedisServer/Program.cs#L8-L25' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleRedisBackplane' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: sampleMessagePipeBackplane -->
@@ -681,7 +683,9 @@ public sealed class RepriceOrderHandler(SampleContext data) :
 {
     public async Task Handle(RepriceOrder message, IMessageHandlerContext context)
     {
-        var order = await data.Orders.FindAsync([message.Id], context.CancellationToken);
+        var order = await data
+            .Orders
+            .FindAsync([message.Id], context.CancellationToken);
         if (order is null)
         {
             return;
@@ -692,7 +696,7 @@ public sealed class RepriceOrderHandler(SampleContext data) :
     }
 }
 ```
-<sup><a href='/samples/Sample.NServiceBusWorker/NServiceBusWorkerHost.cs#L49-L65' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleNServiceBusHandler' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.NServiceBusWorker/RepriceOrderHandler.cs#L2-L20' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleNServiceBusHandler' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 What each incoming message's handlers saved is published once, after they are done, through that message's own context. So the event leaves with the rest of what the handler sent, and only if the handler's work was kept: with the outbox, after its transaction commits. A handler that throws publishes nothing, and one that is retried publishes once.
