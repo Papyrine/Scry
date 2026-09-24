@@ -11,7 +11,7 @@
     <!-- Scry.Client.SignalR's one dependency. The server half needs none: a hub is the shared framework's. -->
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.12" />
     <!-- The change backplanes' one dependency each. Nothing else Scry ships references any of them. -->
-    <PackageVersion Include="StackExchange.Redis" Version="3.3.0" />
+    <PackageVersion Include="StackExchange.Redis" Version="3.3.1" />
     <PackageVersion Include="MessagePipe" Version="1.8.2" />
     <PackageVersion Include="NServiceBus" Version="10.2.9" />
     <!-- 8.x on purpose: the 8.5 line is the last under Apache-2.0, and MassTransit 9 needs a commercial
@@ -63,8 +63,8 @@
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <PackageVersion Include="NUnit" Version="4.6.1" />
     <PackageVersion Include="NUnit3TestAdapter" Version="6.3.0" />
-    <PackageVersion Include="Verify" Version="33.1.1" />
-    <PackageVersion Include="Verify.NUnit" Version="33.1.1" />
+    <PackageVersion Include="Verify" Version="33.1.2" />
+    <PackageVersion Include="Verify.NUnit" Version="33.1.2" />
     <PackageVersion Include="Verify.DiffPlex" Version="3.3.1" />
     <PackageVersion Include="Verify.SourceGenerators" Version="2.5.0" />
     <PackageVersion Include="HttpMultipart" Version="0.1.4" />
@@ -73,6 +73,6 @@
     <PackageVersion Include="MarkdownSnippets.MsBuild" Version="28.4.2" />
     <PackageVersion Include="NaughtyStrings" Version="3.0.0" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
-    <PackageVersion Include="DiffEngine" Version="20.3.1" />
+    <PackageVersion Include="DiffEngine" Version="20.5.0" />
   </ItemGroup>
 </Project>
