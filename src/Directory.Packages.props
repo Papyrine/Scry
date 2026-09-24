@@ -16,7 +16,7 @@
     <PackageVersion Include="NServiceBus" Version="10.2.9" />
     <!-- 8.x on purpose: the 8.5 line is the last under Apache-2.0, and MassTransit 9 needs a commercial
          licence. Do not move it to 9 without deciding that. -->
-    <PackageVersion Include="MassTransit" Version="8.5.10" />
+    <PackageVersion Include="MassTransit" Version="9.2.2" />
     <PackageVersion Include="Rebus" Version="8.9.4" />
     <PackageVersion Include="Rebus.ServiceProvider" Version="10.7.2" />
     <PackageVersion Include="WolverineFx" Version="6.39.1" />
@@ -63,16 +63,16 @@
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <PackageVersion Include="NUnit" Version="4.6.1" />
     <PackageVersion Include="NUnit3TestAdapter" Version="6.3.0" />
-    <PackageVersion Include="Verify" Version="33.1.2" />
-    <PackageVersion Include="Verify.NUnit" Version="33.1.2" />
+    <PackageVersion Include="Verify" Version="33.1.4" />
+    <PackageVersion Include="Verify.NUnit" Version="33.1.4" />
     <PackageVersion Include="Verify.DiffPlex" Version="3.3.1" />
     <PackageVersion Include="Verify.SourceGenerators" Version="2.5.0" />
     <PackageVersion Include="HttpMultipart" Version="0.1.4" />
     <PackageVersion Include="Polyfill" Version="11.4.0" />
     <PackageVersion Include="ProjectDefaults" Version="1.0.181" />
-    <PackageVersion Include="MarkdownSnippets.MsBuild" Version="28.4.2" />
+    <PackageVersion Include="MarkdownSnippets.MsBuild" Version="28.4.4" />
     <PackageVersion Include="NaughtyStrings" Version="3.0.0" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
-    <PackageVersion Include="DiffEngine" Version="20.5.0" />
+    <PackageVersion Include="DiffEngine" Version="20.5.1" />
   </ItemGroup>
 </Project>
