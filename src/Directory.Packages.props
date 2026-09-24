@@ -19,10 +19,10 @@
     <PackageVersion Include="MassTransit" Version="9.2.2" />
     <PackageVersion Include="Rebus" Version="8.9.4" />
     <PackageVersion Include="Rebus.ServiceProvider" Version="10.7.2" />
-    <PackageVersion Include="WolverineFx" Version="6.39.1" />
+    <PackageVersion Include="WolverineFx" Version="6.40.0" />
     <!-- Core Wolverine no longer compiles handler chains at runtime. The adapter needs neither; the tests
          run in dynamic mode, so they bring the compiler. A host picks this or static codegen itself. -->
-    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.39.1" />
+    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.40.0" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
     <PackageVersion Include="Delta.EF" Version="9.0.1" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
