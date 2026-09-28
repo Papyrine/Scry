@@ -4,7 +4,6 @@
 /// the provider's translation is covered rather than only the wire's vocabulary — several neighbours
 /// of these functions are deliberately absent precisely because EF refuses them.
 /// </summary>
-[TestFixture]
 public class TemporalPartTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -30,11 +29,11 @@ public class TemporalPartTests
         var listed = await client.Source<Shift>("Shift")
             .CountAsync(_ => durations.Contains(_.Duration));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(longer, Is.EqualTo(1));
-            Assert.That(listed, Is.EqualTo(1));
-        });
+            await Assert.That(longer).IsEqualTo(1);
+            await Assert.That(listed).IsEqualTo(1);
+        }
     }
 
     [Test]
@@ -52,17 +51,17 @@ public class TemporalPartTests
         var first = await Ordered().ToPageAsync(1);
         var second = await Ordered().ToPageAsync(1, first.Cursor);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(first.Cursor, Is.Not.Null);
-            Assert.That(first.Items.Single().Duration, Is.EqualTo(new TimeSpan(7, 30, 15)));
-            Assert.That(second.Items.Single().Duration, Is.EqualTo(new TimeSpan(9, 45, 50)));
-            Assert.That(second.HasMore, Is.False);
-        });
+            await Assert.That(first.Cursor).IsNotNull();
+            await Assert.That(first.Items.Single().Duration).IsEqualTo(new TimeSpan(7, 30, 15));
+            await Assert.That(second.Items.Single().Duration).IsEqualTo(new TimeSpan(9, 45, 50));
+            await Assert.That(second.HasMore).IsFalse();
+        }
     }
 
     [Test]
-    public void AnElapsedTimeConstantParsesOnTheServer()
+    public async Task AnElapsedTimeConstantParsesOnTheServer()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -80,7 +79,7 @@ public class TemporalPartTests
 
         var response = SharedProcessor.Instance.Execute(request, context);
 
-        Assert.That(response.Payload.GetInt32(), Is.EqualTo(1));
+        await Assert.That(response.Payload.GetInt32()).IsEqualTo(1);
     }
 
     record DurationRow(TimeSpan Duration);
@@ -100,7 +99,7 @@ public class TemporalPartTests
             .ToListAsync();
         // end-snippet
 
-        Assert.That(rows.Single().Name, Is.EqualTo("Early"));
+        await Assert.That(rows.Single().Name).IsEqualTo("Early");
     }
 
     // The sub-second parts are each within the unit above, so both rows read zero for them — what is
@@ -117,7 +116,7 @@ public class TemporalPartTests
                              _.Duration.Microseconds == 0 &&
                              _.Duration.Nanoseconds == 0);
 
-        Assert.That(count, Is.EqualTo(2));
+        await Assert.That(count).IsEqualTo(2);
     }
 
     [Test]
@@ -130,7 +129,7 @@ public class TemporalPartTests
             .CountAsync(_ => _.Placed.Microsecond == 0 &&
                              _.Placed.Nanosecond == 0);
 
-        Assert.That(count, Is.EqualTo(3));
+        await Assert.That(count).IsEqualTo(3);
     }
 
     // TimeOfDay reads a date's time half as an elapsed time, so its own parts read off the result.
@@ -145,7 +144,7 @@ public class TemporalPartTests
             .Select(_ => new OrderRow(_.Region))
             .ToListAsync();
 
-        Assert.That(rows.Single().Region, Is.EqualTo("North"));
+        await Assert.That(rows.Single().Region).IsEqualTo("North");
     }
 
     [Test]
@@ -159,7 +158,7 @@ public class TemporalPartTests
             .Select(_ => new ShiftRow(_.Name))
             .ToListAsync();
 
-        Assert.That(rows.Single().Name, Is.EqualTo("Early"));
+        await Assert.That(rows.Single().Name).IsEqualTo("Early");
     }
 
     [Test]
@@ -174,7 +173,7 @@ public class TemporalPartTests
             .Select(_ => new OrderRow(_.Region))
             .ToListAsync();
 
-        Assert.That(rows.Single().Region, Is.EqualTo("North"));
+        await Assert.That(rows.Single().Region).IsEqualTo("North");
     }
 
     [Test]
@@ -188,7 +187,7 @@ public class TemporalPartTests
             .Select(_ => new ShiftRow(_.Name))
             .ToListAsync();
 
-        Assert.That(rows.Single().Name, Is.EqualTo("Late"));
+        await Assert.That(rows.Single().Name).IsEqualTo("Late");
     }
 
     // The composition back the other way: a date and a time into one timestamp, both read off the row.
@@ -203,7 +202,7 @@ public class TemporalPartTests
             .Select(_ => new ShiftRow(_.Name))
             .ToListAsync();
 
-        Assert.That(rows.Single().Name, Is.EqualTo("Late"));
+        await Assert.That(rows.Single().Name).IsEqualTo("Late");
     }
 
     [Test]
@@ -218,18 +217,18 @@ public class TemporalPartTests
         var milliseconds = await client.Source<Shift>("Shift")
             .CountAsync(_ => _.Stamped.ToUnixTimeMilliseconds() > 0);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(seconds, Is.EqualTo(2));
-            Assert.That(milliseconds, Is.EqualTo(2));
-        });
+            await Assert.That(seconds).IsEqualTo(2);
+            await Assert.That(milliseconds).IsEqualTo(2);
+        }
     }
 
     // A whole total is a division rather than a part, and no provider translates one — so it is not in
     // the set. Like any member with no function behind it, it reads as an ordinary path segment and is
     // refused by the server; the analyzer reports it at the call site first.
     [Test]
-    public void TotalsAreNotCarried()
+    public async Task TotalsAreNotCarried()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
@@ -237,9 +236,9 @@ public class TemporalPartTests
         var rows = client.Source<Shift>("Shift")
             .Where(_ => _.Duration.TotalHours > 1)
             .Select(_ => new ShiftRow(_.Name));
-        var exception = Assert.ThrowsAsync<ScryValidationException>(() => rows.ToListAsync());
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(() => rows.ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("Duration"));
+        await Assert.That(exception!.Message).Contains("Duration");
     }
 
     static ScryClient ClientFor(TestContext context) =>

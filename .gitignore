@@ -12,3 +12,4 @@ nugets/
 *.trx
 BenchmarkDotNet.Artifacts/
 *.lnk
+TestResults/

@@ -4,7 +4,7 @@ using Bunit;
 /// The pending-work panel over a scripted command server: nothing while there is nothing to show, open
 /// as a command goes pending, and each command shown to its end — done, failed, or lost track of.
 /// </summary>
-[TestFixture]
+[NotInParallel]
 public class PendingWorkComponentTests
 {
     static RenameThing Rename => new()
@@ -21,11 +21,11 @@ public class PendingWorkComponentTests
 
         var component = context.Render<ScryPendingWork>(_ => _.Add(panel => panel.Store, client.PendingWork));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(component.Find("link").GetAttribute("href"), Is.EqualTo(ScryCommandStyles.DefaultHref));
-            Assert.That(component.FindAll("button, aside"), Is.Empty);
-        });
+            await Assert.That(component.Find("link").GetAttribute("href")).IsEqualTo(ScryCommandStyles.DefaultHref);
+            await Assert.That(component.FindAll("button, aside")).IsEmpty();
+        }
     }
 
     [Test]
@@ -39,7 +39,7 @@ public class PendingWorkComponentTests
                 .Add(panel => panel.Store, client.PendingWork)
                 .Add(panel => panel.StylesHref, null));
 
-        Assert.That(component.Markup.Trim(), Is.Empty);
+        await Assert.That(component.Markup.Trim()).IsEmpty();
     }
 
     [Test]
@@ -57,12 +57,12 @@ public class PendingWorkComponentTests
         await Rendered(component, () => Status(component) == "pending");
 
         var item = component.Find("[data-testid=pending-work] li");
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(item.GetAttribute("data-command"), Is.EqualTo("RenameThing"));
-            Assert.That(item.TextContent, Does.Contain("RenameThing · Thing 5"));
-            Assert.That(component.Find("[data-testid=pending-work-count]").TextContent, Is.EqualTo("1"));
-        });
+            await Assert.That(item.GetAttribute("data-command")).IsEqualTo("RenameThing");
+            await Assert.That(item.TextContent).Contains("RenameThing · Thing 5");
+            await Assert.That(component.Find("[data-testid=pending-work-count]").TextContent).IsEqualTo("1");
+        }
     }
 
     [Test]
@@ -79,7 +79,7 @@ public class PendingWorkComponentTests
 
         await Rendered(component, () => component.FindAll("[data-testid=pending-work-toggle]").Count == 1);
 
-        Assert.That(component.FindAll("[data-testid=pending-work]"), Is.Empty);
+        await Assert.That(component.FindAll("[data-testid=pending-work]")).IsEmpty();
     }
 
     // A linger longer than the test, so the done state is still drawn whenever the test looks: with a
@@ -135,7 +135,7 @@ public class PendingWorkComponentTests
 
         await Rendered(component, () => Status(component) == "failed");
 
-        Assert.That(component.Find("[data-testid=pending-work-error]").TextContent, Is.EqualTo("The manager still has reports."));
+        await Assert.That(component.Find("[data-testid=pending-work-error]").TextContent).IsEqualTo("The manager still has reports.");
     }
 
     // Cut, asked for again, and not found: the panel says so rather than leaving it pending for ever.
@@ -157,7 +157,7 @@ public class PendingWorkComponentTests
 
         await Rendered(component, () => Status(component) == "unknown");
 
-        Assert.That(component.Find("[data-testid=pending-work-error]").TextContent, Does.Contain("may have run"));
+        await Assert.That(component.Find("[data-testid=pending-work-error]").TextContent).Contains("may have run");
     }
 
     [Test]
@@ -175,7 +175,7 @@ public class PendingWorkComponentTests
         await Rendered(component, () => Status(component) == "failed");
 
         await component.Find("[data-testid=pending-work-close]").ClickAsync(new());
-        Assert.That(component.FindAll("[data-testid=pending-work]"), Is.Empty);
+        await Assert.That(component.FindAll("[data-testid=pending-work]")).IsEmpty();
 
         await component.Find("[data-testid=pending-work-toggle]").ClickAsync(new());
         await component.Find("[data-testid=pending-work-clear]").ClickAsync(new());
@@ -242,7 +242,7 @@ public class PendingWorkComponentTests
         var started = DateTime.UtcNow;
         while (!reached())
         {
-            Assert.That(DateTime.UtcNow - started, Is.LessThan(patience), "Waited too long.");
+            await Assert.That(DateTime.UtcNow - started).IsLessThan(patience).Because("Waited too long.");
             await Task.Delay(10);
         }
     }

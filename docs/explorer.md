@@ -1738,7 +1738,7 @@ Because the explorer reveals the complete queryable schema, leaving it mapped in
 The two images above are not files kept beside the docs: they are **Verify baselines**, and the markdown points its `<img>` straight at them. `ExplorerIntelliSense` and `ExplorerRun` in `samples/Sample.Tests/UiScreenshotTests.cs` drive the live explorer with Playwright and capture them, so a change to the UI fails a test rather than leaving a stale picture in the docs:
 
 ```bash
-dotnet test samples/Scry.Samples.slnx --filter "FullyQualifiedName~UiScreenshotTests"
+dotnet test --solution samples/Scry.Samples.slnx --treenode-filter "/*/*/UiScreenshotTests/*"
 ```
 
 Accepting the received file — move `*.received.png` over `*.verified.png`, or accept it from the Verify diff tool — is what republishes the image. The fixture is `[Category("Browser")]` so a run can opt out, and pixel output is environment sensitive: a first run on a new OS or CI image is expected to need reseeding.

@@ -16,19 +16,20 @@ using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 /// command's stream runs and ends, and that a row a caller may not act on answers exactly as a row
 /// that is not there. Self-contained, with a model, context and server of its own.
 /// </summary>
-[TestFixture]
+[NotInParallel]
+[DependsOn<HttpRoundTripTests.StaleClient>(nameof(HttpRoundTripTests.StaleClient.AClientThatDoesNotKnowRetriesInABody), ProceedOnFailure = true)]
 public class CommandHttpTests
 {
     const string userHeader = HeaderUserHandler.Header;
 
-    SqlDatabase<LedgerContext> database = null!;
+    static SqlDatabase<LedgerContext> database = null!;
 
-    [OneTimeSetUp]
-    public async Task BuildDatabase() =>
+    [Before(Class)]
+    public static async Task BuildDatabase() =>
         database = await LedgerData.Instance.Build();
 
-    [OneTimeTearDown]
-    public async Task DropDatabase() =>
+    [After(Class)]
+    public static async Task DropDatabase() =>
         await database.DisposeAsync();
 
     [Test]
@@ -40,15 +41,15 @@ public class CommandHttpTests
 
         var body = await response.Content.ReadAsStringAsync();
         var receipt = ScryJson.DeserializeReceipt(body);
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(response.Content.Headers.ContentType!.MediaType, Is.EqualTo("application/json"));
-            Assert.That(response.Headers.CacheControl!.NoStore, Is.True);
-            Assert.That(response.Headers.GetValues(WireFormat.SchemaStampHeader).Single(), Is.Not.Empty);
-            Assert.That(receipt.Status, Is.EqualTo(CommandStatus.Completed));
-            Assert.That(receipt.Result!.Value.GetProperty("id").GetInt32(), Is.GreaterThan(3));
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+            await Assert.That(response.Content.Headers.ContentType!.MediaType).IsEqualTo("application/json");
+            await Assert.That(response.Headers.CacheControl!.NoStore).IsTrue();
+            await Assert.That(response.Headers.GetValues(WireFormat.SchemaStampHeader).Single()).IsNotEmpty();
+            await Assert.That(receipt.Status).IsEqualTo(CommandStatus.Completed);
+            await Assert.That(receipt.Result!.Value.GetProperty("id").GetInt32()).IsGreaterThan(3);
+        }
     }
 
     [Test]
@@ -62,15 +63,15 @@ public class CommandHttpTests
         gate.SetResult();
         var final = await stream.Next();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(stream.Response.Content.Headers.ContentType!.MediaType, Is.EqualTo(ScryLive.ContentType));
-            Assert.That(stream.Response.Headers.CacheControl!.NoStore, Is.True);
-            Assert.That(pending.EventType, Is.EqualTo(ScryLive.Result));
-            Assert.That(ScryJson.DeserializeReceipt(pending.Data).Status, Is.EqualTo(CommandStatus.Pending));
-            Assert.That(ScryJson.DeserializeReceipt(final.Data).Status, Is.EqualTo(CommandStatus.Completed));
-        });
-        Assert.That(await stream.Ended(), Is.True);
+            await Assert.That(stream.Response.Content.Headers.ContentType!.MediaType).IsEqualTo(ScryLive.ContentType);
+            await Assert.That(stream.Response.Headers.CacheControl!.NoStore).IsTrue();
+            await Assert.That(pending.EventType).IsEqualTo(ScryLive.Result);
+            await Assert.That(ScryJson.DeserializeReceipt(pending.Data).Status).IsEqualTo(CommandStatus.Pending);
+            await Assert.That(ScryJson.DeserializeReceipt(final.Data).Status).IsEqualTo(CommandStatus.Completed);
+        }
+        await Assert.That(await stream.Ended()).IsTrue();
     }
 
     // Asked again by its id — after a cut, or an end the server chose — a command in flight answers with
@@ -83,21 +84,21 @@ public class CommandHttpTests
         var id = Guid.NewGuid();
         await using (var first = await server.Stream(Command("RenameLedger", new {id = 1, name = "Cash"}, id)))
         {
-            Assert.That(ScryJson.DeserializeReceipt((await first.Next()).Data).Status, Is.EqualTo(CommandStatus.Pending));
+            await Assert.That(ScryJson.DeserializeReceipt((await first.Next()).Data).Status).IsEqualTo(CommandStatus.Pending);
         }
 
         await using var again = await server.StreamReceipt(id);
-        Assert.That(ScryJson.DeserializeReceipt((await again.Next()).Data).Status, Is.EqualTo(CommandStatus.Pending));
+        await Assert.That(ScryJson.DeserializeReceipt((await again.Next()).Data).Status).IsEqualTo(CommandStatus.Pending);
 
         gate.SetResult();
-        Assert.That(ScryJson.DeserializeReceipt((await again.Next()).Data).Status, Is.EqualTo(CommandStatus.Completed));
+        await Assert.That(ScryJson.DeserializeReceipt((await again.Next()).Data).Status).IsEqualTo(CommandStatus.Completed);
 
         using var finished = await server.Http.GetAsync($"/api/query/command/{id:D}");
-        await Assert.MultipleAsync(async () =>
+        using (Assert.Multiple())
         {
-            Assert.That(finished.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(ScryJson.DeserializeReceipt(await finished.Content.ReadAsStringAsync()).Status, Is.EqualTo(CommandStatus.Completed));
-        });
+            await Assert.That(finished.StatusCode).IsEqualTo(HttpStatusCode.OK);
+            await Assert.That(ScryJson.DeserializeReceipt(await finished.Content.ReadAsStringAsync()).Status).IsEqualTo(CommandStatus.Completed);
+        }
     }
 
     // Another caller asking for a command by its id is told exactly what an id nobody sent is told.
@@ -108,19 +109,19 @@ public class CommandHttpTests
         var id = Guid.NewGuid();
         using (var sent = await server.Post(Command("OpenLedger", new {name = "Alice's"}, id), "alice"))
         {
-            Assert.That(sent.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            await Assert.That(sent.StatusCode).IsEqualTo(HttpStatusCode.OK);
         }
 
         using var stranger = await server.Get($"/api/query/command/{id:D}", "bob");
         using var unknown = await server.Get($"/api/query/command/{Guid.NewGuid():D}", "bob");
         using var own = await server.Get($"/api/query/command/{id:D}", "alice");
 
-        await Assert.MultipleAsync(async () =>
+        using (Assert.Multiple())
         {
-            Assert.That(stranger.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
-            Assert.That(await stranger.Content.ReadAsStringAsync(), Is.EqualTo(await unknown.Content.ReadAsStringAsync()));
-            Assert.That(own.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        });
+            await Assert.That(stranger.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+            await Assert.That(await stranger.Content.ReadAsStringAsync()).IsEqualTo(await unknown.Content.ReadAsStringAsync());
+            await Assert.That(own.StatusCode).IsEqualTo(HttpStatusCode.OK);
+        }
     }
 
     // A stream ended for the server's own reason says so, and asking again is a new request.
@@ -140,8 +141,8 @@ public class CommandHttpTests
         await using var stream = await server.Stream(Command("RenameLedger", new {id = 2, name = "Bank"}, id));
         await stream.Next();
         var end = await stream.Next();
-        Assert.That(end.EventType, Is.EqualTo(ScryLive.End));
-        Assert.That(ScryJson.DeserializeLiveEnd(Encoding.UTF8.GetBytes(end.Data)).Reconnect, Is.True);
+        await Assert.That(end.EventType).IsEqualTo(ScryLive.End);
+        await Assert.That(ScryJson.DeserializeLiveEnd(Encoding.UTF8.GetBytes(end.Data)).Reconnect).IsTrue();
 
         gate.SetResult();
         await using var again = await server.StreamReceipt(id);
@@ -151,14 +152,15 @@ public class CommandHttpTests
             receipt = ScryJson.DeserializeReceipt((await again.Next()).Data);
         }
 
-        Assert.That(receipt.Status, Is.EqualTo(CommandStatus.Completed));
+        await Assert.That(receipt.Status).IsEqualTo(CommandStatus.Completed);
     }
 
-    [TestCase("{ not json", ScryErrorCode.WireFormat, "Invalid query command request")]
-    [TestCase("""{"version":1,"command":"Teleport","id":"a3f1c0de-0000-4000-8000-000000000001","payload":{}}""", ScryErrorCode.Validation, "Unknown command 'Teleport'.")]
-    [TestCase("""{"version":1,"command":"RenameLedger","id":"a3f1c0de-0000-4000-8000-000000000001","payload":{"id":1,"name":"x","renamedBy":"m"}}""", ScryErrorCode.Validation, "carries 'renamedBy', which the command does not have.")]
-    [TestCase("""{"version":1,"command":"RenameLedger","id":"a3f1c0de-0000-4000-8000-000000000001","payload":{"name":"x"}}""", ScryErrorCode.Validation, "is missing 'id'.")]
-    [TestCase("""{"version":2,"command":"RenameLedger","id":"a3f1c0de-0000-4000-8000-000000000001","payload":{"id":1,"name":"x"}}""", ScryErrorCode.Validation, "Unsupported command request version 2")]
+    [Test]
+    [Arguments("{ not json", ScryErrorCode.WireFormat, "Invalid query command request")]
+    [Arguments("""{"version":1,"command":"Teleport","id":"a3f1c0de-0000-4000-8000-000000000001","payload":{}}""", ScryErrorCode.Validation, "Unknown command 'Teleport'.")]
+    [Arguments("""{"version":1,"command":"RenameLedger","id":"a3f1c0de-0000-4000-8000-000000000001","payload":{"id":1,"name":"x","renamedBy":"m"}}""", ScryErrorCode.Validation, "carries 'renamedBy', which the command does not have.")]
+    [Arguments("""{"version":1,"command":"RenameLedger","id":"a3f1c0de-0000-4000-8000-000000000001","payload":{"name":"x"}}""", ScryErrorCode.Validation, "is missing 'id'.")]
+    [Arguments("""{"version":2,"command":"RenameLedger","id":"a3f1c0de-0000-4000-8000-000000000001","payload":{"id":1,"name":"x"}}""", ScryErrorCode.Validation, "Unsupported command request version 2")]
     public async Task ARequestThatCannotBeHandledIsA400(string body, ScryErrorCode code, string message)
     {
         await using var server = await Server.Start(database);
@@ -166,13 +168,13 @@ public class CommandHttpTests
         using var response = await server.PostRaw(body);
 
         var error = ScryJson.TryDeserializeError(await response.Content.ReadAsStringAsync())!;
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-            Assert.That(error.Code, Is.EqualTo(code));
-            Assert.That(error.Error, Does.Contain(message));
-            Assert.That(response.Headers.GetValues(WireFormat.SchemaStampHeader).Single(), Is.Not.Empty);
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+            await Assert.That(error.Code).IsEqualTo(code);
+            await Assert.That(error.Error).Contains(message);
+            await Assert.That(response.Headers.GetValues(WireFormat.SchemaStampHeader).Single()).IsNotEmpty();
+        }
     }
 
     [Test]
@@ -183,11 +185,11 @@ public class CommandHttpTests
         using var response = await server.PostRaw("""{"version":1,"command":"Teleport","id":"a3f1c0de-0000-4000-8000-000000000001","payload":{},"stamp":"not-this-server"}""");
 
         var error = ScryJson.TryDeserializeError(await response.Content.ReadAsStringAsync())!;
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(error.Code, Is.EqualTo(ScryErrorCode.StaleClient));
-            Assert.That(error.Error, Does.Contain("regenerate the client"));
-        });
+            await Assert.That(error.Code).IsEqualTo(ScryErrorCode.StaleClient);
+            await Assert.That(error.Error).Contains("regenerate the client");
+        }
     }
 
     [Test]
@@ -198,11 +200,11 @@ public class CommandHttpTests
         using var response = await server.Post(Command("OpenLedger", new {name = new string('x', 200)}));
 
         var error = ScryJson.TryDeserializeError(await response.Content.ReadAsStringAsync())!;
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.RequestEntityTooLarge));
-            Assert.That(error.Code, Is.EqualTo(ScryErrorCode.PayloadTooLarge));
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.RequestEntityTooLarge);
+            await Assert.That(error.Code).IsEqualTo(ScryErrorCode.PayloadTooLarge);
+        }
     }
 
     [Test]
@@ -213,7 +215,7 @@ public class CommandHttpTests
         using var content = new StringContent(ScryJson.Serialize(Command("OpenLedger", new {name = "x"})), Encoding.UTF8, "text/plain");
         using var response = await server.Http.PostAsync("/api/query/command", content);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.UnsupportedMediaType));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.UnsupportedMediaType);
     }
 
     [Test]
@@ -224,12 +226,12 @@ public class CommandHttpTests
         using var response = await server.Post(Command("RenameLedger", new {id = 1, name = "Mine"}), "mallory");
 
         var error = ScryJson.TryDeserializeError(await response.Content.ReadAsStringAsync())!;
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
-            Assert.That(error.Error, Is.EqualTo(ScryPermissionException.CommandDeniedMessage));
-            Assert.That(error.Code, Is.EqualTo(ScryErrorCode.Forbidden));
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Forbidden);
+            await Assert.That(error.Error).IsEqualTo(ScryPermissionException.CommandDeniedMessage);
+            await Assert.That(error.Code).IsEqualTo(ScryErrorCode.Forbidden);
+        }
     }
 
     // A row the command's policy denies and a row that is not there are one answer, byte for byte.
@@ -241,12 +243,12 @@ public class CommandHttpTests
         using var denied = await server.Post(Command("RenameLedger", new {id = 3, name = "Unlocked"}));
         using var missing = await server.Post(Command("RenameLedger", new {id = 999, name = "Found"}));
 
-        await Assert.MultipleAsync(async () =>
+        using (Assert.Multiple())
         {
-            Assert.That(denied.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
-            Assert.That(missing.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
-            Assert.That(await denied.Content.ReadAsStringAsync(), Is.EqualTo(await missing.Content.ReadAsStringAsync()));
-        });
+            await Assert.That(denied.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+            await Assert.That(missing.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+            await Assert.That(await denied.Content.ReadAsStringAsync()).IsEqualTo(await missing.Content.ReadAsStringAsync());
+        }
     }
 
     [Test]
@@ -271,13 +273,13 @@ public class CommandHttpTests
         using var carol = await server.Post(Command("RenameLedger", new {id = 2, name = "Bank"}), "carol");
         gate.SetResult();
 
-        await Assert.MultipleAsync(async () =>
+        using (Assert.Multiple())
         {
-            Assert.That(aliceAgain.StatusCode, Is.EqualTo(HttpStatusCode.TooManyRequests));
-            Assert.That(aliceAgain.Headers.RetryAfter, Is.Not.Null);
-            Assert.That(carol.StatusCode, Is.EqualTo(HttpStatusCode.ServiceUnavailable));
-            Assert.That(ScryJson.TryDeserializeError(await carol.Content.ReadAsStringAsync())!.Code, Is.EqualTo(ScryErrorCode.CommandLimit));
-        });
+            await Assert.That(aliceAgain.StatusCode).IsEqualTo(HttpStatusCode.TooManyRequests);
+            await Assert.That(aliceAgain.Headers.RetryAfter).IsNotNull();
+            await Assert.That(carol.StatusCode).IsEqualTo(HttpStatusCode.ServiceUnavailable);
+            await Assert.That(ScryJson.TryDeserializeError(await carol.Content.ReadAsStringAsync())!.Code).IsEqualTo(ScryErrorCode.CommandLimit);
+        }
     }
 
     // A server that has not said how many commands it will hold maps no command route at all.
@@ -289,11 +291,11 @@ public class CommandHttpTests
         using var command = await server.Post(Command("OpenLedger", new {name = "x"}));
         using var capabilities = await server.Http.GetAsync("/api/query/capabilities");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(command.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
-            Assert.That(capabilities.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
-        });
+            await Assert.That(command.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+            await Assert.That(capabilities.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+        }
     }
 
     [Test]
@@ -304,12 +306,12 @@ public class CommandHttpTests
         using var alice = await server.Get("/api/query/capabilities", "alice");
         using var mallory = await server.Get("/api/query/capabilities", "mallory");
 
-        await Assert.MultipleAsync(async () =>
+        using (Assert.Multiple())
         {
-            Assert.That(alice.Headers.CacheControl!.NoStore, Is.True);
-            Assert.That(ScryJson.DeserializeCapabilities(await alice.Content.ReadAsStringAsync()).Commands, Is.EqualTo(["OpenLedger", "RenameLedger"]));
-            Assert.That(ScryJson.DeserializeCapabilities(await mallory.Content.ReadAsStringAsync()).Commands, Is.EqualTo(["OpenLedger"]));
-        });
+            await Assert.That(alice.Headers.CacheControl!.NoStore).IsTrue();
+            await Assert.That(ScryJson.DeserializeCapabilities(await alice.Content.ReadAsStringAsync()).Commands).IsEquivalentTo(["OpenLedger", "RenameLedger"], CollectionOrdering.Matching);
+            await Assert.That(ScryJson.DeserializeCapabilities(await mallory.Content.ReadAsStringAsync()).Commands).IsEquivalentTo(["OpenLedger"], CollectionOrdering.Matching);
+        }
     }
 
     // The per-row capability is the command's policy decided in the query, per caller.
@@ -321,11 +323,11 @@ public class CommandHttpTests
         var alice = await server.Capabilities("alice");
         var mallory = await server.Capabilities("mallory");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(alice, Is.EqualTo([(1, true), (2, true), (3, false)]));
-            Assert.That(mallory, Is.EqualTo([(1, false), (2, false), (3, false)]));
-        });
+            await Assert.That(alice).IsEquivalentTo([(1, true), (2, true), (3, false)], CollectionOrdering.Matching);
+            await Assert.That(mallory).IsEquivalentTo([(1, false), (2, false), (3, false)], CollectionOrdering.Matching);
+        }
     }
 
     // Whatever guards the endpoint guards every command route, as it guards every query route.
@@ -338,12 +340,12 @@ public class CommandHttpTests
         using var receipt = await server.Get($"/api/query/command/{Guid.NewGuid():D}", "alice");
         using var capabilities = await server.Get("/api/query/capabilities", "alice");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(command.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
-            Assert.That(receipt.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
-            Assert.That(capabilities.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
-        });
+            await Assert.That(command.StatusCode).IsEqualTo(HttpStatusCode.Forbidden);
+            await Assert.That(receipt.StatusCode).IsEqualTo(HttpStatusCode.Forbidden);
+            await Assert.That(capabilities.StatusCode).IsEqualTo(HttpStatusCode.Forbidden);
+        }
     }
 
     // What a command wrote reaches a live query on the same server, through the interceptor on the
@@ -368,14 +370,14 @@ public class CommandHttpTests
         using var response = await server.Http.SendAsync(subscribe, HttpCompletionOption.ResponseHeadersRead);
         await using var body = await response.Content.ReadAsStreamAsync();
         await using var events = SseParser.Create(body).EnumerateAsync().GetAsyncEnumerator();
-        Assert.That(await Next(events), Does.Contain("\"Bank\""));
+        await Assert.That(await Next(events)).Contains("\"Bank\"");
 
         using (var renamed = await server.Post(Command("RenameLedger", new {id = 2, name = "Savings"})))
         {
-            Assert.That(renamed.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            await Assert.That(renamed.StatusCode).IsEqualTo(HttpStatusCode.OK);
         }
 
-        Assert.That(await Next(events), Does.Contain("\"Savings\""));
+        await Assert.That(await Next(events)).Contains("\"Savings\"");
     }
 
     // From here down the far side is the client rather than a parser: a command class in, an outcome
@@ -388,11 +390,11 @@ public class CommandHttpTests
 
         var outcome = await client.SendCommandAsync<OpenLedgerRequest, OpenedLedger>(new() {Name = "From the client"});
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(outcome.Status, Is.EqualTo(ScryCommandStatus.Completed));
-            Assert.That(outcome.Value.Id, Is.GreaterThan(3));
-        });
+            await Assert.That(outcome.Status).IsEqualTo(ScryCommandStatus.Completed);
+            await Assert.That(outcome.Value.Id).IsGreaterThan(3);
+        }
     }
 
     [Test]
@@ -404,13 +406,13 @@ public class CommandHttpTests
         client.CommandWait = TimeSpan.FromMilliseconds(100);
 
         var outcome = await client.SendCommandAsync(new RenameLedgerRequest {Id = 1, Name = "Cash"});
-        Assert.That(outcome.Status, Is.EqualTo(ScryCommandStatus.Pending));
-        Assert.That(client.PendingWork.PendingCount, Is.EqualTo(1));
+        await Assert.That(outcome.Status).IsEqualTo(ScryCommandStatus.Pending);
+        await Assert.That(client.PendingWork.PendingCount).IsEqualTo(1);
 
         gate.SetResult();
         var final = await outcome.Completion.WaitAsync(patience);
 
-        Assert.That(final.Status, Is.EqualTo(ScryCommandStatus.Completed));
+        await Assert.That(final.Status).IsEqualTo(ScryCommandStatus.Completed);
     }
 
     // The server ends a pending command's stream at its lifetime; the client asks for it again by id
@@ -441,7 +443,7 @@ public class CommandHttpTests
         await reattached.Task.WaitAsync(patience);
         gate.SetResult();
 
-        Assert.That((await outcome.Completion.WaitAsync(patience)).Status, Is.EqualTo(ScryCommandStatus.Completed));
+        await Assert.That((await outcome.Completion.WaitAsync(patience)).Status).IsEqualTo(ScryCommandStatus.Completed);
     }
 
     [Test]
@@ -451,11 +453,11 @@ public class CommandHttpTests
 
         var outcome = await server.Client().SendCommandAsync(new RenameLedgerRequest {Id = 3, Name = "Unlocked"});
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(outcome.Status, Is.EqualTo(ScryCommandStatus.Failed));
-            Assert.That(outcome.Error, Is.EqualTo(ScryCommandNotFoundException.TargetMessage));
-        });
+            await Assert.That(outcome.Status).IsEqualTo(ScryCommandStatus.Failed);
+            await Assert.That(outcome.Error).IsEqualTo(ScryCommandNotFoundException.TargetMessage);
+        }
     }
 
     [Test]
@@ -463,7 +465,7 @@ public class CommandHttpTests
     {
         await using var server = await Server.Start(database, authenticate: true);
 
-        Assert.ThrowsAsync<ScryPermissionException>(() => server.Client("mallory").SendCommandAsync(new RenameLedgerRequest {Id = 1, Name = "Mine"}));
+        await Assert.ThrowsExactlyAsync<ScryPermissionException>(() => server.Client("mallory").SendCommandAsync(new RenameLedgerRequest {Id = 1, Name = "Mine"}));
     }
 
     [Test]
@@ -476,12 +478,12 @@ public class CommandHttpTests
         await alice.Ready;
         await mallory.Ready;
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(alice.Can("RenameLedger"), Is.True);
-            Assert.That(mallory.Can("RenameLedger"), Is.False);
-            Assert.That(mallory.Can("OpenLedger"), Is.True);
-        });
+            await Assert.That(alice.Can("RenameLedger")).IsTrue();
+            await Assert.That(mallory.Can("RenameLedger")).IsFalse();
+            await Assert.That(mallory.Can("OpenLedger")).IsTrue();
+        }
     }
 
     [Test]
@@ -490,16 +492,16 @@ public class CommandHttpTests
         await using var server = await Server.Start(database, _ => _.MaxPendingCommands = 0);
         var client = server.Client();
 
-        Assert.ThrowsAsync<NotSupportedException>(() => client.SendCommandAsync(new OpenLedgerRequest {Name = "x"}));
+        await Assert.ThrowsExactlyAsync<NotSupportedException>(() => client.SendCommandAsync(new OpenLedgerRequest {Name = "x"}));
         await client.Ready;
-        Assert.That(client.Can("OpenLedger"), Is.False);
+        await Assert.That(client.Can("OpenLedger")).IsFalse();
     }
 
     static async Task<string> Next(IAsyncEnumerator<SseItem<string>> events)
     {
         while (true)
         {
-            Assert.That(await events.MoveNextAsync().AsTask().WaitAsync(patience), Is.True);
+            await Assert.That(await events.MoveNextAsync().AsTask().WaitAsync(patience)).IsTrue();
             if (events.Current.EventType == ScryLive.Result)
             {
                 return events.Current.Data;
@@ -668,8 +670,8 @@ public class CommandHttpTests
 
         public static async Task<Events> Open(HttpResponseMessage response)
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(response.Content.Headers.ContentType!.MediaType, Is.EqualTo(ScryLive.ContentType));
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+            await Assert.That(response.Content.Headers.ContentType!.MediaType).IsEqualTo(ScryLive.ContentType);
             var stream = await response.Content.ReadAsStreamAsync();
             return new(response, SseParser.Create(stream).EnumerateAsync().GetAsyncEnumerator());
         }
@@ -678,7 +680,7 @@ public class CommandHttpTests
         {
             while (true)
             {
-                Assert.That(await events.MoveNextAsync().AsTask().WaitAsync(patience), Is.True, "The stream ended.");
+                await Assert.That(await events.MoveNextAsync().AsTask().WaitAsync(patience)).IsTrue().Because("The stream ended.");
                 if (events.Current.EventType != ScryLive.Ping)
                 {
                     return events.Current;

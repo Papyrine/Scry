@@ -11,7 +11,8 @@ using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 /// context is touched — or never gets past routing, so both servers are built over a connection string
 /// nothing connects to. That is the point of the tests: none of this behaviour is about data.
 /// </remarks>
-[TestFixture]
+[NotInParallel]
+[DependsOn<HttpRoundTripTests.StaleClient>(nameof(HttpRoundTripTests.StaleClient.AClientThatDoesNotKnowRetriesInABody), ProceedOnFailure = true)]
 public class UrlLimitTests
 {
     const string unusable = "Server=(localdb)\\nothing;Database=none;Connect Timeout=1";
@@ -45,14 +46,14 @@ public class UrlLimitTests
         using var http = app.GetTestClient();
 
         var client = ScryClient.ForHttp(http, "/api/query");
-        Assert.That(client.QueryUrlLimit, Is.EqualTo(QueryUrl.MaxLength));
+        await Assert.That(client.QueryUrlLimit).IsEqualTo(QueryUrl.MaxLength);
 
         // Rejected by the allow-list, so nothing reaches the database — and the response still carries
         // the budget, because it is written before the request is even read.
-        Assert.ThrowsAsync<ScryRequestException>(
+        await Assert.ThrowsExactlyAsync<ScryRequestException>(
             () => client.Source<EmployeeQueryModel>("NotASource").CountAsync());
 
-        Assert.That(client.QueryUrlLimit, Is.EqualTo(64));
+        await Assert.That(client.QueryUrlLimit).IsEqualTo(64);
 
         await app.StopAsync();
     }
@@ -66,8 +67,8 @@ public class UrlLimitTests
 
         using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}=not-base64url!!");
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        Assert.That(response.Headers.GetValues(WireFormat.UrlLimitHeader).Single(), Is.EqualTo("2048"));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That(response.Headers.GetValues(WireFormat.UrlLimitHeader).Single()).IsEqualTo("2048");
 
         await app.StopAsync();
     }
@@ -85,11 +86,11 @@ public class UrlLimitTests
             QueryRequest.Create("Employee", [new CountOp()]));
         using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.MethodNotAllowed));
-            Assert.That(response.Content.Headers.Allow, Does.Contain("POST"));
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.MethodNotAllowed);
+            await Assert.That(response.Content.Headers.Allow).Contains("POST");
+        }
 
         await app.StopAsync();
     }
@@ -104,27 +105,27 @@ public class UrlLimitTests
         using var http = app.GetTestClient();
 
         var client = ScryClient.ForHttp(http, "/api/query");
-        Assert.ThrowsAsync<ScryRequestException>(
+        await Assert.ThrowsExactlyAsync<ScryRequestException>(
             () => client.Source<EmployeeQueryModel>("NotASource").CountAsync());
 
-        Assert.That(client.QueryUrlLimit, Is.Zero);
+        await Assert.That(client.QueryUrlLimit).IsZero();
 
         await app.StopAsync();
     }
 
     [Test]
-    public void NegativeLimitIsRefusedAtStartup()
+    public async Task NegativeLimitIsRefusedAtStartup()
     {
-        var exception = Assert.Throws<Exception>(() => Server(-1));
+        var exception = Assert.ThrowsExactly<Exception>(() => Server(-1));
 
-        Assert.That(exception!.Message, Does.Contain(nameof(ScryOptions.QueryUrlLimit)));
+        await Assert.That(exception!.Message).Contains(nameof(ScryOptions.QueryUrlLimit));
     }
 
     // A policied source answers differently for different callers, and an ETag over a URL says nothing
     // about which one asked. Caught where it can still be fixed rather than in production, where it
     // presents as one caller being handed another's rows.
     [Test]
-    public void CachingAPoliciedSourceWithoutAScopeIsRefusedAtStartup()
+    public async Task CachingAPoliciedSourceWithoutAScopeIsRefusedAtStartup()
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -139,17 +140,17 @@ public class UrlLimitTests
             });
 
         var app = builder.Build();
-        var exception = Assert.Throws<Exception>(() => app.MapScry("/api/query"));
+        var exception = Assert.ThrowsExactly<Exception>(() => app.MapScry("/api/query"));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(exception!.Message, Does.Contain("Department"));
-            Assert.That(exception.Message, Does.Contain(nameof(ScryOptions.CacheScope)));
-        });
+            await Assert.That(exception!.Message).Contains("Department");
+            await Assert.That(exception.Message).Contains(nameof(ScryOptions.CacheScope));
+        }
     }
 
     [Test]
-    public void CachingAPoliciedSourceWithAScopeStarts()
+    public async Task CachingAPoliciedSourceWithAScopeStarts()
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -166,6 +167,6 @@ public class UrlLimitTests
 
         var app = builder.Build();
 
-        Assert.DoesNotThrow(() => app.MapScry("/api/query"));
+        await Assert.That(() => app.MapScry("/api/query")).ThrowsNothing();
     }
 }

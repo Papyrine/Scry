@@ -4,11 +4,10 @@
 /// URL and expects the server to; a server reading the override alone accepted the constant in a URL,
 /// kept the response storable, and computed a stamp the generator's disagreed with.
 /// </summary>
-[TestFixture]
 public class SensitiveOverrideTests
 {
     [Test]
-    public void AConstantAgainstTheOverrideIsRefusedFromAUrl()
+    public async Task AConstantAgainstTheOverrideIsRefusedFromAUrl()
     {
         using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
@@ -18,13 +17,13 @@ public class SensitiveOverrideTests
                 new CountOp()
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(() => Execute(request, context, fromUrl: true, out _));
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => Execute(request, context, fromUrl: true, out _));
 
-        Assert.That(exception!.RequiresBody, Is.True);
+        await Assert.That(exception!.RequiresBody).IsTrue();
     }
 
     [Test]
-    public void ReturningTheOverrideIsNotStored()
+    public async Task ReturningTheOverrideIsNotStored()
     {
         using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
@@ -33,12 +32,12 @@ public class SensitiveOverrideTests
 
         Execute(request, context, fromUrl: true, out var headers);
 
-        Assert.That(headers.CacheControl.ToString(), Is.EqualTo("no-store"));
+        await Assert.That(headers.CacheControl.ToString()).IsEqualTo("no-store");
     }
 
     // The unmarked member on the same type keeps the URL: the marking reaches the override, not the type.
     [Test]
-    public void AnUnmarkedMemberOfTheSameTypeTravelsInTheUrl()
+    public async Task AnUnmarkedMemberOfTheSameTypeTravelsInTheUrl()
     {
         using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
@@ -48,7 +47,7 @@ public class SensitiveOverrideTests
                 new CountOp()
             ]);
 
-        Assert.DoesNotThrow(() => Execute(request, context, fromUrl: true, out _));
+        await Assert.That(() => Execute(request, context, fromUrl: true, out _)).ThrowsNothing();
     }
 
     static QueryResponse Execute(QueryRequest request, TestContext context, bool fromUrl, out IHeaderDictionary responseHeaders)

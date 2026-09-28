@@ -3,7 +3,6 @@
 /// same unfolding EF applies to <c>Queryable.MaxBy</c> / <c>MinBy</c>. The ordering precedes any
 /// projection, so the key reads the row and the answer is the row itself, default-projected.
 /// </summary>
-[TestFixture]
 public class MaxByMinByTests
 {
     [Test]
@@ -14,11 +13,11 @@ public class MaxByMinByTests
 
         var top = await client.Source<Order>("Order").MaxByAsync(_ => _.Amount);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(top!.Amount, Is.EqualTo(250m));
-            Assert.That(top.Region, Is.EqualTo("North"));
-        });
+            await Assert.That(top!.Amount).IsEqualTo(250m);
+            await Assert.That(top.Region).IsEqualTo("North");
+        }
     }
 
     [Test]
@@ -29,7 +28,7 @@ public class MaxByMinByTests
 
         var bottom = await client.Source<Order>("Order").MinByAsync(_ => _.Amount);
 
-        Assert.That(bottom!.Region, Is.EqualTo("South"));
+        await Assert.That(bottom!.Region).IsEqualTo("South");
     }
 
     [Test]
@@ -42,7 +41,7 @@ public class MaxByMinByTests
             .Where(_ => _.Region == "North")
             .MinByAsync(_ => _.Amount);
 
-        Assert.That(cheapest!.Amount, Is.EqualTo(100m));
+        await Assert.That(cheapest!.Amount).IsEqualTo(100m);
     }
 
     [Test]
@@ -53,7 +52,7 @@ public class MaxByMinByTests
 
         var latest = await client.Source<Order>("Order").MaxByAsync(_ => _.Placed);
 
-        Assert.That(latest!.Placed, Is.EqualTo(new DateTime(2026, 7, 20, 14, 5, 0)));
+        await Assert.That(latest!.Placed).IsEqualTo(new DateTime(2026, 7, 20, 14, 5, 0));
     }
 
     [Test]
@@ -66,7 +65,7 @@ public class MaxByMinByTests
             .Where(_ => _.Region == "West")
             .MaxByOrDefaultAsync(_ => _.Amount);
 
-        Assert.That(missing, Is.Null);
+        await Assert.That(missing).IsNull();
     }
 
     static ScryClient ClientFor(TestContext context) =>

@@ -334,8 +334,8 @@ The optional [schema stamp](wire-format.md#schema-stamp) on a request is **not**
 <a id='snippet-rejectIgnoredProperty'></a>
 ```cs
 [Test]
-public void RejectsIgnoredProperty() =>
-    AssertRejected(QueryRequest.Create(
+public async Task RejectsIgnoredProperty() =>
+    await AssertRejected(QueryRequest.Create(
         "Employee",
         [
             new WhereOp(new BinaryNode(
@@ -344,7 +344,7 @@ public void RejectsIgnoredProperty() =>
                 new ConstNode("100", ClrTypeTag.Decimal)))
         ]));
 ```
-<sup><a href='/src/Scry.Tests/SecurityTests.cs#L4-L15' title='Snippet source file'>snippet source</a> | <a href='#snippet-rejectIgnoredProperty' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/SecurityTests.cs#L3-L14' title='Snippet source file'>snippet source</a> | <a href='#snippet-rejectIgnoredProperty' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -593,10 +593,10 @@ public async Task DisallowedPropertyRejectedWith400()
     using var content = new StringContent(json, Encoding.UTF8, "application/json");
     using var response = await http.PostAsync("/api/query", content);
 
-    Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L376-L403' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L375-L402' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 

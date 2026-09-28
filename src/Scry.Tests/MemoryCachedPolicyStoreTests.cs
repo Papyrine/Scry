@@ -4,14 +4,13 @@
 /// with the round then is the contract every store has to keep — a decision made under grants the
 /// host has since revoked must not stand as the answer.
 /// </summary>
-[TestFixture]
 public class MemoryCachedPolicyStoreTests
 {
     const string policy = "RegionPolicy";
     const string scope = "tenant-1";
 
     [Test]
-    public void ARoundAgainstTheCurrentGenerationResolvesWhatItDecided()
+    public async Task ARoundAgainstTheCurrentGenerationResolvesWhatItDecided()
     {
         var store = new MemoryCachedPolicyStore();
         store.Apply(policy, scope, new([(1, true), (2, false)], 2, []));
@@ -21,18 +20,18 @@ public class MemoryCachedPolicyStoreTests
         store.Apply(policy, scope, new([(1, false)], 2, read.PendingKeys) {Generation = read.Generation});
 
         var scoped = store.Get(policy, scope)!;
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
             // The two invalidations of one key pend it once.
-            Assert.That(read.PendingKeys, Is.EqualTo([1]));
-            Assert.That(scoped.PendingKeys, Is.Empty);
-            Assert.That(scoped.AllowedKeys, Is.Empty);
-            Assert.That(scoped.Watermark, Is.EqualTo(2));
-        });
+            await Assert.That(read.PendingKeys).IsEquivalentTo(new object[] {1}, CollectionOrdering.Matching);
+            await Assert.That(scoped.PendingKeys).IsEmpty();
+            await Assert.That(scoped.AllowedKeys).IsEmpty();
+            await Assert.That(scoped.Watermark).IsEqualTo(2);
+        }
     }
 
     [Test]
-    public void ARowInvalidatedWhileARoundDecidesStaysPending()
+    public async Task ARowInvalidatedWhileARoundDecidesStaysPending()
     {
         var store = new MemoryCachedPolicyStore();
         store.Apply(policy, scope, new([(1, true)], 1, []));
@@ -46,15 +45,15 @@ public class MemoryCachedPolicyStoreTests
         store.Apply(policy, scope, new([(1, true)], 1, read.PendingKeys) {Generation = read.Generation});
 
         var scoped = store.Get(policy, scope)!;
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(scoped.PendingKeys, Is.EqualTo([1]));
-            Assert.That(scoped.Generation, Is.Not.EqualTo(read.Generation));
-        });
+            await Assert.That(scoped.PendingKeys).IsEquivalentTo(new object[] {1}, CollectionOrdering.Matching);
+            await Assert.That(scoped.Generation).IsNotEqualTo(read.Generation);
+        }
     }
 
     [Test]
-    public void AScopeForgottenWhileARoundDecidesDropsTheRound()
+    public async Task AScopeForgottenWhileARoundDecidesDropsTheRound()
     {
         var store = new MemoryCachedPolicyStore();
         store.Apply(policy, scope, new([(1, true), (2, true)], 2, []));
@@ -67,16 +66,16 @@ public class MemoryCachedPolicyStoreTests
         store.Apply(policy, scope, new([(3, true)], 3, []) {Generation = read.Generation});
 
         var scoped = store.Get(policy, scope)!;
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(scoped.AllowedKeys, Is.Empty);
-            Assert.That(scoped.Watermark, Is.Null);
-            Assert.That(scoped.PendingKeys, Is.Empty);
-        });
+            await Assert.That(scoped.AllowedKeys).IsEmpty();
+            await Assert.That(scoped.Watermark).IsNull();
+            await Assert.That(scoped.PendingKeys).IsEmpty();
+        }
     }
 
     [Test]
-    public void AForgottenScopeIsDecidedAgainFromNothing()
+    public async Task AForgottenScopeIsDecidedAgainFromNothing()
     {
         var store = new MemoryCachedPolicyStore();
         store.Apply(policy, scope, new([(1, true)], 1, []));
@@ -88,16 +87,16 @@ public class MemoryCachedPolicyStoreTests
         store.Apply(policy, scope, new([(1, false), (2, true)], 2, []) {Generation = read.Generation});
 
         var scoped = store.Get(policy, scope)!;
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(read.Watermark, Is.Null);
-            Assert.That(scoped.AllowedKeys, Is.EqualTo([2]));
-            Assert.That(scoped.Watermark, Is.EqualTo(2));
-        });
+            await Assert.That(read.Watermark).IsNull();
+            await Assert.That(scoped.AllowedKeys).IsEquivalentTo(new object[] {2}, CollectionOrdering.Matching);
+            await Assert.That(scoped.Watermark).IsEqualTo(2);
+        }
     }
 
     [Test]
-    public void OnlyAnInvalidationMovesTheGeneration()
+    public async Task OnlyAnInvalidationMovesTheGeneration()
     {
         var store = new MemoryCachedPolicyStore();
         store.Apply(policy, scope, new([(1, true)], 1, []));
@@ -107,10 +106,10 @@ public class MemoryCachedPolicyStoreTests
         store.InvalidateRows(policy, [2]);
         var third = store.Get(policy, scope)!.Generation;
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(second, Is.EqualTo(first));
-            Assert.That(third, Is.GreaterThan(second));
-        });
+            await Assert.That(second).IsEquivalentTo(first, CollectionOrdering.Matching);
+            await Assert.That(third).IsGreaterThan(second);
+        }
     }
 }

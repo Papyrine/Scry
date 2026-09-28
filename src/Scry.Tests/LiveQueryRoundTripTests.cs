@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 /// client's transport and a real database under it. No web host: this is the seam a transport other
 /// than HTTP plugs into, exercised from both ends at once.
 /// </summary>
-[TestFixture]
 public class LiveQueryRoundTripTests
 {
     [Test]
@@ -24,13 +23,13 @@ public class LiveQueryRoundTripTests
             // ReSharper disable once MethodSupportsCancellation
             .GetAsyncEnumerator();
 
-        Assert.That(await Next(answers), Is.True);
-        Assert.That(answers.Current.Select(_ => _.Region), Is.EqualTo(["North", "South"]));
+        await Assert.That(await Next(answers)).IsTrue();
+        await Assert.That(answers.Current.Select(_ => _.Region)).IsEquivalentTo(["North", "South"], CollectionOrdering.Matching);
 
         await Insert(database, processor, "West");
 
-        Assert.That(await Next(answers), Is.True);
-        Assert.That(answers.Current.Select(_ => _.Region), Is.EqualTo(["North", "South", "West"]));
+        await Assert.That(await Next(answers)).IsTrue();
+        await Assert.That(answers.Current.Select(_ => _.Region)).IsEquivalentTo(["North", "South", "West"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -47,13 +46,13 @@ public class LiveQueryRoundTripTests
             // ReSharper disable once MethodSupportsCancellation
             .GetAsyncEnumerator();
 
-        Assert.That(await Next(answers), Is.True);
-        Assert.That(answers.Current, Is.EqualTo(1));
+        await Assert.That(await Next(answers)).IsTrue();
+        await Assert.That(answers.Current).IsEqualTo(1);
 
         await Insert(database, processor, "North");
 
-        Assert.That(await Next(answers), Is.True);
-        Assert.That(answers.Current, Is.EqualTo(2));
+        await Assert.That(await Next(answers)).IsTrue();
+        await Assert.That(answers.Current).IsEqualTo(2);
     }
 
     [Test]
@@ -74,7 +73,7 @@ public class LiveQueryRoundTripTests
         await Insert(database, processor, "West");
         await seen.Reaches(2);
 
-        Assert.That(seen.Values, Is.EqualTo([2, 3]));
+        await Assert.That(seen.Values).IsEquivalentTo([2, 3], CollectionOrdering.Matching);
     }
 
     static TimeSpan patience = TimeSpan.FromSeconds(20);
@@ -158,7 +157,7 @@ public class LiveQueryRoundTripTests
             var started = Stopwatch.GetTimestamp();
             while (Values.Count < count)
             {
-                Assert.That(Stopwatch.GetElapsedTime(started), Is.LessThan(patience), $"Expected {count} answers; saw {Values.Count}.");
+                await Assert.That(Stopwatch.GetElapsedTime(started)).IsLessThan(patience).Because($"Expected {count} answers; saw {Values.Count}.");
                 await Task.Delay(20);
             }
         }

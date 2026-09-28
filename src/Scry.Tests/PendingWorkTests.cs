@@ -1,7 +1,6 @@
 /// <summary>
 /// The pending-work store: what goes into it, how long a finished command stays, and where it says so.
 /// </summary>
-[TestFixture]
 public class PendingWorkTests
 {
     static RenameThing Rename => new()
@@ -21,12 +20,12 @@ public class PendingWorkTests
         await held.Send(CommandStub.Result(CommandStatus.Completed));
         await Until(() => item.Status == ScryCommandStatus.Completed);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(store.Items, Is.EqualTo([item]));
-            Assert.That(store.PendingCount, Is.Zero);
-            Assert.That(item.Finished, Is.Not.Null);
-        });
+            await Assert.That(store.Items).IsEquivalentTo([item], CollectionOrdering.Matching);
+            await Assert.That(store.PendingCount).IsZero();
+            await Assert.That(item.Finished).IsNotNull();
+        }
         await held.DisposeAsync();
     }
 
@@ -54,14 +53,14 @@ public class PendingWorkTests
         await Until(() => item.Status == ScryCommandStatus.Failed);
         await Task.Delay(50);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(store.Items, Is.EqualTo([item]));
-            Assert.That(item.Error, Is.EqualTo("No."));
-        });
+            await Assert.That(store.Items).IsEquivalentTo([item], CollectionOrdering.Matching);
+            await Assert.That(item.Error).IsEqualTo("No.");
+        }
 
         store.ClearFinished();
-        Assert.That(store.Items, Is.Empty);
+        await Assert.That(store.Items).IsEmpty();
         await held.DisposeAsync();
     }
 
@@ -72,7 +71,7 @@ public class PendingWorkTests
 
         client.PendingWork.ClearFinished();
 
-        Assert.That(client.PendingWork.PendingCount, Is.EqualTo(1));
+        await Assert.That(client.PendingWork.PendingCount).IsEqualTo(1);
         await held.DisposeAsync();
     }
 
@@ -119,10 +118,13 @@ public class PendingWorkTests
                 }
             });
 
+        SynchronizationContext?[] snapshot;
         lock (contexts)
         {
-            Assert.That(contexts, Is.All.SameAs(context));
+            snapshot = [.. contexts];
         }
+
+        await Assert.That(snapshot).All(_ => ReferenceEquals(_, context));
     }
 
     static async Task<(ScryClient Client, HeldReceipts Held)> Pending(TimeSpan linger)
@@ -135,7 +137,7 @@ public class PendingWorkTests
         await Until(() => stub.Requests.Count == 1);
         await held.Send(CommandStub.Result(CommandStatus.Pending));
         var outcome = await sending;
-        Assert.That(outcome.Status, Is.EqualTo(ScryCommandStatus.Pending));
+        await Assert.That(outcome.Status).IsEqualTo(ScryCommandStatus.Pending);
         return (client, held);
     }
 
@@ -146,7 +148,7 @@ public class PendingWorkTests
         var started = DateTime.UtcNow;
         while (!reached())
         {
-            Assert.That(DateTime.UtcNow - started, Is.LessThan(patience), "Waited too long.");
+            await Assert.That(DateTime.UtcNow - started).IsLessThan(patience).Because("Waited too long.");
             await Task.Delay(10);
         }
     }

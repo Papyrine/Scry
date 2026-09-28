@@ -8,7 +8,6 @@
 /// and asserted on shapes the translator builds four different ways, since a check anywhere but the
 /// finished request would answer for some of them and silently miss the rest.
 /// </remarks>
-[TestFixture]
 public class SensitiveTransportTests
 {
     [ScryModel("Person", "Id", "Name", "Ssn")]
@@ -41,7 +40,7 @@ public class SensitiveTransportTests
     // and a hand-built one that marks nothing. The registry once kept whichever registered last, so
     // the unmarked model answered for the marked one's query and its constant went out in a URL.
     [Test]
-    public void ALaterUnmarkedModelDoesNotUnmarkASource()
+    public async Task ALaterUnmarkedModelDoesNotUnmarkASource()
     {
         var marked = new ScryClient((_, _) => throw new("not sent"));
         var request = marked.Source<PersonModel>("Citizen")
@@ -52,7 +51,7 @@ public class SensitiveTransportTests
         var other = new ScryClient((_, _) => throw new("not sent"));
         _ = other.Source<UnmarkedPerson>("Citizen");
 
-        Assert.That(ScryClient.RequiresBody(request), Is.True);
+        await Assert.That(ScryClient.RequiresBody(request)).IsTrue();
     }
 
     [Test]
@@ -63,7 +62,7 @@ public class SensitiveTransportTests
                 .Select(_ => new NameRow(_.Name))
                 .ToListAsync());
 
-        Assert.That(method, Is.EqualTo(HttpMethod.Post));
+        await Assert.That(method).IsEqualTo(HttpMethod.Post);
     }
 
     // The shape a check in the translator misses: a terminal's predicate is translated by a throwaway
@@ -73,7 +72,7 @@ public class SensitiveTransportTests
     {
         var method = await Method(_ => _.CountAsync(_ => _.Ssn == "123-45-6789"));
 
-        Assert.That(method, Is.EqualTo(HttpMethod.Post));
+        await Assert.That(method).IsEqualTo(HttpMethod.Post);
     }
 
     [Test]
@@ -84,7 +83,7 @@ public class SensitiveTransportTests
                 .Select(_ => new NameRow(_.Name))
                 .ToListAsync());
 
-        Assert.That(method, Is.EqualTo(HttpMethod.Post));
+        await Assert.That(method).IsEqualTo(HttpMethod.Post);
     }
 
     // Returning the member puts nothing in the URL. What it does put on the caller's disk is the
@@ -97,7 +96,7 @@ public class SensitiveTransportTests
                 .Select(_ => new SsnRow(_.Ssn))
                 .ToListAsync());
 
-        Assert.That(method, Is.EqualTo(HttpMethod.Get));
+        await Assert.That(method).IsEqualTo(HttpMethod.Get);
     }
 
     [Test]
@@ -108,7 +107,7 @@ public class SensitiveTransportTests
                 .Select(_ => new NameRow(_.Name))
                 .ToListAsync());
 
-        Assert.That(method, Is.EqualTo(HttpMethod.Get));
+        await Assert.That(method).IsEqualTo(HttpMethod.Get);
     }
 
     // A page ordered by a marked member keeps the URL too: its cursor carries the last row's value
@@ -122,7 +121,7 @@ public class SensitiveTransportTests
                 .Select(_ => new NameRow(_.Name))
                 .ToPageAsync(10));
 
-        Assert.That(method, Is.EqualTo(HttpMethod.Get));
+        await Assert.That(method).IsEqualTo(HttpMethod.Get);
     }
 
     // A constant somewhere in a query that also names a marked member elsewhere is treated as though
@@ -135,7 +134,7 @@ public class SensitiveTransportTests
                 .Select(_ => new NameRow(_.Name))
                 .ToListAsync());
 
-        Assert.That(method, Is.EqualTo(HttpMethod.Post));
+        await Assert.That(method).IsEqualTo(HttpMethod.Post);
     }
 
     [Test]
@@ -146,7 +145,7 @@ public class SensitiveTransportTests
                 .Select(_ => new NameRow(_.Name))
                 .ToListAsync());
 
-        Assert.That(method, Is.EqualTo(HttpMethod.Get));
+        await Assert.That(method).IsEqualTo(HttpMethod.Get);
     }
 
     public record SsnRow(string Ssn);

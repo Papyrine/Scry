@@ -11,7 +11,8 @@ using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 /// binary member, so this corpus never diverts; the multipart counterpart of this identity is
 /// <c>BinaryTransferTests.FastAndGeneralPathsEmitIdenticalPayloads</c>.
 /// </summary>
-[TestFixture]
+[NotInParallel]
+[DependsOn<HttpRoundTripTests.StaleClient>(nameof(HttpRoundTripTests.StaleClient.AClientThatDoesNotKnowRetriesInABody), ProceedOnFailure = true)]
 public partial class FastWriterGoldenTests
 {
     static readonly SqlInstance<Sample.Model.SampleContext> sqlInstance = new(
@@ -22,9 +23,9 @@ public partial class FastWriterGoldenTests
             return Task.CompletedTask;
         });
 
-    WebApplication app = null!;
-    HttpClient http = null!;
-    SqlDatabase<Sample.Model.SampleContext> database = null!;
+    static WebApplication app = null!;
+    static HttpClient http = null!;
+    static SqlDatabase<Sample.Model.SampleContext> database = null!;
 
     // Every JSON escaping and encoding path in one list: quotes, backslashes, control characters,
     // multi-codepoint emoji, right-to-left marks, HTML-sensitive text, and a SQL-looking string.
@@ -38,8 +39,8 @@ public partial class FastWriterGoldenTests
         "'; DROP TABLE Employees;--"
     ];
 
-    [OneTimeSetUp]
-    public async Task StartServer()
+    [Before(Class)]
+    public static async Task StartServer()
     {
         database = await sqlInstance.Build();
 
@@ -66,8 +67,8 @@ public partial class FastWriterGoldenTests
         http = app.GetTestClient();
     }
 
-    [OneTimeTearDown]
-    public async Task StopServer()
+    [After(Class)]
+    public static async Task StopServer()
     {
         await app.StopAsync();
         await app.DisposeAsync();
@@ -75,9 +76,9 @@ public partial class FastWriterGoldenTests
         await database.DisposeAsync();
     }
 
-    public static IEnumerable<TestCaseData> Corpus()
+    public static IEnumerable<(string, string)> Corpus()
     {
-        yield return new(
+        yield return (
             "nested projection with nulls",
             """
             {"version":1,"root":"Employee","pipeline":[
@@ -91,7 +92,7 @@ public partial class FastWriterGoldenTests
                 {"name":"Manager","value":{"$type":"node","node":{"$type":"member","path":["Manager","Name"]}}},
                 {"name":"Department","value":{"$type":"node","node":{"$type":"member","path":["Department","Name"]}}}]}}]}
             """);
-        yield return new(
+        yield return (
             "naughty strings through a poco source",
             """
             {"version":1,"root":"Holiday","pipeline":[
@@ -100,13 +101,13 @@ public partial class FastWriterGoldenTests
                 "Name",
                 "Date"]}}]}
             """);
-        yield return new(
+        yield return (
             "default projection",
             """
             {"version":1,"root":"Employee","pipeline":[
               {"$type":"orderBy","key":{"$type":"member","path":"Id"},"descending":false}]}
             """);
-        yield return new(
+        yield return (
             "scalar terminal",
             """
             {"version":1,"root":"Employee","pipeline":[{"$type":"count"}]}
@@ -114,32 +115,32 @@ public partial class FastWriterGoldenTests
         // A count is an int and an aggregate is whatever the provider returns for it, which covers both
         // halves of the value writer: a decimal is one of its fast cases, and a date-without-time is
         // handed to the serializer.
-        yield return new(
+        yield return (
             "aggregate scalar terminal",
             """
             {"version":1,"root":"Order","pipeline":[
               {"$type":"aggregate","function":"Sum","selector":{"$type":"member","path":"Amount"}}]}
             """);
-        yield return new(
+        yield return (
             "aggregate scalar over a date",
             """
             {"version":1,"root":"Employee","pipeline":[
               {"$type":"aggregate","function":"Max","selector":{"$type":"member","path":"Created"}}]}
             """);
-        yield return new(
+        yield return (
             "all terminal",
             """
             {"version":1,"root":"Employee","pipeline":[
               {"$type":"all","predicate":{"$type":"member","path":"Active"}}]}
             """);
-        yield return new(
+        yield return (
             "single row terminal",
             """
             {"version":1,"root":"Employee","pipeline":[
               {"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},
               {"$type":"first","orDefault":false,"predicate":null}]}
             """);
-        yield return new(
+        yield return (
             "null single terminal",
             """
             {"version":1,"root":"Employee","pipeline":[
@@ -148,7 +149,7 @@ public partial class FastWriterGoldenTests
                 "right":{"$type":"const","value":"Nobody","tag":"String"}}},
               {"$type":"first","orDefault":true,"predicate":null}]}
             """);
-        yield return new(
+        yield return (
             "page envelope",
             """
             {"version":1,"root":"Employee","pipeline":[
@@ -160,7 +161,7 @@ public partial class FastWriterGoldenTests
         // The page above has a further page and so mints a cursor. This one asks for more rows than
         // exist, so there is nothing to resume from and the cursor is omitted rather than written as
         // null — the writer's other branch, and a different set of bytes.
-        yield return new(
+        yield return (
             "page envelope with no further page",
             """
             {"version":1,"root":"Employee","pipeline":[
@@ -171,7 +172,7 @@ public partial class FastWriterGoldenTests
             """);
         // A poco source is never seek-safe, so a page of one carries no cursor even when a further
         // page exists — the same omission arrived at down a different path.
-        yield return new(
+        yield return (
             "page envelope over a poco source",
             """
             {"version":1,"root":"Holiday","pipeline":[
@@ -181,7 +182,7 @@ public partial class FastWriterGoldenTests
                 "Date"]}},
               {"$type":"page","size":2}]}
             """);
-        yield return new(
+        yield return (
             "grouped aggregates",
             """
             {"version":1,"root":"Order","pipeline":[
@@ -191,7 +192,7 @@ public partial class FastWriterGoldenTests
                 {"name":"Total","value":{"$type":"node","node":{"$type":"aggregate","function":"Sum","selector":{"$type":"member","path":"Amount"}}}},
                 {"name":"Count","value":{"$type":"node","node":{"$type":"aggregate","function":"Count"}}}]}}]}
             """);
-        yield return new(
+        yield return (
             "distinct projection",
             """
             {"version":1,"root":"Employee","pipeline":[
@@ -201,15 +202,16 @@ public partial class FastWriterGoldenTests
             """);
     }
 
-    [TestCaseSource(nameof(Corpus))]
+    [Test]
+    [MethodDataSource(nameof(Corpus))]
     public async Task FastBytesMatchTheGeneralPath(string name, string request)
     {
         var expected = Unsealed(Direct(request));
 
         // Twice: the first send builds and caches the plan, the second replays it — the writer must
         // be byte-identical on both.
-        Assert.That(Unsealed(await Post(request)), Is.EqualTo(expected), $"{name} (miss)");
-        Assert.That(Unsealed(await Post(request)), Is.EqualTo(expected), $"{name} (hit)");
+        await Assert.That(Unsealed(await Post(request))).IsEqualTo(expected).Because($"{name} (miss)");
+        await Assert.That(Unsealed(await Post(request))).IsEqualTo(expected).Because($"{name} (hit)");
     }
 
     [Test]
@@ -229,7 +231,7 @@ public partial class FastWriterGoldenTests
         using var response = await http.PostAsync("/api/query/stream", content);
         var body = await response.Content.ReadAsStringAsync();
 
-        Assert.That(body, Is.EqualTo(expected));
+        await Assert.That(body).IsEqualTo(expected);
     }
 
     /// <summary>
@@ -243,7 +245,7 @@ public partial class FastWriterGoldenTests
     public async Task BatchBytesMatchTheGeneralPath()
     {
         var queries = Corpus()
-            .Select(_ => (string)_.Arguments[1]!)
+            .Select(_ => _.Item2)
             .ToList();
         queries.Add("""{"version":1,"root":"Nonexistent","pipeline":[]}""");
         queries.Add("""{"version":1,"root":"Nonexistent","pipeline":[],"stamp":"not-this-server"}""");
@@ -251,8 +253,8 @@ public partial class FastWriterGoldenTests
         var batch = $$"""{"version":1,"queries":[{{string.Join(',', queries)}}]}""";
         var expected = Unsealed(DirectBatch(batch));
 
-        Assert.That(Unsealed(await Post(batch, "/api/query/batch")), Is.EqualTo(expected), "miss");
-        Assert.That(Unsealed(await Post(batch, "/api/query/batch")), Is.EqualTo(expected), "hit");
+        await Assert.That(Unsealed(await Post(batch, "/api/query/batch"))).IsEqualTo(expected).Because("miss");
+        await Assert.That(Unsealed(await Post(batch, "/api/query/batch"))).IsEqualTo(expected).Because("hit");
     }
 
     // A page's cursor is sealed under a fresh nonce every time it is minted, so two renderings of one
@@ -263,18 +265,18 @@ public partial class FastWriterGoldenTests
     [GeneratedRegex("(\"cursor\":)\"[^\"]*\"")]
     private static partial Regex CursorValue();
 
-    async Task<string> Post(string request, string path = "/api/query")
+    static async Task<string> Post(string request, string path = "/api/query")
     {
         using var content = new StringContent(request, Encoding.UTF8, "application/json");
         using var response = await http.PostAsync(path, content);
         var body = await response.Content.ReadAsStringAsync();
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), body);
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK).Because(body);
         return body;
     }
 
     // The general path: the same request through ScryProcessor.Execute — dictionaries, JsonElement,
     // full reflection serialization — rendered exactly as the endpoint would render it.
-    string Direct(string request)
+    static string Direct(string request)
     {
         var parsed = ScryJson.DeserializeRequest(request);
         var processor = app.Services.GetRequiredService<ScryProcessor>();
@@ -285,7 +287,7 @@ public partial class FastWriterGoldenTests
 
     // The general path for a batch: dictionaries and a JsonElement per entry, then one reflection pass
     // over the envelope that serializes every one of them a second time.
-    string DirectBatch(string request)
+    static string DirectBatch(string request)
     {
         var parsed = ScryJson.DeserializeBatchRequest(request);
         var processor = app.Services.GetRequiredService<ScryProcessor>();
@@ -294,7 +296,7 @@ public partial class FastWriterGoldenTests
         return ScryJson.Serialize(processor.ExecuteBatch(parsed, db, scope.ServiceProvider));
     }
 
-    async Task<string> DirectStream(string request)
+    static async Task<string> DirectStream(string request)
     {
         var parsed = ScryJson.DeserializeRequest(request);
         var processor = app.Services.GetRequiredService<ScryProcessor>();

@@ -3,7 +3,6 @@
 /// folds it to a scalar, this replaces the row being queried — so the element type has to stand on
 /// its own allow-list, which it already does.
 /// </summary>
-[TestFixture]
 public class SelectManyTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -24,7 +23,7 @@ public class SelectManyTests
             .ToListAsync();
         // end-snippet
 
-        Assert.That(lines.Select(_ => _.Sku).Order(), Is.EqualTo(["A-1", "A-2", "B-1"]));
+        await Assert.That(lines.Select(_ => _.Sku).Order()).IsEquivalentTo(["A-1", "A-2", "B-1"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -42,7 +41,7 @@ public class SelectManyTests
             .Select(_ => new Line(_.Sku, _.Quantity))
             .ToListAsync();
 
-        Assert.That(lines.Select(_ => _.Sku).Order(), Is.EqualTo(["A-1", "B-1"]));
+        await Assert.That(lines.Select(_ => _.Sku).Order()).IsEquivalentTo(["A-1", "B-1"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -59,7 +58,7 @@ public class SelectManyTests
             .Select(_ => new Line(_.Sku, _.Quantity))
             .ToListAsync();
 
-        Assert.That(lines.Single().Sku, Is.EqualTo("A-2"));
+        await Assert.That(lines.Single().Sku).IsEqualTo("A-2");
     }
 
     [Test]
@@ -72,7 +71,7 @@ public class SelectManyTests
             .SelectMany(_ => _.Lines)
             .CountAsync();
 
-        Assert.That(count, Is.EqualTo(3));
+        await Assert.That(count).IsEqualTo(3);
     }
 
     [Test]
@@ -85,7 +84,7 @@ public class SelectManyTests
             .SelectMany(_ => _.Lines)
             .SumAsync(_ => _.Price);
 
-        Assert.That(total, Is.EqualTo(125m));
+        await Assert.That(total).IsEqualTo(125m);
     }
 
     [Test]
@@ -100,26 +99,26 @@ public class SelectManyTests
             .Select(_ => new {Quantity = _.Key, Count = _.Count()})
             .ToListAsync();
 
-        Assert.That(rows.Sum(_ => _.Count), Is.EqualTo(3));
+        await Assert.That(rows.Sum(_ => _.Count)).IsEqualTo(3);
     }
 
     [Test]
-    public void RejectsFlatteningAMemberThatIsNotACollection()
+    public async Task RejectsFlatteningAMemberThatIsNotACollection()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<NotSupportedException>(
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(
             () => client.Source<Order>("Order")
                 .SelectMany(_ => _.Region)
                 .Select(_ => new {Value = _})
                 .ToListAsync());
 
-        Assert.That(exception, Is.Not.Null);
+        await Assert.That(exception).IsNotNull();
     }
 
     [Test]
-    public void RejectsASecondFlatten()
+    public async Task RejectsASecondFlatten()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -132,39 +131,39 @@ public class SelectManyTests
                 new SelectManyOp(["Lines"])
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("Only one SelectMany is allowed."));
+        await Assert.That(exception!.Message).Contains("Only one SelectMany is allowed.");
     }
 
     [Test]
-    public void RejectsFlatteningAMemberThatIsNotAQueryableCollection()
+    public async Task RejectsFlatteningAMemberThatIsNotAQueryableCollection()
     {
         using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create("Order", [new SelectManyOp(["Region"])]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("is not a queryable collection"));
+        await Assert.That(exception!.Message).Contains("is not a queryable collection");
     }
 
     [Test]
-    public void RejectsFlatteningAfterASelect()
+    public async Task RejectsFlatteningAfterASelect()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<ScryValidationException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(
             () => client.Source<Order>("Order")
                 .Select(_ => new {_.Lines})
                 .SelectMany(_ => _.Lines)
                 .Select(_ => new Line(_.Sku, _.Quantity))
                 .ToListAsync());
 
-        Assert.That(exception, Is.Not.Null);
+        await Assert.That(exception).IsNotNull();
     }
 
     static ScryClient ClientFor(TestContext context) =>

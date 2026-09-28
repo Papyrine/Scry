@@ -3,9 +3,8 @@
 using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 // ReSharper disable NotAccessedPositionalProperty.Local
 
-[TestFixture]
-// First among the assembly's fixtures, for AClientThatDoesNotKnowRetriesInABody: see there.
-[Order(1)]
+[NotInParallel]
+[DependsOn<HttpRoundTripTests.StaleClient>(nameof(HttpRoundTripTests.StaleClient.AClientThatDoesNotKnowRetriesInABody), ProceedOnFailure = true)]
 public class HttpRoundTripTests
 {
     static readonly SqlInstance<Sample.Model.SampleContext> sqlInstance = new(
@@ -16,11 +15,11 @@ public class HttpRoundTripTests
             return Task.CompletedTask;
         });
 
-    WebApplication app = null!;
-    HttpClient http = null!;
-    ScryClient client = null!;
-    ScryQuery query = null!;
-    SqlDatabase<Sample.Model.SampleContext> database = null!;
+    static WebApplication app = null!;
+    static HttpClient http = null!;
+    static ScryClient client = null!;
+    static ScryQuery query = null!;
+    static SqlDatabase<Sample.Model.SampleContext> database = null!;
     static string? lastMethod;
     static readonly List<string> methods = [];
 
@@ -40,8 +39,8 @@ public class HttpRoundTripTests
 
     static readonly string[] departmentNames = ["Engineering", "Sales"];
 
-    [OneTimeSetUp]
-    public async Task StartServer()
+    [Before(Class)]
+    public static async Task StartServer()
     {
         database = await sqlInstance.Build();
 
@@ -81,8 +80,8 @@ public class HttpRoundTripTests
         query = new(client);
     }
 
-    [OneTimeTearDown]
-    public async Task StopServer()
+    [After(Class)]
+    public static async Task StopServer()
     {
         await app.StopAsync();
         await app.DisposeAsync();
@@ -99,10 +98,10 @@ public class HttpRoundTripTests
             .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Name), Is.EqualTo(activeEmployeeNames));
-        Assert.That(rows[0].Manager, Is.EqualTo("Alice"));
-        Assert.That(rows[1].Manager, Is.Null);
-        Assert.That(rows[0].Department, Is.EqualTo("Engineering"));
+        await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(activeEmployeeNames, CollectionOrdering.Matching);
+        await Assert.That(rows[0].Manager).IsEqualTo("Alice");
+        await Assert.That(rows[1].Manager).IsNull();
+        await Assert.That(rows[0].Department).IsEqualTo("Engineering");
     }
 
     [Test]
@@ -116,8 +115,8 @@ public class HttpRoundTripTests
             .Select(_ => new HeadcountRow(_.Department, _.Headcount))
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Department), Is.EqualTo(departmentNames));
-        Assert.That(rows.Sum(_ => _.Headcount), Is.EqualTo(4));
+        await Assert.That(rows.Select(_ => _.Department)).IsEquivalentTo(departmentNames, CollectionOrdering.Matching);
+        await Assert.That(rows.Sum(_ => _.Headcount)).IsEqualTo(4);
     }
 
     [Test]
@@ -133,11 +132,11 @@ public class HttpRoundTripTests
             .Select(_ => new TaggedRegionRow(_.Region, _.Tags.Count))
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows.Single().Region, Is.EqualTo("North"));
-            Assert.That(rows.Single().Tags, Is.EqualTo(2));
-        });
+            await Assert.That(rows.Single().Region).IsEqualTo("North");
+            await Assert.That(rows.Single().Tags).IsEqualTo(2);
+        }
     }
 
     [Test]
@@ -152,11 +151,11 @@ public class HttpRoundTripTests
             .Select(_ => new VehicleRow(_.Name, _.Wheels))
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Trailer", "Van"]));
-            Assert.That(rows.Single(_ => _.Name == "Van").Wheels, Is.EqualTo(4));
-        });
+            await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(["Trailer", "Van"], CollectionOrdering.Matching);
+            await Assert.That(rows.Single(_ => _.Name == "Van").Wheels).IsEqualTo(4);
+        }
     }
 
     [Test]
@@ -169,7 +168,7 @@ public class HttpRoundTripTests
             .OrderBy(_ => _.Name)
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Wheels), Is.EqualTo([2, 4]));
+        await Assert.That(rows.Select(_ => _.Wheels)).IsEquivalentTo([2, 4], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -188,7 +187,7 @@ public class HttpRoundTripTests
         }
         // end-snippet
 
-        Assert.That(names, Is.EqualTo(activeEmployeeNames));
+        await Assert.That(names).IsEquivalentTo(activeEmployeeNames, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -205,7 +204,7 @@ public class HttpRoundTripTests
 
         var listed = await query.Employee.Select(_ => new NameRow(_.Name)).ToListAsync();
 
-        Assert.That(streamed, Is.EqualTo(listed.Select(_ => _.Name)));
+        await Assert.That(streamed).IsEquivalentTo(listed.Select(_ => _.Name), CollectionOrdering.Matching);
     }
 
     /// <summary>
@@ -253,19 +252,19 @@ public class HttpRoundTripTests
         }
         while (more);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(fromEmployees, Is.EqualTo(activeEmployeeNames));
-            Assert.That(fromDepartments, Is.EqualTo(departmentNames));
-        });
+            await Assert.That(fromEmployees).IsEquivalentTo(activeEmployeeNames, CollectionOrdering.Matching);
+            await Assert.That(fromDepartments).IsEquivalentTo(departmentNames, CollectionOrdering.Matching);
+        }
     }
 
     [Test]
-    public void StreamingAQueryTheServerRejectsFailsBeforeAnyRowArrives()
+    public async Task StreamingAQueryTheServerRejectsFailsBeforeAnyRowArrives()
     {
         // Validation runs to completion before anything is rebound, so a rejection is still a 400 with
         // a body rather than a stream that stops part-way.
-        var exception = Assert.ThrowsAsync<ScryRequestException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryRequestException>(
             async () =>
             {
                 await foreach (var _ in query.Employee
@@ -277,7 +276,7 @@ public class HttpRoundTripTests
                 }
             });
 
-        Assert.That(exception!.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        await Assert.That(exception!.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
     }
 
     record RatioRow(int Ratio);
@@ -287,10 +286,10 @@ public class HttpRoundTripTests
     // text, exactly as a non-streamed 500 would. Dividing by a client constant is the reliable way
     // to fail on the second row rather than the first, which is what proves the stream had begun.
     [Test]
-    public void AProviderFailureAfterTheStreamBeganEndsItWithTheFixedMessage()
+    public async Task AProviderFailureAfterTheStreamBeganEndsItWithTheFixedMessage()
     {
         var rows = new List<RatioRow>();
-        var exception = Assert.ThrowsAsync<ScryWireException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryWireException>(
             async () =>
             {
                 await foreach (var row in query.Employee
@@ -302,12 +301,12 @@ public class HttpRoundTripTests
                 }
             });
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows, Is.Not.Empty, "the stream should have begun before the failure");
-            Assert.That(exception!.Message, Does.Contain("Query execution failed."));
-            Assert.That(exception.Message, Does.Not.Contain("zero").IgnoreCase);
-        });
+            await Assert.That(rows).IsNotEmpty().Because("the stream should have begun before the failure");
+            await Assert.That(exception!.Message).Contains("Query execution failed.");
+            await Assert.That(exception.Message).DoesNotContain("zero").IgnoringCase();
+        }
     }
 
     [Test]
@@ -319,8 +318,8 @@ public class HttpRoundTripTests
             .ToListAsync();
 
         var north = regions.Single(_ => _.Region == "North");
-        Assert.That(north.Total, Is.EqualTo(350m));
-        Assert.That(north.Count, Is.EqualTo(2));
+        await Assert.That(north.Total).IsEqualTo(350m);
+        await Assert.That(north.Count).IsEqualTo(2);
     }
 
     [Test]
@@ -330,7 +329,7 @@ public class HttpRoundTripTests
             .Where(_ => _.Active)
             .CountAsync();
 
-        Assert.That(count, Is.EqualTo(3));
+        await Assert.That(count).IsEqualTo(3);
     }
 
     // The scenario a hand-rolled filter DTO (property name + operator enum + value, e.g.
@@ -370,7 +369,7 @@ public class HttpRoundTripTests
             .ToListAsync();
         // end-snippet
 
-        Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Carol", "Bob"]));
+        await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(["Carol", "Bob"], CollectionOrdering.Matching);
     }
 
     // begin-snippet: rawRequestRejected
@@ -398,7 +397,7 @@ public class HttpRoundTripTests
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
         using var response = await http.PostAsync("/api/query", content);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
     }
     // end-snippet
 
@@ -416,8 +415,8 @@ public class HttpRoundTripTests
             .Select(_ => new NameRow(_.Name))
             .ToListAsync();
 
-        Assert.That(lastMethod, Is.EqualTo("GET"));
-        Assert.That(rows.Select(_ => _.Name), Is.EqualTo(activeEmployeeNames));
+        await Assert.That(lastMethod).IsEqualTo("GET");
+        await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(activeEmployeeNames, CollectionOrdering.Matching);
     }
 
     // Past the length a URL can carry, the same query goes back to a body. The fallback is the whole
@@ -434,8 +433,8 @@ public class HttpRoundTripTests
             .Select(_ => new NameRow(_.Region))
             .ToListAsync();
 
-        Assert.That(lastMethod, Is.EqualTo("POST"));
-        Assert.That(rows, Is.Empty);
+        await Assert.That(lastMethod).IsEqualTo("POST");
+        await Assert.That(rows).IsEmpty();
     }
 
     // Employee.Password is [Sensitive], so the value compared against it never reaches a URL — where
@@ -448,8 +447,8 @@ public class HttpRoundTripTests
             .Select(_ => new NameRow(_.Name))
             .ToListAsync();
 
-        Assert.That(lastMethod, Is.EqualTo("POST"));
-        Assert.That(rows, Is.Empty);
+        await Assert.That(lastMethod).IsEqualTo("POST");
+        await Assert.That(rows).IsEmpty();
     }
 
     // Naming the same member without a constant leaves the transport alone: an ordering puts nothing
@@ -462,8 +461,8 @@ public class HttpRoundTripTests
             .Select(_ => new NameRow(_.Name))
             .ToListAsync();
 
-        Assert.That(lastMethod, Is.EqualTo("GET"));
-        Assert.That(rows, Is.Not.Empty);
+        await Assert.That(lastMethod).IsEqualTo("GET");
+        await Assert.That(rows).IsNotEmpty();
     }
 
     // The rule a client applies is the one the server holds it to. A hand-written request that broke
@@ -480,19 +479,19 @@ public class HttpRoundTripTests
         using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
         var error = ScryJson.TryDeserializeError(await response.Content.ReadAsByteArrayAsync());
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-            Assert.That(error!.RequiresBody, Is.True);
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+            await Assert.That(error!.RequiresBody).IsTrue();
 
             // Says what to do, never which member — a message naming it would answer "which of these
             // columns is the sensitive one?" for anyone who asked.
-            Assert.That(error.Error, Does.Not.Contain("Password"));
-            Assert.That(error.Error, Does.Contain("request body"));
+            await Assert.That(error.Error).DoesNotContain("Password");
+            await Assert.That(error.Error).Contains("request body");
 
             // And the refusal is never the thing a cache keeps.
-            Assert.That(response.Headers.CacheControl!.NoStore, Is.True);
-        });
+            await Assert.That(response.Headers.CacheControl!.NoStore).IsTrue();
+        }
     }
 
     // The same query in a body is accepted, which is what makes the refusal above a retry rather than
@@ -505,8 +504,8 @@ public class HttpRoundTripTests
             .Select(_ => new NameRow(_.Name))
             .ToListAsync();
 
-        Assert.That(lastMethod, Is.EqualTo("POST"));
-        Assert.That(rows, Is.Empty);
+        await Assert.That(lastMethod).IsEqualTo("POST");
+        await Assert.That(rows).IsEmpty();
     }
 
     // Returning a sensitive member puts nothing in the URL, so the query keeps it — and the response
@@ -523,11 +522,11 @@ public class HttpRoundTripTests
 
         using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(response.Headers.CacheControl!.NoStore, Is.True);
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+            await Assert.That(response.Headers.CacheControl!.NoStore).IsTrue();
+        }
     }
 
     // A query with no Select is answered with every member of the source, sensitive ones included, so
@@ -539,7 +538,7 @@ public class HttpRoundTripTests
 
         using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
 
-        Assert.That(response.Headers.CacheControl!.NoStore, Is.True);
+        await Assert.That(response.Headers.CacheControl!.NoStore).IsTrue();
     }
 
     [Test]
@@ -553,39 +552,14 @@ public class HttpRoundTripTests
 
         using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.Headers.CacheControl!.NoStore, Is.False);
-            Assert.That(response.Headers.CacheControl.Private, Is.True);
-        });
+            await Assert.That(response.Headers.CacheControl!.NoStore).IsFalse();
+            await Assert.That(response.Headers.CacheControl.Private).IsTrue();
+        }
     }
 
     record PasswordRow(string Password);
-
-    // What a client generated before the member was marked does: it reads its own model, sees nothing
-    // sensitive, and asks in a URL. The refusal is one it can act on without a person reading it, so
-    // the query still returns — one round trip later, in a body — rather than failing.
-    //
-    // First in the assembly, since what a client believes is sensitive is the union of every model any
-    // client in the process opened a source as: once anything here opens the generated Employee, which
-    // marks Password, no client in this process can be stale about it, and this asks in a body at once.
-    [Test]
-    [Order(1)]
-    public async Task AClientThatDoesNotKnowRetriesInABody()
-    {
-        var stale = ScryClient.ForHttp(http, "/api/query");
-        methods.Clear();
-
-        var rows = await stale.Source<UnmarkedEmployee>("Employee", ["Id", "Name", "Password"])
-            .Where(_ => _.Password == "hunter2")
-            .Select(_ => new NameRow(_.Name))
-            .ToListAsync();
-
-        // Asked the way it believed it could, refused, and asked again the way it was told to — which
-        // is the whole of the self-healing, and is why this is two requests rather than one.
-        Assert.That(methods, Is.EqualTo(["GET", "POST"]));
-        Assert.That(rows, Is.Empty);
-    }
 
     // Deliberately without [ScrySensitive], which is what makes it stand for a client generated before
     // the model marked the member.
@@ -604,24 +578,25 @@ public class HttpRoundTripTests
     {
         using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}=not-base64url!!");
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        Assert.That(response.Headers.GetValues("Scry-Schema-Stamp").Single(), Is.EqualTo(ScryQuery.SchemaStamp));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That(response.Headers.GetValues("Scry-Schema-Stamp").Single()).IsEqualTo(ScryQuery.SchemaStamp);
     }
 
     // Every way a URL can fail to be a request is one 400: not base64url, base64url of something that
     // is not JSON, and JSON that is not a request. None reaches a handler, and none is storable.
-    [TestCase("not-base64url!!", TestName = "not base64url")]
-    [TestCase("bm90IGpzb24", TestName = "base64url of text that is not JSON")]
-    [TestCase("eyJhIjoxfQ", TestName = "base64url of JSON that is not a request")]
+    [Test]
+    [Arguments("not-base64url!!", DisplayName = "not base64url")]
+    [Arguments("bm90IGpzb24", DisplayName = "base64url of text that is not JSON")]
+    [Arguments("eyJhIjoxfQ", DisplayName = "base64url of JSON that is not a request")]
     public async Task AUrlThatDoesNotDecodeToARequestIsRejected(string encoded)
     {
         using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-            Assert.That(response.Headers.CacheControl!.NoStore, Is.True);
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+            await Assert.That(response.Headers.CacheControl!.NoStore).IsTrue();
+        }
     }
 
     // Two q parameters join into one string that is not base64url: a 400, not the first one.
@@ -631,20 +606,21 @@ public class HttpRoundTripTests
         var encoded = QueryUrl.Encode(QueryRequest.Create("Employee", [new CountOp()]));
         using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}&{QueryUrl.Parameter}={encoded}");
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
     }
 
     // Only the methods with a handler are mapped, so anything else is routing's 405 — no handler runs
     // and nothing is advertised beyond the Allow header routing writes.
-    [TestCase("HEAD")]
-    [TestCase("OPTIONS")]
-    [TestCase("PUT")]
+    [Test]
+    [Arguments("HEAD")]
+    [Arguments("OPTIONS")]
+    [Arguments("PUT")]
     public async Task OtherMethodsOnTheQueryRouteAreNotAllowed(string method)
     {
         using var request = new HttpRequestMessage(new(method), "/api/query");
         using var response = await http.SendAsync(request);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.MethodNotAllowed));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.MethodNotAllowed);
     }
 
     // A batch is one response, so a header one entry's policy writes is on it once — for the whole
@@ -662,11 +638,11 @@ public class HttpRoundTripTests
 
         using var response = await http.SendAsync(request);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(response.Headers.GetValues("X-Scry-Echo").Single(), Is.EqualTo("batch-1"));
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+            await Assert.That(response.Headers.GetValues("X-Scry-Echo").Single()).IsEqualTo("batch-1");
+        }
     }
 
     // A body missing a member an operator requires is refused where an unparseable one is: a 400
@@ -691,11 +667,11 @@ public class HttpRoundTripTests
         using var response = await http.PostAsync("/api/query", content);
 
         var error = ScryJson.TryDeserializeError(await response.Content.ReadAsByteArrayAsync());
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-            Assert.That(error!.Error, Does.Contain("predicate"));
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+            await Assert.That(error!.Error).Contains("predicate");
+        }
     }
 
     // JSON nesting is bounded by the reader — 64 levels, its default — before the expression depth
@@ -715,22 +691,23 @@ public class HttpRoundTripTests
         using var response = await http.PostAsync("/api/query", content);
 
         var error = ScryJson.TryDeserializeError(await response.Content.ReadAsByteArrayAsync());
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-            Assert.That(error!.Error, Does.Contain("depth"));
-            Assert.That(response.Headers.CacheControl!.NoStore, Is.True);
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+            await Assert.That(error!.Error).Contains("depth");
+            await Assert.That(response.Headers.CacheControl!.NoStore).IsTrue();
+        }
     }
 
     // A body that is not declared JSON is refused before it is read. An HTML form can navigate a
     // browser to a POST endpoint with a text/plain field shaped as JSON — exactly the body below —
     // but it cannot set application/json, so requiring the header is what keeps a cross-site page
     // from executing a query as whoever the browser sent.
-    [TestCase("/api/query")]
-    [TestCase("/api/query/stream")]
-    [TestCase("/api/query/batch")]
-    [TestCase("/api/query/attachment")]
+    [Test]
+    [Arguments("/api/query")]
+    [Arguments("/api/query/stream")]
+    [Arguments("/api/query/batch")]
+    [Arguments("/api/query/attachment")]
     public async Task ABodyThatIsNotJsonIsRefused(string endpoint)
     {
         var body = "{\"version\":1,\"root\":\"Employee\",\"pipeline\":[{\"$type\":\"count\"}],\"pad\":\"=\"}\r\n";
@@ -738,13 +715,13 @@ public class HttpRoundTripTests
         using var response = await http.PostAsync(endpoint, content);
         var error = ScryJson.TryDeserializeError(await response.Content.ReadAsByteArrayAsync());
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.UnsupportedMediaType));
-            Assert.That(error!.Error, Does.Contain("application/json"));
-            Assert.That(error.Code, Is.EqualTo(ScryErrorCode.UnsupportedMedia));
-            Assert.That(response.Headers.CacheControl!.NoStore, Is.True);
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.UnsupportedMediaType);
+            await Assert.That(error!.Error).Contains("application/json");
+            await Assert.That(error.Code).IsEqualTo(ScryErrorCode.UnsupportedMedia);
+            await Assert.That(response.Headers.CacheControl!.NoStore).IsTrue();
+        }
     }
 
     /// <summary>
@@ -763,11 +740,11 @@ public class HttpRoundTripTests
                 "/api/query",
                 Json("""{"version":1,"root":"Nope","pipeline":[{"$type":"count"}]}""")));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(malformed, Is.EqualTo(ScryErrorCode.WireFormat));
-            Assert.That(rejected, Is.EqualTo(ScryErrorCode.Validation));
-        });
+            await Assert.That(malformed).IsEqualTo(ScryErrorCode.WireFormat);
+            await Assert.That(rejected).IsEqualTo(ScryErrorCode.Validation);
+        }
 
         return;
 
@@ -781,14 +758,15 @@ public class HttpRoundTripTests
         }
     }
 
-    [TestCase("multipart/form-data")]
-    [TestCase("application/x-www-form-urlencoded")]
+    [Test]
+    [Arguments("multipart/form-data")]
+    [Arguments("application/x-www-form-urlencoded")]
     public async Task AFormBodyIsRefused(string mediaType)
     {
         using var content = new StringContent("{}", Encoding.UTF8, mediaType);
         using var response = await http.PostAsync("/api/query", content);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.UnsupportedMediaType));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.UnsupportedMediaType);
     }
 
     [Test]
@@ -798,12 +776,13 @@ public class HttpRoundTripTests
         content.Headers.ContentType = null;
         using var response = await http.PostAsync("/api/query", content);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.UnsupportedMediaType));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.UnsupportedMediaType);
     }
 
     // The two spellings a JSON client sends, with and without a charset, are both JSON.
-    [TestCase("application/json")]
-    [TestCase("application/json; charset=utf-8")]
+    [Test]
+    [Arguments("application/json")]
+    [Arguments("application/json; charset=utf-8")]
     public async Task AJsonBodyIsAccepted(string contentType)
     {
         using var content = new ByteArrayContent(
@@ -811,7 +790,7 @@ public class HttpRoundTripTests
         content.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse(contentType);
         using var response = await http.PostAsync("/api/query", content);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
     }
 
     [Test]
@@ -819,7 +798,7 @@ public class HttpRoundTripTests
     {
         using var response = await http.GetAsync("/api/query");
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
     }
 
     // A URL identifies a response, so it may be stored — but only by the caller's own cache, and only
@@ -834,16 +813,16 @@ public class HttpRoundTripTests
             query.Employee.Where(_ => _.Active).ToScryRequest(new CountOp()));
         using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
 
-        Assert.That(response.Headers.CacheControl!.Private, Is.True);
-        Assert.That(response.Headers.CacheControl.NoCache, Is.True);
+        await Assert.That(response.Headers.CacheControl!.Private).IsTrue();
+        await Assert.That(response.Headers.CacheControl.NoCache).IsTrue();
     }
 
     [Test]
-    public void GeneratedSchemaStampMatchesServer()
+    public async Task GeneratedSchemaStampMatchesServer()
     {
         var processor = app.Services.GetRequiredService<ScryProcessor>();
 
-        Assert.That(ScryQuery.SchemaStamp, Is.EqualTo(processor.Describe().SchemaStamp));
+        await Assert.That(ScryQuery.SchemaStamp).IsEqualTo(processor.Describe().SchemaStamp);
     }
 
     [Test]
@@ -861,9 +840,7 @@ public class HttpRoundTripTests
             "application/json");
         using var response = await http.PostAsync("/api/query", content);
 
-        Assert.That(
-            response.Headers.GetValues("Scry-Schema-Stamp").Single(),
-            Is.EqualTo(ScryQuery.SchemaStamp));
+        await Assert.That(response.Headers.GetValues("Scry-Schema-Stamp").Single()).IsEqualTo(ScryQuery.SchemaStamp);
     }
 
     // A client generated against the live model must never report itself stale — this is the
@@ -873,8 +850,8 @@ public class HttpRoundTripTests
     {
         await query.Employee.CountAsync();
 
-        Assert.That(client.ServerSchemaStamp, Is.EqualTo(ScryQuery.SchemaStamp));
-        Assert.That(client.SchemaStale, Is.False);
+        await Assert.That(client.ServerSchemaStamp).IsEqualTo(ScryQuery.SchemaStamp);
+        await Assert.That(client.SchemaStale).IsFalse();
     }
 
     // The drifted case: a client carrying a stamp from an older model learns it is stale from a
@@ -887,7 +864,7 @@ public class HttpRoundTripTests
 
         await stale.Source<EmployeeQueryModel>("Employee").CountAsync();
 
-        Assert.That(stale.SchemaStale, Is.True);
+        await Assert.That(stale.SchemaStale).IsTrue();
     }
 
     [Test]
@@ -902,10 +879,10 @@ public class HttpRoundTripTests
         // The query itself succeeds — drift is reported alongside a working result, not as a failure.
         var count = await stale.Source<EmployeeQueryModel>("Employee").CountAsync();
 
-        Assert.That(count, Is.EqualTo(4));
-        Assert.That(drift, Is.Not.Null);
-        Assert.That(drift!.ClientStamp, Is.EqualTo("stamp-from-an-older-model"));
-        Assert.That(drift.ServerStamp, Is.EqualTo(ScryQuery.SchemaStamp));
+        await Assert.That(count).IsEqualTo(4);
+        await Assert.That(drift).IsNotNull();
+        await Assert.That(drift!.ClientStamp).IsEqualTo("stamp-from-an-older-model");
+        await Assert.That(drift.ServerStamp).IsEqualTo(ScryQuery.SchemaStamp);
     }
 
     // Raised once per client, however many queries follow: an app that polls would otherwise re-prompt
@@ -923,7 +900,7 @@ public class HttpRoundTripTests
         await stale.Source<EmployeeQueryModel>("Employee").CountAsync();
         await stale.Source<EmployeeQueryModel>("Employee").CountAsync();
 
-        Assert.That(raised, Is.EqualTo(1));
+        await Assert.That(raised).IsEqualTo(1);
     }
 
     // A client generated against the live model must stay silent — the half that keeps the signal from
@@ -939,23 +916,23 @@ public class HttpRoundTripTests
 
         await matching.Employee.CountAsync();
 
-        Assert.That(raised, Is.False);
-        Assert.That(current.SchemaStale, Is.False);
+        await Assert.That(raised).IsFalse();
+        await Assert.That(current.SchemaStale).IsFalse();
     }
 
     // A drifted client whose query the server rejects gets a ScryStaleClientException — the same type
     // the payload reader throws for an unknown enum value — so one catch covers every stale-client
     // failure and can prompt a reload.
     [Test]
-    public void DriftedClientRejectionThrowsStaleClientException()
+    public async Task DriftedClientRejectionThrowsStaleClientException()
     {
         var stale = ScryClient.ForHttp(http, "/api/query");
         stale.SchemaStamp = "stamp-from-an-older-model";
 
-        var exception = Assert.ThrowsAsync<ScryStaleClientException>(() =>
-            stale.Source<EmployeeQueryModel>("Renamed").ToListAsync())!;
+        var exception = (await Assert.ThrowsExactlyAsync<ScryStaleClientException>(() =>
+            stale.Source<EmployeeQueryModel>("Renamed").ToListAsync()))!;
 
-        Assert.That(exception.Message, Does.Contain("regenerate the client"));
+        await Assert.That(exception.Message).Contains("regenerate the client");
     }
 
     // The wire shape behind it: the error body carries a structured staleClient marker, not just
@@ -977,8 +954,8 @@ public class HttpRoundTripTests
         using var response = await http.PostAsync("/api/query", content);
         var body = await response.Content.ReadAsStringAsync();
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        Assert.That(body, Does.Contain("\"code\":\"StaleClient\""));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That(body).Contains("\"code\":\"StaleClient\"");
     }
 
     // The same rejection without a stamp makes no staleness claim: it is coded for what it is, an
@@ -999,9 +976,9 @@ public class HttpRoundTripTests
         using var response = await http.PostAsync("/api/query", content);
         var body = await response.Content.ReadAsStringAsync();
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        Assert.That(body, Does.Contain("\"code\":\"Validation\""));
-        Assert.That(body, Does.Not.Contain("StaleClient"));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That(body).Contains("\"code\":\"Validation\"");
+        await Assert.That(body).DoesNotContain("StaleClient");
     }
 
     // A constant that fails to parse at rebind is also attributed: validation cannot catch a constant
@@ -1039,10 +1016,10 @@ public class HttpRoundTripTests
         using var response = await http.PostAsync("/api/query", content);
         var body = await response.Content.ReadAsStringAsync();
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        Assert.That(body, Does.Contain("is not a valid Decimal value"));
-        Assert.That(body, Does.Contain("regenerate the client"));
-        Assert.That(body, Does.Contain("\"code\":\"StaleClient\""));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That(body).Contains("is not a valid Decimal value");
+        await Assert.That(body).Contains("regenerate the client");
+        await Assert.That(body).Contains("\"code\":\"StaleClient\"");
     }
 
     // A model frozen at a surface where ManagerId was still non-nullable. Alice has no manager, so the
@@ -1051,17 +1028,17 @@ public class HttpRoundTripTests
     record PreNullableEmployee(string Name, int ManagerId);
 
     [Test]
-    public void UnreadablePayloadFromDriftedClientThrowsStaleClientException()
+    public async Task UnreadablePayloadFromDriftedClientThrowsStaleClientException()
     {
         var stale = ScryClient.ForHttp(http, "/api/query");
         stale.SchemaStamp = "stamp-from-an-older-model";
 
-        var exception = Assert.ThrowsAsync<ScryStaleClientException>(() =>
-            stale.Source<PreNullableEmployee>("Employee", ["Name", "ManagerId"]).ToListAsync())!;
+        var exception = (await Assert.ThrowsExactlyAsync<ScryStaleClientException>(() =>
+            stale.Source<PreNullableEmployee>("Employee", ["Name", "ManagerId"]).ToListAsync()))!;
 
-        Assert.That(exception.Message, Does.Contain("regenerate the client"));
+        await Assert.That(exception.Message).Contains("regenerate the client");
         // The parse failure is preserved rather than replaced, so the cause stays diagnosable.
-        Assert.That(exception.InnerException, Is.InstanceOf<JsonException>());
+        await Assert.That(exception.InnerException).IsAssignableTo<JsonException>();
     }
 
     // The same unreadable payload from a client whose stamp agrees with the server is a real bug, not
@@ -1075,18 +1052,18 @@ public class HttpRoundTripTests
 
         // Prime ServerSchemaStamp so SchemaStale is decided, not merely unknown.
         await current.Source<EmployeeQueryModel>("Employee").CountAsync();
-        Assert.That(current.SchemaStale, Is.False);
+        await Assert.That(current.SchemaStale).IsFalse();
 
-        Assert.ThrowsAsync<JsonException>(() =>
+        await Assert.ThrowsExactlyAsync<JsonException>(() =>
             current.Source<PreNullableEmployee>("Employee", ["Name", "ManagerId"]).ToListAsync());
     }
 
     [Test]
-    public void DisallowedPropertyThrowsThroughClient() =>
+    public async Task DisallowedPropertyThrowsThroughClient() =>
         // The generated client model has no Salary member (the server marks it [QueryIgnore]), so
         // attempts to reach hidden data must come as raw requests, which the server rejects (see the
         // 400 test). Here we confirm an unknown root is rejected through the typed client path.
-        Assert.ThrowsAsync<ScryRequestException>(() =>
+        await Assert.ThrowsExactlyAsync<ScryRequestException>(() =>
             client.Source<EmployeeQueryModel>("Secret").ToListAsync());
 
     // Several queries, one POST. What is being proved is that batching changes only how many requests
@@ -1116,9 +1093,9 @@ public class HttpRoundTripTests
 
         await batch.SendAsync();
 
-        Assert.That((await employees).Select(_ => _.Name), Is.EqualTo(activeEmployeeNames));
-        Assert.That(await departments, Is.EqualTo(2));
-        Assert.That((await first)!.Name, Is.EqualTo("Aaron"));
+        await Assert.That((await employees).Select(_ => _.Name)).IsEquivalentTo(activeEmployeeNames, CollectionOrdering.Matching);
+        await Assert.That(await departments).IsEqualTo(2);
+        await Assert.That((await first)!.Name).IsEqualTo("Aaron");
     }
 
     // A batch is not all-or-nothing: an entry the server refuses faults its own task and leaves the
@@ -1138,9 +1115,9 @@ public class HttpRoundTripTests
 
         await batch.SendAsync();
 
-        var exception = Assert.ThrowsAsync<ScryRequestException>(async () => await rejected)!;
-        Assert.That(exception.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        Assert.That(await accepted, Is.EqualTo(2));
+        var exception = (await Assert.ThrowsExactlyAsync<ScryRequestException>(async () => await rejected))!;
+        await Assert.That(exception.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That(await accepted).IsEqualTo(2);
     }
 
     // The whole header path over real HTTP: the client attaches one, the server's row policy reads it
@@ -1156,8 +1133,8 @@ public class HttpRoundTripTests
             .Select(_ => new RegionRow(_.Region))
             .ToListAsync();
 
-        Assert.That(rows, Is.Not.Empty);
-        Assert.That(echoed, Is.EqualTo("round-trip-1"));
+        await Assert.That(rows).IsNotEmpty();
+        await Assert.That(echoed).IsEqualTo("round-trip-1");
     }
 
     // The streaming endpoint commits its status and headers before the first row, so a policy's write
@@ -1177,24 +1154,65 @@ public class HttpRoundTripTests
             regions.Add(row.Region);
         }
 
-        Assert.That(regions, Is.Not.Empty);
-        Assert.That(echoed, Is.EqualTo("round-trip-2"));
+        await Assert.That(regions).IsNotEmpty();
+        await Assert.That(echoed).IsEqualTo("round-trip-2");
     }
 
     // A rejected query still has response headers, and they are the ones worth reading.
     [Test]
-    public void ResponseHeadersAreReadableOnARejectedQueryOverHttp()
+    public async Task ResponseHeadersAreReadableOnARejectedQueryOverHttp()
     {
         string? stamp = null;
 
         var rejected = client.Source<EmployeeQueryModel>("Secret")
             .OnResponseHeaders(_ => stamp = _.GetValues(WireFormat.SchemaStampHeader).Single());
 
-        Assert.ThrowsAsync<ScryRequestException>(() => rejected.ToListAsync());
-        Assert.That(stamp, Is.EqualTo(ScryQuery.SchemaStamp));
+        await Assert.ThrowsExactlyAsync<ScryRequestException>(() => rejected.ToListAsync());
+        await Assert.That(stamp).IsEqualTo(ScryQuery.SchemaStamp);
     }
 
     record RegionRow(string Region);
+
+    /// <summary>
+    /// What a client generated before the member was marked does: it reads its own model, sees nothing
+    /// sensitive, and asks in a URL. The refusal is one it can act on without a person reading it, so
+    /// the query still returns — one round trip later, in a body — rather than failing.
+    /// </summary>
+    /// <remarks>
+    /// First in the assembly, since what a client believes is sensitive is the union of every model any
+    /// client in the process opened a source as: once anything here opens the generated Employee, which
+    /// marks Password, no client in this process can be stale about it, and this asks in a body at once.
+    /// A class of its own, over a server of its own, because every other test class depends on it and a
+    /// class cannot depend on one of its own tests.
+    /// </remarks>
+    [NotInParallel]
+    public class StaleClient
+    {
+        [Before(Class)]
+        public static Task StartServer() =>
+            HttpRoundTripTests.StartServer();
+
+        [After(Class)]
+        public static Task StopServer() =>
+            HttpRoundTripTests.StopServer();
+
+        [Test]
+        public async Task AClientThatDoesNotKnowRetriesInABody()
+        {
+            var stale = ScryClient.ForHttp(http, "/api/query");
+            methods.Clear();
+
+            var rows = await stale.Source<UnmarkedEmployee>("Employee", ["Id", "Name", "Password"])
+                .Where(_ => _.Password == "hunter2")
+                .Select(_ => new NameRow(_.Name))
+                .ToListAsync();
+
+            // Asked the way it believed it could, refused, and asked again the way it was told to —
+            // which is the whole of the self-healing, and is why this is two requests rather than one.
+            await Assert.That(methods).IsEquivalentTo(["GET", "POST"], CollectionOrdering.Matching);
+            await Assert.That(rows).IsEmpty();
+        }
+    }
 }
 
 /// <summary>

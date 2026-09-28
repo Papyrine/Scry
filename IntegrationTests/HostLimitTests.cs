@@ -15,16 +15,17 @@ using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 /// No database is reached. A refused body never reaches a handler, and the one request answered
 /// reads a POCO source, so the server is built over a connection string nothing connects to.
 /// </remarks>
-[TestFixture]
+[NotInParallel]
+[DependsOn<HttpRoundTripTests.StaleClient>(nameof(HttpRoundTripTests.StaleClient.AClientThatDoesNotKnowRetriesInABody), ProceedOnFailure = true)]
 public class HostLimitTests
 {
     const string unusable = "Server=(localdb)\\nothing;Database=none;Connect Timeout=1";
 
-    WebApplication app = null!;
-    HttpClient http = null!;
+    static WebApplication app = null!;
+    static HttpClient http = null!;
 
-    [OneTimeSetUp]
-    public async Task StartServer()
+    [Before(Class)]
+    public static async Task StartServer()
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseUrls("http://127.0.0.1:0");
@@ -51,8 +52,8 @@ public class HostLimitTests
         };
     }
 
-    [OneTimeTearDown]
-    public async Task StopServer()
+    [After(Class)]
+    public static async Task StopServer()
     {
         http.Dispose();
         await app.StopAsync();
@@ -61,18 +62,19 @@ public class HostLimitTests
 
     // A request the server would otherwise answer, padded past the limit with whitespace the reader
     // ignores, so the refusal can only be the size — and it is the host's 413, never Scry's 500.
-    [TestCase("/api/query")]
-    [TestCase("/api/query/stream")]
-    [TestCase("/api/query/batch")]
-    [TestCase("/api/query/attachment")]
-    [TestCase("/api/query/subscribe")]
+    [Test]
+    [Arguments("/api/query")]
+    [Arguments("/api/query/stream")]
+    [Arguments("/api/query/batch")]
+    [Arguments("/api/query/attachment")]
+    [Arguments("/api/query/subscribe")]
     public async Task ABodyPastTheHostLimitIsRefusedByTheHost(string endpoint)
     {
         var body = """{"version":1,"root":"Holiday","pipeline":[{"$type":"count"}]}""" + new string(' ', 4096);
         using var content = new StringContent(body, Encoding.UTF8, "application/json");
         using var response = await http.PostAsync(endpoint, content);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.RequestEntityTooLarge));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.RequestEntityTooLarge);
     }
 
     [Test]
@@ -82,6 +84,6 @@ public class HostLimitTests
         using var content = new StringContent(body, Encoding.UTF8, "application/json");
         using var response = await http.PostAsync("/api/query", content);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
     }
 }

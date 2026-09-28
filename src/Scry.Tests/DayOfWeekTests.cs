@@ -3,7 +3,6 @@
 /// SQL for it reads <c>@@DATEFIRST</c> and so answers differently per connection. Scry carries the
 /// intent on the wire and builds the deterministic arithmetic server-side instead.
 /// </summary>
-[TestFixture]
 public class DayOfWeekTests
 {
     [Test]
@@ -21,14 +20,14 @@ public class DayOfWeekTests
             .ToList()
             .ToDictionary(_ => _.Sku, _ => _.Placed.DayOfWeek);
 
-        Assert.That(rows, Is.Not.Empty);
-        Assert.Multiple(() =>
+        await Assert.That(rows).IsNotEmpty();
+        using (Assert.Multiple())
         {
             foreach (var row in rows)
             {
-                Assert.That(row.Day, Is.EqualTo(expected[row.Sku]), $"Sku {row.Sku}");
+                await Assert.That(row.Day).IsEqualTo(expected[row.Sku]).Because($"Sku {row.Sku}");
             }
-        });
+        }
     }
 
     [Test]
@@ -44,8 +43,8 @@ public class DayOfWeekTests
             .ToListAsync();
         // end-snippet
 
-        Assert.That(rows.Select(_ => _.Placed.DayOfWeek), Is.All.EqualTo(DayOfWeek.Wednesday));
-        Assert.That(rows, Has.Count.EqualTo(context.Orders.ToList().Count(_ => _.Placed.DayOfWeek == DayOfWeek.Wednesday)));
+        await Assert.That(rows.Select(_ => _.Placed.DayOfWeek)).All(_ => Equals(_, DayOfWeek.Wednesday));
+        await Assert.That(rows).Count().IsEqualTo(context.Orders.ToList().Count(_ => _.Placed.DayOfWeek == DayOfWeek.Wednesday));
     }
 
     [Test]
@@ -59,7 +58,7 @@ public class DayOfWeekTests
             .Select(_ => new {Day = _.Placed.DayOfWeek})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => (int)_.Day), Is.Ordered);
+        await Assert.That(rows.Select(_ => (int)_.Day)).IsInOrder();
     }
 
     [Test]
@@ -73,7 +72,7 @@ public class DayOfWeekTests
         var count = await client.Source<Order>("Order")
             .CountAsync(_ => _.Placed.DayOfWeek == DayOfWeek.Wednesday);
 
-        Assert.That(count, Is.EqualTo(context.Orders.ToList().Count(_ => _.Placed.DayOfWeek == DayOfWeek.Wednesday)));
+        await Assert.That(count).IsEqualTo(context.Orders.ToList().Count(_ => _.Placed.DayOfWeek == DayOfWeek.Wednesday));
     }
 
     [Test]
@@ -115,14 +114,14 @@ public class DayOfWeekTests
 
         var expected = early.ToDictionary(_ => _, _ => _.DayOfWeek);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
             foreach (var date in early)
             {
                 var row = rows.Single(_ => _.Sku == 4000ul + (ulong)Array.IndexOf(early, date));
-                Assert.That(row.Day, Is.EqualTo(expected[date]), $"{date:yyyy-MM-dd}");
+                await Assert.That(row.Day).IsEqualTo(expected[date]).Because($"{date:yyyy-MM-dd}");
             }
-        });
+        }
     }
 
     static ScryClient ClientFor(TestContext context) =>

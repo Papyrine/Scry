@@ -2,8 +2,6 @@
 /// The debug sidecar over the running sample: toggled by its shortcut, populated by the page's own
 /// queries, and linking into the explorer with the captured query pre-populated.
 /// </summary>
-[TestFixture]
-[Parallelizable(ParallelScope.Children)]
 [Category("Browser")]
 public class SidecarUiTests :
     BrowserFixture
@@ -52,7 +50,7 @@ public class SidecarUiTests :
 
         // The home page fills four tables, each from its own query.
         var rows = page.Locator("[data-testid='sidecar-entries'] .scry-sidecar-row");
-        Assert.That(await rows.CountAsync(), Is.GreaterThanOrEqualTo(4));
+        await Assert.That(await rows.CountAsync()).IsGreaterThanOrEqualTo(4);
         await Assertions.Expect(rows.First).ToContainTextAsync("GET");
         await Assertions.Expect(rows.First).ToContainTextAsync("200");
 
@@ -125,17 +123,17 @@ public class SidecarUiTests :
         await page.Locator("[data-testid='sidecar-entries'] .scry-sidecar-row").First.ClickAsync();
 
         var href = await page.Locator("[data-testid='sidecar-explorer-link']").GetAttributeAsync("href");
-        Assert.That(href, Does.StartWith("/scry/#q="));
+        await Assert.That(href).StartsWith("/scry/#q=");
 
         var encoded = href!["/scry/#q=".Length..];
         var snippet = Encoding.UTF8.GetString(Base64Url.DecodeFromChars(encoded));
-        Assert.That(snippet, Does.StartWith("Query."));
+        await Assert.That(snippet).StartsWith("Query.");
 
         // The link is the explorer's tested entry point: opening it fills the editor with the snippet.
         await page.GotoAsync($"{BaseUrl}{href}");
         await page.WaitForSelectorAsync(".monaco-editor", 90);
         await page.WaitForSelectorAsync("main[data-ready]", 90);
         var value = await page.EvaluateAsync<string>("() => monaco.editor.getEditors()[0].getValue()");
-        Assert.That(value, Is.EqualTo(snippet));
+        await Assert.That(value).IsEqualTo(snippet);
     }
 }

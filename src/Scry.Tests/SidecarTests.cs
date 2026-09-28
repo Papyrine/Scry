@@ -3,7 +3,6 @@
 /// touch. Streams and attachments must pass through byte-identical and unbuffered, and capture
 /// itself must never turn a working exchange into a failure.
 /// </summary>
-[TestFixture]
 public class SidecarTests
 {
     [ScryModel("Person", "Id", "Name", "Ssn")]
@@ -29,14 +28,14 @@ public class SidecarTests
             .ToListAsync();
 
         var entry = store.Entries.Single();
-        Assert.That(entry.Kind, Is.EqualTo(ScrySidecarKind.Query));
-        Assert.That(entry.Method, Is.EqualTo("GET"));
-        Assert.That(entry.Request!.Root, Is.EqualTo("Person"));
-        Assert.That(entry.RequestJson, Does.Contain("\"root\": \"Person\""));
-        Assert.That(entry.Status, Is.EqualTo(200));
-        Assert.That(entry.ResponseJson, Does.Contain("\"kind\""));
+        await Assert.That(entry.Kind).IsEqualTo(ScrySidecarKind.Query);
+        await Assert.That(entry.Method).IsEqualTo("GET");
+        await Assert.That(entry.Request!.Root).IsEqualTo("Person");
+        await Assert.That(entry.RequestJson).Contains("\"root\": \"Person\"");
+        await Assert.That(entry.Status).IsEqualTo(200);
+        await Assert.That(entry.ResponseJson).Contains("\"kind\"");
         // A bare Scry GET sets no request headers of its own, so only the response side has any.
-        Assert.That(entry.ResponseHeaders.Select(_ => _.Key), Does.Contain("Content-Type"));
+        await Assert.That(entry.ResponseHeaders.Select(_ => _.Key)).Contains("Content-Type");
     }
 
     // A sensitive constant forces the query into a body; the body is exactly what the panel must
@@ -52,10 +51,10 @@ public class SidecarTests
             .ToListAsync();
 
         var entry = store.Entries.Single();
-        Assert.That(entry.Method, Is.EqualTo("POST"));
-        Assert.That(entry.Kind, Is.EqualTo(ScrySidecarKind.Query));
-        Assert.That(entry.Request!.Root, Is.EqualTo("Person"));
-        Assert.That(entry.RequestJson, Does.Contain("123-45-6789"));
+        await Assert.That(entry.Method).IsEqualTo("POST");
+        await Assert.That(entry.Kind).IsEqualTo(ScrySidecarKind.Query);
+        await Assert.That(entry.Request!.Root).IsEqualTo("Person");
+        await Assert.That(entry.RequestJson).Contains("123-45-6789");
     }
 
     [Test]
@@ -67,9 +66,9 @@ public class SidecarTests
         await client.PostAsync("/api/query/batch", content);
 
         var entry = store.Entries.Single();
-        Assert.That(entry.Kind, Is.EqualTo(ScrySidecarKind.Batch));
-        Assert.That(entry.RequestJson, Does.Contain("\"requests\""));
-        Assert.That(entry.ResponseJson, Does.Contain("\"results\""));
+        await Assert.That(entry.Kind).IsEqualTo(ScrySidecarKind.Batch);
+        await Assert.That(entry.RequestJson).Contains("\"requests\"");
+        await Assert.That(entry.ResponseJson).Contains("\"results\"");
     }
 
     // A stream is read a row at a time above the handler; buffering it here would stall the read
@@ -92,12 +91,12 @@ public class SidecarTests
         };
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
 
-        Assert.That(response.Content, Is.SameAs(served));
+        await Assert.That(response.Content).IsSameReferenceAs(served);
         var entry = store.Entries.Single();
-        Assert.That(entry.Kind, Is.EqualTo(ScrySidecarKind.Stream));
-        Assert.That(entry.ResponseJson, Is.Null);
-        Assert.That(entry.Status, Is.EqualTo(200));
-        Assert.That(entry.ResponseHeaders.Select(_ => _.Key), Does.Contain("Content-Type"));
+        await Assert.That(entry.Kind).IsEqualTo(ScrySidecarKind.Stream);
+        await Assert.That(entry.ResponseJson).IsNull();
+        await Assert.That(entry.Status).IsEqualTo(200);
+        await Assert.That(entry.ResponseHeaders.Select(_ => _.Key)).Contains("Content-Type");
     }
 
     // A live query's response never ends, so buffering it would hold the first answer back for ever.
@@ -112,13 +111,13 @@ public class SidecarTests
         using var request = Subscribe();
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
 
-        Assert.That(served.Reads, Is.Empty);
+        await Assert.That(served.Reads).IsEmpty();
         var entry = store.Entries.Single();
-        Assert.That(entry.Kind, Is.EqualTo(ScrySidecarKind.Subscription));
-        Assert.That(entry.Request?.Root, Is.EqualTo("Person"));
-        Assert.That(entry.ResponseJson, Is.Null);
-        Assert.That(entry.Session, Is.Not.Null);
-        Assert.That(entry.Session!.Connections.Single().Status, Is.EqualTo(200));
+        await Assert.That(entry.Kind).IsEqualTo(ScrySidecarKind.Subscription);
+        await Assert.That(entry.Request?.Root).IsEqualTo("Person");
+        await Assert.That(entry.ResponseJson).IsNull();
+        await Assert.That(entry.Session).IsNotNull();
+        await Assert.That(entry.Session!.Connections.Single().Status).IsEqualTo(200);
     }
 
     // Watching may not change what the consumer reads — not the bytes, and not the boundaries they
@@ -134,8 +133,8 @@ public class SidecarTests
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
         var (text, boundaries) = await Drain(response);
 
-        Assert.That(text, Is.EqualTo(string.Concat(chunks)));
-        Assert.That(boundaries, Is.EqualTo(chunks.Select(_ => _.Length)).AsCollection);
+        await Assert.That(text).IsEqualTo(string.Concat(chunks));
+        await Assert.That(boundaries).IsEquivalentTo(chunks.Select(_ => _.Length), CollectionOrdering.Matching);
     }
 
     // The client refuses a live query whose response is not an event stream, so a header lost in the
@@ -148,7 +147,7 @@ public class SidecarTests
         using var request = Subscribe();
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
 
-        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo(ScryLive.ContentType));
+        await Assert.That(response.Content.Headers.ContentType?.MediaType).IsEqualTo(ScryLive.ContentType);
     }
 
     // Every event, the heartbeats included: an idle live query that is still being pinged looks
@@ -165,14 +164,14 @@ public class SidecarTests
 
         var session = store.Entries.Single().Session!;
         var connection = session.Connections.Single();
-        Assert.That(connection.Events.Select(_ => _.Name), Is.EqualTo([ScryLive.Result, ScryLive.Ping, ScryLive.Unchanged, ScryLive.End]).AsCollection);
-        Assert.That(connection.Events[0].EventId, Is.EqualTo("a3f1"));
-        Assert.That(connection.Events[0].Json, Does.Contain("\"kind\""));
-        Assert.That(connection.Ended, Is.EqualTo("lifetime"));
-        Assert.That(session.Answers, Is.EqualTo(1));
-        Assert.That(session.Pings, Is.EqualTo(1));
-        Assert.That(session.Unchanged, Is.EqualTo(1));
-        Assert.That(session.State, Is.EqualTo(ScrySubscriptionState.Closed));
+        await Assert.That(connection.Events.Select(_ => _.Name)).IsEquivalentTo([ScryLive.Result, ScryLive.Ping, ScryLive.Unchanged, ScryLive.End], CollectionOrdering.Matching);
+        await Assert.That(connection.Events[0].EventId).IsEqualTo("a3f1");
+        await Assert.That(connection.Events[0].Json).Contains("\"kind\"");
+        await Assert.That(connection.Ended).IsEqualTo("lifetime");
+        await Assert.That(session.Answers).IsEqualTo(1);
+        await Assert.That(session.Pings).IsEqualTo(1);
+        await Assert.That(session.Unchanged).IsEqualTo(1);
+        await Assert.That(session.State).IsEqualTo(ScrySubscriptionState.Closed);
     }
 
     // Reads fall wherever the network puts them, and an event is not obliged to arrive in one.
@@ -187,9 +186,9 @@ public class SidecarTests
         await Drain(response);
 
         var connection = store.Entries.Single().Session!.Connections.Single();
-        Assert.That(connection.Events.Single().Name, Is.EqualTo(ScryLive.Result));
-        Assert.That(connection.Events.Single().EventId, Is.EqualTo("a3f1"));
-        Assert.That(connection.Events.Single().Bytes, Is.EqualTo(whole.Length));
+        await Assert.That(connection.Events.Single().Name).IsEqualTo(ScryLive.Result);
+        await Assert.That(connection.Events.Single().EventId).IsEqualTo("a3f1");
+        await Assert.That(connection.Events.Single().Bytes).IsEqualTo(whole.Length);
     }
 
     // Whatever ended the read is the consumer's to classify, so it is recorded and rethrown exactly
@@ -203,12 +202,12 @@ public class SidecarTests
         using var request = Subscribe();
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
 
-        var failure = Assert.ThrowsAsync<IOException>(async () => await Drain(response));
+        var failure = await Assert.ThrowsExactlyAsync<IOException>(async () => await Drain(response));
 
-        Assert.That(failure!.Message, Is.EqualTo("The connection was reset."));
+        await Assert.That(failure!.Message).IsEqualTo("The connection was reset.");
         var session = store.Entries.Single().Session!;
-        Assert.That(session.Connections.Single().Ended, Is.EqualTo("cut"));
-        Assert.That(session.Error, Is.EqualTo("The connection was reset."));
+        await Assert.That(session.Connections.Single().Ended).IsEqualTo("cut");
+        await Assert.That(session.Error).IsEqualTo("The connection was reset.");
     }
 
     // A stream that stops without a closing event was cut rather than ended. The client asks again,
@@ -223,8 +222,8 @@ public class SidecarTests
         await Drain(response);
 
         var session = store.Entries.Single().Session!;
-        Assert.That(session.Connections.Single().Ended, Is.EqualTo("cut"));
-        Assert.That(session.State, Is.EqualTo(ScrySubscriptionState.Reconnecting));
+        await Assert.That(session.Connections.Single().Ended).IsEqualTo("cut");
+        await Assert.That(session.State).IsEqualTo(ScrySubscriptionState.Reconnecting);
     }
 
     // The client names the live query a connection belongs to beside the request, so a reconnect
@@ -238,9 +237,9 @@ public class SidecarTests
         await Connect(client, session: 7, resumedFrom: "a3f1");
 
         var entry = store.Entries.Single();
-        Assert.That(entry.Session!.Connections.Select(_ => _.Attempt), Is.EqualTo([1, 2]).AsCollection);
-        Assert.That(entry.Session.Connections[1].ResumedFrom, Is.EqualTo("a3f1"));
-        Assert.That(entry.Session.Answers, Is.EqualTo(2));
+        await Assert.That(entry.Session!.Connections.Select(_ => _.Attempt)).IsEquivalentTo([1, 2], CollectionOrdering.Matching);
+        await Assert.That(entry.Session.Connections[1].ResumedFrom).IsEqualTo("a3f1");
+        await Assert.That(entry.Session.Answers).IsEqualTo(2);
     }
 
     // Two live queries asking the same thing are two live queries, however alike their traffic.
@@ -252,7 +251,7 @@ public class SidecarTests
         await Connect(client, session: 7, resumedFrom: null);
         await Connect(client, session: 8, resumedFrom: null);
 
-        Assert.That(store.Entries, Has.Count.EqualTo(2));
+        await Assert.That(store.Entries).Count().IsEqualTo(2);
     }
 
     // The cap counts exchanges that are over. A live query still open is the one thing in the log
@@ -273,8 +272,8 @@ public class SidecarTests
             await Scry(client).Select(_ => new NameRow(_.Name)).ToListAsync();
         }
 
-        Assert.That(store.Entries.Count(_ => _.Session is not null), Is.EqualTo(1));
-        Assert.That(store.Entries, Has.Count.EqualTo(2));
+        await Assert.That(store.Entries.Count(_ => _.Session is not null)).IsEqualTo(1);
+        await Assert.That(store.Entries).Count().IsEqualTo(2);
     }
 
     // A refused live query never becomes a stream, so there is nothing to watch and everything to
@@ -292,13 +291,13 @@ public class SidecarTests
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
 
         var entry = store.Entries.Single();
-        Assert.That(entry.Kind, Is.EqualTo(ScrySidecarKind.Subscription));
-        Assert.That(entry.Session, Is.Null);
-        Assert.That(entry.Status, Is.EqualTo(503));
-        Assert.That(entry.Error, Is.EqualTo("Too many live queries."));
+        await Assert.That(entry.Kind).IsEqualTo(ScrySidecarKind.Subscription);
+        await Assert.That(entry.Session).IsNull();
+        await Assert.That(entry.Status).IsEqualTo(503);
+        await Assert.That(entry.Error).IsEqualTo("Too many live queries.");
 
         // Still readable above the handler, which is what the client does with a refusal.
-        Assert.That(await response.Content.ReadAsStringAsync(), Does.Contain("Too many live queries."));
+        await Assert.That(await response.Content.ReadAsStringAsync()).Contains("Too many live queries.");
     }
 
     // A live query answers for as long as it is open, which is far oftener than a panel can usefully
@@ -317,8 +316,8 @@ public class SidecarTests
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
         await Drain(response);
 
-        Assert.That(changed, Is.EqualTo(1));
-        Assert.That(sessions, Is.GreaterThan(3));
+        await Assert.That(changed).IsEqualTo(1);
+        await Assert.That(sessions).IsGreaterThan(3);
     }
 
     static async Task Connect(HttpClient client, long session, string? resumedFrom)
@@ -490,11 +489,11 @@ public class SidecarTests
         };
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
 
-        Assert.That(response.Content, Is.SameAs(served));
+        await Assert.That(response.Content).IsSameReferenceAs(served);
         var entry = store.Entries.Single();
-        Assert.That(entry.Kind, Is.EqualTo(ScrySidecarKind.Attachment));
-        Assert.That(Encoding.UTF8.GetString(entry.AttachmentRequestBody!), Is.EqualTo(body));
-        Assert.That(entry.ResponseJson, Is.Null);
+        await Assert.That(entry.Kind).IsEqualTo(ScrySidecarKind.Attachment);
+        await Assert.That(Encoding.UTF8.GetString(entry.AttachmentRequestBody!)).IsEqualTo(body);
+        await Assert.That(entry.ResponseJson).IsNull();
     }
 
     [Test]
@@ -518,14 +517,14 @@ public class SidecarTests
         using var response = await client.PostAsync("/api/query", body);
 
         // The caller still reads the exact multipart bytes.
-        Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(bytes));
+        await Assert.That(await response.Content.ReadAsByteArrayAsync()).IsEquivalentTo(bytes, CollectionOrdering.Matching);
         var entry = store.Entries.Single();
-        Assert.That(entry.ResponseJson, Does.Contain("\"kind\": \"List\""));
-        Assert.That(entry.BinaryPartSizes, Is.EqualTo([2, 4]));
+        await Assert.That(entry.ResponseJson).Contains("\"kind\": \"List\"");
+        await Assert.That(entry.BinaryPartSizes).IsEquivalentTo([2, 4], CollectionOrdering.Matching);
     }
 
     [Test]
-    public void ErrorResponseRecordsTheServersError()
+    public async Task ErrorResponseRecordsTheServersError()
     {
         var (store, client) = Stubbed(
             _ => new(HttpStatusCode.BadRequest)
@@ -533,26 +532,26 @@ public class SidecarTests
                 Content = JsonContent(JsonSerializer.Serialize(new ScryError("nope"), ScryJson.Options))
             });
 
-        Assert.ThrowsAsync<ScryRequestException>(
+        await Assert.ThrowsExactlyAsync<ScryRequestException>(
             () => Scry(client).Select(_ => new NameRow(_.Name)).ToListAsync());
 
         var entry = store.Entries.Single();
-        Assert.That(entry.Status, Is.EqualTo(400));
-        Assert.That(entry.Error, Is.EqualTo("nope"));
-        Assert.That(entry.ResponseJson, Does.Contain("nope"));
+        await Assert.That(entry.Status).IsEqualTo(400);
+        await Assert.That(entry.Error).IsEqualTo("nope");
+        await Assert.That(entry.ResponseJson).Contains("nope");
     }
 
     [Test]
-    public void TransportExceptionIsRecordedAndRethrown()
+    public async Task TransportExceptionIsRecordedAndRethrown()
     {
         var (store, client) = Stubbed(_ => throw new HttpRequestException("unreachable"));
 
-        Assert.ThrowsAsync<HttpRequestException>(
+        await Assert.ThrowsExactlyAsync<HttpRequestException>(
             () => Scry(client).Select(_ => new NameRow(_.Name)).ToListAsync());
 
         var entry = store.Entries.Single();
-        Assert.That(entry.Error, Is.EqualTo("unreachable"));
-        Assert.That(entry.Status, Is.Null);
+        await Assert.That(entry.Error).IsEqualTo("unreachable");
+        await Assert.That(entry.Status).IsNull();
     }
 
     [Test]
@@ -567,9 +566,9 @@ public class SidecarTests
             await client.PostAsync("/api/query", body);
         }
 
-        Assert.That(store.Entries, Has.Count.EqualTo(2));
-        Assert.That(store.Entries[0].RequestJson, Does.Contain("\"stamp\": \"s1\""));
-        Assert.That(store.Entries[1].RequestJson, Does.Contain("\"stamp\": \"s2\""));
+        await Assert.That(store.Entries).Count().IsEqualTo(2);
+        await Assert.That(store.Entries[0].RequestJson).Contains("\"stamp\": \"s1\"");
+        await Assert.That(store.Entries[1].RequestJson).Contains("\"stamp\": \"s2\"");
     }
 
     [Test]
@@ -579,7 +578,7 @@ public class SidecarTests
 
         await Scry(client).Select(_ => new NameRow(_.Name)).ToListAsync();
 
-        Assert.That(store.Entries, Is.Empty);
+        await Assert.That(store.Entries).IsEmpty();
     }
 
     [Test]
@@ -592,8 +591,8 @@ public class SidecarTests
         await Scry(client).Select(_ => new NameRow(_.Name)).ToListAsync();
         store.Clear();
 
-        Assert.That(raised, Is.EqualTo(2));
-        Assert.That(store.Entries, Is.Empty);
+        await Assert.That(raised).IsEqualTo(2);
+        await Assert.That(store.Entries).IsEmpty();
     }
 
     // The named client may carry the app's own calls beside Scry's; they are listed so the log is
@@ -607,9 +606,9 @@ public class SidecarTests
         await client.GetAsync("/api/ping");
 
         var entry = store.Entries.Single();
-        Assert.That(entry.Kind, Is.EqualTo(ScrySidecarKind.Other));
-        Assert.That(entry.Request, Is.Null);
-        Assert.That(entry.Status, Is.EqualTo(200));
+        await Assert.That(entry.Kind).IsEqualTo(ScrySidecarKind.Other);
+        await Assert.That(entry.Request).IsNull();
+        await Assert.That(entry.Status).IsEqualTo(200);
     }
 
     static IQueryable<PersonModel> Scry(HttpClient http) =>

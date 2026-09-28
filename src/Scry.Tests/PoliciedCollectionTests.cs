@@ -3,19 +3,18 @@
 /// the collection off the owner would count exactly the rows the policy hides — which is why exposing
 /// one is refused until the policy says how it wants to be read through.
 /// </summary>
-[TestFixture]
 public class PoliciedCollectionTests
 {
     [Test]
-    public void ExposingOneIsRefusedUntilThePolicySaysHowToReadIt()
+    public async Task ExposingOneIsRefusedUntilThePolicySaysHowToReadIt()
     {
         // The default, and what the server did before there was anything else to say: a policy that has
         // not been asked the question does not get guessed at.
-        var exception = Assert.Throws<Exception>(
+        var exception = Assert.ThrowsExactly<Exception>(
             () => Build(_ => _.AddPolicy<OrderLine, BulkLinesOnlyPolicy>()))!;
 
-        Assert.That(exception.Message, Does.Contain("Order.Lines"));
-        Assert.That(exception.Message, Does.Contain("CollectionNavigation"));
+        await Assert.That(exception.Message).Contains("Order.Lines");
+        await Assert.That(exception.Message).Contains("CollectionNavigation");
     }
 
     [Test]
@@ -35,7 +34,7 @@ public class PoliciedCollectionTests
             })
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Lines), Is.EqualTo([0, 1, 1]));
+        await Assert.That(rows.Select(_ => _.Lines)).IsEquivalentTo([0, 1, 1], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -51,7 +50,7 @@ public class PoliciedCollectionTests
             .Select(_ => new {Total = _.Lines.Sum(line => line.Price)})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Total), Is.EqualTo([25m, 50m]));
+        await Assert.That(rows.Select(_ => _.Total)).IsEquivalentTo([25m, 50m], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -68,16 +67,16 @@ public class PoliciedCollectionTests
             .Select(_ => new {_.Sku})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Sku), Is.EqualTo(["A-1", "B-1"]));
+        await Assert.That(rows.Select(_ => _.Sku)).IsEquivalentTo(["A-1", "B-1"], CollectionOrdering.Matching);
     }
 
     [Test]
-    public void ErroringFailsTheRequestWhereAnElementWasDenied()
+    public async Task ErroringFailsTheRequestWhereAnElementWasDenied()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, Erroring());
 
-        Assert.ThrowsAsync<ScryPermissionException>(
+        await Assert.ThrowsExactlyAsync<ScryPermissionException>(
             () => client.Source<Order>("Order")
                 .Select(_ => new
                 {
@@ -87,17 +86,16 @@ public class PoliciedCollectionTests
     }
 
     [Test]
-    public void ACollectionNobodyReadsDeniesNothing()
+    public async Task ACollectionNobodyReadsDeniesNothing()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, Erroring());
 
         // The denial is reported for reading through the collection, not for the policy existing. A
         // query that never names the member is unaffected by how it would have answered.
-        Assert.DoesNotThrowAsync(
-            () => client.Source<Order>("Order")
+        await Assert.That(async () => await client.Source<Order>("Order")
                 .Select(_ => new {_.Region})
-                .ToListAsync());
+                .ToListAsync()).ThrowsNothing();
     }
 
     static ScryProcessor Hiding() =>

@@ -11,7 +11,7 @@ using Sample.Model;
 /// the change did. A LocalDB instance of its own, for the reason the F# tests have one: the projects
 /// of this solution are tested in parallel, and two of them rebuilding one template at once deadlock.
 /// </remarks>
-[TestFixture]
+[NotInParallel]
 public class NServiceBusSampleTests
 {
     static SqlInstance<SampleContext> sqlInstance = new(
@@ -49,7 +49,7 @@ public class NServiceBusSampleTests
                 // ReSharper disable once MethodSupportsCancellation
                 .GetAsyncEnumerator();
 
-            Assert.That(await Next(answers), Is.True);
+            await Assert.That(await Next(answers)).IsTrue();
             var before = answers.Current.Single().Amount;
 
             // The server writes nothing here: it sends the command on, and the worker saves. The
@@ -57,10 +57,10 @@ public class NServiceBusSampleTests
             // streamed receipt too, over a real bus: pending, then finished by the worker's reply.
             var outcome = await query.Commands.RepriceOrder(new() {Id = 1});
             var final = await outcome.Completion.WaitAsync(TimeSpan.FromSeconds(60));
-            Assert.That(final.Status, Is.EqualTo(ScryCommandStatus.Completed));
+            await Assert.That(final.Status).IsEqualTo(ScryCommandStatus.Completed);
 
-            Assert.That(await Next(answers), Is.True);
-            Assert.That(answers.Current.Single().Amount, Is.EqualTo(before + 1));
+            await Assert.That(await Next(answers)).IsTrue();
+            await Assert.That(answers.Current.Single().Amount).IsEqualTo(before + 1);
         }
         finally
         {

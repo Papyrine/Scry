@@ -5,7 +5,6 @@
 /// rather than reading the side partially — an ignored bound would answer with more rows than the
 /// query asked for.
 /// </summary>
-[TestFixture]
 public class SidePipelineTests
 {
     // The inner side is the two highest-amount orders anywhere; joining on Region then pairs each
@@ -24,14 +23,14 @@ public class SidePipelineTests
                 (outer, inner) => new {outer.Code, Matched = inner.Amount})
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
             // Top two by amount are 250 and 100, both North — so each North outer pairs with both,
             // and the South outer pairs with nothing.
-            Assert.That(rows, Has.Count.EqualTo(4));
-            Assert.That(rows.Where(_ => _.Code == "40").Select(_ => _.Matched).Order(), Is.EqualTo([100m, 250m]));
-            Assert.That(rows.Where(_ => _.Code == "8").Select(_ => _.Matched).Order(), Is.EqualTo([100m, 250m]));
-        });
+            await Assert.That(rows).Count().IsEqualTo(4);
+            await Assert.That(rows.Where(_ => _.Code == "40").Select(_ => _.Matched).Order()).IsEquivalentTo([100m, 250m], CollectionOrdering.Matching);
+            await Assert.That(rows.Where(_ => _.Code == "8").Select(_ => _.Matched).Order()).IsEquivalentTo([100m, 250m], CollectionOrdering.Matching);
+        }
     }
 
     [Test]
@@ -49,11 +48,11 @@ public class SidePipelineTests
                 (outer, inner) => new {outer.Code, Matched = inner.Amount})
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows, Has.Count.EqualTo(2));
-            Assert.That(rows.Select(_ => _.Matched), Is.All.EqualTo(100m));
-        });
+            await Assert.That(rows).Count().IsEqualTo(2);
+            await Assert.That(rows.Select(_ => _.Matched)).All(_ => Equals(_, 100m));
+        }
     }
 
     // North rows, unioned with the single cheapest order anywhere.
@@ -73,7 +72,7 @@ public class SidePipelineTests
                     .Select(_ => new {_.Code, _.Amount}))
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Code).Order(), Is.EqualTo(["17", "40", "8"]));
+        await Assert.That(rows.Select(_ => _.Code).Order()).IsEquivalentTo(["17", "40", "8"], CollectionOrdering.Matching);
     }
 
     // Skip slices from an ordered operand: the middle order by amount is the North "40", which Concat
@@ -95,13 +94,13 @@ public class SidePipelineTests
                     .Select(_ => new {_.Code}))
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Code).Order(), Is.EqualTo(["40", "40", "8"]));
+        await Assert.That(rows.Select(_ => _.Code).Order()).IsEquivalentTo(["40", "40", "8"], CollectionOrdering.Matching);
     }
 
     // A request is stamped with the lowest version that carries it whole, so only the queries that
     // need the new shape are refused by a server predating it.
     [Test]
-    public void StampsTheVersionThePipelineNeeds()
+    public async Task StampsTheVersionThePipelineNeeds()
     {
         var plain = QueryRequest.Create("Order", [new CountOp()]);
         var richer = QueryRequest.Create(
@@ -119,20 +118,20 @@ public class SidePipelineTests
                 }
             ]);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(plain.Version, Is.EqualTo(1));
-            Assert.That(richer.Version, Is.EqualTo(2));
-        });
+            await Assert.That(plain.Version).IsEqualTo(1);
+            await Assert.That(richer.Version).IsEqualTo(2);
+        }
     }
 
     [Test]
-    public void AnUnboundedOrderingIsRefusedAtTranslation()
+    public async Task AnUnboundedOrderingIsRefusedAtTranslation()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<NotSupportedException>(() =>
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>
             client.Source<Order>("Order")
                 .Join(
                     client.Source<Order>("Order").OrderBy(_ => _.Amount),
@@ -141,16 +140,16 @@ public class SidePipelineTests
                     (outer, inner) => new {outer.Code})
                 .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("bounded by Skip or Take"));
+        await Assert.That(exception!.Message).Contains("bounded by Skip or Take");
     }
 
     [Test]
-    public void UnorderedPagingIsRefusedAtTranslation()
+    public async Task UnorderedPagingIsRefusedAtTranslation()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<NotSupportedException>(() =>
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>
             client.Source<Order>("Order")
                 .Join(
                     client.Source<Order>("Order").Take(1),
@@ -159,12 +158,12 @@ public class SidePipelineTests
                     (outer, inner) => new {outer.Code})
                 .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("in that order"));
+        await Assert.That(exception!.Message).Contains("in that order");
     }
 
     // The same grammar server-side, for a request that did not come through the translator.
     [Test]
-    public void TheServerRefusesAnUnboundedOrdering()
+    public async Task TheServerRefusesAnUnboundedOrdering()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -183,14 +182,14 @@ public class SidePipelineTests
                 }
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("bounded by Skip or Take"));
+        await Assert.That(exception!.Message).Contains("bounded by Skip or Take");
     }
 
     [Test]
-    public void BothSpellingsOfTheInnerFilterAreRefused()
+    public async Task BothSpellingsOfTheInnerFilterAreRefused()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -209,14 +208,14 @@ public class SidePipelineTests
                 }
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("never both"));
+        await Assert.That(exception!.Message).Contains("never both");
     }
 
     [Test]
-    public void AGroupByCannotCrossToTheSide()
+    public async Task AGroupByCannotCrossToTheSide()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -235,10 +234,10 @@ public class SidePipelineTests
                 }
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("is not allowed on a join's inner side"));
+        await Assert.That(exception!.Message).Contains("is not allowed on a join's inner side");
     }
 
     static ScryClient ClientFor(TestContext context) =>

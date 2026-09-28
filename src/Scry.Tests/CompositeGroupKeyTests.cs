@@ -3,7 +3,6 @@
 /// key is projected into a <c>DistinctRow</c> that carries its member mappings — the same technique
 /// that lets a multi-member Distinct be ordered and paged.
 /// </summary>
-[TestFixture]
 public class CompositeGroupKeyTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -26,13 +25,13 @@ public class CompositeGroupKeyTests
             .ToListAsync();
         // end-snippet
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows, Has.Count.EqualTo(3));
-            Assert.That(rows.Single(_ => _ is {Region: "North", Grade: 'A'}).Total, Is.EqualTo(100m));
-            Assert.That(rows.Single(_ => _ is {Region: "North", Grade: 'B'}).Total, Is.EqualTo(250m));
-            Assert.That(rows.Single(_ => _.Region == "South").Total, Is.EqualTo(75m));
-        });
+            await Assert.That(rows).Count().IsEqualTo(3);
+            await Assert.That(rows.Single(_ => _ is {Region: "North", Grade: 'A'}).Total).IsEqualTo(100m);
+            await Assert.That(rows.Single(_ => _ is {Region: "North", Grade: 'B'}).Total).IsEqualTo(250m);
+            await Assert.That(rows.Single(_ => _.Region == "South").Total).IsEqualTo(75m);
+        }
     }
 
     [Test]
@@ -46,7 +45,7 @@ public class CompositeGroupKeyTests
             .Select(_ => new {_.Key.Region, Count = _.Count()})
             .ToListAsync();
 
-        Assert.That(rows.Sum(_ => _.Count), Is.EqualTo(3));
+        await Assert.That(rows.Sum(_ => _.Count)).IsEqualTo(3);
     }
 
     [Test]
@@ -60,7 +59,7 @@ public class CompositeGroupKeyTests
             .Select(_ => new {_.Key.Region, _.Key.Quantity, Total = _.Sum(_ => _.Amount)})
             .ToListAsync();
 
-        Assert.That(rows, Has.Count.EqualTo(3));
+        await Assert.That(rows).Count().IsEqualTo(3);
     }
 
     [Test]
@@ -76,7 +75,7 @@ public class CompositeGroupKeyTests
             .Select(_ => new RegionTotal(_.Key.Region, _.Key.Grade, _.Sum(_ => _.Amount)))
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Grade).Order(), Is.EqualTo(['A', 'B']));
+        await Assert.That(rows.Select(_ => _.Grade).Order()).IsEquivalentTo(['A', 'B'], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -90,24 +89,24 @@ public class CompositeGroupKeyTests
             .Select(_ => new RegionCount(_.Key.Region, _.Key.Grade == 'A', _.Count()))
             .ToListAsync();
 
-        Assert.That(rows.Count(_ => _.Discounted), Is.EqualTo(2));
+        await Assert.That(rows.Count(_ => _.Discounted)).IsEqualTo(2);
     }
 
     [Test]
-    public void RejectsAKeyPartTheQueryDidNotGroupBy()
+    public async Task RejectsAKeyPartTheQueryDidNotGroupBy()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // Reaching a member off the key that is not part of it is refused rather than silently
         // becoming a read of an ungrouped row member.
-        var exception = Assert.ThrowsAsync<NotSupportedException>(
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(
             () => client.Source<Order>("Order")
                 .GroupBy(_ => new {_.Region, _.Grade})
                 .Select(_ => new {_.Key.Region, Other = _.Key.GetHashCode()})
                 .ToListAsync());
 
-        Assert.That(exception, Is.Not.Null);
+        await Assert.That(exception).IsNotNull();
     }
 
     static ScryClient ClientFor(TestContext context) =>

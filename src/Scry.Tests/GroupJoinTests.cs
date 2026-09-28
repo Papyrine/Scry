@@ -3,7 +3,6 @@
 /// — projecting it would make the response nested — so what a client gets is a flat row carrying a
 /// correlated aggregate over the second source.
 /// </summary>
-[TestFixture]
 public class GroupJoinTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -29,11 +28,11 @@ public class GroupJoinTests
             .ToListAsync();
         // end-snippet
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows.Single(_ => _.Department == "Engineering").Headcount, Is.EqualTo(2));
-            Assert.That(rows.Single(_ => _.Department == "Sales").Headcount, Is.EqualTo(2));
-        });
+            await Assert.That(rows.Single(_ => _.Department == "Engineering").Headcount).IsEqualTo(2);
+            await Assert.That(rows.Single(_ => _.Department == "Sales").Headcount).IsEqualTo(2);
+        }
     }
 
     [Test]
@@ -50,11 +49,11 @@ public class GroupJoinTests
                 (department, employees) => new DepartmentNames(department.Name, employees.Min(_ => _.Name)))
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows.Single(_ => _.Department == "Engineering").First, Is.EqualTo("Aaron"));
-            Assert.That(rows.Single(_ => _.Department == "Sales").First, Is.EqualTo("Bob"));
-        });
+            await Assert.That(rows.Single(_ => _.Department == "Engineering").First).IsEqualTo("Aaron");
+            await Assert.That(rows.Single(_ => _.Department == "Sales").First).IsEqualTo("Bob");
+        }
     }
 
     [Test]
@@ -73,7 +72,7 @@ public class GroupJoinTests
                 (department, employees) => new DepartmentSize(department.Name, employees.Count()))
             .ToListAsync();
 
-        Assert.That(rows.Single(_ => _.Department == "Sales").Headcount, Is.EqualTo(1));
+        await Assert.That(rows.Single(_ => _.Department == "Sales").Headcount).IsEqualTo(1);
     }
 
     [Test]
@@ -90,11 +89,11 @@ public class GroupJoinTests
                 (department, employees) => new DepartmentSize(department.Name, employees.Count()))
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows, Has.Count.EqualTo(2));
-            Assert.That(rows.Select(_ => _.Headcount), Is.All.Zero);
-        });
+            await Assert.That(rows).Count().IsEqualTo(2);
+            await Assert.That(rows.Select(_ => _.Headcount)).All(_ => _ == 0);
+        }
     }
 
     [Test]
@@ -113,11 +112,11 @@ public class GroupJoinTests
                 (employee, tickets) => new DepartmentSize(employee.Name, tickets.Count()))
             .ToListAsync();
 
-        Assert.That(rows.Sum(_ => _.Headcount), Is.EqualTo(context.Tickets.Count(_ => _.IsOpen)));
+        await Assert.That(rows.Sum(_ => _.Headcount)).IsEqualTo(context.Tickets.Count(_ => _.IsOpen));
     }
 
     [Test]
-    public void RejectsReadingTheInnerSideDirectly()
+    public async Task RejectsReadingTheInnerSideDirectly()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -136,14 +135,14 @@ public class GroupJoinTests
                     ])
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("reads the inner side of a GroupJoin directly"));
+        await Assert.That(exception!.Message).Contains("reads the inner side of a GroupJoin directly");
     }
 
     [Test]
-    public void RejectsAGroupJoinThatAggregatesNothing()
+    public async Task RejectsAGroupJoinThatAggregatesNothing()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -159,14 +158,14 @@ public class GroupJoinTests
                     [new("Department", JoinSide.Outer, ["Name"])])
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("must aggregate its inner side"));
+        await Assert.That(exception!.Message).Contains("must aggregate its inner side");
     }
 
     [Test]
-    public void RejectsAnAggregateOnAnOrdinaryJoin()
+    public async Task RejectsAnAggregateOnAnOrdinaryJoin()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -188,10 +187,10 @@ public class GroupJoinTests
                     ])
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("only the inner side of a GroupJoin may do"));
+        await Assert.That(exception!.Message).Contains("only the inner side of a GroupJoin may do");
     }
 
     static ScryClient ClientFor(TestContext context) =>

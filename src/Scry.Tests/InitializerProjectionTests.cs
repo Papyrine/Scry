@@ -3,7 +3,6 @@
 /// — names members in both halves, and both have to reach the wire: the arguments were once dropped,
 /// so the row came back with its key at default and nothing said so.
 /// </summary>
-[TestFixture]
 public class InitializerProjectionTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -41,14 +40,14 @@ public class InitializerProjectionTests
             .ToListAsync();
 
         string[] names = ["Aaron", "Alice", "Bob", "Carol"];
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows.Select(_ => _.Name), Is.EqualTo(names));
+            await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(names, CollectionOrdering.Matching);
             // The argument half: a key is never zero, and each row has its own.
-            Assert.That(rows.Select(_ => _.Id), Is.All.GreaterThan(0));
-            Assert.That(rows.Select(_ => _.Id), Is.Unique);
-            Assert.That(rows.Select(_ => _.Department), Is.All.Not.Null);
-        });
+            await Assert.That(rows.Select(_ => _.Id)).All(_ => _ > 0);
+            await Assert.That(rows.Select(_ => _.Id)).HasDistinctItems();
+            await Assert.That(rows.Select(_ => _.Department)).All(_ => _ is not null);
+        }
     }
 
     [Test]
@@ -68,23 +67,23 @@ public class InitializerProjectionTests
             })
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(cards, Has.Count.EqualTo(4));
-            Assert.That(cards.Select(_ => _.Department!.Name), Is.All.Not.Empty);
-            Assert.That(cards.Select(_ => _.Department!.Id), Is.All.GreaterThan(0));
-        });
+            await Assert.That(cards).Count().IsEqualTo(4);
+            await Assert.That(cards.Select(_ => _.Department!.Name)).All(_ => _.Length != 0);
+            await Assert.That(cards.Select(_ => _.Department!.Id)).All(_ => _ > 0);
+        }
     }
 
     [Test]
-    public void AMemberSetInBothHalvesIsRefused()
+    public async Task AMemberSetInBothHalvesIsRefused()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // Legal C# — the positional member is init-only — but two values for one member is a
         // projection no wire member can carry, and a silent choice between them would be worse.
-        var exception = Assert.Throws<NotSupportedException>(() =>
+        var exception = Assert.ThrowsExactly<NotSupportedException>(() =>
             client.Source<Employee>("Employee")
                 .Select(_ => new EmployeeRow(_.Id)
                 {
@@ -92,7 +91,7 @@ public class InitializerProjectionTests
                 })
                 .ToScryRequest());
 
-        Assert.That(exception!.Message, Does.Contain("projected twice"));
+        await Assert.That(exception!.Message).Contains("projected twice");
     }
 
     static ScryClient ClientFor(TestContext context) =>

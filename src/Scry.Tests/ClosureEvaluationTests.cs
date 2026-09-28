@@ -3,11 +3,10 @@
 /// compiled into a delegate per send, and read once: a set tested for membership was evaluated twice,
 /// once to ask whether it was another source and again for its values.
 /// </summary>
-[TestFixture]
 public class ClosureEvaluationTests
 {
     [Test]
-    public void ACapturedSetIsReadOnce()
+    public async Task ACapturedSetIsReadOnce()
     {
         var holder = new Counting();
 
@@ -16,17 +15,17 @@ public class ClosureEvaluationTests
             .ToScryRequest();
 
         var call = (CallNode) ((WhereOp) request.Pipeline[0]).Predicate;
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(call.Arguments, Has.Count.EqualTo(2));
-            Assert.That(holder.Reads, Is.EqualTo(1));
-        });
+            await Assert.That(call.Arguments).Count().IsEqualTo(2);
+            await Assert.That(holder.Reads).IsEqualTo(1);
+        }
     }
 
     // A chain of member reads rooted at a captured object, a boxing conversion over it, and a paging
     // count all read through without compiling — and read the same values compiling would.
     [Test]
-    public void CapturedValuesReadThrough()
+    public async Task CapturedValuesReadThrough()
     {
         var holder = new Counting();
         var take = 3;
@@ -39,13 +38,13 @@ public class ClosureEvaluationTests
             .ToScryRequest();
 
         var predicate = (BinaryNode) ((WhereOp) request.Pipeline[0]).Predicate;
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(((ConstNode) ((BinaryNode) predicate.Left).Right).Value, Is.EqualTo("North"));
-            Assert.That(((ConstNode) ((BinaryNode) predicate.Right).Right).Value, Is.EqualTo("10.5"));
-            Assert.That(((SkipOp) request.Pipeline[1]).Count, Is.EqualTo(2));
-            Assert.That(((TakeOp) request.Pipeline[2]).Count, Is.EqualTo(3));
-        });
+            await Assert.That(((ConstNode) ((BinaryNode) predicate.Left).Right).Value).IsEqualTo("North");
+            await Assert.That(((ConstNode) ((BinaryNode) predicate.Right).Right).Value).IsEqualTo("10.5");
+            await Assert.That(((SkipOp) request.Pipeline[1]).Count).IsEqualTo(2);
+            await Assert.That(((TakeOp) request.Pipeline[2]).Count).IsEqualTo(3);
+        }
     }
 
     sealed class Counting

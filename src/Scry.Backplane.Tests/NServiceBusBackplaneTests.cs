@@ -8,16 +8,16 @@
 /// its handlers are done, and not at all if they threw. That is what makes the event mean "this was
 /// written" rather than "somebody tried to write this".
 /// </remarks>
-[TestFixture]
+[NotInParallel]
 public class NServiceBusBackplaneTests
 {
-    string storage = null!;
-    Node webA = null!;
-    Node webB = null!;
-    Node worker = null!;
+    static string storage = null!;
+    static Node webA = null!;
+    static Node webB = null!;
+    static Node worker = null!;
 
-    [OneTimeSetUp]
-    public async Task StartEndpoints()
+    [Before(Class)]
+    public static async Task StartEndpoints()
     {
         storage = Path.Combine(Path.GetTempPath(), $"scry-backplane-{Guid.NewGuid():N}");
         Directory.CreateDirectory(storage);
@@ -29,8 +29,8 @@ public class NServiceBusBackplaneTests
         worker = await Node.Start("ScryTests.Worker", storage, worker: true);
     }
 
-    [OneTimeTearDown]
-    public async Task StopEndpoints()
+    [After(Class)]
+    public static async Task StopEndpoints()
     {
         await worker.DisposeAsync();
         await webB.DisposeAsync();
@@ -45,7 +45,7 @@ public class NServiceBusBackplaneTests
         }
     }
 
-    [SetUp]
+    [Before(Test)]
     public void Forget()
     {
         webA.Heard.Clear();
@@ -67,12 +67,12 @@ public class NServiceBusBackplaneTests
         var atA = await webA.Heard.Next();
         var atB = await webB.Heard.Next();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(atA.Entities, Is.EqualTo(["Sample.Order"]));
-            Assert.That(atB.Entities, Is.EqualTo(["Sample.Order"]));
-            Assert.That(atA.Origin, Is.EqualTo(worker.Changes.Origin));
-        });
+            await Assert.That(atA.Entities).IsEquivalentTo(["Sample.Order"], CollectionOrdering.Matching);
+            await Assert.That(atB.Entities).IsEquivalentTo(["Sample.Order"], CollectionOrdering.Matching);
+            await Assert.That(atA.Origin).IsEqualTo(worker.Changes.Origin);
+        }
     }
 
     // Two saves while handling one message are one thing that happened, published once.
@@ -90,7 +90,7 @@ public class NServiceBusBackplaneTests
         var heard = await webA.Heard.Next();
         await webA.Heard.NothingMore();
 
-        Assert.That(heard.Entities, Is.EquivalentTo(["Sample.Order", "Sample.OrderLine"]));
+        await Assert.That(heard.Entities).IsEquivalentTo(["Sample.Order", "Sample.OrderLine"]);
     }
 
     // Published through the message's own context, so it leaves only if the handler's work is kept.
@@ -117,28 +117,28 @@ public class NServiceBusBackplaneTests
         var atA = await webA.Heard.Next();
         await webA.Heard.NothingMore();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(atB.Origin, Is.EqualTo(webA.Changes.Origin));
+            await Assert.That(atB.Origin).IsEqualTo(webA.Changes.Origin);
 
             // Heard once at home: from the raise itself. The event coming back is recognised.
-            Assert.That(atA.Entities, Is.EqualTo(["Sample.Department"]));
-        });
+            await Assert.That(atA.Entities).IsEquivalentTo(["Sample.Department"], CollectionOrdering.Matching);
+        }
     }
 
     // The option a Scry server sets, which is the same registration reached through AddScry.
     [Test]
-    public void TheServerOptionRegistersTheBackplaneAndWhatItShares()
+    public async Task TheServerOptionRegistersTheBackplaneAndWhatItShares()
     {
         var options = new ScryOptions(typeof(object));
 
         options.UseNServiceBusBackplane();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(options.Backplane, Is.Not.Null);
-            Assert.That(options.BackplaneServices, Is.Not.Null);
-        });
+            await Assert.That(options.Backplane).IsNotNull();
+            await Assert.That(options.BackplaneServices).IsNotNull();
+        }
     }
 
     /// <summary>One endpoint in a host of its own, as one process would be.</summary>
@@ -231,7 +231,7 @@ public class NServiceBusBackplaneTests
 
         public async Task<ScryChange> Next()
         {
-            Assert.That(await arrived.WaitAsync(patience), Is.True, "No change arrived.");
+            await Assert.That(await arrived.WaitAsync(patience)).IsTrue().Because("No change arrived.");
             lock (changes)
             {
                 return changes.Dequeue();
@@ -239,7 +239,7 @@ public class NServiceBusBackplaneTests
         }
 
         public async Task NothingMore() =>
-            Assert.That(await arrived.WaitAsync(quiet), Is.False, "A change arrived that should not have.");
+            await Assert.That(await arrived.WaitAsync(quiet)).IsFalse().Because("A change arrived that should not have.");
     }
 }
 

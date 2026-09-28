@@ -3,7 +3,6 @@
 /// a byte[] are scalars on the wire — so every one of these folds to a single value, and the ones the
 /// provider refuses are left out rather than carried into a query that would fail at execution.
 /// </summary>
-[TestFixture]
 public class SequenceReadTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -22,7 +21,7 @@ public class SequenceReadTests
             .Select(_ => new ShiftRow(_.Name))
             .ToListAsync();
 
-        Assert.That(rows.Single().Name, Is.EqualTo("Early"));
+        await Assert.That(rows.Single().Name).IsEqualTo("Early");
     }
 
     [Test]
@@ -36,7 +35,7 @@ public class SequenceReadTests
             .Select(_ => new ShiftRow(_.Name))
             .ToListAsync();
 
-        Assert.That(rows.Single().Name, Is.EqualTo("Early"));
+        await Assert.That(rows.Single().Name).IsEqualTo("Early");
     }
 
     // Length above zero is how the emptiness question is asked: Any() means the same and the provider
@@ -52,7 +51,7 @@ public class SequenceReadTests
             .Select(_ => new ShiftRow(_.Name))
             .ToListAsync();
 
-        Assert.That(rows.Single().Name, Is.EqualTo("Early"));
+        await Assert.That(rows.Single().Name).IsEqualTo("Early");
     }
 
     // The compiler resolves Contains on an array to MemoryExtensions rather than Enumerable, so the
@@ -68,7 +67,7 @@ public class SequenceReadTests
             .Select(_ => new ShiftRow(_.Name))
             .ToListAsync();
 
-        Assert.That(rows.Single().Name, Is.EqualTo("Early"));
+        await Assert.That(rows.Single().Name).IsEqualTo("Early");
     }
 
     [Test]
@@ -83,29 +82,29 @@ public class SequenceReadTests
         var second = await client.Source<Shift>("Shift")
             .CountAsync(_ => _.Signature.ElementAt(1) == 0x0B);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(first, Is.EqualTo(1));
-            Assert.That(second, Is.EqualTo(1));
-        });
+            await Assert.That(first).IsEquivalentTo(1, CollectionOrdering.Matching);
+            await Assert.That(second).IsEquivalentTo(1, CollectionOrdering.Matching);
+        }
     }
 
     // An attachment's value is the one thing no query reads, so none of these reach it. The refusal is
     // the server's, which is where it has to be: a generated client sees a handle rather than a byte[]
     // and cannot spell the question at all, and this is the same request written by hand.
     [Test]
-    public void AnAttachmentAnswersNoneOfThem()
+    public async Task AnAttachmentAnswersNoneOfThem()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<ScryValidationException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(
             () => client.Source<Contract>("Contract")
                 .Where(_ => _.Document!.Length > 0)
                 .Select(_ => new ShiftRow(_.Name))
                 .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("attachment"));
+        await Assert.That(exception!.Message).Contains("attachment");
     }
 
     // A [BinaryTransfer] member is a value, so it answers them all — what that attribute changes is
@@ -119,7 +118,7 @@ public class SequenceReadTests
         var count = await client.Source<Employee>("Employee")
             .CountAsync(_ => _.Avatar.Length > 0);
 
-        Assert.That(count, Is.EqualTo(3));
+        await Assert.That(count).IsEqualTo(3);
     }
 
     static ScryClient ClientFor(TestContext context) =>

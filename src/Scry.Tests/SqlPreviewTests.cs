@@ -1,4 +1,3 @@
-[TestFixture]
 public class SqlPreviewTests
 {
     [Test]
@@ -30,7 +29,7 @@ public class SqlPreviewTests
     }
 
     [Test]
-    public void APolicyIsInTheSql()
+    public async Task APolicyIsInTheSql()
     {
         // The preview goes through the same build a query does, so a row policy is part of the SQL it
         // shows. That is the whole reason the explorer keeps this behind a guard of its own: the SQL
@@ -43,25 +42,25 @@ public class SqlPreviewTests
         using var context = TestContext.CreateSeeded();
         var sql = processor.ToQueryString(request, context, EmptyServices.Instance);
 
-        Assert.That(sql, Does.Contain("Active"));
+        await Assert.That(sql).Contains("Active");
     }
 
     [Test]
-    public void ATerminalIsRefused()
+    public async Task ATerminalIsRefused()
     {
         // A terminal is answered by running the query, so there is no SQL to show without executing
         // one — refused rather than run, and refused before the executor reaches the terminal.
         var request = QueryRequest.Create("Employee", [new CountOp()]);
 
         using var context = TestContext.CreateSeeded();
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.ToQueryString(request, context, EmptyServices.Instance))!;
 
-        Assert.That(exception.Message, Does.Contain("ends in Count"));
+        await Assert.That(exception.Message).Contains("ends in Count");
     }
 
     [Test]
-    public void APageIsRefused()
+    public async Task APageIsRefused()
     {
         var request = QueryRequest.Create(
             "Employee",
@@ -71,14 +70,14 @@ public class SqlPreviewTests
             ]);
 
         using var context = TestContext.CreateSeeded();
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.ToQueryString(request, context, EmptyServices.Instance))!;
 
-        Assert.That(exception.Message, Does.Contain("ends in Page"));
+        await Assert.That(exception.Message).Contains("ends in Page");
     }
 
     [Test]
-    public void APocoSourceHasNoSql()
+    public async Task APocoSourceHasNoSql()
     {
         // Holiday is a [QueryablePoco] — rows supplied in memory, so there is no database to have SQL.
         var request = QueryRequest.Create(
@@ -86,24 +85,24 @@ public class SqlPreviewTests
             [new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))]))]);
 
         using var context = TestContext.CreateSeeded();
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.ToQueryString(request, context, EmptyServices.Instance))!;
 
-        Assert.That(exception.Message, Does.Contain("not backed by the database"));
+        await Assert.That(exception.Message).Contains("not backed by the database");
     }
 
     [Test]
-    public void AnUnallowedMemberIsStillRejected()
+    public async Task AnUnallowedMemberIsStillRejected()
     {
         // Validation runs first here exactly as it does for a query: previewing is not a way to reach
         // a member a query could not.
         var request = QueryRequest.Create("Employee", [new WhereOp(new MemberNode(["Salary"]))]);
 
         using var context = TestContext.CreateSeeded();
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.ToQueryString(request, context, EmptyServices.Instance))!;
 
-        Assert.That(exception.Message, Does.Contain("not allow-listed"));
+        await Assert.That(exception.Message).Contains("not allow-listed");
     }
 
     static ScryProcessor Processor(Action<ScryOptions> extra) =>

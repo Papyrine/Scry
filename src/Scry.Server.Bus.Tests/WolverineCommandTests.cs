@@ -7,7 +7,6 @@ using Wolverine.ErrorHandling;
 /// the middleware sends — or, where the error policy sends the message to the error queue, by the
 /// failure it adds.
 /// </summary>
-[TestFixture]
 public class WolverineCommandTests
 {
     [Test]
@@ -17,7 +16,7 @@ public class WolverineCommandTests
 
         var receipts = await ScryServer.Send(host.Services, "ShipParcel", new {label = "wolverine-within"});
 
-        Assert.That(receipts.Select(_ => _.Status), Is.EqualTo([CommandStatus.Completed]));
+        await Assert.That(receipts.Select(_ => _.Status)).IsEquivalentTo([CommandStatus.Completed], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -27,7 +26,7 @@ public class WolverineCommandTests
 
         var receipts = await ScryServer.Send(host.Services, "ShipParcel", new {label = "wolverine-pending"});
 
-        Assert.That(receipts.Select(_ => _.Status), Is.EqualTo([CommandStatus.Pending, CommandStatus.Completed]));
+        await Assert.That(receipts.Select(_ => _.Status)).IsEquivalentTo([CommandStatus.Pending, CommandStatus.Completed], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -38,7 +37,7 @@ public class WolverineCommandTests
 
         await ScryServer.Send(host.Services, "ShipParcel", new {label = "wolverine-headers"}, id, caller: "alice");
 
-        Assert.That(Seen.For("wolverine-headers"), Is.EqualTo((id.ToString("D"), "alice")));
+        await Assert.That(Seen.For("wolverine-headers")).IsEqualTo((id.ToString("D"), "alice"));
     }
 
     [Test]
@@ -48,7 +47,7 @@ public class WolverineCommandTests
 
         var receipts = await ScryServer.Send(host.Services, "WeighParcel", new {grams = 21});
 
-        Assert.That(receipts.Last().Result!.Value.GetProperty("grams").GetInt32(), Is.EqualTo(42));
+        await Assert.That(receipts.Last().Result!.Value.GetProperty("grams").GetInt32()).IsEqualTo(42);
     }
 
     [Test]
@@ -58,11 +57,11 @@ public class WolverineCommandTests
 
         var receipts = await ScryServer.Send(host.Services, "ShipParcel", new {label = "wolverine-failing", fail = true});
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(receipts.Last().Status, Is.EqualTo(CommandStatus.Failed));
-            Assert.That(receipts.Last().Error, Is.EqualTo("Command execution failed."));
-        });
+            await Assert.That(receipts.Last().Status).IsEqualTo(CommandStatus.Failed);
+            await Assert.That(receipts.Last().Error).IsEqualTo("Command execution failed.");
+        }
     }
 
     [Test]
@@ -71,11 +70,11 @@ public class WolverineCommandTests
         using var host = await Start();
         var dispatcher = host.Services.GetRequiredService<WolverineDispatcher>();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(dispatcher.CanDispatch(typeof(ShipParcel)), Is.True);
-            Assert.That(dispatcher.CanDispatch(typeof(LocalChore)), Is.False);
-        });
+            await Assert.That(dispatcher.CanDispatch(typeof(ShipParcel))).IsTrue();
+            await Assert.That(dispatcher.CanDispatch(typeof(LocalChore))).IsFalse();
+        }
     }
 
     [Test]
@@ -83,9 +82,9 @@ public class WolverineCommandTests
     {
         using var host = await Start(second: true);
 
-        var exception = Assert.Throws<Exception>(() => ScryServer.EnsureDispatchable(host.Services))!;
+        var exception = Assert.ThrowsExactly<Exception>(() => ScryServer.EnsureDispatchable(host.Services))!;
 
-        Assert.That(exception.Message, Does.Contain("claimed by"));
+        await Assert.That(exception.Message).Contains("claimed by");
     }
 
     static async Task<IHost> Start(TimeSpan? window = null, bool second = false)

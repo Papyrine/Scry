@@ -4,7 +4,6 @@
 /// traversal appears — a projection leaf, a predicate, an ordering, a key — and a row the policy hides
 /// reads as null rather than being handed over or answered about.
 /// </summary>
-[TestFixture]
 public class NavigationPolicyTests
 {
     /// <summary>Hides Sales, so an employee of it navigates into a row the policy does not return.</summary>
@@ -32,9 +31,7 @@ public class NavigationPolicyTests
 
         // Bob and Carol are in Sales, which the policy hides: the employee row is still returned, and
         // the department it names reads as absent.
-        Assert.That(
-            rows.Select(_ => $"{_.Name}:{_.Department ?? "<null>"}"),
-            Is.EqualTo(["Aaron:Engineering", "Alice:Engineering", "Bob:<null>", "Carol:<null>"]));
+        await Assert.That(rows.Select(_ => $"{_.Name}:{_.Department ?? "<null>"}")).IsEquivalentTo(["Aaron:Engineering", "Alice:Engineering", "Bob:<null>", "Carol:<null>"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -50,7 +47,7 @@ public class NavigationPolicyTests
             .Select(_ => new {_.Name})
             .ToListAsync();
 
-        Assert.That(rows, Is.Empty);
+        await Assert.That(rows).IsEmpty();
     }
 
     [Test]
@@ -66,9 +63,7 @@ public class NavigationPolicyTests
             .Select(_ => new {_.Name, Department = (int?)_.Department!.Id})
             .ToListAsync();
 
-        Assert.That(
-            rows.Select(_ => _.Department is null),
-            Is.EqualTo([false, false, true, true]));
+        await Assert.That(rows.Select(_ => _.Department is null)).IsEquivalentTo([false, false, true, true], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -83,7 +78,7 @@ public class NavigationPolicyTests
             .Select(_ => new {_.Name})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Bob", "Carol", "Aaron", "Alice"]));
+        await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(["Bob", "Carol", "Aaron", "Alice"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -97,9 +92,7 @@ public class NavigationPolicyTests
             .Select(_ => new {Department = (string?)_.Key, Count = _.Count()})
             .ToListAsync();
 
-        Assert.That(
-            rows.Select(_ => $"{_.Department ?? "<null>"}:{_.Count}").Order(),
-            Is.EqualTo(["<null>:2", "Engineering:2"]));
+        await Assert.That(rows.Select(_ => $"{_.Department ?? "<null>"}:{_.Count}").Order()).IsEquivalentTo(["<null>:2", "Engineering:2"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -113,9 +106,7 @@ public class NavigationPolicyTests
             .Select(_ => new {_.Name, Department = new {Name = (string?)_.Department!.Name}})
             .ToListAsync();
 
-        Assert.That(
-            rows.Select(_ => _.Department.Name ?? "<null>"),
-            Is.EqualTo(["Engineering", "Engineering", "<null>", "<null>"]));
+        await Assert.That(rows.Select(_ => _.Department.Name ?? "<null>")).IsEquivalentTo(["Engineering", "Engineering", "<null>", "<null>"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -132,11 +123,11 @@ public class NavigationPolicyTests
             .Select(_ => new {_.Name, Department = new {Id = (int?)_.Department!.Id, Name = (string?)_.Department.Name}})
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows.Select(_ => _.Department.Id is null), Is.EqualTo([false, false, true, true]));
-            Assert.That(rows.Select(_ => _.Department.Name ?? "<null>"), Is.EqualTo(["Engineering", "Engineering", "<null>", "<null>"]));
-        });
+            await Assert.That(rows.Select(_ => _.Department.Id is null)).IsEquivalentTo([false, false, true, true], CollectionOrdering.Matching);
+            await Assert.That(rows.Select(_ => _.Department.Name ?? "<null>")).IsEquivalentTo(["Engineering", "Engineering", "<null>", "<null>"], CollectionOrdering.Matching);
+        }
     }
 
     [Test]
@@ -152,7 +143,7 @@ public class NavigationPolicyTests
             .Select(_ => new {_.Name})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Aaron", "Bob"]));
+        await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(["Aaron", "Bob"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -175,9 +166,7 @@ public class NavigationPolicyTests
         // A join projection member is a bare member path, so the (string?) widening the other
         // projections use has no room here; the members carry the model's non-null annotation while
         // the policy nulls them anyway, and the display helper is where that reality is admitted.
-        Assert.That(
-            rows.Select(_ => $"{_.Employee}:{Display(_.Traversed)}:{Display(_.Joined)}").Order(),
-            Is.EqualTo(["Aaron:Engineering:Engineering", "Alice:Engineering:Engineering", "Bob:<null>:<null>", "Carol:<null>:<null>"]));
+        await Assert.That(rows.Select(_ => $"{_.Employee}:{Display(_.Traversed)}:{Display(_.Joined)}").Order()).IsEquivalentTo(["Aaron:Engineering:Engineering", "Alice:Engineering:Engineering", "Bob:<null>:<null>", "Carol:<null>:<null>"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -200,9 +189,7 @@ public class NavigationPolicyTests
 
         // Only North survives Order's own root policy, and its lines navigate back to a visible order,
         // so the sum is the amount rather than the null a hidden one would have produced.
-        Assert.That(
-            rows.Select(_ => $"{_.Region}:{_.Lines}:{_.Total}").ToArray(),
-            Is.EqualTo(["North:2:200.00", "North:1:250.00"]));
+        await Assert.That(rows.Select(_ => $"{_.Region}:{_.Lines}:{_.Total}").ToArray()).IsEquivalentTo(["North:2:200.00", "North:1:250.00"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -219,9 +206,7 @@ public class NavigationPolicyTests
             .Select(_ => new {_.Name, Manager = (string?)_.Manager!.Name, ManagerDepartment = (string?)_.Manager!.Department!.Name})
             .ToListAsync();
 
-        Assert.That(
-            rows.Select(_ => $"{_.Name}:{_.Manager ?? "<null>"}:{_.ManagerDepartment ?? "<null>"}").ToArray(),
-            Is.EqualTo(["Aaron:Alice:Engineering", "Alice:<null>:<null>", "Carol:<null>:<null>"]));
+        await Assert.That(rows.Select(_ => $"{_.Name}:{_.Manager ?? "<null>"}:{_.ManagerDepartment ?? "<null>"}").ToArray()).IsEquivalentTo(["Aaron:Alice:Engineering", "Alice:<null>:<null>", "Carol:<null>:<null>"], CollectionOrdering.Matching);
     }
 
     /// <summary>Hides the inactive employee, so a traversal into Employee has rows to hide too.</summary>
@@ -257,7 +242,7 @@ public class NavigationPolicyTests
 
         // Employee.Department navigates into policied Department, and the policy is a plain filter, so
         // it translates where it is applied.
-        Assert.DoesNotThrow(() => Processor().ProbePoliciedNavigations(context));
+        await Assert.That(() => Processor().ProbePoliciedNavigations(context)).ThrowsNothing();
     }
 
     [Test]
@@ -268,15 +253,15 @@ public class NavigationPolicyTests
         // The failure the probe exists for. A policy whose predicate the provider cannot translate is
         // caught here, naming the policy and the navigation that reaches it, rather than as a generic
         // 500 on the first client to name the member.
-        var exception = Assert.Throws<Exception>(
+        var exception = Assert.ThrowsExactly<Exception>(
             () => Build(_ => _.AddPolicy<Department, UntranslatablePolicy>()).ProbePoliciedNavigations(context));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(exception!.Message, Does.Contain("'Department'"));
-            Assert.That(exception.Message, Does.Contain("Employee.Department"));
-            Assert.That(exception.Message, Does.Contain("correlated subquery"));
-        });
+            await Assert.That(exception!.Message).Contains("'Department'");
+            await Assert.That(exception.Message).Contains("Employee.Department");
+            await Assert.That(exception.Message).Contains("correlated subquery");
+        }
     }
 
     [Test]
@@ -298,11 +283,11 @@ public class NavigationPolicyTests
             .Select(_ => new {_.Name})
             .ToListAsync();
 
-        Assert.That(rows, Is.Empty);
+        await Assert.That(rows).IsEmpty();
     }
 
     [Test]
-    public void ATraversalIntoADeniedRowFailsWhereThePolicySaysSo()
+    public async Task ATraversalIntoADeniedRowFailsWhereThePolicySaysSo()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -310,21 +295,21 @@ public class NavigationPolicyTests
         // them, and this policy would rather say so than answer with a null.
         var client = ClientFor(context, Erroring());
 
-        Assert.ThrowsAsync<ScryPermissionException>(
+        await Assert.ThrowsExactlyAsync<ScryPermissionException>(
             () => client.Source<Employee>("Employee")
                 .Select(_ => new {_.Name, Department = _.Department!.Name})
                 .ToListAsync());
     }
 
     [Test]
-    public void APredicateOverTheTraversalIsTheSameRead()
+    public async Task APredicateOverTheTraversalIsTheSameRead()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, Erroring());
 
         // Nothing is projected, but the predicate still runs over rows the policy hides — the oracle
         // the traversal rewrite closes, and the same read as far as a denial is concerned.
-        Assert.ThrowsAsync<ScryPermissionException>(
+        await Assert.ThrowsExactlyAsync<ScryPermissionException>(
             () => client.Source<Employee>("Employee")
                 .Where(_ => _.Department!.Name == "Sales")
                 .Select(_ => new {_.Name})
@@ -332,21 +317,20 @@ public class NavigationPolicyTests
     }
 
     [Test]
-    public void AQueryThatNeverStepsIntoTheSourceIsUnaffected()
+    public async Task AQueryThatNeverStepsIntoTheSourceIsUnaffected()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, Erroring());
 
         // The denial is about the traversal. A query that does not name it reads no policied row and
         // has nothing to be told about.
-        Assert.DoesNotThrowAsync(
-            () => client.Source<Employee>("Employee")
+        await Assert.That(async () => await client.Source<Employee>("Employee")
                 .Select(_ => new {_.Name})
-                .ToListAsync());
+                .ToListAsync()).ThrowsNothing();
     }
 
     [Test]
-    public void ShowingTheSqlStepsIntoNothing()
+    public async Task ShowingTheSqlStepsIntoNothing()
     {
         using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
@@ -356,7 +340,7 @@ public class NavigationPolicyTests
         // A preview runs no query, so the traversal has read nothing for a policy to have denied.
         var sql = Erroring().ToQueryString(request, context, EmptyServiceProvider.Instance);
 
-        Assert.That(sql, Does.Contain("SELECT"));
+        await Assert.That(sql).Contains("SELECT");
     }
 
     static ScryProcessor Erroring() =>

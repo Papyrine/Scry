@@ -23,7 +23,8 @@ using SampleContext = Sample.Model.SampleContext;
 /// option; they share a database, which the tests that write to it keep their hands off each other in
 /// by writing to regions of their own.
 /// </remarks>
-[TestFixture]
+[NotInParallel]
+[DependsOn<HttpRoundTripTests.StaleClient>(nameof(HttpRoundTripTests.StaleClient.AClientThatDoesNotKnowRetriesInABody), ProceedOnFailure = true)]
 public class SubscriptionHttpTests
 {
     static readonly SqlInstance<SampleContext> sqlInstance = new(
@@ -34,14 +35,14 @@ public class SubscriptionHttpTests
             return Task.CompletedTask;
         });
 
-    SqlDatabase<SampleContext> database = null!;
+    static SqlDatabase<SampleContext> database = null!;
 
-    [OneTimeSetUp]
-    public async Task BuildDatabase() =>
+    [Before(Class)]
+    public static async Task BuildDatabase() =>
         database = await sqlInstance.Build();
 
-    [OneTimeTearDown]
-    public async Task DropDatabase() =>
+    [After(Class)]
+    public static async Task DropDatabase() =>
         await database.DisposeAsync();
 
     // Byte for byte what the query endpoint answers: a client reads an event exactly as it reads a
@@ -59,12 +60,12 @@ public class SubscriptionHttpTests
         await using var live = await LiveStream.Open(server.Http, request);
         var first = await live.Next();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(first.EventType, Is.EqualTo(ScryLive.Result));
-            Assert.That(first.Data, Is.EqualTo(expected));
-            Assert.That(first.EventId, Is.Not.Empty);
-        });
+            await Assert.That(first.EventType).IsEqualTo(ScryLive.Result);
+            await Assert.That(first.Data).IsEqualTo(expected);
+            await Assert.That(first.EventId).IsNotEmpty();
+        }
     }
 
     [Test]
@@ -77,12 +78,12 @@ public class SubscriptionHttpTests
         await server.AddOrder("Pushed", 12.5m);
         var second = await live.Next();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(Rows(first), Is.Empty);
-            Assert.That(Rows(second), Is.EqualTo([12.5m]));
-            Assert.That(second.EventId, Is.Not.EqualTo(first.EventId));
-        });
+            await Assert.That(Rows(first)).IsEmpty();
+            await Assert.That(Rows(second)).IsEquivalentTo([12.5m], CollectionOrdering.Matching);
+            await Assert.That(second.EventId).IsNotEqualTo(first.EventId);
+        }
     }
 
     // Reconnecting — after a dropped connection, or because the server ended the stream to bound its
@@ -101,11 +102,11 @@ public class SubscriptionHttpTests
         await using var again = await LiveStream.Open(server.Http, request, id);
         var first = await again.Next();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(first.EventType, Is.EqualTo(ScryLive.Unchanged));
-            Assert.That(first.Data, Is.Empty);
-        });
+            await Assert.That(first.EventType).IsEqualTo(ScryLive.Unchanged);
+            await Assert.That(first.Data).IsEmpty();
+        }
     }
 
     [Test]
@@ -114,7 +115,7 @@ public class SubscriptionHttpTests
         await using var server = await Server.Start(database);
         await using var live = await LiveStream.Open(server.Http, Amounts("North"), "not-the-last-answer");
 
-        Assert.That((await live.Next()).EventType, Is.EqualTo(ScryLive.Result));
+        await Assert.That((await live.Next()).EventType).IsEqualTo(ScryLive.Result);
     }
 
     [Test]
@@ -126,7 +127,7 @@ public class SubscriptionHttpTests
 
         var heartbeat = await live.Next(skipPings: false);
 
-        Assert.That(heartbeat.EventType, Is.EqualTo(ScryLive.Ping));
+        await Assert.That(heartbeat.EventType).IsEqualTo(ScryLive.Ping);
     }
 
     // Authorization is decided once per request, and a live query is one request. Ending it is what
@@ -141,13 +142,13 @@ public class SubscriptionHttpTests
         var last = await live.Next();
         var end = ScryJson.DeserializeLiveEnd(Encoding.UTF8.GetBytes(last.Data));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(last.EventType, Is.EqualTo(ScryLive.End));
-            Assert.That(end.Reconnect, Is.True);
-            Assert.That(end.Reason, Is.EqualTo("lifetime"));
-        });
-        Assert.That(await live.Ended(), Is.True);
+            await Assert.That(last.EventType).IsEqualTo(ScryLive.End);
+            await Assert.That(end.Reconnect).IsTrue();
+            await Assert.That(end.Reason).IsEqualTo("lifetime");
+        }
+        await Assert.That(await live.Ended()).IsTrue();
     }
 
     // A host shutting down waits for its requests to finish, and a live query never would. So it is
@@ -163,13 +164,13 @@ public class SubscriptionHttpTests
         var last = await live.Next();
         var end = ScryJson.DeserializeLiveEnd(Encoding.UTF8.GetBytes(last.Data));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(last.EventType, Is.EqualTo(ScryLive.End));
-            Assert.That(end.Reconnect, Is.True);
-            Assert.That(end.Reason, Is.EqualTo("shutdown"));
-        });
-        Assert.That(await live.Ended(), Is.True);
+            await Assert.That(last.EventType).IsEqualTo(ScryLive.End);
+            await Assert.That(end.Reconnect).IsTrue();
+            await Assert.That(end.Reason).IsEqualTo("shutdown");
+        }
+        await Assert.That(await live.Ended()).IsTrue();
     }
 
     [Test]
@@ -184,11 +185,11 @@ public class SubscriptionHttpTests
 
         var last = await live.Next();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(last.EventType, Is.EqualTo(ScryLive.End));
-            Assert.That(ScryJson.DeserializeLiveEnd(Encoding.UTF8.GetBytes(last.Data)).Reason, Is.EqualTo("expired"));
-        });
+            await Assert.That(last.EventType).IsEqualTo(ScryLive.End);
+            await Assert.That(ScryJson.DeserializeLiveEnd(Encoding.UTF8.GetBytes(last.Data)).Reason).IsEqualTo("expired");
+        }
     }
 
     // The first answer is made before the response is committed, so a refusal is still a status with
@@ -201,12 +202,12 @@ public class SubscriptionHttpTests
         using var response = await server.Http.PostAsync("/api/query/subscribe", content);
         var error = ScryJson.TryDeserializeError(await response.Content.ReadAsStringAsync());
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-            Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/json"));
-            Assert.That(error?.Code, Is.EqualTo(ScryErrorCode.Validation));
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+            await Assert.That(response.Content.Headers.ContentType?.MediaType).IsEqualTo("application/json");
+            await Assert.That(error?.Code).IsEqualTo(ScryErrorCode.Validation);
+        }
     }
 
     [Test]
@@ -217,11 +218,11 @@ public class SubscriptionHttpTests
         using var response = await server.Http.PostAsync("/api/query/subscribe", content);
         var error = ScryJson.TryDeserializeError(await response.Content.ReadAsStringAsync());
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-            Assert.That(error?.Code, Is.EqualTo(ScryErrorCode.WireFormat));
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+            await Assert.That(error?.Code).IsEqualTo(ScryErrorCode.WireFormat);
+        }
     }
 
     // A cross-site form can send JSON-shaped text; it cannot declare it as JSON.
@@ -232,7 +233,7 @@ public class SubscriptionHttpTests
         using var content = new StringContent(ScryJson.Serialize(Amounts("North")), Encoding.UTF8, "text/plain");
         using var response = await server.Http.PostAsync("/api/query/subscribe", content);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.UnsupportedMediaType));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.UnsupportedMediaType);
     }
 
     [Test]
@@ -246,12 +247,12 @@ public class SubscriptionHttpTests
         using var response = await server.Http.PostAsync("/api/query/subscribe", content);
         var error = ScryJson.TryDeserializeError(await response.Content.ReadAsStringAsync());
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.ServiceUnavailable));
-            Assert.That(response.Headers.RetryAfter, Is.Not.Null);
-            Assert.That(error?.Code, Is.EqualTo(ScryErrorCode.SubscriptionLimit));
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.ServiceUnavailable);
+            await Assert.That(response.Headers.RetryAfter).IsNotNull();
+            await Assert.That(error?.Code).IsEqualTo(ScryErrorCode.SubscriptionLimit);
+        }
     }
 
     [Test]
@@ -270,7 +271,7 @@ public class SubscriptionHttpTests
         using var content = Json(Amounts("North"));
         using var response = await server.Http.PostAsync("/api/query/subscribe", content);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.TooManyRequests));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.TooManyRequests);
     }
 
     // A closed stream gives its place back, which is what makes the limit a limit on what is open.
@@ -299,7 +300,7 @@ public class SubscriptionHttpTests
                 return;
             }
 
-            Assert.That(DateTime.UtcNow - started, Is.LessThan(TimeSpan.FromSeconds(20)), "The place was never given back.");
+            await Assert.That(DateTime.UtcNow - started).IsLessThan(TimeSpan.FromSeconds(20)).Because("The place was never given back.");
             await Task.Delay(50);
         }
     }
@@ -311,15 +312,15 @@ public class SubscriptionHttpTests
         await using var live = await LiveStream.Open(server.Http, Amounts("North"));
         var response = live.Response;
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo(ScryLive.ContentType));
-            Assert.That(response.Headers.CacheControl?.NoStore, Is.True);
-            Assert.That(response.Headers.GetValues("X-Accel-Buffering"), Is.EqualTo(["no"]));
-            Assert.That(response.Content.Headers.ContentEncoding, Is.EqualTo(["identity"]));
-            Assert.That(response.Headers.Contains(WireFormat.SchemaStampHeader), Is.True);
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+            await Assert.That(response.Content.Headers.ContentType?.MediaType).IsEqualTo(ScryLive.ContentType);
+            await Assert.That(response.Headers.CacheControl?.NoStore).IsTrue();
+            await Assert.That(response.Headers.GetValues("X-Accel-Buffering")).IsEquivalentTo(["no"], CollectionOrdering.Matching);
+            await Assert.That(response.Content.Headers.ContentEncoding).IsEquivalentTo(["identity"], CollectionOrdering.Matching);
+            await Assert.That(response.Headers.Contains(WireFormat.SchemaStampHeader)).IsTrue();
+        }
     }
 
     // The status is long since sent, so a failure has only the stream to be said in. What it says is
@@ -344,13 +345,13 @@ public class SubscriptionHttpTests
         while (last.EventType == ScryLive.Result);
 
         var error = ScryJson.TryDeserializeError(last.Data);
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(last.EventType, Is.EqualTo(ScryLive.Error));
-            Assert.That(error?.Code, Is.EqualTo(ScryErrorCode.Validation));
-            Assert.That(error?.Error, Does.Contain("256 bytes"));
-        });
-        Assert.That(await live.Ended(), Is.True);
+            await Assert.That(last.EventType).IsEqualTo(ScryLive.Error);
+            await Assert.That(error?.Code).IsEqualTo(ScryErrorCode.Validation);
+            await Assert.That(error?.Error).Contains("256 bytes");
+        }
+        await Assert.That(await live.Ended()).IsTrue();
     }
 
     // Projecting a [Sensitive] member marks the response no-store on every run, and the headers of a
@@ -373,7 +374,7 @@ public class SubscriptionHttpTests
             employee.Password = $"changed-{Guid.NewGuid():N}";
         });
 
-        Assert.That((await live.Next()).EventType, Is.EqualTo(ScryLive.Result));
+        await Assert.That((await live.Next()).EventType).IsEqualTo(ScryLive.Result);
     }
 
     // Off is the default, and off is absent rather than guarded: there is no handler to reach.
@@ -384,7 +385,7 @@ public class SubscriptionHttpTests
         using var content = Json(Amounts("North"));
         using var response = await server.Http.PostAsync("/api/query/subscribe", content);
 
-        Assert.That(response.StatusCode, Is.AnyOf(HttpStatusCode.NotFound, HttpStatusCode.MethodNotAllowed));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NotFound).Or.IsEqualTo(HttpStatusCode.MethodNotAllowed);
     }
 
     /// <summary>
@@ -399,7 +400,7 @@ public class SubscriptionHttpTests
         using var content = Json(Amounts("North"));
         using var response = await server.Http.PostAsync("/api/query/subscribe", content);
 
-        Assert.That(response.StatusCode, Is.AnyOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Unauthorized).Or.IsEqualTo(HttpStatusCode.Forbidden);
     }
 
     // From here down, the far side is the generated client rather than a parser: LINQ in, rows out, and
@@ -415,13 +416,13 @@ public class SubscriptionHttpTests
             .Live()
             .GetAsyncEnumerator();
 
-        Assert.That(await Next(answers), Is.True);
-        Assert.That(answers.Current, Is.Empty);
+        await Assert.That(await Next(answers)).IsTrue();
+        await Assert.That(answers.Current).IsEmpty();
 
         await server.AddOrder("ClientRows", 7.25m);
 
-        Assert.That(await Next(answers), Is.True);
-        Assert.That(answers.Current.Select(_ => _.Amount), Is.EqualTo([7.25m]));
+        await Assert.That(await Next(answers)).IsTrue();
+        await Assert.That(answers.Current.Select(_ => _.Amount)).IsEquivalentTo([7.25m], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -432,13 +433,13 @@ public class SubscriptionHttpTests
             .LiveCount(_ => _.Region == "ClientCount")
             .GetAsyncEnumerator();
 
-        Assert.That(await Next(answers), Is.True);
-        Assert.That(answers.Current, Is.Zero);
+        await Assert.That(await Next(answers)).IsTrue();
+        await Assert.That(answers.Current).IsZero();
 
         await server.AddOrder("ClientCount", 1m);
 
-        Assert.That(await Next(answers), Is.True);
-        Assert.That(answers.Current, Is.EqualTo(1));
+        await Assert.That(await Next(answers)).IsTrue();
+        await Assert.That(answers.Current).IsEqualTo(1);
     }
 
     // The server ends every stream at its lifetime. The client asks again, names the answer it holds,
@@ -472,11 +473,14 @@ public class SubscriptionHttpTests
         await server.AddOrder("ClientReconnect", 1m);
         await Until(() => counts.Count == 2, counts);
 
+        int[] snapshot;
         lock (counts)
         {
-            // Once each: asking again did not deliver the answer already held a second time.
-            Assert.That(counts, Is.EqualTo([0, 1]));
+            snapshot = [.. counts];
         }
+
+        // Once each: asking again did not deliver the answer already held a second time.
+        await Assert.That(snapshot).IsEquivalentTo([0, 1], CollectionOrdering.Matching);
     }
 
     // A deployment, from where the consumer sits: the server goes away, there is nothing listening for
@@ -540,11 +544,16 @@ public class SubscriptionHttpTests
         await using var second = await Server.Start(database, port: port);
         await Until(() => counts.Count == 2, counts);
 
+        int[] snapshot;
+        Exception[] failures;
         lock (counts)
         {
-            Assert.That(counts, Is.EqualTo([0, 1]));
-            Assert.That(errors, Is.Empty);
+            snapshot = [.. counts];
+            failures = [.. errors];
         }
+
+        await Assert.That(snapshot).IsEquivalentTo([0, 1], CollectionOrdering.Matching);
+        await Assert.That(failures).IsEmpty();
     }
 
     [Test]
@@ -553,9 +562,9 @@ public class SubscriptionHttpTests
         await using var server = await Server.Start(database, _ => _.MaxSubscriptions = 0);
         await using var answers = server.Query.Order.LiveCount().GetAsyncEnumerator();
 
-        var exception = Assert.ThrowsAsync<NotSupportedException>(async () => await answers.MoveNextAsync());
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(async () => await answers.MoveNextAsync());
 
-        Assert.That(exception!.Message, Does.Contain(nameof(ScryOptions.MaxSubscriptions)));
+        await Assert.That(exception!.Message).Contains(nameof(ScryOptions.MaxSubscriptions));
     }
 
     static TimeSpan patience = TimeSpan.FromSeconds(20);
@@ -576,7 +585,7 @@ public class SubscriptionHttpTests
                 }
             }
 
-            Assert.That(DateTime.UtcNow - started, Is.LessThan(patience), "Waited too long.");
+            await Assert.That(DateTime.UtcNow - started).IsLessThan(patience).Because("Waited too long.");
             await Task.Delay(20);
         }
     }
@@ -638,7 +647,7 @@ public class SubscriptionHttpTests
             }
 
             var response = await http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead);
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), await Body(response));
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK).Because(await Body(response));
             var stream = await response.Content.ReadAsStreamAsync();
             return new(response, SseParser.Create(stream).EnumerateAsync().GetAsyncEnumerator());
         }
@@ -657,7 +666,7 @@ public class SubscriptionHttpTests
         {
             while (true)
             {
-                Assert.That(await events.MoveNextAsync().AsTask().WaitAsync(patience), Is.True, "The stream ended.");
+                await Assert.That(await events.MoveNextAsync().AsTask().WaitAsync(patience)).IsTrue().Because("The stream ended.");
                 if (!skipPings ||
                     events.Current.EventType != ScryLive.Ping)
                 {

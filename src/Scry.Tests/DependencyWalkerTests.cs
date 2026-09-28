@@ -3,7 +3,6 @@
 /// so that a table only a policy names counts as much as one the client named. Too narrow and a change
 /// is missed; "cannot tell" is always a safe answer, and is what null means here.
 /// </summary>
-[TestFixture]
 public class DependencyWalkerTests
 {
     [Test]
@@ -14,7 +13,7 @@ public class DependencyWalkerTests
             .Select(_ => new {_.Region})
             .ToScryRequest();
 
-        Assert.That(await Read(request), Is.EquivalentTo(Names<Order>()));
+        await Assert.That(await Read(request)).IsEquivalentTo(Names<Order>());
     }
 
     [Test]
@@ -25,7 +24,7 @@ public class DependencyWalkerTests
             .Select(_ => new {_.Name, Department = _.Department!.Name})
             .ToScryRequest();
 
-        Assert.That(await Read(request), Is.EquivalentTo(Names<Employee, Department>()));
+        await Assert.That(await Read(request)).IsEquivalentTo(Names<Employee, Department>());
     }
 
     [Test]
@@ -37,7 +36,7 @@ public class DependencyWalkerTests
             .Select(_ => new {_.Name})
             .ToScryRequest();
 
-        Assert.That(await Read(request), Is.EquivalentTo(Names<Employee, Department>()));
+        await Assert.That(await Read(request)).IsEquivalentTo(Names<Employee, Department>());
     }
 
     [Test]
@@ -49,7 +48,7 @@ public class DependencyWalkerTests
             .Select(_ => new {_.Region})
             .ToScryRequest();
 
-        Assert.That(await Read(request), Is.EquivalentTo(Names<Order, OrderLine>()));
+        await Assert.That(await Read(request)).IsEquivalentTo(Names<Order, OrderLine>());
     }
 
     // A derived type's rows are read through its root, and that is the name a write to either reports.
@@ -61,28 +60,24 @@ public class DependencyWalkerTests
             .Select(_ => new {_.Name})
             .ToScryRequest();
 
-        Assert.That(await Read(request), Is.EquivalentTo(Names<Asset>()));
+        await Assert.That(await Read(request)).IsEquivalentTo(Names<Asset>());
     }
 
     // Whatever the terminal, the rows folded are the same rows.
     [Test]
-    public Task ATerminalReadsWhatItsQueryDoes()
+    public async Task ATerminalReadsWhatItsQueryDoes()
     {
         var orders = Capture()
             .Source<Order>("Order")
             .Where(_ => _.Lines.Any());
 
-        return Assert.MultipleAsync(async () =>
+        using (Assert.Multiple())
         {
-            Assert.That(await Read(orders.ToScryRequest(new CountOp())), Is.EquivalentTo(Names<Order, OrderLine>()));
-            Assert.That(await Read(orders.ToScryRequest(new AnyOp(Predicate: null))), Is.EquivalentTo(Names<Order, OrderLine>()));
-            Assert.That(
-                await Read(orders.OrderBy(_ => _.Id).Select(_ => new {_.Id}).ToScryRequest(new FirstOp(OrDefault: true, Predicate: null))),
-                Is.EquivalentTo(Names<Order, OrderLine>()));
-            Assert.That(
-                await Read(orders.OrderBy(_ => _.Id).Select(_ => new {_.Id}).ToScryRequest(new PageOp(Size: 1))),
-                Is.EquivalentTo(Names<Order, OrderLine>()));
-        });
+            await Assert.That(await Read(orders.ToScryRequest(new CountOp()))).IsEquivalentTo(Names<Order, OrderLine>());
+            await Assert.That(await Read(orders.ToScryRequest(new AnyOp(Predicate: null)))).IsEquivalentTo(Names<Order, OrderLine>());
+            await Assert.That(await Read(orders.OrderBy(_ => _.Id).Select(_ => new {_.Id}).ToScryRequest(new FirstOp(OrDefault: true, Predicate: null)))).IsEquivalentTo(Names<Order, OrderLine>());
+            await Assert.That(await Read(orders.OrderBy(_ => _.Id).Select(_ => new {_.Id}).ToScryRequest(new PageOp(Size: 1)))).IsEquivalentTo(Names<Order, OrderLine>());
+        }
     }
 
     // The client never named Department. The policy did, and a change there changes what this caller
@@ -100,7 +95,7 @@ public class DependencyWalkerTests
             .Select(_ => new {_.Region})
             .ToScryRequest();
 
-        Assert.That(await Read(request, processor), Is.EquivalentTo(Names<Order, Department>()));
+        await Assert.That(await Read(request, processor)).IsEquivalentTo(Names<Order, Department>());
     }
 
     // Rows held in memory come from nowhere a write to the database could be seen to reach.
@@ -112,7 +107,7 @@ public class DependencyWalkerTests
             .Select(_ => new {_.Name})
             .ToScryRequest();
 
-        Assert.That(await Read(request), Is.Null);
+        await Assert.That(await Read(request)).IsNull();
     }
 
     static ScryClient Capture() =>

@@ -252,7 +252,7 @@ await foreach (var row in query.Employee
     names.Add(row.Name);
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L179-L189' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientStream' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L178-L188' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientStream' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Neither side holds the whole result: the server never buffers the rows and the client yields each as it is read. That makes it the right terminal for a result too large to sit in memory comfortably, and unnecessary for one that is not — a small result costs an extra round-trip's worth of framing for nothing.
@@ -291,7 +291,7 @@ var request = client.Source<Employee>("Employee")
             _.Manager!.Name))
     .ToScryRequest();
 ```
-<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L32-L45' title='Snippet source file'>snippet source</a> | <a href='#snippet-translateWithoutExecuting' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ClientRoundTripTests.cs#L31-L44' title='Snippet source file'>snippet source</a> | <a href='#snippet-translateWithoutExecuting' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 which produces the wire request without contacting the server.
@@ -423,7 +423,7 @@ var rows = await client.Source<Employee>("Employee")
     .Select(_ => new NameRow(_.Name))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/CollationTests.cs#L60-L65' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCaseInsensitive' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/CollationTests.cs#L59-L64' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCaseInsensitive' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The client names only the sensitivity it wants; which collation implements it is [server configuration](server.md#limits). That is deliberate and load-bearing: a collation cannot be a query parameter — it is emitted into the SQL text — so it is the one value that must never come from a request. A server that has configured neither collation rejects the query rather than guessing.
@@ -439,7 +439,7 @@ var rows = await client.Source<Order>("Order")
     .Select(_ => new {Label = $"{_.Region}-{_.Quantity}"})
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/StringConcatTests.cs#L16-L20' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientStringConcat' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/StringConcatTests.cs#L15-L19' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientStringConcat' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Only the non-string side is converted, which is what tells the provider which side is already text. The alternative — converting both — leaves the operands indistinguishable, and the provider reads the whole expression as arithmetic and fails trying to cast the string to a number.
@@ -461,7 +461,7 @@ var rows = await client.Source<Order>("Order")
     })
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/ToStringTests.cs#L15-L24' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientToString' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ToStringTests.cs#L14-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientToString' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 It is restricted to the scalar shapes a provider renders — the numeric types, `char`, `bool`, the date and time types, `Guid`, and `byte[]`. An **enum** is refused: its text is a member name that lives in the model rather than the database, whose column holds the underlying value, so converting one in SQL would answer with a number where the client expects a name. Anything else is refused too, rather than translated into something that faults at execution.
@@ -775,7 +775,7 @@ var rows = await client.Source<Shift>("Shift")
     .Select(_ => new ShiftRow(_.Name))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/TemporalPartTests.cs#L94-L101' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientTimeSpanParts' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TemporalPartTests.cs#L93-L100' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientTimeSpanParts' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Each is the part within the unit above it, so `Hours` of a two-day span is 0 to 23 and not 48. The whole totals — `TotalHours` and its siblings — are absent: each is a division rather than a part and no provider translates one, so they are [left out](linq-coverage.md#room-to-grow) rather than shipped as a query that fails at execution.
@@ -803,7 +803,7 @@ var rows = await client.Source<Order>("Order")
     .Select(_ => new {_.Amount, Sign = Math.Sign(_.Amount - 100m)})
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/SignTests.cs#L18-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientSign' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/SignTests.cs#L17-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientSign' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 It is another function the server composes rather than hands straight to the provider. The provider does translate it, but SQL's `SIGN` returns its argument's type while the CLR method returns an `int`, so its result cannot be read back — the query succeeds in a predicate, where nothing is materialized, and faults in a projection. Two comparisons and a conditional say the same thing, translate anywhere, and yield an int because that is what they are built from. A null value keeps its sign null rather than being called zero, which is what an unguarded comparison chain would answer.
@@ -831,7 +831,7 @@ var rows = await client.Source<Order>("Order")
     .Take(1)
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L275-L282' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientDistinctPaging' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L274-L281' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientDistinctPaging' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Ordering, paging and counting a deduplicated query all materialize it as a row with one property per projected member — a shaped row is an array of values with no equality or ordering of its own. Three rules follow:
@@ -858,7 +858,7 @@ var rows = await client.Source<Order>("Order")
         .Select(_ => new Label(_.Sku, _.Price)))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/SetOperationTests.cs#L19-L25' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientUnion' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/SetOperationTests.cs#L18-L24' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientUnion' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Union` deduplicates across the two sides, `Concat` keeps duplicates, `Intersect` keeps rows on both, and `Except` keeps rows on the first that are not on the second.
@@ -888,7 +888,7 @@ var rows = await client.Source<Employee>("Employee")
         (employee, department) => new EmployeeDepartment(employee.Name, department.Name))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/JoinTests.cs#L48-L57' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientJoin' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/JoinTests.cs#L47-L56' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientJoin' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `LeftJoin` keeps every outer row, with nulls where the inner side has no match. A value read from the inner side of a left join comes back nullable, so an unmatched row yields null rather than a fault.
@@ -909,7 +909,7 @@ var rows = await client.Source<Department>("Department")
             department.Id))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/JoinTests.cs#L92-L103' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRightJoin' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/JoinTests.cs#L91-L102' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRightJoin' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 It carries one restriction the other two do not: **the outer side of a `RightJoin` may not be narrowed.** A `Where`, `OfType`, `Skip`, or `Take` before it, or a [row policy](policies.md) on the outer source, is rejected — a narrowing to a derived type is a predicate on the discriminator, and the derived source's own policies are applied after it. EF hoists such a predicate out of the join and into the `WHERE` of the combined query, which silently turns the right join into an inner one — unmatched inner rows are dropped instead of kept with nulls. Refusing the shape is better than answering it wrongly; swap the sides and use `LeftJoin`, which has no such problem because EF keeps the inner side as a subquery.
@@ -943,7 +943,7 @@ var rows = await client.Source<Department>("Department")
         (department, employees) => new DepartmentSize(department.Name, employees.Count()))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/GroupJoinTests.cs#L22-L30' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupJoin' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/GroupJoinTests.cs#L21-L29' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupJoin' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 An outer row with no matches survives with an empty group — `Count()` is zero, and `Min`/`Max`/`Sum` come back null — which makes it the way to ask "how many, and how much" about a second source without a row per match.
@@ -969,7 +969,7 @@ var rows = await client.Source<Employee>("Employee")
     .Select(_ => new NameRow(_.Name))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/SourceMembershipTests.cs#L61-L70' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientSourceMembership' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/SourceMembershipTests.cs#L60-L69' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientSourceMembership' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The named source is resolved and [policy-filtered](policies.md) before the test, exactly as a [join](#joins) resolves its second side. Membership is therefore only ever of rows the caller could have queried directly: a row the source's policy hides is not in the set, so the test cannot be used to learn that it exists.
@@ -991,7 +991,7 @@ var rows = await client.Source<Order>("Order")
     .Select(_ => new OrderRow(_.Region, _.Lines.Count(l => l.Quantity > 1)))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/CollectionSubqueryTests.cs#L85-L90' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCollectionSubquery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/CollectionSubqueryTests.cs#L84-L89' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCollectionSubquery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 | C# | Meaning |
@@ -1014,7 +1014,7 @@ A collection of a [`[QueryableComplex]`](annotations.md#queryablecomplex) type �
 var count = await client.Source<Employee>("Employee")
     .CountAsync(_ => _.PreviousAddresses.Any(address => address.City == "Berlin"));
 ```
-<sup><a href='/src/Scry.Tests/ComplexCollectionTests.cs#L21-L24' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientComplexCollectionSubquery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ComplexCollectionTests.cs#L20-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientComplexCollectionSubquery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Nothing about the storage reaches the wire: the request is a `subquery` node over a member path, identical to one over a collection navigation, and the server rebinds it onto EF, which answers it against the JSON column. The same holds for [flattening](#flattening-a-collection) one.
@@ -1031,7 +1031,7 @@ var rows = await client.Source<Order>("Order")
     .Select(_ => new {_.Region})
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/PrimitiveCollectionTests.cs#L22-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientPrimitiveCollectionContains' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/PrimitiveCollectionTests.cs#L21-L26' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientPrimitiveCollectionContains' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Contains` is the common case and means what `Any(_ => _ == value)` does. Anything else that can be said about a scalar can be said about the element — `_.Tags.Any(tag => tag.StartsWith("ex"))`, `_.Tags.All(tag => tag != "urgent")` — and an aggregate with no selector folds the elements themselves:
@@ -1044,7 +1044,7 @@ var rows = await client.Source<Order>("Order")
     .Select(_ => new ScoreRow(_.Region, _.Scores.Sum(), _.Scores.Max()))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/PrimitiveCollectionTests.cs#L87-L92' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientPrimitiveCollectionAggregate' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/PrimitiveCollectionTests.cs#L86-L91' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientPrimitiveCollectionAggregate' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 On the wire the element is an [`element` node](wire-format.md#element), which is only valid inside a subquery over a collection of values. Two limits follow from a value not being a row:
@@ -1064,7 +1064,7 @@ var rows = await client.Source<Asset>("Asset")
     .Select(_ => new VehicleRow(_.Name, _.Wheels))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/OfTypeTests.cs#L21-L26' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientOfType' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/OfTypeTests.cs#L20-L25' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientOfType' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Everything before the narrowing is written against the base and everything after against the derived type, so a member the derived type declares is only nameable once the query has narrowed to it.
@@ -1091,7 +1091,7 @@ var lines = await client.Source<Order>("Order")
     .Select(_ => new Line(_.Sku, _.Quantity))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/SelectManyTests.cs#L20-L25' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientSelectMany' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/SelectManyTests.cs#L19-L24' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientSelectMany' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Everything before the flatten is written against the row, everything after it against the element — so a `Where` on either side reads whatever that side's allow-list exposes, and the projection, ordering, grouping and terminals all describe the elements.
@@ -1120,7 +1120,7 @@ var rows = await client.Source<Order>("Order")
     .Select(_ => new OrderShape(_.Region, _.Amount))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L35-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientSetMembership' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L34-L40' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientSetMembership' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The collection must be closure state — it is evaluated on the client and its values are sent on the wire as constants — and the tested value must come from the row. The number of values is capped by [`MaxInValues`](server.md#limits) (default 1000). An empty collection matches nothing.
@@ -1200,7 +1200,7 @@ var rows = await employees
     .Select(_ => new NameRow(_.Name))
     .ToListAsync();
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L346-L371' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRuntimeComposition' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L345-L370' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRuntimeComposition' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Nothing executes client-side, so an operator appended inside an `if` is part of the captured expression like any other, and the terminal serializes whatever was built. No criteria DTO — property-name strings, an operator enum — is needed, and the request that leaves is indistinguishable from one written as a single chain.
@@ -1248,7 +1248,7 @@ var rows = await client.Source<Order>("Order")
         _.Amount - (_.Discount ?? 0m)))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L558-L565' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientComputedProjection' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L557-L564' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientComputedProjection' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The same allow-list applies inside a computed leaf as anywhere else: a `[QueryIgnore]`d member is no more reachable through an expression than through a plain path, and the expression-depth limit still holds.
@@ -1263,7 +1263,7 @@ var rows = await client.Source<Employee>("Employee")
     .Select(_ => new EmployeeCard(_.Name, new(_.Department!.Name.ToUpper())))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L615-L620' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientNestedComputed' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L614-L619' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientNestedComputed' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 One restriction: a leaf must **read at least one member of the row**. `Select(_ => new { Kind = "employee" })` is rejected — the client already has that value, and EF refuses a constant in a client projection.
@@ -1278,7 +1278,7 @@ var rows = await client.Source<Order>("Order")
     .Select(_ => new OrderShape(_.Key, _.Sum(_ => _.Amount) / _.Count()))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L665-L670' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupedComputed' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L664-L669' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGroupedComputed' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 That does not widen what a group can read. Every column but the key has been folded away, so naming one — even buried inside an expression — is still rejected.
@@ -1373,7 +1373,7 @@ var rows = await client.Source<Order>("Order")
     .Select(_ => new RegionTotal(_.Key.Region, _.Key.Grade, _.Sum(_ => _.Amount)))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/CompositeGroupKeyTests.cs#L22-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCompositeGroupBy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/CompositeGroupKeyTests.cs#L21-L26' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCompositeGroupBy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Reading a member off the key that the query did not group by is rejected rather than becoming a read of an ungrouped row member, and a group filter reads the parts the same way the projection does.
@@ -1388,7 +1388,7 @@ var rows = await client.Source<Order>("Order")
     .Select(_ => new {Day = _.Key, Count = _.Count()})
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/ComputedGroupKeyTests.cs#L15-L20' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientComputedGroupKey' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ComputedGroupKeyTests.cs#L14-L19' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientComputedGroupKey' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The two kinds differ only in how the key names itself on the wire. A key that is a plain member says so by its path, which is what the server matches it back to the position it grouped at; a computed key has no path, so it is named by that position directly. Everything after that is the same — the key composes with aggregates, and a group filter reads it identically.
@@ -1458,7 +1458,7 @@ var rows = await client.Source<Order>("Order")
     .Select(_ => new OrderShape(_.Key, _.Sum(_ => _.Amount)))
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L727-L733' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientHaving' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExpandedOperatorTests.cs#L726-L732' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientHaving' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Its predicate reads a group, so — exactly like the grouped `Select` — it may name only the group key and aggregates. Every other column has been folded away by the grouping, and naming one is rejected:

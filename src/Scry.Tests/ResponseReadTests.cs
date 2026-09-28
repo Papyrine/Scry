@@ -4,7 +4,6 @@
 /// the string overload in every way a caller can observe: the same values, the same payload, the same
 /// re-serialized bytes, and the same refusals.
 /// </summary>
-[TestFixture]
 public class ResponseReadTests
 {
     // ReSharper disable once NotAccessedPositionalProperty.Local
@@ -19,55 +18,55 @@ public class ResponseReadTests
         Encoding.UTF8.GetBytes(json);
 
     [Test]
-    public void ReadsTheSameEnvelopeAsTheStringOverload()
+    public async Task ReadsTheSameEnvelopeAsTheStringOverload()
     {
         var fromText = ScryJson.DeserializeResponse(listJson);
         var fromBytes = ScryJson.DeserializeResponse(Utf8(listJson));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(fromBytes.Version, Is.EqualTo(fromText.Version));
-            Assert.That(fromBytes.Kind, Is.EqualTo(fromText.Kind));
-            Assert.That(fromBytes.Stamp, Is.EqualTo(fromText.Stamp));
-        });
+            await Assert.That(fromBytes.Version).IsEqualTo(fromText.Version);
+            await Assert.That(fromBytes.Kind).IsEqualTo(fromText.Kind);
+            await Assert.That(fromBytes.Stamp).IsEqualTo(fromText.Stamp);
+        }
     }
 
     [Test]
-    public void ReadsTheSamePayloadFromBytesAsFromAnElement()
+    public async Task ReadsTheSamePayloadFromBytesAsFromAnElement()
     {
         var fromText = ScryJson.DeserializePayload<List<Row>>(ScryJson.DeserializeResponse(listJson));
         var fromBytes = ScryJson.DeserializePayload<List<Row>>(ScryJson.DeserializeResponse(Utf8(listJson)));
 
-        Assert.That(fromBytes, Is.EqualTo(fromText));
-        Assert.That(fromBytes, Is.EqualTo(new List<Row>
+        await Assert.That(fromBytes).IsEquivalentTo(fromText!, CollectionOrdering.Matching);
+        await Assert.That(fromBytes).IsEquivalentTo(new List<Row>
         {
             new("Alice", 1, Status.FullTime),
             new("Bob", 2, Status.PartTime)
-        }));
+        }, CollectionOrdering.Matching);
     }
 
     // The payload is stepped over on the way in, so this is the first thing that parses it. Nothing
     // about it may differ from a payload that was parsed eagerly.
     [Test]
-    public void MaterializesThePayloadOnFirstRead()
+    public async Task MaterializesThePayloadOnFirstRead()
     {
         var response = ScryJson.DeserializeResponse(Utf8(listJson));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.Payload.ValueKind, Is.EqualTo(JsonValueKind.Array));
-            Assert.That(response.Payload.GetArrayLength(), Is.EqualTo(2));
-            Assert.That(response.Payload[0].GetProperty("name").GetString(), Is.EqualTo("Alice"));
+            await Assert.That(response.Payload.ValueKind).IsEqualTo(JsonValueKind.Array);
+            await Assert.That(response.Payload.GetArrayLength()).IsEqualTo(2);
+            await Assert.That(response.Payload[0].GetProperty("name").GetString()).IsEqualTo("Alice");
             // Twice, because the second read comes off the cached document rather than parsing again.
-            Assert.That(response.Payload.GetArrayLength(), Is.EqualTo(2));
-        });
+            await Assert.That(response.Payload.GetArrayLength()).IsEqualTo(2);
+        }
     }
 
     // The payload is parsed on first read, and a value whose hash changes when a member is read is not
     // one that can be put in a dictionary. The parse is kept off the record's own fields for that
     // reason, so reading it has to leave equality and the hash where they were.
     [Test]
-    public void KeepsItsHashCodeWhenThePayloadIsRead()
+    public async Task KeepsItsHashCodeWhenThePayloadIsRead()
     {
         var response = ScryJson.DeserializeResponse(Utf8(listJson));
         var before = response.GetHashCode();
@@ -75,56 +74,56 @@ public class ResponseReadTests
 
         _ = response.Payload;
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.GetHashCode(), Is.EqualTo(before));
-            Assert.That(response, Is.EqualTo(response with {}));
+            await Assert.That(response.GetHashCode()).IsEqualTo(before);
+            await Assert.That(response).IsEqualTo(response with {});
             // A copy replacing the payload must not reach back into the response it was copied from.
-            Assert.That(copy with {Payload = default}, Is.Not.SameAs(response));
-            Assert.That(response.Payload.GetArrayLength(), Is.EqualTo(2));
-        });
+            await Assert.That(copy with {Payload = default}).IsNotSameReferenceAs(response);
+            await Assert.That(response.Payload.GetArrayLength()).IsEqualTo(2);
+        }
     }
 
     [Test]
-    public void ReSerializesToTheBytesItWasReadFrom()
+    public async Task ReSerializesToTheBytesItWasReadFrom()
     {
         var response = ScryJson.DeserializeResponse(Utf8(listJson));
 
         // The envelope's member order is part of the wire, and a response read from bytes has to write
         // back out in it — the payload included, which the reader never turned into a document.
-        Assert.That(ScryJson.Serialize(response), Is.EqualTo(listJson));
+        await Assert.That(ScryJson.Serialize(response)).IsEqualTo(listJson);
     }
 
     [Test]
-    public void ReSerializesAScalarReadFromBytes()
+    public async Task ReSerializesAScalarReadFromBytes()
     {
         const string json = """{"version":1,"kind":"Scalar","payload":42,"stamp":"abc123"}""";
         var response = ScryJson.DeserializeResponse(Utf8(json));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.Payload.GetInt32(), Is.EqualTo(42));
-            Assert.That(ScryJson.Serialize(response), Is.EqualTo(json));
-        });
+            await Assert.That(response.Payload.GetInt32()).IsEqualTo(42);
+            await Assert.That(ScryJson.Serialize(response)).IsEqualTo(json);
+        }
     }
 
     [Test]
-    public void ReadsANullPayloadFromBytes()
+    public async Task ReadsANullPayloadFromBytes()
     {
         const string json = """{"version":1,"kind":"Single","payload":null,"stamp":"abc123"}""";
         var response = ScryJson.DeserializeResponse(Utf8(json));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.Payload.ValueKind, Is.EqualTo(JsonValueKind.Null));
-            Assert.That(ScryJson.Serialize(response), Is.EqualTo(json));
-        });
+            await Assert.That(response.Payload.ValueKind).IsEqualTo(JsonValueKind.Null);
+            await Assert.That(ScryJson.Serialize(response)).IsEqualTo(json);
+        }
     }
 
     // A payload holding the envelope's own member names, so a reader that found the payload's extent
     // by scanning for them rather than by structure would take the wrong slice.
     [Test]
-    public void ReadsAPayloadCarryingTheEnvelopesOwnNames()
+    public async Task ReadsAPayloadCarryingTheEnvelopesOwnNames()
     {
         const string json =
             """
@@ -132,13 +131,13 @@ public class ResponseReadTests
             """;
         var rows = ScryJson.DeserializePayload<List<Row>>(ScryJson.DeserializeResponse(Utf8(json)));
 
-        Assert.That(rows!.Select(_ => _.Name), Is.EqualTo(["version", "payload\"stamp"]));
+        await Assert.That(rows!.Select(_ => _.Name)).IsEquivalentTo(["version", "payload\"stamp"], CollectionOrdering.Matching);
     }
 
     // The payload is not the last member here, so the slice has to end where the value does rather
     // than running to the end of the document.
     [Test]
-    public void ReadsAPayloadFollowedByFurtherMembers()
+    public async Task ReadsAPayloadFollowedByFurtherMembers()
     {
         const string json =
             """
@@ -146,46 +145,46 @@ public class ResponseReadTests
             """;
         var response = ScryJson.DeserializeResponse(Utf8(json));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.EnumAliases, Has.Count.EqualTo(1));
-            Assert.That(ScryJson.DeserializePayload<List<Row>>(response)!.Single().Name, Is.EqualTo("Alice"));
-        });
+            await Assert.That(response.EnumAliases).Count().IsEqualTo(1);
+            await Assert.That(ScryJson.DeserializePayload<List<Row>>(response)!.Single().Name).IsEqualTo("Alice");
+        }
     }
 
     [Test]
-    public void RefusesANewerWireVersionFromBytes()
+    public async Task RefusesANewerWireVersionFromBytes()
     {
         var json = $$"""{"version":{{WireFormat.Version + 1}},"kind":"List","payload":[]}""";
 
-        var exception = Assert.Throws<ScryWireException>(() => ScryJson.DeserializeResponse(Utf8(json)));
+        var exception = Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeResponse(Utf8(json)));
 
-        Assert.That(exception!.Message, Does.Contain("Unsupported response wire version"));
+        await Assert.That(exception!.Message).Contains("Unsupported response wire version");
     }
 
     [Test]
-    public void ReportsMalformedBytesAsAWireFailure()
+    public async Task ReportsMalformedBytesAsAWireFailure()
     {
-        var exception = Assert.Throws<ScryWireException>(
+        var exception = Assert.ThrowsExactly<ScryWireException>(
             () => ScryJson.DeserializeResponse(Utf8("""{"version":1,"kind":"List","payload":[}""")));
 
-        Assert.That(exception!.Message, Does.StartWith("Invalid query response"));
+        await Assert.That(exception!.Message).StartsWith("Invalid query response");
     }
 
     // A payload read leaves the scope that told the reader to step over payloads; a failed one has to
     // leave it too, or the next response on this thread would come back with an unparsed payload.
     [Test]
-    public void LeavesNoScopeBehindAfterAFailedRead()
+    public async Task LeavesNoScopeBehindAfterAFailedRead()
     {
-        Assert.Throws<ScryWireException>(
+        Assert.ThrowsExactly<ScryWireException>(
             () => ScryJson.DeserializeResponse(Utf8("""{"version":1,"kind":"List","payload":[}""")));
 
         var response = ScryJson.DeserializeResponse(listJson);
-        Assert.That(response.Payload.GetArrayLength(), Is.EqualTo(2));
+        await Assert.That(response.Payload.GetArrayLength()).IsEqualTo(2);
     }
 
     [Test]
-    public void ReadsABatchsPayloadsFromBytes()
+    public async Task ReadsABatchsPayloadsFromBytes()
     {
         const string json =
             """
@@ -195,17 +194,17 @@ public class ResponseReadTests
             """;
         var batch = ScryJson.DeserializeBatchResponse(Utf8(json));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(ScryJson.DeserializePayload<List<Row>>(batch.Results[0].Response!)!.Single().Name, Is.EqualTo("Alice"));
-            Assert.That(ScryJson.DeserializePayload<List<Row>>(batch.Results[1].Response!)!.Single().Name, Is.EqualTo("Bob"));
-        });
+            await Assert.That(ScryJson.DeserializePayload<List<Row>>(batch.Results[0].Response!)!.Single().Name).IsEqualTo("Alice");
+            await Assert.That(ScryJson.DeserializePayload<List<Row>>(batch.Results[1].Response!)!.Single().Name).IsEqualTo("Bob");
+        }
     }
 
     // An entry that failed carries no response and so no payload was stepped over for it. The entries
     // after it must still line up with their own bytes rather than being shifted by one.
     [Test]
-    public void PairsBatchPayloadsPastAFailedEntry()
+    public async Task PairsBatchPayloadsPastAFailedEntry()
     {
         const string json =
             """
@@ -215,60 +214,60 @@ public class ResponseReadTests
             """;
         var batch = ScryJson.DeserializeBatchResponse(Utf8(json));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(batch.Results[0].Error, Is.EqualTo("Unknown source 'Nope'."));
-            Assert.That(ScryJson.DeserializePayload<List<Row>>(batch.Results[1].Response!)!.Single().Name, Is.EqualTo("Bob"));
-        });
+            await Assert.That(batch.Results[0].Error).IsEqualTo("Unknown source 'Nope'.");
+            await Assert.That(ScryJson.DeserializePayload<List<Row>>(batch.Results[1].Response!)!.Single().Name).IsEqualTo("Bob");
+        }
     }
 
     [Test]
-    public void ReadsAnErrorBodyFromBytes()
+    public async Task ReadsAnErrorBodyFromBytes()
     {
         var error = ScryJson.TryDeserializeError(Utf8("""{"error":"Nope.","code":"StaleClient"}"""));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(error!.Error, Is.EqualTo("Nope."));
-            Assert.That(error.Code, Is.EqualTo(ScryErrorCode.StaleClient));
-        });
+            await Assert.That(error!.Error).IsEqualTo("Nope.");
+            await Assert.That(error.Code).IsEqualTo(ScryErrorCode.StaleClient);
+        }
     }
 
     [Test]
-    public void ReturnsNullForABodyThatIsNotAnError() =>
-        Assert.That(ScryJson.TryDeserializeError(Utf8("<html>502 from a proxy</html>")), Is.Null);
+    public async Task ReturnsNullForABodyThatIsNotAnError() =>
+        await Assert.That(ScryJson.TryDeserializeError(Utf8("<html>502 from a proxy</html>"))).IsNull();
 
     [Test]
-    public void ReadsAStreamedRowFromBytes()
+    public async Task ReadsAStreamedRowFromBytes()
     {
         var row = ScryJson.DeserializeRow<Row>(
             "{\"name\":\"Alice\",\"rank\":1,\"status\":\"FullTime\"}"u8,
             aliases: null);
 
-        Assert.That(row, Is.EqualTo(new Row("Alice", 1, Status.FullTime)));
+        await Assert.That(row).IsEqualTo(new Row("Alice", 1, Status.FullTime));
     }
 
     // The aliases reach the enum reader the same way they do on the element overload, so a client
     // generated before a rename still resolves the current name.
     [Test]
-    public void ResolvesARenamedEnumValueOnARowReadFromBytes()
+    public async Task ResolvesARenamedEnumValueOnARowReadFromBytes()
     {
         var row = ScryJson.DeserializeRow<Row>(
             "{\"name\":\"Alice\",\"rank\":1,\"status\":\"Permanent\"}"u8,
             [new("Status", "Permanent", ["FullTime"])]);
 
-        Assert.That(row!.Status, Is.EqualTo(Status.FullTime));
+        await Assert.That(row!.Status).IsEqualTo(Status.FullTime);
     }
 
     [Test]
-    public void ReadsAMarkerFromBytes()
+    public async Task ReadsAMarkerFromBytes()
     {
         var marker = ScryJson.DeserializeMarker("""{"$scry":"begin","version":1,"stamp":"abc123"}"""u8);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(marker.Kind, Is.EqualTo(ScryStream.Begin));
-            Assert.That(marker.Stamp, Is.EqualTo("abc123"));
-        });
+            await Assert.That(marker.Kind).IsEqualTo(ScryStream.Begin);
+            await Assert.That(marker.Stamp).IsEqualTo("abc123");
+        }
     }
 }

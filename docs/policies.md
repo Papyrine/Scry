@@ -126,7 +126,7 @@ Or in code, which takes precedence over the attribute on the same type:
 ```cs
 var response = Processor(_ => _.AddPolicy<Employee, ActiveOnlyPolicy>()).Execute(request, context);
 ```
-<sup><a href='/src/Scry.Tests/ExecutionTests.cs#L193-L195' title='Snippet source file'>snippet source</a> | <a href='#snippet-addPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/ExecutionTests.cs#L192-L194' title='Snippet source file'>snippet source</a> | <a href='#snippet-addPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Code registration is the better fit when the policy lives in the server project and the model project should not reference it.
@@ -238,7 +238,7 @@ class EngineeringOnlyPolicy :
         source.Where(_ => _.Name == "Engineering");
 }
 ```
-<sup><a href='/src/Scry.Tests/NavigationPolicyTests.cs#L11-L18' title='Snippet source file'>snippet source</a> | <a href='#snippet-navigationPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/NavigationPolicyTests.cs#L10-L17' title='Snippet source file'>snippet source</a> | <a href='#snippet-navigationPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Employee.Department` navigates into `Department`, which the policy above filters. Reading a member through that navigation reads it through the policy:
@@ -251,7 +251,7 @@ var rows = await client.Source<Employee>("Employee")
     .Select(_ => new {_.Name, Department = (string?)_.Department!.Name})
     .ToListAsync();
 ```
-<sup><a href='/src/Scry.Tests/NavigationPolicyTests.cs#L26-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-navigationPolicyQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/NavigationPolicyTests.cs#L25-L30' title='Snippet source file'>snippet source</a> | <a href='#snippet-navigationPolicyQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 An employee in a department the policy hides still comes back — it is `Employee` that was queried, and `Employee` carries no policy here — but the department it names reads as **null**.

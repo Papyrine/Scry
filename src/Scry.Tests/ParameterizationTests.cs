@@ -6,11 +6,10 @@ using Microsoft.Extensions.Logging;
 /// provider's type mapping would escape an inlined literal correctly, but the statement text would
 /// then differ per value — so every value a client sent would compile and cache a plan of its own.
 /// </summary>
-[TestFixture]
 public class ParameterizationTests
 {
     [Test]
-    public void AClientConstantIsBoundRatherThanWrittenIntoTheStatement()
+    public async Task AClientConstantIsBoundRatherThanWrittenIntoTheStatement()
     {
         var sql = SqlFor(
             QueryRequest.Create(
@@ -23,22 +22,22 @@ public class ParameterizationTests
                     new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))]))
                 ]));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(sql, Does.Contain("@"), "the value is bound");
-            Assert.That(sql, Does.Not.Contain("O''Brien"), "and not escaped into the statement text");
-        });
+            await Assert.That(sql).Contains("@").Because("the value is bound");
+            await Assert.That(sql).DoesNotContain("O''Brien").Because("and not escaped into the statement text");
+        }
     }
 
     [Test]
-    public void TwoValuesProduceTheSameStatement()
+    public async Task TwoValuesProduceTheSameStatement()
     {
         // The point of binding: one plan serves every value, so a client cannot flood the plan cache
         // by varying the values it sends.
         var first = SqlFor(Named("Alice"));
         var second = SqlFor(Named("Carol"));
 
-        Assert.That(Statement(first), Is.EqualTo(Statement(second)));
+        await Assert.That(Statement(first)).IsEqualTo(Statement(second));
     }
 
     static QueryRequest Named(string name) =>
@@ -53,28 +52,28 @@ public class ParameterizationTests
             ]);
 
     [Test]
-    public void InValuesAreBoundRatherThanWrittenIntoTheStatement()
+    public async Task InValuesAreBoundRatherThanWrittenIntoTheStatement()
     {
         var sql = Statement(SqlFor(NamedIn("Alice", "Bob")));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(sql, Does.Contain("@"), "the values are bound");
-            Assert.That(sql, Does.Not.Contain("Alice"), "and not written into the statement text");
-        });
+            await Assert.That(sql).Contains("@").Because("the values are bound");
+            await Assert.That(sql).DoesNotContain("Alice").Because("and not written into the statement text");
+        }
     }
 
     [Test]
-    public void TwoInValueSetsProduceTheSameStatement()
+    public async Task TwoInValueSetsProduceTheSameStatement()
     {
         var first = SqlFor(NamedIn("Alice", "Bob"));
         var second = SqlFor(NamedIn("Carol", "Dave"));
 
-        Assert.That(Statement(first), Is.EqualTo(Statement(second)));
+        await Assert.That(Statement(first)).IsEqualTo(Statement(second));
     }
 
     [Test]
-    public void TwoInAritiesProduceTheSameStatementWithinABucket()
+    public async Task TwoInAritiesProduceTheSameStatementWithinABucket()
     {
         // EF binds a parameterized collection as one scalar parameter per value. Tiny lists (up to
         // five values) keep their exact arity; anything larger is padded up to a bucket size by
@@ -84,7 +83,7 @@ public class ParameterizationTests
         var six = SqlFor(NamedIn("A", "B", "C", "D", "E", "F"));
         var eight = SqlFor(NamedIn("A", "B", "C", "D", "E", "F", "G", "H"));
 
-        Assert.That(Statement(six), Is.EqualTo(Statement(eight)));
+        await Assert.That(Statement(six)).IsEqualTo(Statement(eight));
     }
 
     static QueryRequest NamedIn(params string[] names) =>
@@ -99,12 +98,12 @@ public class ParameterizationTests
             ]);
 
     [Test]
-    public void TwoSkipTakeValuesProduceTheSameStatement()
+    public async Task TwoSkipTakeValuesProduceTheSameStatement()
     {
         var first = SqlFor(Window(skip: 1, take: 2));
         var second = SqlFor(Window(skip: 5, take: 7));
 
-        Assert.That(Statement(first), Is.EqualTo(Statement(second)));
+        await Assert.That(Statement(first)).IsEqualTo(Statement(second));
     }
 
     static QueryRequest Window(int skip, int take) =>
@@ -118,12 +117,12 @@ public class ParameterizationTests
             ]);
 
     [Test]
-    public void TwoPageSizesProduceTheSameStatement()
+    public async Task TwoPageSizesProduceTheSameStatement()
     {
         var first = SqlFor(Paged(2));
         var second = SqlFor(Paged(3));
 
-        Assert.That(Statement(first), Is.EqualTo(Statement(second)));
+        await Assert.That(Statement(first)).IsEqualTo(Statement(second));
     }
 
     static QueryRequest Paged(int size) =>

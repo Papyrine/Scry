@@ -1,5 +1,4 @@
-﻿[TestFixture]
-public partial class GeneratorTests
+﻿public partial class GeneratorTests
 {
     [Test]
     public Task EntitiesViewPocoAndEnum()
@@ -333,7 +332,7 @@ public partial class GeneratorTests
     // header's pragma a consumer building with TreatWarningsAsErrors would fail on those uses. The
     // consumer's own query code is outside these files and still warns.
     [Test]
-    public void GeneratedCodeDoesNotWarnOnItsOwnObsoleteTypes()
+    public async Task GeneratedCodeDoesNotWarnOnItsOwnObsoleteTypes()
     {
         const string model = """
             using System;
@@ -358,7 +357,7 @@ public partial class GeneratorTests
 
         var compilation = CSharpCompilation.Create(
             "Generated",
-            GeneratedSources(model).Select(_ => CSharpSyntaxTree.ParseText(_)),
+            (await GeneratedSources(model)).Select(_ => CSharpSyntaxTree.ParseText(_)),
             ReferenceAssemblies(),
             new(OutputKind.DynamicallyLinkedLibrary));
 
@@ -368,14 +367,14 @@ public partial class GeneratorTests
             .Where(_ => _.Id is "CS0612" or "CS0618" or "CS0619")
             .ToList();
 
-        Assert.That(obsolete, Is.Empty, () => string.Join('\n', obsolete));
+        await Assert.That(obsolete).IsEmpty().Because(string.Join('\n', obsolete));
     }
 
     // Deprecating something leaves the queryable surface exactly as it was, so the stamp must not move.
     // Were it hashed, marking one member [Obsolete] would report every deployed client as stale — the
     // opposite of what a deprecation window is for.
     [Test]
-    public void ObsoleteDoesNotAffectTheSchemaStamp()
+    public async Task ObsoleteDoesNotAffectTheSchemaStamp()
     {
         const string bare = """
             using System;
@@ -406,7 +405,7 @@ public partial class GeneratorTests
             }
             """;
 
-        Assert.That(Stamp(annotated), Is.EqualTo(Stamp(bare)));
+        await Assert.That(await Stamp(annotated)).IsEqualTo(await Stamp(bare));
     }
 
     // The counterpart to the test above, and the reason the two are worth stating together: [Sensitive]
@@ -414,7 +413,7 @@ public partial class GeneratorTests
     // client generated before the marking keeps asking in URLs and starts being refused, so the stamp
     // has to move — that is what turns the refusal into a reported staleness with a fix attached.
     [Test]
-    public void SensitiveMovesTheSchemaStamp()
+    public async Task SensitiveMovesTheSchemaStamp()
     {
         const string bare = """
             using Scry;
@@ -456,16 +455,16 @@ public partial class GeneratorTests
             }
             """;
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(Stamp(marked), Is.Not.EqualTo(Stamp(bare)));
-            Assert.That(Stamp(wholeType), Is.Not.EqualTo(Stamp(bare)));
+            await Assert.That(await Stamp(marked)).IsNotEqualTo(await Stamp(bare));
+            await Assert.That(await Stamp(wholeType)).IsNotEqualTo(await Stamp(bare));
 
             // Marking the type is not the same statement as marking its one member, so the two do not
             // collapse onto each other: the type's mark reaches members added later, and any navigation
             // into it.
-            Assert.That(Stamp(wholeType), Is.Not.EqualTo(Stamp(marked)));
-        });
+            await Assert.That(await Stamp(wholeType)).IsNotEqualTo(await Stamp(marked));
+        }
     }
 
     [Test]
@@ -496,8 +495,8 @@ public partial class GeneratorTests
         return Verify(RunGenerator(model));
     }
 
-    static string Stamp(string modelSource) =>
-        GeneratedSources(modelSource)
+    static async Task<string> Stamp(string modelSource) =>
+        (await GeneratedSources(modelSource))
             .SelectMany(_ => _.Split('\n'))
             .Single(_ => _.Contains("public const string SchemaStamp"));
 
@@ -624,7 +623,7 @@ public partial class GeneratorTests
 
     // A source name that is a contextual keyword needs no escaping, so it is emitted as written.
     [Test]
-    public void ContextualKeywordSourceNameIsEmitted()
+    public async Task ContextualKeywordSourceNameIsEmitted()
     {
         const string model = """
             using Scry;
@@ -638,9 +637,7 @@ public partial class GeneratorTests
             }
             """;
 
-        Assert.That(
-            GeneratedSources(model).Any(_ => _.Contains("IQueryable<RecordingQueryModel> record =>")),
-            Is.True);
+        await Assert.That((await GeneratedSources(model)).Any(_ => _.Contains("IQueryable<RecordingQueryModel> record =>"))).IsTrue();
     }
 
     // The generator must ignore [PreviousNames] outright. A previous name is a server-side
@@ -648,7 +645,7 @@ public partial class GeneratorTests
     // into the client that the current surface does not have, and would stop a rename registering as
     // drift. Identical output for the annotated and unannotated model is the check.
     [Test]
-    public void PreviousNamesDoNotAffectGeneratedOutput()
+    public async Task PreviousNamesDoNotAffectGeneratedOutput()
     {
         const string bare = """
             using Scry;
@@ -683,13 +680,13 @@ public partial class GeneratorTests
             }
             """;
 
-        Assert.That(GeneratedSources(annotated), Is.EqualTo(GeneratedSources(bare)));
+        await Assert.That(await GeneratedSources(annotated)).IsEquivalentTo(await GeneratedSources(bare), CollectionOrdering.Matching);
     }
 
     // Refused rather than classified as whichever attribute the reader met last: the server reads
     // them in an order of its own, and the two would disagree about what the type is.
     [Test]
-    public void ATypeOptedInTwiceIsRefused()
+    public async Task ATypeOptedInTwiceIsRefused()
     {
         const string model =
             """
@@ -711,28 +708,28 @@ public partial class GeneratorTests
             }
             """;
 
-        var result = RunGenerator(model).GetRunResult();
+        var result = (await RunGenerator(model)).GetRunResult();
 
         var diagnostic = result.Diagnostics.Single(_ => _.Id == "SCRY008");
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(diagnostic.GetMessage(), Does.StartWith("'Both' carries [Queryable] and [QueryableComplex]."));
-            Assert.That(result.Results.SelectMany(_ => _.GeneratedSources), Is.Empty);
-        });
+            await Assert.That(diagnostic.GetMessage()).StartsWith("'Both' carries [Queryable] and [QueryableComplex].");
+            await Assert.That(result.Results.SelectMany(_ => _.GeneratedSources)).IsEmpty();
+        }
     }
 
-    static List<string> GeneratedSources(string modelSource) =>
-        RunGenerator(modelSource)
+    static async Task<List<string>> GeneratedSources(string modelSource) =>
+        (await RunGenerator(modelSource))
             .GetRunResult()
             .Results
             .SelectMany(_ => _.GeneratedSources)
             .Select(_ => _.SourceText.ToString())
             .ToList();
 
-    static Task VerifyGenerated(string modelSource) =>
-        Verify(RunGenerator(modelSource));
+    static async Task VerifyGenerated(string modelSource) =>
+        await Verify(await RunGenerator(modelSource));
 
-    static GeneratorDriver RunGenerator(string modelSource)
+    static async Task<GeneratorDriver> RunGenerator(string modelSource)
     {
         var references = ReferenceAssemblies();
         var modelCompilation = CSharpCompilation.Create(
@@ -743,7 +740,7 @@ public partial class GeneratorTests
 
         var dllPath = new TempFile("dll");
         var emit = modelCompilation.Emit(dllPath);
-        Assert.That(emit.Success, Is.True, () => string.Join('\n', emit.Diagnostics));
+        await Assert.That(emit.Success).IsTrue().Because(string.Join('\n', emit.Diagnostics));
 
         var consumer = CSharpCompilation.Create(
             "Consumer",

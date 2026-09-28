@@ -4,7 +4,6 @@
 /// numeric-to-numeric conversions truncate where the CLR's round, so that direction is refused rather
 /// than answered differently per source.
 /// </summary>
-[TestFixture]
 public class TextConversionTests
 {
     [Test]
@@ -17,9 +16,7 @@ public class TextConversionTests
             .Select(_ => new {_.Code, Value = int.Parse(_.Code)})
             .ToListAsync();
 
-        Assert.That(
-            rows.OrderBy(_ => _.Value).Select(_ => (_.Code, _.Value)),
-            Is.EqualTo([("8", 8), ("17", 17), ("40", 40)]));
+        await Assert.That(rows.OrderBy(_ => _.Value).Select(_ => (_.Code, _.Value))).IsEquivalentTo([("8", 8), ("17", 17), ("40", 40)], CollectionOrdering.Matching);
     }
 
     // Numeric order and string order disagree over the seeded codes — "8" sorts after "40" as text —
@@ -35,7 +32,7 @@ public class TextConversionTests
             .Select(_ => new {_.Code})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Code), Is.EqualTo(["8", "17", "40"]));
+        await Assert.That(rows.Select(_ => _.Code)).IsEquivalentTo(["8", "17", "40"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -47,7 +44,7 @@ public class TextConversionTests
         var count = await client.Source<Order>("Order")
             .CountAsync(_ => long.Parse(_.Code) > 10);
 
-        Assert.That(count, Is.EqualTo(2));
+        await Assert.That(count).IsEqualTo(2);
     }
 
     // The Convert spellings reach the same functions as Parse, and Convert.ToString is StringFrom by
@@ -71,14 +68,14 @@ public class TextConversionTests
             .ToListAsync();
 
         var row = rows.Single();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(row.Int, Is.EqualTo(40));
-            Assert.That(row.Long, Is.EqualTo(40L));
-            Assert.That(row.Decimal, Is.EqualTo(40m));
-            Assert.That(row.Double, Is.EqualTo(40d));
-            Assert.That(row.Text, Is.EqualTo("3"));
-        });
+            await Assert.That(row.Int).IsEqualTo(40);
+            await Assert.That(row.Long).IsEqualTo(40L);
+            await Assert.That(row.Decimal).IsEqualTo(40m);
+            await Assert.That(row.Double).IsEqualTo(40d);
+            await Assert.That(row.Text).IsEqualTo("3");
+        }
     }
 
     [Test]
@@ -100,14 +97,14 @@ public class TextConversionTests
             .ToListAsync();
 
         var row = rows.Single();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(row.Byte, Is.EqualTo((byte)40));
-            Assert.That(row.Short, Is.EqualTo((short)40));
-            Assert.That(row.Float, Is.EqualTo(40f));
-            Assert.That(row.ByteAgain, Is.EqualTo((byte)40));
-            Assert.That(row.ShortAgain, Is.EqualTo((short)40));
-        });
+            await Assert.That(row.Byte).IsEqualTo((byte)40);
+            await Assert.That(row.Short).IsEqualTo((short)40);
+            await Assert.That(row.Float).IsEqualTo(40f);
+            await Assert.That(row.ByteAgain).IsEqualTo((byte)40);
+            await Assert.That(row.ShortAgain).IsEqualTo((short)40);
+        }
     }
 
     [Test]
@@ -119,47 +116,47 @@ public class TextConversionTests
         var parsed = await client.Source<Order>("Order").CountAsync(_ => bool.Parse(_.Audited));
         var converted = await client.Source<Order>("Order").CountAsync(_ => Convert.ToBoolean(_.Audited));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(parsed, Is.EqualTo(2));
-            Assert.That(converted, Is.EqualTo(2));
-        });
+            await Assert.That(parsed).IsEqualTo(2);
+            await Assert.That(converted).IsEqualTo(2);
+        }
     }
 
     // ToSingle is the one Convert spelling deliberately left out: the provider translates float.Parse
     // but carries no ToSingle conversion, so the spelling would trade a translation-time refusal for
     // an execution fault.
     [Test]
-    public void ConvertToSingleStaysClientSide()
+    public async Task ConvertToSingleStaysClientSide()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<NotSupportedException>(() =>
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>
             client.Source<Order>("Order")
                 .Select(_ => new {Value = Convert.ToSingle(_.Code)})
                 .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("client-side"));
+        await Assert.That(exception!.Message).Contains("client-side");
     }
 
     [Test]
-    public void ANumericMemberIsRefusedAtTranslation()
+    public async Task ANumericMemberIsRefusedAtTranslation()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<NotSupportedException>(() =>
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>
             client.Source<Order>("Order")
                 .Select(_ => new {Value = Convert.ToInt32(_.Amount)})
                 .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("already one"));
+        await Assert.That(exception!.Message).Contains("already one");
     }
 
     // The same refusal server-side, for a request that did not come through the translator.
     [Test]
-    public void ANarrowingOfANumericMemberIsRefusedByTheServer()
+    public async Task ANarrowingOfANumericMemberIsRefusedByTheServer()
     {
         // Over a number the function is a cast, and only a widening one is carried: reading a decimal
         // as an int would truncate in the database where the CLR rounds.
@@ -176,14 +173,14 @@ public class TextConversionTests
                 new CountOp()
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("would narrow"));
+        await Assert.That(exception!.Message).Contains("would narrow");
     }
 
     [Test]
-    public void AWideningOfANumericMemberIsACast()
+    public async Task AWideningOfANumericMemberIsACast()
     {
         // The same function over a narrower member is the cast a client writes as (double)_.Quantity.
         // Quantities are 3, 7 and 1, so two are above 2.5 once compared as doubles.
@@ -202,11 +199,11 @@ public class TextConversionTests
 
         var response = SharedProcessor.Instance.Execute(request, context);
 
-        Assert.That(response.Payload.GetInt32(), Is.EqualTo(2));
+        await Assert.That(response.Payload.GetInt32()).IsEqualTo(2);
     }
 
     [Test]
-    public void AValueThatIsNeitherTextNorANumberIsRefusedByTheServer()
+    public async Task AValueThatIsNeitherTextNorANumberIsRefusedByTheServer()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -221,10 +218,10 @@ public class TextConversionTests
                 new CountOp()
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("reads text as a value"));
+        await Assert.That(exception!.Message).Contains("reads text as a value");
     }
 
     static ScryClient ClientFor(TestContext context) =>

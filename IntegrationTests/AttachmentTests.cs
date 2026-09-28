@@ -15,7 +15,8 @@ using Microsoft.Extensions.Options;
 /// answer; a null value is a different one. The fixture is self-contained — the sample model's
 /// attachment is covered by the sample tests — with its own context, schema, and server.
 /// </summary>
-[TestFixture]
+[NotInParallel]
+[DependsOn<HttpRoundTripTests.StaleClient>(nameof(HttpRoundTripTests.StaleClient.AClientThatDoesNotKnowRetriesInABody), ProceedOnFailure = true)]
 public class AttachmentTests
 {
     static readonly byte[] leasePayload = [0x11, 0x22, 0x33];
@@ -40,10 +41,10 @@ public class AttachmentTests
             await context.SaveChangesAsync();
         });
 
-    WebApplication app = null!;
-    HttpClient http = null!;
-    ScryClient client = null!;
-    SqlDatabase<AttachmentContext> database = null!;
+    static WebApplication app = null!;
+    static HttpClient http = null!;
+    static ScryClient client = null!;
+    static SqlDatabase<AttachmentContext> database = null!;
 
     /// <summary>
     /// Stands in for the generated model. Written exactly as the generator would emit it: the
@@ -69,11 +70,11 @@ public class AttachmentTests
 
     static readonly string[] seededNames = ["Ada", "Grace", "Alan"];
 
-    IQueryable<PersonModel> People =>
+    static IQueryable<PersonModel> People =>
         client.Source<PersonModel>("Person", personMembers);
 
-    [OneTimeSetUp]
-    public async Task StartServer()
+    [Before(Class)]
+    public static async Task StartServer()
     {
         database = await sqlInstance.Build();
 
@@ -90,8 +91,8 @@ public class AttachmentTests
         client = ScryClient.ForHttp(http, "/api/query");
     }
 
-    [OneTimeTearDown]
-    public async Task StopServer()
+    [After(Class)]
+    public static async Task StopServer()
     {
         await app.StopAsync();
         await app.DisposeAsync();
@@ -121,11 +122,11 @@ public class AttachmentTests
         // outlives the response it came from, and holds only the key.
         var photo = await Read(rows[0].Photo);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows.Select(_ => _.Name), Is.EqualTo(seededNames));
-            Assert.That(photo, Is.EqualTo(managerPayload));
-        });
+            await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(seededNames, CollectionOrdering.Matching);
+            await Assert.That(photo).IsEquivalentTo(managerPayload, CollectionOrdering.Matching);
+        }
     }
 
     [Test]
@@ -135,7 +136,7 @@ public class AttachmentTests
             .Select(_ => new PersonRow(_.Id, _.Photo))
             .ToListAsync();
 
-        Assert.That(await Read(rows.Single().Photo), Is.EqualTo(leasePayload));
+        await Assert.That(await Read(rows.Single().Photo)).IsEquivalentTo(leasePayload, CollectionOrdering.Matching);
     }
 
     // The attachment hangs off a navigation, so its key is the navigation's key rather than the row's.
@@ -148,12 +149,12 @@ public class AttachmentTests
 
         var row = rows.Single();
 
-        await Assert.MultipleAsync(async () =>
+        using (Assert.Multiple())
         {
-            Assert.That(row.Name, Is.EqualTo("Grace"));
-            Assert.That(row.Manager.Id, Is.EqualTo(1));
-            Assert.That(await Read(row.Manager.Photo), Is.EqualTo(managerPayload));
-        });
+            await Assert.That(row.Name).IsEqualTo("Grace");
+            await Assert.That(row.Manager.Id).IsEqualTo(1);
+            await Assert.That(await Read(row.Manager.Photo)).IsEquivalentTo(managerPayload, CollectionOrdering.Matching);
+        }
     }
 
     [Test]
@@ -167,11 +168,11 @@ public class AttachmentTests
             first ??= await Read(row.Photo);
         }
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(names, Is.EqualTo(seededNames));
-            Assert.That(first, Is.EqualTo(managerPayload));
-        });
+            await Assert.That(names).IsEquivalentTo(seededNames, CollectionOrdering.Matching);
+            await Assert.That(first).IsEquivalentTo(managerPayload, CollectionOrdering.Matching);
+        }
     }
 
     // A row that is there holding no value. Distinct from the refusals: the caller may read it, and
@@ -181,7 +182,7 @@ public class AttachmentTests
     {
         var row = await People.FirstAsync(_ => _.Id == 3);
 
-        Assert.That(await Read(row!.Photo), Is.Null);
+        await Assert.That(await Read(row!.Photo)).IsNull();
     }
 
     [Test]
@@ -191,8 +192,8 @@ public class AttachmentTests
         http.DefaultRequestHeaders.Add(denyHeader, "yes");
         try
         {
-            var exception = Assert.ThrowsAsync<ScryRequestException>(() => Read(row!.Photo));
-            Assert.That(exception!.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+            var exception = await Assert.ThrowsExactlyAsync<ScryRequestException>(() => Read(row!.Photo));
+            await Assert.That(exception!.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
         }
         finally
         {
@@ -201,63 +202,63 @@ public class AttachmentTests
     }
 
     [Test]
-    public void MissingRowIsNotFound()
+    public async Task MissingRowIsNotFound()
     {
-        var exception = Assert.ThrowsAsync<ScryRequestException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryRequestException>(
             () => PostAttachment(AttachmentRequest.Create("Person", "Photo", [new("404", ClrTypeTag.Int32)])));
 
-        Assert.That(exception!.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        await Assert.That(exception!.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
     }
 
     // The row exists and holds a value, but the row policy hides it — so the attachment is as
     // unreachable as the row, and by the same status as a row that was never there.
     [Test]
-    public void PolicyFilteredRowIsNotFound()
+    public async Task PolicyFilteredRowIsNotFound()
     {
-        var exception = Assert.ThrowsAsync<ScryRequestException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryRequestException>(
             () => PostAttachment(AttachmentRequest.Create("Person", "Photo", [new("4", ClrTypeTag.Int32)])));
 
-        Assert.That(exception!.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        await Assert.That(exception!.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
     }
 
     [Test]
-    public void UnknownMemberIsRejected()
+    public async Task UnknownMemberIsRejected()
     {
-        var exception = Assert.ThrowsAsync<ScryRequestException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryRequestException>(
             () => PostAttachment(AttachmentRequest.Create("Person", "Name", [new("1", ClrTypeTag.Int32)])));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(exception!.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-            Assert.That(exception.Body, Does.Contain("is not an attachment member"));
-        });
+            await Assert.That(exception!.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+            await Assert.That(exception.Body).Contains("is not an attachment member");
+        }
     }
 
     [Test]
-    public void WrongKeyCountIsRejected()
+    public async Task WrongKeyCountIsRejected()
     {
-        var exception = Assert.ThrowsAsync<ScryRequestException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryRequestException>(
             () => PostAttachment(
                 AttachmentRequest.Create("Person", "Photo", [new("1", ClrTypeTag.Int32), new("2", ClrTypeTag.Int32)])));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(exception!.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-            Assert.That(exception.Body, Does.Contain("keyed by 1 value"));
-        });
+            await Assert.That(exception!.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+            await Assert.That(exception.Body).Contains("keyed by 1 value");
+        }
     }
 
     [Test]
-    public void UnparseableKeyIsRejected()
+    public async Task UnparseableKeyIsRejected()
     {
-        var exception = Assert.ThrowsAsync<ScryRequestException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryRequestException>(
             () => PostAttachment(AttachmentRequest.Create("Person", "Photo", [new("not-a-number", ClrTypeTag.Int32)])));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(exception!.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-            Assert.That(exception.Body, Does.Contain("not a valid Int32"));
-        });
+            await Assert.That(exception!.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+            await Assert.That(exception.Body).Contains("not a valid Int32");
+        }
     }
 
     // A hand-built request naming the attachment in a query, which the generated client cannot
@@ -285,7 +286,7 @@ public class AttachmentTests
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
         using var response = await http.PostAsync("/api/query", content);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
     }
 
     /// <summary>
@@ -299,12 +300,12 @@ public class AttachmentTests
     {
         using var response = await FetchRaw("Photo", 1);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("image/png"));
-            Assert.That(response.Headers.GetValues("X-Content-Type-Options").Single(), Is.EqualTo("nosniff"));
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+            await Assert.That(response.Content.Headers.ContentType?.MediaType).IsEqualTo("image/png");
+            await Assert.That(response.Headers.GetValues("X-Content-Type-Options").Single()).IsEqualTo("nosniff");
+        }
     }
 
     // A download, never a document: an HTML form navigates a browser to the endpoint with POST, so
@@ -316,12 +317,12 @@ public class AttachmentTests
         using var response = await FetchRaw("Photo", 1);
         var disposition = response.Content.Headers.ContentDisposition;
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(disposition?.DispositionType, Is.EqualTo("attachment"));
-            Assert.That(disposition?.FileName?.Trim('"'), Is.EqualTo("Photo.png"));
-            Assert.That(response.Headers.GetValues("Content-Security-Policy").Single(), Is.EqualTo("sandbox"));
-        });
+            await Assert.That(disposition?.DispositionType).IsEqualTo("attachment");
+            await Assert.That(disposition?.FileName?.Trim('"')).IsEqualTo("Photo.png");
+            await Assert.That(response.Headers.GetValues("Content-Security-Policy").Single()).IsEqualTo("sandbox");
+        }
     }
 
     // An attachment declaring nothing is served as bytes, which is what it was before content types
@@ -331,11 +332,11 @@ public class AttachmentTests
     {
         using var response = await FetchRaw("Resume", 1);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo(AttachmentMedia.Default));
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+            await Assert.That(response.Content.Headers.ContentType?.MediaType).IsEqualTo(AttachmentMedia.Default);
+        }
     }
 
     // The row's answer wins over the member's: the policy sees the key before the row is read and can
@@ -345,12 +346,12 @@ public class AttachmentTests
     {
         using var response = await FetchRaw("Photo", PhotoPolicy.JpegId);
 
-        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("image/jpeg"));
+        await Assert.That(response.Content.Headers.ContentType?.MediaType).IsEqualTo("image/jpeg");
     }
 
     // The response itself rather than its bytes: these assert on headers, which the client's own
     // OpenAsync path deliberately does not surface.
-    async Task<HttpResponseMessage> FetchRaw(string member, int id)
+    static async Task<HttpResponseMessage> FetchRaw(string member, int id)
     {
         using var content = new StringContent(
             ScryJson.Serialize(AttachmentRequest.Create("Person", member, [new(id.ToString(), ClrTypeTag.Int32)])),
@@ -380,10 +381,7 @@ public class AttachmentTests
                 "application/json");
             using var response = await http.PostAsync("/api/query/attachment", content);
 
-            Assert.That(
-                response.Headers.GetValues(WireFormat.SchemaStampHeader).Single(),
-                Is.EqualTo(stamp),
-                $"key {keys}, member {member} → {(int) response.StatusCode}");
+            await Assert.That(response.Headers.GetValues(WireFormat.SchemaStampHeader).Single()).IsEqualTo(stamp).Because($"key {keys}, member {member} → {(int) response.StatusCode}");
         }
     }
 
@@ -422,17 +420,11 @@ public class AttachmentTests
             var encoded = QueryUrl.Encode(QueryRequest.Create("Person", [new CountOp()]));
             using var viaUrl = await transport.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
 
-            Assert.Multiple(() =>
+            using (Assert.Multiple())
             {
-                Assert.That(
-                    response.StatusCode,
-                    Is.AnyOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden),
-                    "The attachment endpoint must inherit the authorization applied to MapScry.");
-                Assert.That(
-                    viaUrl.StatusCode,
-                    Is.AnyOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden),
-                    "The GET route must inherit the authorization applied to MapScry.");
-            });
+                await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Unauthorized).Or.IsEqualTo(HttpStatusCode.Forbidden).Because("The attachment endpoint must inherit the authorization applied to MapScry.");
+                await Assert.That(viaUrl.StatusCode).IsEqualTo(HttpStatusCode.Unauthorized).Or.IsEqualTo(HttpStatusCode.Forbidden).Because("The GET route must inherit the authorization applied to MapScry.");
+            }
         }
         finally
         {
@@ -441,7 +433,7 @@ public class AttachmentTests
         }
     }
 
-    async Task PostAttachment(AttachmentRequest request)
+    static async Task PostAttachment(AttachmentRequest request)
     {
         using var content = new StringContent(ScryJson.Serialize(request), Encoding.UTF8, "application/json");
         using var response = await http.PostAsync("/api/query/attachment", content);

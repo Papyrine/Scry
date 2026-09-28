@@ -9,7 +9,6 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 /// interceptor: a blocking ask reaches the interceptor's synchronous member, an awaited one its
 /// asynchronous member, and the endpoint's path must reach only the second.
 /// </summary>
-[TestFixture]
 public class AsyncExecutionTests
 {
     [Test]
@@ -35,13 +34,13 @@ public class AsyncExecutionTests
     // The probe is the one read here: the one inactive employee is denied, so the request fails
     // before its count runs.
     [Test]
-    public void ADeniedRowProbeIsReadAsynchronously()
+    public async Task ADeniedRowProbeIsReadAsynchronously()
     {
         var spy = new CommandSpy();
-        Assert.ThrowsAsync<ScryPermissionException>(
+        await Assert.ThrowsExactlyAsync<ScryPermissionException>(
             () => Buffered(Erroring(), QueryRequest.Create("Employee", [new CountOp()]), spy).AsTask());
 
-        Assert.That(spy.Asynchronous, Is.EqualTo(1));
+        await Assert.That(spy.Asynchronous).IsEqualTo(1);
     }
 
     // A cold scope decides every row, which reads them all before the count is asked.
@@ -57,11 +56,11 @@ public class AsyncExecutionTests
 
         var spy = await Buffered(processor, QueryRequest.Create("Order", [new CountOp()]), services: new OnlyPolicy(policy));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(policy.Decisions, Is.GreaterThan(0));
-            Assert.That(spy.Asynchronous, Is.EqualTo(2));
-        });
+            await Assert.That(policy.Decisions).IsGreaterThan(0);
+            await Assert.That(spy.Asynchronous).IsEqualTo(2);
+        }
     }
 
     [Test]
@@ -78,12 +77,12 @@ public class AsyncExecutionTests
             new HeaderDictionary(),
             Cancel.None);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(result.Found, Is.True);
-            Assert.That(spy.Synchronous, Is.Zero);
-            Assert.That(spy.Asynchronous, Is.EqualTo(1));
-        });
+            await Assert.That(result.Found).IsTrue();
+            await Assert.That(spy.Synchronous).IsZero();
+            await Assert.That(spy.Asynchronous).IsEqualTo(1);
+        }
     }
 
     // What comes before a stream's first row — here the probe, which passes since the filter
@@ -107,12 +106,12 @@ public class AsyncExecutionTests
             count++;
         }
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(count, Is.EqualTo(3));
-            Assert.That(spy.Synchronous, Is.Zero);
-            Assert.That(spy.Asynchronous, Is.EqualTo(2));
-        });
+            await Assert.That(count).IsEqualTo(3);
+            await Assert.That(spy.Synchronous).IsZero();
+            await Assert.That(spy.Asynchronous).IsEqualTo(2);
+        }
     }
 
     static async ValueTask<CommandSpy> Buffered(ScryProcessor processor, QueryRequest request, CommandSpy? spy = null, IServiceProvider? services = null)
@@ -129,12 +128,12 @@ public class AsyncExecutionTests
             new HeaderDictionary(),
             output);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(output.WrittenCount, Is.GreaterThan(0));
-            Assert.That(spy.Synchronous, Is.Zero);
-            Assert.That(spy.Asynchronous, Is.GreaterThan(0));
-        });
+            await Assert.That(output.WrittenCount).IsGreaterThan(0);
+            await Assert.That(spy.Synchronous).IsZero();
+            await Assert.That(spy.Asynchronous).IsGreaterThan(0);
+        }
         return spy;
     }
 

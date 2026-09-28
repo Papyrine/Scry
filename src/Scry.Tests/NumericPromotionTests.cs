@@ -8,7 +8,6 @@
 /// written as client LINQ and executed against LocalDB, so the drop, the rebind and the SQL EF
 /// produces are all covered by the same assertion.
 /// </summary>
-[TestFixture]
 public class NumericPromotionTests
 {
     record IdRow(int Id);
@@ -35,9 +34,7 @@ public class NumericPromotionTests
             .Select(_ => new QuantityRow(_.Key, _.Sum(_ => _.Quantity)))
             .ToListAsync();
 
-        Assert.That(
-            rows.OrderBy(_ => _.Region).Select(_ => (_.Region, _.Quantity)),
-            Is.EqualTo([("North", 10L), ("South", 1L)]));
+        await Assert.That(rows.OrderBy(_ => _.Region).Select(_ => (_.Region, _.Quantity))).IsEquivalentTo([("North", 10L), ("South", 1L)], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -52,13 +49,13 @@ public class NumericPromotionTests
             .Select(_ => new UnitsRow(_.Id, _.Lines.Sum(l => l.Units)))
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Units), Is.EqualTo([42, 7, 0]));
+        await Assert.That(rows.Select(_ => _.Units)).IsEquivalentTo([42, 7, 0], CollectionOrdering.Matching);
     }
 
     // The distinct fold takes its values through a selector-less overload, of which there are the
     // same few. Hand-built: a client cannot write Sum over a uint sequence at all.
     [Test]
-    public void ADistinctGroupedSumWidensANarrowMember()
+    public async Task ADistinctGroupedSumWidensANarrowMember()
     {
         using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
@@ -80,17 +77,17 @@ public class NumericPromotionTests
 
         var totals = response.Payload.EnumerateArray()
             .ToDictionary(_ => _.GetProperty("region").GetString()!, _ => _.GetProperty("total").GetInt64());
-        Assert.That(totals, Is.EqualTo(new Dictionary<string, long>
+        await Assert.That(totals).IsEquivalentTo(new Dictionary<string, long>
         {
             ["North"] = 10,
             ["South"] = 1
-        }));
+        }, CollectionOrdering.Matching);
     }
 
     // A member that is not numeric at all has no fold, and is refused as such rather than left to
     // fail the overload lookup as a server fault.
     [Test]
-    public void ASumOverANonNumericMemberIsRefused()
+    public async Task ASumOverANonNumericMemberIsRefused()
     {
         using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
@@ -101,9 +98,9 @@ public class NumericPromotionTests
                     new([new("Total", new NodeValue(new AggregateNode(AggregateFn.Sum, new MemberNode(["Status"]))))]))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("'Sum' is not supported over 'Status'"));
+        await Assert.That(exception!.Message).Contains("'Sum' is not supported over 'Status'");
     }
 
     [Test]
@@ -113,7 +110,7 @@ public class NumericPromotionTests
         // Orders 1 and 2 have more items than their id; order 3 has fewer.
         var ids = await Ids(_ => _.Quantity > _.Id);
 
-        Assert.That(ids, Is.EqualTo([1, 2]));
+        await Assert.That(ids).IsEquivalentTo([1, 2], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -124,7 +121,7 @@ public class NumericPromotionTests
         // target actually is, is pinned by TheWideningIsInTheSql.
         var ids = await Ids(_ => _.Amount > _.Quantity);
 
-        Assert.That(ids, Is.EqualTo([1, 2, 3]));
+        await Assert.That(ids).IsEquivalentTo([1, 2, 3], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -134,7 +131,7 @@ public class NumericPromotionTests
         // two either way, so the answer cannot depend on which side it was written on.
         var ids = await Ids(_ => _.Id < _.Amount);
 
-        Assert.That(ids, Is.EqualTo([1, 2, 3]));
+        await Assert.That(ids).IsEquivalentTo([1, 2, 3], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -145,7 +142,7 @@ public class NumericPromotionTests
         // as a zero and silently exclude the row for the wrong reason, or include it.
         var ids = await Ids(_ => _.Discount > _.Id);
 
-        Assert.That(ids, Is.EqualTo([1, 3]));
+        await Assert.That(ids).IsEquivalentTo([1, 3], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -156,7 +153,7 @@ public class NumericPromotionTests
         // value rather than wrapping to -1 and dropping out.
         var ids = await Ids(_ => _.Sku > _.Quantity);
 
-        Assert.That(ids, Is.EqualTo([1, 2, 3]));
+        await Assert.That(ids).IsEquivalentTo([1, 2, 3], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -166,7 +163,7 @@ public class NumericPromotionTests
         // quantity, and reading either operand at the other's type would not change that.
         var ids = await Ids(_ => _.Id == _.Quantity);
 
-        Assert.That(ids, Is.Empty);
+        await Assert.That(ids).IsEmpty();
     }
 
     // A cast the client wrote is carried where dropping it would change the answer: in arithmetic,
@@ -188,11 +185,12 @@ public class NumericPromotionTests
 
         double[] halves = [1.5, 3.5, 0.5];
         double[] perId = [3, 3.5, 1d / 3];
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows.Select(_ => _.Half), Is.EqualTo(halves));
-            Assert.That(rows.Select(_ => _.PerId), Is.EqualTo(perId).Within(1e-12));
-        });
+            await Assert.That(rows.Select(_ => _.Half)).IsEquivalentTo(halves, CollectionOrdering.Matching);
+            await Assert.That(rows).Count().IsEqualTo(perId.Length);
+            await Assert.That(rows.Select(_ => _.PerId).Zip(perId, (actual, expected) => Math.Abs(actual - expected) <= 1e-12)).All(_ => _);
+        }
     }
 
     [Test]
@@ -216,32 +214,32 @@ public class NumericPromotionTests
     // What is not carried is refused rather than dropped: reading an enum or a char as a number,
     // and narrowing, which the database and the CLR do differently.
     [Test]
-    public void ReadingAnEnumAsANumberIsRefused()
+    public async Task ReadingAnEnumAsANumberIsRefused()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.Throws<NotSupportedException>(() => client.Source<Employee>("Employee")
+        var exception = Assert.ThrowsExactly<NotSupportedException>(() => client.Source<Employee>("Employee")
             .Select(_ => new
             {
                 Code = (int) _.Status
             })
             .ToScryRequest());
 
-        Assert.That(exception!.Message, Does.Contain("reads an enum as a number"));
+        await Assert.That(exception!.Message).Contains("reads an enum as a number");
     }
 
     [Test]
-    public void ANarrowingCastIsRefused()
+    public async Task ANarrowingCastIsRefused()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.Throws<NotSupportedException>(() => client.Source<Order>("Order")
+        var exception = Assert.ThrowsExactly<NotSupportedException>(() => client.Source<Order>("Order")
             .Where(_ => (int) _.Amount > 5)
             .ToScryRequest());
 
-        Assert.That(exception!.Message, Does.Contain("narrows"));
+        await Assert.That(exception!.Message).Contains("narrows");
     }
 
     // The conversions C# writes into a comparison — an enum to its number, a narrower operand to the
@@ -249,7 +247,7 @@ public class NumericPromotionTests
     // by name and leaves promoting a comparison to the server. A captured value rather than a
     // literal, since the compiler folds a literal enum to its number before there is a tree at all.
     [Test]
-    public void AComparisonStillTravelsAsWritten()
+    public async Task AComparisonStillTravelsAsWritten()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
@@ -264,12 +262,12 @@ public class NumericPromotionTests
 
         var json = ScryJson.Serialize(request);
         var promotedJson = ScryJson.Serialize(promoted);
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(json, Does.Contain("\"value\":\"FullTime\",\"tag\":\"Enum\""));
-            Assert.That(json, Does.Not.Contain("From"));
-            Assert.That(promotedJson, Does.Not.Contain("From"));
-        });
+            await Assert.That(json).Contains("\"value\":\"FullTime\",\"tag\":\"Enum\"");
+            await Assert.That(json).DoesNotContain("From");
+            await Assert.That(promotedJson).DoesNotContain("From");
+        }
     }
 
     [Test]
@@ -324,7 +322,7 @@ public class NumericPromotionTests
         var total = await client.Source<Order>("Order")
             .SumAsync(_ => _.Quantity);
 
-        Assert.That(total, Is.EqualTo(11L));
+        await Assert.That(total).IsEqualTo(11L);
     }
 
     [Test]
@@ -339,7 +337,7 @@ public class NumericPromotionTests
         var average = await client.Source<Order>("Order")
             .AverageAsync(_ => _.Quantity);
 
-        Assert.That(average, Is.EqualTo(11d / 3).Within(1e-12));
+        await Assert.That(average).IsEqualTo(11d / 3).Within(1e-12);
     }
 
     [Test]
@@ -354,19 +352,19 @@ public class NumericPromotionTests
         var total = await client.Source<Order>("Order")
             .SumAsync(_ => Math.Sqrt((double) _.Amount));
 
-        Assert.That(total, Is.EqualTo(Math.Sqrt(100) + Math.Sqrt(250) + Math.Sqrt(75)).Within(1e-9));
+        await Assert.That(total).IsEqualTo(Math.Sqrt(100) + Math.Sqrt(250) + Math.Sqrt(75)).Within(1e-9);
     }
 
     [Test]
-    public void AnOperandThatIsNotNumericIsLeftAlone()
+    public async Task AnOperandThatIsNotNumericIsLeftAlone()
     {
         // char is not one of the numeric widths, so the pair is not promoted and both operands reach
         // the operator at their own types. .NET defines no GreaterThan over char and int, and that
         // refusal is caught and answered as a validation failure naming the pair — a 400 — rather than
         // escaping as a fault. EF, given the same comparison, builds the SQL and fails at the database.
-        var exception = Assert.ThrowsAsync<ScryValidationException>(() => Ids(_ => _.Grade > _.Id))!;
+        var exception = (await Assert.ThrowsExactlyAsync<ScryValidationException>(() => Ids(_ => _.Grade > _.Id)))!;
 
-        Assert.That(exception.Message, Does.Contain("'GreaterThan' is not defined for 'Char' and 'Int32'"));
+        await Assert.That(exception.Message).Contains("'GreaterThan' is not defined for 'Char' and 'Int32'");
     }
 
     [Test]
@@ -376,7 +374,7 @@ public class NumericPromotionTests
         // promoting. Grades are 'A', 'B' and 'A'.
         var ids = await Ids(_ => _.Grade > 'A');
 
-        Assert.That(ids, Is.EqualTo([2]));
+        await Assert.That(ids).IsEquivalentTo([2], CollectionOrdering.Matching);
     }
 
     static async Task<List<int>> Ids(Expression<Func<Order, bool>> predicate)

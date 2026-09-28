@@ -3,7 +3,6 @@
 /// and nothing more: the host enforces its body limit only once the body is read, so what this
 /// allocates before that first read has to be bounded by something other than the client's claim.
 /// </summary>
-[TestFixture]
 public class RequestBodyTests
 {
     [Test]
@@ -14,7 +13,7 @@ public class RequestBodyTests
 
         var read = await ScryServiceExtensions.ReadBody(context);
 
-        Assert.That(read, Is.EqualTo(body));
+        await Assert.That(read).IsEquivalentTo(body, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -25,7 +24,7 @@ public class RequestBodyTests
 
         var read = await ScryServiceExtensions.ReadBody(context);
 
-        Assert.That(read, Is.EqualTo(body));
+        await Assert.That(read).IsEquivalentTo(body, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -36,7 +35,7 @@ public class RequestBodyTests
 
         var read = await ScryServiceExtensions.ReadBody(context);
 
-        Assert.That(read, Is.EqualTo(body));
+        await Assert.That(read).IsEquivalentTo(body, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -47,7 +46,7 @@ public class RequestBodyTests
 
         var read = await ScryServiceExtensions.ReadBody(context);
 
-        Assert.That(read, Is.EqualTo(body));
+        await Assert.That(read).IsEquivalentTo(body, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -62,11 +61,11 @@ public class RequestBodyTests
         var read = await ScryServiceExtensions.ReadBody(context);
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(read, Is.EqualTo(body));
-            Assert.That(allocated, Is.LessThan(1024 * 1024));
-        });
+            await Assert.That(read).IsEquivalentTo(body, CollectionOrdering.Matching);
+            await Assert.That(allocated).IsLessThan(1024 * 1024);
+        }
     }
 
     static byte[] Bytes(int count)

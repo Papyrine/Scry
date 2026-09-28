@@ -1,31 +1,30 @@
 // The queries the explorer remembers. The flattening rule below is load-bearing beyond the pane: the
 // docs screenshot asserts the rendered entry, so a change to it changes a published image.
-[TestFixture]
 public class HistoryStoreTests
 {
     [Test]
-    public void RecordsNewestFirst()
+    public async Task RecordsNewestFirst()
     {
         var store = new HistoryStore();
         store.Add("one");
         store.Add("two");
 
-        Assert.That(store.Items.Select(_ => _.Query), Is.EqualTo(["two", "one"]));
+        await Assert.That(store.Items.Select(_ => _.Query)).IsEquivalentTo(["two", "one"], CollectionOrdering.Matching);
     }
 
     [Test]
-    public void IgnoresABlankQuery()
+    public async Task IgnoresABlankQuery()
     {
         var store = new HistoryStore();
         store.Add("   ");
 
-        Assert.That(store.Count, Is.Zero);
+        await Assert.That(store.Count).IsZero();
     }
 
     // An exact repeat moves the existing entry up rather than adding a second, so whatever was
     // attached to it survives.
     [Test]
-    public void MovesARepeatUpAndKeepsItsLabel()
+    public async Task MovesARepeatUpAndKeepsItsLabel()
     {
         var store = new HistoryStore();
         store.Add("one");
@@ -33,13 +32,13 @@ public class HistoryStoreTests
         store.Add("two");
         store.Add("one");
 
-        Assert.That(store.Count, Is.EqualTo(2));
-        Assert.That(store.Items[0].Query, Is.EqualTo("one"));
-        Assert.That(store.Items[0].Label, Is.EqualTo("My query"));
+        await Assert.That(store.Count).IsEqualTo(2);
+        await Assert.That(store.Items[0].Query).IsEqualTo("one");
+        await Assert.That(store.Items[0].Label).IsEqualTo("My query");
     }
 
     [Test]
-    public void CapsOrdinaryEntries()
+    public async Task CapsOrdinaryEntries()
     {
         var store = new HistoryStore();
         for (var index = 0; index < HistoryStore.MaxItems + 5; index++)
@@ -47,16 +46,16 @@ public class HistoryStoreTests
             store.Add($"query {index}");
         }
 
-        Assert.That(store.Count, Is.EqualTo(HistoryStore.MaxItems));
+        await Assert.That(store.Count).IsEqualTo(HistoryStore.MaxItems);
 
         // The oldest went, the newest stayed.
-        Assert.That(store.Items[0].Query, Is.EqualTo($"query {HistoryStore.MaxItems + 4}"));
-        Assert.That(store.Items.Select(_ => _.Query), Does.Not.Contain("query 0"));
+        await Assert.That(store.Items[0].Query).IsEqualTo($"query {HistoryStore.MaxItems + 4}");
+        await Assert.That(store.Items.Select(_ => _.Query)).DoesNotContain("query 0");
     }
 
     // A favorite is a deliberate keep: it neither occupies a slot under the cap nor is evicted from one.
     [Test]
-    public void NeverEvictsAFavorite()
+    public async Task NeverEvictsAFavorite()
     {
         var store = new HistoryStore();
         store.Add("keeper");
@@ -66,12 +65,12 @@ public class HistoryStoreTests
             store.Add($"query {index}");
         }
 
-        Assert.That(store.Items.Select(_ => _.Query), Does.Contain("keeper"));
-        Assert.That(store.Count, Is.EqualTo(HistoryStore.MaxItems + 1));
+        await Assert.That(store.Items.Select(_ => _.Query)).Contains("keeper");
+        await Assert.That(store.Count).IsEqualTo(HistoryStore.MaxItems + 1);
     }
 
     [Test]
-    public void ListsFavoritesFirst()
+    public async Task ListsFavoritesFirst()
     {
         var store = new HistoryStore();
         store.Add("one");
@@ -79,11 +78,11 @@ public class HistoryStoreTests
         store.Add("three");
         store.SetFavorite("one", true);
 
-        Assert.That(store.Items[0].Query, Is.EqualTo("one"));
+        await Assert.That(store.Items[0].Query).IsEqualTo("one");
     }
 
     [Test]
-    public void PutsAnUnmarkedFavoriteBackUnderTheCap()
+    public async Task PutsAnUnmarkedFavoriteBackUnderTheCap()
     {
         var store = new HistoryStore();
         store.Add("keeper");
@@ -95,13 +94,13 @@ public class HistoryStoreTests
 
         store.SetFavorite("keeper", false);
 
-        Assert.That(store.Count, Is.EqualTo(HistoryStore.MaxItems));
-        Assert.That(store.Items.Select(_ => _.Query), Does.Not.Contain("keeper"));
+        await Assert.That(store.Count).IsEqualTo(HistoryStore.MaxItems);
+        await Assert.That(store.Items.Select(_ => _.Query)).DoesNotContain("keeper");
     }
 
     // Losing a favorite to Clear is not recoverable, so Clear does not take them.
     [Test]
-    public void ClearKeepsFavorites()
+    public async Task ClearKeepsFavorites()
     {
         var store = new HistoryStore();
         store.Add("ordinary");
@@ -110,11 +109,11 @@ public class HistoryStoreTests
 
         store.Clear();
 
-        Assert.That(store.Items.Select(_ => _.Query), Is.EqualTo(["keeper"]));
+        await Assert.That(store.Items.Select(_ => _.Query)).IsEquivalentTo(["keeper"], CollectionOrdering.Matching);
     }
 
     [Test]
-    public void RemovesByText()
+    public async Task RemovesByText()
     {
         var store = new HistoryStore();
         store.Add("one");
@@ -122,60 +121,57 @@ public class HistoryStoreTests
 
         store.Remove("one");
 
-        Assert.That(store.Items.Select(_ => _.Query), Is.EqualTo(["two"]));
+        await Assert.That(store.Items.Select(_ => _.Query)).IsEquivalentTo(["two"], CollectionOrdering.Matching);
     }
 
     [Test]
-    public void TreatsABlankLabelAsNone()
+    public async Task TreatsABlankLabelAsNone()
     {
         var store = new HistoryStore();
         store.Add("one");
         store.SetLabel("one", "   ");
 
-        Assert.That(store.Items[0].Label, Is.Null);
+        await Assert.That(store.Items[0].Label).IsNull();
     }
 
     // A multi-line query reads as the fluent chain it is: a continuation line is appended directly, so
     // its indentation does not survive as stray spaces before every operator.
     [Test]
-    public void FlattensAFluentChainWithoutStraySpaces() =>
-        Assert.That(
-            HistoryStore.Flatten(
+    public async Task FlattensAFluentChainWithoutStraySpaces() =>
+        await Assert.That(HistoryStore.Flatten(
                 """
                 Query.Employee
                     .Where(_ => _.Active)
                     .Select(_ => new { _.Name })
-                """),
-            Is.EqualTo("Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name })"));
+                """)).IsEqualTo("Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name })");
 
     [Test]
-    public void FlattensSeparateStatementsWithASpace() =>
-        Assert.That(
-            HistoryStore.Flatten(
+    public async Task FlattensSeparateStatementsWithASpace() =>
+        await Assert.That(HistoryStore.Flatten(
                 """
                 var since = new DateOnly(2026, 1, 1);
                 Query.Employee
-                """),
-            Is.EqualTo("var since = new DateOnly(2026, 1, 1); Query.Employee"));
+                """)).IsEqualTo("var since = new DateOnly(2026, 1, 1); Query.Employee");
 
     [Test]
-    public void ShowsTheLabelInsteadOfTheQueryWhenThereIsOne()
+    public async Task ShowsTheLabelInsteadOfTheQueryWhenThereIsOne()
     {
         var store = new HistoryStore();
         store.Add("Query.Employee");
         store.SetLabel("Query.Employee", "Everyone");
 
-        Assert.That(HistoryStore.DisplayText(store.Items[0]), Is.EqualTo("Everyone"));
+        await Assert.That(HistoryStore.DisplayText(store.Items[0])).IsEqualTo("Everyone");
     }
 
     // Both spellings are searched, so an entry found by either is found.
-    [TestCase("Employee", true)]
-    [TestCase("employee", true)]
-    [TestCase("Everyone", true)]
-    [TestCase("Department", false)]
-    [TestCase("", true)]
-    [TestCase(null, true)]
-    public void MatchesLabelAndQuery(string? filter, bool expected)
+    [Test]
+    [Arguments("Employee", true)]
+    [Arguments("employee", true)]
+    [Arguments("Everyone", true)]
+    [Arguments("Department", false)]
+    [Arguments("", true)]
+    [Arguments(null, true)]
+    public async Task MatchesLabelAndQuery(string? filter, bool expected)
     {
         var item = new HistoryItem
         {
@@ -183,11 +179,11 @@ public class HistoryStoreTests
             Label = "Everyone"
         };
 
-        Assert.That(HistoryStore.Matches(item, filter), Is.EqualTo(expected));
+        await Assert.That(HistoryStore.Matches(item, filter)).IsEqualTo(expected);
     }
 
     [Test]
-    public void RoundTripsThroughStorage()
+    public async Task RoundTripsThroughStorage()
     {
         var store = new HistoryStore();
         store.Add("one");
@@ -198,70 +194,72 @@ public class HistoryStoreTests
         var loaded = new HistoryStore();
         loaded.Load(store.Serialize());
 
-        Assert.That(loaded.Items[0].Query, Is.EqualTo("one"));
-        Assert.That(loaded.Items[0].Label, Is.EqualTo("First"));
-        Assert.That(loaded.Items[0].Favorite);
-        Assert.That(loaded.Count, Is.EqualTo(2));
+        await Assert.That(loaded.Items[0].Query).IsEqualTo("one");
+        await Assert.That(loaded.Items[0].Label).IsEqualTo("First");
+        await Assert.That(loaded.Items[0].Favorite).IsTrue();
+        await Assert.That(loaded.Count).IsEqualTo(2);
     }
 
     // Corrupt or from a shape this version does not read: start empty rather than fail the page. The
     // last two parse, and each held an entry that failed the first render before the button that
     // clears the storage could be reached.
-    [TestCase(null)]
-    [TestCase("")]
-    [TestCase("not json")]
-    [TestCase("{\"not\":\"an array\"}")]
-    [TestCase("[null]")]
-    [TestCase("[{\"query\":null}]")]
-    public void StartsEmptyOnAValueItCannotRead(string? json)
+    [Test]
+    [Arguments(null)]
+    [Arguments("")]
+    [Arguments("not json")]
+    [Arguments("{\"not\":\"an array\"}")]
+    [Arguments("[null]")]
+    [Arguments("[{\"query\":null}]")]
+    public async Task StartsEmptyOnAValueItCannotRead(string? json)
     {
         var store = new HistoryStore();
         store.Load(json);
 
-        Assert.That(store.Count, Is.Zero);
+        await Assert.That(store.Count).IsZero();
     }
 
     // Entry by entry: the ones that read survive the ones that do not.
     [Test]
-    public void KeepsTheEntriesItCanReadBesideOnesItCannot()
+    public async Task KeepsTheEntriesItCanReadBesideOnesItCannot()
     {
         var store = new HistoryStore();
         store.Load("[null,{\"query\":\"Query.Employee\"},{\"query\":null}]");
 
-        Assert.That(store.Items.Select(_ => _.Query), Is.EqualTo(["Query.Employee"]));
+        await Assert.That(store.Items.Select(_ => _.Query)).IsEquivalentTo(["Query.Employee"], CollectionOrdering.Matching);
     }
 
     // The value written before entries carried labels: a plain array of query strings.
     [Test]
-    public void AdoptsTheLegacyShape()
+    public async Task AdoptsTheLegacyShape()
     {
         var store = new HistoryStore();
         store.LoadLegacy("""["two","one"]""");
 
-        Assert.That(store.Items.Select(_ => _.Query), Is.EqualTo(["two", "one"]));
-        Assert.That(store.Items.All(_ => _.Label is null));
-        Assert.That(store.Items.All(_ => !_.Favorite));
+        await Assert.That(store.Items.Select(_ => _.Query)).IsEquivalentTo(["two", "one"], CollectionOrdering.Matching);
+        await Assert.That(store.Items.All(_ => _.Label is null)).IsTrue();
+        await Assert.That(store.Items.All(_ => !_.Favorite)).IsTrue();
     }
 
     [Test]
-    public void CapsTheLegacyShapeToo()
+    public async Task CapsTheLegacyShapeToo()
     {
         var store = new HistoryStore();
         store.LoadLegacy(
             JsonSerializer.Serialize(
                 Enumerable.Range(0, HistoryStore.MaxItems + 5).Select(_ => $"query {_}")));
 
-        Assert.That(store.Count, Is.EqualTo(HistoryStore.MaxItems));
+        await Assert.That(store.Count).IsEqualTo(HistoryStore.MaxItems);
     }
 
-    [TestCase(null)]
-    [TestCase("")]
-    [TestCase("not json")]
-    public void StartsEmptyOnALegacyValueItCannotRead(string? json)
+    [Test]
+    [Arguments(null)]
+    [Arguments("")]
+    [Arguments("not json")]
+    public async Task StartsEmptyOnALegacyValueItCannotRead(string? json)
     {
         var store = new HistoryStore();
         store.LoadLegacy(json);
 
-        Assert.That(store.Count, Is.Zero);
+        await Assert.That(store.Count).IsZero();
     }
 }

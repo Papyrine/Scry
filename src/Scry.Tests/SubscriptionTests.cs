@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 /// it runs and when it speaks — it must run for every change that could matter, and say nothing unless
 /// what this caller may see is different from what it was last told.
 /// </summary>
-[TestFixture]
+[NotInParallel]
 public class SubscriptionTests
 {
     [Test]
@@ -22,7 +22,7 @@ public class SubscriptionTests
         await using var reading = database.NewDbContext();
         await using var answers = Live().Subscribe(Regions(), reading).GetAsyncEnumerator();
 
-        Assert.That(await Next(answers), Is.EqualTo(["North", "South"]));
+        await Assert.That(await Next(answers)).IsEquivalentTo(["North", "South"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -36,7 +36,7 @@ public class SubscriptionTests
 
         await Insert(database, processor, "West");
 
-        Assert.That(await Next(answers), Is.EqualTo(["North", "South", "West"]));
+        await Assert.That(await Next(answers)).IsEquivalentTo(["North", "South", "West"], CollectionOrdering.Matching);
     }
 
     // The query ran — somebody wrote to what it reads — and found what this caller sees unchanged. So
@@ -57,11 +57,11 @@ public class SubscriptionTests
         await Insert(database, processor, "West");
         await runs.Reaches(2);
 
-        Assert.That(pending.IsCompleted, Is.False);
+        await Assert.That(pending.IsCompleted).IsFalse();
 
         // And it is still listening: a change that does show is sent.
         await Insert(database, processor, "North");
-        Assert.That(await pending.WaitAsync(patience), Is.True);
+        await Assert.That(await pending.WaitAsync(patience)).IsTrue();
     }
 
     [Test]
@@ -88,11 +88,11 @@ public class SubscriptionTests
         }
 
         await Task.Delay(quiet);
-        Assert.That(runs.Count, Is.EqualTo(1));
+        await Assert.That(runs.Count).IsEqualTo(1);
 
         await Insert(database, processor, "West");
-        Assert.That(await pending.WaitAsync(patience), Is.True);
-        Assert.That(runs.Count, Is.EqualTo(2));
+        await Assert.That(await pending.WaitAsync(patience)).IsTrue();
+        await Assert.That(runs.Count).IsEqualTo(2);
     }
 
     // Until the first run has said what it read, nothing is known about what matters — so a write that
@@ -131,14 +131,14 @@ public class SubscriptionTests
         var request = Capture().Source<Order>("Order").ToScryRequest(new CountOp());
         await using var answers = processor.Subscribe(request, reading).GetAsyncEnumerator();
 
-        Assert.That(await answers.MoveNextAsync(), Is.True);
-        Assert.That(answers.Current.Kind, Is.EqualTo(ResultKind.Scalar));
-        Assert.That(answers.Current.Payload.GetInt32(), Is.EqualTo(2));
+        await Assert.That(await answers.MoveNextAsync()).IsTrue();
+        await Assert.That(answers.Current.Kind).IsEqualTo(ResultKind.Scalar);
+        await Assert.That(answers.Current.Payload.GetInt32()).IsEqualTo(2);
 
         await Insert(database, processor, "West");
 
-        Assert.That(await answers.MoveNextAsync().AsTask().WaitAsync(patience), Is.True);
-        Assert.That(answers.Current.Payload.GetInt32(), Is.EqualTo(3));
+        await Assert.That(await answers.MoveNextAsync().AsTask().WaitAsync(patience)).IsTrue();
+        await Assert.That(answers.Current.Payload.GetInt32()).IsEqualTo(3);
     }
 
     // No row was written. Which rows the caller may see changed, and that is part of the answer.
@@ -153,13 +153,13 @@ public class SubscriptionTests
             .Subscribe(Regions(), reading, new OnlyPolicy(policy))
             .GetAsyncEnumerator();
 
-        Assert.That(await Next(answers), Is.EqualTo(["North"]));
+        await Assert.That(await Next(answers)).IsEquivalentTo(["North"], CollectionOrdering.Matching);
 
         processor.Changes.Attach(reading.Model);
         policy.Allowing = null;
         processor.PolicyCache.InvalidateScope<Order>(CountingRegionPolicy.Scope);
 
-        Assert.That(await Next(answers), Is.EqualTo(["North", "South"]));
+        await Assert.That(await Next(answers)).IsEquivalentTo(["North", "South"], CollectionOrdering.Matching);
     }
 
     // A rejection is the request's, so it is thrown before anything is answered — where a transport
@@ -171,7 +171,7 @@ public class SubscriptionTests
         var request = QueryRequest.Create("Nothing", []);
         await using var answers = Live().Subscribe(request, reading).GetAsyncEnumerator();
 
-        Assert.ThrowsAsync<ScryValidationException>(async () => await answers.MoveNextAsync());
+        await Assert.ThrowsExactlyAsync<ScryValidationException>(async () => await answers.MoveNextAsync());
     }
 
     [Test]
@@ -181,8 +181,8 @@ public class SubscriptionTests
         var processor = Live(_ => _.MaxSubscriptionBytes = 64);
         await using var answers = processor.Subscribe(Regions(), reading).GetAsyncEnumerator();
 
-        var exception = Assert.ThrowsAsync<ScryValidationException>(async () => await answers.MoveNextAsync());
-        Assert.That(exception!.Message, Does.Contain("64 bytes"));
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(async () => await answers.MoveNextAsync());
+        await Assert.That(exception!.Message).Contains("64 bytes");
     }
 
     [Test]
@@ -196,8 +196,8 @@ public class SubscriptionTests
         await using var another = TestContext.CreateSeeded();
         await using var refused = processor.Subscribe(Regions(), another).GetAsyncEnumerator();
 
-        var exception = Assert.ThrowsAsync<ScrySubscriptionLimitException>(async () => await refused.MoveNextAsync());
-        Assert.That(exception!.PerCaller, Is.False);
+        var exception = await Assert.ThrowsExactlyAsync<ScrySubscriptionLimitException>(async () => await refused.MoveNextAsync());
+        await Assert.That(exception!.PerCaller).IsFalse();
     }
 
     [Test]
@@ -210,12 +210,12 @@ public class SubscriptionTests
 
         await using var second = TestContext.CreateSeeded();
         await using var refused = Subscribe(processor, second, "alice").GetAsyncEnumerator();
-        var exception = Assert.ThrowsAsync<ScrySubscriptionLimitException>(async () => await refused.MoveNextAsync());
-        Assert.That(exception!.PerCaller, Is.True);
+        var exception = await Assert.ThrowsExactlyAsync<ScrySubscriptionLimitException>(async () => await refused.MoveNextAsync());
+        await Assert.That(exception!.PerCaller).IsTrue();
 
         await using var third = TestContext.CreateSeeded();
         await using var allowed = Subscribe(processor, third, "bob").GetAsyncEnumerator();
-        Assert.That(await allowed.MoveNextAsync(), Is.True);
+        await Assert.That(await allowed.MoveNextAsync()).IsTrue();
     }
 
     [Test]
@@ -231,7 +231,7 @@ public class SubscriptionTests
         await using var second = TestContext.CreateSeeded();
         await using var again = processor.Subscribe(Regions(), second).GetAsyncEnumerator();
 
-        Assert.That(await again.MoveNextAsync(), Is.True);
+        await Assert.That(await again.MoveNextAsync()).IsTrue();
     }
 
     // Off is the default, and off is absent rather than guarded.
@@ -242,8 +242,8 @@ public class SubscriptionTests
         var processor = ScryProcessor.Create<TestContext>(options => options.AddPocoSource<Holiday>(_ => Holiday.Seed()));
         await using var answers = processor.Subscribe(Regions(), reading).GetAsyncEnumerator();
 
-        var exception = Assert.ThrowsAsync<Exception>(async () => await answers.MoveNextAsync());
-        Assert.That(exception!.Message, Does.Contain(nameof(ScryOptions.MaxSubscriptions)));
+        var exception = await Assert.ThrowsExactlyAsync<Exception>(async () => await answers.MoveNextAsync());
+        await Assert.That(exception!.Message).Contains(nameof(ScryOptions.MaxSubscriptions));
     }
 
     // Changes inside the throttle are neither lost nor queued: one run answers for all of them.
@@ -264,12 +264,12 @@ public class SubscriptionTests
         await Insert(database, processor, "West");
         await Insert(database, processor, "Central");
 
-        Assert.That(await pending.WaitAsync(patience), Is.True);
-        Assert.Multiple(() =>
+        await Assert.That(await pending.WaitAsync(patience)).IsTrue();
+        using (Assert.Multiple())
         {
-            Assert.That(Read(answers.Current), Is.EqualTo(["Central", "East", "North", "South", "West"]));
-            Assert.That(runs.Count, Is.EqualTo(2));
-        });
+            await Assert.That(Read(answers.Current)).IsEquivalentTo(["Central", "East", "North", "South", "West"], CollectionOrdering.Matching);
+            await Assert.That(runs.Count).IsEqualTo(2);
+        }
     }
 
     // Nothing runs while nobody is asking for the next answer, so a reader that falls behind is handed
@@ -289,8 +289,8 @@ public class SubscriptionTests
         await Insert(database, processor, "East");
         await Insert(database, processor, "West");
 
-        Assert.That(await Next(answers), Is.EqualTo(["East", "North", "South", "West"]));
-        Assert.That(runs.Count, Is.EqualTo(2));
+        await Assert.That(await Next(answers)).IsEquivalentTo(["East", "North", "South", "West"], CollectionOrdering.Matching);
+        await Assert.That(runs.Count).IsEqualTo(2);
     }
 
     // Written through a context nothing is watching, as another system would: only the poll finds it.
@@ -305,7 +305,7 @@ public class SubscriptionTests
 
         await InsertUnwatched(database, "West");
 
-        Assert.That(await Next(answers), Is.EqualTo(["North", "South", "West"]));
+        await Assert.That(await Next(answers)).IsEquivalentTo(["North", "South", "West"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -328,7 +328,7 @@ public class SubscriptionTests
         await InsertUnwatched(database, "West");
         token = "2";
 
-        Assert.That(await Next(answers), Is.EqualTo(["North", "South", "West"]));
+        await Assert.That(await Next(answers)).IsEquivalentTo(["North", "South", "West"], CollectionOrdering.Matching);
     }
 
     // A probe that fails every interval would otherwise be a query storm of its own making.
@@ -352,7 +352,7 @@ public class SubscriptionTests
 
         await Task.Delay(quiet);
 
-        Assert.That(runs.Count, Is.EqualTo(1));
+        await Assert.That(runs.Count).IsEqualTo(1);
         await End(ending, pending);
     }
 
@@ -371,24 +371,24 @@ public class SubscriptionTests
         await Insert(database, processor, "West");
         await Next(answers);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(runs.Entries, Has.Count.EqualTo(2));
-            Assert.That(runs.Entries.Select(_ => _.Subscribed), Is.All.True);
-            Assert.That(runs.Entries.Select(_ => _.Outcome), Is.All.EqualTo(ScryQueryOutcome.Success));
-        });
+            await Assert.That(runs.Entries).Count().IsEqualTo(2);
+            await Assert.That(runs.Entries.Select(_ => _.Subscribed)).All(_ => Equals(_, true));
+            await Assert.That(runs.Entries.Select(_ => _.Outcome)).All(_ => Equals(_, ScryQueryOutcome.Success));
+        }
     }
 
     // A query asked once is recorded as it always was.
     [Test]
-    public void AQueryAskedOnceIsNotRecordedAsALiveQuerys()
+    public async Task AQueryAskedOnceIsNotRecordedAsALiveQuerys()
     {
         using var reading = TestContext.CreateSeeded();
         var runs = new RunCounter();
 
         Live().Execute(Regions(), reading, Services(runs));
 
-        Assert.That(runs.Entries.Single().Subscribed, Is.False);
+        await Assert.That(runs.Entries.Single().Subscribed).IsFalse();
     }
 
     // A node holds a place on the backplane for as long as it has something to re-ask, and no longer.
@@ -407,11 +407,11 @@ public class SubscriptionTests
             await answers.MoveNextAsync();
             await processor.Changes.Reconciled;
 
-            Assert.That(backplane.Subscriptions, Is.EqualTo(1));
+            await Assert.That(backplane.Subscriptions).IsEqualTo(1);
         }
 
         await processor.Changes.Reconciled;
-        Assert.That(backplane.Subscriptions, Is.Zero);
+        await Assert.That(backplane.Subscriptions).IsZero();
     }
 
     // One write makes every live query due in the same instant. What the limit promises is that they
@@ -421,7 +421,7 @@ public class SubscriptionTests
     {
         var most = await MostAtTheDatabase("SubscriptionQueue", allowed: 1);
 
-        Assert.That(most, Is.EqualTo(1));
+        await Assert.That(most).IsEqualTo(1);
     }
 
     // The control for the test above: the same three, allowed to, do overlap — so a one there was the
@@ -431,7 +431,7 @@ public class SubscriptionTests
     {
         var most = await MostAtTheDatabase("SubscriptionStampede", allowed: 3);
 
-        Assert.That(most, Is.GreaterThan(1));
+        await Assert.That(most).IsGreaterThan(1);
     }
 
     static async Task<int> MostAtTheDatabase(string name, int allowed)
@@ -487,10 +487,10 @@ public class SubscriptionTests
         {
             await Next(answers);
 
-            Assert.That(Active(measurements), Is.EqualTo([1L]));
+            await Assert.That(Active(measurements)).IsEquivalentTo([1L], CollectionOrdering.Matching);
         }
 
-        Assert.That(Active(measurements), Is.EqualTo([1L, -1L]));
+        await Assert.That(Active(measurements)).IsEquivalentTo([1L, -1L], CollectionOrdering.Matching);
     }
 
     // Refused, it never held a place, so it must not be counted as having taken or given one back.
@@ -507,9 +507,9 @@ public class SubscriptionTests
         await using var refusedReading = database.NewDbContext();
         await using var refused = processor.Subscribe(Regions(), refusedReading).GetAsyncEnumerator();
 
-        Assert.CatchAsync<ScrySubscriptionLimitException>(async () => await refused.MoveNextAsync());
+        await Assert.ThrowsAsync<ScrySubscriptionLimitException>(async () => await refused.MoveNextAsync());
 
-        Assert.That(Active(measurements), Is.Empty);
+        await Assert.That(Active(measurements)).IsEmpty();
     }
 
     [Test]
@@ -536,12 +536,12 @@ public class SubscriptionTests
             () => Snapshot(measurements).FirstOrDefault(_ => _.Instrument == "scry.server.subscription.signal.failures"),
             _ => _.Instrument is not null);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(failure.Value, Is.EqualTo(1L));
-            Assert.That(failure.Tags["scry.signal"], Is.EqualTo("probe"));
-            Assert.That(failure.Tags["error.type"], Is.EqualTo(typeof(InvalidOperationException).FullName));
-        });
+            await Assert.That(failure.Value).IsEqualTo(1L);
+            await Assert.That(failure.Tags["scry.signal"]).IsEqualTo("probe");
+            await Assert.That(failure.Tags["error.type"]).IsEqualTo(typeof(InvalidOperationException).FullName);
+        }
         await End(ending, pending);
     }
 
@@ -566,17 +566,17 @@ public class SubscriptionTests
         var durations = Snapshot(measurements)
             .Where(_ => _.Instrument == "scry.server.query.duration")
             .ToList();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(durations, Has.Count.EqualTo(2));
-            Assert.That(durations.Select(_ => _.Tags.GetValueOrDefault("scry.subscription")), Is.All.EqualTo(true));
-            Assert.That(stopped, Has.Count.EqualTo(2));
-            Assert.That(stopped.Select(_ => _.GetTagItem("scry.subscription")), Is.All.EqualTo(true));
-        });
+            await Assert.That(durations).Count().IsEqualTo(2);
+            await Assert.That(durations.Select(_ => _.Tags.GetValueOrDefault("scry.subscription"))).All(_ => Equals(_, true));
+            await Assert.That(stopped).Count().IsEqualTo(2);
+            await Assert.That(stopped.Select(_ => _.GetTagItem("scry.subscription"))).All(_ => Equals(_, true));
+        }
     }
 
     [Test]
-    public void AQueryAskedOnceIsNotTaggedAsALiveQuerys()
+    public async Task AQueryAskedOnceIsNotTaggedAsALiveQuerys()
     {
         List<(string Instrument, object Value, Dictionary<string, object?> Tags)> measurements = [];
         List<Activity> stopped = [];
@@ -587,30 +587,30 @@ public class SubscriptionTests
             Live().Execute(Regions(), reading);
         }
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(
-                measurements.Single(_ => _.Instrument == "scry.server.query.duration").Tags,
-                Does.Not.ContainKey("scry.subscription"));
-            Assert.That(stopped.Single().GetTagItem("scry.subscription"), Is.Null);
-        });
+            await Assert.That(measurements.Single(_ => _.Instrument == "scry.server.query.duration").Tags).DoesNotContainKey("scry.subscription");
+            await Assert.That(stopped.Single().GetTagItem("scry.subscription")).IsNull();
+        }
     }
 
     // A limit that made no sense would otherwise surface as a live query that never ran, or ran without
     // pause — so it is refused where the mistake was made, at startup, naming the option.
-    [TestCaseSource(nameof(OptionsOutOfRange))]
-    public void AnOptionOutOfRangeIsRefusedAtStartup(string option, Action<ScryOptions> set)
+    [Test]
+    [MethodDataSource(nameof(OptionsOutOfRange))]
+    public async Task AnOptionOutOfRangeIsRefusedAtStartup(string option, Action<ScryOptions> set)
     {
-        var exception = Assert.Catch(() => Live(set))!;
+        var exception = Assert.Throws<Exception>(() => Live(set))!;
 
-        Assert.That(exception.Message, Does.Contain($"ScryOptions.{option} "));
+        await Assert.That(exception.Message).Contains($"ScryOptions.{option} ");
     }
 
-    [TestCaseSource(nameof(OptionsAtTheirEdge))]
-    public void AnOptionAtTheEdgeOfItsRangeIsAccepted(string option, Action<ScryOptions> set) =>
-        Assert.DoesNotThrow(() => Live(set), option);
+    [Test]
+    [MethodDataSource(nameof(OptionsAtTheirEdge))]
+    public async Task AnOptionAtTheEdgeOfItsRangeIsAccepted(string option, Action<ScryOptions> set) =>
+        await Assert.That(() => Live(set)).ThrowsNothing().Because(option);
 
-    static IEnumerable<TestCaseData> OptionsOutOfRange()
+    public static IEnumerable<TestDataRow<(string, Action<ScryOptions>)>> OptionsOutOfRange()
     {
         yield return Case(nameof(ScryOptions.MaxSubscriptions), _ => _.MaxSubscriptions = -1);
         yield return Case(nameof(ScryOptions.MaxSubscriptionsPerCaller), _ => _.MaxSubscriptionsPerCaller = 0);
@@ -623,7 +623,7 @@ public class SubscriptionTests
         yield return Case(nameof(ScryOptions.ChangeProbeInterval), _ => _.ChangeProbeInterval = TimeSpan.Zero);
     }
 
-    static IEnumerable<TestCaseData> OptionsAtTheirEdge()
+    public static IEnumerable<TestDataRow<(string, Action<ScryOptions>)>> OptionsAtTheirEdge()
     {
         yield return Case(nameof(ScryOptions.MaxSubscriptions), _ => _.MaxSubscriptions = 0);
         yield return Case(nameof(ScryOptions.MaxSubscriptionsPerCaller), _ => _.MaxSubscriptionsPerCaller = 1);
@@ -634,8 +634,8 @@ public class SubscriptionTests
         yield return Case(nameof(ScryOptions.SubscriptionLifetime), _ => _.SubscriptionLifetime = null);
     }
 
-    static TestCaseData Case(string option, Action<ScryOptions> set) =>
-        new TestCaseData(option, set).SetArgDisplayNames(option);
+    static TestDataRow<(string, Action<ScryOptions>)> Case(string option, Action<ScryOptions> set) =>
+        new((option, set), DisplayName: option);
 
     static List<long> Active(List<(string Instrument, object Value, Dictionary<string, object?> Tags)> measurements) =>
     [
@@ -833,7 +833,7 @@ public class SubscriptionTests
 
     static async Task<string[]> Next(IAsyncEnumerator<QueryResponse> answers)
     {
-        Assert.That(await answers.MoveNextAsync().AsTask().WaitAsync(patience), Is.True);
+        await Assert.That(await answers.MoveNextAsync().AsTask().WaitAsync(patience)).IsTrue();
         return Read(answers.Current);
     }
 
@@ -842,7 +842,7 @@ public class SubscriptionTests
     static async Task End(CancelSource ending, Task<bool> pending)
     {
         await ending.CancelAsync();
-        Assert.CatchAsync<OperationCanceledException>(() => pending);
+        await Assert.ThrowsAsync<OperationCanceledException>(() => pending);
     }
 
     static string[] Read(QueryResponse response) =>

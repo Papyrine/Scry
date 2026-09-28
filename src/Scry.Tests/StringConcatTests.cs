@@ -4,7 +4,6 @@
 /// two numbers is arithmetic — so the client records the intent while the compiler's method is still
 /// visible, rather than leaving the server to guess from operand types.
 /// </summary>
-[TestFixture]
 public class StringConcatTests
 {
     [Test]
@@ -19,7 +18,7 @@ public class StringConcatTests
             .ToListAsync();
         // end-snippet
 
-        Assert.That(rows.Select(_ => _.Label).Order(), Is.EqualTo(["North-3", "North-7", "South-1"]));
+        await Assert.That(rows.Select(_ => _.Label).Order()).IsEquivalentTo(["North-3", "North-7", "South-1"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -33,7 +32,7 @@ public class StringConcatTests
             .Select(_ => new {Label = $"{_.Key}:{_.Count()}"})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Label).Order(), Is.EqualTo(["North:2", "South:1"]));
+        await Assert.That(rows.Select(_ => _.Label).Order()).IsEquivalentTo(["North:2", "South:1"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -49,7 +48,7 @@ public class StringConcatTests
             .Select(_ => new {Label = $"Qty {_.Quantity}"})
             .ToListAsync();
 
-        Assert.That(rows.Single().Label, Is.EqualTo("Qty 1"));
+        await Assert.That(rows.Single().Label).IsEqualTo("Qty 1");
     }
 
     [Test]
@@ -65,11 +64,11 @@ public class StringConcatTests
 
         var row = rows.Single();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(row.Amount, Does.StartWith("South").And.Contains("75"));
-            Assert.That(row.Year, Is.EqualTo("South2025"));
-        });
+            await Assert.That(row.Amount).StartsWith("South").And.Contains("75");
+            await Assert.That(row.Year).IsEqualTo("South2025");
+        }
     }
 
     [Test]
@@ -83,7 +82,7 @@ public class StringConcatTests
             .Select(_ => new {Label = _.Region + "!"})
             .ToListAsync();
 
-        Assert.That(rows.Single().Label, Is.EqualTo("South!"));
+        await Assert.That(rows.Single().Label).IsEqualTo("South!");
     }
 
     [Test]
@@ -100,11 +99,11 @@ public class StringConcatTests
 
         var row = rows.Single();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(row.Sum, Is.EqualTo(3));
-            Assert.That(row.Amount, Is.EqualTo(77m));
-        });
+            await Assert.That(row.Sum).IsEqualTo(3u);
+            await Assert.That(row.Amount).IsEqualTo(77m);
+        }
     }
 
     [Test]
@@ -118,7 +117,7 @@ public class StringConcatTests
             .Select(_ => new {_.Region})
             .ToListAsync();
 
-        Assert.That(rows.Single().Region, Is.EqualTo("South"));
+        await Assert.That(rows.Single().Region).IsEqualTo("South");
     }
 
     [Test]
@@ -132,7 +131,7 @@ public class StringConcatTests
             .Select(_ => new {_.Region, _.Quantity})
             .ToListAsync();
 
-        Assert.That(rows.First().Region, Is.EqualTo("South"));
+        await Assert.That(rows.First().Region).IsEqualTo("South");
     }
 
     [Test]
@@ -148,7 +147,7 @@ public class StringConcatTests
             .Select(_ => new {Label = $"{_.Region}/{_.Quantity}"})
             .ToListAsync();
 
-        Assert.That(rows.Single().Label, Is.EqualTo("South/1"));
+        await Assert.That(rows.Single().Label).IsEqualTo("South/1");
     }
 
     [Test]
@@ -162,22 +161,22 @@ public class StringConcatTests
             .Select(_ => new {Label = string.Concat(_.Region, _.Quantity, "x")})
             .ToListAsync();
 
-        Assert.That(rows.Single().Label, Is.EqualTo("South1x"));
+        await Assert.That(rows.Single().Label).IsEqualTo("South1x");
     }
 
     [Test]
-    public void StillRejectsAFormattedHole()
+    public async Task StillRejectsAFormattedHole()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // A format specifier would change the value, and the database has no equivalent spelling.
-        var exception = Assert.ThrowsAsync<NotSupportedException>(
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(
             () => client.Source<Order>("Order")
                 .Select(_ => new {Label = $"{_.Amount:N2}"})
                 .ToListAsync());
 
-        Assert.That(exception, Is.Not.Null);
+        await Assert.That(exception).IsNotNull();
     }
 
     static ScryClient ClientFor(TestContext context) =>

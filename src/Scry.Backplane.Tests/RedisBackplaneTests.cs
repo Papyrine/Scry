@@ -5,7 +5,6 @@ using StackExchange.Redis;
 /// what it drops. The dozen lines that talk to a real server are behind the seam this fakes, and are
 /// exercised by the one test here that wants a server and is skipped without one.
 /// </summary>
-[TestFixture]
 public class RedisBackplaneTests
 {
     [Test]
@@ -26,11 +25,11 @@ public class RedisBackplaneTests
         var change = new ScryChange(["Sample.Order", "Sample.OrderLine"], Guid.NewGuid());
         await here.PublishAsync(change, default);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(heard.Single().Entities, Is.EqualTo(change.Entities));
-            Assert.That(heard.Single().Origin, Is.EqualTo(change.Origin));
-        });
+            await Assert.That(heard.Single().Entities).IsEquivalentTo(change.Entities, CollectionOrdering.Matching);
+            await Assert.That(heard.Single().Origin).IsEqualTo(change.Origin);
+        }
     }
 
     // Delivered to the publisher too, as Redis does. Recognising its own is the listener's job, by
@@ -52,11 +51,11 @@ public class RedisBackplaneTests
 
         await node.PublishAsync(new([], origin), default);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(heard.Single().Origin, Is.EqualTo(origin));
-            Assert.That(heard.Single().Everything, Is.True);
-        });
+            await Assert.That(heard.Single().Origin).IsEqualTo(origin);
+            await Assert.That(heard.Single().Everything).IsTrue();
+        }
     }
 
     // A channel is shared infrastructure: what is not a change is somebody else's message.
@@ -76,11 +75,11 @@ public class RedisBackplaneTests
 
         await redis.PublishAsync("scry:changes", "not a change");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(heard, Is.Empty);
-            Assert.That(node.Dropped, Is.EqualTo(1));
-        });
+            await Assert.That(heard).IsEmpty();
+            await Assert.That(node.Dropped).IsEqualTo(1);
+        }
     }
 
     [Test]
@@ -110,7 +109,7 @@ public class RedisBackplaneTests
 
         await ours.PublishAsync(new(["Sample.Order"], Guid.NewGuid()), default);
 
-        Assert.That(heard, Is.Empty);
+        await Assert.That(heard).IsEmpty();
     }
 
     [Test]
@@ -130,20 +129,18 @@ public class RedisBackplaneTests
         await listening.DisposeAsync();
         await node.PublishAsync(new([], Guid.NewGuid()), default);
 
-        Assert.That(heard, Is.Empty);
+        await Assert.That(heard).IsEmpty();
     }
 
     // Registration: the backplane is built from the host's services, which is where the connection is.
     [Test]
-    public void TheOptionRegistersABackplaneBuiltFromTheHostsConnection()
+    public async Task TheOptionRegistersABackplaneBuiltFromTheHostsConnection()
     {
         var services = new ServiceCollection();
         services.AddScryChanges();
         services.AddScryRedisBackplane(_ => _.Channel = "custom");
 
-        Assert.That(
-            services.Single(_ => _.ServiceType == typeof(IScryChangeBackplane)).Lifetime,
-            Is.EqualTo(ServiceLifetime.Singleton));
+        await Assert.That(services.Single(_ => _.ServiceType == typeof(IScryChangeBackplane)).Lifetime).IsEqualTo(ServiceLifetime.Singleton);
     }
 
     // The dozen lines behind the seam, against a real server. Set ScryRedis to a connection string —
@@ -153,7 +150,7 @@ public class RedisBackplaneTests
     {
         if (Environment.GetEnvironmentVariable("ScryRedis") is not {Length: > 0} connectionString)
         {
-            Assert.Ignore("Set the ScryRedis environment variable to a Redis connection string to run this.");
+            Skip.Test("Set the ScryRedis environment variable to a Redis connection string to run this.");
             return;
         }
 
@@ -177,7 +174,7 @@ public class RedisBackplaneTests
         await here.PublishAsync(change, default);
 
         var received = await heard.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        Assert.That(received.Entities, Is.EqualTo(change.Entities));
+        await Assert.That(received.Entities).IsEqualTo(change.Entities);
     }
 
     /// <summary>Delivers to every subscriber of a channel, the publisher included, as Redis does.</summary>

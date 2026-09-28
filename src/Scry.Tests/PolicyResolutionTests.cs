@@ -4,41 +4,40 @@
 /// after a startup that passed. The check runs every policy the schema will apply through the same
 /// two doors once, before the first request.
 /// </summary>
-[TestFixture]
 public class PolicyResolutionTests
 {
     [Test]
-    public void APolicyNeitherRegisteredNorConstructibleIsRefusedAtStartup()
+    public async Task APolicyNeitherRegisteredNorConstructibleIsRefusedAtStartup()
     {
         var processor = Build(_ => _.AddPolicy<Order, NeedsAClockPolicy>());
         var services = new ServiceCollection().BuildServiceProvider();
 
-        var exception = Assert.Throws<Exception>(() => processor.EnsurePoliciesResolvable(services))!;
+        var exception = Assert.ThrowsExactly<Exception>(() => processor.EnsurePoliciesResolvable(services))!;
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(exception.Message, Does.Contain("NeedsAClockPolicy"));
-            Assert.That(exception.Message, Does.Contain("'Order'"));
-            Assert.That(exception.Message, Does.Contain("AddScoped<NeedsAClockPolicy>"));
-        });
+            await Assert.That(exception.Message).Contains("NeedsAClockPolicy");
+            await Assert.That(exception.Message).Contains("'Order'");
+            await Assert.That(exception.Message).Contains("AddScoped<NeedsAClockPolicy>");
+        }
     }
 
     // The startup probe runs every policy a traversal reaches once, with empty headers and no
     // principal. One that cannot answer under those conditions fails startup naming itself, which is
     // the moment to either give it a default or clear ProbePoliciedNavigations.
     [Test]
-    public void APolicyThatThrowsUnderTheStartupProbeFailsStartupNamingIt()
+    public async Task APolicyThatThrowsUnderTheStartupProbeFailsStartupNamingIt()
     {
         using var context = TestContext.CreateSeeded();
         var processor = Build(_ => _.AddPolicy<Department, NeedsAPrincipalPolicy>());
 
-        var exception = Assert.Throws<Exception>(() => processor.ProbePoliciedNavigations(context, new ServiceCollection().BuildServiceProvider()))!;
+        var exception = Assert.ThrowsExactly<Exception>(() => processor.ProbePoliciedNavigations(context, new ServiceCollection().BuildServiceProvider()))!;
 
-        Assert.That(exception.ToString(), Does.Contain("NeedsAPrincipalPolicy"));
+        await Assert.That(exception.ToString()).Contains("NeedsAPrincipalPolicy");
     }
 
     [Test]
-    public void ARegisteredPolicyPasses()
+    public async Task ARegisteredPolicyPasses()
     {
         var processor = Build(_ => _.AddPolicy<Order, NeedsAClockPolicy>());
         var services = new ServiceCollection()
@@ -46,14 +45,14 @@ public class PolicyResolutionTests
             .AddScoped<NeedsAClockPolicy>()
             .BuildServiceProvider();
 
-        Assert.DoesNotThrow(() => processor.EnsurePoliciesResolvable(services));
+        await Assert.That(() => processor.EnsurePoliciesResolvable(services)).ThrowsNothing();
     }
 
     // The default configuration's policies, attachment check included, all have a parameterless
     // constructor, so a host with no registrations at all still starts.
     [Test]
-    public void ConstructiblePoliciesPassWithoutRegistration() =>
-        Assert.DoesNotThrow(() => SharedProcessor.Instance.EnsurePoliciesResolvable(new ServiceCollection().BuildServiceProvider()));
+    public async Task ConstructiblePoliciesPassWithoutRegistration() =>
+        await Assert.That(() => SharedProcessor.Instance.EnsurePoliciesResolvable(new ServiceCollection().BuildServiceProvider())).ThrowsNothing();
 
     static ScryProcessor Build(Action<ScryOptions> extra) =>
         ScryProcessor.Create<TestContext>(options =>

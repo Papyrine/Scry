@@ -5,7 +5,6 @@
 /// collation whatever the culture. The in-memory members are bound ordinally now, and each case here
 /// runs under a culture that would have answered otherwise.
 /// </summary>
-[TestFixture]
 public class PocoCultureTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -25,7 +24,7 @@ public class PocoCultureTests
             .Select(_ => new NameRow(_.Name.ToUpper()))
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Name), Does.Contain("CHRISTMAS"));
+        await Assert.That(rows.Select(_ => _.Name)).Contains("CHRISTMAS");
     }
 
     [Test]
@@ -37,7 +36,7 @@ public class PocoCultureTests
         // one, so the culture would have found the prefix.
         var names = await Names(_ => _.Name.StartsWith("Chr\u00ADist"));
 
-        Assert.That(names, Is.Empty);
+        await Assert.That(names).IsEmpty();
     }
 
     [Test]
@@ -49,7 +48,7 @@ public class PocoCultureTests
         // the culture puts "christmas" first and would have found none.
         var names = await Names(_ => _.Name.CompareTo("christmas") < 0);
 
-        Assert.That(names, Has.Count.EqualTo(3));
+        await Assert.That(names).Count().IsEqualTo(3);
     }
 
     static async Task<List<string>> Names(Expression<Func<Holiday, bool>> predicate)

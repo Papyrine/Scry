@@ -1,7 +1,6 @@
 ﻿// In-process tests of the browser-Roslyn layer. These run on the desktop host (not WASM), so they are
 // fast and deterministic — they cover the completion/diagnostics/translation LOGIC. The Playwright
 // suite (samples/Sample.Tests) remains the thin layer that proves it all actually works inside WASM.
-[TestFixture]
 public class RoslynLayerTests
 {
     // A small allow-listed surface mirroring the sample's Employee model (no server/EF needed).
@@ -56,17 +55,17 @@ public class RoslynLayerTests
     public async Task HoldsTheBaseCompilationOnceWarmed()
     {
         using var fresh = RoslynWorkspace.Create(ModelSynthesizer.Synthesize(introspection), scryReferences);
-        Assert.That(fresh.IsWarm, Is.False);
+        await Assert.That(fresh.IsWarm).IsFalse();
 
         await fresh.DiagnoseAsync("Query.Employee.Where(_ => _.Active)");
-        Assert.That(fresh.IsWarm, Is.False, "a request warms nothing");
+        await Assert.That(fresh.IsWarm).IsFalse().Because("a request warms nothing");
 
         await fresh.WarmAsync();
-        Assert.That(fresh.IsWarm, Is.True);
+        await Assert.That(fresh.IsWarm).IsTrue();
 
         await fresh.DiagnoseAsync("Query.Employee.Where(_ => _.Name.Length > 1)");
         await fresh.CompleteAsync("Query.Employee.Where(_ => _.", 26);
-        Assert.That(fresh.IsWarm, Is.True, "requests leave it in place");
+        await Assert.That(fresh.IsWarm).IsTrue().Because("requests leave it in place");
     }
 
     [Test]
@@ -75,10 +74,10 @@ public class RoslynLayerTests
         const string code = "Query.Employee.Where(_ => _.";
         var labels = (await workspace.CompleteAsync(code, code.Length)).Select(_ => _.Label).ToList();
 
-        Assert.That(labels, Does.Contain("Active"));
-        Assert.That(labels, Does.Contain("Name"));
-        Assert.That(labels, Does.Contain("Status"));
-        Assert.That(labels, Does.Contain("Manager"));
+        await Assert.That(labels).Contains("Active");
+        await Assert.That(labels).Contains("Name");
+        await Assert.That(labels).Contains("Status");
+        await Assert.That(labels).Contains("Manager");
     }
 
     [Test]
@@ -87,10 +86,10 @@ public class RoslynLayerTests
         const string code = "Query.Employee.";
         var labels = (await workspace.CompleteAsync(code, code.Length)).Select(_ => _.Label).ToList();
 
-        Assert.That(labels, Does.Contain("Where"));
-        Assert.That(labels, Does.Contain("ToListAsync"));
-        Assert.That(labels, Does.Contain("FirstAsync"));
-        Assert.That(labels, Does.Contain("CountAsync"));
+        await Assert.That(labels).Contains("Where");
+        await Assert.That(labels).Contains("ToListAsync");
+        await Assert.That(labels).Contains("FirstAsync");
+        await Assert.That(labels).Contains("CountAsync");
     }
 
     [Test]
@@ -98,7 +97,7 @@ public class RoslynLayerTests
     {
         var diagnostics = await workspace.DiagnoseAsync("Query.Employee.Where(_ => _.Nope)");
 
-        Assert.That(diagnostics.Any(_ => _.IsError && _.Message.Contains("Nope")), Is.True);
+        await Assert.That(diagnostics.Any(_ => _.IsError && _.Message.Contains("Nope"))).IsTrue();
     }
 
     [Test]
@@ -107,18 +106,18 @@ public class RoslynLayerTests
         var diagnostics = await workspace.DiagnoseAsync(
             "Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name })");
 
-        Assert.That(diagnostics, Is.Empty);
+        await Assert.That(diagnostics).IsEmpty();
     }
 
     [Test]
-    public void TranslatesWhereSelectToWire()
+    public async Task TranslatesWhereSelectToWire()
     {
         var request = executor.Translate(
             "Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name, _.Status })");
 
-        Assert.That(request.Root, Is.EqualTo("Employee"));
-        Assert.That(request.Pipeline.Any(_ => _ is WhereOp), Is.True, "where op");
-        Assert.That(request.Pipeline.Any(_ => _ is SelectOp), Is.True, "select op");
+        await Assert.That(request.Root).IsEqualTo("Employee");
+        await Assert.That(request.Pipeline.Any(_ => _ is WhereOp)).IsTrue().Because("where op");
+        await Assert.That(request.Pipeline.Any(_ => _ is SelectOp)).IsTrue().Because("select op");
     }
 
     [Test]
@@ -128,56 +127,54 @@ public class RoslynLayerTests
         const string code = "Query.Employee.Where(_ => _.Address.";
         var labels = (await workspace.CompleteAsync(code, code.Length)).Select(_ => _.Label).ToList();
 
-        Assert.That(labels, Does.Contain("City"));
-        Assert.That(labels, Does.Contain("Country"));
+        await Assert.That(labels).Contains("City");
+        await Assert.That(labels).Contains("Country");
     }
 
     [Test]
-    public void TranslatesComplexTypeTraversalToWire()
+    public async Task TranslatesComplexTypeTraversalToWire()
     {
         var request = executor.Translate(
             "Query.Employee.Where(_ => _.Address.City == \"London\").Select(_ => new { _.Name, _.Address.Country })");
 
-        Assert.That(request.Root, Is.EqualTo("Employee"));
-        Assert.That(request.Pipeline.Any(_ => _ is WhereOp), Is.True, "where op");
-        Assert.That(request.Pipeline.Any(_ => _ is SelectOp), Is.True, "select op");
+        await Assert.That(request.Root).IsEqualTo("Employee");
+        await Assert.That(request.Pipeline.Any(_ => _ is WhereOp)).IsTrue().Because("where op");
+        await Assert.That(request.Pipeline.Any(_ => _ is SelectOp)).IsTrue().Because("select op");
     }
 
     // The user's question and the full terminal-support surface: each terminal (Scry async or plain
     // LINQ) folds into the right wire QueryOp; a bare/list terminal adds none. Trailing ';' tolerated.
-    [TestCase("Query.Employee.ToList()", null)]
-    [TestCase("Query.Employee.ToList();", null)]
-    [TestCase("Query.Employee.ToListAsync()", null)]
-    [TestCase("Query.Employee.ToArray()", null)]
-    [TestCase("Query.Employee.ToArrayAsync()", null)]
-    [TestCase("Query.Employee.ToHashSet()", null)]
-    [TestCase("Query.Employee.ToHashSetAsync()", null)]
-    [TestCase("Query.Employee.ToDictionary(_ => _.Name)", null)]
-    [TestCase("Query.Employee.ToDictionaryAsync(_ => _.Name)", null)]
-    [TestCase("Query.Employee.Where(_ => _.Active).ToDictionaryAsync(_ => _.Name, _ => _.Status)", null)]
-    [TestCase("Query.Employee.ToLookup(_ => _.Status)", null)]
-    [TestCase("Query.Employee.ToLookupAsync(_ => _.Status)", null)]
-    [TestCase("Query.Employee.CountAsync()", typeof(CountOp))]
-    [TestCase("Query.Employee.Count()", typeof(CountOp))]
-    [TestCase("Query.Employee.Where(_ => _.Active).CountAsync()", typeof(CountOp))]
-    [TestCase("Query.Employee.FirstAsync()", typeof(FirstOp))]
-    [TestCase("Query.Employee.SingleAsync()", typeof(SingleOp))]
-    [TestCase("Query.Employee.AnyAsync()", typeof(AnyOp))]
-    public void TranslatesTerminalToWireOp(string query, Type? terminalOp)
+    [Test]
+    [Arguments("Query.Employee.ToList()", null)]
+    [Arguments("Query.Employee.ToList();", null)]
+    [Arguments("Query.Employee.ToListAsync()", null)]
+    [Arguments("Query.Employee.ToArray()", null)]
+    [Arguments("Query.Employee.ToArrayAsync()", null)]
+    [Arguments("Query.Employee.ToHashSet()", null)]
+    [Arguments("Query.Employee.ToHashSetAsync()", null)]
+    [Arguments("Query.Employee.ToDictionary(_ => _.Name)", null)]
+    [Arguments("Query.Employee.ToDictionaryAsync(_ => _.Name)", null)]
+    [Arguments("Query.Employee.Where(_ => _.Active).ToDictionaryAsync(_ => _.Name, _ => _.Status)", null)]
+    [Arguments("Query.Employee.ToLookup(_ => _.Status)", null)]
+    [Arguments("Query.Employee.ToLookupAsync(_ => _.Status)", null)]
+    [Arguments("Query.Employee.CountAsync()", typeof(CountOp))]
+    [Arguments("Query.Employee.Count()", typeof(CountOp))]
+    [Arguments("Query.Employee.Where(_ => _.Active).CountAsync()", typeof(CountOp))]
+    [Arguments("Query.Employee.FirstAsync()", typeof(FirstOp))]
+    [Arguments("Query.Employee.SingleAsync()", typeof(SingleOp))]
+    [Arguments("Query.Employee.AnyAsync()", typeof(AnyOp))]
+    public async Task TranslatesTerminalToWireOp(string query, Type? terminalOp)
     {
         var request = executor.Translate(query);
 
-        Assert.That(request.Root, Is.EqualTo("Employee"));
+        await Assert.That(request.Root).IsEqualTo("Employee");
         if (terminalOp is null)
         {
-            Assert.That(
-                request.Pipeline.Any(_ => _ is CountOp or AnyOp or FirstOp or SingleOp),
-                Is.False,
-                "a list/enumerate terminal should add no terminal op");
+            await Assert.That(request.Pipeline.Any(_ => _ is CountOp or AnyOp or FirstOp or SingleOp)).IsFalse().Because("a list/enumerate terminal should add no terminal op");
         }
         else
         {
-            Assert.That(request.Pipeline[^1], Is.TypeOf(terminalOp));
+            await Assert.That(request.Pipeline[^1].GetType()).IsEqualTo(terminalOp);
         }
     }
 
@@ -188,41 +185,41 @@ public class RoslynLayerTests
     {
         var diagnostics = await workspace.DiagnoseAsync("Query.Employee.Select(_ => new { _.Status })");
 
-        Assert.That(diagnostics.Any(_ => !_.IsError && _.Message.Contains("Use Active.")), Is.True);
-        Assert.That(diagnostics.Any(_ => _.IsError), Is.False);
+        await Assert.That(diagnostics.Any(_ => !_.IsError && _.Message.Contains("Use Active."))).IsTrue();
+        await Assert.That(diagnostics.Any(_ => _.IsError)).IsFalse();
     }
 
     [Test]
-    public void TranslatesAnObsoleteMemberLikeAnyOther()
+    public async Task TranslatesAnObsoleteMemberLikeAnyOther()
     {
         var request = executor.Translate("Query.Employee.Select(_ => new { _.Status })");
 
-        Assert.That(request.Root, Is.EqualTo("Employee"));
-        Assert.That(request.Pipeline.Any(_ => _ is SelectOp), Is.True, "select op");
+        await Assert.That(request.Root).IsEqualTo("Employee");
+        await Assert.That(request.Pipeline.Any(_ => _ is SelectOp)).IsTrue().Because("select op");
     }
 
     [Test]
-    public void SynthesizesExecutableModel()
+    public async Task SynthesizesExecutableModel()
     {
         var source = ModelSynthesizer.Synthesize(introspection, executable: true);
 
-        Assert.That(source, Does.Contain("public enum Status"));
-        Assert.That(source, Does.Contain("public class EmployeeQueryModel"));
-        Assert.That(source, Does.Contain("public string Name { get; init; } = null!;"));
-        Assert.That(source, Does.Contain("IQueryable<EmployeeQueryModel> Employee"));
+        await Assert.That(source).Contains("public enum Status");
+        await Assert.That(source).Contains("public class EmployeeQueryModel");
+        await Assert.That(source).Contains("public string Name { get; init; } = null!;");
+        await Assert.That(source).Contains("IQueryable<EmployeeQueryModel> Employee");
         // Mirrors the generator, so a snippet warns exactly where compiled client code would. The
         // pragma keeps the synthesized model's own uses of a deprecated type quiet.
-        Assert.That(source, Does.Contain("#pragma warning disable CS0612, CS0618"));
-        Assert.That(source, Does.Contain("[global::System.ObsoleteAttribute(\"Use Active.\")]"));
+        await Assert.That(source).Contains("#pragma warning disable CS0612, CS0618");
+        await Assert.That(source).Contains("[global::System.ObsoleteAttribute(\"Use Active.\")]");
         // The scalar member list mirrors the generator's entry point, so a snippet without a Select
         // produces the same wire request a generated client would.
-        Assert.That(source, Does.Contain("client.Source<EmployeeQueryModel>(\"Employee\", [\"Name\", \"Active\", \"Status\"])"));
+        await Assert.That(source).Contains("client.Source<EmployeeQueryModel>(\"Employee\", [\"Name\", \"Active\", \"Status\"])");
     }
 
     // A member or enum value named with a reserved keyword is spelled with the verbatim prefix, as
     // the generator spells it; the wire name introspection carries is the bare one.
     [Test]
-    public void SynthesizesKeywordNamesEscaped()
+    public async Task SynthesizesKeywordNamesEscaped()
     {
         var keyworded = new ScryIntrospection(
             ScryIntrospection.CurrentVersion,
@@ -240,20 +237,20 @@ public class RoslynLayerTests
 
         var source = ModelSynthesizer.Synthesize(keyworded);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(source, Does.Contain("public string @event { get; init; }"));
-            Assert.That(source, Does.Contain("public Kind @class { get; init; }"));
-            Assert.That(source, Does.Contain("    @default,"));
-            Assert.That(source, Does.Contain("    @override,"));
-        });
+            await Assert.That(source).Contains("public string @event { get; init; }");
+            await Assert.That(source).Contains("public Kind @class { get; init; }");
+            await Assert.That(source).Contains("    @default,");
+            await Assert.That(source).Contains("    @override,");
+        }
     }
 
     // Variables declared ahead of the query. A variable is captured state like any other, so what the
     // query reads from it folds into the constant it stood for — the request is the one the query
     // would have produced with the value written inline, and carries no trace of the name.
     [Test]
-    public void FoldsAVariableIntoTheConstantItStandsFor()
+    public async Task FoldsAVariableIntoTheConstantItStandsFor()
     {
         var request = executor.Translate(
             """
@@ -262,14 +259,14 @@ public class RoslynLayerTests
             """);
 
         var predicate = (BinaryNode) ((WhereOp) request.Pipeline[0]).Predicate;
-        Assert.That(((MemberNode) predicate.Left).Path, Is.EqualTo(["Name"]));
-        Assert.That(predicate.Right, Is.EqualTo(new ConstNode("Ada", ClrTypeTag.String)));
+        await Assert.That(((MemberNode) predicate.Left).Path).IsEquivalentTo(["Name"], CollectionOrdering.Matching);
+        await Assert.That(predicate.Right).IsEqualTo(new ConstNode("Ada", ClrTypeTag.String));
     }
 
     // A variable holding a set is the same story one level out: it is evaluated here and its elements
     // become the constants of an In, which is the SQL IN a client-side set has always translated to.
     [Test]
-    public void FoldsASetVariableIntoTheValuesItHolds()
+    public async Task FoldsASetVariableIntoTheValuesItHolds()
     {
         var request = executor.Translate(
             """
@@ -278,14 +275,12 @@ public class RoslynLayerTests
             """);
 
         var predicate = (CallNode) ((WhereOp) request.Pipeline[0]).Predicate;
-        Assert.That(predicate.Function, Is.EqualTo(KnownFunction.In));
-        Assert.That(
-            predicate.Arguments,
-            Is.EqualTo(new Node[] {new ConstNode("Ada", ClrTypeTag.String), new ConstNode("Grace", ClrTypeTag.String)}));
+        await Assert.That(predicate.Function).IsEqualTo(KnownFunction.In);
+        await Assert.That(predicate.Arguments).IsEquivalentTo(new Node[] {new ConstNode("Ada", ClrTypeTag.String), new ConstNode("Grace", ClrTypeTag.String)}, CollectionOrdering.Matching);
     }
 
     [Test]
-    public void CarriesEveryVariableAQueryReads()
+    public async Task CarriesEveryVariableAQueryReads()
     {
         var request = executor.Translate(
             """
@@ -295,16 +290,16 @@ public class RoslynLayerTests
             """);
 
         var predicate = (BinaryNode) ((WhereOp) request.Pipeline[0]).Predicate;
-        Assert.That(((BinaryNode) predicate.Left).Right, Is.EqualTo(new ConstNode("Ada", ClrTypeTag.String)));
-        Assert.That(((BinaryNode) predicate.Right).Right, Is.EqualTo(new ConstNode("Contractor", ClrTypeTag.Enum)));
-        Assert.That(request.Pipeline[^1], Is.TypeOf<CountOp>());
+        await Assert.That(((BinaryNode) predicate.Left).Right).IsEqualTo(new ConstNode("Ada", ClrTypeTag.String));
+        await Assert.That(((BinaryNode) predicate.Right).Right).IsEqualTo(new ConstNode("Contractor", ClrTypeTag.Enum));
+        await Assert.That(request.Pipeline[^1]).IsTypeOf<CountOp>();
     }
 
     // Where the query ends is decided by parsing the snippet, not by looking for a ';'. A semicolon
     // inside a string literal separates nothing, and a scan would split the snippet in the middle of
     // this one.
     [Test]
-    public void SplitsTheSnippetWhereTheParserDoes()
+    public async Task SplitsTheSnippetWhereTheParserDoes()
     {
         var request = executor.Translate(
             """
@@ -313,7 +308,7 @@ public class RoslynLayerTests
             """);
 
         var predicate = (BinaryNode) ((WhereOp) request.Pipeline[0]).Predicate;
-        Assert.That(predicate.Right, Is.EqualTo(new ConstNode(";", ClrTypeTag.String)));
+        await Assert.That(predicate.Right).IsEqualTo(new ConstNode(";", ClrTypeTag.String));
     }
 
     // An editor with nothing in it has nothing to be told about. The wrapper an empty snippet splices
@@ -322,8 +317,8 @@ public class RoslynLayerTests
     [Test]
     public async Task SaysNothingAboutAnEmptySnippet()
     {
-        Assert.That(await workspace.DiagnoseAsync(""), Is.Empty);
-        Assert.That(await workspace.DiagnoseAsync("   \n  "), Is.Empty);
+        await Assert.That(await workspace.DiagnoseAsync("")).IsEmpty();
+        await Assert.That(await workspace.DiagnoseAsync("   \n  ")).IsEmpty();
     }
 
     [Test]
@@ -335,7 +330,7 @@ public class RoslynLayerTests
             Query.Employee.Where(_ => _.Name == name).Select(_ => new { _.Name })
             """);
 
-        Assert.That(diagnostics, Is.Empty);
+        await Assert.That(diagnostics).IsEmpty();
     }
 
     // The snippet is not one run of text in the document Roslyn sees — a `return` is spliced in at the
@@ -352,8 +347,8 @@ public class RoslynLayerTests
 
         var diagnostic = (await workspace.DiagnoseAsync(code)).Single(_ => _.Message.Contains("Nope"));
 
-        Assert.That(diagnostic.Start, Is.EqualTo(code.IndexOf("Nope", StringComparison.Ordinal)));
-        Assert.That(diagnostic.End, Is.EqualTo(diagnostic.Start + "Nope".Length));
+        await Assert.That(diagnostic.Start).IsEqualTo(code.IndexOf("Nope", StringComparison.Ordinal));
+        await Assert.That(diagnostic.End).IsEqualTo(diagnostic.Start + "Nope".Length);
     }
 
     [Test]
@@ -367,7 +362,7 @@ public class RoslynLayerTests
 
         var diagnostic = (await workspace.DiagnoseAsync(code)).First(_ => _.Message.Contains("Nope"));
 
-        Assert.That(diagnostic.Start, Is.EqualTo(code.IndexOf("Nope", StringComparison.Ordinal)));
+        await Assert.That(diagnostic.Start).IsEqualTo(code.IndexOf("Nope", StringComparison.Ordinal));
     }
 
     [Test]
@@ -382,9 +377,9 @@ public class RoslynLayerTests
 
         var completions = await workspace.CompleteAsync(code, caret);
 
-        Assert.That(completions.Select(_ => _.Label), Does.Contain("ToUpper"));
-        Assert.That(completions.Select(_ => _.Label), Does.Contain("Length"));
-        Assert.That(completions.All(_ => _.ReplaceStart == caret), Is.True, "replace span in snippet coordinates");
+        await Assert.That(completions.Select(_ => _.Label)).Contains("ToUpper");
+        await Assert.That(completions.Select(_ => _.Label)).Contains("Length");
+        await Assert.That(completions.All(_ => _.ReplaceStart == caret)).IsTrue().Because("replace span in snippet coordinates");
     }
 
     [Test]
@@ -398,8 +393,8 @@ public class RoslynLayerTests
 
         var completions = await workspace.CompleteAsync(code, code.Length);
 
-        Assert.That(completions.Select(_ => _.Label), Does.Contain("Active"));
-        Assert.That(completions.All(_ => _.ReplaceStart == code.Length), Is.True, "replace span in snippet coordinates");
+        await Assert.That(completions.Select(_ => _.Label)).Contains("Active");
+        await Assert.That(completions.All(_ => _.ReplaceStart == code.Length)).IsTrue().Because("replace span in snippet coordinates");
     }
 
     [Test]
@@ -414,17 +409,17 @@ public class RoslynLayerTests
 
         var hover = await workspace.GetHoverAsync(code, member + 1);
 
-        Assert.That(hover, Is.Not.Null);
-        Assert.That(hover!.Text, Does.Contain("Active"));
-        Assert.That(hover.Start, Is.EqualTo(member));
-        Assert.That(hover.End, Is.EqualTo(member + "Active".Length));
+        await Assert.That(hover).IsNotNull();
+        await Assert.That(hover!.Text).Contains("Active");
+        await Assert.That(hover.Start).IsEqualTo(member);
+        await Assert.That(hover.End).IsEqualTo(member + "Active".Length);
     }
 
     // The models are compiled and loaded once for the schema; a run compiles only its own snippet
     // against them. Before, every run re-emitted the whole model beside its snippet and loaded the
     // result into a context nothing can unload, so a hundred runs held a hundred copies of it.
     [Test]
-    public void LoadsTheModelOncePerSchema()
+    public async Task LoadsTheModelOncePerSchema()
     {
         var local = SnippetExecutor.Create(introspection, scryReferences);
         for (var run = 0; run < 3; run++)
@@ -433,26 +428,26 @@ public class RoslynLayerTests
         }
 
         var names = local.LoadedAssemblies.Select(_ => _.GetName().Name!).ToList();
-        Assert.That(names.Count(_ => _ == "ScryModel"), Is.EqualTo(1));
-        Assert.That(names.Count(_ => _.StartsWith("ScrySnippet")), Is.EqualTo(3));
+        await Assert.That(names.Count(_ => _ == "ScryModel")).IsEqualTo(1);
+        await Assert.That(names.Count(_ => _.StartsWith("ScrySnippet"))).IsEqualTo(3);
     }
 
     // The snippet runs through reflection, which wraps whatever it throws in an exception whose own
     // message says only that something was thrown. What the translator refuses — here a string method
     // that is client-side code — has to reach the banner as the refusal itself.
     [Test]
-    public void ReportsATranslatorRefusalAsItself()
+    public async Task ReportsATranslatorRefusalAsItself()
     {
-        var exception = Assert.Throws<NotSupportedException>(
+        var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => executor.Translate("Query.Employee.Where(_ => _.Name.GetHashCode() == 3)"));
 
-        Assert.That(exception!.Message, Does.Contain("GetHashCode").And.Contain("client-side code"));
+        await Assert.That(exception!.Message).Contains("GetHashCode").And.Contains("client-side code");
     }
 
     // A variable's initializer is the snippet's own code, and what it throws is reported as what it
     // threw.
     [Test]
-    public void ReportsAFailedInitializerAsItself()
+    public async Task ReportsAFailedInitializerAsItself()
     {
         const string code =
             """
@@ -460,9 +455,9 @@ public class RoslynLayerTests
             Query.Employee.Where(_ => _.Name.Length == count)
             """;
 
-        var exception = Assert.Throws<FormatException>(() => executor.Translate(code));
+        var exception = Assert.ThrowsExactly<FormatException>(() => executor.Translate(code));
 
-        Assert.That(exception!.Message, Does.Contain("nope"));
+        await Assert.That(exception!.Message).Contains("nope");
     }
 
     // Everything a declaration holds is evaluated here and folds into a constant, so a statement that
@@ -479,17 +474,15 @@ public class RoslynLayerTests
 
         var diagnostics = await workspace.DiagnoseAsync(code);
 
-        Assert.That(diagnostics.Any(_ => _.IsError && _.Message.Contains("variable declaration")), Is.True);
-        Assert.That(
-            Assert.Throws<Exception>(() => executor.Translate(code))!.Message,
-            Does.Contain("variable declaration"));
+        await Assert.That(diagnostics.Any(_ => _.IsError && _.Message.Contains("variable declaration"))).IsTrue();
+        await Assert.That(Assert.ThrowsExactly<Exception>(() => executor.Translate(code))!.Message).Contains("variable declaration");
     }
 
     // The rule above is about the snippet's shape, not a boundary around what runs: a declaration's
     // initializer is ordinary code, evaluated in the browser exactly as a compiled client would
     // evaluate it, and what it produced is what the query folds in.
     [Test]
-    public void EvaluatesADeclarationsInitializerAsOrdinaryCode()
+    public async Task EvaluatesADeclarationsInitializerAsOrdinaryCode()
     {
         const string code =
             """
@@ -499,6 +492,6 @@ public class RoslynLayerTests
 
         var request = executor.Translate(code);
 
-        Assert.That(ScryJson.Serialize(request), Does.Contain("Aaron").And.Not.Contain("Concat"));
+        await Assert.That(ScryJson.Serialize(request)).Contains("Aaron").And.DoesNotContain("Concat");
     }
 }

@@ -4,19 +4,19 @@ using Sample.Model;
 /// The 304 exchange the sample wires up: Delta's database timestamp and the client's query fingerprint
 /// combined into an ETag, and what happens on the next identical query. See /docs/caching.md.
 /// </summary>
-[TestFixture]
+[NotInParallel]
 public class ConditionalQueryTests
 {
-    ScryTestServer server = null!;
+    static ScryTestServer server = null!;
 
-    [OneTimeSetUp]
-    public async Task StartServer() =>
+    [Before(Class)]
+    public static async Task StartServer() =>
         // Its own server, not the shared one: this fixture writes to the database, and an ETag on
         // every response would be churn in the other fixtures' snapshots.
         server = await ScryTestServer.StartAsync(conditionalRequests: true);
 
-    [OneTimeTearDown]
-    public async Task StopServer() =>
+    [After(Class)]
+    public static async Task StopServer() =>
         await server.DisposeAsync();
 
     [Test]
@@ -28,14 +28,14 @@ public class ConditionalQueryTests
 
         // The same query, re-asked with what the server said last time. Headers are transport-only, so
         // the request bytes — and therefore the fingerprint the ETag was built from — are unchanged.
-        var exception = Assert.ThrowsAsync<ScryRequestException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryRequestException>(
             () => Active(query, "Engineering")
                 .WithHeader("If-None-Match", etag)
                 .ToListAsync());
 
         // The raw client surfaces the 304 as a failure: on its own, a status with no body is not a
         // result it can materialize. QueryCacheHandler is what turns it into one — see below.
-        Assert.That(exception!.StatusCode, Is.EqualTo(HttpStatusCode.NotModified));
+        await Assert.That(exception!.StatusCode).IsEqualTo(HttpStatusCode.NotModified);
     }
 
     // A bare "*" is not a match. The RFC reads it as "any current representation", which here would
@@ -51,7 +51,7 @@ public class ConditionalQueryTests
             .WithHeader("If-None-Match", "*")
             .ToListAsync();
 
-        Assert.That(rows, Is.Not.Empty);
+        await Assert.That(rows).IsNotEmpty();
     }
 
     // A rejection carries no ETag: a client that cached one could later be told its copy of the
@@ -69,12 +69,12 @@ public class ConditionalQueryTests
                 ]));
         using var response = await http.GetAsync($"/api/query?{QueryUrl.Parameter}={encoded}");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-            Assert.That(response.Headers.ETag, Is.Null);
-            Assert.That(response.Headers.CacheControl!.NoStore, Is.True);
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+            await Assert.That(response.Headers.ETag).IsNull();
+            await Assert.That(response.Headers.CacheControl!.NoStore).IsTrue();
+        }
     }
 
     [Test]
@@ -108,7 +108,7 @@ public class ConditionalQueryTests
 
         // The row written above moved the database's timestamp, so the client's ETag no longer stands
         // for anything and the query is answered in full.
-        Assert.That(after, Is.Not.Null.And.Not.EqualTo(before));
+        await Assert.That(after).IsNotNull().And.IsNotEqualTo(before);
     }
 
     /// <summary>
@@ -129,7 +129,7 @@ public class ConditionalQueryTests
             .OnResponseHeaders(_ => before = _.ETag?.ToString())
             .ToListAsync();
 
-        Assert.That(granted.Select(_ => _.Region), Does.Contain("South"));
+        await Assert.That(granted.Select(_ => _.Region)).Contains("South");
 
         using (var revoke = await http.PostAsync("/api/grants/South?allowed=false", content: null))
         {
@@ -142,11 +142,11 @@ public class ConditionalQueryTests
             .OnResponseHeaders(_ => after = _.ETag?.ToString())
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(after, Is.Not.Null.And.Not.EqualTo(before), "the revoked caller's ETag still matched");
-            Assert.That(revoked.Select(_ => _.Region), Does.Not.Contain("South"));
-        });
+            await Assert.That(after).IsNotNull().And.IsNotEqualTo(before).Because("the revoked caller's ETag still matched");
+            await Assert.That(revoked.Select(_ => _.Region)).DoesNotContain("South");
+        }
 
         // Restored, since this fixture's server outlives the test.
         using var restore = await http.PostAsync("/api/grants/South?allowed=true", content: null);
@@ -168,7 +168,7 @@ public class ConditionalQueryTests
         var engineering = await Warm(query, "Engineering");
         var sales = await Warm(query, "Sales");
 
-        Assert.That(sales, Is.Not.EqualTo(engineering));
+        await Assert.That(sales).IsNotEqualTo(engineering);
 
         // One query's ETag is never accepted for another: the fingerprint in it is of the request
         // bytes, and these two ask different things.
@@ -178,7 +178,7 @@ public class ConditionalQueryTests
             .OnResponseHeaders(_ => answered = _.ETag?.ToString())
             .ToListAsync();
 
-        Assert.That(answered, Is.EqualTo(engineering));
+        await Assert.That(answered).IsEqualTo(engineering);
     }
 
     [Test]
@@ -196,11 +196,11 @@ public class ConditionalQueryTests
         // with no ETag wiring at all.
         using var response = await http.PostAsync("/api/query", content);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(response.Headers.ETag, Is.Null);
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+            await Assert.That(response.Headers.ETag).IsNull();
+        }
     }
 
     [Test]
@@ -244,14 +244,14 @@ public class ConditionalQueryTests
         var first = await Active(query, "Engineering").ToListAsync();
         var second = await Active(query, "Engineering").ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
             // The second query was never executed — the server only read its timestamp — and the rows
             // the caller got back are the first one's.
-            Assert.That(second, Is.EqualTo(first));
-            Assert.That(cache.Hits, Is.EqualTo(1));
-            Assert.That(cache.Misses, Is.EqualTo(1));
-        });
+            await Assert.That(second).IsEquivalentTo(first, CollectionOrdering.Matching);
+            await Assert.That(cache.Hits).IsEqualTo(1);
+            await Assert.That(cache.Misses).IsEqualTo(1);
+        }
 
         // The ETag and the If-None-Match it comes back as are scrubbed: the value carries the
         // database's log position, which moves with every write the machine has ever done. That they
@@ -333,7 +333,7 @@ public class ConditionalQueryTests
             .OnResponseHeaders(_ => etag = _.ETag?.ToString())
             .ToListAsync();
 
-        Assert.That(etag, Is.Not.Null);
+        await Assert.That(etag).IsNotNull();
         return etag!;
     }
 

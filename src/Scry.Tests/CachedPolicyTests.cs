@@ -4,7 +4,6 @@
 /// made — because a cache that decided too often would not be one, and one that decided too rarely
 /// would hand over a row nobody had ruled on.
 /// </summary>
-[TestFixture]
 public class CachedPolicyTests
 {
     [Test]
@@ -19,7 +18,7 @@ public class CachedPolicyTests
             .Select(_ => new {_.Region})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Region), Is.EqualTo(["North", "North"]));
+        await Assert.That(rows.Select(_ => _.Region)).IsEquivalentTo(["North", "North"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -33,10 +32,10 @@ public class CachedPolicyTests
         // answer already made — which is the whole point, and what a policy too expensive for SQL
         // needs to be true.
         await client.Source<Order>("Order").CountAsync();
-        Assert.That(policy.Decisions, Is.EqualTo(3));
+        await Assert.That(policy.Decisions).IsEqualTo(3);
 
         await client.Source<Order>("Order").CountAsync();
-        Assert.That(policy.Decisions, Is.EqualTo(3));
+        await Assert.That(policy.Decisions).IsEqualTo(3);
     }
 
     [Test]
@@ -77,8 +76,8 @@ public class CachedPolicyTests
 
             // Decided exactly once, and allowed: the row is in the result on the same read that
             // decided it, not the one after.
-            Assert.That(policy.Decisions, Is.EqualTo(before + 1));
-            Assert.That(count, Is.EqualTo(3));
+            await Assert.That(policy.Decisions).IsEqualTo(before + 1);
+            await Assert.That(count).IsEqualTo(3);
         }
     }
 
@@ -112,8 +111,8 @@ public class CachedPolicyTests
             var client = ClientFor(reading, processor, policy);
             var count = await client.Source<Order>("Order").CountAsync();
 
-            Assert.That(policy.Decisions, Is.EqualTo(before + 1));
-            Assert.That(count, Is.EqualTo(3));
+            await Assert.That(policy.Decisions).IsEqualTo(before + 1);
+            await Assert.That(count).IsEqualTo(3);
         }
     }
 
@@ -151,8 +150,8 @@ public class CachedPolicyTests
             // Exactly one row was decided again, and the answer moved with the grant. The others keep
             // the answers already made for them — invalidating a row is not invalidating the scope,
             // which is the difference the two methods exist to draw.
-            Assert.That(policy.Decisions, Is.EqualTo(before + 1));
-            Assert.That(rows.Select(_ => _.Region), Is.EqualTo(["North", "North", "South"]));
+            await Assert.That(policy.Decisions).IsEqualTo(before + 1);
+            await Assert.That(rows.Select(_ => _.Region)).IsEquivalentTo(["North", "North", "South"], CollectionOrdering.Matching);
         }
     }
 
@@ -187,12 +186,12 @@ public class CachedPolicyTests
             .Select(_ => new {_.Region})
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows.Select(_ => _.Region), Is.EqualTo(["North", "North"]));
+            await Assert.That(rows.Select(_ => _.Region)).IsEquivalentTo(["North", "North"], CollectionOrdering.Matching);
             // Three rows, then the one the host re-pended, decided once more.
-            Assert.That(policy.Decisions, Is.EqualTo(4));
-        });
+            await Assert.That(policy.Decisions).IsEqualTo(4);
+        }
     }
 
     [Test]
@@ -204,12 +203,12 @@ public class CachedPolicyTests
         var client = ClientFor(context, processor, policy);
 
         await client.Source<Order>("Order").CountAsync();
-        Assert.That(policy.Decisions, Is.EqualTo(3));
+        await Assert.That(policy.Decisions).IsEqualTo(3);
 
         processor.PolicyCache.InvalidateScope<Order>(CountingRegionPolicy.Scope);
 
         await client.Source<Order>("Order").CountAsync();
-        Assert.That(policy.Decisions, Is.EqualTo(6));
+        await Assert.That(policy.Decisions).IsEqualTo(6);
     }
 
     [Test]
@@ -230,8 +229,8 @@ public class CachedPolicyTests
 
         // Two callers, two sets of answers. One scope's decisions must never be the other's, which is
         // the one thing a shared cache has to get right.
-        Assert.That(northRows.Select(_ => _.Region), Is.EqualTo(["North", "North"]));
-        Assert.That(southRows.Select(_ => _.Region), Is.EqualTo(["South"]));
+        await Assert.That(northRows.Select(_ => _.Region)).IsEquivalentTo(["North", "North"], CollectionOrdering.Matching);
+        await Assert.That(southRows.Select(_ => _.Region)).IsEquivalentTo(["South"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -248,13 +247,13 @@ public class CachedPolicyTests
         // What a host does just after writing rows: decide them while it still has them in hand, so
         // the cost does not land on whoever queries next.
         processor.PolicyCache.Prime(CountingRegionPolicy.Scope, orders, Context(context, policy));
-        Assert.That(policy.Decisions, Is.EqualTo(3));
+        await Assert.That(policy.Decisions).IsEqualTo(3);
 
         var rows = await ClientFor(context, processor, policy).Source<Order>("Order")
             .Select(_ => new {_.Region})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Region), Is.EqualTo(["North", "North"]));
+        await Assert.That(rows.Select(_ => _.Region)).IsEquivalentTo(["North", "North"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -270,12 +269,12 @@ public class CachedPolicyTests
         // is still in the SQL — over the empty set of keys nothing has been decided into.
         var sql = Cached().ToQueryString(request, context, new StubProvider(policy));
 
-        Assert.That(sql, Does.Contain("SELECT"));
-        Assert.That(policy.Decisions, Is.Zero);
+        await Assert.That(sql).Contains("SELECT");
+        await Assert.That(policy.Decisions).IsZero();
     }
 
     [Test]
-    public void ATooLargeAllowedSetIsRefusedRatherThanSentToTheDatabase()
+    public async Task ATooLargeAllowedSetIsRefusedRatherThanSentToTheDatabase()
     {
         using var context = TestContext.CreateSeeded();
         var policy = new CountingRegionPolicy {Allowing = null};
@@ -287,10 +286,10 @@ public class CachedPolicyTests
 
         // Allowing everything is what a policy written as a cache but behaving like none looks like,
         // and every allowed key travels with every query.
-        var exception = Assert.ThrowsAsync<Exception>(
-            () => ClientFor(context, processor, policy).Source<Order>("Order").CountAsync())!;
+        var exception = (await Assert.ThrowsExactlyAsync<Exception>(
+            () => ClientFor(context, processor, policy).Source<Order>("Order").CountAsync()))!;
 
-        Assert.That(exception.Message, Does.Contain("MaxCachedPolicyKeys"));
+        await Assert.That(exception.Message).Contains("MaxCachedPolicyKeys");
     }
 
     // The hazard the doc names, given a test: a scope key read from a request header is a scope key
@@ -309,14 +308,14 @@ public class CachedPolicyTests
         processor.Execute(request, context, services, new HeaderDictionary {["X-Scope"] = "one"}, new HeaderDictionary());
         processor.Execute(request, context, services, new HeaderDictionary {["X-Scope"] = "two"}, new HeaderDictionary());
 
-        Assert.That(policy.Decisions, Is.EqualTo(6));
+        await Assert.That(policy.Decisions).IsEqualTo(6);
     }
 
     // The bound on the work rather than on the result. A scope nothing has been decided for reads
     // every row of the table, per scope key, so a table past the bound is refused from a count —
     // before a row is read, which is what the policy never being asked proves.
     [Test]
-    public void ATooLargeColdScopeIsRefusedBeforeItsRowsAreRead()
+    public async Task ATooLargeColdScopeIsRefusedBeforeItsRowsAreRead()
     {
         using var context = TestContext.CreateSeeded();
         var policy = new CountingRegionPolicy();
@@ -326,24 +325,24 @@ public class CachedPolicyTests
             _.AddCachedPolicy<Order, long, CountingRegionPolicy>(order => order.Revision);
         });
 
-        var exception = Assert.ThrowsAsync<Exception>(
-            () => ClientFor(context, processor, policy).Source<Order>("Order").CountAsync())!;
+        var exception = (await Assert.ThrowsExactlyAsync<Exception>(
+            () => ClientFor(context, processor, policy).Source<Order>("Order").CountAsync()))!;
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(exception.Message, Does.Contain("MaxCachedPolicyRows"));
-            Assert.That(policy.Decisions, Is.Zero);
-        });
+            await Assert.That(exception.Message).Contains("MaxCachedPolicyRows");
+            await Assert.That(policy.Decisions).IsZero();
+        }
     }
 
     [Test]
-    public void ATypeWithNoKeyIsRefusedAtStartup()
+    public async Task ATypeWithNoKeyIsRefusedAtStartup()
     {
         // Answers are filed per row by one key value, so a type without one has nowhere to put them.
-        var exception = Assert.Throws<Exception>(
+        var exception = Assert.ThrowsExactly<Exception>(
             () => Build(_ => _.AddCachedPolicy<Holiday, Date, HolidayPolicy>(holiday => holiday.Date)))!;
 
-        Assert.That(exception.Message, Does.Contain("key"));
+        await Assert.That(exception.Message).Contains("key");
     }
 
     /// <summary>

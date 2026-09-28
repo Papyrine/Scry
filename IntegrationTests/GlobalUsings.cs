@@ -4,6 +4,6 @@ global using System.Text.Json;
 global using Microsoft.AspNetCore.Builder;
 global using Microsoft.AspNetCore.TestHost;
 global using Microsoft.Extensions.DependencyInjection;
-global using NUnit.Framework;
 global using Scry;
 global using Scry.Generated;
+global using TUnit.Assertions.Enums;

@@ -12,7 +12,8 @@ using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 /// Every source here is a <c>[QueryablePoco]</c>, so nothing touches a database: the rows are supplied
 /// by the fixture, which is also the only way to have a read that fails part-way on demand.
 /// </remarks>
-[TestFixture]
+[NotInParallel]
+[DependsOn<HttpRoundTripTests.StaleClient>(nameof(HttpRoundTripTests.StaleClient.AClientThatDoesNotKnowRetriesInABody), ProceedOnFailure = true)]
 public class ResponseSpillTests
 {
     // Wide rows, so a few hundred of them clear the default threshold, and distinctive ones, so a
@@ -57,9 +58,9 @@ public class ResponseSpillTests
         using var http = app.GetTestClient();
         var expected = Direct(app, listRequest);
 
-        Assert.That(expected.Length, Is.GreaterThan(64 * 1024), "the corpus must actually spill");
-        Assert.That(await Post(http, listRequest), Is.EqualTo(expected), "miss");
-        Assert.That(await Post(http, listRequest), Is.EqualTo(expected), "hit");
+        await Assert.That(expected.Length).IsGreaterThan(64 * 1024).Because("the corpus must actually spill");
+        await Assert.That(await Post(http, listRequest)).IsEqualTo(expected).Because("miss");
+        await Assert.That(await Post(http, listRequest)).IsEqualTo(expected).Because("hit");
     }
 
     /// <summary>
@@ -75,9 +76,9 @@ public class ResponseSpillTests
         var batch = $$"""{"version":1,"queries":[{{listRequest}},{{listRequest}}]}""";
         var expected = DirectBatch(app, batch);
 
-        Assert.That(expected.Length, Is.GreaterThan(64 * 1024), "the batch must actually spill");
-        Assert.That(await Post(http, batch, "/api/query/batch"), Is.EqualTo(expected), "miss");
-        Assert.That(await Post(http, batch, "/api/query/batch"), Is.EqualTo(expected), "hit");
+        await Assert.That(expected.Length).IsGreaterThan(64 * 1024).Because("the batch must actually spill");
+        await Assert.That(await Post(http, batch, "/api/query/batch")).IsEqualTo(expected).Because("miss");
+        await Assert.That(await Post(http, batch, "/api/query/batch")).IsEqualTo(expected).Because("hit");
     }
 
     // Nothing went out early, so the pending bytes are the whole body and can say how many they are.
@@ -93,11 +94,11 @@ public class ResponseSpillTests
         var declared = response.Content.Headers.ContentLength;
         var body = await response.Content.ReadAsByteArrayAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(declared, Is.EqualTo(body.Length));
-            Assert.That(response.Headers.TransferEncodingChunked, Is.Not.True);
-        });
+            await Assert.That(declared).IsEqualTo(body.Length);
+            await Assert.That(response.Headers.TransferEncodingChunked).IsNotEqualTo(true);
+        }
     }
 
     // A length can only describe a whole body, and the first drain is the moment this stops having one.
@@ -111,13 +112,13 @@ public class ResponseSpillTests
         var declared = response.Content.Headers.ContentLength;
         var body = await response.Content.ReadAsStringAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(declared, Is.Null);
+            await Assert.That(declared).IsNull();
             // Given up the length, not a byte of the answer.
-            Assert.That(body, Does.EndWith("}"));
-            Assert.That(body.Length, Is.GreaterThan(64 * 1024));
-        });
+            await Assert.That(body).EndsWith("}");
+            await Assert.That(body.Length).IsGreaterThan(64 * 1024);
+        }
     }
 
     /// <summary>
@@ -144,14 +145,11 @@ public class ResponseSpillTests
             // The other way a truncation presents: the body ended before the host said it would.
         }
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(
-                body is null || !body.Contains("\"stamp\""),
-                Is.True,
-                $"a truncated response must not look complete, but was: {body}");
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+            await Assert.That(body is null || !body.Contains("\"stamp\"")).IsTrue().Because($"a truncated response must not look complete, but was: {body}");
+        }
     }
 
     /// <summary>
@@ -168,11 +166,11 @@ public class ResponseSpillTests
         using var response = await Send(http, listRequest);
         var body = await response.Content.ReadAsStringAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
-            Assert.That(body, Does.Contain("Query execution failed."));
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.InternalServerError);
+            await Assert.That(body).Contains("Query execution failed.");
+        }
     }
 
     // Zero holds every response whole, which is what every response was before there was a threshold.
@@ -185,14 +183,14 @@ public class ResponseSpillTests
         using var response = await Send(http, listRequest);
         var body = await response.Content.ReadAsByteArrayAsync();
 
-        Assert.That(response.Content.Headers.ContentLength, Is.EqualTo(body.Length));
+        await Assert.That(response.Content.Headers.ContentLength).IsEqualTo(body.Length);
     }
 
     static async Task<string> Post(HttpClient http, string request, string path = "/api/query")
     {
         using var response = await Send(http, request, path: path);
         var body = await response.Content.ReadAsStringAsync();
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), body);
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK).Because(body);
         return body;
     }
 

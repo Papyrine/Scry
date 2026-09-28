@@ -4,7 +4,6 @@
 /// spelled — and it must actually derive from the type being queried, which is what keeps the
 /// narrowing a narrowing.
 /// </summary>
-[TestFixture]
 public class OfTypeTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -25,7 +24,7 @@ public class OfTypeTests
             .ToListAsync();
         // end-snippet
 
-        Assert.That(rows.Select(_ => _.Name).Order(), Is.EqualTo(["Trailer", "Van"]));
+        await Assert.That(rows.Select(_ => _.Name).Order()).IsEquivalentTo(["Trailer", "Van"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -41,7 +40,7 @@ public class OfTypeTests
             .Select(_ => new VehicleRow(_.Name, _.Wheels))
             .ToListAsync();
 
-        Assert.That(rows.Single().Name, Is.EqualTo("Van"));
+        await Assert.That(rows.Single().Name).IsEqualTo("Van");
     }
 
     [Test]
@@ -56,7 +55,7 @@ public class OfTypeTests
             .Select(_ => new VehicleRow(_.Name, _.Wheels))
             .ToListAsync();
 
-        Assert.That(rows.Single().Name, Is.EqualTo("Trailer"));
+        await Assert.That(rows.Single().Name).IsEqualTo("Trailer");
     }
 
     [Test]
@@ -69,7 +68,7 @@ public class OfTypeTests
             .OfType<Building>()
             .CountAsync();
 
-        Assert.That(count, Is.EqualTo(1));
+        await Assert.That(count).IsEqualTo(1);
     }
 
     [Test]
@@ -84,25 +83,25 @@ public class OfTypeTests
             .Select(_ => new {Wheels = _.Key, Count = _.Count()})
             .ToListAsync();
 
-        Assert.That(rows.Sum(_ => _.Count), Is.EqualTo(2));
+        await Assert.That(rows.Sum(_ => _.Count)).IsEqualTo(2);
     }
 
     [Test]
-    public void RejectsNarrowingToATypeThatIsNotOptedIn()
+    public async Task RejectsNarrowingToATypeThatIsNotOptedIn()
     {
         using var context = TestContext.CreateSeeded();
 
         // Artwork derives from Asset but carries no [Queryable], so it has no wire name at all.
         var request = QueryRequest.Create("Asset", [new OfTypeOp("Artwork")]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("Unknown source 'Artwork'"));
+        await Assert.That(exception!.Message).Contains("Unknown source 'Artwork'");
     }
 
     [Test]
-    public void RejectsNarrowingToAnUnrelatedType()
+    public async Task RejectsNarrowingToAnUnrelatedType()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -110,27 +109,27 @@ public class OfTypeTests
         // would widen the query to a source the request never named.
         var request = QueryRequest.Create("Asset", [new OfTypeOp("Order")]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("does not derive from 'Asset'"));
+        await Assert.That(exception!.Message).Contains("does not derive from 'Asset'");
     }
 
     [Test]
-    public void RejectsNarrowingToTheSameType()
+    public async Task RejectsNarrowingToTheSameType()
     {
         using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create("Asset", [new OfTypeOp("Asset")]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("does not narrow"));
+        await Assert.That(exception!.Message).Contains("does not narrow");
     }
 
     [Test]
-    public void RejectsWideningToTheBase()
+    public async Task RejectsWideningToTheBase()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -138,14 +137,14 @@ public class OfTypeTests
         // reach rows the source it named never contained.
         var request = QueryRequest.Create("Vehicle", [new OfTypeOp("Asset")]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("does not derive from 'Vehicle'"));
+        await Assert.That(exception!.Message).Contains("does not derive from 'Vehicle'");
     }
 
     [Test]
-    public void RejectsReadingADerivedMemberWithoutNarrowing()
+    public async Task RejectsReadingADerivedMemberWithoutNarrowing()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -154,10 +153,10 @@ public class OfTypeTests
             "Asset",
             [new WhereOp(new BinaryNode(BinaryOp.GreaterThan, new MemberNode(["Wheels"]), new ConstNode("2", ClrTypeTag.Int32)))]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("Wheels"));
+        await Assert.That(exception!.Message).Contains("Wheels");
     }
 
     static ScryClient ClientFor(TestContext context) =>

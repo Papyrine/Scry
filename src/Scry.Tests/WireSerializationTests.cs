@@ -1,4 +1,3 @@
-[TestFixture]
 public class WireSerializationTests
 {
     [Test]
@@ -121,7 +120,7 @@ public class WireSerializationTests
     }
 
     [Test]
-    public void PageEnvelopeResponseRoundTrips()
+    public async Task PageEnvelopeResponseRoundTrips()
     {
         var page = new ScryPage<Dictionary<string, object?>>(
             [
@@ -136,18 +135,18 @@ public class WireSerializationTests
             QueryResponse.Create(ResultKind.Page, JsonSerializer.SerializeToElement(page, ScryJson.Options)));
 
         // A null cursor is omitted from the wire, matching the fail-when-writing-null contract.
-        Assert.That(json, Does.Not.Contain("cursor"));
+        await Assert.That(json).DoesNotContain("cursor");
 
         var response = ScryJson.DeserializeResponse(json);
-        Assert.That(response.Kind, Is.EqualTo(ResultKind.Page));
+        await Assert.That(response.Kind).IsEqualTo(ResultKind.Page);
 
         var roundTripped = response.Payload.Deserialize<ScryPage<Dictionary<string, object?>>>(ScryJson.Options)!;
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(roundTripped.HasMore, Is.True);
-            Assert.That(roundTripped.Cursor, Is.Null);
-            Assert.That(roundTripped.Items, Has.Count.EqualTo(1));
-        });
+            await Assert.That(roundTripped.HasMore).IsTrue();
+            await Assert.That(roundTripped.Cursor).IsNull();
+            await Assert.That(roundTripped.Items).Count().IsEqualTo(1);
+        }
     }
 
     [Test]
@@ -167,17 +166,17 @@ public class WireSerializationTests
             }
             """;
 
-        Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest(json));
+        Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeRequest(json));
     }
 
     [Test]
     public void MalformedJsonFailsClosed() =>
-        Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest("{ not json"));
+        Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeRequest("{ not json"));
 
     // A member the vocabulary requires, left out: refused as malformed rather than read as its
     // default, which is a null the validator would dereference into a server fault.
     [Test]
-    public void AnOmittedRequiredMemberFailsClosed()
+    public async Task AnOmittedRequiredMemberFailsClosed()
     {
         var json =
             """
@@ -192,13 +191,13 @@ public class WireSerializationTests
             }
             """;
 
-        var exception = Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest(json));
-        Assert.That(exception!.Message, Does.Contain("predicate"));
+        var exception = Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeRequest(json));
+        await Assert.That(exception!.Message).Contains("predicate");
     }
 
     // The same member spelled as an explicit null: the absence's twin, and refused the same way.
     [Test]
-    public void AnExplicitNullForARequiredMemberFailsClosed()
+    public async Task AnExplicitNullForARequiredMemberFailsClosed()
     {
         var json =
             """
@@ -214,92 +213,94 @@ public class WireSerializationTests
             }
             """;
 
-        var exception = Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest(json));
-        Assert.That(exception!.Message, Does.Contain("predicate"));
+        var exception = Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeRequest(json));
+        await Assert.That(exception!.Message).Contains("predicate");
     }
 
     // A null element of a wire array is the absence's twin one level down: RespectNullableAnnotations
     // refuses a null member, and the element converter refuses these, so a validator never dereferences
     // one — which was a 500 recorded as Failed, for a request the client wrote.
-    [TestCase("""{"version":1,"root":"Employees","pipeline":[null]}""", "QueryOp")]
-    [TestCase("""{"version":1,"root":"Employees","pipeline":[{"$type":"groupBy","keys":[null]}]}""", "Node")]
-    [TestCase("""{"version":1,"root":"Employees","pipeline":[{"$type":"where","predicate":{"$type":"call","function":"StringContains","target":{"$type":"member","path":"Name"},"arguments":[null]}}]}""", "Node")]
-    [TestCase("""{"version":1,"root":"Employees","pipeline":[{"$type":"where","predicate":{"$type":"compositeKey","parts":[null]}}]}""", "Node")]
-    [TestCase("""{"version":1,"root":"Employees","pipeline":[{"$type":"join","root":"Department","kind":"Inner","outerKey":{"$type":"member","path":"DepartmentId"},"innerKey":{"$type":"member","path":"Id"},"result":[null]}]}""", "JoinMember")]
-    [TestCase("""{"version":1,"root":"Employees","pipeline":[{"$type":"join","root":"Department","kind":"Inner","outerKey":{"$type":"member","path":"DepartmentId"},"innerKey":{"$type":"member","path":"Id"},"result":[{"name":"Name","side":"Outer","path":"Name"}],"innerOps":[null]}]}""", "QueryOp")]
-    [TestCase("""{"version":1,"root":"Employees","pipeline":[{"$type":"set","kind":"Union","root":"Department","projection":{"members":["Name"]},"operandOps":[null]}]}""", "QueryOp")]
-    public void ANullArrayElementFailsClosed(string json, string element)
+    [Test]
+    [Arguments("""{"version":1,"root":"Employees","pipeline":[null]}""", "QueryOp")]
+    [Arguments("""{"version":1,"root":"Employees","pipeline":[{"$type":"groupBy","keys":[null]}]}""", "Node")]
+    [Arguments("""{"version":1,"root":"Employees","pipeline":[{"$type":"where","predicate":{"$type":"call","function":"StringContains","target":{"$type":"member","path":"Name"},"arguments":[null]}}]}""", "Node")]
+    [Arguments("""{"version":1,"root":"Employees","pipeline":[{"$type":"where","predicate":{"$type":"compositeKey","parts":[null]}}]}""", "Node")]
+    [Arguments("""{"version":1,"root":"Employees","pipeline":[{"$type":"join","root":"Department","kind":"Inner","outerKey":{"$type":"member","path":"DepartmentId"},"innerKey":{"$type":"member","path":"Id"},"result":[null]}]}""", "JoinMember")]
+    [Arguments("""{"version":1,"root":"Employees","pipeline":[{"$type":"join","root":"Department","kind":"Inner","outerKey":{"$type":"member","path":"DepartmentId"},"innerKey":{"$type":"member","path":"Id"},"result":[{"name":"Name","side":"Outer","path":"Name"}],"innerOps":[null]}]}""", "QueryOp")]
+    [Arguments("""{"version":1,"root":"Employees","pipeline":[{"$type":"set","kind":"Union","root":"Department","projection":{"members":["Name"]},"operandOps":[null]}]}""", "QueryOp")]
+    public async Task ANullArrayElementFailsClosed(string json, string element)
     {
-        var exception = Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest(json));
-        Assert.That(exception!.Message, Does.Contain($"array of {element} cannot be null"));
+        var exception = Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeRequest(json));
+        await Assert.That(exception!.Message).Contains($"array of {element} cannot be null");
     }
 
     [Test]
-    public void ANullBatchEntryFailsClosed()
+    public async Task ANullBatchEntryFailsClosed()
     {
-        var exception = Assert.Throws<ScryWireException>(
+        var exception = Assert.ThrowsExactly<ScryWireException>(
             () => ScryJson.DeserializeBatchRequest("""{"version":1,"queries":[null]}"""));
-        Assert.That(exception!.Message, Does.Contain("array of QueryRequest cannot be null"));
+        await Assert.That(exception!.Message).Contains("array of QueryRequest cannot be null");
     }
 
     [Test]
-    public void ANullAttachmentKeyFailsClosed()
+    public async Task ANullAttachmentKeyFailsClosed()
     {
-        var exception = Assert.Throws<ScryWireException>(
+        var exception = Assert.ThrowsExactly<ScryWireException>(
             () => ScryJson.DeserializeAttachmentRequest("""{"version":1,"root":"Employee","member":"Photo","keys":[null]}"""));
-        Assert.That(exception!.Message, Does.Contain("array of AttachmentKey cannot be null"));
+        await Assert.That(exception!.Message).Contains("array of AttachmentKey cannot be null");
     }
 
     // A request names only what the vocabulary names: a member nothing reads is refused rather than
     // skipped, at every level. Skipping is what let a form field shaped as JSON carry its "=" in a
     // member the server never looked at.
-    [TestCase("""{"version":1,"root":"Employees","pipeline":[],"pad":"="}""")]
-    [TestCase("""{"version":1,"root":"Employees","pipeline":[{"$type":"count","extra":1}]}""")]
-    [TestCase("""{"version":1,"root":"Employees","pipeline":[{"$type":"where","predicate":{"$type":"member","path":"Name","extra":1}}]}""")]
-    [TestCase("""{"version":1,"root":"Employees","pipeline":[{"$type":"select","projection":{"members":[{"name":"N","value":{"$type":"node","node":{"$type":"member","path":"Name"}},"extra":1}]}}]}""")]
-    [TestCase("""{"version":1,"root":"Employees","pipeline":[{"$type":"select","projection":{"members":["Name"],"extra":1}}]}""")]
+    [Test]
+    [Arguments("""{"version":1,"root":"Employees","pipeline":[],"pad":"="}""")]
+    [Arguments("""{"version":1,"root":"Employees","pipeline":[{"$type":"count","extra":1}]}""")]
+    [Arguments("""{"version":1,"root":"Employees","pipeline":[{"$type":"where","predicate":{"$type":"member","path":"Name","extra":1}}]}""")]
+    [Arguments("""{"version":1,"root":"Employees","pipeline":[{"$type":"select","projection":{"members":[{"name":"N","value":{"$type":"node","node":{"$type":"member","path":"Name"}},"extra":1}]}}]}""")]
+    [Arguments("""{"version":1,"root":"Employees","pipeline":[{"$type":"select","projection":{"members":["Name"],"extra":1}}]}""")]
     public void AnUnknownMemberFailsClosed(string json) =>
-        Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest(json));
+        Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeRequest(json));
 
     // A name is part of the wire contract, and one spelling: read case-insensitively, "equal" and
     // "Equal" would be two byte-strings for one query, and the ETag, the URL, and the audit
     // fingerprint are all over the bytes.
     [Test]
-    public void AnEnumNameInTheWrongCaseFailsClosed()
+    public async Task AnEnumNameInTheWrongCaseFailsClosed()
     {
         const string json = """{"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"equal","left":{"$type":"member","path":"Id"},"right":{"$type":"const","value":"1","tag":"Int32"}}}]}""";
 
-        var exception = Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest(json))!;
+        var exception = Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeRequest(json))!;
 
-        Assert.That(exception.Message, Does.Contain("case-sensitive"));
+        await Assert.That(exception.Message).Contains("case-sensitive");
     }
 
     // The discriminator leads its object. STJ's default; pinned because AllowOutOfOrderMetadataProperties
     // would silently make "$type" anywhere a second spelling of the same operator.
     [Test]
     public void ADiscriminatorNotFirstFailsClosed() =>
-        Assert.Throws<ScryWireException>(
+        Assert.ThrowsExactly<ScryWireException>(
             () => ScryJson.DeserializeRequest("""{"version":1,"root":"Employee","pipeline":[{"predicate":{"$type":"member","path":"Active"},"$type":"where"}]}"""));
 
     // A property named twice is refused rather than last-wins, so no request has two byte-strings
     // that read as one.
     [Test]
     public void ADuplicatePropertyFailsClosed() =>
-        Assert.Throws<ScryWireException>(
+        Assert.ThrowsExactly<ScryWireException>(
             () => ScryJson.DeserializeRequest("""{"version":1,"root":"Employee","root":"Department","pipeline":[{"$type":"count"}]}"""));
 
     [Test]
     public void AnUnknownMemberOnABatchFailsClosed() =>
-        Assert.Throws<ScryWireException>(
+        Assert.ThrowsExactly<ScryWireException>(
             () => ScryJson.DeserializeBatchRequest("""{"version":1,"queries":[],"pad":"="}"""));
 
     [Test]
     public void AnUnknownMemberOnAnAttachmentRequestFailsClosed() =>
-        Assert.Throws<ScryWireException>(
+        Assert.ThrowsExactly<ScryWireException>(
             () => ScryJson.DeserializeAttachmentRequest("""{"version":1,"root":"Employee","member":"Photo","keys":[{"value":"1","tag":"Int32","pad":"="}]}"""));
 
     [Test]
-    public void ANullRootFailsClosed()
+    public async Task ANullRootFailsClosed()
     {
         var json =
             """
@@ -310,12 +311,12 @@ public class WireSerializationTests
             }
             """;
 
-        var exception = Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest(json));
-        Assert.That(exception!.Message, Does.Contain("root"));
+        var exception = Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeRequest(json));
+        await Assert.That(exception!.Message).Contains("root");
     }
 
     [Test]
-    public void AnOmittedRootFailsClosed()
+    public async Task AnOmittedRootFailsClosed()
     {
         var json =
             """
@@ -325,12 +326,12 @@ public class WireSerializationTests
             }
             """;
 
-        var exception = Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest(json));
-        Assert.That(exception!.Message, Does.Contain("root"));
+        var exception = Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeRequest(json));
+        await Assert.That(exception!.Message).Contains("root");
     }
 
     [Test]
-    public void AnAttachmentRequestWithoutKeysFailsClosed()
+    public async Task AnAttachmentRequestWithoutKeysFailsClosed()
     {
         var json =
             """
@@ -341,8 +342,8 @@ public class WireSerializationTests
             }
             """;
 
-        var exception = Assert.Throws<ScryWireException>(() => ScryJson.DeserializeAttachmentRequest(json));
-        Assert.That(exception!.Message, Does.Contain("keys"));
+        var exception = Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeAttachmentRequest(json));
+        await Assert.That(exception!.Message).Contains("keys");
     }
 
     // The other half of that rule: every member the writer leaves out when null has to read back as
@@ -381,33 +382,33 @@ public class WireSerializationTests
     }
 
     [Test]
-    public void AnAttachmentKeyWithoutAValueReadsBack()
+    public async Task AnAttachmentKeyWithoutAValueReadsBack()
     {
         var request = AttachmentRequest.Create("Employee", "Photo", [new(null, ClrTypeTag.String)]);
 
         var json = ScryJson.Serialize(request);
         var roundTripped = ScryJson.DeserializeAttachmentRequest(json);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(json, Does.Not.Contain("value"));
-            Assert.That(roundTripped.Keys.Single().Value, Is.Null);
-            Assert.That(roundTripped.Keys.Single().Tag, Is.EqualTo(ClrTypeTag.String));
-        });
+            await Assert.That(json).DoesNotContain("value");
+            await Assert.That(roundTripped.Keys.Single().Value).IsNull();
+            await Assert.That(roundTripped.Keys.Single().Tag).IsEqualTo(ClrTypeTag.String);
+        }
     }
 
     [Test]
-    public void PathNamingOneMemberTravelsAsAString()
+    public async Task PathNamingOneMemberTravelsAsAString()
     {
         var request = QueryRequest.Create("Employees", [new WhereOp(new MemberNode(["Active"]))]);
 
         var json = ScryJson.Serialize(request);
 
-        Assert.That(json, Does.Contain("""{"$type":"member","path":"Active"}"""));
+        await Assert.That(json).Contains("""{"$type":"member","path":"Active"}""");
     }
 
     [Test]
-    public void PathNamingOneMemberAsAnArrayFailsClosed()
+    public async Task PathNamingOneMemberAsAnArrayFailsClosed()
     {
         // The two spellings are alternatives, not synonyms: one member is a string and any other count
         // is an array, so a path has a single encoding and two requests meaning the same thing cannot
@@ -426,12 +427,12 @@ public class WireSerializationTests
             }
             """;
 
-        var exception = Assert.Throws<ScryWireException>(() => ScryJson.DeserializeRequest(json));
-        Assert.That(exception!.Message, Does.Contain("written as a string"));
+        var exception = Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeRequest(json));
+        await Assert.That(exception!.Message).Contains("written as a string");
     }
 
     [Test]
-    public void NewerResponseVersionFailsClosed()
+    public async Task NewerResponseVersionFailsClosed()
     {
         var json =
             $$"""
@@ -442,17 +443,17 @@ public class WireSerializationTests
               }
               """;
 
-        var exception = Assert.Throws<ScryWireException>(() => ScryJson.DeserializeResponse(json));
-        Assert.That(exception!.Message, Does.Contain($"wire version {WireFormat.Version + 1}"));
+        var exception = Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeResponse(json));
+        await Assert.That(exception!.Message).Contains($"wire version {WireFormat.Version + 1}");
     }
 
     [Test]
-    public void CurrentResponseVersionIsAccepted()
+    public async Task CurrentResponseVersionIsAccepted()
     {
         var json = ScryJson.Serialize(QueryResponse.Create(ResultKind.Scalar, JsonSerializer.SerializeToElement(1)));
 
         var response = ScryJson.DeserializeResponse(json);
-        Assert.That(response.Version, Is.EqualTo(WireFormat.Version));
+        await Assert.That(response.Version).IsEqualTo(WireFormat.Version);
     }
 
     [Test]
@@ -514,7 +515,7 @@ public class WireSerializationTests
     }
 
     [Test]
-    public Task ExpandedTerminalsRoundTrip()
+    public async Task ExpandedTerminalsRoundTrip()
     {
         // Each terminal is serialized on its own — a pipeline may only carry one — so this walks the
         // whole set through the discriminator map in a single assertion.
@@ -535,10 +536,10 @@ public class WireSerializationTests
         foreach (var (serialized, index) in json.Select((_, i) => (_, i)))
         {
             var roundTripped = ScryJson.DeserializeRequest(serialized);
-            Assert.That(ScryJson.Serialize(roundTripped), Is.EqualTo(serialized), $"terminal {index}");
+            await Assert.That(ScryJson.Serialize(roundTripped)).IsEqualTo(serialized).Because($"terminal {index}");
         }
 
-        return Verify(json)
+        await Verify(json)
             .Snapshot(
                 """
                 [
@@ -553,7 +554,7 @@ public class WireSerializationTests
     }
 
     [Test]
-    public Task AttachmentRequestRoundTrips()
+    public async Task AttachmentRequestRoundTrips()
     {
         var request = AttachmentRequest.Create(
             "Employee",
@@ -567,18 +568,18 @@ public class WireSerializationTests
         var json = ScryJson.Serialize(request);
         var roundTripped = ScryJson.DeserializeAttachmentRequest(json);
 
-        Assert.That(ScryJson.Serialize(roundTripped), Is.EqualTo(json));
+        await Assert.That(ScryJson.Serialize(roundTripped)).IsEqualTo(json);
 
-        return Verify(json)
+        await Verify(json)
             .Snapshot("{\"version\":1,\"root\":\"Employee\",\"member\":\"Photo\",\"keys\":[{\"value\":\"7\",\"tag\":\"Int32\"},{\"value\":\"a3f1c0de-0000-4000-8000-000000000001\",\"tag\":\"Guid\"}],\"stamp\":\"{scrubbed stamp}\"}");
     }
 
     [Test]
     public void MalformedAttachmentRequestFailsClosed() =>
-        Assert.Throws<ScryWireException>(() => ScryJson.DeserializeAttachmentRequest("{ not json"));
+        Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeAttachmentRequest("{ not json"));
 
     [Test]
-    public void LiveEndRoundTrips()
+    public async Task LiveEndRoundTrips()
     {
         var bytes = ScryJson.SerializeToUtf8(
             new ScryLiveEnd(true)
@@ -586,35 +587,35 @@ public class WireSerializationTests
                 Reason = "lifetime"
             });
 
-        Assert.That(Encoding.UTF8.GetString(bytes), Is.EqualTo("""{"reconnect":true,"reason":"lifetime"}"""));
+        await Assert.That(Encoding.UTF8.GetString(bytes)).IsEqualTo("""{"reconnect":true,"reason":"lifetime"}""");
 
         var end = ScryJson.DeserializeLiveEnd(bytes);
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(end.Reconnect, Is.True);
-            Assert.That(end.Reason, Is.EqualTo("lifetime"));
-        });
+            await Assert.That(end.Reconnect).IsTrue();
+            await Assert.That(end.Reason).IsEqualTo("lifetime");
+        }
     }
 
     // A reason is for a log, so an end without one is whole.
     [Test]
-    public void ALiveEndWithoutAReasonReadsBack()
+    public async Task ALiveEndWithoutAReasonReadsBack()
     {
         var bytes = ScryJson.SerializeToUtf8(new ScryLiveEnd(false));
 
-        Assert.That(Encoding.UTF8.GetString(bytes), Is.EqualTo("""{"reconnect":false}"""));
-        Assert.That(ScryJson.DeserializeLiveEnd(bytes).Reason, Is.Null);
+        await Assert.That(Encoding.UTF8.GetString(bytes)).IsEqualTo("""{"reconnect":false}""");
+        await Assert.That(ScryJson.DeserializeLiveEnd(bytes).Reason).IsNull();
     }
 
     // Whether to ask again is the whole of what the event says, so an end that does not say it is
     // refused rather than read as "do not".
     [Test]
     public void ALiveEndWithoutReconnectFailsClosed() =>
-        Assert.Throws<ScryWireException>(() => ScryJson.DeserializeLiveEnd("{}"u8));
+        Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeLiveEnd("{}"u8));
 
     // What a transport with no status line answers a failure with: the same body an endpoint writes.
     [Test]
-    public void AnErrorWritesTheBodyAnEndpointAnswersWith()
+    public async Task AnErrorWritesTheBodyAnEndpointAnswersWith()
     {
         var error = new ScryError("Too many live queries.")
         {
@@ -623,56 +624,52 @@ public class WireSerializationTests
 
         var bytes = ScryJson.SerializeToUtf8(error);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(
-                Encoding.UTF8.GetString(bytes),
-                Is.EqualTo("""{"error":"Too many live queries.","code":"SubscriptionLimit"}"""));
-            Assert.That(ScryJson.Serialize(error), Is.EqualTo(Encoding.UTF8.GetString(bytes)));
-            Assert.That(ScryJson.TryDeserializeError(bytes), Is.EqualTo(error));
-        });
+            await Assert.That(Encoding.UTF8.GetString(bytes)).IsEqualTo("""{"error":"Too many live queries.","code":"SubscriptionLimit"}""");
+            await Assert.That(ScryJson.Serialize(error)).IsEqualTo(Encoding.UTF8.GetString(bytes));
+            await Assert.That(ScryJson.TryDeserializeError(bytes)).IsEqualTo(error);
+        }
     }
 
     static Guid commandId = new("a3f1c0de-0000-4000-8000-000000000001");
 
     [Test]
-    public void CommandRequestRoundTrips()
+    public async Task CommandRequestRoundTrips()
     {
         var payload = JsonSerializer.SerializeToElement(new {id = 7, name = "Carol"});
         var request = CommandRequest.Create("RenameEmployee", commandId, payload, "SEJsUtm-XMA5VNZu");
 
         var json = ScryJson.Serialize(request);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(
-                json,
-                Is.EqualTo("""{"version":1,"command":"RenameEmployee","id":"a3f1c0de-0000-4000-8000-000000000001","payload":{"id":7,"name":"Carol"},"stamp":"SEJsUtm-XMA5VNZu"}"""));
-            Assert.That(ScryJson.Serialize(ScryJson.DeserializeCommandRequest(json)), Is.EqualTo(json));
-            Assert.That(Encoding.UTF8.GetString(ScryJson.SerializeToUtf8(request)), Is.EqualTo(json));
-        });
+            await Assert.That(json).IsEqualTo("""{"version":1,"command":"RenameEmployee","id":"a3f1c0de-0000-4000-8000-000000000001","payload":{"id":7,"name":"Carol"},"stamp":"SEJsUtm-XMA5VNZu"}""");
+            await Assert.That(ScryJson.Serialize(ScryJson.DeserializeCommandRequest(json))).IsEqualTo(json);
+            await Assert.That(Encoding.UTF8.GetString(ScryJson.SerializeToUtf8(request))).IsEqualTo(json);
+        }
     }
 
     // A command names only what the vocabulary names, as a query does: a member nothing reads is
     // refused rather than skipped.
     [Test]
     public void AnUnknownMemberOnACommandRequestFailsClosed() =>
-        Assert.Throws<ScryWireException>(
+        Assert.ThrowsExactly<ScryWireException>(
             () => ScryJson.DeserializeCommandRequest(
                 """{"version":1,"command":"RenameEmployee","id":"a3f1c0de-0000-4000-8000-000000000001","payload":{},"pad":"="}"""));
 
     [Test]
     public void ACommandRequestWithoutAPayloadFailsClosed() =>
-        Assert.Throws<ScryWireException>(
+        Assert.ThrowsExactly<ScryWireException>(
             () => ScryJson.DeserializeCommandRequest("""{"version":1,"command":"RenameEmployee","id":"a3f1c0de-0000-4000-8000-000000000001"}"""u8));
 
     [Test]
     public void ACommandRequestWithAMalformedIdFailsClosed() =>
-        Assert.Throws<ScryWireException>(
+        Assert.ThrowsExactly<ScryWireException>(
             () => ScryJson.DeserializeCommandRequest("""{"version":1,"command":"RenameEmployee","id":"7","payload":{}}"""));
 
     [Test]
-    public void CommandReceiptRoundTrips()
+    public async Task CommandReceiptRoundTrips()
     {
         var receipt = CommandReceipt.Create(commandId, CommandStatus.Completed) with
         {
@@ -682,68 +679,64 @@ public class WireSerializationTests
 
         var json = ScryJson.Serialize(receipt);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(
-                json,
-                Is.EqualTo("""{"version":1,"id":"a3f1c0de-0000-4000-8000-000000000001","status":"Completed","result":{"id":12},"stamp":"SEJsUtm-XMA5VNZu"}"""));
-            Assert.That(ScryJson.Serialize(ScryJson.DeserializeReceipt(json)), Is.EqualTo(json));
-            Assert.That(ScryJson.Serialize(ScryJson.DeserializeReceipt(ScryJson.SerializeToUtf8(receipt))), Is.EqualTo(json));
-        });
+            await Assert.That(json).IsEqualTo("""{"version":1,"id":"a3f1c0de-0000-4000-8000-000000000001","status":"Completed","result":{"id":12},"stamp":"SEJsUtm-XMA5VNZu"}""");
+            await Assert.That(ScryJson.Serialize(ScryJson.DeserializeReceipt(json))).IsEqualTo(json);
+            await Assert.That(ScryJson.Serialize(ScryJson.DeserializeReceipt(ScryJson.SerializeToUtf8(receipt)))).IsEqualTo(json);
+        }
     }
 
     // A pending receipt says only where the command is: nothing optional is written, and it reads back.
     [Test]
-    public void APendingReceiptCarriesNoResultOrError()
+    public async Task APendingReceiptCarriesNoResultOrError()
     {
         var json = ScryJson.Serialize(CommandReceipt.Create(commandId, CommandStatus.Pending));
 
-        Assert.That(json, Is.EqualTo("""{"version":1,"id":"a3f1c0de-0000-4000-8000-000000000001","status":"Pending"}"""));
+        await Assert.That(json).IsEqualTo("""{"version":1,"id":"a3f1c0de-0000-4000-8000-000000000001","status":"Pending"}""");
         var receipt = ScryJson.DeserializeReceipt(json);
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(receipt.Status, Is.EqualTo(CommandStatus.Pending));
-            Assert.That(receipt.Result, Is.Null);
-            Assert.That(receipt.Error, Is.Null);
-        });
+            await Assert.That(receipt.Status).IsEqualTo(CommandStatus.Pending);
+            await Assert.That(receipt.Result).IsNull();
+            await Assert.That(receipt.Error).IsNull();
+        }
     }
 
     [Test]
-    public void AFailedReceiptCarriesItsError() =>
-        Assert.That(
-            ScryJson.Serialize(CommandReceipt.Create(commandId, CommandStatus.Failed) with {Error = "Command execution failed."}),
-            Is.EqualTo("""{"version":1,"id":"a3f1c0de-0000-4000-8000-000000000001","status":"Failed","error":"Command execution failed."}"""));
+    public async Task AFailedReceiptCarriesItsError() =>
+        await Assert.That(ScryJson.Serialize(CommandReceipt.Create(commandId, CommandStatus.Failed) with {Error = "Command execution failed."})).IsEqualTo("""{"version":1,"id":"a3f1c0de-0000-4000-8000-000000000001","status":"Failed","error":"Command execution failed."}""");
 
     // A receipt from a newer server is refused as a newer response is: its result is in an encoding
     // this client was not built against.
     [Test]
     public void ANewerReceiptVersionFailsClosed() =>
-        Assert.Throws<ScryWireException>(
+        Assert.ThrowsExactly<ScryWireException>(
             () => ScryJson.DeserializeReceipt("""{"version":2,"id":"a3f1c0de-0000-4000-8000-000000000001","status":"Completed"}"""));
 
     [Test]
-    public void CommandCapabilitiesRoundTrip()
+    public async Task CommandCapabilitiesRoundTrip()
     {
         var capabilities = CommandCapabilities.Create(["DeleteEmployee", "RenameEmployee"], "SEJsUtm-XMA5VNZu");
 
         var json = ScryJson.Serialize(capabilities);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(json, Is.EqualTo("""{"version":1,"commands":["DeleteEmployee","RenameEmployee"],"stamp":"SEJsUtm-XMA5VNZu"}"""));
-            Assert.That(ScryJson.DeserializeCapabilities(json).Commands, Is.EqualTo(capabilities.Commands));
-            Assert.That(ScryJson.DeserializeCapabilities(ScryJson.SerializeToUtf8(capabilities)).Stamp, Is.EqualTo("SEJsUtm-XMA5VNZu"));
-        });
+            await Assert.That(json).IsEqualTo("""{"version":1,"commands":["DeleteEmployee","RenameEmployee"],"stamp":"SEJsUtm-XMA5VNZu"}""");
+            await Assert.That(ScryJson.DeserializeCapabilities(json).Commands).IsEquivalentTo(capabilities.Commands, CollectionOrdering.Matching);
+            await Assert.That(ScryJson.DeserializeCapabilities(ScryJson.SerializeToUtf8(capabilities)).Stamp).IsEqualTo("SEJsUtm-XMA5VNZu");
+        }
     }
 
-    static Task VerifyRoundTrip(QueryRequest request)
+    static async Task VerifyRoundTrip(QueryRequest request)
     {
         var json = ScryJson.Serialize(request);
         var roundTripped = ScryJson.DeserializeRequest(json);
         var reserialized = ScryJson.Serialize(roundTripped);
 
-        Assert.That(reserialized, Is.EqualTo(json));
+        await Assert.That(reserialized).IsEqualTo(json);
 
-        return Verify(json);
+        await Verify(json);
     }
 }

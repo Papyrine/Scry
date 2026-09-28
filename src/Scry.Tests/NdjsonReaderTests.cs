@@ -4,7 +4,6 @@
 /// not sit conveniently inside a single read: split across refills, longer than the buffer, and last
 /// with nothing terminating it.
 /// </summary>
-[TestFixture]
 public class NdjsonReaderTests
 {
     // Hands out a few bytes per read, so every line of any length crosses at least one refill —
@@ -53,28 +52,28 @@ public class NdjsonReaderTests
 
     [Test]
     public async Task ReadsOneLinePerNewline() =>
-        Assert.That(await ReadAll("one\ntwo\nthree\n"), Is.EqualTo(["one", "two", "three"]));
+        await Assert.That(await ReadAll("one\ntwo\nthree\n")).IsEquivalentTo(["one", "two", "three"], CollectionOrdering.Matching);
 
     [Test]
     public async Task ReadsALastLineWithNoTerminator() =>
-        Assert.That(await ReadAll("one\ntwo"), Is.EqualTo(["one", "two"]));
+        await Assert.That(await ReadAll("one\ntwo")).IsEquivalentTo(["one", "two"], CollectionOrdering.Matching);
 
     [Test]
     public async Task StripsACarriageReturnBeforeTheNewline() =>
-        Assert.That(await ReadAll("one\r\ntwo\r\n"), Is.EqualTo(["one", "two"]));
+        await Assert.That(await ReadAll("one\r\ntwo\r\n")).IsEquivalentTo(["one", "two"], CollectionOrdering.Matching);
 
     [Test]
     public async Task KeepsEmptyLines() =>
-        Assert.That(await ReadAll("one\n\ntwo\n"), Is.EqualTo(["one", "", "two"]));
+        await Assert.That(await ReadAll("one\n\ntwo\n")).IsEquivalentTo(["one", "", "two"], CollectionOrdering.Matching);
 
     [Test]
     public async Task ReadsNothingFromAnEmptyStream() =>
-        Assert.That(await ReadAll(""), Is.Empty);
+        await Assert.That(await ReadAll("")).IsEmpty();
 
     // A byte at a time, so every line is assembled across refills and the buffer slides on each one.
     [Test]
     public async Task ReadsLinesSplitAcrossRefills() =>
-        Assert.That(await ReadAll("alpha\nbeta\ngamma\n", perRead: 1), Is.EqualTo(["alpha", "beta", "gamma"]));
+        await Assert.That(await ReadAll("alpha\nbeta\ngamma\n", perRead: 1)).IsEquivalentTo(["alpha", "beta", "gamma"], CollectionOrdering.Matching);
 
     // Past the reader's initial rent, so the buffer has to grow rather than only slide.
     [Test]
@@ -83,7 +82,7 @@ public class NdjsonReaderTests
         var long1 = new string('a', 40_000);
         var long2 = new string('b', 90_000);
 
-        Assert.That(await ReadAll($"{long1}\n{long2}\nshort\n", perRead: 4096), Is.EqualTo([long1, long2, "short"]));
+        await Assert.That(await ReadAll($"{long1}\n{long2}\nshort\n", perRead: 4096)).IsEquivalentTo([long1, long2, "short"], CollectionOrdering.Matching);
     }
 
     // The rows a stream actually carries, read the way the client reads them.
@@ -101,13 +100,11 @@ public class NdjsonReaderTests
 
         var lines = await ReadAll(body.ReplaceLineEndings("\n"), perRead: 7);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(lines, Has.Count.EqualTo(4));
-            Assert.That(ScryJson.DeserializeMarker(Encoding.UTF8.GetBytes(lines[0])).Kind, Is.EqualTo(ScryStream.Begin));
-            Assert.That(
-                JsonSerializer.Deserialize<JsonElement>(lines[1]).GetProperty("name").GetString(),
-                Is.EqualTo("Alice"));
-        });
+            await Assert.That(lines).Count().IsEqualTo(4);
+            await Assert.That(ScryJson.DeserializeMarker(Encoding.UTF8.GetBytes(lines[0])).Kind).IsEqualTo(ScryStream.Begin);
+            await Assert.That(JsonSerializer.Deserialize<JsonElement>(lines[1]).GetProperty("name").GetString()).IsEqualTo("Alice");
+        }
     }
 }

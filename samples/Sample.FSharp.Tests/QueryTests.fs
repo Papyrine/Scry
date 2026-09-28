@@ -4,28 +4,29 @@ open System
 open System.Linq
 open System.Text.Json
 open System.Threading.Tasks
-open NUnit.Framework
+open TUnit.Assertions
+open TUnit.Assertions.Extensions
+open TUnit.Core
 open Sample.FSharp
 open Scry
-open VerifyNUnit
+open VerifyTUnit
 
-[<TestFixture>]
 type QueryTests() =
-    let mutable server: ScryServer = Unchecked.defaultof<_>
+    static let mutable server: ScryServer = Unchecked.defaultof<_>
 
     /// The request as it would travel, for a snapshot of what F# put on the wire.
     let wire (source: IQueryable<'T>) =
         JsonSerializer.Serialize(source.ToScryRequest(), ScryJson.Options)
 
-    [<OneTimeSetUp>]
-    member _.Start() : Task =
+    [<Before(HookType.Class)>]
+    static member Start() : Task =
         task {
             let! started = ScryServer.StartAsync()
             server <- started
         }
 
-    [<OneTimeTearDown>]
-    member _.Stop() : Task =
+    [<After(HookType.Class)>]
+    static member Stop() : Task =
         // Null when the start failed, and a second exception there would hide the first.
         if isNull (box server) then
             Task.CompletedTask
@@ -75,5 +76,5 @@ type QueryTests() =
     member _.ActiveCount() : Task =
         task {
             let! count = Queries.activeCountAsync server.Query
-            Assert.That(count, Is.EqualTo 3)
+            do! check (Assert.That(count).IsEqualTo 3)
         }

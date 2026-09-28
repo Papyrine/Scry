@@ -3,24 +3,23 @@
 /// and none of it reaches the reflection resolver. Nothing breaks if one does — the fallback reads the
 /// same attributes and produces the same JSON — so the drift is silent, and this is what makes it not.
 /// </summary>
-[TestFixture]
 public class WireMetadataTests
 {
     // The generated resolver, which sits ahead of the reflection fallback covering payload types.
     static IJsonTypeInfoResolver generated = ScryJson.Options.TypeInfoResolverChain[0];
 
     [Test]
-    public void GeneratedMetadataIsAheadOfReflection()
+    public async Task GeneratedMetadataIsAheadOfReflection()
     {
         // Pins the ordering the two sweeps below rely on. A row is the shape a payload arrives in and
         // is nothing the wire assembly declares, so the generated resolver cannot answer it — if it
         // did, the resolver under test would be the reflection one and the sweeps would pass vacuously.
-        Assert.That(generated.GetTypeInfo(typeof(Dictionary<string, object?>), ScryJson.Options), Is.Null);
-        Assert.That(ScryJson.Options.GetTypeInfo(typeof(Dictionary<string, object?>)), Is.Not.Null);
+        await Assert.That(generated.GetTypeInfo(typeof(Dictionary<string, object?>), ScryJson.Options)).IsNull();
+        await Assert.That(ScryJson.Options.GetTypeInfo(typeof(Dictionary<string, object?>))).IsNotNull();
     }
 
     [Test]
-    public void EveryWireTypeIsSourceGenerated()
+    public async Task EveryWireTypeIsSourceGenerated()
     {
         var reflected = WireTypes()
             .Where(_ => generated.GetTypeInfo(_, ScryJson.Options) is null)
@@ -28,14 +27,11 @@ public class WireMetadataTests
             .Order(StringComparer.Ordinal)
             .ToList();
 
-        Assert.That(
-            reflected,
-            Is.Empty,
-            "These wire types fall back to reflection. Add a [JsonSerializable] root to WireJsonContext that reaches them.");
+        await Assert.That(reflected).IsEmpty().Because("These wire types fall back to reflection. Add a [JsonSerializable] root to WireJsonContext that reaches them.");
     }
 
     [Test]
-    public void EveryPolymorphicCaseIsSourceGenerated()
+    public async Task EveryPolymorphicCaseIsSourceGenerated()
     {
         // Listed separately from the sweep above because a derived type is reached by the generator
         // through the discriminator map rather than through a property, and that is exactly the
@@ -45,14 +41,14 @@ public class WireMetadataTests
             .Select(_ => _.DerivedType)
             .ToList();
 
-        Assert.That(cases, Is.Not.Empty);
-        Assert.Multiple(() =>
+        await Assert.That(cases).IsNotEmpty();
+        using (Assert.Multiple())
         {
             foreach (var type in cases)
             {
-                Assert.That(generated.GetTypeInfo(type, ScryJson.Options), Is.Not.Null, type.Name);
+                await Assert.That(generated.GetTypeInfo(type, ScryJson.Options)).IsNotNull().Because(type.Name);
             }
-        });
+        }
     }
 
     // Every record the wire assembly declares. Open generics are excluded: ScryPage<T> is closed over

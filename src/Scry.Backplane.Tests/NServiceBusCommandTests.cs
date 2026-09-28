@@ -10,24 +10,24 @@ using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 /// <remarks>
 /// The server's commands are untargeted, so its context is never opened: its model is all it is for.
 /// </remarks>
-[TestFixture]
+[NotInParallel]
 public class NServiceBusCommandTests
 {
     const string workerName = "ScryTests.CommandWorker";
 
-    string storage = null!;
-    Worker worker = null!;
+    static string storage = null!;
+    static Worker worker = null!;
 
-    [OneTimeSetUp]
-    public async Task StartWorker()
+    [Before(Class)]
+    public static async Task StartWorker()
     {
         storage = Path.Combine(Path.GetTempPath(), $"scry-commands-{Guid.NewGuid():N}");
         Directory.CreateDirectory(storage);
         worker = await Worker.Start(storage);
     }
 
-    [OneTimeTearDown]
-    public async Task StopWorker()
+    [After(Class)]
+    public static async Task StopWorker()
     {
         await worker.DisposeAsync();
         try
@@ -47,7 +47,7 @@ public class NServiceBusCommandTests
 
         var receipts = await server.Send("ShipParcel", new {label = "Within"});
 
-        Assert.That(receipts.Select(_ => _.Status), Is.EqualTo([CommandStatus.Completed]));
+        await Assert.That(receipts.Select(_ => _.Status)).IsEquivalentTo([CommandStatus.Completed], CollectionOrdering.Matching);
     }
 
     // Past the window: pending at once, and finished when the reply comes in.
@@ -58,7 +58,7 @@ public class NServiceBusCommandTests
 
         var receipts = await server.Send("ShipParcel", new {label = "Pending"});
 
-        Assert.That(receipts.Select(_ => _.Status), Is.EqualTo([CommandStatus.Pending, CommandStatus.Completed]));
+        await Assert.That(receipts.Select(_ => _.Status)).IsEquivalentTo([CommandStatus.Pending, CommandStatus.Completed], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -70,11 +70,11 @@ public class NServiceBusCommandTests
         await server.Send("ShipParcel", new {label = "Headers"}, id, caller: "alice");
 
         var seen = ShipParcelHandler.Seen.Single(_ => _.Label == "Headers");
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(seen.CommandId, Is.EqualTo(id.ToString("D")));
-            Assert.That(seen.Caller, Is.EqualTo("alice"));
-        });
+            await Assert.That(seen.CommandId).IsEqualTo(id.ToString("D"));
+            await Assert.That(seen.Caller).IsEqualTo("alice");
+        }
     }
 
     [Test]
@@ -85,11 +85,11 @@ public class NServiceBusCommandTests
         var receipts = await server.Send("WeighParcel", new {grams = 21});
 
         var final = receipts.Last();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(final.Status, Is.EqualTo(CommandStatus.Completed));
-            Assert.That(final.Result!.Value.GetProperty("grams").GetInt32(), Is.EqualTo(42));
-        });
+            await Assert.That(final.Status).IsEqualTo(CommandStatus.Completed);
+            await Assert.That(final.Result!.Value.GetProperty("grams").GetInt32()).IsEqualTo(42);
+        }
     }
 
     // Every attempt spent, the message goes to the error queue — and the server is told it failed,
@@ -102,11 +102,11 @@ public class NServiceBusCommandTests
         var receipts = await server.Send("ShipParcel", new {label = "Failing", fail = true});
 
         var final = receipts.Last();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(final.Status, Is.EqualTo(CommandStatus.Failed));
-            Assert.That(final.Error, Is.EqualTo("Command execution failed."));
-        });
+            await Assert.That(final.Status).IsEqualTo(CommandStatus.Failed);
+            await Assert.That(final.Error).IsEqualTo("Command execution failed.");
+        }
     }
 
     // The reply and the change leave through the same context, after the same handlers.
@@ -118,11 +118,11 @@ public class NServiceBusCommandTests
         var receipts = await server.Send("ShipParcel", new {label = "Together"});
         var change = await server.Heard.Next();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(receipts.Last().Status, Is.EqualTo(CommandStatus.Completed));
-            Assert.That(change.Entities, Is.EqualTo(["Parcel"]));
-        });
+            await Assert.That(receipts.Last().Status).IsEqualTo(CommandStatus.Completed);
+            await Assert.That(change.Entities).IsEquivalentTo(["Parcel"], CollectionOrdering.Matching);
+        }
     }
 
     // By default, what the endpoint calls a command by marker; beside that, only what it was told.
@@ -132,14 +132,14 @@ public class NServiceBusCommandTests
         await using var bare = await Server.Start("ScryTests.CommandsClaimsBare", storage);
         await using var told = await Server.Start("ScryTests.CommandsClaimsTold", storage, claims: _ => _.For<NamedChore>());
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(bare.Claims(typeof(ShipParcel)), Is.True);
-            Assert.That(bare.Claims(typeof(NamedChore)), Is.False);
-            Assert.That(bare.Claims(typeof(LocalChore)), Is.False);
-            Assert.That(told.Claims(typeof(NamedChore)), Is.True);
-            Assert.That(told.Claims(typeof(LocalChore)), Is.False);
-        });
+            await Assert.That(bare.Claims(typeof(ShipParcel))).IsTrue();
+            await Assert.That(bare.Claims(typeof(NamedChore))).IsFalse();
+            await Assert.That(bare.Claims(typeof(LocalChore))).IsFalse();
+            await Assert.That(told.Claims(typeof(NamedChore))).IsTrue();
+            await Assert.That(told.Claims(typeof(LocalChore))).IsFalse();
+        }
     }
 
     // What no dispatcher claims stays with its in-process handler.
@@ -150,7 +150,7 @@ public class NServiceBusCommandTests
 
         var receipts = await server.Send("LocalChore", new { });
 
-        Assert.That(receipts.Last().Status, Is.EqualTo(CommandStatus.Completed));
+        await Assert.That(receipts.Last().Status).IsEqualTo(CommandStatus.Completed);
     }
 
     [Test]
@@ -158,9 +158,9 @@ public class NServiceBusCommandTests
     {
         await using var server = await Server.Start("ScryTests.CommandsTwoClaims", storage, second: true);
 
-        var exception = Assert.Throws<Exception>(server.EnsureDispatchable)!;
+        var exception = Assert.ThrowsExactly<Exception>(server.EnsureDispatchable)!;
 
-        Assert.That(exception.Message, Does.Contain("claimed by"));
+        await Assert.That(exception.Message).Contains("claimed by");
     }
 
     /// <summary>The worker: handles the commands, replies, and publishes what it saved.</summary>
@@ -312,7 +312,7 @@ public class NServiceBusCommandTests
 
         public async Task<ScryChange> Next()
         {
-            Assert.That(await arrived.WaitAsync(TimeSpan.FromSeconds(30)), Is.True, "No change arrived.");
+            await Assert.That(await arrived.WaitAsync(TimeSpan.FromSeconds(30))).IsTrue().Because("No change arrived.");
             lock (changes)
             {
                 return changes.Dequeue();

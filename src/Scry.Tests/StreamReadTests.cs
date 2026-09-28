@@ -3,36 +3,35 @@
 /// and a stream that ends inside a line. Both are the wire's failures to report, not the JSON
 /// reader's.
 /// </summary>
-[TestFixture]
 public class StreamReadTests
 {
     // The single and batch paths refuse a newer version; the stream's opening marker carried one that
     // was never compared, so a client read every row against a newer encoding.
     [Test]
-    public void RefusesANewerWireVersionOnTheOpeningMarker()
+    public async Task RefusesANewerWireVersionOnTheOpeningMarker()
     {
         var client = Streaming(
             $$"""{"$scry":"begin","version":{{WireFormat.Version + 1}},"stamp":"s"}""" + "\n" +
             """{"$scry":"end"}""" + "\n");
 
-        var exception = Assert.ThrowsAsync<ScryWireException>(() => Drain(client));
+        var exception = await Assert.ThrowsExactlyAsync<ScryWireException>(() => Drain(client));
 
-        Assert.That(exception!.Message, Does.Contain("Unsupported response wire version"));
+        await Assert.That(exception!.Message).Contains("Unsupported response wire version");
     }
 
     // Cut inside a row. The reader hands an unterminated last line over for its content to be judged,
     // and judged it once was by the JSON reader, which threw its own exception at the incomplete
     // token — outside the wire's classification, which the closing-marker check never reached.
     [Test]
-    public void ReportsAStreamCutMidLineAsIncomplete()
+    public async Task ReportsAStreamCutMidLineAsIncomplete()
     {
         var client = Streaming(
             """{"$scry":"begin","version":1,"stamp":"s"}""" + "\n" +
             """{"name":"Al""");
 
-        var exception = Assert.ThrowsAsync<ScryWireException>(() => Drain(client));
+        var exception = await Assert.ThrowsExactlyAsync<ScryWireException>(() => Drain(client));
 
-        Assert.That(exception!.Message, Does.Contain("incomplete"));
+        await Assert.That(exception!.Message).Contains("incomplete");
     }
 
     // A whole last line without its newline is what it says: here the closing marker, so the rows
@@ -45,7 +44,7 @@ public class StreamReadTests
             """{"name":"Alice"}""" + "\n" +
             """{"$scry":"end"}""");
 
-        Assert.That(await Drain(client), Is.EqualTo(1));
+        await Assert.That(await Drain(client)).IsEqualTo(1);
     }
 
     [Test]
@@ -56,7 +55,7 @@ public class StreamReadTests
             """{"name":"Alice"}""" + "\n" +
             """{"$scry":"end"}""" + "\n");
 
-        Assert.That(await Drain(client), Is.EqualTo(1));
+        await Assert.That(await Drain(client)).IsEqualTo(1);
     }
 
     static async Task<int> Drain(ScryClient client)

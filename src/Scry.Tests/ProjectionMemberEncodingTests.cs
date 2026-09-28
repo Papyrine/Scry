@@ -4,39 +4,35 @@
 /// spelling looks like across the operator set; this pins that a member has only one of them, which is
 /// what lets a request be keyed on its bytes.
 /// </summary>
-[TestFixture]
 public class ProjectionMemberEncodingTests
 {
     [Test]
-    public void AMemberReadingItsOwnNameTravelsAsAString() =>
-        Assert.That(
-            Serialize(new("Active", new NodeValue(new MemberNode(["Active"])))),
-            Does.Contain("\"members\":[\"Active\"]"));
+    public async Task AMemberReadingItsOwnNameTravelsAsAString() =>
+        await Assert.That(Serialize(new("Active", new NodeValue(new MemberNode(["Active"]))))).Contains("\"members\":[\"Active\"]");
 
     [Test]
-    public void AStringReadsBackAsTheMemberItStandsFor()
+    public async Task AStringReadsBackAsTheMemberItStandsFor()
     {
         var json = Serialize(new("Active", new NodeValue(new MemberNode(["Active"]))));
         var member = Deserialize("[\"Active\"]").Members.Single();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(member.Name, Is.EqualTo("Active"));
-            Assert.That(
-                member.Value is NodeValue {Node: MemberNode {Path: ["Active"]}},
-                "the string stands for a member reading the path it names");
+            await Assert.That(member.Name).IsEqualTo("Active");
+            await Assert.That(member.Value is NodeValue {Node: MemberNode {Path: ["Active"]}}).IsTrue().Because("the string stands for a member reading the path it names");
             // And the trip closes: what the short form reads back to writes back out as the short form.
-            Assert.That(ScryJson.Serialize(ScryJson.DeserializeRequest(json)), Is.EqualTo(json));
-        });
+            await Assert.That(ScryJson.Serialize(ScryJson.DeserializeRequest(json))).IsEqualTo(json);
+        }
     }
 
     // The three shapes that keep the object form: a member renamed away from what it reads, one
     // reaching through a navigation, and one that is not a member read at all.
-    [TestCaseSource(nameof(ObjectFormCases))]
-    public void AMemberThatDoesNotReadItsOwnNameTravelsAsAnObject(ProjectionMember member) =>
-        Assert.That(Serialize(member), Does.Contain("\"name\":"));
+    [Test]
+    [MethodDataSource(nameof(ObjectFormCases))]
+    public async Task AMemberThatDoesNotReadItsOwnNameTravelsAsAnObject(ProjectionMember member) =>
+        await Assert.That(Serialize(member)).Contains("\"name\":");
 
-    static IEnumerable<ProjectionMember> ObjectFormCases()
+    public static IEnumerable<ProjectionMember> ObjectFormCases()
     {
         yield return new("IsActive", new NodeValue(new MemberNode(["Active"])));
         yield return new("Name", new NodeValue(new MemberNode(["Manager", "Name"])));
@@ -46,19 +42,19 @@ public class ProjectionMemberEncodingTests
     // The canonicity guard. Both spellings deserializing would make two requests meaning the same thing
     // two different sets of bytes, which is what the ETag and the request fingerprint key off.
     [Test]
-    public void TheObjectSpellingOfAMemberReadingItsOwnNameIsRefused()
+    public async Task TheObjectSpellingOfAMemberReadingItsOwnNameIsRefused()
     {
-        var exception = Assert.Throws<ScryWireException>(
+        var exception = Assert.ThrowsExactly<ScryWireException>(
             () => Deserialize("""[{"name":"Active","value":{"$type":"node","node":{"$type":"member","path":"Active"}}}]"""))!;
 
-        Assert.That(exception.Message, Does.Contain("""is written as a string: "Active"."""));
+        await Assert.That(exception.Message).Contains("""is written as a string: "Active".""");
     }
 
     // The same member one level down, so the refusal is known to reach through a nested projection
     // rather than only applying to the members the pipeline names directly.
     [Test]
     public void TheObjectSpellingIsRefusedInsideANestedProjection() =>
-        Assert.Throws<ScryWireException>(
+        Assert.ThrowsExactly<ScryWireException>(
             () => Deserialize(
                 """
                 [{"name":"Department","value":{"$type":"nested","path":"Department","projection":{"members":[{"name":"Name","value":{"$type":"node","node":{"$type":"member","path":"Name"}}}]}}}]
@@ -66,15 +62,15 @@ public class ProjectionMemberEncodingTests
 
     [Test]
     public void ABlankMemberNameIsRefused() =>
-        Assert.Throws<ScryWireException>(() => Deserialize("[\" \"]"));
+        Assert.ThrowsExactly<ScryWireException>(() => Deserialize("[\" \"]"));
 
     [Test]
     public void AMemberMissingItsValueIsRefused() =>
-        Assert.Throws<ScryWireException>(() => Deserialize("""[{"name":"Active"}]"""));
+        Assert.ThrowsExactly<ScryWireException>(() => Deserialize("""[{"name":"Active"}]"""));
 
     [Test]
     public void AMemberThatIsNeitherAStringNorAnObjectIsRefused() =>
-        Assert.Throws<ScryWireException>(() => Deserialize("[7]"));
+        Assert.ThrowsExactly<ScryWireException>(() => Deserialize("[7]"));
 
     static string Serialize(ProjectionMember member) =>
         ScryJson.Serialize(QueryRequest.Create("Employee", [new SelectOp(new([member]))]));

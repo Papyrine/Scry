@@ -838,10 +838,10 @@ public async Task DisallowedPropertyRejectedWith400()
     using var content = new StringContent(json, Encoding.UTF8, "application/json");
     using var response = await http.PostAsync("/api/query", content);
 
-    Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
 }
 ```
-<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L376-L403' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/HttpRoundTripTests.cs#L375-L402' title='Snippet source file'>snippet source</a> | <a href='#snippet-rawRequestRejected' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `CommandRoundTripTests` does the same for commands: every generated command sent over HTTP to a host running the sample's own handlers — the typed result, the enum payload by name, a slow rename's streamed receipt, and a delete arriving as a live query's next answer. `CommandHttpTests` and `CommandHubTests` pin the command routes and hub methods themselves, against a model of their own.

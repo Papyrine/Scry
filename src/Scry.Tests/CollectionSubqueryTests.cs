@@ -2,7 +2,6 @@
 /// Collection navigations are aggregable but never projectable: every question here folds a
 /// collection to a scalar, evaluated by the database as a correlated subquery.
 /// </summary>
-[TestFixture]
 public class CollectionSubqueryTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -24,7 +23,7 @@ public class CollectionSubqueryTests
             .Select(_ => new OrderRow(_.Region, _.Lines.Count))
             .ToListAsync();
 
-        Assert.That(rows.Single().Lines, Is.EqualTo(2));
+        await Assert.That(rows.Single().Lines).IsEqualTo(2);
     }
 
     [Test]
@@ -36,7 +35,7 @@ public class CollectionSubqueryTests
         // Two of the three orders have lines.
         var count = await client.Source<Order>("Order").CountAsync(_ => _.Lines.Any());
 
-        Assert.That(count, Is.EqualTo(2));
+        await Assert.That(count).IsEqualTo(2);
     }
 
     [Test]
@@ -48,7 +47,7 @@ public class CollectionSubqueryTests
         // All is vacuously true for the order with no lines, exactly as in LINQ and SQL.
         var count = await client.Source<Order>("Order").CountAsync(_ => _.Lines.All(l => l.Quantity > 1));
 
-        Assert.That(count, Is.EqualTo(2));
+        await Assert.That(count).IsEqualTo(2);
     }
 
     [Test]
@@ -62,7 +61,7 @@ public class CollectionSubqueryTests
             .Select(_ => new OrderRow(_.Region, _.Lines.Count))
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Lines), Is.EqualTo([2, 1, 0]));
+        await Assert.That(rows.Select(_ => _.Lines)).IsEquivalentTo([2, 1, 0], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -73,7 +72,7 @@ public class CollectionSubqueryTests
 
         var count = await client.Source<Order>("Order").CountAsync(_ => _.Lines.Count > 1);
 
-        Assert.That(count, Is.EqualTo(1));
+        await Assert.That(count).IsEqualTo(1);
     }
 
     [Test]
@@ -89,7 +88,7 @@ public class CollectionSubqueryTests
             .ToListAsync();
         // end-snippet
 
-        Assert.That(rows.Select(_ => _.Lines), Is.EqualTo([1, 1, 0]));
+        await Assert.That(rows.Select(_ => _.Lines)).IsEquivalentTo([1, 1, 0], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -103,7 +102,7 @@ public class CollectionSubqueryTests
             .Select(_ => new OrderRow(_.Region, _.Lines.Count(l => l.Quantity > 1)))
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Lines), Is.EqualTo([1, 1, 0]));
+        await Assert.That(rows.Select(_ => _.Lines)).IsEquivalentTo([1, 1, 0], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -117,7 +116,7 @@ public class CollectionSubqueryTests
             .Select(_ => new TotalRow(_.Region, _.Lines.Sum(l => l.Price)))
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Total), Is.EqualTo([75m, 50m, 0m]));
+        await Assert.That(rows.Select(_ => _.Total)).IsEquivalentTo([75m, 50m, 0m], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -132,7 +131,7 @@ public class CollectionSubqueryTests
             .Select(_ => new OrderRow(_.Region, _.Lines.Count))
             .ToListAsync();
 
-        Assert.That(rows.Single().Lines, Is.Zero);
+        await Assert.That(rows.Single().Lines).IsZero();
     }
 
     [Test]
@@ -143,7 +142,7 @@ public class CollectionSubqueryTests
 
         var count = await client.Source<Order>("Order").CountAsync(_ => _.Lines.Max(l => l.Price) == 50m);
 
-        Assert.That(count, Is.EqualTo(2));
+        await Assert.That(count).IsEqualTo(2);
     }
 
     [Test]
@@ -157,7 +156,7 @@ public class CollectionSubqueryTests
             "Order",
             [new SelectOp(new([new("Lines", new NodeValue(new MemberNode(["Lines"])))]))]);
 
-        Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+        Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
     }
 
     [Test]
@@ -175,11 +174,11 @@ public class CollectionSubqueryTests
                     new ConstNode("A-1", ClrTypeTag.String)))
             ]);
 
-        Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+        Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
     }
 
     [Test]
-    public void AnUnOptedInCollectionStaysInvisible()
+    public async Task AnUnOptedInCollectionStaysInvisible()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -188,14 +187,14 @@ public class CollectionSubqueryTests
             "Department",
             [new WhereOp(new SubqueryNode(["Employees"], SubqueryFn.Any))]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("not allow-listed"));
+        await Assert.That(exception!.Message).Contains("not allow-listed");
     }
 
     [Test]
-    public void ASubqueryInsideASubqueryIsRejected()
+    public async Task ASubqueryInsideASubqueryIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -208,14 +207,14 @@ public class CollectionSubqueryTests
                     new SubqueryNode(["Lines"], SubqueryFn.Any)))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("inside another subquery"));
+        await Assert.That(exception!.Message).Contains("inside another subquery");
     }
 
     [Test]
-    public void AMembershipTestInsideASubqueryIsRejected()
+    public async Task AMembershipTestInsideASubqueryIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -229,14 +228,14 @@ public class CollectionSubqueryTests
                     new InSourceNode(new MemberNode(["OrderId"]), "Order", new MemberNode(["Id"]))))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("inside a subquery"));
+        await Assert.That(exception!.Message).Contains("inside a subquery");
     }
 
     [Test]
-    public void ASubqueryWrappedInACollationIsStillNested()
+    public async Task ASubqueryWrappedInACollationIsStillNested()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -255,14 +254,14 @@ public class CollectionSubqueryTests
                         new ConstNode("x", ClrTypeTag.String))))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("inside another subquery"));
+        await Assert.That(exception!.Message).Contains("inside another subquery");
     }
 
     [Test]
-    public void AnIgnoredMemberStaysHiddenInsideASubquery()
+    public async Task AnIgnoredMemberStaysHiddenInsideASubquery()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -280,14 +279,14 @@ public class CollectionSubqueryTests
                         new ConstNode("North", ClrTypeTag.String))))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("not allow-listed"));
+        await Assert.That(exception!.Message).Contains("not allow-listed");
     }
 
     [Test]
-    public void AllWithoutAPredicateIsRejected()
+    public async Task AllWithoutAPredicateIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -295,18 +294,18 @@ public class CollectionSubqueryTests
             "Order",
             [new WhereOp(new SubqueryNode(["Lines"], SubqueryFn.All))]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("requires a predicate"));
+        await Assert.That(exception!.Message).Contains("requires a predicate");
     }
 
     [Test]
-    public void ExposingACollectionOfAPoliciedTypeIsRefusedAtStartup()
+    public async Task ExposingACollectionOfAPoliciedTypeIsRefusedAtStartup()
     {
         // A policy filters a source; a subquery has none, so counting a policied collection would count
         // exactly the rows the policy hides. Refused when the schema is built, not at query time.
-        var exception = Assert.Throws<Exception>(
+        var exception = Assert.ThrowsExactly<Exception>(
             () => ScryProcessor.Create<TestContext>(
                 options =>
                 {
@@ -314,7 +313,7 @@ public class CollectionSubqueryTests
                     options.AddPolicy<OrderLine, BulkLinesOnlyPolicy>();
                 }));
 
-        Assert.That(exception!.Message, Does.Contain("row policy"));
+        await Assert.That(exception!.Message).Contains("row policy");
     }
 
     static ScryClient ClientFor(TestContext context) =>

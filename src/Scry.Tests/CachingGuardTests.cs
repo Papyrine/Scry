@@ -5,36 +5,35 @@
 /// would notice such a source varying. One registered as the collection itself cannot vary, and is
 /// not counted.
 /// </summary>
-[TestFixture]
 public class CachingGuardTests
 {
     [Test]
-    public void AFactorySuppliedPocoSourceAnswersByCaller()
+    public async Task AFactorySuppliedPocoSourceAnswersByCaller()
     {
         var processor = Build(_ => _.AddPocoSource<Holiday>(_ => Holiday.Seed()));
 
         var holiday = processor.CallerDependentSources.Single(_ => _.Source == "Holiday");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(holiday.Why, Does.Contain("factory"));
-            Assert.That(holiday.Hint, Does.Contain("collection itself"));
-        });
+            await Assert.That(holiday.Why).Contains("factory");
+            await Assert.That(holiday.Hint).Contains("collection itself");
+        }
     }
 
     [Test]
-    public void AFixedPocoSourceDoesNot()
+    public async Task AFixedPocoSourceDoesNot()
     {
         var processor = Build(_ => _.AddPocoSource(Holiday.Seed().ToList()));
 
-        Assert.That(processor.CallerDependentSources.Select(_ => _.Source), Does.Not.Contain("Holiday"));
+        await Assert.That(processor.CallerDependentSources.Select(_ => _.Source)).DoesNotContain("Holiday");
     }
 
     // The sources are named in one order, by name, so a startup message names the same one every
     // run; a policied source that sorts before the factory-supplied one is named first, with no
     // registration to suggest instead.
     [Test]
-    public void SourcesAreNamedInOneOrder()
+    public async Task SourcesAreNamedInOneOrder()
     {
         var processor = Build(_ => _.AddPocoSource<Holiday>(_ => Holiday.Seed()));
 
@@ -42,13 +41,13 @@ public class CachingGuardTests
         var names = sources.Select(_ => _.Source).ToList();
         var first = sources[0];
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(names, Is.EqualTo(names.OrderBy(_ => _, StringComparer.Ordinal)));
-            Assert.That(first.Source, Is.Not.EqualTo("Holiday"));
-            Assert.That(first.Why, Does.Contain("policy"));
-            Assert.That(first.Hint, Is.Null);
-        });
+            await Assert.That(names).IsEquivalentTo(names.OrderBy(_ => _, StringComparer.Ordinal), CollectionOrdering.Matching);
+            await Assert.That(first.Source).IsNotEqualTo("Holiday");
+            await Assert.That(first.Why).Contains("policy");
+            await Assert.That(first.Hint).IsNull();
+        }
     }
 
     static ScryProcessor Build(Action<ScryOptions> configure) =>

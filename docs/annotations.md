@@ -183,7 +183,7 @@ The server derives the same name, so its introspection stays in step with genera
 <a id='snippet-namedSourceTest'></a>
 ```cs
 [Test]
-public void NameOverridesSourceNameButNotModelName()
+public async Task NameOverridesSourceNameButNotModelName()
 {
     var sources = SharedProcessor.Instance.Describe().Sources;
 
@@ -191,12 +191,12 @@ public void NameOverridesSourceNameButNotModelName()
     // generated model stays SalesRegionQueryModel and the server's introspection agrees with
     // what the generator emits.
     var region = sources.Single(_ => _.Name == "Region");
-    Assert.That(region.Model, Is.EqualTo("SalesRegionQueryModel"));
-    Assert.That(region.Kind, Is.EqualTo("Entity"));
-    Assert.That(sources.Select(_ => _.Name), Does.Not.Contain("SalesRegion"));
+    await Assert.That(region.Model).IsEqualTo("SalesRegionQueryModel");
+    await Assert.That(region.Kind).IsEqualTo("Entity");
+    await Assert.That(sources.Select(_ => _.Name)).DoesNotContain("SalesRegion");
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.cs#L8-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSourceTest' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.cs#L7-L21' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSourceTest' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Details:

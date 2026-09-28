@@ -5,7 +5,6 @@
 /// builds one <see cref="DistinctRow"/> per side, whose member-wise equality the provider decomposes
 /// into per-part comparisons.
 /// </summary>
-[TestFixture]
 public class CompositeJoinKeyTests
 {
     // Self-joining Order on {Region, Grade} pairs each row with itself alone. Region by itself would
@@ -25,13 +24,13 @@ public class CompositeJoinKeyTests
                 (outer, inner) => new {outer.Code, Matched = inner.Amount})
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows, Has.Count.EqualTo(3));
-            Assert.That(rows.Single(_ => _.Code == "40").Matched, Is.EqualTo(100m));
-            Assert.That(rows.Single(_ => _.Code == "8").Matched, Is.EqualTo(250m));
-            Assert.That(rows.Single(_ => _.Code == "17").Matched, Is.EqualTo(75m));
-        });
+            await Assert.That(rows).Count().IsEqualTo(3);
+            await Assert.That(rows.Single(_ => _.Code == "40").Matched).IsEqualTo(100m);
+            await Assert.That(rows.Single(_ => _.Code == "8").Matched).IsEqualTo(250m);
+            await Assert.That(rows.Single(_ => _.Code == "17").Matched).IsEqualTo(75m);
+        }
     }
 
     [Test]
@@ -49,7 +48,7 @@ public class CompositeJoinKeyTests
             .ToListAsync();
 
         // Both North rows pair with both North rows.
-        Assert.That(rows, Has.Count.EqualTo(5));
+        await Assert.That(rows).Count().IsEqualTo(5);
     }
 
     [Test]
@@ -66,11 +65,11 @@ public class CompositeJoinKeyTests
                 (outer, twins) => new {outer.Code, Twins = twins.Count()})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Twins), Is.All.EqualTo(1));
+        await Assert.That(rows.Select(_ => _.Twins)).All(_ => Equals(_, 1));
     }
 
     [Test]
-    public void ACompositeOnOneSideAloneIsRejected()
+    public async Task ACompositeOnOneSideAloneIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -86,14 +85,14 @@ public class CompositeJoinKeyTests
                     [new("Code", JoinSide.Outer, ["Code"])])
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("composite on both sides"));
+        await Assert.That(exception!.Message).Contains("composite on both sides");
     }
 
     [Test]
-    public void MismatchedPartCountsAreRejected()
+    public async Task MismatchedPartCountsAreRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -109,16 +108,16 @@ public class CompositeJoinKeyTests
                     [new("Code", JoinSide.Outer, ["Code"])])
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("pairs its parts"));
+        await Assert.That(exception!.Message).Contains("pairs its parts");
     }
 
     // A composite has no value of its own, so anywhere a value is expected it is an unsupported
     // expression.
     [Test]
-    public void ACompositeKeyOutsideAJoinIsRejected()
+    public async Task ACompositeKeyOutsideAJoinIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -133,10 +132,10 @@ public class CompositeJoinKeyTests
                 new CountOp()
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("Unsupported expression"));
+        await Assert.That(exception!.Message).Contains("Unsupported expression");
     }
 
     static ScryClient ClientFor(TestContext context) =>

@@ -9,13 +9,12 @@
 /// A slow rename takes the sample's five seconds — past the client's three-second wait, which is what
 /// puts it in the panel at all.
 /// </remarks>
-[TestFixture]
 [Category("Browser")]
+[NotInParallel]
 public class CommandUiTests :
     BrowserFixture
 {
     [Test]
-    [Order(1)]
     public async Task SampleCommands()
     {
         var page = await NewSizedPageAsync();
@@ -27,6 +26,7 @@ public class CommandUiTests :
     }
 
     [Test]
+    [DependsOn(nameof(SampleCommands), ProceedOnFailure = true)]
     public async Task HiringAnswersInline()
     {
         var page = await NewPageAsync();
@@ -40,6 +40,7 @@ public class CommandUiTests :
     }
 
     [Test]
+    [DependsOn(nameof(SampleCommands), ProceedOnFailure = true)]
     public async Task DeactivatingARowLetsItBeDeleted()
     {
         var page = await NewPageAsync();
@@ -56,6 +57,7 @@ public class CommandUiTests :
     }
 
     [Test]
+    [DependsOn(nameof(SampleCommands), ProceedOnFailure = true)]
     public async Task ASlowRenameWaitsInThePanelUntilItLands()
     {
         var page = await NewPageAsync();
@@ -75,6 +77,7 @@ public class CommandUiTests :
     // Two browser contexts are two clients, neither told about the other: the page watching hears of
     // the rename from the server, because the rows its query reads changed.
     [Test]
+    [DependsOn(nameof(SampleCommands), ProceedOnFailure = true)]
     public async Task ARenameInOneBrowserReachesAnother()
     {
         var watching = await NewPageInAsync(await NewContextAsync());
@@ -91,6 +94,7 @@ public class CommandUiTests :
 
     // The panel as the docs show it: a rename still running, past the client's wait.
     [Test]
+    [DependsOn(nameof(SampleCommands), ProceedOnFailure = true)]
     public async Task SamplePendingWork()
     {
         var page = await NewSizedPageAsync(docsViewport);

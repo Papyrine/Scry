@@ -5,7 +5,6 @@
 /// that is not queryable, while reading a leaf out of it was fine. The client's half: a leaf read
 /// through the Nullable's Value keeps no "Value" segment, in a path any more than at its end.
 /// </summary>
-[TestFixture]
 public class OptionalStructProjectionTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -29,7 +28,7 @@ public class OptionalStructProjectionTests
     }
 
     [Test]
-    public void TheWireShapeIsANestedProjection()
+    public async Task TheWireShapeIsANestedProjection()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
@@ -42,7 +41,7 @@ public class OptionalStructProjectionTests
             .Select(_ => _.Value)
             .OfType<NestedValue>()
             .Single();
-        Assert.That(nested.Path, Is.EqualTo(["Workstation"]));
+        await Assert.That(nested.Path).IsEquivalentTo(["Workstation"], CollectionOrdering.Matching);
     }
 
     static ScryClient ClientFor(TestContext context) =>

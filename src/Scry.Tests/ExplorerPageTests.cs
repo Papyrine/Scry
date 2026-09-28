@@ -4,7 +4,6 @@
 /// browser suite proves the policy lets the real page run; these pin the three against each other,
 /// on pages the embedded one deliberately never is.
 /// </summary>
-[TestFixture]
 public class ExplorerPageTests
 {
     static ExplorerPage Build(string html, string route = "/scry", string? queryEndpoint = null)
@@ -28,21 +27,21 @@ public class ExplorerPageTests
     /// refuse the one that is.
     /// </summary>
     [Test]
-    public void HashesTheScriptAsItIsServedNotAsItIsEmbedded()
+    public async Task HashesTheScriptAsItIsServedNotAsItIsEmbedded()
     {
         var page = Build("<script>window.base = '__SCRY_BASE__';</script>");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(page.Html, Does.Contain("window.base = '/scry/';"));
-            Assert.That(page.Policy, Does.Contain(Sha256("window.base = '/scry/';")));
-            Assert.That(page.Policy, Does.Not.Contain(Sha256("window.base = '__SCRY_BASE__';")));
-        });
+            await Assert.That(page.Html).Contains("window.base = '/scry/';");
+            await Assert.That(page.Policy).Contains(Sha256("window.base = '/scry/';"));
+            await Assert.That(page.Policy).DoesNotContain(Sha256("window.base = '__SCRY_BASE__';"));
+        }
     }
 
     /// <summary>Every inline script, in document order; the ones with a src are the origin's to allow.</summary>
     [Test]
-    public void HashesEveryInlineScriptAndNoSourcedOne()
+    public async Task HashesEveryInlineScriptAndNoSourcedOne()
     {
         var page = Build(
             """
@@ -52,9 +51,7 @@ public class ExplorerPageTests
             <script type="module">two();</script>
             """);
 
-        Assert.That(
-            page.Policy,
-            Does.Contain($"script-src 'self' 'wasm-unsafe-eval' {Sha256("one();")} {Sha256("two();")};"));
+        await Assert.That(page.Policy).Contains($"script-src 'self' 'wasm-unsafe-eval' {Sha256("one();")} {Sha256("two();")};");
     }
 
     /// <summary>
@@ -63,44 +60,45 @@ public class ExplorerPageTests
     /// the explorer makes to the endpoint it was configured with.
     /// </summary>
     [Test]
-    public void ConnectSrcNamesTheEndpointsOriginWithoutItsCredentials()
+    public async Task ConnectSrcNamesTheEndpointsOriginWithoutItsCredentials()
     {
         var page = Build("<p></p>", queryEndpoint: "https://user:pass@api.example.com:8443/scry/query");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(page.Policy, Does.Contain("connect-src 'self' https://api.example.com:8443;"));
-            Assert.That(page.Policy, Does.Not.Contain("user:pass"));
-        });
+            await Assert.That(page.Policy).Contains("connect-src 'self' https://api.example.com:8443;");
+            await Assert.That(page.Policy).DoesNotContain("user:pass");
+        }
     }
 
-    [TestCase("/query", TestName = "a relative endpoint is the origin's own")]
-    [TestCase("ftp://api.example.com/query", TestName = "a scheme the page cannot fetch over")]
-    public void ConnectSrcIsTheOriginAloneFor(string queryEndpoint)
+    [Test]
+    [Arguments("/query", DisplayName = "a relative endpoint is the origin's own")]
+    [Arguments("ftp://api.example.com/query", DisplayName = "a scheme the page cannot fetch over")]
+    public async Task ConnectSrcIsTheOriginAloneFor(string queryEndpoint)
     {
         var page = Build("<p></p>", queryEndpoint: queryEndpoint);
 
-        Assert.That(page.Policy, Does.Contain("connect-src 'self';"));
+        await Assert.That(page.Policy).Contains("connect-src 'self';");
     }
 
     /// <summary>The tag is of the served bytes, so two routes are two pages and two tags.</summary>
     [Test]
-    public void TagsWhatIsServedRatherThanWhatIsEmbedded()
+    public async Task TagsWhatIsServedRatherThanWhatIsEmbedded()
     {
         const string html = """<base href="__SCRY_BASE__" />""";
 
         var mounted = Build(html);
         var elsewhere = Build(html, route: "/tools/scry");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(mounted.Html, Does.Contain("""<base href="/scry/" />"""));
-            Assert.That(elsewhere.Html, Does.Contain("""<base href="/tools/scry/" />"""));
-            Assert.That(mounted.Tag, Is.Not.EqualTo(elsewhere.Tag));
+            await Assert.That(mounted.Html).Contains("""<base href="/scry/" />""");
+            await Assert.That(elsewhere.Html).Contains("""<base href="/tools/scry/" />""");
+            await Assert.That(mounted.Tag).IsNotEqualTo(elsewhere.Tag);
             // Quoted as the header wants it, and the same page tags the same way twice.
-            Assert.That(mounted.Tag, Does.StartWith("\"").And.EndWith("\""));
-            Assert.That(Build(html).Tag, Is.EqualTo(mounted.Tag));
-        });
+            await Assert.That(mounted.Tag).StartsWith("\"").And.EndsWith("\"");
+            await Assert.That(Build(html).Tag).IsEqualTo(mounted.Tag);
+        }
     }
 
     /// <summary>
@@ -109,19 +107,19 @@ public class ExplorerPageTests
     /// its base href is the route it was mounted at.
     /// </summary>
     [Test]
-    public void BuildsTheEmbeddedPage()
+    public async Task BuildsTheEmbeddedPage()
     {
         var page = ScryExplorerExtensions.Build(
             ExplorerAssets.Instance.ReadText("index.html"),
             "/tools/scry",
             new());
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(page.Html, Does.Contain("""<base href="/tools/scry/" />"""));
-            Assert.That(page.Html, Does.Not.Contain("__SCRY_BASE__"));
-            Assert.That(ExplorerAssets.InlineScriptHashes(page.Html), Has.Count.EqualTo(2));
-        });
+            await Assert.That(page.Html).Contains("""<base href="/tools/scry/" />""");
+            await Assert.That(page.Html).DoesNotContain("__SCRY_BASE__");
+            await Assert.That(ExplorerAssets.InlineScriptHashes(page.Html)).Count().IsEqualTo(2);
+        }
     }
 
     /// <summary>
@@ -131,18 +129,18 @@ public class ExplorerPageTests
     /// is not the thing failing.
     /// </summary>
     [Test]
-    public void ThePackageEmbedsItsHostPage() =>
-        Assert.That(ExplorerAssets.Instance.HasAssets, Is.True);
+    public async Task ThePackageEmbedsItsHostPage() =>
+        await Assert.That(ExplorerAssets.Instance.HasAssets).IsTrue();
 
     /// <summary>
     /// The root mount. A base href of "//" is a scheme-relative url, which would send the whole app
     /// looking for its assets on a host named by whatever followed.
     /// </summary>
     [Test]
-    public void TheRootRouteWritesASingleSlash()
+    public async Task TheRootRouteWritesASingleSlash()
     {
         var page = Build("""<base href="__SCRY_BASE__" />""", route: "/");
 
-        Assert.That(page.Html, Does.Contain("""<base href="/" />"""));
+        await Assert.That(page.Html).Contains("""<base href="/" />""");
     }
 }

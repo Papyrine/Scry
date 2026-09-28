@@ -1,4 +1,4 @@
-[TestFixture]
+[NotInParallel]
 public class ObservabilityTests
 {
     [Test]
@@ -39,7 +39,7 @@ public class ObservabilityTests
 
         await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create("Missing", [new CountOp()]);
-        Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+        Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
         // The root is not in the schema, so the tag carries a placeholder rather than an
         // attacker-controlled string.
@@ -80,12 +80,12 @@ public class ObservabilityTests
             context);
 
         var activity = stopped.Single();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(activity.DisplayName, Is.EqualTo("scry.attachment Contract"));
-            Assert.That(activity.GetTagItem("scry.source"), Is.EqualTo("Contract"));
-            Assert.That(activity.GetTagItem("scry.member"), Is.EqualTo("Document"));
-        });
+            await Assert.That(activity.DisplayName).IsEqualTo("scry.attachment Contract");
+            await Assert.That(activity.GetTagItem("scry.source")).IsEqualTo("Contract");
+            await Assert.That(activity.GetTagItem("scry.member")).IsEqualTo("Document");
+        }
     }
 
     [Test]
@@ -96,14 +96,14 @@ public class ObservabilityTests
 
         await using var context = TestContext.CreateSeeded();
         var request = AttachmentRequest.Create("Contract", "<script>", [new("1", ClrTypeTag.Int32)]);
-        Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.FetchAttachment(request, context));
+        Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.FetchAttachment(request, context));
 
         var activity = stopped.Single();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(activity.GetTagItem("scry.source"), Is.EqualTo("Contract"));
-            Assert.That(activity.GetTagItem("scry.member"), Is.EqualTo("(unknown)"));
-        });
+            await Assert.That(activity.GetTagItem("scry.source")).IsEqualTo("Contract");
+            await Assert.That(activity.GetTagItem("scry.member")).IsEqualTo("(unknown)");
+        }
     }
 
     [Test]
@@ -136,7 +136,7 @@ public class ObservabilityTests
         SharedProcessor.Instance.Execute(EmployeeNames(), context, provider);
 
         var entry = auditor.Entries.Single();
-        Assert.That(entry.Duration, Is.GreaterThan(TimeSpan.Zero));
+        await Assert.That(entry.Duration).IsGreaterThan(TimeSpan.Zero);
         await VerifyEntry(entry);
     }
 
@@ -168,7 +168,7 @@ public class ObservabilityTests
         var request = QueryRequest.Create(
             "Employee",
             [new WhereOp(new MemberNode(["Salary"]))]);
-        Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context, provider));
+        Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context, provider));
 
         await VerifyEntry(auditor.Entries.Single());
     }
@@ -190,7 +190,7 @@ public class ObservabilityTests
         await using var context = TestContext.CreateSeeded();
         // The policy is applied through a typed call, so its failure arrives as it was thrown, and the
         // audit entry names it as such.
-        Assert.Throws<InvalidOperationException>(() => processor.Execute(EmployeeNames(), context, provider));
+        Assert.ThrowsExactly<InvalidOperationException>(() => processor.Execute(EmployeeNames(), context, provider));
 
         await VerifyEntry(auditor.Entries.Single());
     }
@@ -210,7 +210,7 @@ public class ObservabilityTests
         }
 
         var entry = auditor.Entries.Single();
-        Assert.That(entry.Rows, Is.EqualTo(streamed.Count));
+        await Assert.That(entry.Rows).IsEqualTo(streamed.Count);
         await VerifyEntry(entry);
     }
 
@@ -248,11 +248,11 @@ public class ObservabilityTests
         SharedProcessor.Instance.Execute(request, context, provider);
 
         var entry = auditor.Entries.Single();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(entry.Sensitive, Is.True);
-            Assert.That(entry.Request, Is.SameAs(request));
-        });
+            await Assert.That(entry.Sensitive).IsTrue();
+            await Assert.That(entry.Request).IsSameReferenceAs(request);
+        }
     }
 
     static QueryRequest EmployeeNames() =>
@@ -270,7 +270,7 @@ public class ObservabilityTests
 
     // A batch refused at its envelope ran no entry, so it is metered and spanned once, as itself.
     [Test]
-    public void MetricsAndActivityForABatchRefusedWhole()
+    public async Task MetricsAndActivityForABatchRefusedWhole()
     {
         var measurements = new List<(string Instrument, object Value, Dictionary<string, object?> Tags)>();
         using var meters = ListenMeters(measurements);
@@ -288,18 +288,18 @@ public class ObservabilityTests
         ]);
 
         using var context = TestContext.CreateSeeded();
-        Assert.Throws<ScryValidationException>(() => processor.ExecuteBatch(batch, context));
+        Assert.ThrowsExactly<ScryValidationException>(() => processor.ExecuteBatch(batch, context));
 
         var duration = measurements.Single(_ => _.Instrument == "scry.server.query.duration");
         var activity = stopped.Single();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(duration.Tags["scry.source"], Is.EqualTo("(batch)"));
-            Assert.That(duration.Tags["scry.outcome"], Is.EqualTo("rejected"));
-            Assert.That(activity.DisplayName, Is.EqualTo("scry.batch"));
-            Assert.That(activity.Status, Is.EqualTo(ActivityStatusCode.Error));
-            Assert.That(activity.TagObjects.Single(_ => _.Key == "scry.batch.size").Value, Is.EqualTo(2));
-        });
+            await Assert.That(duration.Tags["scry.source"]).IsEqualTo("(batch)");
+            await Assert.That(duration.Tags["scry.outcome"]).IsEqualTo("rejected");
+            await Assert.That(activity.DisplayName).IsEqualTo("scry.batch");
+            await Assert.That(activity.Status).IsEqualTo(ActivityStatusCode.Error);
+            await Assert.That(activity.TagObjects.Single(_ => _.Key == "scry.batch.size").Value).IsEqualTo(2);
+        }
     }
 
     static ActivityListener Listen(List<Activity> stopped)

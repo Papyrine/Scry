@@ -3,7 +3,6 @@
 /// throughout: nothing about them reaches the wire request, so the server learns of them only as HTTP
 /// headers, and a policy reads them the same way any middleware would.
 /// </summary>
-[TestFixture]
 public class HeaderTests
 {
     [Test]
@@ -21,7 +20,7 @@ public class HeaderTests
             .WithHeader("X-Correlation", "abc-123")
             .CountAsync();
 
-        Assert.That(sent, Is.EqualTo("abc-123"));
+        await Assert.That(sent).IsEqualTo("abc-123");
     }
 
     // The operator can sit anywhere: it swaps the provider and leaves the captured expression alone,
@@ -43,7 +42,7 @@ public class HeaderTests
             .WithHeader("X-Correlation", "second")
             .CountAsync();
 
-        Assert.That(sent, Is.EqualTo(["first", "second"]));
+        await Assert.That(sent).IsEquivalentTo(["first", "second"], CollectionOrdering.Matching);
     }
 
     // A query re-sent as a body after a 405 is the same query asked again, so it carries the headers
@@ -71,12 +70,12 @@ public class HeaderTests
             })
             .CountAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(sent, Has.Count.EqualTo(2));
-            Assert.That(sent.Distinct().Count(), Is.EqualTo(1));
-            Assert.That(minted, Is.EqualTo(1));
-        });
+            await Assert.That(sent).Count().IsEqualTo(2);
+            await Assert.That(sent.Distinct().Count()).IsEqualTo(1);
+            await Assert.That(minted).IsEqualTo(1);
+        }
     }
 
     [Test]
@@ -95,13 +94,13 @@ public class HeaderTests
             .OnResponseHeaders(_ => trace = _.GetValues("X-Trace").Single())
             .CountAsync();
 
-        Assert.That(trace, Is.EqualTo("trace-1"));
+        await Assert.That(trace).IsEqualTo("trace-1");
     }
 
     // The response that went wrong is exactly the one whose trace header is worth having, so the hook
     // has to run before the failure is turned into an exception.
     [Test]
-    public void ResponseHeadersAreReadWhenTheQueryFails()
+    public async Task ResponseHeadersAreReadWhenTheQueryFails()
     {
         var client = StubbedClient(
             _ =>
@@ -118,14 +117,14 @@ public class HeaderTests
         var query = client.Source<Employee>("Employee", ["Name"])
             .OnResponseHeaders(_ => trace = _.GetValues("X-Trace").Single());
 
-        Assert.ThrowsAsync<ScryRequestException>(() => query.CountAsync());
-        Assert.That(trace, Is.EqualTo("trace-2"));
+        await Assert.ThrowsExactlyAsync<ScryRequestException>(() => query.CountAsync());
+        await Assert.That(trace).IsEqualTo("trace-2");
     }
 
     // Headers are HTTP's, and the wire request is what the server validates. A header that leaked into
     // it would be an attacker-supplied value reaching the validator.
     [Test]
-    public void HeadersNeverReachTheWireRequest()
+    public async Task HeadersNeverReachTheWireRequest()
     {
         var client = StubbedClient(_ => Scalar(0));
         var plain = client.Source<Employee>("Employee", ["Name"]).Where(_ => _.Active);
@@ -134,15 +133,13 @@ public class HeaderTests
             .WithHeader("X-Correlation", "abc-123")
             .OnResponseHeaders(_ => { });
 
-        Assert.That(
-            ScryJson.Serialize(withHeaders.ToScryRequest()),
-            Is.EqualTo(ScryJson.Serialize(plain.ToScryRequest())));
+        await Assert.That(ScryJson.Serialize(withHeaders.ToScryRequest())).IsEqualTo(ScryJson.Serialize(plain.ToScryRequest()));
     }
 
     // A custom transport has nowhere to put a header. Refusing is the honest answer; sending the query
     // without it would make WithHeader look like it worked.
     [Test]
-    public void HeadersOverANonHttpTransportAreRefused()
+    public async Task HeadersOverANonHttpTransportAreRefused()
     {
         using var context = TestContext.CreateSeeded();
         var processor = SharedProcessor.Instance;
@@ -151,12 +148,12 @@ public class HeaderTests
         var query = client.Source<Employee>("Employee", ["Name"])
             .WithHeader("X-Correlation", "abc-123");
 
-        var exception = Assert.ThrowsAsync<NotSupportedException>(() => query.CountAsync())!;
-        Assert.That(exception.Message, Does.Contain("ScryClient.ForHttp"));
+        var exception = (await Assert.ThrowsExactlyAsync<NotSupportedException>(() => query.CountAsync()))!;
+        await Assert.That(exception.Message).Contains("ScryClient.ForHttp");
     }
 
     [Test]
-    public void PolicyReadsTheRequestHeaderAndWritesToTheResponse()
+    public async Task PolicyReadsTheRequestHeaderAndWritesToTheResponse()
     {
         using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
@@ -177,15 +174,15 @@ public class HeaderTests
             responseHeaders);
 
         // Only the Sales employees, so the policy read the header rather than ignoring it.
-        Assert.That(ScryJson.Serialize(response), Does.Contain("Bob").And.Contain("Carol"));
-        Assert.That(ScryJson.Serialize(response), Does.Not.Contain("Alice"));
-        Assert.That(responseHeaders["X-Scry-Policy"].ToString(), Is.EqualTo("department"));
+        await Assert.That(ScryJson.Serialize(response)).Contains("Bob").And.Contains("Carol");
+        await Assert.That(ScryJson.Serialize(response)).DoesNotContain("Alice");
+        await Assert.That(responseHeaders["X-Scry-Policy"].ToString()).IsEqualTo("department");
     }
 
     // The processor is usable off the HTTP endpoint, where there are no headers at all. A policy that
     // reads one there gets an empty dictionary rather than a null reference.
     [Test]
-    public void PolicyOutsideTheHttpEndpointSeesEmptyHeaders()
+    public async Task PolicyOutsideTheHttpEndpointSeesEmptyHeaders()
     {
         using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
@@ -195,7 +192,7 @@ public class HeaderTests
         var response = Processor().Execute(request, context);
 
         // No X-Department, so the policy filtered nothing and every employee came back.
-        Assert.That(ScryJson.Serialize(response), Does.Contain("Alice").And.Contain("Bob"));
+        await Assert.That(ScryJson.Serialize(response)).Contains("Alice").And.Contains("Bob");
     }
 
     static ScryProcessor Processor() =>

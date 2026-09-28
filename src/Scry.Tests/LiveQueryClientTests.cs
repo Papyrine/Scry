@@ -5,7 +5,6 @@ using System.IO.Pipelines;
 /// good and what is asked for again, and what each of the three ways of consuming one promises.
 /// Driven by scripted responses, so that what is pinned is the client and not a server.
 /// </summary>
-[TestFixture]
 public class LiveQueryClientTests
 {
     [Test]
@@ -16,7 +15,7 @@ public class LiveQueryClientTests
 
         var answers = await Drain(script.Client());
 
-        Assert.That(answers, Is.EqualTo(["Alice", "Alice,Bob"]));
+        await Assert.That(answers).IsEquivalentTo(["Alice", "Alice,Bob"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -25,7 +24,7 @@ public class LiveQueryClientTests
         var script = new Script(
             ping + Result("a", "Alice") + "event: something-new\ndata: {}\n\n" + ping + End(reconnect: false));
 
-        Assert.That(await Drain(script.Client()), Is.EqualTo(["Alice"]));
+        await Assert.That(await Drain(script.Client())).IsEquivalentTo(["Alice"], CollectionOrdering.Matching);
     }
 
     // A connection that stops without the server having said it was ending was cut. It is asked for
@@ -39,11 +38,11 @@ public class LiveQueryClientTests
 
         var answers = await Drain(script.Client());
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(answers, Is.EqualTo(["Alice", "Bob"]));
-            Assert.That(script.LastEventIds, Is.EqualTo([null, "a"]));
-        });
+            await Assert.That(answers).IsEquivalentTo(["Alice", "Bob"], CollectionOrdering.Matching);
+            await Assert.That(script.LastEventIds).IsEquivalentTo([null, "a"], CollectionOrdering.Matching);
+        }
     }
 
     [Test]
@@ -53,8 +52,8 @@ public class LiveQueryClientTests
             Result("a", "Alice") + End(reconnect: true),
             unchanged + End(reconnect: false));
 
-        Assert.That(await Drain(script.Client()), Is.EqualTo(["Alice"]));
-        Assert.That(script.LastEventIds, Is.EqualTo([null, "a"]));
+        await Assert.That(await Drain(script.Client())).IsEquivalentTo(["Alice"], CollectionOrdering.Matching);
+        await Assert.That(script.LastEventIds).IsEquivalentTo([null, "a"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -66,57 +65,58 @@ public class LiveQueryClientTests
             Failure(HttpStatusCode.BadGateway, code: null),
             Result("a", "Alice") + End(reconnect: false));
 
-        Assert.That(await Drain(script.Client()), Is.EqualTo(["Alice"]));
+        await Assert.That(await Drain(script.Client())).IsEquivalentTo(["Alice"], CollectionOrdering.Matching);
     }
 
     // Refused on the request's own merits: it would be refused again.
-    [TestCase(HttpStatusCode.BadRequest, ScryErrorCode.Validation)]
-    [TestCase(HttpStatusCode.BadRequest, ScryErrorCode.WireFormat)]
-    [TestCase(HttpStatusCode.UnsupportedMediaType, ScryErrorCode.UnsupportedMedia)]
-    public void ARefusalEndsTheLiveQuery(HttpStatusCode status, ScryErrorCode code)
+    [Test]
+    [Arguments(HttpStatusCode.BadRequest, ScryErrorCode.Validation)]
+    [Arguments(HttpStatusCode.BadRequest, ScryErrorCode.WireFormat)]
+    [Arguments(HttpStatusCode.UnsupportedMediaType, ScryErrorCode.UnsupportedMedia)]
+    public async Task ARefusalEndsTheLiveQuery(HttpStatusCode status, ScryErrorCode code)
     {
         var script = new Script(Failure(status, code), Result("a", "Alice"));
 
-        var exception = Assert.ThrowsAsync<ScryRequestException>(() => Drain(script.Client()));
+        var exception = await Assert.ThrowsExactlyAsync<ScryRequestException>(() => Drain(script.Client()));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(exception!.Code, Is.EqualTo(code));
-            Assert.That(script.Connections, Is.EqualTo(1));
-        });
+            await Assert.That(exception!.Code).IsEqualTo(code);
+            await Assert.That(script.Connections).IsEqualTo(1);
+        }
     }
 
     [Test]
-    public void ADenialEndsTheLiveQuery()
+    public async Task ADenialEndsTheLiveQuery()
     {
         var script = new Script(Failure(HttpStatusCode.Forbidden, ScryErrorCode.Forbidden));
 
-        Assert.ThrowsAsync<ScryPermissionException>(() => Drain(script.Client()));
+        await Assert.ThrowsExactlyAsync<ScryPermissionException>(() => Drain(script.Client()));
     }
 
     [Test]
-    public void AStaleClientEndsTheLiveQuery()
+    public async Task AStaleClientEndsTheLiveQuery()
     {
         var script = new Script(Failure(HttpStatusCode.BadRequest, ScryErrorCode.StaleClient));
 
-        Assert.ThrowsAsync<ScryStaleClientException>(() => Drain(script.Client()));
+        await Assert.ThrowsExactlyAsync<ScryStaleClientException>(() => Drain(script.Client()));
     }
 
     // Said in the stream, because the status was long since sent — and surfaced exactly as the same
     // failure before the first answer would have been.
     [Test]
-    public void AFailureSaidInTheStreamSurfacesAsTheStatusWouldHave()
+    public async Task AFailureSaidInTheStreamSurfacesAsTheStatusWouldHave()
     {
         var script = new Script(
             Result("a", "Alice") + Error("The result is larger than a live query may hold.", ScryErrorCode.Validation));
 
-        var exception = Assert.ThrowsAsync<ScryRequestException>(() => Drain(script.Client()));
+        var exception = await Assert.ThrowsExactlyAsync<ScryRequestException>(() => Drain(script.Client()));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(exception!.Code, Is.EqualTo(ScryErrorCode.Validation));
-            Assert.That(exception.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        });
+            await Assert.That(exception!.Code).IsEqualTo(ScryErrorCode.Validation);
+            await Assert.That(exception.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        }
     }
 
     [Test]
@@ -126,25 +126,26 @@ public class LiveQueryClientTests
             Result("a", "Alice") + Error("Query execution failed.", ScryErrorCode.ExecutionFailed),
             unchanged + End(reconnect: false));
 
-        Assert.That(await Drain(script.Client()), Is.EqualTo(["Alice"]));
-        Assert.That(script.Connections, Is.EqualTo(2));
+        await Assert.That(await Drain(script.Client())).IsEquivalentTo(["Alice"], CollectionOrdering.Matching);
+        await Assert.That(script.Connections).IsEqualTo(2);
     }
 
     // The route exists only where the server has said how many live queries it will hold.
-    [TestCase(HttpStatusCode.NotFound)]
-    [TestCase(HttpStatusCode.MethodNotAllowed)]
-    public void AServerWithoutTheRouteSaysWhatToSet(HttpStatusCode status)
+    [Test]
+    [Arguments(HttpStatusCode.NotFound)]
+    [Arguments(HttpStatusCode.MethodNotAllowed)]
+    public async Task AServerWithoutTheRouteSaysWhatToSet(HttpStatusCode status)
     {
         var script = new Script(new HttpResponseMessage(status));
 
-        var exception = Assert.ThrowsAsync<NotSupportedException>(() => Drain(script.Client()));
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() => Drain(script.Client()));
 
-        Assert.That(exception!.Message, Does.Contain("MaxSubscriptions"));
+        await Assert.That(exception!.Message).Contains("MaxSubscriptions");
     }
 
     // A single-page app's fallback route answers any unmapped path with its index page, and a 200.
     [Test]
-    public void ASuccessThatIsNotAnEventStreamIsNotMistakenForOne()
+    public async Task ASuccessThatIsNotAnEventStreamIsNotMistakenForOne()
     {
         var script = new Script(
             new HttpResponseMessage(HttpStatusCode.OK)
@@ -152,19 +153,19 @@ public class LiveQueryClientTests
                 Content = new StringContent("<!doctype html>", Encoding.UTF8, "text/html")
             });
 
-        Assert.ThrowsAsync<NotSupportedException>(() => Drain(script.Client()));
+        await Assert.ThrowsExactlyAsync<NotSupportedException>(() => Drain(script.Client()));
     }
 
     [Test]
-    public void APolicyThatDeclinesEndsTheLiveQueryWithWhatItWasRetrying()
+    public async Task APolicyThatDeclinesEndsTheLiveQueryWithWhatItWasRetrying()
     {
         var script = new Script(Failure(HttpStatusCode.BadGateway, code: null));
         var client = script.Client();
         client.Reconnect = new GivesUp();
 
-        var exception = Assert.ThrowsAsync<ScryRequestException>(() => Drain(client));
+        var exception = await Assert.ThrowsExactlyAsync<ScryRequestException>(() => Drain(client));
 
-        Assert.That(exception!.StatusCode, Is.EqualTo(HttpStatusCode.BadGateway));
+        await Assert.That(exception!.StatusCode).IsEqualTo(HttpStatusCode.BadGateway);
     }
 
     [Test]
@@ -182,7 +183,7 @@ public class LiveQueryClientTests
         await Drain(client);
 
         // Counted up while nothing arrives, and from zero again once something has.
-        Assert.That(policy.Counts, Is.EqualTo([0, 1, 0]));
+        await Assert.That(policy.Counts).IsEquivalentTo([0, 1, 0], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -194,12 +195,12 @@ public class LiveQueryClientTests
 
         await Drain(client);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(script.Bodies.Single(), Is.EqualTo(ScryJson.Serialize(names.ToScryRequest())));
-            Assert.That(ScryJson.Serialize(names.Live().Request), Is.EqualTo(ScryJson.Serialize(names.ToScryRequest())));
-            Assert.That(script.Paths.Single(), Is.EqualTo("/api/query/subscribe"));
-        });
+            await Assert.That(script.Bodies.Single()).IsEqualTo(ScryJson.Serialize(names.ToScryRequest()));
+            await Assert.That(ScryJson.Serialize(names.Live().Request)).IsEqualTo(ScryJson.Serialize(names.ToScryRequest()));
+            await Assert.That(script.Paths.Single()).IsEqualTo("/api/query/subscribe");
+        }
     }
 
     [Test]
@@ -213,7 +214,7 @@ public class LiveQueryClientTests
             counts.Add(count);
         }
 
-        Assert.That(counts, Is.EqualTo([2, 3]));
+        await Assert.That(counts).IsEquivalentTo([2, 3], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -227,7 +228,7 @@ public class LiveQueryClientTests
             names.Add(row?.Name);
         }
 
-        Assert.That(names, Is.EqualTo(["Alice", null]));
+        await Assert.That(names).IsEquivalentTo(["Alice", null], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -242,11 +243,11 @@ public class LiveQueryClientTests
             counts.Add(count);
         }
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(counts, Is.EqualTo([large]));
-            Assert.That(Terminal(script), Is.EqualTo("longCount"));
-        });
+            await Assert.That(counts).IsEquivalentTo([large], CollectionOrdering.Matching);
+            await Assert.That(Terminal(script)).IsEqualTo("longCount");
+        }
     }
 
     [Test]
@@ -260,11 +261,11 @@ public class LiveQueryClientTests
             answers.Add(any);
         }
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(answers, Is.EqualTo([true, false]));
-            Assert.That(Terminal(script), Is.EqualTo("any"));
-        });
+            await Assert.That(answers).IsEquivalentTo([true, false], CollectionOrdering.Matching);
+            await Assert.That(Terminal(script)).IsEqualTo("any");
+        }
     }
 
     // The predicate belongs to the terminal, as it does on the terminal asked once.
@@ -279,11 +280,11 @@ public class LiveQueryClientTests
 
         using var request = JsonDocument.Parse(script.Bodies.Single());
         var terminal = request.RootElement.GetProperty("pipeline").EnumerateArray().Last();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(terminal.GetProperty("$type").GetString(), Is.EqualTo("any"));
-            Assert.That(terminal.GetProperty("predicate").ValueKind, Is.EqualTo(JsonValueKind.Object));
-        });
+            await Assert.That(terminal.GetProperty("$type").GetString()).IsEqualTo("any");
+            await Assert.That(terminal.GetProperty("predicate").ValueKind).IsEqualTo(JsonValueKind.Object);
+        }
     }
 
     [Test]
@@ -297,26 +298,27 @@ public class LiveQueryClientTests
             names.Add(row?.Name);
         }
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(names, Is.EqualTo(["Alice", null]));
-            Assert.That(Terminal(script), Is.EqualTo("single"));
-        });
+            await Assert.That(names).IsEquivalentTo(["Alice", null], CollectionOrdering.Matching);
+            await Assert.That(Terminal(script)).IsEqualTo("single");
+        }
     }
 
     // A stream the server ended on schedule is asked for again at once; only a run of failures is
     // backed away from, and never further than the cap however long the outage.
-    [TestCase(0, 0)]
-    [TestCase(1, 1)]
-    [TestCase(2, 2)]
-    [TestCase(3, 4)]
-    [TestCase(4, 8)]
-    [TestCase(5, 16)]
-    [TestCase(6, 30)]
-    [TestCase(7, 30)]
-    [TestCase(1000, 30)]
-    [TestCase(int.MaxValue, 30)]
-    public void TheDefaultPolicyDoublesToItsCapAndNeverGivesUp(int failures, int seconds)
+    [Test]
+    [Arguments(0, 0)]
+    [Arguments(1, 1)]
+    [Arguments(2, 2)]
+    [Arguments(3, 4)]
+    [Arguments(4, 8)]
+    [Arguments(5, 16)]
+    [Arguments(6, 30)]
+    [Arguments(7, 30)]
+    [Arguments(1000, 30)]
+    [Arguments(int.MaxValue, 30)]
+    public async Task TheDefaultPolicyDoublesToItsCapAndNeverGivesUp(int failures, int seconds)
     {
         var policy = new ScryClient((_, _) => throw new("never sent")).Reconnect;
 
@@ -325,17 +327,15 @@ public class LiveQueryClientTests
         {
             var delay = policy.NextDelay(new(failures, TimeSpan.FromHours(1), RetryReason: null));
 
-            Assert.That(delay, Is.Not.Null);
-            Assert.That(
-                delay!.Value.TotalSeconds,
-                Is.InRange(seconds * 0.8, seconds * 1.2));
+            await Assert.That(delay).IsNotNull();
+            await Assert.That(delay!.Value.TotalSeconds).IsBetween(seconds * 0.8, seconds * 1.2);
         }
     }
 
     // A server that restarts drops every live query it held at once. Without the scatter they would
     // all come back at once too.
     [Test]
-    public void TheDefaultPolicyDoesNotSendEveryClientBackTogether()
+    public async Task TheDefaultPolicyDoesNotSendEveryClientBackTogether()
     {
         var policy = new ScryClient((_, _) => throw new("never sent")).Reconnect;
 
@@ -344,28 +344,28 @@ public class LiveQueryClientTests
             .Distinct()
             .Count();
 
-        Assert.That(delays, Is.GreaterThan(1));
+        await Assert.That(delays).IsGreaterThan(1);
     }
 
     [Test]
-    public void ABatchedQueryCannotBeLive()
+    public async Task ABatchedQueryCannotBeLive()
     {
         var script = new Script();
         var client = script.Client();
 
-        var exception = Assert.Throws<NotSupportedException>(() => Names(client).InBatch(client.Batch()).Live());
+        var exception = Assert.ThrowsExactly<NotSupportedException>(() => Names(client).InBatch(client.Batch()).Live());
 
-        Assert.That(exception!.Message, Does.Contain("batch"));
+        await Assert.That(exception!.Message).Contains("batch");
     }
 
     [Test]
-    public void ATransportThatCannotHoldAQueryOpenSaysSo()
+    public async Task ATransportThatCannotHoldAQueryOpenSaysSo()
     {
         var client = new ScryClient((_, _) => throw new("never sent"));
 
-        var exception = Assert.ThrowsAsync<NotSupportedException>(() => Drain(client));
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() => Drain(client));
 
-        Assert.That(exception!.Message, Does.Contain("subscribe transport"));
+        await Assert.That(exception!.Message).Contains("subscribe transport");
     }
 
     // A supplied transport has no names for its answers, so asking again gets the answer already
@@ -384,7 +384,7 @@ public class LiveQueryClientTests
             });
 
         List<string> answers = [];
-        Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(
             async () =>
             {
                 await foreach (var rows in Names(client).Live())
@@ -393,7 +393,7 @@ public class LiveQueryClientTests
                 }
             });
 
-        Assert.That(answers, Is.EqualTo(["Alice", "Alice,Bob"]));
+        await Assert.That(answers).IsEquivalentTo(["Alice", "Alice,Bob"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -407,12 +407,12 @@ public class LiveQueryClientTests
             .Subscribe(rows => answers.Add(string.Join(',', rows.Select(_ => _.Name))));
         await subscription.Completion;
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(answers, Is.EqualTo(["Alice", "Bob"]));
-            Assert.That(subscription.State, Is.EqualTo(ScrySubscriptionState.Closed));
-            Assert.That(subscription.Error, Is.Null);
-        });
+            await Assert.That(answers).IsEquivalentTo(["Alice", "Bob"], CollectionOrdering.Matching);
+            await Assert.That(subscription.State).IsEqualTo(ScrySubscriptionState.Closed);
+            await Assert.That(subscription.Error).IsNull();
+        }
     }
 
     // Bound to the Task overload, so the next answer waits for it and a failure in it is seen. As an
@@ -434,7 +434,7 @@ public class LiveQueryClientTests
                 });
         await subscription.Completion;
 
-        Assert.That(events, Is.EqualTo(["begin Alice", "end Alice", "begin Bob", "end Bob"]));
+        await Assert.That(events).IsEquivalentTo(["begin Alice", "end Alice", "begin Bob", "end Bob"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -448,12 +448,12 @@ public class LiveQueryClientTests
             .Subscribe(_ => { }, exception => reported = exception);
         await subscription.Completion;
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(reported, Is.InstanceOf<ScryPermissionException>());
-            Assert.That(subscription.Error, Is.SameAs(reported));
-            Assert.That(subscription.State, Is.EqualTo(ScrySubscriptionState.Faulted));
-        });
+            await Assert.That(reported).IsAssignableTo<ScryPermissionException>();
+            await Assert.That(subscription.Error).IsSameReferenceAs(reported);
+            await Assert.That(subscription.State).IsEqualTo(ScrySubscriptionState.Faulted);
+        }
     }
 
     [Test]
@@ -472,11 +472,11 @@ public class LiveQueryClientTests
                 });
         await subscription.Completion;
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(delivered, Is.EqualTo(1));
-            Assert.That(subscription.Error, Is.InstanceOf<InvalidOperationException>());
-        });
+            await Assert.That(delivered).IsEqualTo(1);
+            await Assert.That(subscription.Error).IsAssignableTo<InvalidOperationException>();
+        }
     }
 
     [Test]
@@ -505,11 +505,11 @@ public class LiveQueryClientTests
         await body.Send(Result("b", "Bob"));
         await subscription.Completion.WaitAsync(patience);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(delivered, Is.EqualTo(1));
-            Assert.That(subscription.State, Is.EqualTo(ScrySubscriptionState.Closed));
-        });
+            await Assert.That(delivered).IsEqualTo(1);
+            await Assert.That(subscription.State).IsEqualTo(ScrySubscriptionState.Closed);
+        }
     }
 
     [Test]
@@ -538,9 +538,7 @@ public class LiveQueryClientTests
         await subscription.Completion.WaitAsync(patience);
 
         // Connecting is where it starts, which is not a change.
-        Assert.That(
-            states,
-            Is.EqualTo([ScrySubscriptionState.Live, ScrySubscriptionState.Reconnecting, ScrySubscriptionState.Live, ScrySubscriptionState.Closed]));
+        await Assert.That(states).IsEquivalentTo([ScrySubscriptionState.Live, ScrySubscriptionState.Reconnecting, ScrySubscriptionState.Live, ScrySubscriptionState.Closed], CollectionOrdering.Matching);
     }
 
     // A context need not run what is posted to it in order — the default one runs each post on the
@@ -577,9 +575,7 @@ public class LiveQueryClientTests
         await body.DisposeAsync();
         await subscription.Completion.WaitAsync(patience);
 
-        Assert.That(
-            states,
-            Is.EqualTo([ScrySubscriptionState.Live, ScrySubscriptionState.Reconnecting, ScrySubscriptionState.Live, ScrySubscriptionState.Closed]));
+        await Assert.That(states).IsEquivalentTo([ScrySubscriptionState.Live, ScrySubscriptionState.Reconnecting, ScrySubscriptionState.Live, ScrySubscriptionState.Closed], CollectionOrdering.Matching);
     }
 
     // Every consumer goes through the same pump, so a watcher on the client sees a live query
@@ -609,27 +605,25 @@ public class LiveQueryClientTests
         await body.DisposeAsync();
         await subscription.Completion.WaitAsync(patience);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(
-                reported.Select(_ => _.State),
-                Is.EqualTo(
+            await Assert.That(reported.Select(_ => _.State)).IsEquivalentTo(
                 [
                     ScrySubscriptionState.Connecting,
                     ScrySubscriptionState.Live,
                     ScrySubscriptionState.Reconnecting,
                     ScrySubscriptionState.Live,
                     ScrySubscriptionState.Closed
-                ]));
+                ], CollectionOrdering.Matching);
 
             // One live query, however many connections it took.
-            Assert.That(reported.Select(_ => _.Session).Distinct().Count(), Is.EqualTo(1));
-            Assert.That(reported.Select(_ => _.Request).Distinct().Count(), Is.EqualTo(1));
+            await Assert.That(reported.Select(_ => _.Session).Distinct().Count()).IsEqualTo(1);
+            await Assert.That(reported.Select(_ => _.Request).Distinct().Count()).IsEqualTo(1);
 
             // The answer rides on the report that delivered it, and only that one.
-            Assert.That(reported.Count(_ => _.Answer is not null), Is.EqualTo(1));
-            Assert.That(reported[^1].Attempt, Is.EqualTo(2));
-        });
+            await Assert.That(reported.Count(_ => _.Answer is not null)).IsEqualTo(1);
+            await Assert.That(reported[^1].Attempt).IsEqualTo(2);
+        }
     }
 
     // Watching a live query must not be able to end it.
@@ -646,7 +640,7 @@ public class LiveQueryClientTests
             answers.Add(string.Join(',', rows.Select(_ => _.Name)));
         }
 
-        Assert.That(answers, Is.EqualTo(["Alice"]));
+        await Assert.That(answers).IsEquivalentTo(["Alice"], CollectionOrdering.Matching);
     }
 
     // A callback made on a UI thread is handed its answers there, and may touch what that thread owns.
@@ -669,7 +663,7 @@ public class LiveQueryClientTests
 
         await subscription.Completion;
 
-        Assert.That(context.Posted, Is.GreaterThanOrEqualTo(1));
+        await Assert.That(context.Posted).IsGreaterThanOrEqualTo(1);
     }
 
     [Test]
@@ -681,7 +675,7 @@ public class LiveQueryClientTests
         using var subscription = Names(script.Client()).Live().AsObservable().Subscribe(observer);
         await observer.Ended.WaitAsync(patience);
 
-        Assert.That(observer.Calls, Is.EqualTo(["next Alice", "next Bob", "completed"]));
+        await Assert.That(observer.Calls).IsEquivalentTo(["next Alice", "next Bob", "completed"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -693,7 +687,7 @@ public class LiveQueryClientTests
         using var subscription = Names(script.Client()).Live().AsObservable().Subscribe(observer);
         await observer.Ended.WaitAsync(patience);
 
-        Assert.That(observer.Calls, Is.EqualTo(["next Alice", "error ScryPermissionException"]));
+        await Assert.That(observer.Calls).IsEquivalentTo(["next Alice", "error ScryPermissionException"], CollectionOrdering.Matching);
     }
 
     // Each observer is a consumer of its own, with a connection of its own.
@@ -712,7 +706,7 @@ public class LiveQueryClientTests
         await first.Ended.WaitAsync(patience);
         await second.Ended.WaitAsync(patience);
 
-        Assert.That(script.Connections, Is.EqualTo(2));
+        await Assert.That(script.Connections).IsEqualTo(2);
     }
 
     static TimeSpan patience = TimeSpan.FromSeconds(20);

@@ -4,8 +4,8 @@
 /// page tests cannot show is that last part — a browser that held the response until it completed
 /// would render nothing at all.
 /// </summary>
-[TestFixture]
 [Category("Browser")]
+[NotInParallel]
 public class LiveUiTests :
     BrowserFixture
 {
@@ -29,9 +29,10 @@ public class LiveUiTests :
         await Becomes(writing, firstAmount, before + 1);
     }
 
-    [TestCase("/live")]
-    [TestCase("/live/stream")]
-    [TestCase("/live/messagepipe")]
+    [Test]
+    [Arguments("/live")]
+    [Arguments("/live/stream")]
+    [Arguments("/live/messagepipe")]
     public async Task EachWayOfConsumingOneShowsTheChange(string path)
     {
         var page = await NewPageAsync();
@@ -66,14 +67,15 @@ public class LiveUiTests :
         await page.ClickAsync("#reprice");
 
         await Becomes(page, "#total", before + 1);
-        Assert.That(await page.InnerTextAsync("#change"), Is.EqualTo("+1.00"));
+        await Assert.That(await page.InnerTextAsync("#change")).IsEqualTo("+1.00");
     }
 
     // The same page over a hub connection instead of HTTP. Nothing on it changes but the transport —
     // which is the point — so what is pinned is that it goes on working: the rows come back over the
     // socket, and a write still arrives without being asked for.
-    [TestCase("/live")]
-    [TestCase("/live/stream")]
+    [Test]
+    [Arguments("/live")]
+    [Arguments("/live/stream")]
     public async Task TheSamePageWorksOverAHub(string path)
     {
         var page = await NewPageAsync();

@@ -3,7 +3,6 @@
 /// <c>CompareTo</c>. The server emits the CLR call and EF owns the SQL, a CASE over the two operands;
 /// text compares under the server's collation, exactly as ordering does.
 /// </summary>
-[TestFixture]
 public class CompareToTests
 {
     [Test]
@@ -16,12 +15,12 @@ public class CompareToTests
             .Select(_ => new {_.Amount, Cmp = _.Amount.CompareTo(100m)})
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows.Single(_ => _.Amount == 75m).Cmp, Is.EqualTo(-1));
-            Assert.That(rows.Single(_ => _.Amount == 100m).Cmp, Is.Zero);
-            Assert.That(rows.Single(_ => _.Amount == 250m).Cmp, Is.EqualTo(1));
-        });
+            await Assert.That(rows.Single(_ => _.Amount == 75m).Cmp).IsEqualTo(-1);
+            await Assert.That(rows.Single(_ => _.Amount == 100m).Cmp).IsZero();
+            await Assert.That(rows.Single(_ => _.Amount == 250m).Cmp).IsEqualTo(1);
+        }
     }
 
     [Test]
@@ -33,7 +32,7 @@ public class CompareToTests
         var count = await client.Source<Order>("Order")
             .CountAsync(_ => _.Region.CompareTo("South") < 0);
 
-        Assert.That(count, Is.EqualTo(2));
+        await Assert.That(count).IsEqualTo(2);
     }
 
     // The static spelling means the same as the instance one.
@@ -47,12 +46,12 @@ public class CompareToTests
             .Select(_ => new {_.Name, Cmp = string.Compare(_.Name, "Bob")})
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows.Single(_ => _.Name == "Bob").Cmp, Is.Zero);
-            Assert.That(rows.Single(_ => _.Name == "Alice").Cmp, Is.EqualTo(-1));
-            Assert.That(rows.Single(_ => _.Name == "Carol").Cmp, Is.EqualTo(1));
-        });
+            await Assert.That(rows.Single(_ => _.Name == "Bob").Cmp).IsZero();
+            await Assert.That(rows.Single(_ => _.Name == "Alice").Cmp).IsEqualTo(-1);
+            await Assert.That(rows.Single(_ => _.Name == "Carol").Cmp).IsEqualTo(1);
+        }
     }
 
     [Test]
@@ -66,7 +65,7 @@ public class CompareToTests
         var count = await client.Source<Order>("Order")
             .CountAsync(_ => _.Placed.CompareTo(cutoff) < 0);
 
-        Assert.That(count, Is.EqualTo(1));
+        await Assert.That(count).IsEqualTo(1);
     }
 
     [Test]
@@ -80,13 +79,13 @@ public class CompareToTests
             .Select(_ => new {_.Quantity, Cmp = _.Quantity.CompareTo(3u)})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Cmp).Order(), Is.EqualTo([-1, 0, 1]));
+        await Assert.That(rows.Select(_ => _.Cmp).Order()).IsEquivalentTo([-1, 0, 1], CollectionOrdering.Matching);
     }
 
     // A null operand keeps the answer null: a comparison against a value that is not there has no
     // direction.
     [Test]
-    public void KeepsNullNullRatherThanPickingADirection()
+    public async Task KeepsNullNullRatherThanPickingADirection()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -104,20 +103,20 @@ public class CompareToTests
         var response = SharedProcessor.Instance.Execute(request, context);
         var rows = response.Payload.EnumerateArray().ToList();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
             var absent = rows.Single(_ => _.GetProperty("discount").ValueKind == JsonValueKind.Null);
-            Assert.That(absent.GetProperty("cmp").ValueKind, Is.EqualTo(JsonValueKind.Null));
+            await Assert.That(absent.GetProperty("cmp").ValueKind).IsEqualTo(JsonValueKind.Null);
 
             var compared = rows
                 .Where(_ => _.GetProperty("discount").ValueKind != JsonValueKind.Null)
                 .Select(_ => _.GetProperty("cmp").GetInt32());
-            Assert.That(compared.Order(), Is.EqualTo([-1, 1]));
-        });
+            await Assert.That(compared.Order()).IsEquivalentTo([-1, 1], CollectionOrdering.Matching);
+        }
     }
 
     [Test]
-    public void RejectsSomethingWithoutAnOrdering()
+    public async Task RejectsSomethingWithoutAnOrdering()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -125,10 +124,10 @@ public class CompareToTests
             "Employee",
             [new SelectOp(new([new("Cmp", new NodeValue(new CallNode(KnownFunction.CompareTo, new MemberNode(["Active"]), [new ConstNode("true", ClrTypeTag.Boolean)])))]))]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("CompareTo is not supported over"));
+        await Assert.That(exception!.Message).Contains("CompareTo is not supported over");
     }
 
     static ScryClient ClientFor(TestContext context) =>

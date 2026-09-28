@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <!--
@@ -10,9 +11,7 @@
     suite in samples/Sample.Tests stays as the thin "actually runs in WASM" smoke layer.
   -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="NUnit" />
-    <PackageReference Include="NUnit3TestAdapter" />
+    <PackageReference Include="TUnit" />
     <PackageReference Include="ProjectDefaults" PrivateAssets="all" />
     <ProjectReference Include="..\Scry.Explorer.Core\Scry.Explorer.Core.csproj" />
     <ProjectReference Include="..\Scry.Client\Scry.Client.csproj" />

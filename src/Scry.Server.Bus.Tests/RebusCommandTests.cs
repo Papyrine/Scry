@@ -10,7 +10,6 @@ using Rebus.Transport.InMem;
 /// which sends and hears replies on an input queue of its own, and a worker, whose handlers are ordinary
 /// Rebus handlers and whose replies leave inside each message's transaction.
 /// </summary>
-[TestFixture]
 public class RebusCommandTests
 {
     [Test]
@@ -20,7 +19,7 @@ public class RebusCommandTests
 
         var receipts = await ScryServer.Send(pair.Server.Services, "ShipParcel", new {label = "rebus-within"});
 
-        Assert.That(receipts.Select(_ => _.Status), Is.EqualTo([CommandStatus.Completed]));
+        await Assert.That(receipts.Select(_ => _.Status)).IsEquivalentTo([CommandStatus.Completed], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -30,7 +29,7 @@ public class RebusCommandTests
 
         var receipts = await ScryServer.Send(pair.Server.Services, "ShipParcel", new {label = "rebus-pending"});
 
-        Assert.That(receipts.Select(_ => _.Status), Is.EqualTo([CommandStatus.Pending, CommandStatus.Completed]));
+        await Assert.That(receipts.Select(_ => _.Status)).IsEquivalentTo([CommandStatus.Pending, CommandStatus.Completed], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -41,7 +40,7 @@ public class RebusCommandTests
 
         await ScryServer.Send(pair.Server.Services, "ShipParcel", new {label = "rebus-headers"}, id, caller: "alice");
 
-        Assert.That(Seen.For("rebus-headers"), Is.EqualTo((id.ToString("D"), "alice")));
+        await Assert.That(Seen.For("rebus-headers")).IsEqualTo((id.ToString("D"), "alice"));
     }
 
     [Test]
@@ -51,7 +50,7 @@ public class RebusCommandTests
 
         var receipts = await ScryServer.Send(pair.Server.Services, "WeighParcel", new {grams = 21});
 
-        Assert.That(receipts.Last().Result!.Value.GetProperty("grams").GetInt32(), Is.EqualTo(42));
+        await Assert.That(receipts.Last().Result!.Value.GetProperty("grams").GetInt32()).IsEqualTo(42);
     }
 
     [Test]
@@ -61,11 +60,11 @@ public class RebusCommandTests
 
         var receipts = await ScryServer.Send(pair.Server.Services, "ShipParcel", new {label = "rebus-failing", fail = true});
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(receipts.Last().Status, Is.EqualTo(CommandStatus.Failed));
-            Assert.That(receipts.Last().Error, Is.EqualTo("Command execution failed."));
-        });
+            await Assert.That(receipts.Last().Status).IsEqualTo(CommandStatus.Failed);
+            await Assert.That(receipts.Last().Error).IsEqualTo("Command execution failed.");
+        }
     }
 
     [Test]
@@ -74,11 +73,11 @@ public class RebusCommandTests
         await using var pair = await Pair.Start();
         var dispatcher = pair.Server.Services.GetRequiredService<RebusDispatcher>();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(dispatcher.CanDispatch(typeof(ShipParcel)), Is.True);
-            Assert.That(dispatcher.CanDispatch(typeof(LocalChore)), Is.False);
-        });
+            await Assert.That(dispatcher.CanDispatch(typeof(ShipParcel))).IsTrue();
+            await Assert.That(dispatcher.CanDispatch(typeof(LocalChore))).IsFalse();
+        }
     }
 
     [Test]
@@ -86,9 +85,9 @@ public class RebusCommandTests
     {
         await using var pair = await Pair.Start(second: true);
 
-        var exception = Assert.Throws<Exception>(() => ScryServer.EnsureDispatchable(pair.Server.Services))!;
+        var exception = Assert.ThrowsExactly<Exception>(() => ScryServer.EnsureDispatchable(pair.Server.Services))!;
 
-        Assert.That(exception.Message, Does.Contain("claimed by"));
+        await Assert.That(exception.Message).Contains("claimed by");
     }
 
     sealed class Pair(IHost server, IHost worker) :

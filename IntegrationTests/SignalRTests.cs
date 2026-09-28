@@ -22,7 +22,8 @@ using SampleContext = Sample.Model.SampleContext;
 /// Long polling, because the test server has no sockets. The hub protocol above it is the same
 /// whichever transport carries it.
 /// </remarks>
-[TestFixture]
+[NotInParallel]
+[DependsOn<HttpRoundTripTests.StaleClient>(nameof(HttpRoundTripTests.StaleClient.AClientThatDoesNotKnowRetriesInABody), ProceedOnFailure = true)]
 public class SignalRTests
 {
     static readonly SqlInstance<SampleContext> sqlInstance = new(
@@ -33,14 +34,14 @@ public class SignalRTests
             return Task.CompletedTask;
         });
 
-    SqlDatabase<SampleContext> database = null!;
+    static SqlDatabase<SampleContext> database = null!;
 
-    [OneTimeSetUp]
-    public async Task BuildDatabase() =>
+    [Before(Class)]
+    public static async Task BuildDatabase() =>
         database = await sqlInstance.Build();
 
-    [OneTimeTearDown]
-    public async Task DropDatabase() =>
+    [After(Class)]
+    public static async Task DropDatabase() =>
         await database.DisposeAsync();
 
     record NameRow(string Name);
@@ -61,12 +62,12 @@ public class SignalRTests
             .Select(_ => new NameRow(_.Name))
             .FirstOrDefaultAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(names.Select(_ => _.Name), Is.EqualTo(["Aaron", "Alice", "Carol"]));
-            Assert.That(count, Is.EqualTo(2));
-            Assert.That(first?.Name, Is.EqualTo("Aaron"));
-        });
+            await Assert.That(names.Select(_ => _.Name)).IsEquivalentTo(["Aaron", "Alice", "Carol"], CollectionOrdering.Matching);
+            await Assert.That(count).IsEqualTo(2);
+            await Assert.That(first?.Name).IsEqualTo("Aaron");
+        }
     }
 
     [Test]
@@ -86,11 +87,11 @@ public class SignalRTests
             .CountAsync();
         await batch.SendAsync();
 
-        await Assert.MultipleAsync(async () =>
+        using (Assert.Multiple())
         {
-            Assert.That((await names).Select(_ => _.Name), Is.EqualTo(["Aaron", "Alice", "Carol"]));
-            Assert.That(await count, Is.EqualTo(2));
-        });
+            await Assert.That((await names).Select(_ => _.Name)).IsEquivalentTo(["Aaron", "Alice", "Carol"], CollectionOrdering.Matching);
+            await Assert.That(await count).IsEqualTo(2);
+        }
     }
 
     [Test]
@@ -108,7 +109,7 @@ public class SignalRTests
             names.Add(row.Name);
         }
 
-        Assert.That(names, Is.EqualTo(["Aaron", "Alice", "Carol"]));
+        await Assert.That(names).IsEquivalentTo(["Aaron", "Alice", "Carol"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -119,13 +120,13 @@ public class SignalRTests
             .LiveCount(_ => _.Region == "HubLive")
             .GetAsyncEnumerator();
 
-        Assert.That(await Next(answers), Is.True);
-        Assert.That(answers.Current, Is.Zero);
+        await Assert.That(await Next(answers)).IsTrue();
+        await Assert.That(answers.Current).IsZero();
 
         await server.AddOrder("HubLive");
 
-        Assert.That(await Next(answers), Is.True);
-        Assert.That(answers.Current, Is.EqualTo(1));
+        await Assert.That(await Next(answers)).IsTrue();
+        await Assert.That(answers.Current).IsEqualTo(1);
     }
 
     // Caught by the code that catches it over HTTP: the same type, and the same code on it.
@@ -134,14 +135,14 @@ public class SignalRTests
     {
         await using var server = await Server.Start(database);
 
-        var exception = Assert.ThrowsAsync<ScryRequestException>(
-            () => server.Client.Source<NameRow>("Nothing").ToListAsync())!;
+        var exception = (await Assert.ThrowsExactlyAsync<ScryRequestException>(
+            () => server.Client.Source<NameRow>("Nothing").ToListAsync()))!;
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(exception.Code, Is.EqualTo(ScryErrorCode.Validation));
-            Assert.That(exception.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        });
+            await Assert.That(exception.Code).IsEqualTo(ScryErrorCode.Validation);
+            await Assert.That(exception.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        }
     }
 
     [Test]
@@ -149,15 +150,15 @@ public class SignalRTests
     {
         await using var server = await Server.Start(database);
 
-        var exception = Assert.ThrowsAsync<ScryRequestException>(
+        var exception = (await Assert.ThrowsExactlyAsync<ScryRequestException>(
             async () =>
             {
                 await foreach (var _ in server.Client.Source<NameRow>("Nothing").ToAsyncEnumerable())
                 {
                 }
-            })!;
+            }))!;
 
-        Assert.That(exception.Code, Is.EqualTo(ScryErrorCode.Validation));
+        await Assert.That(exception.Code).IsEqualTo(ScryErrorCode.Validation);
     }
 
     // The hub is handed a string and reads it with Scry's own reader. Bound by the hub's serializer
@@ -172,11 +173,11 @@ public class SignalRTests
             """{"version":1,"root":"Department","pipeline":[{"$type":"count"}],"smuggled":true}""");
         var marker = ScryJson.DeserializeMarker(Encoding.UTF8.GetBytes(answer));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(marker.Kind, Is.EqualTo(ScryStream.Error));
-            Assert.That(marker.Code, Is.EqualTo(ScryErrorCode.WireFormat));
-        });
+            await Assert.That(marker.Kind).IsEqualTo(ScryStream.Error);
+            await Assert.That(marker.Code).IsEqualTo(ScryErrorCode.WireFormat);
+        }
     }
 
     // SignalR puts no bound of its own on how many streams one client starts. The processor's does.
@@ -186,12 +187,12 @@ public class SignalRTests
         await using var server = await Server.Start(database, _ => _.MaxSubscriptions = 1);
         server.Client.Reconnect = new GivesUp();
         await using var held = server.Query.Order.LiveCount().GetAsyncEnumerator();
-        Assert.That(await Next(held), Is.True);
+        await Assert.That(await Next(held)).IsTrue();
 
         await using var refused = server.Query.Order.LiveCount().GetAsyncEnumerator();
-        var exception = Assert.ThrowsAsync<ScryRequestException>(async () => await refused.MoveNextAsync())!;
+        var exception = (await Assert.ThrowsExactlyAsync<ScryRequestException>(async () => await refused.MoveNextAsync()))!;
 
-        Assert.That(exception.Code, Is.EqualTo(ScryErrorCode.SubscriptionLimit));
+        await Assert.That(exception.Code).IsEqualTo(ScryErrorCode.SubscriptionLimit);
     }
 
     // Stopping the enumeration stops the hub's stream, which ends the subscription and gives its
@@ -202,12 +203,12 @@ public class SignalRTests
         await using var server = await Server.Start(database, _ => _.MaxSubscriptions = 1);
         await using (var held = server.Query.Order.LiveCount().GetAsyncEnumerator())
         {
-            Assert.That(await Next(held), Is.True);
+            await Assert.That(await Next(held)).IsTrue();
         }
 
         await using var again = server.Query.Order.LiveCount().GetAsyncEnumerator();
 
-        Assert.That(await Next(again), Is.True);
+        await Assert.That(await Next(again)).IsTrue();
     }
 
     [Test]
@@ -216,30 +217,30 @@ public class SignalRTests
         await using var server = await Server.Start(database, _ => _.MaxSubscriptions = 0);
         await using var answers = server.Query.Order.LiveCount().GetAsyncEnumerator();
 
-        var exception = Assert.ThrowsAsync<ScryRequestException>(async () => await answers.MoveNextAsync())!;
+        var exception = (await Assert.ThrowsExactlyAsync<ScryRequestException>(async () => await answers.MoveNextAsync()))!;
 
-        Assert.That(exception.Body, Does.Contain(nameof(ScryOptions.MaxSubscriptions)));
+        await Assert.That(exception.Body).Contains(nameof(ScryOptions.MaxSubscriptions));
     }
 
     // Nothing here maps MapScry, so nothing but MapScryHub could have run the startup checks.
     [Test]
-    public void TheStartupChecksRunWithoutTheHttpEndpoints()
+    public async Task TheStartupChecksRunWithoutTheHttpEndpoints()
     {
-        var exception = Assert.ThrowsAsync<Exception>(
+        var exception = (await Assert.ThrowsExactlyAsync<Exception>(
             async () =>
             {
                 await using var server = await Server.Start(
                     database,
                     _ => _.AddPolicy<Sample.Model.Order, UnconstructablePolicy>());
-            })!;
+            }))!;
 
-        Assert.That(exception.Message, Does.Contain(nameof(UnconstructablePolicy)));
+        await Assert.That(exception.Message).Contains(nameof(UnconstructablePolicy));
     }
 
     [Test]
-    public void AuthorizationOnTheHubRefusesTheConnection()
+    public async Task AuthorizationOnTheHubRefusesTheConnection()
     {
-        Assert.ThrowsAsync<HttpRequestException>(
+        await Assert.ThrowsExactlyAsync<HttpRequestException>(
             async () =>
             {
                 await using var server = await Server.Start(database, configure: null, refuseEveryone: true);

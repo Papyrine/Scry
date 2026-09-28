@@ -11,7 +11,6 @@
 /// first asking whether the call read the row at all. The refusals are kept alongside: the same call
 /// spelled over the row still has nowhere to run.
 /// </remarks>
-[TestFixture]
 public class ClosureFoldTests
 {
     // The shape that prompted this. A relative date is the client's own clock, so it belongs in the
@@ -19,67 +18,67 @@ public class ClosureFoldTests
     // spelling that reads the row, and refused this one rather than folding it. The part read off
     // the folded value folds with it, so the whole operand is the constant.
     [Test]
-    public void ATemporalConversionOverClosureState()
+    public async Task ATemporalConversionOverClosureState()
     {
         var predicate = PredicateOf(_ => _.Placed.Day == Date.FromDateTime(DateTime.UtcNow).Day);
 
-        Assert.That(predicate.Right, Is.InstanceOf<ConstNode>());
+        await Assert.That(predicate.Right).IsAssignableTo<ConstNode>();
     }
 
     // A temporal name the wire carries no function for at all — the fold is what makes it a value
     // rather than a refusal.
     [Test]
-    public void ATemporalMethodOffTheSurfaceOverClosureState()
+    public async Task ATemporalMethodOffTheSurfaceOverClosureState()
     {
         var predicate = PredicateOf(_ => _.Placed > DateTime.UtcNow.AddTicks(1));
 
-        Assert.That(predicate.Right, Is.InstanceOf<ConstNode>());
+        await Assert.That(predicate.Right).IsAssignableTo<ConstNode>();
     }
 
     [Test]
-    public void AMathMethodOffTheSurfaceOverClosureState()
+    public async Task AMathMethodOffTheSurfaceOverClosureState()
     {
         var predicate = PredicateOf(_ => _.Amount > (decimal) Math.Clamp(1.5, 0, 2));
 
-        Assert.That(predicate.Right, Is.InstanceOf<ConstNode>());
+        await Assert.That(predicate.Right).IsAssignableTo<ConstNode>();
     }
 
     [Test]
-    public void AStringMethodOffTheSurfaceOverClosureState()
+    public async Task AStringMethodOffTheSurfaceOverClosureState()
     {
         var predicate = PredicateOf(_ => _.Region == "x".PadLeft(3));
 
-        Assert.That(predicate.Right, Is.InstanceOf<ConstNode>());
+        await Assert.That(predicate.Right).IsAssignableTo<ConstNode>();
     }
 
     // A property read off closure state. The temporal dispatch carried it as a function over the
     // constant, and for an offset — which travels as text — the server refused to read a part of a
     // string; a date's own parts happened to survive because a date carries a typed tag.
     [Test]
-    public void ATemporalPropertyOverClosureState()
+    public async Task ATemporalPropertyOverClosureState()
     {
         var cutoff = new DateTimeOffset(2026, 3, 4, 6, 15, 30, TimeSpan.FromHours(2));
         var predicate = PredicateOf(_ => _.Placed.Year == cutoff.Year);
 
-        Assert.That(predicate.Right, Is.InstanceOf<ConstNode>());
+        await Assert.That(predicate.Right).IsAssignableTo<ConstNode>();
     }
 
     [Test]
-    public void AnElapsedTimesPartOverClosureState()
+    public async Task AnElapsedTimesPartOverClosureState()
     {
         var span = TimeSpan.FromHours(5);
         var predicate = PredicateOf(_ => _.Amount > span.Hours);
 
-        Assert.That(predicate.Right, Is.InstanceOf<ConstNode>());
+        await Assert.That(predicate.Right).IsAssignableTo<ConstNode>();
     }
 
     [Test]
-    public void AStringLengthOverClosureState()
+    public async Task AStringLengthOverClosureState()
     {
         var text = "north";
         var predicate = PredicateOf(_ => _.Region.Length == text.Length);
 
-        Assert.That(predicate.Right, Is.InstanceOf<ConstNode>());
+        await Assert.That(predicate.Right).IsAssignableTo<ConstNode>();
     }
 
     // The shape from a page: the year of the client's clock, read off an offset. Round-tripped, since
@@ -95,39 +94,39 @@ public class ClosureFoldTests
             .Where(_ => _.Placed.Year == now.Year)
             .CountAsync();
 
-        Assert.That(count, Is.EqualTo(context.Orders.Count(_ => _.Placed.Year == 2026)));
+        await Assert.That(count).IsEqualTo(context.Orders.Count(_ => _.Placed.Year == 2026));
     }
 
     // Formatting is refused because the SQL that would express it reads the server's language. A value
     // formatted here has already answered that objection.
     [Test]
-    public void AFormattedToStringOverClosureState()
+    public async Task AFormattedToStringOverClosureState()
     {
         var stamped = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var predicate = PredicateOf(_ => _.Region == stamped.ToString("yyyy", CultureInfo.InvariantCulture));
 
-        Assert.That(predicate.Right, Is.InstanceOf<ConstNode>());
+        await Assert.That(predicate.Right).IsAssignableTo<ConstNode>();
     }
 
     // The other half of the rule: a call that does read the row cannot be evaluated here, and has no
     // wire function to become either.
     [Test]
     public void ATemporalMethodOffTheSurfaceOverTheRowIsStillRefused() =>
-        Assert.Throws<NotSupportedException>(
+        Assert.ThrowsExactly<NotSupportedException>(
             () => PredicateOf(_ => _.Placed.AddTicks(1) > DateTime.UtcNow));
 
     [Test]
     public void AStringMethodOffTheSurfaceOverTheRowIsStillRefused() =>
-        Assert.Throws<NotSupportedException>(
+        Assert.ThrowsExactly<NotSupportedException>(
             () => PredicateOf(_ => _.Region.PadLeft(3) == "x"));
 
     [Test]
-    public void AFormattedToStringOverTheRowIsStillRefused()
+    public async Task AFormattedToStringOverTheRowIsStillRefused()
     {
-        var exception = Assert.Throws<NotSupportedException>(
+        var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => PredicateOf(_ => _.Placed.ToString("yyyy", CultureInfo.InvariantCulture) == "2026"));
 
-        Assert.That(exception!.Message, Does.StartWith("ToString with a format is not supported"));
+        await Assert.That(exception!.Message).StartsWith("ToString with a format is not supported");
     }
 
     static BinaryNode PredicateOf(Expression<Func<Order, bool>> predicate)

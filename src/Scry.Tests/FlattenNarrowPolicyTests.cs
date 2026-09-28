@@ -5,13 +5,12 @@
 /// carried. Every query here has to match its direct counterpart, or the longer request would be the
 /// weaker authorization.
 /// </summary>
-[TestFixture]
 public class FlattenNarrowPolicyTests
 {
     // Fleet is policied, Machine is not, and Press carries a policy of its own: the shape where the
     // root's chain is as long as the derived type's, so counting the root's levels skips all of them.
     [Test]
-    public void NarrowingAfterAFlattenAppliesTheDerivedPolicy()
+    public async Task NarrowingAfterAFlattenAppliesTheDerivedPolicy()
     {
         using var context = TestContext.CreateSeeded();
         var processor = Build(
@@ -21,16 +20,16 @@ public class FlattenNarrowPolicyTests
         var flattened = Names(processor, context, "Fleet", [new SelectManyOp(["Machines"]), new OfTypeOp("Press"), SelectName()]);
         var direct = Names(processor, context, "Press", [SelectName()]);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(flattened, Is.EqualTo(["Big press"]));
-            Assert.That(flattened, Is.EqualTo(direct));
-        });
+            await Assert.That(flattened).IsEquivalentTo(["Big press"], CollectionOrdering.Matching);
+            await Assert.That(flattened).IsEquivalentTo(direct, CollectionOrdering.Matching);
+        }
     }
 
     // The derived type's own members are what a skipped policy would hand over.
     [Test]
-    public void NarrowingAfterAFlattenHidesTheDerivedMembersOfADeniedRow()
+    public async Task NarrowingAfterAFlattenHidesTheDerivedMembersOfADeniedRow()
     {
         using var context = TestContext.CreateSeeded();
         var processor = Build(
@@ -48,14 +47,14 @@ public class FlattenNarrowPolicyTests
             context);
 
         var tonnages = response.Payload.EnumerateArray().Select(_ => _.GetProperty("tonnage").GetInt32()).ToList();
-        Assert.That(tonnages, Is.EqualTo([200]));
+        await Assert.That(tonnages).IsEquivalentTo([200], CollectionOrdering.Matching);
     }
 
     // The element policied too, read through the collection by opting in: the flatten applies the
     // element's whole chain and the narrowing adds only what the derived type declares. The two
     // policies keep disjoint rows, so a skipped one on either side answers with a name.
     [Test]
-    public void NarrowingAfterAFlattenOfAPoliciedElementAppliesBothChains()
+    public async Task NarrowingAfterAFlattenOfAPoliciedElementAppliesBothChains()
     {
         using var context = TestContext.CreateSeeded();
         var processor = Build(
@@ -82,42 +81,42 @@ public class FlattenNarrowPolicyTests
 
         // Skipping the derived policy answers "Big press" as well; skipping the element's answers
         // "Small press" as well. The two yards' light presses are what both chains let through.
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(flattened, Is.EqualTo(["Annex press", "Depot press"]));
-            Assert.That(flattened, Is.EqualTo(direct));
-        });
+            await Assert.That(flattened).IsEquivalentTo(["Annex press", "Depot press"], CollectionOrdering.Matching);
+            await Assert.That(flattened).IsEquivalentTo(direct, CollectionOrdering.Matching);
+        }
     }
 
     // Without a policy on the root the count started at zero and the derived chain was applied
     // whole, so this is the case that was always right and must stay so.
     [Test]
-    public void NarrowingAfterAFlattenOfAnUnpoliciedRootAppliesTheDerivedPolicy()
+    public async Task NarrowingAfterAFlattenOfAnUnpoliciedRootAppliesTheDerivedPolicy()
     {
         using var context = TestContext.CreateSeeded();
         var processor = Build(_ => _.AddPolicy<Press, HeavyPressesOnlyPolicy>());
 
         var flattened = Names(processor, context, "Fleet", [new SelectManyOp(["Machines"]), new OfTypeOp("Press"), SelectName()]);
 
-        Assert.That(flattened, Is.EqualTo(["Big press"]));
+        await Assert.That(flattened).IsEquivalentTo(["Big press"], CollectionOrdering.Matching);
     }
 
     // The root's policy still applies to the flatten itself: the retired fleet's machines are never read.
     [Test]
-    public void TheRootPolicyStillFiltersWhatIsFlattened()
+    public async Task TheRootPolicyStillFiltersWhatIsFlattened()
     {
         using var context = TestContext.CreateSeeded();
         var processor = Build(_ => _.AddPolicy<Fleet, ActiveFleetsOnlyPolicy>());
 
         var flattened = Names(processor, context, "Fleet", [new SelectManyOp(["Machines"]), SelectName()]);
 
-        Assert.That(flattened, Is.EqualTo(["Annex press", "Big press", "Depot press", "Drill", "Small press"]));
+        await Assert.That(flattened).IsEquivalentTo(["Annex press", "Big press", "Depot press", "Drill", "Small press"], CollectionOrdering.Matching);
     }
 
     // A root carrying two policies — its base's and its own — over the same flatten: the count the
     // executor resets at the flatten is the element's, whatever the root carried.
     [Test]
-    public void NarrowingAfterAFlattenFromATwiceRootAppliesTheDerivedPolicy()
+    public async Task NarrowingAfterAFlattenFromATwiceRootAppliesTheDerivedPolicy()
     {
         using var context = TestContext.CreateSeeded();
         var processor = Build(
@@ -130,7 +129,7 @@ public class FlattenNarrowPolicyTests
         // The unstaffed yard's press is hidden by the root's own policy; the depot's light press
         // survives the derived policy. A heavy press anywhere would have proven the derived policy
         // ran, and there is none in a yard, so the light policy is the one whose skipping would show.
-        Assert.That(flattened, Is.EqualTo(["Depot press"]));
+        await Assert.That(flattened).IsEquivalentTo(["Depot press"], CollectionOrdering.Matching);
     }
 
     // A flatten stops the denied-row probe: the rows after it are the elements, and the probe asks
@@ -138,7 +137,7 @@ public class FlattenNarrowPolicyTests
     // flatten instead. Pinned as the accepted behaviour — hiding discloses nothing, which is the
     // safe direction — so a change to it is a deliberate one.
     [Test]
-    public void AnErroringDerivedPolicyHidesRatherThanFailsAfterAFlatten()
+    public async Task AnErroringDerivedPolicyHidesRatherThanFailsAfterAFlatten()
     {
         using var context = TestContext.CreateSeeded();
         var processor = Build(
@@ -149,13 +148,13 @@ public class FlattenNarrowPolicyTests
 
         var flattened = Names(processor, context, "Fleet", [new SelectManyOp(["Machines"]), new OfTypeOp("Press"), SelectName()]);
 
-        Assert.That(flattened, Is.EqualTo(["Big press"]));
+        await Assert.That(flattened).IsEquivalentTo(["Big press"], CollectionOrdering.Matching);
     }
 
     // Down a three-level chain, each level's policy is applied exactly once: the narrowing to the
     // middle applies the middle's, and the narrowing to the leaf applies only what the leaf adds.
     [Test]
-    public void NarrowingTwiceAppliesEachLevelOnce()
+    public async Task NarrowingTwiceAppliesEachLevelOnce()
     {
         using var context = TestContext.CreateSeeded();
         var processor = Build(
@@ -166,12 +165,12 @@ public class FlattenNarrowPolicyTests
 
         var names = Names(processor, context, "Machine", [new OfTypeOp("Press"), new OfTypeOp("HeavyPress"), SelectName()]);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(names, Is.EqualTo(["Big press"]));
-            Assert.That(TalliedPressPolicy.Applications, Is.EqualTo(1));
-            Assert.That(TalliedHeavyPressPolicy.Applications, Is.EqualTo(1));
-        });
+            await Assert.That(names).IsEquivalentTo(["Big press"], CollectionOrdering.Matching);
+            await Assert.That(TalliedPressPolicy.Applications).IsEqualTo(1);
+            await Assert.That(TalliedHeavyPressPolicy.Applications).IsEqualTo(1);
+        }
     }
 
     // A right join refuses a narrowed outer side, since EF hoists the narrowing into the combined
@@ -179,7 +178,7 @@ public class FlattenNarrowPolicyTests
     // collection subquery instead, which EF keeps as an APPLY — so the validator lets it through,
     // and this pins that it is right to: the hidden machine stays hidden, and the join stays a join.
     [Test]
-    public void ARightJoinAfterAFlattenKeepsTheElementPolicy()
+    public async Task ARightJoinAfterAFlattenKeepsTheElementPolicy()
     {
         using var context = TestContext.CreateSeeded();
         var processor = Build(
@@ -206,7 +205,7 @@ public class FlattenNarrowPolicyTests
             .Order()
             .ToList();
 
-        Assert.That(rows, Is.EqualTo([("Annex press", "Annex"), ("Big press", "Main"), ("Depot press", "Depot"), ("Drill", "Main"), ("Old press", "Retired")]));
+        await Assert.That(rows).IsEquivalentTo(new (string?, string?)[] {("Annex press", "Annex"), ("Big press", "Main"), ("Depot press", "Depot"), ("Drill", "Main"), ("Old press", "Retired")}, CollectionOrdering.Matching);
     }
 
     static SelectOp SelectName() =>

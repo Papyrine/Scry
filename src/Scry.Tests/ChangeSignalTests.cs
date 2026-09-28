@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 /// what it names — because one reported too early is read before it exists and never looked for again,
 /// and one that names the wrong entity reaches nobody.
 /// </summary>
-[TestFixture]
+[NotInParallel]
 public class ChangeSignalTests
 {
     [Test]
@@ -26,7 +26,7 @@ public class ChangeSignalTests
             });
         await context.SaveChangesAsync();
 
-        Assert.That(reported.Single().Entities, Is.EqualTo([Name<Asset>(context)]));
+        await Assert.That(reported.Single().Entities).IsEquivalentTo([Name<Asset>(context)], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -45,7 +45,7 @@ public class ChangeSignalTests
         // ReSharper disable once MethodHasAsyncOverload
         context.SaveChanges();
 
-        Assert.That(reported.Single().Entities, Is.EqualTo([Name<Department>(context)]));
+        await Assert.That(reported.Single().Entities).IsEquivalentTo([Name<Department>(context)], CollectionOrdering.Matching);
     }
 
     // Change detection has not run when the interceptor is asked, so a property set on a tracked
@@ -67,7 +67,7 @@ public class ChangeSignalTests
         department.Name = "Counsel";
         await context.SaveChangesAsync();
 
-        Assert.That(reported.Single().Entities, Is.EqualTo([Name<Department>(context)]));
+        await Assert.That(reported.Single().Entities).IsEquivalentTo([Name<Department>(context)], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -79,7 +79,7 @@ public class ChangeSignalTests
 
         await context.SaveChangesAsync();
 
-        Assert.That(reported, Is.Empty);
+        await Assert.That(reported).IsEmpty();
     }
 
     // Reported before the commit, a live query would read the rows as they were, find its answer
@@ -105,14 +105,12 @@ public class ChangeSignalTests
             });
         await context.SaveChangesAsync();
 
-        Assert.That(reported, Is.Empty);
+        await Assert.That(reported).IsEmpty();
 
         await transaction.CommitAsync();
 
         // Both saves, once, as one change.
-        Assert.That(
-            reported.Single().Entities,
-            Is.EquivalentTo([Name<Department>(context), Name<Asset>(context)]));
+        await Assert.That(reported.Single().Entities).IsEquivalentTo([Name<Department>(context), Name<Asset>(context)]);
     }
 
     [Test]
@@ -139,7 +137,7 @@ public class ChangeSignalTests
             await transaction.CommitAsync();
         }
 
-        Assert.That(reported, Is.Empty);
+        await Assert.That(reported).IsEmpty();
     }
 
     [Test]
@@ -158,12 +156,12 @@ public class ChangeSignalTests
                 });
             await context.SaveChangesAsync();
 
-            Assert.That(reported, Is.Empty);
+            await Assert.That(reported).IsEmpty();
 
             scope.Complete();
         }
 
-        Assert.That(reported.Single().Entities, Is.EqualTo([Name<Department>(context)]));
+        await Assert.That(reported.Single().Entities).IsEquivalentTo([Name<Department>(context)], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -183,7 +181,7 @@ public class ChangeSignalTests
             await context.SaveChangesAsync();
         }
 
-        Assert.That(reported, Is.Empty);
+        await Assert.That(reported).IsEmpty();
     }
 
     [Test]
@@ -200,8 +198,8 @@ public class ChangeSignalTests
                 OrderId = 404
             });
 
-        Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
-        Assert.That(reported, Is.Empty);
+        await Assert.ThrowsExactlyAsync<DbUpdateException>(() => context.SaveChangesAsync());
+        await Assert.That(reported).IsEmpty();
     }
 
     // The lines are never loaded, so the tracker holds no entry for them: the database deletes them
@@ -236,13 +234,11 @@ public class ChangeSignalTests
             });
         await context.SaveChangesAsync();
 
-        Assert.That(
-            reported.Single().Entities,
-            Is.EquivalentTo([Name<Order>(context), Name<OrderLine>(context)]));
+        await Assert.That(reported.Single().Entities).IsEquivalentTo([Name<Order>(context), Name<OrderLine>(context)]);
     }
 
     [Test]
-    public void NotifyReportsADerivedTypeAsItsRoot()
+    public async Task NotifyReportsADerivedTypeAsItsRoot()
     {
         using var context = TestContext.CreateSeeded();
         var (changes, reported) = Listening();
@@ -250,11 +246,11 @@ public class ChangeSignalTests
 
         changes.Notify<HeavyPress>();
 
-        Assert.That(reported.Single().Entities, Is.EqualTo([Name<Machine>(context)]));
+        await Assert.That(reported.Single().Entities).IsEquivalentTo([Name<Machine>(context)], CollectionOrdering.Matching);
     }
 
     [Test]
-    public void NotifyNamesEachRootOnce()
+    public async Task NotifyNamesEachRootOnce()
     {
         using var context = TestContext.CreateSeeded();
         var (changes, reported) = Listening();
@@ -262,14 +258,12 @@ public class ChangeSignalTests
 
         changes.Notify(typeof(Vehicle), typeof(Building), typeof(Order));
 
-        Assert.That(
-            reported.Single().Entities,
-            Is.EqualTo([Name<Asset>(context), Name<Order>(context)]));
+        await Assert.That(reported.Single().Entities).IsEquivalentTo([Name<Asset>(context), Name<Order>(context)], CollectionOrdering.Matching);
     }
 
     // A type the model does not map is a POCO source, which only its host can report on.
     [Test]
-    public void NotifyNamesAnUnmappedTypeAsItself()
+    public async Task NotifyNamesAnUnmappedTypeAsItself()
     {
         using var context = TestContext.CreateSeeded();
         var (changes, reported) = Listening();
@@ -277,47 +271,47 @@ public class ChangeSignalTests
 
         changes.Notify<Holiday>();
 
-        Assert.That(reported.Single().Entities, Is.EqualTo([typeof(Holiday).FullName]));
+        await Assert.That(reported.Single().Entities).IsEquivalentTo([typeof(Holiday).FullName], CollectionOrdering.Matching);
     }
 
     // Which root a type's rows are read through is the model's to say. With none seen yet, a report
     // that might name the wrong thing is widened rather than risked.
     [Test]
-    public void NotifyBeforeAModelIsSeenReportsEverything()
+    public async Task NotifyBeforeAModelIsSeenReportsEverything()
     {
         var (changes, reported) = Listening();
 
         changes.Notify<Vehicle>();
 
-        Assert.That(reported.Single().Everything, Is.True);
+        await Assert.That(reported.Single().Everything).IsTrue();
     }
 
     [Test]
-    public void NotifyWithNothingToNameReportsNothing()
+    public async Task NotifyWithNothingToNameReportsNothing()
     {
         var (changes, reported) = Listening();
 
         changes.Notify();
 
-        Assert.That(reported, Is.Empty);
+        await Assert.That(reported).IsEmpty();
     }
 
     [Test]
-    public void NotifyAllReportsEverything()
+    public async Task NotifyAllReportsEverything()
     {
         var (changes, reported) = Listening();
 
         changes.NotifyAll();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(reported.Single().Everything, Is.True);
-            Assert.That(reported.Single().Origin, Is.EqualTo(changes.Origin));
-        });
+            await Assert.That(reported.Single().Everything).IsTrue();
+            await Assert.That(reported.Single().Origin).IsEqualTo(changes.Origin);
+        }
     }
 
     [Test]
-    public void AListenerThatLeftHearsNothingMore()
+    public async Task AListenerThatLeftHearsNothingMore()
     {
         var changes = new ScryChanges();
         List<ScryChange> reported = [];
@@ -326,12 +320,12 @@ public class ChangeSignalTests
         listening.Dispose();
         changes.NotifyAll();
 
-        Assert.That(reported, Is.Empty);
+        await Assert.That(reported).IsEmpty();
     }
 
     // No row was written, but which rows a caller may see is part of what a live query answers.
     [Test]
-    public void APolicyCacheInvalidationReportsTheEntity()
+    public async Task APolicyCacheInvalidationReportsTheEntity()
     {
         using var context = TestContext.CreateSeeded();
         var processor = ScryProcessor.Create<TestContext>(options =>
@@ -346,9 +340,7 @@ public class ChangeSignalTests
         processor.PolicyCache.InvalidateScope<Order>("anyone");
         processor.PolicyCache.InvalidateRows<Order>([1]);
 
-        Assert.That(
-            reported.Select(_ => _.Entities.Single()),
-            Is.EqualTo([Name<Order>(context), Name<Order>(context)]));
+        await Assert.That(reported.Select(_ => _.Entities.Single())).IsEquivalentTo([Name<Order>(context), Name<Order>(context)], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -362,14 +354,14 @@ public class ChangeSignalTests
 
         here.Raise(["Order"]);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
             // Once here, from the raise itself: the backplane handing it back is recognised.
-            Assert.That(heardHere.Single().Entities, Is.EqualTo(["Order"]));
-            Assert.That(heardThere.Single().Entities, Is.EqualTo(["Order"]));
-            Assert.That(heardThere.Single().Origin, Is.EqualTo(here.Origin));
-            Assert.That(backplane.Published, Has.Count.EqualTo(1));
-        });
+            await Assert.That(heardHere.Single().Entities).IsEquivalentTo(["Order"], CollectionOrdering.Matching);
+            await Assert.That(heardThere.Single().Entities).IsEquivalentTo(["Order"], CollectionOrdering.Matching);
+            await Assert.That(heardThere.Single().Origin).IsEqualTo(here.Origin);
+            await Assert.That(backplane.Published).Count().IsEqualTo(1);
+        }
     }
 
     // A change heard from another node is acted on, never passed on: every node publishing what it
@@ -385,7 +377,7 @@ public class ChangeSignalTests
 
         here.NotifyAll();
 
-        Assert.That(backplane.Published.Select(_ => _.Origin), Is.EqualTo([here.Origin]));
+        await Assert.That(backplane.Published.Select(_ => _.Origin)).IsEquivalentTo([here.Origin], CollectionOrdering.Matching);
     }
 
     // A node with no live query of its own still has to say what it wrote, and has no reason to listen.
@@ -398,11 +390,11 @@ public class ChangeSignalTests
 
         changes.NotifyAll();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(backplane.Subscriptions, Is.Zero);
-            Assert.That(backplane.Published, Has.Count.EqualTo(1));
-        });
+            await Assert.That(backplane.Subscriptions).IsZero();
+            await Assert.That(backplane.Published).Count().IsEqualTo(1);
+        }
     }
 
     [Test]
@@ -414,20 +406,20 @@ public class ChangeSignalTests
         var first = changes.Listen(_ => { });
         var second = changes.Listen(_ => { });
         await changes.Reconciled;
-        Assert.That(backplane.Subscriptions, Is.EqualTo(1));
+        await Assert.That(backplane.Subscriptions).IsEqualTo(1);
 
         first.Dispose();
         await changes.Reconciled;
-        Assert.That(backplane.Subscriptions, Is.EqualTo(1));
+        await Assert.That(backplane.Subscriptions).IsEqualTo(1);
 
         second.Dispose();
         await changes.Reconciled;
-        Assert.That(backplane.Subscriptions, Is.Zero);
+        await Assert.That(backplane.Subscriptions).IsZero();
     }
 
     // Raised inside the host's SaveChanges, where a backplane that is down must cost the write nothing.
     [Test]
-    public void ABackplaneThatThrowsCostsTheWriterNothing()
+    public async Task ABackplaneThatThrowsCostsTheWriterNothing()
     {
         var backplane = new LoopbackBackplane
         {
@@ -435,57 +427,58 @@ public class ChangeSignalTests
         };
         var (changes, reported) = Listening(backplane);
 
-        Assert.DoesNotThrow(changes.NotifyAll);
+        await Assert.That(changes.NotifyAll).ThrowsNothing();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
             // This node's own live queries still hear of this node's own write.
-            Assert.That(reported, Has.Count.EqualTo(1));
-            Assert.That(changes.BackplaneFailures, Is.EqualTo(1));
-        });
+            await Assert.That(reported).Count().IsEqualTo(1);
+            await Assert.That(changes.BackplaneFailures).IsEqualTo(1);
+        }
     }
 
     // An entity name is EF's, and a shared-type entity's carries commas and brackets.
     [Test]
-    public void AChangeSurvivesBeingCarriedAsText()
+    public async Task AChangeSurvivesBeingCarriedAsText()
     {
         var change = new ScryChange(["Sample.Order", "ArticleLabel (Dictionary<string, object>)"], Guid.NewGuid());
 
-        Assert.That(ScryChange.TryParse(change.Serialize(), out var parsed), Is.True);
+        await Assert.That(ScryChange.TryParse(change.Serialize(), out var parsed)).IsTrue();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(parsed!.Entities, Is.EqualTo(change.Entities));
-            Assert.That(parsed.Origin, Is.EqualTo(change.Origin));
-        });
+            await Assert.That(parsed!.Entities).IsEquivalentTo(change.Entities, CollectionOrdering.Matching);
+            await Assert.That(parsed.Origin).IsEqualTo(change.Origin);
+        }
     }
 
     [Test]
-    public void EverythingSurvivesBeingCarriedAsText()
+    public async Task EverythingSurvivesBeingCarriedAsText()
     {
         var change = new ScryChange([], Guid.NewGuid());
 
-        Assert.That(ScryChange.TryParse(change.Serialize(), out var parsed), Is.True);
-        Assert.That(parsed!.Everything, Is.True);
+        await Assert.That(ScryChange.TryParse(change.Serialize(), out var parsed)).IsTrue();
+        await Assert.That(parsed!.Everything).IsTrue();
     }
 
     // A backplane is shared infrastructure: what is not one of these is somebody else's message.
-    [TestCase("")]
-    [TestCase("not json")]
-    [TestCase("[]")]
-    [TestCase("{}")]
-    [TestCase("""{"origin":"nobody","entities":[]}""")]
-    [TestCase("""{"origin":"8f0f7d0e-5c0a-4a53-9a39-4d4f4f0b2f11"}""")]
-    [TestCase("""{"origin":"8f0f7d0e-5c0a-4a53-9a39-4d4f4f0b2f11","entities":"Order"}""")]
-    [TestCase("""{"origin":"8f0f7d0e-5c0a-4a53-9a39-4d4f4f0b2f11","entities":[null]}""")]
-    [TestCase("""{"origin":"8f0f7d0e-5c0a-4a53-9a39-4d4f4f0b2f11","entities":[7]}""")]
-    public void WhatIsNotAChangeIsNotReadAsOne(string text) =>
-        Assert.That(ScryChange.TryParse(text, out _), Is.False);
+    [Test]
+    [Arguments("")]
+    [Arguments("not json")]
+    [Arguments("[]")]
+    [Arguments("{}")]
+    [Arguments("""{"origin":"nobody","entities":[]}""")]
+    [Arguments("""{"origin":"8f0f7d0e-5c0a-4a53-9a39-4d4f4f0b2f11"}""")]
+    [Arguments("""{"origin":"8f0f7d0e-5c0a-4a53-9a39-4d4f4f0b2f11","entities":"Order"}""")]
+    [Arguments("""{"origin":"8f0f7d0e-5c0a-4a53-9a39-4d4f4f0b2f11","entities":[null]}""")]
+    [Arguments("""{"origin":"8f0f7d0e-5c0a-4a53-9a39-4d4f4f0b2f11","entities":[7]}""")]
+    public async Task WhatIsNotAChangeIsNotReadAsOne(string text) =>
+        await Assert.That(ScryChange.TryParse(text, out _)).IsFalse();
 
     // An owned type's rows are only ever read through their owner, and a join table has no CLR type
     // of its own to be told apart by — which is why a name is what travels.
     [Test]
-    public void OwnedTypesAndJoinTablesAreNamedByWhatTheyAreReadThrough()
+    public async Task OwnedTypesAndJoinTablesAreNamedByWhatTheyAreReadThrough()
     {
         using var context = new ShapesContext(
             new DbContextOptionsBuilder<ShapesContext>()
@@ -496,18 +489,18 @@ public class ChangeSignalTests
         var byline = model.FindEntityTypes(typeof(Byline)).Single();
         var join = article.GetSkipNavigations().Single().JoinEntityType;
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(EntityNames.Root(byline), Is.EqualTo(article.Name));
-            Assert.That(EntityNames.Root(join), Is.EqualTo(join.Name));
-            Assert.That(EntityNames.For(model, typeof(Byline)), Is.EqualTo([article.Name]));
-        });
+            await Assert.That(EntityNames.Root(byline)).IsEqualTo(article.Name);
+            await Assert.That(EntityNames.Root(join)).IsEqualTo(join.Name);
+            await Assert.That(EntityNames.For(model, typeof(Byline))).IsEquivalentTo([article.Name], CollectionOrdering.Matching);
+        }
     }
 
     // A row the database nulled changed, so its type is named. It was not deleted, so what hangs off it
     // is untouched — and a key the database refuses to act on changes nothing at all.
     [Test]
-    public void ADeleteNamesWhatTheDatabaseNullsAndStopsThere()
+    public async Task ADeleteNamesWhatTheDatabaseNullsAndStopsThere()
     {
         using var context = new ShelvesContext(
             new DbContextOptionsBuilder<ShelvesContext>()
@@ -518,11 +511,11 @@ public class ChangeSignalTests
 
         EntityNames.AddCascades(model.FindEntityType(typeof(Shelf))!, names);
 
-        Assert.That(names, Is.EquivalentTo([model.FindEntityType(typeof(Book))!.Name]));
+        await Assert.That(names).IsEquivalentTo([model.FindEntityType(typeof(Book))!.Name]);
     }
 
     [Test]
-    public void ABackplaneFailureIsCounted()
+    public async Task ABackplaneFailureIsCounted()
     {
         List<(string Instrument, long Value, Dictionary<string, object?> Tags)> measurements = [];
         using var listener = Counters(measurements);
@@ -535,17 +528,17 @@ public class ChangeSignalTests
         changes.NotifyAll();
 
         var failure = measurements.Single(_ => _.Instrument == "scry.server.subscription.signal.failures");
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(failure.Value, Is.EqualTo(1));
-            Assert.That(failure.Tags["scry.signal"], Is.EqualTo("backplane"));
-            Assert.That(failure.Tags["error.type"], Is.EqualTo(typeof(Exception).FullName));
-        });
+            await Assert.That(failure.Value).IsEqualTo(1);
+            await Assert.That(failure.Tags["scry.signal"]).IsEqualTo("backplane");
+            await Assert.That(failure.Tags["error.type"]).IsEqualTo(typeof(Exception).FullName);
+        }
     }
 
     // The three ways a host names its backplane, each ending as the one registration AddScry makes.
     [Test]
-    public void ABackplaneNamedByTypeIsBuiltFromTheContainer()
+    public async Task ABackplaneNamedByTypeIsBuiltFromTheContainer()
     {
         using var provider = new ServiceCollection()
             .AddSingleton(new BackplaneSetting("from the container"))
@@ -558,16 +551,16 @@ public class ChangeSignalTests
 
         var backplane = provider.GetRequiredService<IScryChangeBackplane>();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(backplane, Is.InstanceOf<ConfiguredBackplane>());
-            Assert.That(((ConfiguredBackplane) backplane).Setting.Value, Is.EqualTo("from the container"));
-            Assert.That(provider.GetRequiredService<IScryChangeBackplane>(), Is.SameAs(backplane));
-        });
+            await Assert.That(backplane).IsAssignableTo<ConfiguredBackplane>();
+            await Assert.That(((ConfiguredBackplane) backplane).Setting.Value).IsEqualTo("from the container");
+            await Assert.That(provider.GetRequiredService<IScryChangeBackplane>()).IsSameReferenceAs(backplane);
+        }
     }
 
     [Test]
-    public void ABackplaneBuiltByAFactoryIsTheOneRegistered()
+    public async Task ABackplaneBuiltByAFactoryIsTheOneRegistered()
     {
         var built = new LoopbackBackplane();
         using var provider = new ServiceCollection()
@@ -578,11 +571,11 @@ public class ChangeSignalTests
             })
             .BuildServiceProvider();
 
-        Assert.That(provider.GetRequiredService<IScryChangeBackplane>(), Is.SameAs(built));
+        await Assert.That(provider.GetRequiredService<IScryChangeBackplane>()).IsSameReferenceAs(built);
     }
 
     [Test]
-    public void ABackplanesOwnServicesAreRegisteredBesideIt()
+    public async Task ABackplanesOwnServicesAreRegisteredBesideIt()
     {
         using var provider = new ServiceCollection()
             .AddScry<TestContext>(options =>
@@ -596,12 +589,12 @@ public class ChangeSignalTests
 
         var backplane = (ConfiguredBackplane) provider.GetRequiredService<IScryChangeBackplane>();
 
-        Assert.That(backplane.Setting, Is.SameAs(provider.GetRequiredService<BackplaneSetting>()));
+        await Assert.That(backplane.Setting).IsSameReferenceAs(provider.GetRequiredService<BackplaneSetting>());
     }
 
     // What the registration is for: a change reported through the container's ScryChanges is published.
     [Test]
-    public void TheRegisteredBackplaneIsTheOneChangesArePublishedOn()
+    public async Task TheRegisteredBackplaneIsTheOneChangesArePublishedOn()
     {
         var built = new LoopbackBackplane();
         using var provider = new ServiceCollection()
@@ -614,7 +607,7 @@ public class ChangeSignalTests
 
         provider.GetRequiredService<ScryChanges>().NotifyAll();
 
-        Assert.That(built.Published.Single().Everything, Is.True);
+        await Assert.That(built.Published.Single().Everything).IsTrue();
     }
 
     static MeterListener Counters(List<(string Instrument, long Value, Dictionary<string, object?> Tags)> measurements)

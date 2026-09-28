@@ -9,7 +9,6 @@
 /// spelled-out half (operators, conversions) exhaustively; the shapes below cover the delegating
 /// half, and are written as real lambdas so that what is tested is what Roslyn actually emits.
 /// </remarks>
-[TestFixture]
 public class ClosureReaderTests
 {
     #region Matrices
@@ -57,7 +56,7 @@ public class ClosureReaderTests
     // refuses is a node the compiler could not have built either, and what the reader declines is
     // left to the fallback — only an answer it gives has to match.
     [Test]
-    public void EveryOperatorAgreesWithTheCompiler()
+    public async Task EveryOperatorAgreesWithTheCompiler()
     {
         var read = 0;
         foreach (var type in operandTypes)
@@ -71,7 +70,7 @@ public class ClosureReaderTests
                     {
                         foreach (var right in Operands(values, nullable != type))
                         {
-                            read += AssertAgreement(() => Expression.MakeBinary(
+                            read += await AssertAgreement(() => Expression.MakeBinary(
                                 op,
                                 Expression.Constant(left, nullable),
                                 Expression.Constant(right, ShiftCount(op) ?? nullable)));
@@ -83,11 +82,11 @@ public class ClosureReaderTests
 
         // The count is not the point, but a matrix the reader declined outright would pass every
         // assertion above without reading anything.
-        Assert.That(read, Is.GreaterThan(2000));
+        await Assert.That(read).IsGreaterThan(2000);
     }
 
     [Test]
-    public void EveryUnaryOperatorAgreesWithTheCompiler()
+    public async Task EveryUnaryOperatorAgreesWithTheCompiler()
     {
         ExpressionType[] operators =
             [ExpressionType.Negate, ExpressionType.Not, ExpressionType.UnaryPlus];
@@ -101,19 +100,19 @@ public class ClosureReaderTests
                 {
                     foreach (var operand in Operands(Values(type), nullable != type))
                     {
-                        read += AssertAgreement(() => Expression.MakeUnary(op, Expression.Constant(operand, nullable), null!));
+                        read += await AssertAgreement(() => Expression.MakeUnary(op, Expression.Constant(operand, nullable), null!));
                     }
                 }
             }
         }
 
-        Assert.That(read, Is.GreaterThan(100));
+        await Assert.That(read).IsGreaterThan(100);
     }
 
     // Every numeric conversion in both directions, including the ones that truncate and the ones
     // that cannot hold what they are given.
     [Test]
-    public void EveryConversionAgreesWithTheCompiler()
+    public async Task EveryConversionAgreesWithTheCompiler()
     {
         Type[] types =
         [
@@ -131,14 +130,14 @@ public class ClosureReaderTests
                 {
                     foreach (var value in Operands(Values(from), nullable != from))
                     {
-                        read += AssertAgreement(() => Expression.Convert(Expression.Constant(value, nullable), to));
-                        AssertAgreement(() => Expression.Convert(Expression.Constant(value, nullable), typeof(object)));
+                        read += await AssertAgreement(() => Expression.Convert(Expression.Constant(value, nullable), to));
+                        await AssertAgreement(() => Expression.Convert(Expression.Constant(value, nullable), typeof(object)));
                     }
                 }
             }
         }
 
-        Assert.That(read, Is.GreaterThan(500));
+        await Assert.That(read).IsGreaterThan(500);
     }
 
     static Type[] Lifted(Type type) =>
@@ -162,7 +161,7 @@ public class ClosureReaderTests
     /// Asks the reader and the compiler the same expression and asserts they agree — on the value,
     /// or on the exception. Returns 1 when the reader answered, 0 when it left the shape alone.
     /// </summary>
-    static int AssertAgreement(Func<Expression> build)
+    static async Task<int> AssertAgreement(Func<Expression> build)
     {
         Expression expression;
         try
@@ -191,12 +190,37 @@ public class ClosureReaderTests
 
         var compiled = Outcome(() => Expression.Lambda(expression).Compile().DynamicInvoke());
 
-        Assert.That(actual, Is.EqualTo(compiled), () => expression.ToString());
+        await Assert.That(Agree(actual, compiled)).IsTrue().Because($"{expression}: read {actual}, compiled {compiled}");
         return 1;
     }
 
     // The answer or the failure, as one comparable thing. An exception is compared by type: the two
     // paths word the message differently and neither wording is the query's.
+    // Numbers agree by value whatever their types, as they did under NUnit's equality: the reader may
+    // box a value at a width the compiler did not.
+    static bool Agree(object? actual, object? compiled)
+    {
+        if (Equals(actual, compiled))
+        {
+            return true;
+        }
+
+        if (!IsNumber(actual) || !IsNumber(compiled))
+        {
+            return false;
+        }
+
+        if (actual is double or float || compiled is double or float)
+        {
+            return Convert.ToDouble(actual, CultureInfo.InvariantCulture) == Convert.ToDouble(compiled, CultureInfo.InvariantCulture);
+        }
+
+        return Convert.ToDecimal(actual, CultureInfo.InvariantCulture) == Convert.ToDecimal(compiled, CultureInfo.InvariantCulture);
+    }
+
+    static bool IsNumber(object? value) =>
+        value is sbyte or byte or short or ushort or int or uint or long or ulong or float or double or decimal;
+
     static object? Outcome(Func<object?> answer)
     {
         try
@@ -219,14 +243,15 @@ public class ClosureReaderTests
 
     // Each of these is a shape the reader used to hand to the compiler. They are asserted through
     // the translator rather than directly, since what matters is that a real query stops compiling.
-    [TestCaseSource(nameof(Shapes))]
-    public void AShapeIsReadRatherThanCompiled(string name, Expression<Func<Order, bool>> predicate)
+    [Test]
+    [MethodDataSource(nameof(Shapes))]
+    public async Task AShapeIsReadRatherThanCompiled(string name, Expression<Func<Order, bool>> predicate)
     {
         _ = name;
-        Assert.That(Reads(predicate.Body), Is.True);
+        await Assert.That(Reads(predicate.Body)).IsTrue();
     }
 
-    static IEnumerable<TestCaseData> Shapes()
+    public static IEnumerable<TestDataRow<(string, Expression<Func<Order, bool>>)>> Shapes()
     {
         var region = "north";
         var cutoff = new DateTime(2026, 3, 4, 0, 0, 0, DateTimeKind.Utc);
@@ -262,8 +287,8 @@ public class ClosureReaderTests
 
         yield break;
 
-        static TestCaseData Case(string name, Expression<Func<Order, bool>> predicate) =>
-            new TestCaseData(name, predicate).SetName($"{{m}}({name})");
+        static TestDataRow<(string, Expression<Func<Order, bool>>)> Case(string name, Expression<Func<Order, bool>> predicate) =>
+            new((name, predicate), DisplayName: $"AShapeIsReadRatherThanCompiled({name})");
     }
 
     // The right side of each shape above is the closure half; the left is the row. Only the closure
@@ -303,7 +328,7 @@ public class ClosureReaderTests
     // the whole to the compiler runs the half twice, which for a captured property is a second read
     // and for a captured method a second call.
     [Test]
-    public void AnUnreadableShapeIsNotPartlyRead()
+    public async Task AnUnreadableShapeIsNotPartlyRead()
     {
         var counting = new Counting();
 
@@ -312,16 +337,16 @@ public class ClosureReaderTests
             .Where(_ => counting.Ids.Where(_ => _ > 1).Contains(_.Id))
             .ToScryRequest();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(((WhereOp) request.Pipeline[0]).Predicate, Is.InstanceOf<CallNode>());
-            Assert.That(counting.Reads, Is.EqualTo(1));
-        });
+            await Assert.That(((WhereOp) request.Pipeline[0]).Predicate).IsAssignableTo<CallNode>();
+            await Assert.That(counting.Reads).IsEqualTo(1);
+        }
     }
 
     // The counterpart: a shape the reader does answer reads it once too.
     [Test]
-    public void AReadableShapeIsReadOnce()
+    public async Task AReadableShapeIsReadOnce()
     {
         var counting = new Counting();
 
@@ -330,25 +355,25 @@ public class ClosureReaderTests
             .Where(_ => counting.Ids.Contains(_.Id))
             .ToScryRequest();
 
-        Assert.That(counting.Reads, Is.EqualTo(1));
+        await Assert.That(counting.Reads).IsEqualTo(1);
     }
 
     // A sized array is left to the compiler too, and for a sharper reason than the optionals above:
     // Array.CreateInstance accepts a length the instruction refuses, so a bound past what an array
     // can hold would read as a silently smaller array where the query means an overflow.
     [Test]
-    public void ASizedArrayIsLeftToTheCompiler()
+    public async Task ASizedArrayIsLeftToTheCompiler()
     {
         var size = 3;
         Expression<Func<Order, bool>> predicate = _ => _.Id == new int[size].Length;
 
-        Assert.That(Reads(predicate.Body), Is.False);
+        await Assert.That(Reads(predicate.Body)).IsFalse();
     }
 
     // A member of an optional is left to the compiler: an optional boxes as the value it holds, so
     // reflection has no Nullable<T> to find HasValue on.
     [Test]
-    public void AnOptionalsOwnMembersStillTranslate()
+    public async Task AnOptionalsOwnMembersStillTranslate()
     {
         int? maybe = 4;
 
@@ -360,7 +385,7 @@ public class ClosureReaderTests
             .ToScryRequest();
 
         var predicate = (BinaryNode) ((WhereOp) request.Pipeline[0]).Predicate;
-        Assert.That(((ConstNode) ((BinaryNode) predicate.Left).Right).Value, Is.EqualTo("4"));
+        await Assert.That(((ConstNode) ((BinaryNode) predicate.Left).Right).Value).IsEqualTo("4");
     }
 
     // What the closure threw is what the query raises, whichever path the shape took. The reader
@@ -370,20 +395,20 @@ public class ClosureReaderTests
     {
         var counting = new Counting();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.Throws<InvalidTimeZoneException>(
+            Assert.ThrowsExactly<InvalidTimeZoneException>(
                 () => Client()
                     .Source<Order>("Order", ["Region"])
                     .Where(_ => _.Region == counting.Throwing())
                     .ToScryRequest());
 
-            Assert.Throws<InvalidTimeZoneException>(
+            Assert.ThrowsExactly<InvalidTimeZoneException>(
                 () => Client()
                     .Source<Order>("Order", ["Region"])
                     .Where(_ => new[] {"a"}.Select(text => counting.Throwing() + text).Contains(_.Region))
                     .ToScryRequest());
-        });
+        }
     }
 
     sealed class Counting

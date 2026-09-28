@@ -10,17 +10,17 @@ using Sample.WebClient.Pages.Live;
 /// A server of its own, since these write. The pages never refetch: nothing in them runs after a
 /// button is pressed except the callback a new answer arrives through, which is what is being pinned.
 /// </remarks>
-[TestFixture]
+[NotInParallel]
 public class LivePagesTests
 {
-    ScryTestServer server = null!;
+    static ScryTestServer server = null!;
 
-    [OneTimeSetUp]
-    public async Task StartServer() =>
+    [Before(Class)]
+    public static async Task StartServer() =>
         server = await ScryTestServer.StartAsync(liveQueries: true, commands: true);
 
-    [OneTimeTearDown]
-    public async Task StopServer() =>
+    [After(Class)]
+    public static async Task StopServer() =>
         await server.DisposeAsync();
 
     [Test]
@@ -35,11 +35,11 @@ public class LivePagesTests
         await page.Find("#reprice").ClickAsync();
         await page.WaitForStateAsync(() => Amounts(page)[0] == before[0] + 1, patience);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(Amounts(page)[1..], Is.EqualTo(before[1..]), "Only the first order was repriced.");
-            Assert.That(page.Find("#count").TextContent, Is.EqualTo("3 live"));
-        });
+            await Assert.That(Amounts(page)[1..]).IsEquivalentTo(before[1..], CollectionOrdering.Matching).Because("Only the first order was repriced.");
+            await Assert.That(page.Find("#count").TextContent).IsEqualTo("3 live");
+        }
     }
 
     // A bulk update never passes through SaveChanges, so no interceptor sees it. The server says what
@@ -55,7 +55,7 @@ public class LivePagesTests
         await page.Find("#reprice-bulk").ClickAsync();
         await page.WaitForStateAsync(() => Amounts(page)[2] == before[2] + 1, patience);
 
-        Assert.That(Amounts(page), Is.EqualTo(before.Select(_ => _ + 1)));
+        await Assert.That(Amounts(page)).IsEquivalentTo(before.Select(_ => _ + 1), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -69,7 +69,7 @@ public class LivePagesTests
         await page.Find("#reprice").ClickAsync();
         await page.WaitForStateAsync(() => Amounts(page)[0] == before[0] + 1, patience);
 
-        Assert.That(int.Parse(page.Find("#answers").TextContent), Is.GreaterThanOrEqualTo(2));
+        await Assert.That(int.Parse(page.Find("#answers").TextContent)).IsGreaterThanOrEqualTo(2);
     }
 
     // Rx's own operators over the interface Scry hands it: the change is folded out of two answers.
@@ -84,11 +84,11 @@ public class LivePagesTests
         await page.Find("#reprice").ClickAsync();
         await page.WaitForStateAsync(() => decimal.Parse(page.Find("#total").TextContent) == before + 1, patience);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(page.Find("#change").TextContent, Is.EqualTo("+1.00"));
-            Assert.That(page.Find("#orders").TextContent, Is.EqualTo("3"));
-        });
+            await Assert.That(page.Find("#change").TextContent).IsEqualTo("+1.00");
+            await Assert.That(page.Find("#orders").TextContent).IsEqualTo("3");
+        }
     }
 
     // One server subscription, and two components that know nothing about Scry both fed by it.
@@ -103,11 +103,11 @@ public class LivePagesTests
         await page.Find("#reprice").ClickAsync();
         await page.WaitForStateAsync(() => Amounts(page)[0] == before[0] + 1, patience);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(page.Find("#count").TextContent, Is.EqualTo("3"));
-            Assert.That(decimal.Parse(page.Find("#total").TextContent), Is.EqualTo(before.Sum() + 1));
-        });
+            await Assert.That(page.Find("#count").TextContent).IsEqualTo("3");
+            await Assert.That(decimal.Parse(page.Find("#total").TextContent)).IsEqualTo(before.Sum() + 1);
+        }
     }
 
     static TimeSpan patience = TimeSpan.FromSeconds(20);
@@ -120,7 +120,7 @@ public class LivePagesTests
             .Select(_ => decimal.Parse(_.TextContent))
     ];
 
-    BunitContext Context()
+    static BunitContext Context()
     {
         var context = new BunitContext();
         context.Services.AddSingleton(server.CreateScryClient());

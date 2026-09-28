@@ -3,7 +3,6 @@
 /// every body twice on the way; now the body is read headers-first into an array sized from the
 /// length the server declared, and a declared length is a claim the read checks rather than trusts.
 /// </summary>
-[TestFixture]
 public class BufferedReadTests
 {
     [Test]
@@ -11,7 +10,7 @@ public class BufferedReadTests
     {
         var client = Stubbed(_ => Scalar(7));
 
-        Assert.That(await client.Source<NameOnly>("Employee", ["Name"]).CountAsync(), Is.EqualTo(7));
+        await Assert.That(await client.Source<NameOnly>("Employee", ["Name"]).CountAsync()).IsEqualTo(7);
     }
 
     // A chunked body declares nothing, so the array cannot be sized ahead: the buffer grows with what
@@ -31,14 +30,14 @@ public class BufferedReadTests
                 };
             });
 
-        Assert.That(await client.Source<NameOnly>("Employee", ["Name"]).CountAsync(), Is.EqualTo(7));
-        Assert.That(declared, Is.Null);
+        await Assert.That(await client.Source<NameOnly>("Employee", ["Name"]).CountAsync()).IsEqualTo(7);
+        await Assert.That(declared).IsNull();
     }
 
     // The declared length sizes the array and nothing else: a body that ends short of it is a wire
     // failure that names the shortfall, rather than a payload padded out with zeros.
     [Test]
-    public void ReportsABodyShorterThanItsDeclaredLength()
+    public async Task ReportsABodyShorterThanItsDeclaredLength()
     {
         var length = 0;
         var client = Stubbed(
@@ -54,10 +53,10 @@ public class BufferedReadTests
                 };
             });
 
-        var exception = Assert.ThrowsAsync<ScryWireException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryWireException>(
             () => client.Source<NameOnly>("Employee", ["Name"]).CountAsync());
 
-        Assert.That(exception!.Message, Does.Contain($"{length} of the {length + 10} bytes"));
+        await Assert.That(exception!.Message).Contains($"{length} of the {length + 10} bytes");
     }
 
     // A binary part declares its length, so it is read straight into an array of that size.
@@ -68,7 +67,7 @@ public class BufferedReadTests
 
         var rows = await client.Source<NameAndAvatar>("Employee", ["Name", "Avatar"]).ToListAsync();
 
-        Assert.That(rows.Single().Avatar, Is.EqualTo("ABC"u8.ToArray()));
+        await Assert.That(rows.Single().Avatar).IsEquivalentTo("ABC"u8.ToArray(), CollectionOrdering.Matching);
     }
 
     // A part without one is read the growing way, to the same result.
@@ -79,22 +78,23 @@ public class BufferedReadTests
 
         var rows = await client.Source<NameAndAvatar>("Employee", ["Name", "Avatar"]).ToListAsync();
 
-        Assert.That(rows.Single().Avatar, Is.EqualTo("ABC"u8.ToArray()));
+        await Assert.That(rows.Single().Avatar).IsEquivalentTo("ABC"u8.ToArray(), CollectionOrdering.Matching);
     }
 
     // A part's declared length is checked against the part on both sides: one that ends short would
     // otherwise be padded, and one that runs long would have its tail dropped on the way to the next
     // section.
-    [TestCase(5, "ended after 3 of the 5 bytes")]
-    [TestCase(2, "more than the 2 bytes")]
-    public void ReportsAPartThatDisagreesWithItsDeclaredLength(int declared, string expected)
+    [Test]
+    [Arguments(5, "ended after 3 of the 5 bytes")]
+    [Arguments(2, "more than the 2 bytes")]
+    public async Task ReportsAPartThatDisagreesWithItsDeclaredLength(int declared, string expected)
     {
         var client = Stubbed(_ => Multipart(Part("ABC", declared)));
 
-        var exception = Assert.ThrowsAsync<ScryWireException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryWireException>(
             () => client.Source<NameAndAvatar>("Employee", ["Name", "Avatar"]).ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain(expected));
+        await Assert.That(exception!.Message).Contains(expected);
     }
 
     static byte[] Utf8(HttpContent content) =>

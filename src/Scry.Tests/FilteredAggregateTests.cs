@@ -5,7 +5,6 @@
 /// <c>COUNT(DISTINCT …)</c>), and the composed fields travel under wire version 2, so a server
 /// predating them rejects the request rather than folding unfiltered.
 /// </summary>
-[TestFixture]
 public class FilteredAggregateTests
 {
     [Test]
@@ -26,16 +25,16 @@ public class FilteredAggregateTests
             })
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
             var north = regions.Single(_ => _.Key == "North");
-            Assert.That(north.Big, Is.EqualTo(2));
-            Assert.That(north.AGraded, Is.EqualTo(100m));
+            await Assert.That(north.Big).IsEqualTo(2);
+            await Assert.That(north.AGraded).IsEqualTo(100m);
 
             var south = regions.Single(_ => _.Key == "South");
-            Assert.That(south.Big, Is.Zero);
-            Assert.That(south.AGraded, Is.EqualTo(75m));
-        });
+            await Assert.That(south.Big).IsZero();
+            await Assert.That(south.AGraded).IsEqualTo(75m);
+        }
     }
 
     [Test]
@@ -49,11 +48,11 @@ public class FilteredAggregateTests
             .Select(_ => new {_.Key, Big = _.Count(_ => _.Amount > 90)})
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(regions.Single(_ => _.Key == "North").Big, Is.EqualTo(2));
-            Assert.That(regions.Single(_ => _.Key == "South").Big, Is.Zero);
-        });
+            await Assert.That(regions.Single(_ => _.Key == "North").Big).IsEqualTo(2);
+            await Assert.That(regions.Single(_ => _.Key == "South").Big).IsZero();
+        }
     }
 
     // Region names are all five letters, so the computed key folds every order into one group — whose
@@ -74,11 +73,11 @@ public class FilteredAggregateTests
             .ToListAsync();
 
         var group = groups.Single();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(group.Rows, Is.EqualTo(3));
-            Assert.That(group.Grades, Is.EqualTo(2));
-        });
+            await Assert.That(group.Rows).IsEqualTo(3);
+            await Assert.That(group.Grades).IsEqualTo(2);
+        }
     }
 
     [Test]
@@ -93,7 +92,7 @@ public class FilteredAggregateTests
             .Select(_ => new {_.Key})
             .ToListAsync();
 
-        Assert.That(regions.Single().Key, Is.EqualTo("North"));
+        await Assert.That(regions.Single().Key).IsEqualTo("North");
     }
 
     // A distinct fold over an optional member: SQL's distinct aggregates skip nulls, and the server
@@ -109,15 +108,15 @@ public class FilteredAggregateTests
             .Select(_ => new {_.Key, Discounts = _.Select(_ => _.Discount).Distinct().Count()})
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(regions.Single(_ => _.Key == "North").Discounts, Is.EqualTo(1));
-            Assert.That(regions.Single(_ => _.Key == "South").Discounts, Is.EqualTo(1));
-        });
+            await Assert.That(regions.Single(_ => _.Key == "North").Discounts).IsEqualTo(1);
+            await Assert.That(regions.Single(_ => _.Key == "South").Discounts).IsEqualTo(1);
+        }
     }
 
     [Test]
-    public void TheComposedFieldsTravelUnderVersion2()
+    public async Task TheComposedFieldsTravelUnderVersion2()
     {
         var plain = QueryRequest.Create(
             "Order",
@@ -143,15 +142,15 @@ public class FilteredAggregateTests
                     ]))
             ]);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(plain.Version, Is.EqualTo(1));
-            Assert.That(filtered.Version, Is.EqualTo(2));
-        });
+            await Assert.That(plain.Version).IsEqualTo(1);
+            await Assert.That(filtered.Version).IsEqualTo(2);
+        }
     }
 
     [Test]
-    public void ADistinctFoldWithoutASelectorIsRejected()
+    public async Task ADistinctFoldWithoutASelectorIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -171,13 +170,13 @@ public class FilteredAggregateTests
                     ]))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("requires a selector"));
+        await Assert.That(exception!.Message).Contains("requires a selector");
     }
 
     [Test]
-    public void TheTextAggregateStaysWhole()
+    public async Task TheTextAggregateStaysWhole()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -198,25 +197,25 @@ public class FilteredAggregateTests
                     ]))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("folds the whole group"));
+        await Assert.That(exception!.Message).Contains("folds the whole group");
     }
 
     [Test]
-    public void AFoldOverSelectedValuesRefusesAFilterWrittenAfterTheSelect()
+    public async Task AFoldOverSelectedValuesRefusesAFilterWrittenAfterTheSelect()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<NotSupportedException>(() =>
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>
             client.Source<Order>("Order")
                 .GroupBy(_ => _.Region)
                 .Select(_ => new {Total = _.Select(_ => _.Amount).Where(_ => _ > 90).Sum()})
                 .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("filter the rows, then select the values"));
+        await Assert.That(exception!.Message).Contains("filter the rows, then select the values");
     }
 
     static ScryClient ClientFor(TestContext context) =>

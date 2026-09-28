@@ -3,7 +3,6 @@
 /// written as client LINQ and executed against LocalDB — so the translator, the validator, the
 /// rebinder and the SQL EF produces are all covered by the same assertion.
 /// </summary>
-[TestFixture]
 public class ExpandedOperatorTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -40,7 +39,7 @@ public class ExpandedOperatorTests
             .ToListAsync();
         // end-snippet
 
-        Assert.That(rows.Select(_ => _.Amount), Is.EqualTo([100m, 250m]));
+        await Assert.That(rows.Select(_ => _.Amount)).IsEquivalentTo([100m, 250m], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -54,7 +53,7 @@ public class ExpandedOperatorTests
             .Where(_ => wanted.Contains(_.Region))
             .CountAsync();
 
-        Assert.That(count, Is.Zero);
+        await Assert.That(count).IsZero();
     }
 
     [Test]
@@ -72,7 +71,7 @@ public class ExpandedOperatorTests
             .Where(_ => ids.Contains(_.Id))
             .CountAsync();
 
-        Assert.That(count, Is.EqualTo(2));
+        await Assert.That(count).IsEqualTo(2);
     }
 
     // A set of optional values tested against a required member: C# lifts the member, which the
@@ -92,7 +91,7 @@ public class ExpandedOperatorTests
             .Where(_ => flags.Contains(_.Active))
             .CountAsync();
 
-        Assert.That(count, Is.Zero);
+        await Assert.That(count).IsZero();
     }
 
     [Test]
@@ -111,7 +110,7 @@ public class ExpandedOperatorTests
             .Where(_ => managers.Contains(_.ManagerId))
             .CountAsync();
 
-        Assert.That(count, Is.EqualTo(4));
+        await Assert.That(count).IsEqualTo(4);
     }
 
     [Test]
@@ -130,14 +129,14 @@ public class ExpandedOperatorTests
         // Average over an integer member returns a double, matching System.Linq's own overloads.
         var averageQuantity = await Orders().AverageAsync(_ => _.Id);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(sum, Is.EqualTo(425m));
-            Assert.That(average, Is.EqualTo(141.666m).Within(0.01m));
-            Assert.That(min, Is.EqualTo(75m));
-            Assert.That(max, Is.EqualTo(250m));
-            Assert.That(averageQuantity, Is.EqualTo(2d));
-        });
+            await Assert.That(sum).IsEqualTo(425m);
+            await Assert.That(average).IsEqualTo(141.666m).Within(0.01m);
+            await Assert.That(min).IsEqualTo(75m);
+            await Assert.That(max).IsEqualTo(250m);
+            await Assert.That(averageQuantity).IsEqualTo(2d);
+        }
     }
 
     [Test]
@@ -150,11 +149,11 @@ public class ExpandedOperatorTests
         var sum = await client.Source<Order>("Order").SumAsync(_ => _.Discount);
         var max = await client.Source<Order>("Order").MaxAsync(_ => _.Discount);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(sum, Is.EqualTo(15m));
-            Assert.That(max, Is.EqualTo(10m));
-        });
+            await Assert.That(sum).IsEqualTo(15m);
+            await Assert.That(max).IsEqualTo(10m);
+        }
     }
 
     [Test]
@@ -167,7 +166,7 @@ public class ExpandedOperatorTests
             .Where(_ => _.Region == "Nowhere")
             .MinAsync(_ => _.Amount);
 
-        Assert.That(min, Is.Zero);
+        await Assert.That(min).IsZero();
     }
 
     [Test]
@@ -182,7 +181,7 @@ public class ExpandedOperatorTests
             .SumAsync(_ => _.Amount);
         // end-snippet
 
-        Assert.That(sum, Is.EqualTo(350m));
+        await Assert.That(sum).IsEqualTo(350m);
     }
 
     [Test]
@@ -195,12 +194,12 @@ public class ExpandedOperatorTests
         var longCount = await client.Source<Employee>("Employee").LongCountAsync();
         var longCountFiltered = await client.Source<Employee>("Employee").LongCountAsync(_ => !_.Active);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(count, Is.EqualTo(3));
-            Assert.That(longCount, Is.EqualTo(4L));
-            Assert.That(longCountFiltered, Is.EqualTo(1L));
-        });
+            await Assert.That(count).IsEqualTo(3);
+            await Assert.That(longCount).IsEqualTo(4L);
+            await Assert.That(longCountFiltered).IsEqualTo(1L);
+        }
     }
 
     [Test]
@@ -213,12 +212,12 @@ public class ExpandedOperatorTests
         var allActive = await client.Source<Employee>("Employee").AllAsync(_ => _.Active);
         var allNamed = await client.Source<Employee>("Employee").AllAsync(_ => _.Name != "");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(anyContractor, Is.True);
-            Assert.That(allActive, Is.False);
-            Assert.That(allNamed, Is.True);
-        });
+            await Assert.That(anyContractor).IsTrue();
+            await Assert.That(allActive).IsFalse();
+            await Assert.That(allNamed).IsTrue();
+        }
     }
 
     [Test]
@@ -233,7 +232,7 @@ public class ExpandedOperatorTests
             .Distinct()
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Region).Order(), Is.EqualTo(["North", "South"]));
+        await Assert.That(rows.Select(_ => _.Region).Order()).IsEquivalentTo(["North", "South"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -247,7 +246,7 @@ public class ExpandedOperatorTests
             .Distinct()
             .CountAsync();
 
-        Assert.That(count, Is.EqualTo(2));
+        await Assert.That(count).IsEqualTo(2);
     }
 
     [Test]
@@ -262,7 +261,7 @@ public class ExpandedOperatorTests
             .OrderByDescending(_ => _.Region)
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Region), Is.EqualTo(["South", "North"]));
+        await Assert.That(rows.Select(_ => _.Region)).IsEquivalentTo(["South", "North"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -281,46 +280,46 @@ public class ExpandedOperatorTests
             .ToListAsync();
         // end-snippet
 
-        Assert.That(rows.Single().Region, Is.EqualTo("North"));
+        await Assert.That(rows.Single().Region).IsEqualTo("North");
     }
 
     [Test]
-    public void PagingADeduplicatedQueryWithoutOrderingIsRejected()
+    public async Task PagingADeduplicatedQueryWithoutOrderingIsRejected()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // Without an ordering the slice would be of an order the deduplication never defined.
-        var exception = Assert.ThrowsAsync<ScryValidationException>(() => client.Source<Order>("Order")
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(() => client.Source<Order>("Order")
             .Select(_ => new RegionRow(_.Region))
             .Distinct()
             .Take(1)
             .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("requires an OrderBy"));
+        await Assert.That(exception!.Message).Contains("requires an OrderBy");
     }
 
     // An ordering written before the deduplication described the rows that fed it, and EF drops it
     // under DISTINCT unless every ordered column is projected — so it leaves the slice as undefined
     // as no ordering at all.
     [Test]
-    public void PagingADeduplicatedQueryOrderedBeforeTheDistinctIsRejected()
+    public async Task PagingADeduplicatedQueryOrderedBeforeTheDistinctIsRejected()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<ScryValidationException>(() => client.Source<Order>("Order")
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(() => client.Source<Order>("Order")
             .OrderBy(_ => _.Placed)
             .Select(_ => new RegionRow(_.Region))
             .Distinct()
             .Take(1)
             .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("requires an OrderBy"));
+        await Assert.That(exception!.Message).Contains("requires an OrderBy");
     }
 
     [Test]
-    public void OrderingADeduplicatedQueryByAnotherMemberIsRejected()
+    public async Task OrderingADeduplicatedQueryByAnotherMemberIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -333,9 +332,9 @@ public class ExpandedOperatorTests
                 new OrderByOp(new MemberNode(["Amount"]), Descending: false)
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("projected member"));
+        await Assert.That(exception!.Message).Contains("projected member");
     }
 
     [Test]
@@ -351,7 +350,7 @@ public class ExpandedOperatorTests
             .Distinct()
             .ToListAsync();
 
-        Assert.That(rows, Has.Count.EqualTo(3));
+        await Assert.That(rows).Count().IsEqualTo(3);
     }
 
     [Test]
@@ -371,24 +370,24 @@ public class ExpandedOperatorTests
             .Select(_ => new NameRow(_.Name))
             .LastOrDefaultAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(last!.Name, Is.EqualTo("Carol"));
-            Assert.That(lastOrDefault, Is.Null);
-        });
+            await Assert.That(last!.Name).IsEqualTo("Carol");
+            await Assert.That(lastOrDefault).IsNull();
+        }
     }
 
     [Test]
-    public void LastWithoutOrderingIsRejected()
+    public async Task LastWithoutOrderingIsRejected()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<ScryValidationException>(() => client.Source<Employee>("Employee")
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(() => client.Source<Employee>("Employee")
             .Select(_ => new NameRow(_.Name))
             .LastAsync());
 
-        Assert.That(exception!.Message, Does.Contain("ordered"));
+        await Assert.That(exception!.Message).Contains("ordered");
     }
 
     [Test]
@@ -405,11 +404,11 @@ public class ExpandedOperatorTests
         var second = await Ordered().ElementAtAsync(1);
         var past = await Ordered().ElementAtOrDefaultAsync(99);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(second!.Name, Is.EqualTo("Alice"));
-            Assert.That(past, Is.Null);
-        });
+            await Assert.That(second!.Name).IsEqualTo("Alice");
+            await Assert.That(past).IsNull();
+        }
     }
 
     [Test]
@@ -428,16 +427,16 @@ public class ExpandedOperatorTests
         var byReplace = await Employees().CountAsync(_ => _.Name.Replace("a", "4") == "C4rol");
         var byWhiteSpace = await Employees().CountAsync(_ => !string.IsNullOrWhiteSpace(_.Name));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(byLength, Is.EqualTo(3), "Aaron, Alice and Carol");
-            Assert.That(byTrimmed, Is.EqualTo(1));
-            Assert.That(bySubstring, Is.EqualTo(1));
-            Assert.That(bySubstringToEnd, Is.EqualTo(1));
-            Assert.That(byIndexOf, Is.EqualTo(1), "Bob");
-            Assert.That(byReplace, Is.EqualTo(1));
-            Assert.That(byWhiteSpace, Is.EqualTo(4));
-        });
+            await Assert.That(byLength).IsEqualTo(3).Because("Aaron, Alice and Carol");
+            await Assert.That(byTrimmed).IsEqualTo(1);
+            await Assert.That(bySubstring).IsEqualTo(1);
+            await Assert.That(bySubstringToEnd).IsEqualTo(1);
+            await Assert.That(byIndexOf).IsEqualTo(1).Because("Bob");
+            await Assert.That(byReplace).IsEqualTo(1);
+            await Assert.That(byWhiteSpace).IsEqualTo(4);
+        }
     }
 
     [Test]
@@ -459,19 +458,19 @@ public class ExpandedOperatorTests
         var byAddDays = await Orders().CountAsync(_ => _.Placed.AddDays(1).Day == 5);
         var byAddMonths = await Orders().CountAsync(_ => _.Placed.AddMonths(1).Month == 4);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(byYear, Is.EqualTo(2));
-            Assert.That(byMonth, Is.EqualTo(1));
-            Assert.That(byHour, Is.EqualTo(1));
-            Assert.That(byMinute, Is.EqualTo(1));
-            Assert.That(bySecond, Is.EqualTo(1));
-            Assert.That(byMillisecond, Is.EqualTo(3), "none of the seeded times carry milliseconds");
-            Assert.That(byDayOfYear, Is.EqualTo(1), "31 December 2025");
-            Assert.That(byDatePart, Is.EqualTo(1));
-            Assert.That(byAddDays, Is.EqualTo(1));
-            Assert.That(byAddMonths, Is.EqualTo(1));
-        });
+            await Assert.That(byYear).IsEqualTo(2);
+            await Assert.That(byMonth).IsEqualTo(1);
+            await Assert.That(byHour).IsEqualTo(1);
+            await Assert.That(byMinute).IsEqualTo(1);
+            await Assert.That(bySecond).IsEqualTo(1);
+            await Assert.That(byMillisecond).IsEqualTo(3).Because("none of the seeded times carry milliseconds");
+            await Assert.That(byDayOfYear).IsEqualTo(1).Because("31 December 2025");
+            await Assert.That(byDatePart).IsEqualTo(1);
+            await Assert.That(byAddDays).IsEqualTo(1);
+            await Assert.That(byAddMonths).IsEqualTo(1);
+        }
     }
 
     [Test]
@@ -484,7 +483,7 @@ public class ExpandedOperatorTests
         // memory rather than as SQL.
         var count = await client.Source<Holiday>("Holiday").CountAsync(_ => _.Date.Month == 12);
 
-        Assert.That(count, Is.EqualTo(1));
+        await Assert.That(count).IsEqualTo(1);
     }
 
     [Test]
@@ -504,16 +503,16 @@ public class ExpandedOperatorTests
         var byCeiling = await Orders().CountAsync(_ => Math.Ceiling(_.Amount / 3) == 34m);
         var byFloor = await Orders().CountAsync(_ => Math.Floor(_.Amount / 3) == 33m);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(bySqrt, Is.EqualTo(1), "only 250 has a root above 15");
-            Assert.That(byPow, Is.EqualTo(1), "the order with quantity 7");
-            Assert.That(byTruncate, Is.EqualTo(1));
-            Assert.That(byAbs, Is.EqualTo(1));
-            Assert.That(byRound, Is.EqualTo(1));
-            Assert.That(byCeiling, Is.EqualTo(1));
-            Assert.That(byFloor, Is.EqualTo(1));
-        });
+            await Assert.That(bySqrt).IsEqualTo(1).Because("only 250 has a root above 15");
+            await Assert.That(byPow).IsEqualTo(1).Because("the order with quantity 7");
+            await Assert.That(byTruncate).IsEqualTo(1);
+            await Assert.That(byAbs).IsEqualTo(1);
+            await Assert.That(byRound).IsEqualTo(1);
+            await Assert.That(byCeiling).IsEqualTo(1);
+            await Assert.That(byFloor).IsEqualTo(1);
+        }
     }
 
     [Test]
@@ -527,12 +526,12 @@ public class ExpandedOperatorTests
         var conditional = await client.Source<Employee>("Employee")
             .CountAsync(_ => (_.Active ? _.Name : "inactive") == "inactive");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(even, Is.EqualTo(1));
-            Assert.That(coalesced, Is.EqualTo(1), "the order with no discount");
-            Assert.That(conditional, Is.EqualTo(1), "Bob");
-        });
+            await Assert.That(even).IsEqualTo(1);
+            await Assert.That(coalesced).IsEqualTo(1).Because("the order with no discount");
+            await Assert.That(conditional).IsEqualTo(1).Because("Bob");
+        }
     }
 
     [Test]
@@ -546,7 +545,7 @@ public class ExpandedOperatorTests
             .Select(_ => new NameRow(_.Name.ToUpper()))
             .ToListAsync();
 
-        Assert.That(rows.Single().Name, Is.EqualTo("ALICE"));
+        await Assert.That(rows.Single().Name).IsEqualTo("ALICE");
     }
 
     [Test]
@@ -564,26 +563,26 @@ public class ExpandedOperatorTests
             .ToListAsync();
         // end-snippet
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows.Select(_ => _.Region), Is.EqualTo(["S", "N", "N"]));
-            Assert.That(rows.Select(_ => _.Amount), Is.EqualTo([70m, 90m, 250m]));
-        });
+            await Assert.That(rows.Select(_ => _.Region)).IsEquivalentTo(["S", "N", "N"], CollectionOrdering.Matching);
+            await Assert.That(rows.Select(_ => _.Amount)).IsEquivalentTo([70m, 90m, 250m], CollectionOrdering.Matching);
+        }
     }
 
     [Test]
-    public void ConstantOnlyProjectionMemberIsRejected()
+    public async Task ConstantOnlyProjectionMemberIsRejected()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // A leaf that reads nothing from the row is a value the client already has, and EF rejects a
         // constant in a client projection outright — so it is reported as a rejection, not a fault.
-        var exception = Assert.ThrowsAsync<ScryValidationException>(() => client.Source<Employee>("Employee")
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(() => client.Source<Employee>("Employee")
             .Select(_ => new NameRow("fixed"))
             .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("must read at least one member"));
+        await Assert.That(exception!.Message).Contains("must read at least one member");
     }
 
     [Test]
@@ -601,7 +600,7 @@ public class ExpandedOperatorTests
             .Select(_ => new NameRow(_.Name.Replace("A", "4") + suffix))
             .ToListAsync();
 
-        Assert.That(rows.Single().Name, Is.EqualTo("4lice!"));
+        await Assert.That(rows.Single().Name).IsEqualTo("4lice!");
     }
 
     [Test]
@@ -619,7 +618,7 @@ public class ExpandedOperatorTests
             .ToListAsync();
         // end-snippet
 
-        Assert.That(rows.Single().Department.Name, Is.EqualTo("ENGINEERING"));
+        await Assert.That(rows.Single().Department.Name).IsEqualTo("ENGINEERING");
     }
 
     [Test]
@@ -633,11 +632,11 @@ public class ExpandedOperatorTests
             .Select(_ => new EmployeeTwoCard(_.Name, new(_.Department!.Name, _.Department!.Name.Length)))
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows.Single().Department.Name, Is.EqualTo("Engineering"));
-            Assert.That(rows.Single().Department.Length, Is.EqualTo(11));
-        });
+            await Assert.That(rows.Single().Department.Name).IsEqualTo("Engineering");
+            await Assert.That(rows.Single().Department.Length).IsEqualTo(11);
+        }
     }
 
     [Test]
@@ -651,7 +650,7 @@ public class ExpandedOperatorTests
             .Select(_ => new NameRow(_.Key.ToUpper()))
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Name).Order(), Is.EqualTo(["NORTH", "SOUTH"]));
+        await Assert.That(rows.Select(_ => _.Name).Order()).IsEquivalentTo(["NORTH", "SOUTH"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -669,11 +668,11 @@ public class ExpandedOperatorTests
             .ToListAsync();
         // end-snippet
 
-        Assert.That(rows.Single(_ => _.Region == "North").Amount, Is.EqualTo(175m));
+        await Assert.That(rows.Single(_ => _.Region == "North").Amount).IsEqualTo(175m);
     }
 
     [Test]
-    public void ANonKeyMemberInAGroupedProjectionIsStillRejected()
+    public async Task ANonKeyMemberInAGroupedProjectionIsStillRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -693,9 +692,9 @@ public class ExpandedOperatorTests
                 ]))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("group key or aggregates"));
+        await Assert.That(exception!.Message).Contains("group key or aggregates");
     }
 
     [Test]
@@ -711,11 +710,11 @@ public class ExpandedOperatorTests
             .Select(_ => new OrderShape(_.Key, _.Sum(_ => _.Amount)))
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows.Single().Region, Is.EqualTo("North"));
-            Assert.That(rows.Single().Amount, Is.EqualTo(350m));
-        });
+            await Assert.That(rows.Single().Region).IsEqualTo("North");
+            await Assert.That(rows.Single().Amount).IsEqualTo(350m);
+        }
     }
 
     [Test]
@@ -732,7 +731,7 @@ public class ExpandedOperatorTests
             .ToListAsync();
         // end-snippet
 
-        Assert.That(rows.Single().Region, Is.EqualTo("North"));
+        await Assert.That(rows.Single().Region).IsEqualTo("North");
     }
 
     [Test]
@@ -748,11 +747,11 @@ public class ExpandedOperatorTests
             .Select(_ => new OrderShape(_.Key, _.Sum(_ => _.Amount)))
             .ToListAsync();
 
-        Assert.That(rows, Is.Empty);
+        await Assert.That(rows).IsEmpty();
     }
 
     [Test]
-    public void HavingOverANonKeyMemberIsRejected()
+    public async Task HavingOverANonKeyMemberIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -768,9 +767,9 @@ public class ExpandedOperatorTests
                 new SelectOp(new([new("Region", new NodeValue(new MemberNode(["Region"])))]))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("group key or aggregates"));
+        await Assert.That(exception!.Message).Contains("group key or aggregates");
     }
 
     [Test]
@@ -785,21 +784,21 @@ public class ExpandedOperatorTests
             .Select(_ => new NameRow(_.Name))
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Carol", "Bob", "Alice", "Aaron"]));
+        await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(["Carol", "Bob", "Alice", "Aaron"], CollectionOrdering.Matching);
     }
 
     [Test]
-    public void ReverseWithoutOrderingIsRejected()
+    public async Task ReverseWithoutOrderingIsRejected()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<ScryValidationException>(() => client.Source<Employee>("Employee")
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(() => client.Source<Employee>("Employee")
             .Reverse()
             .Select(_ => new NameRow(_.Name))
             .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("ordered"));
+        await Assert.That(exception!.Message).Contains("ordered");
     }
 
     [Test]
@@ -816,11 +815,11 @@ public class ExpandedOperatorTests
         var byConcat = await client.Source<Employee>("Employee")
             .CountAsync(_ => string.Concat(_.Name, separator, _.Address.City) == "Alice of London");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(byOperator, Is.EqualTo(1));
-            Assert.That(byConcat, Is.EqualTo(1));
-        });
+            await Assert.That(byOperator).IsEqualTo(1);
+            await Assert.That(byConcat).IsEqualTo(1);
+        }
     }
 
     [Test]
@@ -834,21 +833,21 @@ public class ExpandedOperatorTests
             .Select(_ => new NameRow($"{_.Name} ({_.Address.City})"))
             .ToListAsync();
 
-        Assert.That(rows.Single().Name, Is.EqualTo("Alice (London)"));
+        await Assert.That(rows.Single().Name).IsEqualTo("Alice (London)");
     }
 
     [Test]
-    public void AFormattedInterpolationHoleIsRejected()
+    public async Task AFormattedInterpolationHoleIsRejected()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // A format specifier would change the value, and the database has no equivalent spelling.
-        var exception = Assert.ThrowsAsync<NotSupportedException>(() => client.Source<Order>("Order")
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() => client.Source<Order>("Order")
             .Select(_ => new NameRow($"{_.Amount:N2}"))
             .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("plain holes").Or.Contain("string values"));
+        await Assert.That(exception!.Message).Contains("plain holes").Or.Contains("string values");
     }
 
     [Test]
@@ -864,7 +863,7 @@ public class ExpandedOperatorTests
             .Select(_ => new NameRow($"{_.Region}-{_.Amount}"))
             .ToListAsync();
 
-        Assert.That(rows.Single().Name, Does.StartWith("South-75"));
+        await Assert.That(rows.Single().Name).StartsWith("South-75");
     }
 
     // Four holes bind the params overload of string.Format, whose array is its second argument. The
@@ -881,7 +880,7 @@ public class ExpandedOperatorTests
             .Select(_ => new NameRow($"{_.Region} {_.Id} {_.Grade} {_.Amount}"))
             .ToListAsync();
 
-        Assert.That(rows.Single().Name, Does.StartWith("South ").And.Contain(" 75"));
+        await Assert.That(rows.Single().Name).StartsWith("South ").And.Contains(" 75");
     }
 
     [Test]
@@ -896,11 +895,11 @@ public class ExpandedOperatorTests
         var byLiteral = await client.Source<Order>("Order").CountAsync(_ => _.Grade == 'B');
         var byCaptured = await client.Source<Order>("Order").CountAsync(_ => _.Grade == wanted);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(byLiteral, Is.EqualTo(1));
-            Assert.That(byCaptured, Is.EqualTo(2));
-        });
+            await Assert.That(byLiteral).IsEqualTo(1);
+            await Assert.That(byCaptured).IsEqualTo(2);
+        }
     }
 
     [Test]
@@ -916,7 +915,7 @@ public class ExpandedOperatorTests
             .OrderBy(_ => _.Amount)
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Amount), Is.EqualTo([75m, 100m, 250m]));
+        await Assert.That(rows.Select(_ => _.Amount)).IsEquivalentTo([75m, 100m, 250m], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -936,11 +935,11 @@ public class ExpandedOperatorTests
             .Distinct()
             .CountAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(pairs, Is.EqualTo(3));
-            Assert.That(regions, Is.EqualTo(2));
-        });
+            await Assert.That(pairs).IsEqualTo(3);
+            await Assert.That(regions).IsEqualTo(2);
+        }
     }
 
     [Test]
@@ -956,7 +955,7 @@ public class ExpandedOperatorTests
             .Take(2)
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Amount), Is.EqualTo([250m, 100m]));
+        await Assert.That(rows.Select(_ => _.Amount)).IsEquivalentTo([250m, 100m], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -972,11 +971,11 @@ public class ExpandedOperatorTests
             .Distinct()
             .CountAsync();
 
-        Assert.That(count, Is.EqualTo(3));
+        await Assert.That(count).IsEqualTo(3);
     }
 
     [Test]
-    public void OrderingADeduplicatedQueryByANestedMemberIsRejected()
+    public async Task OrderingADeduplicatedQueryByANestedMemberIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -995,9 +994,9 @@ public class ExpandedOperatorTests
                 new OrderByOp(new MemberNode(["Name"]), Descending: false)
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("nested projection member"));
+        await Assert.That(exception!.Message).Contains("nested projection member");
     }
 
     static ScryClient ClientFor(TestContext context) =>

@@ -3,7 +3,6 @@
 /// it. To a client it is a member like any other — the default projection carries it, a query filters,
 /// orders and groups by it — and the server computes it from the command's policy, in the database.
 /// </summary>
-[TestFixture]
 public class CapabilityMemberTests
 {
     // The model a generated client would hold for Contract: the capability is one more member.
@@ -33,7 +32,7 @@ public class CapabilityMemberTests
             .ToListAsync();
 
         // The sealed contract is refused by the policy's row condition; the others pass it.
-        Assert.That(rows.Select(_ => (_.Id, _.CanSealContract)), Is.EqualTo([(1, true), (2, true), (UnsealedContractsPolicy.SealedId, false)]));
+        await Assert.That(rows.Select(_ => (_.Id, _.CanSealContract))).IsEquivalentTo([(1, true), (2, true), (UnsealedContractsPolicy.SealedId, false)], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -48,7 +47,7 @@ public class CapabilityMemberTests
             .Select(_ => new {_.Id})
             .ToListAsync();
 
-        Assert.That(ids.Select(_ => _.Id), Is.EqualTo([1, 2]));
+        await Assert.That(ids.Select(_ => _.Id)).IsEquivalentTo([1, 2], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -63,7 +62,7 @@ public class CapabilityMemberTests
             .Select(_ => new {_.Id})
             .ToListAsync();
 
-        Assert.That(ids.Select(_ => _.Id), Is.EqualTo([UnsealedContractsPolicy.SealedId, 1, 2]));
+        await Assert.That(ids.Select(_ => _.Id)).IsEquivalentTo([UnsealedContractsPolicy.SealedId, 1, 2], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -77,7 +76,7 @@ public class CapabilityMemberTests
             .Select(_ => new {_.Key, Count = _.Count()})
             .ToListAsync();
 
-        Assert.That(groups.OrderBy(_ => _.Key).Select(_ => (_.Key, _.Count)), Is.EqualTo([(false, 1), (true, 2)]));
+        await Assert.That(groups.OrderBy(_ => _.Key).Select(_ => (_.Key, _.Count))).IsEquivalentTo([(false, 1), (true, 2)], CollectionOrdering.Matching);
     }
 
     // A caller the policy refuses outright may send the command against no row, so every row says so —
@@ -95,7 +94,7 @@ public class CapabilityMemberTests
             .Select(_ => new {_.CanSealContract})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.CanSealContract), Is.EqualTo([false, false, false]));
+        await Assert.That(rows.Select(_ => _.CanSealContract)).IsEquivalentTo([false, false, false], CollectionOrdering.Matching);
     }
 
     // The row condition is the policy's, asked with this call's context: a caller whose desk holds one
@@ -115,11 +114,11 @@ public class CapabilityMemberTests
         var forFirst = await Capabilities(context, first);
         var forSecond = await Capabilities(context, second);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(forFirst, Is.EqualTo([(1, true), (2, false), (UnsealedContractsPolicy.SealedId, false)]));
-            Assert.That(forSecond, Is.EqualTo([(1, false), (2, true), (UnsealedContractsPolicy.SealedId, false)]));
-        });
+            await Assert.That(forFirst).IsEquivalentTo([(1, true), (2, false), (UnsealedContractsPolicy.SealedId, false)], CollectionOrdering.Matching);
+            await Assert.That(forSecond).IsEquivalentTo([(1, false), (2, true), (UnsealedContractsPolicy.SealedId, false)], CollectionOrdering.Matching);
+        }
     }
 
     static async Task<List<(int Id, bool CanSeal)>> Capabilities(TestContext context, IServiceProvider services)
@@ -142,13 +141,13 @@ public class CapabilityMemberTests
             .Select(_ => new {_.CanRenameShift})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.CanRenameShift), Is.Not.Empty.And.All.True);
+        await Assert.That(rows.Select(_ => _.CanRenameShift)).IsNotEmpty().And.All(_ => Equals(_, true));
     }
 
     // The row condition is the policy's expression read against the row, in the statement — and the
     // literal it compares with is bound as a parameter rather than written into the SQL.
     [Test]
-    public void TheRowConditionIsInTheStatementWithItsLiteralsBound()
+    public async Task TheRowConditionIsInTheStatementWithItsLiteralsBound()
     {
         using var context = TestContext.CreateSeeded();
         var request = Translator()
@@ -158,54 +157,54 @@ public class CapabilityMemberTests
 
         var sql = commandsOn.ToQueryString(request, context, EmptyServices.Instance);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(sql, Does.Contain("CASE"));
-            Assert.That(sql, Does.Contain("DECLARE"));
-            Assert.That(sql, Does.Not.Contain($"<> {UnsealedContractsPolicy.SealedId}"));
-        });
+            await Assert.That(sql).Contains("CASE");
+            await Assert.That(sql).Contains("DECLARE");
+            await Assert.That(sql).DoesNotContain($"<> {UnsealedContractsPolicy.SealedId}");
+        }
     }
 
     [Test]
-    public void ItIsNotTraversable()
+    public async Task ItIsNotTraversable()
     {
         using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create("Contract", [new WhereOp(new MemberNode(["CanSealContract", "Value"]))]);
 
-        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("Cannot traverse through non-navigation 'CanSealContract'"));
+        await Assert.That(exception!.Message).Contains("Cannot traverse through non-navigation 'CanSealContract'");
     }
 
     // Described as the plain bool it reads as, and never as part of a key, a sensitive member, or bytes.
     [Test]
-    public void ItIsDescribedAsAnOrdinaryBool()
+    public async Task ItIsDescribedAsAnOrdinaryBool()
     {
         var contract = SharedProcessor.Instance.Describe().Types.Single(_ => _.Model == "ContractQueryModel");
         var capability = contract.Members.Single(_ => _.Name == "CanSealContract");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(capability.TypeDisplay, Is.EqualTo("bool"));
-            Assert.That(capability.IsCapability, Is.True);
-            Assert.That(capability.Command, Is.EqualTo("SealContract"));
-            Assert.That(capability.IsSensitive, Is.False);
-            Assert.That(contract.Keys ?? [], Does.Not.Contain("CanSealContract"));
-        });
+            await Assert.That(capability.TypeDisplay).IsEqualTo("bool");
+            await Assert.That(capability.IsCapability).IsTrue();
+            await Assert.That(capability.Command).IsEqualTo("SealContract");
+            await Assert.That(capability.IsSensitive).IsFalse();
+            await Assert.That(contract.Keys ?? []).DoesNotContain("CanSealContract");
+        }
     }
 
     // Declared by the target and inherited by what derives from it, as a member of the base would be.
     [Test]
-    public void ADerivedTypeInheritsIt()
+    public async Task ADerivedTypeInheritsIt()
     {
         var types = SharedProcessor.Instance.Describe().Types;
         var signed = types.Single(_ => _.Model == "SignedContractQueryModel");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(signed.Base, Is.EqualTo("ContractQueryModel"));
-            Assert.That(signed.Members.Select(_ => _.Name), Does.Not.Contain("CanSealContract"));
-        });
+            await Assert.That(signed.Base).IsEqualTo("ContractQueryModel");
+            await Assert.That(signed.Members.Select(_ => _.Name)).DoesNotContain("CanSealContract");
+        }
     }
 
     // Each run of a live query is a call of its own, so the capability is decided again on every run:
@@ -246,8 +245,8 @@ public class CapabilityMemberTests
             // ReSharper disable once MethodSupportsCancellation
             .GetAsyncEnumerator();
 
-        Assert.That(await answers.MoveNextAsync().AsTask().WaitAsync(patience), Is.True);
-        Assert.That(answers.Current.Select(_ => _.CanSealContract), Is.EqualTo([true]));
+        await Assert.That(await answers.MoveNextAsync().AsTask().WaitAsync(patience)).IsTrue();
+        await Assert.That(answers.Current.Select(_ => _.CanSealContract)).IsEquivalentTo([true], CollectionOrdering.Matching);
 
         // Written through a context carrying the interceptor, which is what reports the save to the
         // live query. Spelled out rather than imported: EF's query extensions share names with Scry's.
@@ -262,8 +261,8 @@ public class CapabilityMemberTests
             await writing.SaveChangesAsync();
         }
 
-        Assert.That(await answers.MoveNextAsync().AsTask().WaitAsync(patience), Is.True);
-        Assert.That(answers.Current.Select(_ => _.CanSealContract), Is.EqualTo([false]));
+        await Assert.That(await answers.MoveNextAsync().AsTask().WaitAsync(patience)).IsTrue();
+        await Assert.That(answers.Current.Select(_ => _.CanSealContract)).IsEquivalentTo([false], CollectionOrdering.Matching);
     }
 
     static TimeSpan patience = TimeSpan.FromSeconds(20);
@@ -289,7 +288,7 @@ public class CapabilityMemberTests
             .Source<ContractModel>("Contract", contractMembers)
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.CanSealContract), Is.All.False);
+        await Assert.That(rows.Select(_ => _.CanSealContract)).All(_ => Equals(_, false));
     }
 
     static ScryClient Translator() =>

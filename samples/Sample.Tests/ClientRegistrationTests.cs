@@ -3,7 +3,7 @@
 /// is not Blazor WebAssembly should use: the ambient registration the parameterless overload picks up
 /// may belong to another API, and a bare HttpClient in the container is discouraged there anyway.
 /// </summary>
-[TestFixture]
+[NotInParallel]
 public class ClientRegistrationTests
 {
     record NameRow(string Name);
@@ -32,10 +32,8 @@ public class ClientRegistrationTests
         // Resolving is the whole of what this overload does differently — it reaches the same
         // ScryClient the named form does, by a different route — so the round trip is covered by the
         // test below rather than repeated here.
-        Assert.That(scope.ServiceProvider.GetRequiredService<ScryQuery>(), Is.Not.Null);
-        Assert.That(
-            scope.ServiceProvider.GetRequiredService<ScryClient>(),
-            Is.SameAs(scope.ServiceProvider.GetRequiredService<ScryClient>()));
+        await Assert.That(scope.ServiceProvider.GetRequiredService<ScryQuery>()).IsNotNull();
+        await Assert.That(scope.ServiceProvider.GetRequiredService<ScryClient>()).IsSameReferenceAs(scope.ServiceProvider.GetRequiredService<ScryClient>());
     }
 
     [Test]
@@ -62,7 +60,7 @@ public class ClientRegistrationTests
             .Select(_ => new NameRow(_.Name))
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Name), Is.Not.Empty);
+        await Assert.That(rows.Select(_ => _.Name)).IsNotEmpty();
     }
 
     [Test]
@@ -85,11 +83,11 @@ public class ClientRegistrationTests
         var first = scope.ServiceProvider.GetRequiredService<ScryClient>();
         var second = scope.ServiceProvider.GetRequiredService<ScryClient>();
 
-        Assert.That(first, Is.SameAs(second));
+        await Assert.That(first).IsSameReferenceAs(second);
 
         await new ScryQuery(first).Employee.Select(_ => new NameRow(_.Name)).ToListAsync();
 
-        Assert.That(second.ServerSchemaStamp, Is.Not.Null);
+        await Assert.That(second.ServerSchemaStamp).IsNotNull();
     }
 
     // The pending-work store is the client's own, registered off it, so a component injecting the store
@@ -110,10 +108,10 @@ public class ClientRegistrationTests
         await using var second = provider.CreateAsyncScope();
 
         var store = first.ServiceProvider.GetRequiredService<ScryPendingWorkStore>();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(store, Is.SameAs(first.ServiceProvider.GetRequiredService<ScryClient>().PendingWork));
-            Assert.That(store, Is.Not.SameAs(second.ServiceProvider.GetRequiredService<ScryPendingWorkStore>()));
-        });
+            await Assert.That(store).IsSameReferenceAs(first.ServiceProvider.GetRequiredService<ScryClient>().PendingWork);
+            await Assert.That(store).IsNotSameReferenceAs(second.ServiceProvider.GetRequiredService<ScryPendingWorkStore>());
+        }
     }
 }

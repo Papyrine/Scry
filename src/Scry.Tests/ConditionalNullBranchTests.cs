@@ -4,7 +4,6 @@
 /// other branch, whichever side the null is on. It once did so for the false branch only, and read a
 /// null in the true branch as text.
 /// </summary>
-[TestFixture]
 public class ConditionalNullBranchTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -23,7 +22,7 @@ public class ConditionalNullBranchTests
             .ToListAsync();
 
         // Bob is the one inactive employee, so his is the one department read.
-        Assert.That(rows.Select(_ => (_.Name, _.Department)), Is.EqualTo([("Aaron", (int?)null), ("Alice", null), ("Bob", 2), ("Carol", null)]));
+        await Assert.That(rows.Select(_ => (_.Name, _.Department))).IsEquivalentTo([("Aaron", (int?)null), ("Alice", null), ("Bob", 2), ("Carol", null)], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -37,7 +36,7 @@ public class ConditionalNullBranchTests
             .Select(_ => new DepartmentRow(_.Name, _.Active ? _.DepartmentId : null))
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Department), Is.EqualTo(new int?[] {1, 1, null, 2}));
+        await Assert.That(rows.Select(_ => _.Department)).IsEquivalentTo(new int?[] {1, 1, null, 2}, CollectionOrdering.Matching);
     }
 
     static ScryClient ClientFor(TestContext context) =>

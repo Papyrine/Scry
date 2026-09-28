@@ -3,7 +3,6 @@
 /// SQL — EF translates the CLR call to <c>(x &amp; flag) = flag</c> — and the same call runs as
 /// itself over an in-memory source.
 /// </summary>
-[TestFixture]
 public class HasFlagTests
 {
     [Test]
@@ -18,7 +17,7 @@ public class HasFlagTests
             .Select(_ => new {_.Name})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Aaron", "Alice", "Carol"]));
+        await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(["Aaron", "Alice", "Carol"], CollectionOrdering.Matching);
     }
 
     // A combined flag folds into one constant and travels by name — "Parking, Gym" — so the test asks
@@ -34,7 +33,7 @@ public class HasFlagTests
             .Select(_ => new {_.Name})
             .ToListAsync();
 
-        Assert.That(rows.Single().Name, Is.EqualTo("Alice"));
+        await Assert.That(rows.Single().Name).IsEqualTo("Alice");
     }
 
     [Test]
@@ -47,11 +46,11 @@ public class HasFlagTests
             .Select(_ => new {_.Name, Gym = _.Perks.HasFlag(Perks.Gym)})
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows.Single(_ => _.Name == "Bob").Gym, Is.False);
-            Assert.That(rows.Where(_ => _.Name != "Bob").Select(_ => _.Gym), Is.All.True);
-        });
+            await Assert.That(rows.Single(_ => _.Name == "Bob").Gym).IsFalse();
+            await Assert.That(rows.Where(_ => _.Name != "Bob").Select(_ => _.Gym)).All(_ => Equals(_, true));
+        }
     }
 
     // HasFlag(None) is vacuously true — (x & 0) == 0 — and the database answers it the way the CLR
@@ -65,11 +64,11 @@ public class HasFlagTests
         var count = await client.Source<Employee>("Employee")
             .CountAsync(_ => _.Perks.HasFlag(Perks.None));
 
-        Assert.That(count, Is.EqualTo(4));
+        await Assert.That(count).IsEqualTo(4);
     }
 
     [Test]
-    public void RejectsHasFlagOverSomethingNotAnEnum()
+    public async Task RejectsHasFlagOverSomethingNotAnEnum()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -80,10 +79,10 @@ public class HasFlagTests
                 new CountOp()
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("HasFlag is not supported over"));
+        await Assert.That(exception!.Message).Contains("HasFlag is not supported over");
     }
 
     static ScryClient ClientFor(TestContext context) =>

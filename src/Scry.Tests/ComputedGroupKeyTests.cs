@@ -3,7 +3,6 @@
 /// the wire by its path, which is what the server matches it back by; a computed key has no path, so
 /// it is named by its position among the query's keys instead.
 /// </summary>
-[TestFixture]
 public class ComputedGroupKeyTests
 {
     [Test]
@@ -24,14 +23,14 @@ public class ComputedGroupKeyTests
             .GroupBy(_ => _.Placed.DayOfWeek)
             .ToDictionary(_ => _.Key, _ => _.Count());
 
-        Assert.That(rows, Has.Count.EqualTo(expected.Count));
-        Assert.Multiple(() =>
+        await Assert.That(rows).Count().IsEqualTo(expected.Count);
+        using (Assert.Multiple())
         {
             foreach (var row in rows)
             {
-                Assert.That(row.Count, Is.EqualTo(expected[row.Day]), $"{row.Day}");
+                await Assert.That(row.Count).IsEqualTo(expected[row.Day]).Because($"{row.Day}");
             }
-        });
+        }
     }
 
     [Test]
@@ -45,8 +44,8 @@ public class ComputedGroupKeyTests
             .Select(_ => new {Region = _.Key, Total = _.Sum(_ => _.Amount)})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Region).Order(), Is.EqualTo(["NORTH", "SOUTH"]));
-        Assert.That(rows.Single(_ => _.Region == "NORTH").Total, Is.EqualTo(350m));
+        await Assert.That(rows.Select(_ => _.Region).Order()).IsEquivalentTo(["NORTH", "SOUTH"], CollectionOrdering.Matching);
+        await Assert.That(rows.Single(_ => _.Region == "NORTH").Total).IsEqualTo(350m);
     }
 
     [Test]
@@ -60,7 +59,7 @@ public class ComputedGroupKeyTests
             .Select(_ => new {Doubled = _.Key, Count = _.Count()})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Doubled).Order(), Is.EqualTo([150m, 200m, 500m]));
+        await Assert.That(rows.Select(_ => _.Doubled).Order()).IsEquivalentTo([150m, 200m, 500m], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -76,7 +75,7 @@ public class ComputedGroupKeyTests
             .Select(_ => new {Region = _.Key, Count = _.Count()})
             .ToListAsync();
 
-        Assert.That(rows.Single().Count, Is.EqualTo(2));
+        await Assert.That(rows.Single().Count).IsEqualTo(2);
     }
 
     [Test]
@@ -90,8 +89,8 @@ public class ComputedGroupKeyTests
             .Select(_ => new {Label = _.Key + "!", Average = _.Sum(_ => _.Amount) / _.Count()})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Label).Order(), Is.EqualTo(["NORTH!", "SOUTH!"]));
-        Assert.That(rows.Single(_ => _.Label == "NORTH!").Average, Is.EqualTo(175m));
+        await Assert.That(rows.Select(_ => _.Label).Order()).IsEquivalentTo(["NORTH!", "SOUTH!"], CollectionOrdering.Matching);
+        await Assert.That(rows.Single(_ => _.Label == "NORTH!").Average).IsEqualTo(175m);
     }
 
     [Test]
@@ -107,12 +106,12 @@ public class ComputedGroupKeyTests
             .Select(_ => new {_.Key.Region, _.Key.Doubled, Count = _.Count()})
             .ToListAsync();
 
-        Assert.That(rows, Has.Count.EqualTo(3));
-        Assert.That(rows.Single(_ => _.Doubled == 500m).Region, Is.EqualTo("North"));
+        await Assert.That(rows).Count().IsEqualTo(3);
+        await Assert.That(rows.Single(_ => _.Doubled == 500m).Region).IsEqualTo("North");
     }
 
     [Test]
-    public void RejectsAGroupKeyOutsideAGroupedQuery()
+    public async Task RejectsAGroupKeyOutsideAGroupedQuery()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -122,14 +121,14 @@ public class ComputedGroupKeyTests
             "Order",
             [new SelectOp(new([new("Key", new NodeValue(new GroupKeyNode(0)))]))]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("only be read in the Select or Where that follows a GroupBy"));
+        await Assert.That(exception!.Message).Contains("only be read in the Select or Where that follows a GroupBy");
     }
 
     [Test]
-    public void RejectsAGroupKeyBeyondTheKeysTheQueryHas()
+    public async Task RejectsAGroupKeyBeyondTheKeysTheQueryHas()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -140,10 +139,10 @@ public class ComputedGroupKeyTests
                 new SelectOp(new([new("Key", new NodeValue(new GroupKeyNode(3)))]))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("Group key 3 is out of range"));
+        await Assert.That(exception!.Message).Contains("Group key 3 is out of range");
     }
 
     static ScryClient ClientFor(TestContext context) =>

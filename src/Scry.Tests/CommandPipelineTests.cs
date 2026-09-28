@@ -3,7 +3,6 @@
 /// found through its policies, accepted, handled on a scope of its own, and answered with its outcome —
 /// in one receipt where it finishes inside the sync window, and pending then final where it does not.
 /// </summary>
-[TestFixture]
 public class CommandPipelineTests
 {
     [Test]
@@ -13,14 +12,14 @@ public class CommandPipelineTests
 
         var receipts = await host.Send("CreateShift", new {name = "Late", day = "2026-03-05", perks = new[] {"Gym"}});
 
-        Assert.That(receipts, Has.Count.EqualTo(1));
+        await Assert.That(receipts).Count().IsEqualTo(1);
         var receipt = receipts[0];
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(receipt.Status, Is.EqualTo(CommandStatus.Completed));
-            Assert.That(receipt.Result!.Value.GetProperty("id").GetInt32(), Is.GreaterThan(0));
-            Assert.That(receipt.Stamp, Is.EqualTo(host.Processor.SchemaStamp));
-        });
+            await Assert.That(receipt.Status).IsEqualTo(CommandStatus.Completed);
+            await Assert.That(receipt.Result!.Value.GetProperty("id").GetInt32()).IsGreaterThan(0);
+            await Assert.That(receipt.Stamp).IsEqualTo(host.Processor.SchemaStamp);
+        }
     }
 
     [Test]
@@ -35,15 +34,15 @@ public class CommandPipelineTests
             .SendCommand(CommandHost.Request("RenameShift", new {id = 1, name = "Night"}), reading, scope.ServiceProvider, new HeaderDictionary())
             .GetAsyncEnumerator();
 
-        Assert.That(await receipts.MoveNextAsync(), Is.True);
-        Assert.That(receipts.Current.Status, Is.EqualTo(CommandStatus.Pending));
+        await Assert.That(await receipts.MoveNextAsync()).IsTrue();
+        await Assert.That(receipts.Current.Status).IsEqualTo(CommandStatus.Pending);
 
         host.Script.Gate.SetResult();
 
-        Assert.That(await receipts.MoveNextAsync().AsTask().WaitAsync(patience), Is.True);
-        Assert.That(receipts.Current.Status, Is.EqualTo(CommandStatus.Completed));
-        Assert.That(await receipts.MoveNextAsync(), Is.False);
-        Assert.That(host.ShiftName(), Is.EqualTo("Night"));
+        await Assert.That(await receipts.MoveNextAsync().AsTask().WaitAsync(patience)).IsTrue();
+        await Assert.That(receipts.Current.Status).IsEqualTo(CommandStatus.Completed);
+        await Assert.That(await receipts.MoveNextAsync()).IsFalse();
+        await Assert.That(host.ShiftName()).IsEqualTo("Night");
     }
 
     // Saved after the handler returns, through the context it wrote to: a handler never has to.
@@ -54,11 +53,11 @@ public class CommandPipelineTests
 
         var receipts = await host.Send("RenameShift", new {id = 1, name = "Night"});
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(receipts.Single().Status, Is.EqualTo(CommandStatus.Completed));
-            Assert.That(host.ShiftName(), Is.EqualTo("Night"));
-        });
+            await Assert.That(receipts.Single().Status).IsEqualTo(CommandStatus.Completed);
+            await Assert.That(host.ShiftName()).IsEqualTo("Night");
+        }
     }
 
     [Test]
@@ -69,11 +68,11 @@ public class CommandPipelineTests
 
         var receipts = await host.Send("RenameShift", new {id = 1, name = "Night"});
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(receipts.Single().Status, Is.EqualTo(CommandStatus.Completed));
-            Assert.That(host.ShiftName(), Is.EqualTo("Early"));
-        });
+            await Assert.That(receipts.Single().Status).IsEqualTo(CommandStatus.Completed);
+            await Assert.That(host.ShiftName()).IsEqualTo("Early");
+        }
     }
 
     [Test]
@@ -84,12 +83,12 @@ public class CommandPipelineTests
 
         var receipt = (await host.Send("RenameShift", new {id = 1, name = "Night"})).Single();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(receipt.Status, Is.EqualTo(CommandStatus.Failed));
-            Assert.That(receipt.Error, Is.EqualTo("That name is taken."));
-            Assert.That(host.ShiftName(), Is.EqualTo("Early"));
-        });
+            await Assert.That(receipt.Status).IsEqualTo(CommandStatus.Failed);
+            await Assert.That(receipt.Error).IsEqualTo("That name is taken.");
+            await Assert.That(host.ShiftName()).IsEqualTo("Early");
+        }
     }
 
     // Anything else a handler throws is a developer's message, so the client is told only that it
@@ -102,13 +101,13 @@ public class CommandPipelineTests
 
         var receipt = (await host.Send("RenameShift", new {id = 1, name = "Night"})).Single();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(receipt.Status, Is.EqualTo(CommandStatus.Failed));
-            Assert.That(receipt.Error, Is.EqualTo("Command execution failed."));
-            Assert.That(host.Audited.Single().Error, Does.Contain("Server=secret"));
-            Assert.That(host.Audited.Single().CommandStatus, Is.EqualTo(CommandStatus.Failed));
-        });
+            await Assert.That(receipt.Status).IsEqualTo(CommandStatus.Failed);
+            await Assert.That(receipt.Error).IsEqualTo("Command execution failed.");
+            await Assert.That(host.Audited.Single().Error).Contains("Server=secret");
+            await Assert.That(host.Audited.Single().CommandStatus).IsEqualTo(CommandStatus.Failed);
+        }
     }
 
     [Test]
@@ -119,12 +118,12 @@ public class CommandPipelineTests
         await host.Send("SealContract", new {contractId = 1}, caller: "alice");
 
         var (command, caller, keys) = host.Script.Seen.Single();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(command, Is.EqualTo("SealContract"));
-            Assert.That(caller, Is.EqualTo("alice"));
-            Assert.That(keys, Is.EqualTo(new object[] {1}));
-        });
+            await Assert.That(command).IsEqualTo("SealContract");
+            await Assert.That(caller).IsEqualTo("alice");
+            await Assert.That(keys).IsEquivalentTo(new object[] {1}, CollectionOrdering.Matching);
+        }
     }
 
     [Test]
@@ -132,9 +131,9 @@ public class CommandPipelineTests
     {
         await using var host = await CommandHost.Start("CommandUnknown");
 
-        var exception = Assert.ThrowsAsync<ScryValidationException>(() => host.Send("Teleport", new { }));
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(() => host.Send("Teleport", new { }));
 
-        Assert.That(exception!.Message, Is.EqualTo("Unknown command 'Teleport'."));
+        await Assert.That(exception!.Message).IsEqualTo("Unknown command 'Teleport'.");
     }
 
     // A property behind [CommandIgnore] is the server's to fill: a payload naming it is refused, by the
@@ -144,9 +143,9 @@ public class CommandPipelineTests
     {
         await using var host = await CommandHost.Start("CommandIgnoredMember");
 
-        var exception = Assert.ThrowsAsync<ScryValidationException>(() => host.Send("SealContract", new {contractId = 1, sealedBy = "mallory"}));
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(() => host.Send("SealContract", new {contractId = 1, sealedBy = "mallory"}));
 
-        Assert.That(exception!.Message, Is.EqualTo("The payload of command 'SealContract' carries 'sealedBy', which the command does not have."));
+        await Assert.That(exception!.Message).IsEqualTo("The payload of command 'SealContract' carries 'sealedBy', which the command does not have.");
     }
 
     [Test]
@@ -154,9 +153,9 @@ public class CommandPipelineTests
     {
         await using var host = await CommandHost.Start("CommandMissingKey");
 
-        var exception = Assert.ThrowsAsync<ScryValidationException>(() => host.Send("SealContract", new { }));
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(() => host.Send("SealContract", new { }));
 
-        Assert.That(exception!.Message, Is.EqualTo("The payload of command 'SealContract' is missing 'contractId'."));
+        await Assert.That(exception!.Message).IsEqualTo("The payload of command 'SealContract' is missing 'contractId'.");
     }
 
     [Test]
@@ -164,9 +163,9 @@ public class CommandPipelineTests
     {
         await using var host = await CommandHost.Start("CommandEnumByNumber");
 
-        var exception = Assert.ThrowsAsync<ScryValidationException>(() => host.Send("CreateShift", new {name = "Late", day = "2026-03-05", perks = new[] {1}}));
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(() => host.Send("CreateShift", new {name = "Late", day = "2026-03-05", perks = new[] {1}}));
 
-        Assert.That(exception!.Message, Does.StartWith("The payload of command 'CreateShift' is not valid at '$.perks"));
+        await Assert.That(exception!.Message).StartsWith("The payload of command 'CreateShift' is not valid at '$.perks");
     }
 
     [Test]
@@ -174,9 +173,9 @@ public class CommandPipelineTests
     {
         await using var host = await CommandHost.Start("CommandNotAnObject");
 
-        var exception = Assert.ThrowsAsync<ScryValidationException>(() => host.Send("SealContract", new[] {1}));
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(() => host.Send("SealContract", new[] {1}));
 
-        Assert.That(exception!.Message, Is.EqualTo("The payload of command 'SealContract' must be a JSON object."));
+        await Assert.That(exception!.Message).IsEqualTo("The payload of command 'SealContract' must be a JSON object.");
     }
 
     [Test]
@@ -184,13 +183,13 @@ public class CommandPipelineTests
     {
         await using var host = await CommandHost.Start("CommandDenied", register: _ => _.AddSingleton(new CommandGate {Open = false}));
 
-        var exception = Assert.ThrowsAsync<ScryPermissionException>(() => host.Send("SealContract", new {contractId = 1}));
+        var exception = await Assert.ThrowsExactlyAsync<ScryPermissionException>(() => host.Send("SealContract", new {contractId = 1}));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(exception!.Message, Is.EqualTo(ScryPermissionException.CommandDeniedMessage));
-            Assert.That(host.Script.Seen, Is.Empty);
-        });
+            await Assert.That(exception!.Message).IsEqualTo(ScryPermissionException.CommandDeniedMessage);
+            await Assert.That(host.Script.Seen).IsEmpty();
+        }
     }
 
     // One query, one answer: a row the command's policy denies reads exactly as a row that is not there,
@@ -200,15 +199,15 @@ public class CommandPipelineTests
     {
         await using var host = await CommandHost.Start("CommandRowDenied");
 
-        var denied = Assert.ThrowsAsync<ScryCommandNotFoundException>(() => host.Send("SealContract", new {contractId = UnsealedContractsPolicy.SealedId}));
-        var missing = Assert.ThrowsAsync<ScryCommandNotFoundException>(() => host.Send("SealContract", new {contractId = 999}));
+        var denied = await Assert.ThrowsExactlyAsync<ScryCommandNotFoundException>(() => host.Send("SealContract", new {contractId = UnsealedContractsPolicy.SealedId}));
+        var missing = await Assert.ThrowsExactlyAsync<ScryCommandNotFoundException>(() => host.Send("SealContract", new {contractId = 999}));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(denied!.Message, Is.EqualTo(ScryCommandNotFoundException.TargetMessage));
-            Assert.That(missing!.Message, Is.EqualTo(denied.Message));
-            Assert.That(host.Script.Seen, Is.Empty);
-        });
+            await Assert.That(denied!.Message).IsEqualTo(ScryCommandNotFoundException.TargetMessage);
+            await Assert.That(missing!.Message).IsEqualTo(denied.Message);
+            await Assert.That(host.Script.Seen).IsEmpty();
+        }
     }
 
     // The row check is the same policy, asked with the command's own context: one contract, refused to a
@@ -221,15 +220,15 @@ public class CommandPipelineTests
         await using var mine = Call(host, contract: 1);
         await using var theirs = Call(host, contract: 2);
 
-        var refused = Assert.ThrowsAsync<ScryCommandNotFoundException>(() => host.Send("SealContract", new {contractId = 1}, services: theirs.ServiceProvider));
+        var refused = await Assert.ThrowsExactlyAsync<ScryCommandNotFoundException>(() => host.Send("SealContract", new {contractId = 1}, services: theirs.ServiceProvider));
         var receipts = await host.Send("SealContract", new {contractId = 1}, services: mine.ServiceProvider);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(refused!.Message, Is.EqualTo(ScryCommandNotFoundException.TargetMessage));
-            Assert.That(receipts[^1].Status, Is.EqualTo(CommandStatus.Completed));
-            Assert.That(host.Script.Seen.Select(_ => _.Keys), Is.EqualTo([new object[] {1}]));
-        });
+            await Assert.That(refused!.Message).IsEqualTo(ScryCommandNotFoundException.TargetMessage);
+            await Assert.That(receipts[^1].Status).IsEqualTo(CommandStatus.Completed);
+            await Assert.That(host.Script.Seen.Single().Keys).IsEquivalentTo(new object[] {1}, CollectionOrdering.Matching);
+        }
     }
 
     // A call's own scope with the caller's desk filled in, as an app's middleware fills in the current user.
@@ -247,9 +246,9 @@ public class CommandPipelineTests
         var id = Guid.NewGuid();
         await host.Send("SealContract", new {contractId = 1}, id: id);
 
-        var exception = Assert.ThrowsAsync<ScryValidationException>(() => host.Send("SealContract", new {contractId = 1}, id: id));
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(() => host.Send("SealContract", new {contractId = 1}, id: id));
 
-        Assert.That(exception!.Message, Does.Contain("has already been sent"));
+        await Assert.That(exception!.Message).Contains("has already been sent");
     }
 
     [Test]
@@ -263,12 +262,12 @@ public class CommandPipelineTests
                 _.CommandSyncWindow = TimeSpan.Zero;
             });
         host.Script.Gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        Assert.That((await FirstReceipt(host, "SealContract", new {contractId = 1})).Status, Is.EqualTo(CommandStatus.Pending));
+        await Assert.That((await FirstReceipt(host, "SealContract", new {contractId = 1})).Status).IsEqualTo(CommandStatus.Pending);
 
-        var exception = Assert.ThrowsAsync<ScryCommandLimitException>(() => FirstReceipt(host, "SealContract", new {contractId = 1}));
+        var exception = await Assert.ThrowsExactlyAsync<ScryCommandLimitException>(() => FirstReceipt(host, "SealContract", new {contractId = 1}));
 
         host.Script.Gate.SetResult();
-        Assert.That(exception!.PerCaller, Is.False);
+        await Assert.That(exception!.PerCaller).IsFalse();
     }
 
     [Test]
@@ -282,17 +281,17 @@ public class CommandPipelineTests
                 _.CommandSyncWindow = TimeSpan.Zero;
             });
         host.Script.Gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        Assert.That((await FirstReceipt(host, "SealContract", new {contractId = 1}, "alice")).Status, Is.EqualTo(CommandStatus.Pending));
+        await Assert.That((await FirstReceipt(host, "SealContract", new {contractId = 1}, "alice")).Status).IsEqualTo(CommandStatus.Pending);
 
-        var refused = Assert.ThrowsAsync<ScryCommandLimitException>(() => FirstReceipt(host, "SealContract", new {contractId = 1}, "alice"));
+        var refused = await Assert.ThrowsExactlyAsync<ScryCommandLimitException>(() => FirstReceipt(host, "SealContract", new {contractId = 1}, "alice"));
         var other = await FirstReceipt(host, "SealContract", new {contractId = 1}, "bob");
 
         host.Script.Gate.SetResult();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(refused!.PerCaller, Is.True);
-            Assert.That(other.Status, Is.EqualTo(CommandStatus.Pending));
-        });
+            await Assert.That(refused!.PerCaller).IsTrue();
+            await Assert.That(other.Status).IsEqualTo(CommandStatus.Pending);
+        }
     }
 
     // Asked again by its id, a command answers its own caller — and nobody else, who is told exactly
@@ -303,19 +302,19 @@ public class CommandPipelineTests
         await using var host = await CommandHost.Start("CommandReceipt", _ => _.CommandSyncWindow = TimeSpan.Zero);
         host.Script.Gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
         var id = Guid.NewGuid();
-        Assert.That((await FirstReceipt(host, "SealContract", new {contractId = 1}, "alice", id)).Status, Is.EqualTo(CommandStatus.Pending));
+        await Assert.That((await FirstReceipt(host, "SealContract", new {contractId = 1}, "alice", id)).Status).IsEqualTo(CommandStatus.Pending);
 
-        var stranger = Assert.ThrowsAsync<ScryCommandNotFoundException>(() => Receipts(host.Processor.Receipt(id, "bob")));
-        var unknown = Assert.ThrowsAsync<ScryCommandNotFoundException>(() => Receipts(host.Processor.Receipt(Guid.NewGuid(), "alice")));
+        var stranger = await Assert.ThrowsExactlyAsync<ScryCommandNotFoundException>(() => Receipts(host.Processor.Receipt(id, "bob")));
+        var unknown = await Assert.ThrowsExactlyAsync<ScryCommandNotFoundException>(() => Receipts(host.Processor.Receipt(Guid.NewGuid(), "alice")));
 
         host.Script.Gate.SetResult();
         var own = await Receipts(host.Processor.Receipt(id, "alice")).WaitAsync(patience);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(stranger!.Message, Is.EqualTo(unknown!.Message));
-            Assert.That(own.Last().Status, Is.EqualTo(CommandStatus.Completed));
-        });
+            await Assert.That(stranger!.Message).IsEqualTo(unknown!.Message);
+            await Assert.That(own.Last().Status).IsEqualTo(CommandStatus.Completed);
+        }
     }
 
     // The wait is the client's and the command is its handler's: a client that stops waiting has not
@@ -333,18 +332,18 @@ public class CommandPipelineTests
             await using var receipts = host.Processor
                 .SendCommand(CommandHost.Request("RenameShift", new {id = 1, name = "Night"}, id), reading, scope.ServiceProvider, new HeaderDictionary(), cancel: leaving.Token)
                 .GetAsyncEnumerator(leaving.Token);
-            Assert.That(await receipts.MoveNextAsync(), Is.True);
+            await Assert.That(await receipts.MoveNextAsync()).IsTrue();
             await leaving.CancelAsync();
         }
 
         host.Script.Gate.SetResult();
         var receipt = (await Receipts(host.Processor.Receipt(id)).WaitAsync(patience)).Last();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(receipt.Status, Is.EqualTo(CommandStatus.Completed));
-            Assert.That(host.ShiftName(), Is.EqualTo("Night"));
-        });
+            await Assert.That(receipt.Status).IsEqualTo(CommandStatus.Completed);
+            await Assert.That(host.ShiftName()).IsEqualTo("Night");
+        }
     }
 
     [Test]
@@ -363,10 +362,13 @@ public class CommandPipelineTests
         // A handler that saves nothing: the notification is the pipeline's, not the interceptor's.
         await host.Send("SealContract", new {contractId = 1});
 
+        ScryChange[] snapshot;
         lock (changes)
         {
-            Assert.That(changes.SelectMany(_ => _.Entities), Does.Contain("Contract"));
+            snapshot = [.. changes];
         }
+
+        await Assert.That(snapshot.SelectMany(_ => _.Entities)).Contains("Contract");
     }
 
     [Test]
@@ -385,10 +387,13 @@ public class CommandPipelineTests
 
         await host.Send("SealContract", new {contractId = 1});
 
+        ScryChange[] snapshot;
         lock (changes)
         {
-            Assert.That(changes, Is.Empty);
+            snapshot = [.. changes];
         }
+
+        await Assert.That(snapshot).IsEmpty();
     }
 
     // One entry for a command answered with its outcome; two for one answered pending — the second when
@@ -405,13 +410,13 @@ public class CommandPipelineTests
         await sending.WaitAsync(patience);
         await WaitFor(() => host.Audited.Count == 2);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(host.Audited[0].CommandStatus, Is.EqualTo(CommandStatus.Pending));
-            Assert.That(host.Audited[1].CommandStatus, Is.EqualTo(CommandStatus.Completed));
-            Assert.That(host.Audited[1].Command!.Command, Is.EqualTo("RenameShift"));
-            Assert.That(host.Audited[1].Request, Is.Null);
-        });
+            await Assert.That(host.Audited[0].CommandStatus).IsEqualTo(CommandStatus.Pending);
+            await Assert.That(host.Audited[1].CommandStatus).IsEqualTo(CommandStatus.Completed);
+            await Assert.That(host.Audited[1].Command!.Command).IsEqualTo("RenameShift");
+            await Assert.That(host.Audited[1].Request).IsNull();
+        }
     }
 
     [Test]
@@ -419,15 +424,15 @@ public class CommandPipelineTests
     {
         await using var host = await CommandHost.Start("CommandRefusalAudited");
 
-        Assert.ThrowsAsync<ScryCommandNotFoundException>(() => host.Send("SealContract", new {contractId = 999}));
+        await Assert.ThrowsExactlyAsync<ScryCommandNotFoundException>(() => host.Send("SealContract", new {contractId = 999}));
 
         var entry = host.Audited.Single();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(entry.Outcome, Is.EqualTo(ScryQueryOutcome.Rejected));
-            Assert.That(entry.CommandStatus, Is.Null);
-            Assert.That(entry.Command!.Command, Is.EqualTo("SealContract"));
-        });
+            await Assert.That(entry.Outcome).IsEqualTo(ScryQueryOutcome.Rejected);
+            await Assert.That(entry.CommandStatus).IsNull();
+            await Assert.That(entry.Command!.Command).IsEqualTo("SealContract");
+        }
     }
 
     [Test]
@@ -440,27 +445,27 @@ public class CommandPipelineTests
         var open = host.Processor.Capabilities(reading, host.Services, new HeaderDictionary());
         var shut = host.Processor.Capabilities(reading, closed, new HeaderDictionary());
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(open.Commands, Is.EqualTo(["CreateShift", "RenameShift", "SealContract"]));
-            Assert.That(shut.Commands, Is.EqualTo(["CreateShift", "RenameShift"]));
-            Assert.That(open.Stamp, Is.EqualTo(host.Processor.SchemaStamp));
-        });
+            await Assert.That(open.Commands).IsEquivalentTo(["CreateShift", "RenameShift", "SealContract"], CollectionOrdering.Matching);
+            await Assert.That(shut.Commands).IsEquivalentTo(["CreateShift", "RenameShift"], CollectionOrdering.Matching);
+            await Assert.That(open.Stamp).IsEqualTo(host.Processor.SchemaStamp);
+        }
     }
 
     [Test]
-    public void CommandsAreOffUntilAServerSaysHowManyItWillHold()
+    public async Task CommandsAreOffUntilAServerSaysHowManyItWillHold()
     {
         using var context = TestContext.CreateSeeded();
 
-        var exception = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(async () =>
         {
             await foreach (var _ in SharedProcessor.Instance.SendCommand(CommandHost.Request("SealContract", new {contractId = 1}), context))
             {
             }
         });
 
-        Assert.That(exception!.Message, Does.StartWith("Commands are off"));
+        await Assert.That(exception!.Message).StartsWith("Commands are off");
     }
 
     // A command's save reaches a live query on the same processor through the interceptor on the
@@ -470,13 +475,13 @@ public class CommandPipelineTests
     {
         await using var host = await CommandHost.Start("CommandReachesALiveQuery");
         await using var answers = LiveShiftNames(host).GetAsyncEnumerator();
-        Assert.That(await answers.MoveNextAsync().AsTask().WaitAsync(patience), Is.True);
-        Assert.That(answers.Current, Is.EqualTo(["Early"]));
+        await Assert.That(await answers.MoveNextAsync().AsTask().WaitAsync(patience)).IsTrue();
+        await Assert.That(answers.Current).IsEquivalentTo(["Early"], CollectionOrdering.Matching);
 
         await host.Send("RenameShift", new {id = 1, name = "Night"});
 
-        Assert.That(await answers.MoveNextAsync().AsTask().WaitAsync(patience), Is.True);
-        Assert.That(answers.Current, Is.EqualTo(["Night"]));
+        await Assert.That(await answers.MoveNextAsync().AsTask().WaitAsync(patience)).IsTrue();
+        await Assert.That(answers.Current).IsEquivalentTo(["Night"], CollectionOrdering.Matching);
     }
 
     // A bulk write no interceptor can see still reaches it: a completed targeted command reports its
@@ -487,12 +492,12 @@ public class CommandPipelineTests
         await using var host = await CommandHost.Start("CommandBulkReachesALiveQuery");
         host.Script.Bulk = true;
         await using var answers = LiveShiftNames(host).GetAsyncEnumerator();
-        Assert.That(await answers.MoveNextAsync().AsTask().WaitAsync(patience), Is.True);
+        await Assert.That(await answers.MoveNextAsync().AsTask().WaitAsync(patience)).IsTrue();
 
         await host.Send("RenameShift", new {id = 1, name = "Night"});
 
-        Assert.That(await answers.MoveNextAsync().AsTask().WaitAsync(patience), Is.True);
-        Assert.That(answers.Current, Is.EqualTo(["Night"]));
+        await Assert.That(await answers.MoveNextAsync().AsTask().WaitAsync(patience)).IsTrue();
+        await Assert.That(answers.Current).IsEquivalentTo(["Night"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -501,9 +506,9 @@ public class CommandPipelineTests
         await using var host = await CommandHost.Start("CommandUnrouted");
         await using var empty = new ServiceCollection().BuildServiceProvider();
 
-        var exception = Assert.Throws<Exception>(() => host.Processor.EnsureCommandsDispatchable(empty));
+        var exception = Assert.ThrowsExactly<Exception>(() => host.Processor.EnsureCommandsDispatchable(empty));
 
-        Assert.That(exception!.Message, Does.StartWith("Command 'CreateShift' has nowhere to go: no dispatcher claims it and no ICommandHandler<CreateShift, ShiftCreated> is registered."));
+        await Assert.That(exception!.Message).StartsWith("Command 'CreateShift' has nowhere to go: no dispatcher claims it and no ICommandHandler<CreateShift, ShiftCreated> is registered.");
     }
 
     [Test]
@@ -518,9 +523,9 @@ public class CommandPipelineTests
             },
             _ => _.AddSingleton<ClaimsEverything>().AddSingleton<AlsoClaimsEverything>());
 
-        var exception = Assert.Throws<Exception>(() => host.Processor.EnsureCommandsDispatchable(host.Services));
+        var exception = Assert.ThrowsExactly<Exception>(() => host.Processor.EnsureCommandsDispatchable(host.Services));
 
-        Assert.That(exception!.Message, Does.Contain("is claimed by ClaimsEverything and AlsoClaimsEverything"));
+        await Assert.That(exception!.Message).Contains("is claimed by ClaimsEverything and AlsoClaimsEverything");
     }
 
     // A dispatcher claims what it says it claims and reports the outcome back: the pipeline around it
@@ -537,14 +542,14 @@ public class CommandPipelineTests
 
         var receipt = (await host.Send("SealContract", new {contractId = 1}, caller: "alice")).Single();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(receipt.Status, Is.EqualTo(CommandStatus.Completed));
-            Assert.That(host.Script.Seen, Is.Empty);
-            Assert.That(dispatcher.Envelopes.Single().Caller, Is.EqualTo("alice"));
-            Assert.That(dispatcher.Envelopes.Single().Keys, Is.EqualTo(new object[] {1}));
-            Assert.That(((Seal) dispatcher.Envelopes.Single().Command).ContractId, Is.EqualTo(1));
-        });
+            await Assert.That(receipt.Status).IsEqualTo(CommandStatus.Completed);
+            await Assert.That(host.Script.Seen).IsEmpty();
+            await Assert.That(dispatcher.Envelopes.Single().Caller).IsEqualTo("alice");
+            await Assert.That(dispatcher.Envelopes.Single().Keys).IsEquivalentTo(new object[] {1}, CollectionOrdering.Matching);
+            await Assert.That(((Seal) dispatcher.Envelopes.Single().Command).ContractId).IsEqualTo(1);
+        }
     }
 
     static TimeSpan patience = TimeSpan.FromSeconds(20);
@@ -594,7 +599,7 @@ public class CommandPipelineTests
         var started = Stopwatch.GetTimestamp();
         while (!condition())
         {
-            Assert.That(Stopwatch.GetElapsedTime(started), Is.LessThan(patience));
+            await Assert.That(Stopwatch.GetElapsedTime(started)).IsLessThan(patience);
             await Task.Delay(10);
         }
     }

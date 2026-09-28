@@ -2,7 +2,6 @@
 /// Two sources combined into one sequence. Each is resolved and policy-filtered before they meet, and
 /// both must project the same shape — a combined row carries no record of which side produced it.
 /// </summary>
-[TestFixture]
 public class SetOperationTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -25,7 +24,7 @@ public class SetOperationTests
         // end-snippet
 
         // Three orders and three lines, none of them equal as a pair.
-        Assert.That(rows, Has.Count.EqualTo(6));
+        await Assert.That(rows).Count().IsEqualTo(6);
     }
 
     [Test]
@@ -46,11 +45,11 @@ public class SetOperationTests
             .Concat(client.Source<Order>("Order").Select(_ => new Label(_.Region, _.Amount)))
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(union, Has.Count.EqualTo(3));
-            Assert.That(concat, Has.Count.EqualTo(6));
-        });
+            await Assert.That(union).Count().IsEqualTo(3);
+            await Assert.That(concat).Count().IsEqualTo(6);
+        }
     }
 
     [Test]
@@ -73,11 +72,11 @@ public class SetOperationTests
                 .Select(_ => new Label(_.Region, _.Amount)))
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(intersect, Has.Count.EqualTo(2));
-            Assert.That(except.Single().Name, Is.EqualTo("South"));
-        });
+            await Assert.That(intersect).Count().IsEqualTo(2);
+            await Assert.That(except.Single().Name).IsEqualTo("South");
+        }
     }
 
     [Test]
@@ -91,7 +90,7 @@ public class SetOperationTests
             .Union(client.Source<OrderLine>("OrderLine").Select(_ => new Label(_.Sku, _.Price)))
             .CountAsync();
 
-        Assert.That(count, Is.EqualTo(6));
+        await Assert.That(count).IsEqualTo(6);
     }
 
     [Test]
@@ -107,15 +106,15 @@ public class SetOperationTests
             .Union(client.Source<Ticket>("Ticket").Select(_ => new Label(_.Name, _.Id)))
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows.Select(_ => _.Name), Does.Not.Contain("Old typo"));
-            Assert.That(rows, Has.Count.EqualTo(4), "two departments and the two open tickets");
-        });
+            await Assert.That(rows.Select(_ => _.Name)).DoesNotContain("Old typo");
+            await Assert.That(rows).Count().IsEqualTo(4).Because("two departments and the two open tickets");
+        }
     }
 
     [Test]
-    public void MismatchedMemberNamesAreRejected()
+    public async Task MismatchedMemberNamesAreRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -130,14 +129,14 @@ public class SetOperationTests
                     new([new("Sku", new NodeValue(new MemberNode(["Sku"])))]))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("same members"));
+        await Assert.That(exception!.Message).Contains("same members");
     }
 
     [Test]
-    public void MismatchedMemberTypesAreRejected()
+    public async Task MismatchedMemberTypesAreRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -152,10 +151,10 @@ public class SetOperationTests
                     new([new("Value", new NodeValue(new MemberNode(["Price"])))]))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("same types"));
+        await Assert.That(exception!.Message).Contains("same types");
     }
 
     [Test]
@@ -174,23 +173,23 @@ public class SetOperationTests
                     new([new("Value", new NodeValue(new MemberNode(["Salary"])))]))
             ]);
 
-        Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+        Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
     }
 
     [Test]
-    public void OperatorsAfterASetOperationAreRejected()
+    public async Task OperatorsAfterASetOperationAreRejected()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<ScryValidationException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(
             () => client.Source<Order>("Order")
                 .Select(_ => new Label(_.Region, _.Amount))
                 .Union(client.Source<OrderLine>("OrderLine").Select(_ => new Label(_.Sku, _.Price)))
                 .OrderBy(_ => _.Name)
                 .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("may follow a set operation"));
+        await Assert.That(exception!.Message).Contains("may follow a set operation");
     }
 
     static ScryClient ClientFor(TestContext context) =>

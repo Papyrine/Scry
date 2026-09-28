@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 
-[TestFixture]
 public class GuardrailTests
 {
     // Maps the same Address type as a (keyless) entity rather than a complex type. Validating the real
@@ -14,14 +13,14 @@ public class GuardrailTests
     }
 
     [Test]
-    public void RejectsComplexTypeMappedAsEntity()
+    public async Task RejectsComplexTypeMappedAsEntity()
     {
         var options = new DbContextOptionsBuilder<AddressAsEntityContext>()
             .UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=ScryGuardrail")
             .Options;
         using var context = new AddressAsEntityContext(options);
 
-        var exception = Assert.Throws<Exception>(() => SharedProcessor.Instance.ValidateAgainstModel(context));
-        Assert.That(exception!.Message, Does.Contain("[QueryableComplex] but is a mapped entity"));
+        var exception = Assert.ThrowsExactly<Exception>(() => SharedProcessor.Instance.ValidateAgainstModel(context));
+        await Assert.That(exception!.Message).Contains("[QueryableComplex] but is a mapped entity");
     }
 }

@@ -3,7 +3,6 @@
 /// is resolved and policy-filtered before the test, so membership is only ever of rows the caller
 /// could have queried directly.
 /// </summary>
-[TestFixture]
 public class SourceMembershipTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -29,7 +28,7 @@ public class SourceMembershipTests
                     .Select(_ => _.Id)
                     .Contains(_.DepartmentId));
 
-        Assert.That(count, Is.EqualTo(4));
+        await Assert.That(count).IsEqualTo(4);
     }
 
     // An optional member tested against required keys. C# only lets this be written with the keys
@@ -49,7 +48,7 @@ public class SourceMembershipTests
                     .Select(_ => (int?) _.Id)
                     .Contains(_.ManagerId));
 
-        Assert.That(count, Is.EqualTo(2));
+        await Assert.That(count).IsEqualTo(2);
     }
 
     [Test]
@@ -69,7 +68,7 @@ public class SourceMembershipTests
             .ToListAsync();
         // end-snippet
 
-        Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Bob", "Carol"]));
+        await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(["Bob", "Carol"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -88,11 +87,11 @@ public class SourceMembershipTests
                     .Contains(_.Id));
 
         // Employees are Ids 1..4; tickets 1 and 2 are open, 3 is not. So only two match, not three.
-        Assert.That(open, Is.EqualTo(2));
+        await Assert.That(open).IsEqualTo(2);
     }
 
     [Test]
-    public void MembershipAgainstAnUnknownSourceIsRejected()
+    public async Task MembershipAgainstAnUnknownSourceIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -105,9 +104,9 @@ public class SourceMembershipTests
                     new MemberNode(["Id"])))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("Unknown source"));
+        await Assert.That(exception!.Message).Contains("Unknown source");
     }
 
     [Test]
@@ -125,11 +124,11 @@ public class SourceMembershipTests
                     new MemberNode(["Salary"])))
             ]);
 
-        Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+        Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
     }
 
     [Test]
-    public void ANestedMembershipTestIsRejected()
+    public async Task ANestedMembershipTestIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -147,13 +146,13 @@ public class SourceMembershipTests
                             new MemberNode(["Id"]))))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("inside another"));
+        await Assert.That(exception!.Message).Contains("inside another");
     }
 
     [Test]
-    public void ASubqueryInsideAMembershipTestIsRejected()
+    public async Task ASubqueryInsideAMembershipTestIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -169,13 +168,13 @@ public class SourceMembershipTests
                         new SubqueryNode(["Lines"], SubqueryFn.Any)))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("inside a membership test"));
+        await Assert.That(exception!.Message).Contains("inside a membership test");
     }
 
     [Test]
-    public void ASubqueryMayBeTheMembershipValue()
+    public async Task ASubqueryMayBeTheMembershipValue()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -192,11 +191,11 @@ public class SourceMembershipTests
                 new CountOp()
             ]);
 
-        Assert.DoesNotThrow(() => SharedProcessor.Instance.Execute(request, context));
+        await Assert.That(() => SharedProcessor.Instance.Execute(request, context)).ThrowsNothing();
     }
 
     [Test]
-    public void AMembershipTestInsideASubqueryInTheValueIsRejected()
+    public async Task AMembershipTestInsideASubqueryInTheValueIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -215,25 +214,25 @@ public class SourceMembershipTests
                         new MemberNode(["Id"])))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("inside a subquery"));
+        await Assert.That(exception!.Message).Contains("inside a subquery");
     }
 
     [Test]
-    public void AnUnsupportedOperatorOnTheOtherSourceIsRejected()
+    public async Task AnUnsupportedOperatorOnTheOtherSourceIsRejected()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<NotSupportedException>(() => client.Source<Employee>("Employee")
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() => client.Source<Employee>("Employee")
             .CountAsync(_ => client
                 .Source<Department>("Department")
                 .OrderBy(_ => _.Name)
                 .Select(_ => _.Id)
                 .Contains(_.DepartmentId)));
 
-        Assert.That(exception!.Message, Does.Contain("Where and a Select"));
+        await Assert.That(exception!.Message).Contains("Where and a Select");
     }
 
     [Test]
@@ -257,14 +256,12 @@ public class SourceMembershipTests
             .ToListAsync();
 
         // Aaron and Alice are in Engineering, Bob and Carol in Sales.
-        Assert.That(
-            rows.Select(_ => $"{_.Name} {_.Department.Name} {_.Department.InSales}"),
-            Is.EqualTo([
+        await Assert.That(rows.Select(_ => $"{_.Name} {_.Department.Name} {_.Department.InSales}")).IsEquivalentTo([
                 "Aaron Engineering False",
                 "Alice Engineering False",
                 "Bob Sales True",
                 "Carol Sales True"
-            ]));
+            ], CollectionOrdering.Matching);
     }
 
     static ScryClient ClientFor(TestContext context) =>

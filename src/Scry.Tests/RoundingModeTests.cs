@@ -3,37 +3,36 @@
 /// dropped, and any other is refused. The mode once travelled as an operand: with digits it was
 /// silently discarded, and alone it was sent as the digits and refused by the server as a number.
 /// </summary>
-[TestFixture]
 public class RoundingModeTests
 {
     [Test]
-    public void AwayFromZeroWithDigitsIsDropped()
+    public async Task AwayFromZeroWithDigitsIsDropped()
     {
         var call = RoundOf(_ => Math.Round(_.Amount, 2, MidpointRounding.AwayFromZero) > 1);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(call.Function, Is.EqualTo(KnownFunction.MathRound));
-            Assert.That(call.Arguments, Has.Count.EqualTo(1));
-            Assert.That(((ConstNode) call.Arguments[0]).Value, Is.EqualTo("2"));
-        });
+            await Assert.That(call.Function).IsEqualTo(KnownFunction.MathRound);
+            await Assert.That(call.Arguments).Count().IsEqualTo(1);
+            await Assert.That(((ConstNode) call.Arguments[0]).Value).IsEqualTo("2");
+        }
     }
 
     [Test]
-    public void AwayFromZeroAloneIsDropped()
+    public async Task AwayFromZeroAloneIsDropped()
     {
         var call = RoundOf(_ => Math.Round(_.Amount, MidpointRounding.AwayFromZero) > 1);
 
-        Assert.That(call.Arguments, Is.Empty);
+        await Assert.That(call.Arguments).IsEmpty();
     }
 
     [Test]
-    public void AnotherModeIsRefused()
+    public async Task AnotherModeIsRefused()
     {
-        var exception = Assert.Throws<NotSupportedException>(
+        var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => RoundOf(_ => Math.Round(_.Amount, 2, MidpointRounding.ToEven) > 1));
 
-        Assert.That(exception!.Message, Does.Contain("AwayFromZero"));
+        await Assert.That(exception!.Message).Contains("AwayFromZero");
     }
 
     static CallNode RoundOf(Expression<Func<Order, bool>> predicate)

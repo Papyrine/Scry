@@ -2,7 +2,6 @@
 /// The drift event is promised at most once per client. A scoped client awaiting several queries at
 /// once records the server's stamp from several threads, and a check-then-set raise could fire twice.
 /// </summary>
-[TestFixture]
 public class SchemaDriftEventTests
 {
     [Test]
@@ -26,11 +25,11 @@ public class SchemaDriftEventTests
             Enumerable.Range(0, 64)
                 .Select(_ => client.Source<NameOnly>("Employee", ["Name"]).CountAsync()));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(raised, Is.EqualTo(1));
-            Assert.That(client.SchemaStale, Is.True);
-        });
+            await Assert.That(raised).IsEqualTo(1);
+            await Assert.That(client.SchemaStale).IsTrue();
+        }
     }
 
     public class NameOnly

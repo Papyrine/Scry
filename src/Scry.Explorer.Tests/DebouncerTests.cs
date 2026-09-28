@@ -1,7 +1,6 @@
 // The trailing-edge debounce behind both the explorer's persist and its diagnostics pass. Its work
 // runs on a task nothing awaits, so what it drops, what it lets through, and where a failure inside
 // it surfaces are only observable here.
-[TestFixture]
 public class DebouncerTests
 {
     // Short enough to keep the suite fast, long enough to be clear of scheduler jitter.
@@ -35,7 +34,7 @@ public class DebouncerTests
 
         await third.Task.WaitAsync(limit);
 
-        Assert.That(ran, Is.EqualTo(["third"]));
+        await Assert.That(ran).IsEquivalentTo(["third"], CollectionOrdering.Matching);
     }
 
     // Not one-shot: once a window has closed, the next call opens a fresh one.
@@ -63,7 +62,7 @@ public class DebouncerTests
         });
         await second.Task.WaitAsync(limit);
 
-        Assert.That(ran, Is.EqualTo(2));
+        await Assert.That(ran).IsEqualTo(2);
     }
 
     // What the diagnostics pass is built on: a Roslyn run outlasts the window it started in, so the
@@ -99,7 +98,7 @@ public class DebouncerTests
         await started.Task.WaitAsync(limit);
         debouncer.Run(() => Task.CompletedTask);
 
-        Assert.That(await outcome.Task.WaitAsync(limit), Is.EqualTo("cancelled"));
+        await Assert.That(await outcome.Task.WaitAsync(limit)).IsEqualTo("cancelled");
     }
 
     // The page closing cannot wait for the window: what was going to be written when it closed is
@@ -117,9 +116,9 @@ public class DebouncerTests
 
         await debouncer.Flush();
 
-        Assert.That(ran, Is.EqualTo(1));
+        await Assert.That(ran).IsEqualTo(1);
         await Task.Delay(window * 5);
-        Assert.That(ran, Is.EqualTo(1));
+        await Assert.That(ran).IsEqualTo(1);
     }
 
     // Once the window has closed and the action has run, there is nothing left for a flush to do.
@@ -139,7 +138,7 @@ public class DebouncerTests
 
         await debouncer.Flush();
 
-        Assert.That(ran, Is.EqualTo(1));
+        await Assert.That(ran).IsEqualTo(1);
     }
 
     [Test]
@@ -165,19 +164,23 @@ public class DebouncerTests
         // Long enough that the window would have closed several times over had Dispose not shut it.
         await Task.Delay(window * 10);
 
-        Assert.That(ran, Is.False);
+        await Assert.That(ran).IsFalse();
     }
 
     // Nothing awaits the debounced task, so an exception inside the action has nowhere to surface but
     // the console. Dropping it silently would leave an update that never happened looking exactly
     // like one that found nothing to do.
+    // Swaps the process-wide error writer, so nothing else may run while it is swapped.
     [Test]
+    [NotInParallel]
     public async Task ReportsAnActionThatThrewAndKeepsGoing()
     {
         using var debouncer = new Debouncer(window);
         var reported = new StringWriter();
         var original = Console.Error;
+#pragma warning disable TUnit0055
         Console.SetError(reported);
+#pragma warning restore TUnit0055
         try
         {
             debouncer.Run(() => throw new InvalidOperationException("Deliberate."));
@@ -195,10 +198,12 @@ public class DebouncerTests
         }
         finally
         {
+#pragma warning disable TUnit0055
             Console.SetError(original);
+#pragma warning restore TUnit0055
         }
 
-        Assert.That(reported.ToString(), Does.Contain("Scry: a debounced action failed."));
+        await Assert.That(reported.ToString()).Contains("Scry: a debounced action failed.");
     }
 
     static async Task WaitUntil(Func<bool> condition, string expectation)

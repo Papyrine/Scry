@@ -4,28 +4,27 @@
 /// instead. The test model carries two such types on purpose — they pin classification — which is
 /// what makes the shared processor the fixture here.
 /// </summary>
-[TestFixture]
 public class SourceMappingTests
 {
     [Test]
-    public void AnOptedInTypeTheContextDoesNotMapIsRefusedAtStartup()
+    public async Task AnOptedInTypeTheContextDoesNotMapIsRefusedAtStartup()
     {
         using var context = TestContext.CreateSeeded();
 
-        var exception = Assert.Throws<Exception>(() => SharedProcessor.Instance.EnsureSourcesMapped(context))!;
+        var exception = Assert.ThrowsExactly<Exception>(() => SharedProcessor.Instance.EnsureSourcesMapped(context))!;
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(exception.Message, Does.Contain("does not map it"));
-            Assert.That(exception.Message, Does.Contain("TestContext"));
-            Assert.That(exception.Message, Does.Contain("AddPocoSource"));
-        });
+            await Assert.That(exception.Message).Contains("does not map it");
+            await Assert.That(exception.Message).Contains("TestContext");
+            await Assert.That(exception.Message).Contains("AddPocoSource");
+        }
     }
 
     // One model assembly may serve several contexts, each opting in types the others map; the host
     // says so, and the check stands down.
     [Test]
-    public void TheRefusalIsWaivedForAnAssemblyServingSeveralContexts()
+    public async Task TheRefusalIsWaivedForAnAssemblyServingSeveralContexts()
     {
         using var context = TestContext.CreateSeeded();
         var processor = ScryProcessor.Create<TestContext>(options =>
@@ -34,30 +33,30 @@ public class SourceMappingTests
             options.AllowUnmappedSources = true;
         });
 
-        Assert.DoesNotThrow(() => processor.EnsureSourcesMapped(context));
+        await Assert.That(() => processor.EnsureSourcesMapped(context)).ThrowsNothing();
     }
 
     // Where the check is waived, a query naming an unmapped source is a rejection like any unknown
     // source — never the Set<T>() fault, which a client could otherwise produce on demand.
     [Test]
-    public void AQueryOfAnUnmappedSourceIsRejectedNotFaulted()
+    public async Task AQueryOfAnUnmappedSourceIsRejectedNotFaulted()
     {
         using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create("Region", [new CountOp()]);
 
-        var exception = Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context))!;
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context))!;
 
-        Assert.That(exception.Message, Is.EqualTo("Unknown source 'Region'."));
+        await Assert.That(exception.Message).IsEqualTo("Unknown source 'Region'.");
     }
 
     // The refusal is per source, so the message names the one that is missing.
     [Test]
-    public void TheRefusalNamesTheSource()
+    public async Task TheRefusalNamesTheSource()
     {
         using var context = TestContext.CreateSeeded();
 
-        var exception = Assert.Throws<Exception>(() => SharedProcessor.Instance.EnsureSourcesMapped(context))!;
+        var exception = Assert.ThrowsExactly<Exception>(() => SharedProcessor.Instance.EnsureSourcesMapped(context))!;
 
-        Assert.That(exception.Message, Does.Match("Source '(DepartmentHeadcount|Region)'"));
+        await Assert.That(exception.Message).Matches("Source '(DepartmentHeadcount|Region)'");
     }
 }

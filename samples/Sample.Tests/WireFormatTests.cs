@@ -1,6 +1,6 @@
 // Captures the actual HTTP traffic between client and server and snapshots it. This documents
 // Scry's wire format: the serialized LINQ query that goes up, and the projected rows that come back.
-[TestFixture]
+[NotInParallel]
 public class WireFormatTests
 {
     public record EmployeeRow(string Name, Status Status, string? Manager, string Department);

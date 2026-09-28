@@ -10,7 +10,8 @@ using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 /// A server of its own, because the mode is a property of a registered policy and every other fixture
 /// here depends on queries succeeding.
 /// </remarks>
-[TestFixture]
+[NotInParallel]
+[DependsOn<HttpRoundTripTests.StaleClient>(nameof(HttpRoundTripTests.StaleClient.AClientThatDoesNotKnowRetriesInABody), ProceedOnFailure = true)]
 public class DeniedRowHttpTests
 {
     static readonly SqlInstance<Sample.Model.SampleContext> sqlInstance = new(
@@ -21,13 +22,13 @@ public class DeniedRowHttpTests
             return Task.CompletedTask;
         });
 
-    WebApplication app = null!;
-    HttpClient http = null!;
-    ScryQuery query = null!;
-    SqlDatabase<Sample.Model.SampleContext> database = null!;
+    static WebApplication app = null!;
+    static HttpClient http = null!;
+    static ScryQuery query = null!;
+    static SqlDatabase<Sample.Model.SampleContext> database = null!;
 
-    [OneTimeSetUp]
-    public async Task StartServer()
+    [Before(Class)]
+    public static async Task StartServer()
     {
         database = await sqlInstance.Build();
 
@@ -53,8 +54,8 @@ public class DeniedRowHttpTests
         query = new(ScryClient.ForHttp(http, "/api/query"));
     }
 
-    [OneTimeTearDown]
-    public async Task StopServer()
+    [After(Class)]
+    public static async Task StopServer()
     {
         await app.StopAsync();
         await app.DisposeAsync();
@@ -63,13 +64,13 @@ public class DeniedRowHttpTests
     }
 
     [Test]
-    public void ADeniedQuerySurfacesAsAPermissionException()
+    public async Task ADeniedQuerySurfacesAsAPermissionException()
     {
         // Orders outside the north exist, so listing them all reads rows this policy denies.
-        var exception = Assert.ThrowsAsync<ScryPermissionException>(
-            () => query.Order.Select(_ => new {_.Region}).ToListAsync())!;
+        var exception = (await Assert.ThrowsExactlyAsync<ScryPermissionException>(
+            () => query.Order.Select(_ => new {_.Region}).ToListAsync()))!;
 
-        Assert.That(exception.Message, Is.EqualTo(ScryPermissionException.DeniedMessage));
+        await Assert.That(exception.Message).IsEqualTo(ScryPermissionException.DeniedMessage);
     }
 
     [Test]
@@ -79,16 +80,16 @@ public class DeniedRowHttpTests
         using var content = new StringContent(ScryJson.Serialize(request), Encoding.UTF8, "application/json");
         using var response = await http.PostAsync("/api/query", content);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
-        Assert.That(response.Headers.ETag, Is.Null);
-        Assert.That(response.Headers.CacheControl!.NoStore, Is.True);
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Forbidden);
+        await Assert.That(response.Headers.ETag).IsNull();
+        await Assert.That(response.Headers.CacheControl!.NoStore).IsTrue();
 
         // The body says a policy denied the query and nothing else: not which source, not which row,
         // not which policy.
         var body = await response.Content.ReadAsStringAsync();
-        Assert.That(body, Does.Contain(ScryPermissionException.DeniedMessage));
-        Assert.That(body, Does.Not.Contain("Order"));
-        Assert.That(body, Does.Not.Contain("Region"));
+        await Assert.That(body).Contains(ScryPermissionException.DeniedMessage);
+        await Assert.That(body).DoesNotContain("Order");
+        await Assert.That(body).DoesNotContain("Region");
     }
 
     [Test]
@@ -99,15 +100,15 @@ public class DeniedRowHttpTests
             .Select(_ => new {_.Region, _.Amount})
             .ToListAsync();
 
-        Assert.That(rows, Is.Not.Empty);
-        Assert.That(rows.Select(_ => _.Region), Is.All.EqualTo("North"));
+        await Assert.That(rows).IsNotEmpty();
+        await Assert.That(rows.Select(_ => _.Region)).All(_ => Equals(_, "North"));
     }
 
     [Test]
-    public void AStreamIsDeniedBeforeItStarts() =>
+    public async Task AStreamIsDeniedBeforeItStarts() =>
         // The rows are built before the first byte is written, so a denial still answers as a status
         // rather than as an error marker part-way through a response that already looked successful.
-        Assert.ThrowsAsync<ScryPermissionException>(
+        await Assert.ThrowsExactlyAsync<ScryPermissionException>(
             async () =>
             {
                 await foreach (var _ in query.Order.Select(_ => new {_.Region}).ToAsyncEnumerable())

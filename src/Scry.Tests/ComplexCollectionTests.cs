@@ -4,7 +4,6 @@
 /// never projectable. What differs is only where the rows live, and that is EF's business, not the
 /// wire's — the requests here are indistinguishable from the ones over Order.Lines.
 /// </summary>
-[TestFixture]
 public class ComplexCollectionTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -24,7 +23,7 @@ public class ComplexCollectionTests
         // end-snippet
 
         // Alice and Carol have lived in Berlin.
-        Assert.That(count, Is.EqualTo(2));
+        await Assert.That(count).IsEqualTo(2);
     }
 
     [Test]
@@ -39,7 +38,7 @@ public class ComplexCollectionTests
             .ToListAsync();
 
         // Aaron's array is empty, which counts as zero rather than faulting.
-        Assert.That(rows.Select(_ => _.Previous), Is.EqualTo([0, 2, 1, 2]));
+        await Assert.That(rows.Select(_ => _.Previous)).IsEquivalentTo([0, 2, 1, 2], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -52,7 +51,7 @@ public class ComplexCollectionTests
             .CountAsync(_ => _.PreviousAddresses.All(address => address.Country == "UK"));
 
         // Bob's one previous address is in the UK, and Aaron's empty array is vacuously true.
-        Assert.That(count, Is.EqualTo(2));
+        await Assert.That(count).IsEqualTo(2);
     }
 
     [Test]
@@ -64,7 +63,7 @@ public class ComplexCollectionTests
         var count = await client.Source<Employee>("Employee")
             .CountAsync(_ => _.PreviousAddresses.Max(address => address.City) == "Paris");
 
-        Assert.That(count, Is.EqualTo(1));
+        await Assert.That(count).IsEqualTo(1);
     }
 
     [Test]
@@ -80,7 +79,7 @@ public class ComplexCollectionTests
             .Select(_ => new {_.City})
             .ToListAsync();
 
-        Assert.That(cities.Select(_ => _.City).Order(), Is.EqualTo(["Berlin", "Berlin", "London", "London", "Paris"]));
+        await Assert.That(cities.Select(_ => _.City).Order()).IsEquivalentTo(["Berlin", "Berlin", "London", "London", "Paris"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -96,11 +95,11 @@ public class ComplexCollectionTests
             .Select(_ => new {_.City})
             .ToListAsync();
 
-        Assert.That(cities.Single().City, Is.EqualTo("Berlin"));
+        await Assert.That(cities.Single().City).IsEqualTo("Berlin");
     }
 
     [Test]
-    public void AnIgnoredMemberStaysHiddenInsideAJsonArray()
+    public async Task AnIgnoredMemberStaysHiddenInsideAJsonArray()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -119,10 +118,10 @@ public class ComplexCollectionTests
                         new ConstNode("10115", ClrTypeTag.String))))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("not allow-listed"));
+        await Assert.That(exception!.Message).Contains("not allow-listed");
     }
 
     [Test]
@@ -136,7 +135,7 @@ public class ComplexCollectionTests
             "Employee",
             [new SelectOp(new([new("PreviousAddresses", new NodeValue(new MemberNode(["PreviousAddresses"])))]))]);
 
-        Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+        Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
     }
 
     [Test]
@@ -154,17 +153,17 @@ public class ComplexCollectionTests
                     new ConstNode("Berlin", ClrTypeTag.String)))
             ]);
 
-        Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+        Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
     }
 
     [Test]
-    public void AttachingARowPolicyToAComplexTypeIsRefusedAtStartup()
+    public async Task AttachingARowPolicyToAComplexTypeIsRefusedAtStartup()
     {
         // A policy filters a source, and a complex type has none — so one attached here would never
         // run, including over the JSON array a [QueryableCollection] of it exposes. The equivalent
         // mistake on an entity collection is already refused; this closes the same gap for a complex
         // one, where the existing check could never fire.
-        var exception = Assert.Throws<Exception>(
+        var exception = Assert.ThrowsExactly<Exception>(
             () => ScryProcessor.Create<TestContext>(
                 options =>
                 {
@@ -172,7 +171,7 @@ public class ComplexCollectionTests
                     options.AddPolicy<Address, UkAddressesOnlyPolicy>();
                 }));
 
-        Assert.That(exception!.Message, Does.Contain("row policy"));
+        await Assert.That(exception!.Message).Contains("row policy");
     }
 
     static ScryClient ClientFor(TestContext context) =>

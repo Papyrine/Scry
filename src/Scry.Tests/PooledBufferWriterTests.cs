@@ -3,11 +3,10 @@
 /// that array as it grows, so what matters is that everything written survives the swaps in order and
 /// that nothing past what was written is ever visible.
 /// </summary>
-[TestFixture]
 public class PooledBufferWriterTests
 {
     [Test]
-    public void KeepsWhatWasWrittenAcrossGrowth()
+    public async Task KeepsWhatWasWrittenAcrossGrowth()
     {
         using var writer = new PooledBufferWriter();
 
@@ -22,41 +21,41 @@ public class PooledBufferWriterTests
             written.AddRange(payload);
         }
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(writer.WrittenCount, Is.EqualTo(written.Count));
-            Assert.That(writer.WrittenMemory.ToArray(), Is.EqualTo(written.ToArray()));
-        });
+            await Assert.That(writer.WrittenCount).IsEqualTo(written.Count);
+            await Assert.That(writer.WrittenMemory.ToArray()).IsEquivalentTo(written.ToArray(), CollectionOrdering.Matching);
+        }
     }
 
     [Test]
-    public void HonoursASizeHintLargerThanTheCurrentBuffer()
+    public async Task HonoursASizeHintLargerThanTheCurrentBuffer()
     {
         using var writer = new PooledBufferWriter();
 
         var span = writer.GetSpan(1024 * 1024);
 
-        Assert.That(span.Length, Is.GreaterThanOrEqualTo(1024 * 1024));
+        await Assert.That(span.Length).IsGreaterThanOrEqualTo(1024 * 1024);
     }
 
     [Test]
-    public void ExposesNothingBeyondWhatWasWritten()
+    public async Task ExposesNothingBeyondWhatWasWritten()
     {
         using var writer = new PooledBufferWriter();
 
         "abc"u8.CopyTo(writer.GetSpan(3));
         writer.Advance(3);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(writer.WrittenCount, Is.EqualTo(3));
-            Assert.That(writer.WrittenMemory.Length, Is.EqualTo(3));
-            Assert.That(Encoding.UTF8.GetString(writer.WrittenMemory.Span), Is.EqualTo("abc"));
-        });
+            await Assert.That(writer.WrittenCount).IsEqualTo(3);
+            await Assert.That(writer.WrittenMemory.Length).IsEqualTo(3);
+            await Assert.That(Encoding.UTF8.GetString(writer.WrittenMemory.Span)).IsEqualTo("abc");
+        }
     }
 
     [Test]
-    public void ResetKeepsTheArrayAndDropsTheContent()
+    public async Task ResetKeepsTheArrayAndDropsTheContent()
     {
         using var writer = new PooledBufferWriter();
 
@@ -66,11 +65,11 @@ public class PooledBufferWriterTests
         "second"u8.CopyTo(writer.GetSpan(6));
         writer.Advance(6);
 
-        Assert.That(Encoding.UTF8.GetString(writer.WrittenMemory.Span), Is.EqualTo("second"));
+        await Assert.That(Encoding.UTF8.GetString(writer.WrittenMemory.Span)).IsEqualTo("second");
     }
 
     [Test]
-    public void WritesTheSameBytesAsTheFrameworksOwnWriter()
+    public async Task WritesTheSameBytesAsTheFrameworksOwnWriter()
     {
         var expected = new ArrayBufferWriter<byte>();
         using var pooled = new PooledBufferWriter();
@@ -85,7 +84,7 @@ public class PooledBufferWriterTests
             json.Flush();
         }
 
-        Assert.That(pooled.WrittenMemory.ToArray(), Is.EqualTo(expected.WrittenMemory.ToArray()));
+        await Assert.That(pooled.WrittenMemory.ToArray()).IsEquivalentTo(expected.WrittenMemory.ToArray(), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -94,16 +93,16 @@ public class PooledBufferWriterTests
         var writer = new PooledBufferWriter();
         writer.Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() => writer.GetSpan(1));
+        Assert.ThrowsExactly<ObjectDisposedException>(() => writer.GetSpan(1));
     }
 
     // Returned once, not once per call — a double return would hand the same array to two renters.
     [Test]
-    public void ToleratesBeingDisposedTwice()
+    public async Task ToleratesBeingDisposedTwice()
     {
         var writer = new PooledBufferWriter();
         writer.Dispose();
 
-        Assert.DoesNotThrow(writer.Dispose);
+        await Assert.That(writer.Dispose).ThrowsNothing();
     }
 }

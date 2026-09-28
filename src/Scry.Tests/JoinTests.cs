@@ -2,7 +2,6 @@
 /// A join resolves its second source through the same allow-list and row policy a root goes through,
 /// before the two sides meet — so it can only ever narrow.
 /// </summary>
-[TestFixture]
 public class JoinTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -31,12 +30,12 @@ public class JoinTests
                 (employee, department) => new EmployeeDepartment(employee.Name, department.Name))
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows, Has.Count.EqualTo(4));
-            Assert.That(rows.Single(_ => _.Employee == "Alice").Department, Is.EqualTo("Engineering"));
-            Assert.That(rows.Single(_ => _.Employee == "Carol").Department, Is.EqualTo("Sales"));
-        });
+            await Assert.That(rows).Count().IsEqualTo(4);
+            await Assert.That(rows.Single(_ => _.Employee == "Alice").Department).IsEqualTo("Engineering");
+            await Assert.That(rows.Single(_ => _.Employee == "Carol").Department).IsEqualTo("Sales");
+        }
     }
 
     [Test]
@@ -56,7 +55,7 @@ public class JoinTests
             .ToListAsync();
         // end-snippet
 
-        Assert.That(rows.Select(_ => _.Employee).Order(), Is.EqualTo(["Aaron", "Alice"]));
+        await Assert.That(rows.Select(_ => _.Employee).Order()).IsEquivalentTo(["Aaron", "Alice"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -74,11 +73,11 @@ public class JoinTests
                 (employee, department) => new EmployeeDepartment(employee.Name, department!.Name))
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows, Has.Count.EqualTo(4));
-            Assert.That(rows.Select(_ => _.Department), Is.All.Null);
-        });
+            await Assert.That(rows).Count().IsEqualTo(4);
+            await Assert.That(rows.Select(_ => _.Department)).All(_ => _ is null);
+        }
     }
 
     [Test]
@@ -102,26 +101,26 @@ public class JoinTests
             .ToListAsync();
         // end-snippet
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows, Has.Count.EqualTo(4));
-            Assert.That(rows.Count(_ => _.Department is null), Is.EqualTo(2));
+            await Assert.That(rows).Count().IsEqualTo(4);
+            await Assert.That(rows.Count(_ => _.Department is null)).IsEqualTo(2);
 
             // The outer side is the absent one, so its non-nullable int is widened rather than faulting.
-            Assert.That(rows.Count(_ => _.DepartmentId is null), Is.EqualTo(2));
-            Assert.That(rows.Single(_ => _.Employee == "Alice").Department, Is.EqualTo("Engineering"));
-        });
+            await Assert.That(rows.Count(_ => _.DepartmentId is null)).IsEqualTo(2);
+            await Assert.That(rows.Single(_ => _.Employee == "Alice").Department).IsEqualTo("Engineering");
+        }
     }
 
     [Test]
-    public void RightJoinRejectsANarrowedOuterSide()
+    public async Task RightJoinRejectsANarrowedOuterSide()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // EF hoists the outer predicate out of the join, silently turning the right join into an inner
         // one. Scry refuses the shape rather than answering it wrongly.
-        var exception = Assert.ThrowsAsync<ScryValidationException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(
             () => client.Source<Department>("Department")
                 .Where(_ => _.Name == "Engineering")
                 .RightJoin(
@@ -131,18 +130,18 @@ public class JoinTests
                     (department, employee) => new EmployeeWithDepartment(employee.Name, department!.Name, department.Id))
                 .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("RightJoin cannot narrow its outer side"));
+        await Assert.That(exception!.Message).Contains("RightJoin cannot narrow its outer side");
     }
 
     // A narrowing to a derived type is a predicate on the discriminator, hoisted the same way — and
     // the derived source's own policies are applied after it, so they would be hoisted with it.
     [Test]
-    public void RightJoinRejectsANarrowedToDerivedOuterSide()
+    public async Task RightJoinRejectsANarrowedToDerivedOuterSide()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<ScryValidationException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(
             () => client.Source<Asset>("Asset")
                 .OfType<Vehicle>()
                 .RightJoin(
@@ -152,18 +151,18 @@ public class JoinTests
                     (vehicle, employee) => new VehicleRow(employee.Name, vehicle!.Name))
                 .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("RightJoin cannot narrow its outer side"));
+        await Assert.That(exception!.Message).Contains("RightJoin cannot narrow its outer side");
     }
 
     [Test]
-    public void RightJoinRejectsAPoliciedOuterSide()
+    public async Task RightJoinRejectsAPoliciedOuterSide()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // A row policy is a filter, so it would be hoisted the same way — leaving the policy applied
         // but the join semantics wrong. Refused at validation instead.
-        var exception = Assert.ThrowsAsync<ScryValidationException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(
             () => client.Source<Ticket>("Ticket")
                 .RightJoin(
                     client.Source<Employee>("Employee"),
@@ -172,7 +171,7 @@ public class JoinTests
                     (ticket, employee) => new TicketRow(employee.Name, ticket!.Name))
                 .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("cannot be the outer side of a RightJoin"));
+        await Assert.That(exception!.Message).Contains("cannot be the outer side of a RightJoin");
     }
 
     [Test]
@@ -191,7 +190,7 @@ public class JoinTests
 
         // The policy filters the inner source before the join, so the closed ticket cannot reappear
         // through the side a right join preserves.
-        Assert.That(rows.Select(_ => _.Ticket), Does.Not.Contain("Old typo"));
+        await Assert.That(rows.Select(_ => _.Ticket)).DoesNotContain("Old typo");
     }
 
     [Test]
@@ -208,7 +207,7 @@ public class JoinTests
                 (employee, department) => new EmployeeDepartment(employee.Name, department.Name))
             .CountAsync();
 
-        Assert.That(count, Is.EqualTo(4));
+        await Assert.That(count).IsEqualTo(4);
     }
 
     [Test]
@@ -239,15 +238,15 @@ public class JoinTests
                 (employee, ticket) => new TicketRow(employee.Name, ticket.Name))
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows.Single().Ticket, Is.EqualTo("Login bug"));
-            Assert.That(allJoined.Select(_ => _.Ticket), Does.Not.Contain("Old typo"));
-        });
+            await Assert.That(rows.Single().Ticket).IsEqualTo("Login bug");
+            await Assert.That(allJoined.Select(_ => _.Ticket)).DoesNotContain("Old typo");
+        }
     }
 
     [Test]
-    public void JoiningAnUnknownSourceIsRejected()
+    public async Task JoiningAnUnknownSourceIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -263,10 +262,10 @@ public class JoinTests
                     [new("Name", JoinSide.Outer, ["Name"])])
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("Unknown source"));
+        await Assert.That(exception!.Message).Contains("Unknown source");
     }
 
     [Test]
@@ -287,11 +286,11 @@ public class JoinTests
                     [new("Salary", JoinSide.Outer, ["Salary"])])
             ]);
 
-        Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+        Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
     }
 
     [Test]
-    public void ReadingTheWrongSideIsRejected()
+    public async Task ReadingTheWrongSideIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -308,14 +307,14 @@ public class JoinTests
                     [new("Region", JoinSide.Inner, ["Region"])])
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("not allow-listed"));
+        await Assert.That(exception!.Message).Contains("not allow-listed");
     }
 
     [Test]
-    public void MismatchedKeyTypesAreRejected()
+    public async Task MismatchedKeyTypesAreRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -331,14 +330,14 @@ public class JoinTests
                     [new("Name", JoinSide.Outer, ["Name"])])
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("same type"));
+        await Assert.That(exception!.Message).Contains("same type");
     }
 
     [Test]
-    public void OperatorsAfterAJoinAreRejected()
+    public async Task OperatorsAfterAJoinAreRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -356,10 +355,10 @@ public class JoinTests
                 new OrderByOp(new MemberNode(["Name"]), Descending: false)
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("may follow a Join"));
+        await Assert.That(exception!.Message).Contains("may follow a Join");
     }
 
     [Test]
@@ -379,17 +378,17 @@ public class JoinTests
                     [])
             ]);
 
-        Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+        Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
     }
 
     [Test]
-    public void UnsupportedOperatorsOnTheInnerSideAreRejected()
+    public async Task UnsupportedOperatorsOnTheInnerSideAreRejected()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // Only Where crosses into the inner side; anything else would describe rows the join consumed.
-        var exception = Assert.ThrowsAsync<NotSupportedException>(
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(
             () => client.Source<Employee>("Employee")
                 .Join(
                     client.Source<Department>("Department").OrderBy(_ => _.Name),
@@ -398,7 +397,7 @@ public class JoinTests
                     (employee, department) => new EmployeeDepartment(employee.Name, department.Name))
                 .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("inner side of a join"));
+        await Assert.That(exception!.Message).Contains("inner side of a join");
     }
 
     static ScryClient ClientFor(TestContext context) =>

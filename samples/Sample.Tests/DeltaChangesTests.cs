@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 /// through a context nothing is watching — as a write from another node, another system, or a script
 /// run by hand would — so the marker is the only thing that could have noticed it.
 /// </summary>
-[TestFixture]
+[NotInParallel]
 public class DeltaChangesTests
 {
     [Test]
@@ -20,7 +20,7 @@ public class DeltaChangesTests
             .Live()
             // ReSharper disable once MethodSupportsCancellation
             .GetAsyncEnumerator();
-        Assert.That(await Next(answers), Is.True);
+        await Assert.That(await Next(answers)).IsTrue();
         var before = answers.Current[0].Name;
 
         var renamed = $"{before} (renamed)";
@@ -31,8 +31,8 @@ public class DeltaChangesTests
             await writing.SaveChangesAsync();
         }
 
-        Assert.That(await Next(answers), Is.True);
-        Assert.That(answers.Current[0].Name, Is.EqualTo(renamed));
+        await Assert.That(await Next(answers)).IsTrue();
+        await Assert.That(answers.Current[0].Name).IsEqualTo(renamed);
     }
 
     static Task<bool> Next<T>(IAsyncEnumerator<T> answers) =>

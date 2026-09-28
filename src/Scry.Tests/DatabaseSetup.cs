@@ -2,12 +2,11 @@
 /// Builds the shared LocalDB database once for the whole assembly (see <see cref="TestContext"/>),
 /// and disposes it when the run completes.
 /// </summary>
-[SetUpFixture]
-public class DatabaseSetup
+public static class DatabaseSetup
 {
-    [OneTimeSetUp]
-    public Task SetUp() => TestContext.InitializeAsync();
+    [Before(TestSession)]
+    public static Task SetUp() => TestContext.InitializeAsync();
 
-    [OneTimeTearDown]
-    public Task TearDown() => TestContext.ShutdownAsync();
+    [After(TestSession)]
+    public static Task TearDown() => TestContext.ShutdownAsync();
 }

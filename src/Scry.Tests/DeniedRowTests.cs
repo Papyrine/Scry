@@ -4,7 +4,6 @@
 /// wonder — a policy can be configured to fail the request instead. What must not happen either way is
 /// a denied row reaching a result, so the check runs before anything executes.
 /// </summary>
-[TestFixture]
 public class DeniedRowTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -26,16 +25,16 @@ public class DeniedRowTests
             .Select(_ => new {_.Name})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Aaron", "Alice", "Carol"]));
+        await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(["Aaron", "Alice", "Carol"], CollectionOrdering.Matching);
     }
 
     [Test]
-    public void AListWhosePolicyErrorsFailsRatherThanQuietlyDroppingARow()
+    public async Task AListWhosePolicyErrorsFailsRatherThanQuietlyDroppingARow()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, ErroringOnLists());
 
-        Assert.ThrowsAsync<ScryPermissionException>(
+        await Assert.ThrowsExactlyAsync<ScryPermissionException>(
             () => client.Source<Employee>("Employee")
                 .Select(_ => new {_.Name})
                 .ToListAsync());
@@ -54,18 +53,18 @@ public class DeniedRowTests
             .Select(_ => new {_.Name})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Alice"]));
+        await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(["Alice"], CollectionOrdering.Matching);
     }
 
     [Test]
-    public void ACountIsAListPositionToo()
+    public async Task ACountIsAListPositionToo()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, ErroringOnLists());
 
         // Folding the rows into a number does not make the denial disappear: the count would have been
         // one short, which is exactly what the mode exists to refuse to answer.
-        Assert.ThrowsAsync<ScryPermissionException>(
+        await Assert.ThrowsExactlyAsync<ScryPermissionException>(
             () => client.Source<Employee>("Employee").CountAsync());
     }
 
@@ -82,11 +81,11 @@ public class DeniedRowTests
             .Select(_ => new {_.Name})
             .FirstOrDefaultAsync();
 
-        Assert.That(row, Is.Null);
+        await Assert.That(row).IsNull();
     }
 
     [Test]
-    public void ASingleRowTerminalErrorsWhereThatPositionSaysSo()
+    public async Task ASingleRowTerminalErrorsWhereThatPositionSaysSo()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(
@@ -96,7 +95,7 @@ public class DeniedRowTests
                 RootSingle = DeniedRowMode.Error
             })));
 
-        Assert.ThrowsAsync<ScryPermissionException>(
+        await Assert.ThrowsExactlyAsync<ScryPermissionException>(
             () => client.Source<Employee>("Employee")
                 .Where(_ => !_.Active)
                 .Select(_ => new {_.Name})
@@ -123,11 +122,11 @@ public class DeniedRowTests
             .Select(_ => new {_.Name})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Van"]));
+        await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(["Van"], CollectionOrdering.Matching);
     }
 
     [Test]
-    public void ARowOnlyTheErroringPolicyDeniesFailsTheRequest()
+    public async Task ARowOnlyTheErroringPolicyDeniesFailsTheRequest()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -141,14 +140,14 @@ public class DeniedRowTests
                 _.AddPolicy<Vehicle, TwoWheeledVehiclesOnlyPolicy>(erroring);
             }));
 
-        Assert.ThrowsAsync<ScryPermissionException>(
+        await Assert.ThrowsExactlyAsync<ScryPermissionException>(
             () => client.Source<Vehicle>("Vehicle")
                 .Select(_ => new {_.Name})
                 .ToListAsync());
     }
 
     [Test]
-    public void NarrowingAppliesTheDerivedTypesModeToo()
+    public async Task NarrowingAppliesTheDerivedTypesModeToo()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -156,7 +155,7 @@ public class DeniedRowTests
         // policy the narrowing added is the one that answers.
         var client = ClientFor(context, With(_ => _.AddPolicy<Vehicle, TwoWheeledVehiclesOnlyPolicy>(erroring)));
 
-        Assert.ThrowsAsync<ScryPermissionException>(
+        await Assert.ThrowsExactlyAsync<ScryPermissionException>(
             () => client.Source<Asset>("Asset")
                 .OfType<Vehicle>()
                 .Select(_ => new {_.Name})
@@ -164,7 +163,7 @@ public class DeniedRowTests
     }
 
     [Test]
-    public void ADeniedRowBeyondThePageStillFailsTheRequest()
+    public async Task ADeniedRowBeyondThePageStillFailsTheRequest()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, ErroringOnLists());
@@ -172,7 +171,7 @@ public class DeniedRowTests
         // Paging picks among the rows that matched, so a denial is reported for the rows the query
         // asked for rather than for the window it happened to read: the answer does not depend on
         // where in the result the denied row fell.
-        Assert.ThrowsAsync<ScryPermissionException>(
+        await Assert.ThrowsExactlyAsync<ScryPermissionException>(
             () => client.Source<Employee>("Employee")
                 .OrderBy(_ => _.Name)
                 .Take(1)
@@ -181,7 +180,7 @@ public class DeniedRowTests
     }
 
     [Test]
-    public void ABatchEntryIsDeniedWithoutTakingTheBatchWithIt()
+    public async Task ABatchEntryIsDeniedWithoutTakingTheBatchWithIt()
     {
         using var context = TestContext.CreateSeeded();
         var batch = new QueryBatchRequest(
@@ -193,32 +192,32 @@ public class DeniedRowTests
 
         var response = ErroringOnLists().ExecuteBatch(batch, context);
 
-        Assert.That(response.Results[0].Status, Is.EqualTo(HttpStatusCode.Forbidden));
-        Assert.That(response.Results[0].Error, Is.EqualTo(ScryPermissionException.DeniedMessage));
+        await Assert.That(response.Results[0].Status).IsEqualTo(HttpStatusCode.Forbidden);
+        await Assert.That(response.Results[0].Error).IsEqualTo(ScryPermissionException.DeniedMessage);
         // The entry that asked for nothing denied is answered as it would have been on its own.
-        Assert.That(response.Results[1].Response, Is.Not.Null);
+        await Assert.That(response.Results[1].Response).IsNotNull();
     }
 
     [Test]
-    public void TheDeniedMessageNamesNothingAboutWhatDeniedIt()
+    public async Task TheDeniedMessageNamesNothingAboutWhatDeniedIt()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, ErroringOnLists());
 
-        var exception = Assert.ThrowsAsync<ScryPermissionException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryPermissionException>(
             () => client.Source<Employee>("Employee")
                 .Select(_ => new {_.Name})
                 .ToListAsync());
 
         // Erroring already discloses that something matched. Naming the source, the row, or the policy
         // would disclose the shape of the policy on top of it.
-        Assert.That(exception!.Message, Is.EqualTo(ScryPermissionException.DeniedMessage));
-        Assert.That(exception.Message, Does.Not.Contain("Employee"));
-        Assert.That(exception.Message, Does.Not.Contain("Active"));
+        await Assert.That(exception!.Message).IsEqualTo(ScryPermissionException.DeniedMessage);
+        await Assert.That(exception.Message).DoesNotContain("Employee");
+        await Assert.That(exception.Message).DoesNotContain("Active");
     }
 
     [Test]
-    public void ShowingTheSqlRunsNothingAndSoDeniesNothing()
+    public async Task ShowingTheSqlRunsNothingAndSoDeniesNothing()
     {
         using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
@@ -229,19 +228,19 @@ public class DeniedRowTests
         // for one must not become a way to run the probe's queries either.
         var sql = ErroringOnLists().ToQueryString(request, context, EmptyServiceProvider.Instance);
 
-        Assert.That(sql, Does.Contain("SELECT"));
+        await Assert.That(sql).Contains("SELECT");
     }
 
     // A join's inner side, a set operand, and a membership set each read another source as a list,
     // and that source's list position answers for them — it once answered for the root alone, and a
     // deployment that asked to be told was quietly not told here.
     [Test]
-    public void AJoinsInnerSideErrorsWhereItsListPositionSaysSo()
+    public async Task AJoinsInnerSideErrorsWhereItsListPositionSaysSo()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, ErroringOnLists());
 
-        Assert.ThrowsAsync<ScryPermissionException>(
+        await Assert.ThrowsExactlyAsync<ScryPermissionException>(
             () => client.Source<Department>("Department")
                 .Join(
                     client.Source<Employee>("Employee"),
@@ -267,16 +266,16 @@ public class DeniedRowTests
                 (department, employee) => new Pair(department.Name, employee.Name))
             .ToListAsync();
 
-        Assert.That(rows, Has.Count.EqualTo(3));
+        await Assert.That(rows).Count().IsEqualTo(3);
     }
 
     [Test]
-    public void ASetOperandErrorsWhereItsListPositionSaysSo()
+    public async Task ASetOperandErrorsWhereItsListPositionSaysSo()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, ErroringOnLists());
 
-        Assert.ThrowsAsync<ScryPermissionException>(
+        await Assert.ThrowsExactlyAsync<ScryPermissionException>(
             () => client.Source<Department>("Department")
                 .Select(_ => new NameOnly(_.Name))
                 .Union(client.Source<Employee>("Employee").Select(_ => new NameOnly(_.Name)))
@@ -284,12 +283,12 @@ public class DeniedRowTests
     }
 
     [Test]
-    public void AMembershipSetErrorsWhereItsListPositionSaysSo()
+    public async Task AMembershipSetErrorsWhereItsListPositionSaysSo()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, ErroringOnLists());
 
-        Assert.ThrowsAsync<ScryPermissionException>(
+        await Assert.ThrowsExactlyAsync<ScryPermissionException>(
             () => client.Source<Department>("Department")
                 .CountAsync(department =>
                     client.Source<Employee>("Employee")

@@ -5,20 +5,19 @@
 /// wire request directly. A limit that stops firing is not a wrong answer but an unbounded one, which
 /// is why they are pinned by their message and by the number they name.
 /// </summary>
-[TestFixture]
 public class ValidatorLimitTests
 {
     [Test]
-    public void ThePipelineLengthIsBounded()
+    public async Task ThePipelineLengthIsBounded()
     {
         // Counted before the pipeline is walked, so the cost of refusing is not the cost of validating.
         var ops = Enumerable.Repeat<QueryOp>(new WhereOp(new MemberNode(["Active"])), 33).ToList();
 
-        Assert.That(Rejects("Employee", ops), Does.Contain("Pipeline exceeds the maximum length of 32"));
+        await Assert.That(Rejects("Employee", ops)).Contains("Pipeline exceeds the maximum length of 32");
     }
 
     [Test]
-    public void TheGroupByKeyCountIsBounded()
+    public async Task TheGroupByKeyCountIsBounded()
     {
         // A grouped row is materialized as a DistinctRow, which exists in arities up to eight. A ninth
         // key has no row type to land in, so it is refused rather than failing later without one.
@@ -35,13 +34,11 @@ public class ValidatorLimitTests
             new MemberNode(["Code"])
         };
 
-        Assert.That(
-            Rejects("Order", [new GroupByOp(keys)]),
-            Does.Contain("GroupBy supports at most 8 keys"));
+        await Assert.That(Rejects("Order", [new GroupByOp(keys)])).Contains("GroupBy supports at most 8 keys");
     }
 
     [Test]
-    public void ProjectionNestingIsBounded()
+    public async Task ProjectionNestingIsBounded()
     {
         // Employee.Manager is an Employee, so a nested projection can descend forever. Five levels is
         // one past MaxNavigationDepth.
@@ -51,38 +48,32 @@ public class ValidatorLimitTests
             projection = new([new("Manager", new NestedValue(["Manager"], projection))]);
         }
 
-        Assert.That(
-            Rejects("Employee", [new SelectOp(projection)]),
-            Does.Contain("Projection nesting is too deep"));
+        await Assert.That(Rejects("Employee", [new SelectOp(projection)])).Contains("Projection nesting is too deep");
     }
 
     [Test]
-    public void AMemberPathIsBounded()
+    public async Task AMemberPathIsBounded()
     {
         // The same self-navigation spelled as one path rather than as nesting: five segments where four
         // are allowed. Bounding only the nesting would leave this way down open.
         var path = new MemberNode(["Manager", "Manager", "Manager", "Manager", "Name"]);
 
-        Assert.That(
-            Rejects("Employee", [new OrderByOp(path, Descending: false)]),
-            Does.Contain("path is too deep"));
+        await Assert.That(Rejects("Employee", [new OrderByOp(path, Descending: false)])).Contains("path is too deep");
     }
 
     [Test]
-    public void ExpressionNestingIsBounded()
+    public async Task ExpressionNestingIsBounded()
     {
         // A predicate wrapped in more negations than MaxExpressionDepth allows. The depth is checked at
         // the top of the walk, so the refusal costs the depth of the limit and not the depth of the
         // expression — which is the point of having one.
         var deep = Negated(40, new MemberNode(["Active"]));
 
-        Assert.That(
-            Rejects("Employee", [new WhereOp(deep)]),
-            Does.Contain("Expression nesting is too deep"));
+        await Assert.That(Rejects("Employee", [new WhereOp(deep)])).Contains("Expression nesting is too deep");
     }
 
     [Test]
-    public void ExpressionNestingIsBoundedInAHavingClause()
+    public async Task ExpressionNestingIsBoundedInAHavingClause()
     {
         // The Where that follows a GroupBy is validated by a different walk over the same node types,
         // with its own copy of the depth check. A bound on one is not a bound on the other.
@@ -93,56 +84,48 @@ public class ValidatorLimitTests
             new SelectOp(new([new("Region", new NodeValue(new GroupKeyNode(0)))]))
         ];
 
-        Assert.That(Rejects("Order", ops), Does.Contain("Expression nesting is too deep"));
+        await Assert.That(Rejects("Order", ops)).Contains("Expression nesting is too deep");
     }
 
     // Neither depth nor width bounds a flat expression of thousands of nodes, so the count of them is
     // bounded on its own — across the whole request, since a per-operator budget is one the pipeline
     // length multiplies.
     [Test]
-    public void TheExpressionNodeCountIsBounded()
+    public async Task TheExpressionNodeCountIsBounded()
     {
         // A balanced tree of sixteen comparisons is 31 binary nodes plus 32 leaves: wide, not deep.
         var wide = Balanced(16);
 
-        Assert.That(
-            Rejects("Employee", [new WhereOp(wide)], _ => _.MaxExpressionNodes = 40),
-            Does.Contain("expression nodes, more than the maximum of 40"));
+        await Assert.That(Rejects("Employee", [new WhereOp(wide)], _ => _.MaxExpressionNodes = 40)).Contains("expression nodes, more than the maximum of 40");
     }
 
     [Test]
-    public void TheExpressionNodeCountIsCountedAcrossOperators()
+    public async Task TheExpressionNodeCountIsCountedAcrossOperators()
     {
         // Each predicate alone is under the cap; the two together are not.
         QueryOp[] ops = [new WhereOp(Balanced(8)), new WhereOp(Balanced(8))];
 
-        Assert.That(
-            Rejects("Employee", ops, _ => _.MaxExpressionNodes = 40),
-            Does.Contain("expression nodes"));
+        await Assert.That(Rejects("Employee", ops, _ => _.MaxExpressionNodes = 40)).Contains("expression nodes");
     }
 
     [Test]
-    public void TheCorrelatedSubqueryCountIsBounded()
+    public async Task TheCorrelatedSubqueryCountIsBounded()
     {
         // Three questions about a collection side by side, where nesting one in another is refused
         // outright: each is a query the database runs per row.
         var lines = new SubqueryNode(["Lines"], SubqueryFn.Any);
         var predicate = new BinaryNode(BinaryOp.AndAlso, new BinaryNode(BinaryOp.AndAlso, lines, lines), lines);
 
-        Assert.That(
-            Rejects("Order", [new WhereOp(predicate)], _ => _.MaxCorrelatedSubqueries = 2),
-            Does.Contain("correlated subqueries, more than the maximum of 2"));
+        await Assert.That(Rejects("Order", [new WhereOp(predicate)], _ => _.MaxCorrelatedSubqueries = 2)).Contains("correlated subqueries, more than the maximum of 2");
     }
 
     [Test]
-    public void AMembershipTestCountsAsACorrelatedSubquery()
+    public async Task AMembershipTestCountsAsACorrelatedSubquery()
     {
         var membership = new InSourceNode(new MemberNode(["Id"]), "Ticket", new MemberNode(["Id"]));
         var predicate = new BinaryNode(BinaryOp.AndAlso, membership, membership);
 
-        Assert.That(
-            Rejects("Employee", [new WhereOp(predicate)], _ => _.MaxCorrelatedSubqueries = 1),
-            Does.Contain("correlated subqueries"));
+        await Assert.That(Rejects("Employee", [new WhereOp(predicate)], _ => _.MaxCorrelatedSubqueries = 1)).Contains("correlated subqueries");
     }
 
     static Node Balanced(int leaves)
@@ -156,46 +139,46 @@ public class ValidatorLimitTests
     }
 
     [Test]
-    public void ASetOperandCannotCarryEmptyOps()
+    public async Task ASetOperandCannotCarryEmptyOps()
     {
         // An operand carrying an empty list is not an operand without a filter — that is spelled by
         // leaving the ops off altogether — so it is refused rather than read as either.
         QueryOp[] operand = [];
 
-        Assert.That(Rejects("Order", Union(operand)), Does.Contain("Empty ops on a set operand"));
+        await Assert.That(Rejects("Order", Union(operand))).Contains("Empty ops on a set operand");
     }
 
     [Test]
-    public void ASetOperandSkipCannotBeNegative()
+    public async Task ASetOperandSkipCannotBeNegative()
     {
         // A negative skip is not a smaller page but an unbounded one, and the operand's ops are the one
         // place paging arrives without having passed the top-level pipeline's own checks.
         QueryOp[] operand = [ordered, new SkipOp(-1)];
 
-        Assert.That(Rejects("Order", Union(operand)), Does.Contain("Skip cannot be negative"));
+        await Assert.That(Rejects("Order", Union(operand))).Contains("Skip cannot be negative");
     }
 
     // An empty side is a legitimate ask, the same as an empty page at the root; only a negative one
     // is refused.
     [Test]
-    public void ASetOperandTakeOfZeroIsAccepted()
+    public async Task ASetOperandTakeOfZeroIsAccepted()
     {
         QueryOp[] operand = [ordered, new TakeOp(0)];
 
-        Assert.DoesNotThrow(() => Execute("Order", Union(operand)));
+        await Assert.That(() => Execute("Order", Union(operand))).ThrowsNothing();
     }
 
     [Test]
-    public void ASetOperandTakeCannotBeNegative()
+    public async Task ASetOperandTakeCannotBeNegative()
     {
         QueryOp[] operand = [ordered, new TakeOp(-1)];
 
-        Assert.That(Rejects("Order", Union(operand)), Does.Contain("Take cannot be negative"));
+        await Assert.That(Rejects("Order", Union(operand))).Contains("Take cannot be negative");
     }
 
     // A join's result is a projection of its own and is held to the same width.
     [Test]
-    public void AJoinResultIsBoundedByTheProjectionWidth()
+    public async Task AJoinResultIsBoundedByTheProjectionWidth()
     {
         var join = new JoinOp(
             "Department",
@@ -205,15 +188,13 @@ public class ValidatorLimitTests
             null,
             [new("Employee", JoinSide.Outer, ["Name"]), new("Department", JoinSide.Inner, ["Name"])]);
 
-        Assert.That(
-            Rejects("Employee", [join], _ => _.MaxProjectionMembers = 1),
-            Does.Contain("join projecting 2 members exceeds the maximum of 1"));
+        await Assert.That(Rejects("Employee", [join], _ => _.MaxProjectionMembers = 1)).Contains("join projecting 2 members exceeds the maximum of 1");
     }
 
     // A set operand's projection is validated through the same walk as the pipeline's, and counted
     // on its own: two projections of two members are each within a bound of two, not one of four.
     [Test]
-    public void ASetOperandProjectionIsCountedOnItsOwn()
+    public async Task ASetOperandProjectionIsCountedOnItsOwn()
     {
         Projection two = new([new("Name", new NodeValue(new MemberNode(["Name"]))), new("Id", new NodeValue(new MemberNode(["Id"])))]);
         QueryOp[] ops = [new SelectOp(two), new SetOp(SetKind.Union, "Employee", null, two), new CountOp()];
@@ -225,15 +206,16 @@ public class ValidatorLimitTests
             options.MaxProjectionMembers = 2;
         });
 
-        Assert.DoesNotThrow(() => processor.Execute(QueryRequest.Create("Employee", ops), context));
+        await Assert.That(() => processor.Execute(QueryRequest.Create("Employee", ops), context)).ThrowsNothing();
     }
 
     // A row-limiting operator over rows in no defined order slices an undefined sequence, and a host
     // whose EF treats that warning as an error would fault on it. Refused here, whatever the host did.
-    [TestCase("skip")]
-    [TestCase("take")]
-    [TestCase("page")]
-    public void PagingWithoutAnOrderingIsRefused(string op)
+    [Test]
+    [Arguments("skip")]
+    [Arguments("take")]
+    [Arguments("page")]
+    public async Task PagingWithoutAnOrderingIsRefused(string op)
     {
         QueryOp limiting = op switch
         {
@@ -242,33 +224,33 @@ public class ValidatorLimitTests
             _ => new PageOp(Size: 1)
         };
 
-        Assert.That(Rejects("Employee", [limiting]), Does.Contain("requires an OrderBy"));
+        await Assert.That(Rejects("Employee", [limiting])).Contains("requires an OrderBy");
     }
 
     // A flatten consumes the ordering written before it: the rows after it are the elements, which
     // the root's ordering says nothing about.
     [Test]
-    public void PagingAfterAFlattenNeedsAnOrderingOfItsOwn()
+    public async Task PagingAfterAFlattenNeedsAnOrderingOfItsOwn()
     {
         QueryOp[] ops = [new OrderByOp(new MemberNode(["Name"]), Descending: false), new SelectManyOp(["Machines"]), new TakeOp(1)];
 
-        Assert.That(Rejects("Fleet", ops), Does.Contain("requires an OrderBy"));
+        await Assert.That(Rejects("Fleet", ops)).Contains("requires an OrderBy");
     }
 
     // Skip has no upper bound: the offset is a parameter, so a large one costs the database nothing
     // it would not spend on a small one, and there is nothing to bound it against.
     [Test]
-    public void ASkipOfIntMaxIsAccepted()
+    public async Task ASkipOfIntMaxIsAccepted()
     {
         var count = Execute("Employee", [new OrderByOp(new MemberNode(["Id"]), Descending: false), new SkipOp(int.MaxValue), new CountOp()]);
 
-        Assert.That(count.Payload.GetInt32(), Is.Zero);
+        await Assert.That(count.Payload.GetInt32()).IsZero();
     }
 
     // MaxInValues bounds each Contains set, not the request: two sets each at the limit are two
     // parameters of that size, and the request-wide node budget is what bounds their sum.
     [Test]
-    public void TwoContainsSetsEachAtTheLimitAreAccepted()
+    public async Task TwoContainsSetsEachAtTheLimitAreAccepted()
     {
         static CallNode Set(string member) =>
             new(KnownFunction.In, new MemberNode([member]), [.. Enumerable.Range(0, 3).Select(_ => new ConstNode(_.ToString(), ClrTypeTag.Int32))]);
@@ -284,7 +266,7 @@ public class ValidatorLimitTests
             options.MaxInValues = 3;
         });
 
-        Assert.DoesNotThrow(() => processor.Execute(request, context));
+        await Assert.That(() => processor.Execute(request, context)).ThrowsNothing();
     }
 
     static QueryResponse Execute(string root, IReadOnlyList<QueryOp> pipeline)
@@ -294,15 +276,13 @@ public class ValidatorLimitTests
     }
 
     [Test]
-    public void ASetOperandTakeIsBoundedByThePageSize()
+    public async Task ASetOperandTakeIsBoundedByThePageSize()
     {
         // The page size caps an operand exactly as it caps the outer query. Without this a request
         // could ask for a bounded page of an unbounded operand.
         QueryOp[] operand = [ordered, new TakeOp(1001)];
 
-        Assert.That(
-            Rejects("Order", Union(operand)),
-            Does.Contain("exceeds the maximum page size of 1000"));
+        await Assert.That(Rejects("Order", Union(operand))).Contains("exceeds the maximum page size of 1000");
     }
 
     // An ordering, because the side ops allow paging only where something bounds it.
@@ -356,7 +336,7 @@ public class ValidatorLimitTests
                 extra(options);
             });
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => processor.Execute(request, context));
 
         return exception!.Message;

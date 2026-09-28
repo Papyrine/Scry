@@ -4,27 +4,29 @@ open System
 open System.Linq
 open System.Threading
 open System.Threading.Tasks
-open NUnit.Framework
+open TUnit.Assertions
+open TUnit.Assertions.Extensions
+open TUnit.Core
 open Scry
 open Scry.Generated
 open Sample.FSharp
 
 /// Commands from F#, against the sample's own handlers. A database of its own, because these write.
-[<TestFixture>]
+[<NotInParallel>]
 type CommandTests() =
-    let mutable server: ScryServer = Unchecked.defaultof<_>
+    static let mutable server: ScryServer = Unchecked.defaultof<_>
 
     let patience = TimeSpan.FromSeconds 30.
 
-    [<OneTimeSetUp>]
-    member _.Start() : Task =
+    [<Before(HookType.Class)>]
+    static member Start() : Task =
         task {
             let! started = ScryServer.StartAsync "Commands"
             server <- started
         }
 
-    [<OneTimeTearDown>]
-    member _.Stop() : Task =
+    [<After(HookType.Class)>]
+    static member Stop() : Task =
         if isNull (box server) then
             Task.CompletedTask
         else
@@ -49,9 +51,9 @@ type CommandTests() =
 
             let! outcome = Commands.rename server.Query carol "Caroline"
 
-            Assert.That(outcome.Status, Is.EqualTo ScryCommandStatus.Completed)
+            do! check (Assert.That(outcome.Status).IsEqualTo ScryCommandStatus.Completed)
             let! renamed = this.NameOf carol
-            Assert.That((renamed = [ "Caroline" ]), Is.True, $"%A{renamed}")
+            do! check (Assert.That((renamed = [ "Caroline" ])).IsTrue().Because $"%A{renamed}")
         }
 
     [<Test>]
@@ -60,7 +62,7 @@ type CommandTests() =
             let! id = Commands.hire server.Query "Dana" 1
 
             let! hired = this.NameOf id
-            Assert.That((hired = [ "Dana" ]), Is.True, $"%A{hired}")
+            do! check (Assert.That((hired = [ "Dana" ])).IsTrue().Because $"%A{hired}")
         }
 
     // The rename reaches the live query through the server's change interceptor: nothing about the
@@ -81,15 +83,15 @@ type CommandTests() =
                     heard.Release() |> ignore)
 
             let! first = heard.WaitAsync patience
-            Assert.That(first, Is.True, "The first answer never arrived.")
+            do! check (Assert.That(first).IsTrue().Because "The first answer never arrived.")
 
             let! outcome = Commands.rename query aaron "Aaron Commanded"
-            Assert.That(outcome.Status, Is.EqualTo ScryCommandStatus.Completed)
+            do! check (Assert.That(outcome.Status).IsEqualTo ScryCommandStatus.Completed)
 
             let! second = heard.WaitAsync patience
-            Assert.That(second, Is.True, "The rename never arrived.")
+            do! check (Assert.That(second).IsTrue().Because "The rename never arrived.")
             let last = lock answers (fun () -> answers[answers.Count - 1])
-            Assert.That((last = [ "Aaron Commanded" ]), Is.True, $"%A{last}")
+            do! check (Assert.That((last = [ "Aaron Commanded" ])).IsTrue().Because $"%A{last}")
 
             // The client before the server: a live query left open would hold the server's shutdown.
             subscription.Dispose()

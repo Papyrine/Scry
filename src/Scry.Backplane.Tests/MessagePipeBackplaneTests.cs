@@ -5,7 +5,6 @@ using MessagePipe;
 /// implementation of the interfaces every real transport of its implements, so what holds here holds
 /// over Redis or NATS for as far as this adapter is concerned.
 /// </summary>
-[TestFixture]
 public class MessagePipeBackplaneTests
 {
     [Test]
@@ -26,11 +25,11 @@ public class MessagePipeBackplaneTests
         var change = new ScryChange(["Sample.Order", "ArticleLabel (Dictionary<string, object>)"], Guid.NewGuid());
         await here.PublishAsync(change, default);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(heard.Single().Entities, Is.EqualTo(change.Entities));
-            Assert.That(heard.Single().Origin, Is.EqualTo(change.Origin));
-        });
+            await Assert.That(heard.Single().Entities).IsEquivalentTo(change.Entities, CollectionOrdering.Matching);
+            await Assert.That(heard.Single().Origin).IsEqualTo(change.Origin);
+        }
     }
 
     [Test]
@@ -51,11 +50,11 @@ public class MessagePipeBackplaneTests
             .GetRequiredService<IDistributedPublisher<string, string>>()
             .PublishAsync("scry:changes", "not a change");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(heard, Is.Empty);
-            Assert.That(node.Dropped, Is.EqualTo(1));
-        });
+            await Assert.That(heard).IsEmpty();
+            await Assert.That(node.Dropped).IsEqualTo(1);
+        }
     }
 
     [Test]
@@ -75,7 +74,7 @@ public class MessagePipeBackplaneTests
 
         await ours.PublishAsync(new(["Sample.Order"], Guid.NewGuid()), default);
 
-        Assert.That(heard, Is.Empty);
+        await Assert.That(heard).IsEmpty();
     }
 
     [Test]
@@ -95,7 +94,7 @@ public class MessagePipeBackplaneTests
         await listening.DisposeAsync();
         await node.PublishAsync(new([], Guid.NewGuid()), default);
 
-        Assert.That(heard, Is.Empty);
+        await Assert.That(heard).IsEmpty();
     }
 
     // Registration resolves MessagePipe's own services from the host, whichever transport backs them.
@@ -108,7 +107,7 @@ public class MessagePipeBackplaneTests
         collection.AddScryMessagePipeBackplane(_ => _.Topic = "custom");
         await using var services = collection.BuildServiceProvider();
 
-        Assert.That(services.GetRequiredService<IScryChangeBackplane>(), Is.InstanceOf<MessagePipeChangeBackplane>());
+        await Assert.That(services.GetRequiredService<IScryChangeBackplane>()).IsAssignableTo<MessagePipeChangeBackplane>();
     }
 
     static ServiceProvider Services()

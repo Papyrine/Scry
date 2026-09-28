@@ -4,7 +4,6 @@
 /// by the provider to SQL's <c>RADIANS</c> / <c>DEGREES</c>; like the trigonometry they accompany,
 /// they are defined over double alone, so an integer or decimal member widens to reach them.
 /// </summary>
-[TestFixture]
 public class AngleConversionTests
 {
     [Test]
@@ -19,7 +18,7 @@ public class AngleConversionTests
             .Select(_ => new {Radians = double.DegreesToRadians(_.Quantity * 60d)})
             .ToListAsync();
 
-        Assert.That(rows.Single().Radians, Is.EqualTo(Math.PI).Within(1e-9));
+        await Assert.That(rows.Single().Radians).IsEqualTo(Math.PI).Within(1e-9);
     }
 
     [Test]
@@ -34,7 +33,7 @@ public class AngleConversionTests
             .Select(_ => new {Degrees = double.RadiansToDegrees((double)_.Amount / 100d * Math.PI)})
             .ToListAsync();
 
-        Assert.That(rows.Single().Degrees, Is.EqualTo(180d).Within(1e-9));
+        await Assert.That(rows.Single().Degrees).IsEqualTo(180d).Within(1e-9);
     }
 
     [Test]
@@ -47,7 +46,7 @@ public class AngleConversionTests
         var count = await client.Source<Order>("Order")
             .CountAsync(_ => double.DegreesToRadians(_.Quantity * 60d) > 3d);
 
-        Assert.That(count, Is.EqualTo(2));
+        await Assert.That(count).IsEqualTo(2);
     }
 
     // The float statics spell the same functions.
@@ -62,11 +61,11 @@ public class AngleConversionTests
             .Select(_ => new {Radians = float.DegreesToRadians(_.Quantity * 60f)})
             .ToListAsync();
 
-        Assert.That(rows.Single().Radians, Is.EqualTo(Math.PI).Within(1e-6));
+        await Assert.That((double) rows.Single().Radians).IsCloseTo(Math.PI, 1e-6);
     }
 
     [Test]
-    public void RejectsSomethingNotNumeric()
+    public async Task RejectsSomethingNotNumeric()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -74,10 +73,10 @@ public class AngleConversionTests
             "Order",
             [new SelectOp(new([new("Radians", new NodeValue(new CallNode(KnownFunction.MathDegreesToRadians, new MemberNode(["Region"]), [])))]))]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("DegreesToRadians is not supported over"));
+        await Assert.That(exception!.Message).Contains("DegreesToRadians is not supported over");
     }
 
     static ScryClient ClientFor(TestContext context) =>

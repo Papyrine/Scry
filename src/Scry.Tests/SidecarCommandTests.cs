@@ -2,7 +2,6 @@
 /// Commands in the sidecar: one row per command, whether it was seen on the wire, reported by the
 /// client, or both — and a stream of receipts passed through rather than read.
 /// </summary>
-[TestFixture]
 public class SidecarCommandTests
 {
     static RenameThing Rename => new()
@@ -19,16 +18,16 @@ public class SidecarCommandTests
         await client.SendCommandAsync(Rename);
 
         var entry = store.Entries.Single();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(entry.Kind, Is.EqualTo(ScrySidecarKind.Command));
-            Assert.That(entry.Method, Is.EqualTo("POST"));
-            Assert.That(entry.RequestJson, Does.Contain("\"command\": \"RenameThing\""));
-            Assert.That(entry.ResponseJson, Does.Contain("Completed"));
-            Assert.That(entry.Command!.Name, Is.EqualTo("RenameThing"));
-            Assert.That(entry.Command.State, Is.EqualTo(ScryCommandActivityKind.Completed));
-            Assert.That(entry.Command.OnTheWire, Is.True);
-        });
+            await Assert.That(entry.Kind).IsEqualTo(ScrySidecarKind.Command);
+            await Assert.That(entry.Method).IsEqualTo("POST");
+            await Assert.That(entry.RequestJson).Contains("\"command\": \"RenameThing\"");
+            await Assert.That(entry.ResponseJson).Contains("Completed");
+            await Assert.That(entry.Command!.Name).IsEqualTo("RenameThing");
+            await Assert.That(entry.Command.State).IsEqualTo(ScryCommandActivityKind.Completed);
+            await Assert.That(entry.Command.OnTheWire).IsTrue();
+        }
     }
 
     // Read by the client above as it streams, so passed through; the row says pending until told more.
@@ -43,12 +42,12 @@ public class SidecarCommandTests
         await sending;
 
         var entry = store.Entries.Single();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(entry.ResponseJson, Is.Null);
-            Assert.That(entry.Status, Is.EqualTo(200));
-            Assert.That(entry.Command!.State, Is.EqualTo(ScryCommandActivityKind.Pending));
-        });
+            await Assert.That(entry.ResponseJson).IsNull();
+            await Assert.That(entry.Status).IsEqualTo(200);
+            await Assert.That(entry.Command!.State).IsEqualTo(ScryCommandActivityKind.Pending);
+        }
     }
 
     // Asked for again by its id, a command stays one row, as a live query's reconnect does.
@@ -63,11 +62,11 @@ public class SidecarCommandTests
         await client.SendCommandAsync(Rename);
 
         var entry = store.Entries.Single();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(entry.Command!.Attempt, Is.EqualTo(2));
-            Assert.That(entry.Command.State, Is.EqualTo(ScryCommandActivityKind.Completed));
-        });
+            await Assert.That(entry.Command!.Attempt).IsEqualTo(2);
+            await Assert.That(entry.Command.State).IsEqualTo(ScryCommandActivityKind.Completed);
+        }
     }
 
     [Test]
@@ -78,12 +77,12 @@ public class SidecarCommandTests
         await client.Ready;
 
         var entry = store.Entries.Single();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(entry.Kind, Is.EqualTo(ScrySidecarKind.Command));
-            Assert.That(entry.Command, Is.Null);
-            Assert.That(entry.ResponseJson, Does.Contain("RenameThing"));
-        });
+            await Assert.That(entry.Kind).IsEqualTo(ScrySidecarKind.Command);
+            await Assert.That(entry.Command).IsNull();
+            await Assert.That(entry.ResponseJson).Contains("RenameThing");
+        }
     }
 
     [Test]
@@ -91,15 +90,15 @@ public class SidecarCommandTests
     {
         var (store, client) = Watched(new(CommandStub.Refusal(HttpStatusCode.BadRequest, ScryErrorCode.Validation, "Unknown command 'RenameThing'.")));
 
-        Assert.ThrowsAsync<ScryRequestException>(() => client.SendCommandAsync(Rename));
+        await Assert.ThrowsExactlyAsync<ScryRequestException>(() => client.SendCommandAsync(Rename));
         await Task.Yield();
 
         var command = store.Entries.Single().Command!;
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(command.State, Is.EqualTo(ScryCommandActivityKind.Refused));
-            Assert.That(command.Error, Is.EqualTo("Unknown command 'RenameThing'."));
-        });
+            await Assert.That(command.State).IsEqualTo(ScryCommandActivityKind.Refused);
+            await Assert.That(command.Error).IsEqualTo("Unknown command 'RenameThing'.");
+        }
     }
 
     // Seen on the wire and reported by the client: one row, the wire's, carrying what the client said.
@@ -115,13 +114,13 @@ public class SidecarCommandTests
         await client.SendCommandAsync(Rename);
 
         var entry = store.Entries.Single();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(entry.Method, Is.EqualTo("POST"));
-            Assert.That(entry.Command!.OnTheWire, Is.True);
-            Assert.That(entry.Command.State, Is.EqualTo(ScryCommandActivityKind.Completed));
-            Assert.That(entry.Command.ResultJson, Does.Contain("\"id\": 3"));
-        });
+            await Assert.That(entry.Method).IsEqualTo("POST");
+            await Assert.That(entry.Command!.OnTheWire).IsTrue();
+            await Assert.That(entry.Command.State).IsEqualTo(ScryCommandActivityKind.Completed);
+            await Assert.That(entry.Command.ResultJson).Contains("\"id\": 3");
+        }
     }
 
     // Sent somewhere the sidecar cannot watch, a command is listed from what the client reports.
@@ -138,14 +137,14 @@ public class SidecarCommandTests
         await client.SendCommandAsync(Rename);
 
         var entry = store.Entries.Single();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(entry.Kind, Is.EqualTo(ScrySidecarKind.Command));
-            Assert.That(entry.Method, Is.EqualTo("COMMAND"));
-            Assert.That(entry.RequestJson, Does.Contain("RenameThing"));
-            Assert.That(entry.Command!.OnTheWire, Is.False);
-            Assert.That(entry.Command.State, Is.EqualTo(ScryCommandActivityKind.Completed));
-        });
+            await Assert.That(entry.Kind).IsEqualTo(ScrySidecarKind.Command);
+            await Assert.That(entry.Method).IsEqualTo("COMMAND");
+            await Assert.That(entry.RequestJson).Contains("RenameThing");
+            await Assert.That(entry.Command!.OnTheWire).IsFalse();
+            await Assert.That(entry.Command.State).IsEqualTo(ScryCommandActivityKind.Completed);
+        }
     }
 
     // With no exchange of its own to time, a reported command is timed from its send to its outcome
@@ -162,7 +161,7 @@ public class SidecarCommandTests
 
         await client.SendCommandAsync(Rename);
 
-        Assert.That(store.Entries.Single().Duration, Is.GreaterThanOrEqualTo(TimeSpan.FromMilliseconds(40)));
+        await Assert.That(store.Entries.Single().Duration).IsGreaterThanOrEqualTo(TimeSpan.FromMilliseconds(40));
     }
 
     static async IAsyncEnumerable<CommandReceipt> Slowly(CommandReceipt receipt)

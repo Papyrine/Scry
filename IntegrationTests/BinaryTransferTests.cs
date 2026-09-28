@@ -13,7 +13,8 @@ using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 /// the parts already sent left intact. The fixture is self-contained — the sample model has no binary
 /// member — with its own context, schema, and server.
 /// </summary>
-[TestFixture]
+[NotInParallel]
+[DependsOn<HttpRoundTripTests.StaleClient>(nameof(HttpRoundTripTests.StaleClient.AClientThatDoesNotKnowRetriesInABody), ProceedOnFailure = true)]
 public class BinaryTransferTests
 {
     static readonly byte[] alphaPayload = [0x01, 0x02, 0x03];
@@ -40,20 +41,20 @@ public class BinaryTransferTests
             await context.SaveChangesAsync();
         });
 
-    WebApplication app = null!;
-    HttpClient http = null!;
-    ScryClient client = null!;
-    SqlDatabase<BinaryContext> database = null!;
+    static WebApplication app = null!;
+    static HttpClient http = null!;
+    static ScryClient client = null!;
+    static SqlDatabase<BinaryContext> database = null!;
 
     record Doc(int Id, string Name, byte[]? Payload, DocumentKind Kind);
 
     static readonly string[] docMembers = ["Id", "Name", "Payload", "Kind"];
 
-    IQueryable<Doc> Documents =>
+    static IQueryable<Doc> Documents =>
         client.Source<Doc>("Document", docMembers);
 
-    [OneTimeSetUp]
-    public async Task StartServer()
+    [Before(Class)]
+    public static async Task StartServer()
     {
         database = await sqlInstance.Build();
 
@@ -70,13 +71,25 @@ public class BinaryTransferTests
         client = ScryClient.ForHttp(http, "/api/query");
     }
 
-    [OneTimeTearDown]
-    public async Task StopServer()
+    [After(Class)]
+    public static async Task StopServer()
     {
         await app.StopAsync();
         await app.DisposeAsync();
         http.Dispose();
         await database.DisposeAsync();
+    }
+
+    // A row as text, so rows compare by the bytes they carry: a tuple holding an array compares it by
+    // reference.
+    static string Described(string name, byte[]? payload)
+    {
+        if (payload is null)
+        {
+            return $"{name}: null";
+        }
+
+        return $"{name}: {Convert.ToHexString(payload)}";
     }
 
     static readonly (string Name, byte[]? Payload)[] seeded =
@@ -95,7 +108,7 @@ public class BinaryTransferTests
             .OrderBy(_ => _.Id)
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => (_.Name, _.Payload)), Is.EqualTo(seeded));
+        await Assert.That(rows.Select(_ => Described(_.Name, _.Payload))).IsEquivalentTo(seeded.Select(_ => Described(_.Name, _.Payload)), CollectionOrdering.Matching);
     }
 
     // The projection the framing tests share: a select with a [BinaryTransfer] slot in it, which is
@@ -135,26 +148,26 @@ public class BinaryTransferTests
     public async Task ResponseCarriesPartsBeforeTheEnvelope()
     {
         var (contentType, body) = await PostRaw("/api/query", listRequest);
-        var boundary = BoundaryOf(contentType);
-        var sections = ParseMultipart(body, boundary);
+        var boundary = await BoundaryOf(contentType);
+        var sections = await ParseMultipart(body, boundary);
 
         // Four non-null payloads → four parts, in row order, each byte-exact — then the envelope.
-        Assert.That(sections, Has.Count.EqualTo(5));
-        Assert.That(sections[..4].Select(_ => _.Headers["Content-Type"]), Is.All.EqualTo(ScryBinary.PartContentType));
-        Assert.That(sections[0].Content, Is.EqualTo(alphaPayload));
-        Assert.That(sections[1].Content, Is.EqualTo(boundaryPayload));
-        Assert.That(sections[2].Content, Is.Empty);
-        Assert.That(sections[3].Content, Is.EqualTo(fullPayload));
-        Assert.That(sections[..4].Select(_ => int.Parse(_.Headers["Content-Length"])), Is.EqualTo([3, boundaryPayload.Length, 0, 256]));
+        await Assert.That(sections).Count().IsEqualTo(5);
+        await Assert.That(sections[..4].Select(_ => _.Headers["Content-Type"])).All(_ => Equals(_, ScryBinary.PartContentType));
+        await Assert.That(sections[0].Content).IsEquivalentTo(alphaPayload, CollectionOrdering.Matching);
+        await Assert.That(sections[1].Content).IsEquivalentTo(boundaryPayload, CollectionOrdering.Matching);
+        await Assert.That(sections[2].Content).IsEmpty();
+        await Assert.That(sections[3].Content).IsEquivalentTo(fullPayload, CollectionOrdering.Matching);
+        await Assert.That(sections[..4].Select(_ => int.Parse(_.Headers["Content-Length"]))).IsEquivalentTo(new[] {3, boundaryPayload.Length, 0, 256}, CollectionOrdering.Matching);
 
-        Assert.That(sections[4].Headers["Content-Type"], Is.EqualTo("application/json"));
+        await Assert.That(sections[4].Headers["Content-Type"]).IsEqualTo("application/json");
         var envelope = Encoding.UTF8.GetString(sections[4].Content);
         // Placeholders number the parts in emission order; a null value stays inline and takes no index.
-        Assert.That(envelope, Does.Contain("""{"name":"alpha","payload":{"$bin":0}}"""));
-        Assert.That(envelope, Does.Contain("""{"name":"boundary","payload":{"$bin":1}}"""));
-        Assert.That(envelope, Does.Contain("""{"name":"empty","payload":{"$bin":2}}"""));
-        Assert.That(envelope, Does.Contain("""{"name":"missing","payload":null}"""));
-        Assert.That(envelope, Does.Contain("""{"name":"full","payload":{"$bin":3}}"""));
+        await Assert.That(envelope).Contains("""{"name":"alpha","payload":{"$bin":0}}""");
+        await Assert.That(envelope).Contains("""{"name":"boundary","payload":{"$bin":1}}""");
+        await Assert.That(envelope).Contains("""{"name":"empty","payload":{"$bin":2}}""");
+        await Assert.That(envelope).Contains("""{"name":"missing","payload":null}""");
+        await Assert.That(envelope).Contains("""{"name":"full","payload":{"$bin":3}}""");
     }
 
     [Test]
@@ -168,13 +181,13 @@ public class BinaryTransferTests
             """;
 
         var (single, _) = await PostRaw("/api/query", namesOnly);
-        Assert.That(single, Does.StartWith("application/json"));
+        await Assert.That(single).StartsWith("application/json");
 
         var (stream, _) = await PostRaw("/api/query/stream", namesOnly);
-        Assert.That(stream, Does.StartWith(ScryStream.ContentType));
+        await Assert.That(stream).StartsWith(ScryStream.ContentType);
 
         var (batch, _) = await PostRaw("/api/query/batch", $$"""{"version":1,"queries":[{{namesOnly}}]}""");
-        Assert.That(batch, Does.StartWith("application/json"));
+        await Assert.That(batch).StartsWith("application/json");
     }
 
     /// <summary>
@@ -189,16 +202,14 @@ public class BinaryTransferTests
         using var spillingHttp = spilling.GetTestClient();
 
         var (contentType, body) = await PostRaw(spillingHttp, "/api/query", listRequest);
-        var sections = ParseMultipart(body, BoundaryOf(contentType));
+        var sections = await ParseMultipart(body, await BoundaryOf(contentType));
 
         // The framing this fixture already pins, arrived at with spilling switched on as hard as it goes.
-        Assert.That(sections, Has.Count.EqualTo(5));
-        Assert.That(sections[0].Content, Is.EqualTo(alphaPayload));
-        Assert.That(sections[3].Content, Is.EqualTo(fullPayload));
-        Assert.That(sections[4].Headers["Content-Type"], Is.EqualTo("application/json"));
-        Assert.That(
-            Encoding.UTF8.GetString(sections[4].Content),
-            Does.Contain("""{"name":"alpha","payload":{"$bin":0}}"""));
+        await Assert.That(sections).Count().IsEqualTo(5);
+        await Assert.That(sections[0].Content).IsEquivalentTo(alphaPayload, CollectionOrdering.Matching);
+        await Assert.That(sections[3].Content).IsEquivalentTo(fullPayload, CollectionOrdering.Matching);
+        await Assert.That(sections[4].Headers["Content-Type"]).IsEqualTo("application/json");
+        await Assert.That(Encoding.UTF8.GetString(sections[4].Content)).Contains("""{"name":"alpha","payload":{"$bin":0}}""");
     }
 
     /// <summary>
@@ -226,13 +237,13 @@ public class BinaryTransferTests
         var declared = response.Content.Headers.ContentLength;
         var body = await response.Content.ReadAsStringAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.Content.Headers.ContentType!.ToString(), Does.StartWith("application/json"));
-            Assert.That(declared, Is.Null);
-            Assert.That(body, Does.Contain("""{"name":"alpha"}"""));
-            Assert.That(body, Does.EndWith("}"));
-        });
+            await Assert.That(response.Content.Headers.ContentType!.ToString()).StartsWith("application/json");
+            await Assert.That(declared).IsNull();
+            await Assert.That(body).Contains("""{"name":"alpha"}""");
+            await Assert.That(body).EndsWith("}");
+        }
     }
 
     /// <summary>
@@ -262,7 +273,7 @@ public class BinaryTransferTests
         var body = await response.Content.ReadAsByteArrayAsync();
 
         // A declared length is what never having drained looks like from the outside.
-        Assert.That(declared, Is.EqualTo(body.Length));
+        await Assert.That(declared).IsEqualTo(body.Length);
     }
 
     [Test]
@@ -272,7 +283,7 @@ public class BinaryTransferTests
             .Where(_ => _.Name == "full")
             .FirstAsync();
 
-        Assert.That(row!.Payload, Is.EqualTo(fullPayload));
+        await Assert.That(row!.Payload).IsEquivalentTo(fullPayload, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -282,7 +293,7 @@ public class BinaryTransferTests
             .OrderBy(_ => _.Id)
             .ToPageAsync(3);
 
-        Assert.That(page.Items.Select(_ => (_.Name, _.Payload)), Is.EqualTo(seeded[..3]));
+        await Assert.That(page.Items.Select(_ => Described(_.Name, _.Payload))).IsEquivalentTo(seeded[..3].Select(_ => Described(_.Name, _.Payload)), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -297,7 +308,7 @@ public class BinaryTransferTests
             .OrderBy(_ => _.Id)
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => (_.Name, _.Payload)), Is.EqualTo(seeded));
+        await Assert.That(rows.Select(_ => Described(_.Name, _.Payload))).IsEquivalentTo(seeded.Select(_ => Described(_.Name, _.Payload)), CollectionOrdering.Matching);
     }
 
     [Test]
@@ -309,46 +320,44 @@ public class BinaryTransferTests
             rows.Add(row);
         }
 
-        Assert.That(rows.Select(_ => (_.Name, _.Payload)), Is.EqualTo(seeded));
+        await Assert.That(rows.Select(_ => Described(_.Name, _.Payload))).IsEquivalentTo(seeded.Select(_ => Described(_.Name, _.Payload)), CollectionOrdering.Matching);
     }
 
     [Test]
     public async Task StreamAlternatesSectionsAndResetsIndicesPerRow()
     {
         var (contentType, body) = await PostRaw("/api/query/stream", listRequest);
-        Assert.That(contentType, Does.StartWith(ScryBinary.ContentType));
-        var sections = ParseMultipart(body, BoundaryOf(contentType));
+        await Assert.That(contentType).StartsWith(ScryBinary.ContentType);
+        var sections = await ParseMultipart(body, await BoundaryOf(contentType));
 
         // Ndjson sections alternate with each row's parts: begin | part | alpha-row | part |
         // boundary-row | part | empty-row + partless missing-row | part | full-row + end.
-        Assert.That(
-            sections.Select(_ => _.Headers["Content-Type"]),
-            Is.EqualTo([
+        await Assert.That(sections.Select(_ => _.Headers["Content-Type"])).IsEquivalentTo([
                 ScryStream.ContentType, ScryBinary.PartContentType,
                 ScryStream.ContentType, ScryBinary.PartContentType,
                 ScryStream.ContentType, ScryBinary.PartContentType,
                 ScryStream.ContentType, ScryBinary.PartContentType,
                 ScryStream.ContentType
-            ]));
+            ], CollectionOrdering.Matching);
 
-        Assert.That(sections[1].Content, Is.EqualTo(alphaPayload));
-        Assert.That(sections[3].Content, Is.EqualTo(boundaryPayload));
-        Assert.That(sections[5].Content, Is.Empty);
-        Assert.That(sections[7].Content, Is.EqualTo(fullPayload));
+        await Assert.That(sections[1].Content).IsEquivalentTo(alphaPayload, CollectionOrdering.Matching);
+        await Assert.That(sections[3].Content).IsEquivalentTo(boundaryPayload, CollectionOrdering.Matching);
+        await Assert.That(sections[5].Content).IsEmpty();
+        await Assert.That(sections[7].Content).IsEquivalentTo(fullPayload, CollectionOrdering.Matching);
 
         var lines = sections
             .Where(_ => _.Headers["Content-Type"] == ScryStream.ContentType)
             .Select(_ => Encoding.UTF8.GetString(_.Content))
             .ToArray();
-        Assert.That(lines[0], Does.Contain(ScryStream.MarkerProperty).And.Contain(ScryStream.Begin));
+        await Assert.That(lines[0]).Contains(ScryStream.MarkerProperty).And.Contains(ScryStream.Begin);
         // Every row's placeholder is index 0 again: a stream's indices reset per row line.
-        Assert.That(lines[1], Does.Contain("""{"name":"alpha","payload":{"$bin":0}}"""));
-        Assert.That(lines[2], Does.Contain("""{"name":"boundary","payload":{"$bin":0}}"""));
+        await Assert.That(lines[1]).Contains("""{"name":"alpha","payload":{"$bin":0}}""");
+        await Assert.That(lines[2]).Contains("""{"name":"boundary","payload":{"$bin":0}}""");
         // The partless row rides the same section as the row before it.
-        Assert.That(lines[3], Does.Contain("""{"name":"empty","payload":{"$bin":0}}"""));
-        Assert.That(lines[3], Does.Contain("""{"name":"missing","payload":null}"""));
-        Assert.That(lines[4], Does.Contain("""{"name":"full","payload":{"$bin":0}}"""));
-        Assert.That(lines[4], Does.Contain(ScryStream.End));
+        await Assert.That(lines[3]).Contains("""{"name":"empty","payload":{"$bin":0}}""");
+        await Assert.That(lines[3]).Contains("""{"name":"missing","payload":null}""");
+        await Assert.That(lines[4]).Contains("""{"name":"full","payload":{"$bin":0}}""");
+        await Assert.That(lines[4]).Contains(ScryStream.End);
     }
 
     [Test]
@@ -358,22 +367,22 @@ public class BinaryTransferTests
         // is pulled, so a projection with a binary slot wraps even when nothing ends up diverting.
         // A single null-valued row, and no rows at all, are the two ways that can happen.
         var (nullType, nullBody) = await PostRaw("/api/query/stream", NamedRequest("missing"));
-        var nullSections = ParseMultipart(nullBody, BoundaryOf(nullType));
+        var nullSections = await ParseMultipart(nullBody, await BoundaryOf(nullType));
 
-        Assert.That(nullSections.Select(_ => _.Headers["Content-Type"]), Is.EqualTo([ScryStream.ContentType]));
+        await Assert.That(nullSections.Select(_ => _.Headers["Content-Type"])).IsEquivalentTo([ScryStream.ContentType], CollectionOrdering.Matching);
         var nullLines = LinesOf(nullSections[0]);
-        Assert.That(nullLines, Has.Length.EqualTo(3));
-        Assert.That(nullLines[1], Does.Contain("""{"name":"missing","payload":null}"""));
+        await Assert.That(nullLines).Count().IsEqualTo(3);
+        await Assert.That(nullLines[1]).Contains("""{"name":"missing","payload":null}""");
 
         var (emptyType, emptyBody) = await PostRaw("/api/query/stream", NamedRequest("nothing is named this"));
-        var emptySections = ParseMultipart(emptyBody, BoundaryOf(emptyType));
+        var emptySections = await ParseMultipart(emptyBody, await BoundaryOf(emptyType));
 
-        Assert.That(emptySections.Select(_ => _.Headers["Content-Type"]), Is.EqualTo([ScryStream.ContentType]));
+        await Assert.That(emptySections.Select(_ => _.Headers["Content-Type"])).IsEquivalentTo([ScryStream.ContentType], CollectionOrdering.Matching);
         // Nothing between the markers: an empty result is still a multipart response, just an empty one.
         var emptyLines = LinesOf(emptySections[0]);
-        Assert.That(emptyLines, Has.Length.EqualTo(2));
-        Assert.That(emptyLines[0], Does.Contain(ScryStream.Begin));
-        Assert.That(emptyLines[1], Does.Contain(ScryStream.End));
+        await Assert.That(emptyLines).Count().IsEqualTo(2);
+        await Assert.That(emptyLines[0]).Contains(ScryStream.Begin);
+        await Assert.That(emptyLines[1]).Contains(ScryStream.End);
     }
 
     [Test]
@@ -389,24 +398,24 @@ public class BinaryTransferTests
             rows.Add(row);
         }
 
-        Assert.That(rows.Select(_ => (_.Name, _.Payload)), Is.EqualTo(seeded));
+        await Assert.That(rows.Select(_ => Described(_.Name, _.Payload))).IsEquivalentTo(seeded.Select(_ => Described(_.Name, _.Payload)), CollectionOrdering.Matching);
     }
 
     [Test]
     public async Task DriftedStreamCarriesTheAliasesAndKeepsItsParts()
     {
         var (contentType, body) = await PostRaw("/api/query/stream", driftedRequest);
-        var sections = ParseMultipart(body, BoundaryOf(contentType));
+        var sections = await ParseMultipart(body, await BoundaryOf(contentType));
 
         // A mismatched stamp adds the enum alias table to the begin marker, which is the one thing on
         // this path that differs. Everything around it is the framing a matching client gets: the same
         // alternating sections, the same bytes.
-        Assert.That(sections, Has.Count.EqualTo(9));
-        Assert.That(LinesOf(sections[0])[0], Does.Contain("DocumentKind").And.Contain("Sketch"));
-        Assert.That(sections[1].Content, Is.EqualTo(alphaPayload));
-        Assert.That(sections[3].Content, Is.EqualTo(boundaryPayload));
-        Assert.That(sections[5].Content, Is.Empty);
-        Assert.That(sections[7].Content, Is.EqualTo(fullPayload));
+        await Assert.That(sections).Count().IsEqualTo(9);
+        await Assert.That(LinesOf(sections[0])[0]).Contains("DocumentKind").And.Contains("Sketch");
+        await Assert.That(sections[1].Content).IsEquivalentTo(alphaPayload, CollectionOrdering.Matching);
+        await Assert.That(sections[3].Content).IsEquivalentTo(boundaryPayload, CollectionOrdering.Matching);
+        await Assert.That(sections[5].Content).IsEmpty();
+        await Assert.That(sections[7].Content).IsEquivalentTo(fullPayload, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -416,28 +425,24 @@ public class BinaryTransferTests
         using var limitedHttp = limited.GetTestClient();
 
         var (contentType, body) = await PostRaw(limitedHttp, "/api/query/stream", listRequest);
-        var sections = ParseMultipart(body, BoundaryOf(contentType));
+        var sections = await ParseMultipart(body, await BoundaryOf(contentType));
 
         // Two rows and their parts are on the wire by the time the limit trips, and the status is long
         // since sent — so the failure rides the stream's error marker, in the section the last row was
         // written into, and the closing marker never comes.
-        Assert.That(
-            sections.Select(_ => _.Headers["Content-Type"]),
-            Is.EqualTo([
+        await Assert.That(sections.Select(_ => _.Headers["Content-Type"])).IsEquivalentTo([
                 ScryStream.ContentType, ScryBinary.PartContentType,
                 ScryStream.ContentType, ScryBinary.PartContentType,
                 ScryStream.ContentType
-            ]));
-        Assert.That(sections[1].Content, Is.EqualTo(alphaPayload));
-        Assert.That(sections[3].Content, Is.EqualTo(boundaryPayload));
+            ], CollectionOrdering.Matching);
+        await Assert.That(sections[1].Content).IsEquivalentTo(alphaPayload, CollectionOrdering.Matching);
+        await Assert.That(sections[3].Content).IsEquivalentTo(boundaryPayload, CollectionOrdering.Matching);
 
         var last = LinesOf(sections[4]);
-        Assert.That(last[0], Does.Contain("""{"name":"boundary","payload":{"$bin":0}}"""));
-        Assert.That(last[1], Does.Contain($"\"{ScryStream.MarkerProperty}\":\"{ScryStream.Error}\""));
-        Assert.That(last[1], Does.Contain("more than the maximum of 2 streamed rows"));
-        Assert.That(
-            Encoding.UTF8.GetString(body),
-            Does.Not.Contain($"\"{ScryStream.MarkerProperty}\":\"{ScryStream.End}\""));
+        await Assert.That(last[0]).Contains("""{"name":"boundary","payload":{"$bin":0}}""");
+        await Assert.That(last[1]).Contains($"\"{ScryStream.MarkerProperty}\":\"{ScryStream.Error}\"");
+        await Assert.That(last[1]).Contains("more than the maximum of 2 streamed rows");
+        await Assert.That(Encoding.UTF8.GetString(body)).DoesNotContain($"\"{ScryStream.MarkerProperty}\":\"{ScryStream.End}\"");
     }
 
     [Test]
@@ -449,7 +454,7 @@ public class BinaryTransferTests
         var documents = limitedClient.Source<Doc>("Document", docMembers);
 
         var rows = new List<Doc>();
-        var exception = Assert.ThrowsAsync<ScryWireException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryWireException>(
             async () =>
             {
                 await foreach (var row in documents.OrderBy(_ => _.Id).ToAsyncEnumerable())
@@ -458,15 +463,15 @@ public class BinaryTransferTests
                 }
             });
 
-        Assert.That(exception!.Message, Does.Contain("more than the maximum of 2 streamed rows"));
+        await Assert.That(exception!.Message).Contains("more than the maximum of 2 streamed rows");
         // The rows that did arrive are whole — their parts were read and resolved before the failure,
         // so a truncated stream is an error rather than a short answer with mangled bytes.
-        Assert.That(rows.Select(_ => (_.Name, _.Payload)), Is.EqualTo(seeded[..2]));
+        await Assert.That(rows.Select(_ => Described(_.Name, _.Payload))).IsEquivalentTo(seeded[..2].Select(_ => Described(_.Name, _.Payload)), CollectionOrdering.Matching);
     }
 
     // A second server, because the spill threshold is fixed at startup and the fixture's own server
     // keeps the default — under which nothing here is large enough to spill at all.
-    async Task<WebApplication> StartSpilling(int threshold)
+    static async Task<WebApplication> StartSpilling(int threshold)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -484,7 +489,7 @@ public class BinaryTransferTests
     }
 
     // A second server, because the row limit is fixed at startup and the fixture's own server has none.
-    async Task<WebApplication> StartLimited(int maxStreamRows)
+    static async Task<WebApplication> StartLimited(int maxStreamRows)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -522,9 +527,9 @@ public class BinaryTransferTests
 
         await batch.SendAsync();
 
-        Assert.That((await withBinary).Select(_ => (_.Name, _.Payload)), Is.EqualTo(seeded[..2]));
-        Assert.That((await namesOnly).Select(_ => _.Name), Is.EqualTo(seeded.Select(_ => _.Name)));
-        Assert.That((await moreBinary).Single().Payload, Is.EqualTo(fullPayload));
+        await Assert.That((await withBinary).Select(_ => Described(_.Name, _.Payload))).IsEquivalentTo(seeded[..2].Select(_ => Described(_.Name, _.Payload)), CollectionOrdering.Matching);
+        await Assert.That((await namesOnly).Select(_ => _.Name)).IsEquivalentTo(seeded.Select(_ => _.Name), CollectionOrdering.Matching);
+        await Assert.That((await moreBinary).Single().Payload).IsEquivalentTo(fullPayload, CollectionOrdering.Matching);
     }
 
     record NameRow(string Name);
@@ -536,18 +541,18 @@ public class BinaryTransferTests
             $$"""{"version":1,"queries":[{{listRequest}},{{listRequest}}]}""";
 
         var (contentType, body) = await PostRaw("/api/query/batch", request);
-        Assert.That(contentType, Does.StartWith(ScryBinary.ContentType));
-        var sections = ParseMultipart(body, BoundaryOf(contentType));
+        await Assert.That(contentType).StartsWith(ScryBinary.ContentType);
+        var sections = await ParseMultipart(body, await BoundaryOf(contentType));
 
         // Two identical entries → eight parts (four each), one envelope, indices continuing across
         // the entry boundary rather than resetting.
-        Assert.That(sections, Has.Count.EqualTo(9));
+        await Assert.That(sections).Count().IsEqualTo(9);
         var envelope = Encoding.UTF8.GetString(sections[8].Content);
-        Assert.That(envelope, Does.Contain("""{"name":"alpha","payload":{"$bin":0}}"""));
-        Assert.That(envelope, Does.Contain("""{"name":"full","payload":{"$bin":3}}"""));
-        Assert.That(envelope, Does.Contain("""{"name":"alpha","payload":{"$bin":4}}"""));
-        Assert.That(envelope, Does.Contain("""{"name":"full","payload":{"$bin":7}}"""));
-        Assert.That(sections[4].Content, Is.EqualTo(alphaPayload));
+        await Assert.That(envelope).Contains("""{"name":"alpha","payload":{"$bin":0}}""");
+        await Assert.That(envelope).Contains("""{"name":"full","payload":{"$bin":3}}""");
+        await Assert.That(envelope).Contains("""{"name":"alpha","payload":{"$bin":4}}""");
+        await Assert.That(envelope).Contains("""{"name":"full","payload":{"$bin":7}}""");
+        await Assert.That(sections[4].Content).IsEquivalentTo(alphaPayload, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -558,21 +563,19 @@ public class BinaryTransferTests
         // required to share. A drifted stamp is what reaches the general path here, since this model's
         // DocumentKind carries a renamed value and so the response has an alias table to carry.
         var (fastType, fastBody) = await PostRaw("/api/query", listRequest);
-        var fast = ParseMultipart(fastBody, BoundaryOf(fastType));
+        var fast = await ParseMultipart(fastBody, await BoundaryOf(fastType));
 
         var (generalType, generalBody) = await PostRaw("/api/query", driftedRequest);
-        var general = ParseMultipart(generalBody, BoundaryOf(generalType));
+        var general = await ParseMultipart(generalBody, await BoundaryOf(generalType));
 
-        Assert.That(fast[..^1].Select(_ => _.Content), Is.EqualTo(general[..^1].Select(_ => _.Content)));
+        await Assert.That(fast[..^1].Select(_ => Convert.ToHexString(_.Content))).IsEquivalentTo(general[..^1].Select(_ => Convert.ToHexString(_.Content)), CollectionOrdering.Matching);
 
         using var fastEnvelope = JsonDocument.Parse(fast[^1].Content);
         using var generalEnvelope = JsonDocument.Parse(general[^1].Content);
-        Assert.That(
-            fastEnvelope.RootElement.GetProperty("payload").GetRawText(),
-            Is.EqualTo(generalEnvelope.RootElement.GetProperty("payload").GetRawText()));
+        await Assert.That(fastEnvelope.RootElement.GetProperty("payload").GetRawText()).IsEqualTo(generalEnvelope.RootElement.GetProperty("payload").GetRawText());
     }
 
-    Task<(string ContentType, byte[] Body)> PostRaw(string endpoint, string request) =>
+    static Task<(string ContentType, byte[] Body)> PostRaw(string endpoint, string request) =>
         PostRaw(http, endpoint, request);
 
     static async Task<(string ContentType, byte[] Body)> PostRaw(HttpClient transport, string endpoint, string request)
@@ -580,7 +583,7 @@ public class BinaryTransferTests
         using var content = new StringContent(request, Encoding.UTF8, "application/json");
         using var response = await transport.PostAsync(endpoint, content);
         var body = await response.Content.ReadAsByteArrayAsync();
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), Encoding.UTF8.GetString(body));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK).Because(Encoding.UTF8.GetString(body));
         return (response.Content.Headers.ContentType!.ToString(), body);
     }
 
@@ -590,46 +593,45 @@ public class BinaryTransferTests
         Encoding.UTF8.GetString(section.Content)
             .Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
-    static string BoundaryOf(string contentType)
+    static async Task<string> BoundaryOf(string contentType)
     {
-        Assert.That(contentType, Does.StartWith($"{ScryBinary.ContentType}; boundary={ScryBinary.BoundaryPrefix}"));
+        await Assert.That(contentType).StartsWith($"{ScryBinary.ContentType}; boundary={ScryBinary.BoundaryPrefix}");
         return contentType[$"{ScryBinary.ContentType}; boundary=".Length..];
     }
 
     // A deliberately independent parse of the framing, so these tests pin the bytes on the wire
     // rather than agreeing with the client's vendored reader by construction.
-    static List<(Dictionary<string, string> Headers, byte[] Content)> ParseMultipart(byte[] body, string boundary)
+    static async Task<List<(Dictionary<string, string> Headers, byte[] Content)>> ParseMultipart(byte[] body, string boundary)
     {
         var sections = new List<(Dictionary<string, string>, byte[])>();
-        var span = (ReadOnlySpan<byte>)body;
         var first = Encoding.ASCII.GetBytes($"--{boundary}\r\n");
         var delimiter = Encoding.ASCII.GetBytes($"\r\n--{boundary}");
-        Assert.That(span.StartsWith(first), "The body must open with the first boundary line.");
+        await Assert.That(body.AsSpan().StartsWith(first)).IsTrue().Because("The body must open with the first boundary line.");
         var index = first.Length;
 
         while (true)
         {
-            var headerEnd = span[index..].IndexOf("\r\n\r\n"u8);
-            Assert.That(headerEnd, Is.GreaterThanOrEqualTo(0), "A section must carry headers.");
-            var headers = Encoding.ASCII.GetString(span.Slice(index, headerEnd))
+            var headerEnd = body.AsSpan()[index..].IndexOf("\r\n\r\n"u8);
+            await Assert.That(headerEnd).IsGreaterThanOrEqualTo(0).Because("A section must carry headers.");
+            var headers = Encoding.ASCII.GetString(body.AsSpan().Slice(index, headerEnd))
                 .Split("\r\n")
                 .Select(_ => _.Split(':', 2))
                 .ToDictionary(_ => _[0].Trim(), _ => _[1].Trim());
 
             var contentStart = index + headerEnd + 4;
-            var contentLength = span[contentStart..].IndexOf(delimiter);
-            Assert.That(contentLength, Is.GreaterThanOrEqualTo(0), "A section must end at a delimiter.");
-            sections.Add((headers, span.Slice(contentStart, contentLength).ToArray()));
+            var contentLength = body.AsSpan()[contentStart..].IndexOf(delimiter);
+            await Assert.That(contentLength).IsGreaterThanOrEqualTo(0).Because("A section must end at a delimiter.");
+            sections.Add((headers, body.AsSpan().Slice(contentStart, contentLength).ToArray()));
 
             index = contentStart + contentLength + delimiter.Length;
-            if (span[index..].StartsWith("--"u8))
+            if (body.AsSpan()[index..].StartsWith("--"u8))
             {
                 // The terminator: nothing but the closing line may follow.
-                Assert.That(Encoding.ASCII.GetString(span[index..]), Is.EqualTo("--\r\n"));
+                await Assert.That(Encoding.ASCII.GetString(body.AsSpan()[index..])).IsEqualTo("--\r\n");
                 return sections;
             }
 
-            Assert.That(span[index..].StartsWith("\r\n"u8), "A delimiter must end its line.");
+            await Assert.That(body.AsSpan()[index..].StartsWith("\r\n"u8)).IsTrue().Because("A delimiter must end its line.");
             index += 2;
         }
     }

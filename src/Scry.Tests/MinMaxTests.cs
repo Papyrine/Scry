@@ -4,7 +4,6 @@
 /// from SQL Server 2022 — a conditional says the same thing on any provider, and a null operand keeps
 /// the answer null where GREATEST would skip it.
 /// </summary>
-[TestFixture]
 public class MinMaxTests
 {
     [Test]
@@ -17,13 +16,13 @@ public class MinMaxTests
             .Select(_ => new {_.Amount, Floored = Math.Max(_.Amount, 100m), Capped = Math.Min(_.Amount, 100m)})
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows.Single(_ => _.Amount == 75m).Floored, Is.EqualTo(100m));
-            Assert.That(rows.Single(_ => _.Amount == 75m).Capped, Is.EqualTo(75m));
-            Assert.That(rows.Single(_ => _.Amount == 250m).Floored, Is.EqualTo(250m));
-            Assert.That(rows.Single(_ => _.Amount == 250m).Capped, Is.EqualTo(100m));
-        });
+            await Assert.That(rows.Single(_ => _.Amount == 75m).Floored).IsEqualTo(100m);
+            await Assert.That(rows.Single(_ => _.Amount == 75m).Capped).IsEqualTo(75m);
+            await Assert.That(rows.Single(_ => _.Amount == 250m).Floored).IsEqualTo(250m);
+            await Assert.That(rows.Single(_ => _.Amount == 250m).Capped).IsEqualTo(100m);
+        }
     }
 
     [Test]
@@ -37,7 +36,7 @@ public class MinMaxTests
         var count = await client.Source<Order>("Order")
             .CountAsync(_ => Math.Max(_.Amount, _.Discount.GetValueOrDefault()) > 90);
 
-        Assert.That(count, Is.EqualTo(2));
+        await Assert.That(count).IsEqualTo(2);
     }
 
     // Max(Max(a, b), c) is how C# spells a three-way greatest, and each call composes independently.
@@ -51,7 +50,7 @@ public class MinMaxTests
             .Select(_ => new {Widest = Math.Max(Math.Max(_.Amount, 90m), 120m)})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Widest).Order(), Is.EqualTo([120m, 120m, 250m]));
+        await Assert.That(rows.Select(_ => _.Widest).Order()).IsEquivalentTo([120m, 120m, 250m], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -65,13 +64,13 @@ public class MinMaxTests
             .Select(_ => new {_.Quantity, AtLeast = Math.Max(_.Quantity, 2u)})
             .ToListAsync();
 
-        Assert.That(rows.Single(_ => _.Quantity == 1u).AtLeast, Is.EqualTo(2u));
+        await Assert.That(rows.Single(_ => _.Quantity == 1u).AtLeast).IsEqualTo(2u);
     }
 
     // A null operand keeps the answer null. GREATEST would skip the null and answer with the other
     // operand — the greater of one value, not of two — and an unguarded CASE would do the same.
     [Test]
-    public void KeepsNullNullRatherThanAnsweringTheOtherOperand()
+    public async Task KeepsNullNullRatherThanAnsweringTheOtherOperand()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -89,20 +88,20 @@ public class MinMaxTests
         var response = SharedProcessor.Instance.Execute(request, context);
         var rows = response.Payload.EnumerateArray().ToList();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
             var absent = rows.Single(_ => _.GetProperty("discount").ValueKind == JsonValueKind.Null);
-            Assert.That(absent.GetProperty("widest").ValueKind, Is.EqualTo(JsonValueKind.Null));
+            await Assert.That(absent.GetProperty("widest").ValueKind).IsEqualTo(JsonValueKind.Null);
 
             var widest = rows
                 .Where(_ => _.GetProperty("discount").ValueKind != JsonValueKind.Null)
                 .Select(_ => _.GetProperty("widest").GetDecimal());
-            Assert.That(widest.Order(), Is.EqualTo([7m, 10m]));
-        });
+            await Assert.That(widest.Order()).IsEquivalentTo([7m, 10m], CollectionOrdering.Matching);
+        }
     }
 
     [Test]
-    public void RejectsSomethingNotNumeric()
+    public async Task RejectsSomethingNotNumeric()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -110,10 +109,10 @@ public class MinMaxTests
             "Order",
             [new SelectOp(new([new("Widest", new NodeValue(new CallNode(KnownFunction.MathMax, new MemberNode(["Region"]), [new ConstNode("x", ClrTypeTag.String)])))]))]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("Max is not supported over"));
+        await Assert.That(exception!.Message).Contains("Max is not supported over");
     }
 
     static ScryClient ClientFor(TestContext context) =>

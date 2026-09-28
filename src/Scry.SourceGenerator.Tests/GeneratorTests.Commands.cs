@@ -69,7 +69,7 @@ public partial class GeneratorTests
     // The key may be named after the key member or prefixed with the entity's name, as EF's own
     // convention for a foreign key would spell it.
     [Test]
-    public void ACommandKeyMayCarryTheEntityName()
+    public async Task ACommandKeyMayCarryTheEntityName()
     {
         const string model = """
             using Scry;
@@ -89,13 +89,13 @@ public partial class GeneratorTests
             }
             """;
 
-        var commands = GeneratedSources(model).Single(_ => _.Contains("public sealed class ScryCommands"));
+        var commands = (await GeneratedSources(model)).Single(_ => _.Contains("public sealed class ScryCommands"));
 
-        Assert.That(commands, Does.Contain("""[global::Scry.ScryCommand("Promote", Target = "Employee", Keys = new[] {"EmployeeId"})]"""));
+        await Assert.That(commands).Contains("""[global::Scry.ScryCommand("Promote", Target = "Employee", Keys = new[] {"EmployeeId"})]""");
     }
 
     [Test]
-    public void ACommandNameOverrideNamesTheClassTheMethodAndTheCapability()
+    public async Task ACommandNameOverrideNamesTheClassTheMethodAndTheCapability()
     {
         const string model = """
             using Scry;
@@ -115,25 +115,25 @@ public partial class GeneratorTests
             }
             """;
 
-        var sources = GeneratedSources(model);
+        var sources = await GeneratedSources(model);
         var commands = sources.Single(_ => _.Contains("public sealed class ScryCommands"));
         var employee = sources.Single(_ => _.Contains("public class EmployeeQueryModel"));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(commands, Does.Contain("public sealed class Fire"));
-            Assert.That(commands, Does.Contain("Fire(\n        global::Scry.Generated.Fire command,").Or.Contain("Fire(\r\n        global::Scry.Generated.Fire command,"));
-            Assert.That(commands, Does.Contain("public bool CanFire => client.Can(\"Fire\");"));
-            Assert.That(employee, Does.Contain("public bool CanFire { get; init; }"));
-            Assert.That(commands, Does.Not.Contain("TerminateEmployee"));
-        });
+            await Assert.That(commands).Contains("public sealed class Fire");
+            await Assert.That(commands).Contains("Fire(\n        global::Scry.Generated.Fire command,").Or.Contains("Fire(\r\n        global::Scry.Generated.Fire command,");
+            await Assert.That(commands).Contains("public bool CanFire => client.Can(\"Fire\");");
+            await Assert.That(employee).Contains("public bool CanFire { get; init; }");
+            await Assert.That(commands).DoesNotContain("TerminateEmployee");
+        }
     }
 
     // A model declaring no command emits exactly what it did before commands existed — no facade, no
     // capability — and its stamp is unchanged, which the untouched snapshots above pin. Declaring one
     // moves the stamp: it changes what a deployed client can send.
     [Test]
-    public void ACommandMovesTheSchemaStamp()
+    public async Task ACommandMovesTheSchemaStamp()
     {
         const string bare = """
             using Scry;
@@ -165,17 +165,17 @@ public partial class GeneratorTests
             }
             """;
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(Stamp(withCommand), Is.Not.EqualTo(Stamp(bare)));
-            Assert.That(GeneratedSources(bare).Any(_ => _.Contains("ScryCommands")), Is.False);
-        });
+            await Assert.That(await Stamp(withCommand)).IsNotEqualTo(await Stamp(bare));
+            await Assert.That((await GeneratedSources(bare)).Any(_ => _.Contains("ScryCommands"))).IsFalse();
+        }
     }
 
     // Deprecating a command, like deprecating a member, is a note to whoever rebuilds a client and
     // leaves what a deployed one may send exactly as it was.
     [Test]
-    public void ObsoleteOnACommandDoesNotAffectTheSchemaStamp()
+    public async Task ObsoleteOnACommandDoesNotAffectTheSchemaStamp()
     {
         const string bare = """
             using Scry;
@@ -203,48 +203,49 @@ public partial class GeneratorTests
             }
             """;
 
-        Assert.That(Stamp(annotated), Is.EqualTo(Stamp(bare)));
+        await Assert.That(await Stamp(annotated)).IsEqualTo(await Stamp(bare));
     }
 
     // Every way a command can be misdeclared is reported, and — like a conflicting opt-in — nothing is
     // emitted: the server refuses the same model at startup, so any code generated from it would be
     // a client for a surface no server serves.
-    [TestCase(
+    [Test]
+    [Arguments(
         "SCRY009",
         """
         [QueryableView] public class Summary { public int Id { get; set; } }
         [Command(typeof(Summary))] public class Touch { public int Id { get; set; } }
         """,
         "'Touch' targets 'Summary', which is not a [Queryable] entity.")]
-    [TestCase(
+    [Arguments(
         "SCRY009",
         """
         public class Plain { public int Id { get; set; } }
         [Command(typeof(Plain))] public class Touch { public int Id { get; set; } }
         """,
         "'Touch' targets 'Plain', which is not a [Queryable] entity.")]
-    [TestCase(
+    [Arguments(
         "SCRY010",
         """
         [Command(typeof(Employee))] public class Touch { public string Note { get; set; } = ""; }
         """,
         "'Touch' targets 'Employee', keyed by 'Id', but carries no 'int' property named 'Id' or 'EmployeeId'.")]
-    [TestCase(
+    [Arguments(
         "SCRY010",
         "[Command(typeof(Employee))] public class Touch { public long Id { get; set; } }",
         "'Touch' targets 'Employee', keyed by 'Id', but carries no 'int' property named 'Id' or 'EmployeeId'.")]
-    [TestCase(
+    [Arguments(
         "SCRY010",
         "[Command(typeof(Employee))] public class Touch { public int Id { get; set; } public int EmployeeId { get; set; } }",
         "'Touch' carries both 'Id' and 'EmployeeId', so which one is the key of 'Employee' is ambiguous.")]
-    [TestCase(
+    [Arguments(
         "SCRY011",
         """
         [Command(Name = "Touch")] public class First { public int Id { get; set; } }
         [Command(Name = "Touch")] public class Second { public int Id { get; set; } }
         """,
         "The name 'Touch' is generated twice")]
-    [TestCase(
+    [Arguments(
         "SCRY011",
         """
         public enum Touch { One }
@@ -252,55 +253,55 @@ public partial class GeneratorTests
         [Command(Name = "Touch")] public class Poke { public int Id { get; set; } }
         """,
         "The name 'Touch' is generated twice: as an enum and as the command 'Poke'.")]
-    [TestCase(
+    [Arguments(
         "SCRY012",
         """
         [Command(Name = "class")] public class Touch { public int Id { get; set; } }
         """,
         "The command name 'class' on 'Touch' cannot be written as a C# member name")]
-    [TestCase(
+    [Arguments(
         "SCRY013",
         "[Command] public class Touch { [QueryIgnore] public int Id { get; set; } }",
         "'Touch.Id' carries [QueryIgnore], which hides a member from queries and means nothing on a command.")]
-    [TestCase(
+    [Arguments(
         "SCRY014",
         "[Command] public class Touch { public Employee? Employee { get; set; } }",
         "'Touch.Employee' is not a type a command can carry.")]
-    [TestCase(
+    [Arguments(
         "SCRY014",
         "[Command] public class Touch { public object? Anything { get; set; } }",
         "'Touch.Anything' is not a type a command can carry.")]
-    [TestCase(
+    [Arguments(
         "SCRY015",
         """
         public class Touched { public object? Anything { get; set; } }
         [Command(Result = typeof(Touched))] public class Touch { public int Id { get; set; } }
         """,
         "'Touch' answers with 'Touched', whose property 'Anything' is not a type a result can carry.")]
-    [TestCase(
+    [Arguments(
         "SCRY015",
         "[Command(Result = typeof(System.Uri))] public class Touch { public int Id { get; set; } }",
         "'Touch' answers with 'Uri', which is not declared in the model assembly.")]
-    [TestCase(
+    [Arguments(
         "SCRY016",
         """
         [Queryable] public class Badge { public int Id { get; set; } public bool CanTouch { get; set; } }
         [Command(typeof(Badge))] public class Touch { public int Id { get; set; } }
         """,
         "'Touch' would add 'CanTouch' to 'Badge', which already has a member of that name.")]
-    [TestCase(
+    [Arguments(
         "SCRY017",
         "[Command] public abstract class Touch { public int Id { get; set; } }",
         "'Touch' carries [Command] but is not a concrete class with a public parameterless constructor.")]
-    [TestCase(
+    [Arguments(
         "SCRY017",
         "[Command] public class Touch { public Touch(int id) => Id = id; public int Id { get; set; } }",
         "'Touch' carries [Command] but is not a concrete class with a public parameterless constructor.")]
-    [TestCase(
+    [Arguments(
         "SCRY008",
         "[Queryable] [Command] public class Both { public int Id { get; set; } }",
         "'Both' carries [Queryable] and [Command].")]
-    public void AMisdeclaredCommandIsReported(string id, string declarations, string message)
+    public async Task AMisdeclaredCommandIsReported(string id, string declarations, string message)
     {
         var model = $$"""
             using Scry;
@@ -316,14 +317,14 @@ public partial class GeneratorTests
             {{declarations}}
             """;
 
-        var result = RunGenerator(model).GetRunResult();
+        var result = (await RunGenerator(model)).GetRunResult();
 
         var diagnostic = result.Diagnostics.FirstOrDefault(_ => _.Id == id);
-        Assert.That(diagnostic, Is.Not.Null, () => string.Join('\n', result.Diagnostics));
-        Assert.Multiple(() =>
+        await Assert.That(diagnostic).IsNotNull().Because(string.Join('\n', result.Diagnostics));
+        using (Assert.Multiple())
         {
-            Assert.That(diagnostic!.GetMessage(), Does.StartWith(message));
-            Assert.That(result.Results.SelectMany(_ => _.GeneratedSources), Is.Empty);
-        });
+            await Assert.That(diagnostic!.GetMessage()).StartsWith(message);
+            await Assert.That(result.Results.SelectMany(_ => _.GeneratedSources)).IsEmpty();
+        }
     }
 }

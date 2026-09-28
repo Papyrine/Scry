@@ -11,11 +11,10 @@
 /// constant of the client's choosing, say — and answered as the fixed 500 by design. What this
 /// refuses is a fault before the database is asked, which is a validator or builder gap.
 /// </remarks>
-[TestFixture]
 public class FunctionMatrixTests
 {
     [Test]
-    public void EveryFunctionOverEveryMemberTranslatesOrIsRejected()
+    public async Task EveryFunctionOverEveryMemberTranslatesOrIsRejected()
     {
         using var context = TestContext.CreateSeeded();
         var faults = new List<string>();
@@ -31,11 +30,11 @@ public class FunctionMatrixTests
             }
         }
 
-        Assert.That(faults, Is.Empty, string.Join("\n", faults));
+        await Assert.That(faults).IsEmpty().Because(string.Join("\n", faults));
     }
 
     [Test]
-    public void EveryOperatorOverEveryPairOfMembersTranslatesOrIsRejected()
+    public async Task EveryOperatorOverEveryPairOfMembersTranslatesOrIsRejected()
     {
         using var context = TestContext.CreateSeeded();
         var faults = new List<string>();
@@ -63,7 +62,7 @@ public class FunctionMatrixTests
             }
         }
 
-        Assert.That(faults, Is.Empty, string.Join("\n", faults));
+        await Assert.That(faults).IsEmpty().Because(string.Join("\n", faults));
     }
 
     static void Probe(TestContext context, string root, QueryOp op, List<string> faults, string label)

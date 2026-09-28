@@ -3,7 +3,6 @@
 /// transport. These use an in-process transport — no HTTP, no headers — which is exactly the case the
 /// body-carried stamp exists to cover.
 /// </summary>
-[TestFixture]
 public class ResponseStampTests
 {
     // A model frozen at a surface where ManagerId was still non-nullable. Alice has no manager, so a
@@ -13,36 +12,34 @@ public class ResponseStampTests
     // ReSharper restore NotAccessedPositionalProperty.Local
 
     [Test]
-    public void EveryResponseCarriesTheServerStamp()
+    public async Task EveryResponseCarriesTheServerStamp()
     {
         using var context = TestContext.CreateSeeded();
         var processor = SharedProcessor.Instance;
 
         var response = processor.Execute(QueryRequest.Create("Employee", [new CountOp()]), context);
 
-        Assert.That(response.Stamp, Is.EqualTo(processor.Describe().SchemaStamp));
+        await Assert.That(response.Stamp).IsEqualTo(processor.Describe().SchemaStamp);
     }
 
     [Test]
-    public void StampRoundTripsTheWireAndIsOmittedWhenNull()
+    public async Task StampRoundTripsTheWireAndIsOmittedWhenNull()
     {
         var payload = JsonSerializer.SerializeToElement(1);
         var stamped = QueryResponse.Create(ResultKind.Scalar, payload) with { Stamp = "abc" };
 
-        Assert.That(ScryJson.DeserializeResponse(ScryJson.Serialize(stamped)).Stamp, Is.EqualTo("abc"));
+        await Assert.That(ScryJson.DeserializeResponse(ScryJson.Serialize(stamped)).Stamp).IsEqualTo("abc");
 
         // Additive: a response without the field still deserializes, and none is written when null.
-        Assert.That(ScryJson.Serialize(QueryResponse.Create(ResultKind.Scalar, payload)), Does.Not.Contain("stamp"));
-        Assert.That(
-            ScryJson.DeserializeResponse(
+        await Assert.That(ScryJson.Serialize(QueryResponse.Create(ResultKind.Scalar, payload))).DoesNotContain("stamp");
+        await Assert.That(ScryJson.DeserializeResponse(
                 """
                 {
                   "version": 1,
                   "kind": "Scalar",
                   "payload": 1
                 }
-                """).Stamp,
-            Is.Null);
+                """).Stamp).IsNull();
     }
 
     [Test]
@@ -57,10 +54,10 @@ public class ResponseStampTests
         // The query succeeds — drift is reported alongside a working result, as with the HTTP header.
         var count = await client.Source<PreNullableEmployee>("Employee", ["Name"]).CountAsync();
 
-        Assert.That(count, Is.EqualTo(4));
-        Assert.That(client.SchemaStale, Is.True);
-        Assert.That(drift, Is.Not.Null);
-        Assert.That(drift!.ClientStamp, Is.EqualTo("stamp-from-an-older-model"));
+        await Assert.That(count).IsEqualTo(4);
+        await Assert.That(client.SchemaStale).IsTrue();
+        await Assert.That(drift).IsNotNull();
+        await Assert.That(drift!.ClientStamp).IsEqualTo("stamp-from-an-older-model");
     }
 
     [Test]
@@ -78,24 +75,24 @@ public class ResponseStampTests
 
         await client.Source<PreNullableEmployee>("Employee", ["Name"]).CountAsync();
 
-        Assert.That(client.SchemaStale, Is.False);
-        Assert.That(raised, Is.False);
+        await Assert.That(client.SchemaStale).IsFalse();
+        await Assert.That(raised).IsFalse();
     }
 
     // Payload classification depends on the stamp being recorded before the payload is read. Over a
     // non-HTTP transport the stamp arrives in the same response, so the ordering has to hold there
     // too — this is the in-process counterpart of the HTTP test in IntegrationTests.
     [Test]
-    public void UnreadablePayloadFromDriftedClientThrowsStaleClientException()
+    public async Task UnreadablePayloadFromDriftedClientThrowsStaleClientException()
     {
         using var context = TestContext.CreateSeeded();
         var client = StaleClient(context);
 
-        var exception = Assert.ThrowsAsync<ScryStaleClientException>(() =>
-            client.Source<PreNullableEmployee>("Employee", ["Name", "ManagerId"]).ToListAsync())!;
+        var exception = (await Assert.ThrowsExactlyAsync<ScryStaleClientException>(() =>
+            client.Source<PreNullableEmployee>("Employee", ["Name", "ManagerId"]).ToListAsync()))!;
 
-        Assert.That(exception.Message, Does.Contain("regenerate the client"));
-        Assert.That(exception.InnerException, Is.InstanceOf<JsonException>());
+        await Assert.That(exception.Message).Contains("regenerate the client");
+        await Assert.That(exception.InnerException).IsAssignableTo<JsonException>();
     }
 
     static ScryClient StaleClient(TestContext context)

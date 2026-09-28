@@ -1,4 +1,3 @@
-[TestFixture]
 public class BatchTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -36,7 +35,7 @@ public class BatchTests
     }
 
     [Test]
-    public Task RejectedEntryLeavesOthersAnswered()
+    public async Task RejectedEntryLeavesOthersAnswered()
     {
         // The property that makes a batch safe to use: entries are independent, so one asking for a
         // [QueryIgnore]d member is rejected on its own and the queries around it still answer.
@@ -50,29 +49,29 @@ public class BatchTests
         using var context = TestContext.CreateSeeded();
         var response = SharedProcessor.Instance.ExecuteBatch(batch, context);
 
-        Assert.That(response.Results[0].Response, Is.Not.Null);
-        Assert.That(response.Results[1].Response, Is.Null);
-        Assert.That(response.Results[2].Response, Is.Not.Null);
-        return Verify(Pretty(ScryJson.Serialize(response)));
+        await Assert.That(response.Results[0].Response).IsNotNull();
+        await Assert.That(response.Results[1].Response).IsNull();
+        await Assert.That(response.Results[2].Response).IsNotNull();
+        await Verify(Pretty(ScryJson.Serialize(response)));
     }
 
     [Test]
-    public void OverMaxBatchSizeRejectsTheWholeBatch()
+    public async Task OverMaxBatchSizeRejectsTheWholeBatch()
     {
         var processor = Processor(_ => _.MaxBatchSize = 2);
         var batch = QueryBatchRequest.Create(
             [.. Enumerable.Repeat(QueryRequest.Create("Employee", [new CountOp()]), 3)]);
 
         using var context = TestContext.CreateSeeded();
-        var exception = Assert.Throws<ScryValidationException>(() => processor.ExecuteBatch(batch, context))!;
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => processor.ExecuteBatch(batch, context))!;
 
-        Assert.That(exception.Message, Does.Contain("more than the maximum of 2"));
+        await Assert.That(exception.Message).Contains("more than the maximum of 2");
     }
 
     // Refused at the envelope, the batch ran no entry, so nothing would have reached the trail. The
     // refusal is recorded once, carrying the batch rather than a query.
     [Test]
-    public void ABatchRefusedWholeIsAuditedOnce()
+    public async Task ABatchRefusedWholeIsAuditedOnce()
     {
         var auditor = new RecordingAuditor();
         var services = new ServiceCollection();
@@ -83,34 +82,34 @@ public class BatchTests
             [.. Enumerable.Repeat(QueryRequest.Create("Employee", [new CountOp()]), 3)]);
 
         using var context = TestContext.CreateSeeded();
-        Assert.Throws<ScryValidationException>(() => processor.ExecuteBatch(batch, context, provider));
+        Assert.ThrowsExactly<ScryValidationException>(() => processor.ExecuteBatch(batch, context, provider));
 
         var entry = auditor.Entries.Single();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(entry.Outcome, Is.EqualTo(ScryQueryOutcome.Rejected));
-            Assert.That(entry.Batch, Is.SameAs(batch));
-            Assert.That(entry.Request, Is.Null);
-            Assert.That(entry.Error, Does.Contain("more than the maximum of 2"));
-        });
+            await Assert.That(entry.Outcome).IsEqualTo(ScryQueryOutcome.Rejected);
+            await Assert.That(entry.Batch).IsSameReferenceAs(batch);
+            await Assert.That(entry.Request).IsNull();
+            await Assert.That(entry.Error).Contains("more than the maximum of 2");
+        }
     }
 
     [Test]
-    public void UnsupportedWireVersionRejectsTheWholeBatch()
+    public async Task UnsupportedWireVersionRejectsTheWholeBatch()
     {
         var batch = new QueryBatchRequest(WireFormat.Version + 1, [QueryRequest.Create("Employee", [new CountOp()])]);
 
         using var context = TestContext.CreateSeeded();
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.ExecuteBatch(batch, context))!;
 
-        Assert.That(exception.Message, Does.Contain("Unsupported wire version"));
+        await Assert.That(exception.Message).Contains("Unsupported wire version");
     }
 
     // An entry that fails at execution — a division by a constant of the client's choosing — reports
     // the fixed message and a 500, in its own slot, beside an entry that succeeded.
     [Test]
-    public void AFailingEntryReportsTheFixedMessageInItsOwnSlot()
+    public async Task AFailingEntryReportsTheFixedMessageInItsOwnSlot()
     {
         var failing = QueryRequest.Create(
             "Employee",
@@ -127,31 +126,32 @@ public class BatchTests
         using var context = TestContext.CreateSeeded();
         var response = SharedProcessor.Instance.ExecuteBatch(batch, context);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.Results[0].Response, Is.Not.Null);
-            Assert.That(response.Results[0].Error, Is.Null);
-            Assert.That(response.Results[1].Status, Is.EqualTo(HttpStatusCode.InternalServerError));
-            Assert.That(response.Results[1].Error, Is.EqualTo("Query execution failed."));
-            Assert.That(response.Results[1].Response, Is.Null);
-        });
+            await Assert.That(response.Results[0].Response).IsNotNull();
+            await Assert.That(response.Results[0].Error).IsNull();
+            await Assert.That(response.Results[1].Status).IsEqualTo(HttpStatusCode.InternalServerError);
+            await Assert.That(response.Results[1].Error).IsEqualTo("Query execution failed.");
+            await Assert.That(response.Results[1].Response).IsNull();
+        }
     }
 
-    [TestCase(0)]
-    [TestCase(-1)]
-    public void AWireVersionBelowOneRejectsTheWholeBatch(int version)
+    [Test]
+    [Arguments(0)]
+    [Arguments(-1)]
+    public async Task AWireVersionBelowOneRejectsTheWholeBatch(int version)
     {
         var batch = new QueryBatchRequest(version, [QueryRequest.Create("Employee", [new CountOp()])]);
 
         using var context = TestContext.CreateSeeded();
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.ExecuteBatch(batch, context))!;
 
-        Assert.That(exception.Message, Does.Contain("Unsupported wire version"));
+        await Assert.That(exception.Message).Contains("Unsupported wire version");
     }
 
     [Test]
-    public void EveryEntryIsPolicyFiltered()
+    public async Task EveryEntryIsPolicyFiltered()
     {
         // A row policy has to narrow each entry of a batch exactly as it narrows a lone query —
         // otherwise batching would be a way around one. Bob is inactive, so no entry may return him.
@@ -165,12 +165,12 @@ public class BatchTests
         using var context = TestContext.CreateSeeded();
         var json = ScryJson.Serialize(processor.ExecuteBatch(batch, context));
 
-        Assert.That(json, Does.Contain("Alice"));
-        Assert.That(json, Does.Not.Contain("Bob"));
+        await Assert.That(json).Contains("Alice");
+        await Assert.That(json).DoesNotContain("Bob");
     }
 
     [Test]
-    public void EveryEntryIsAuditedSeparately()
+    public async Task EveryEntryIsAuditedSeparately()
     {
         var auditor = new RecordingAuditor();
         var services = new ServiceCollection();
@@ -187,9 +187,9 @@ public class BatchTests
         SharedProcessor.Instance.ExecuteBatch(batch, context, provider);
 
         // A batch is not one audit entry: the trail records what was asked, and a batch asked twice.
-        Assert.That(auditor.Entries, Has.Count.EqualTo(2));
-        Assert.That(auditor.Entries[0].Outcome, Is.EqualTo(ScryQueryOutcome.Success));
-        Assert.That(auditor.Entries[1].Outcome, Is.EqualTo(ScryQueryOutcome.Rejected));
+        await Assert.That(auditor.Entries).Count().IsEqualTo(2);
+        await Assert.That(auditor.Entries[0].Outcome).IsEqualTo(ScryQueryOutcome.Success);
+        await Assert.That(auditor.Entries[1].Outcome).IsEqualTo(ScryQueryOutcome.Rejected);
     }
 
     [Test]
@@ -220,8 +220,8 @@ public class BatchTests
         var count = await orders;
         // end-snippet
 
-        Assert.That(batch.Count, Is.EqualTo(2));
-        Assert.That(batch.Sent);
+        await Assert.That(batch.Count).IsEqualTo(2);
+        await Assert.That(batch.Sent).IsTrue();
         await Verify(new {rows, count});
     }
 
@@ -242,14 +242,14 @@ public class BatchTests
 
         await batch.SendAsync();
 
-        var exception = Assert.ThrowsAsync<ScryRequestException>(async () => await rejected)!;
-        Assert.That(exception.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        Assert.That(exception.Body, Does.Contain("Unknown source 'Missing'"));
-        Assert.That(await accepted, Is.GreaterThan(0));
+        var exception = (await Assert.ThrowsExactlyAsync<ScryRequestException>(async () => await rejected))!;
+        await Assert.That(exception.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That(exception.Body).Contains("Unknown source 'Missing'");
+        await Assert.That(await accepted).IsGreaterThan(0);
     }
 
     [Test]
-    public void TransportFailureFaultsEveryEntry()
+    public async Task TransportFailureFaultsEveryEntry()
     {
         // A batch that never arrives must fault the entries rather than leave them pending: a caller
         // awaiting one would otherwise wait on a response that is never coming.
@@ -261,9 +261,9 @@ public class BatchTests
         var first = client.Source<Employee>("Employee").InBatch(batch).CountAsync();
         var second = client.Source<Employee>("Employee").InBatch(batch).CountAsync();
 
-        Assert.ThrowsAsync<InvalidOperationException>(() => batch.SendAsync());
-        Assert.ThrowsAsync<InvalidOperationException>(async () => await first);
-        Assert.ThrowsAsync<InvalidOperationException>(async () => await second);
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => batch.SendAsync());
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(async () => await first);
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(async () => await second);
     }
 
     [Test]
@@ -274,7 +274,7 @@ public class BatchTests
 
         await batch.SendAsync();
 
-        Assert.ThrowsAsync<InvalidOperationException>(() => batch.SendAsync());
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => batch.SendAsync());
     }
 
     [Test]
@@ -287,54 +287,54 @@ public class BatchTests
         await batch.SendAsync();
 
         // Thrown by InBatch, not by the terminal: an async terminal would only surface it on await.
-        Assert.Throws<InvalidOperationException>(
+        Assert.ThrowsExactly<InvalidOperationException>(
             () => client.Source<Employee>("Employee").InBatch(batch));
     }
 
     [Test]
-    public void HeadersInABatchAreRefused()
+    public async Task HeadersInABatchAreRefused()
     {
         using var context = TestContext.CreateSeeded();
         var client = BatchingClientFor(context);
         var batch = client.Batch();
 
         // One request carries the batch, so a query inside it has none of its own to write a header on.
-        var exception = Assert.Throws<NotSupportedException>(
+        var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => client.Source<Employee>("Employee")
                 .WithHeader("X-Trace", "1")
                 .InBatch(batch))!;
 
-        Assert.That(exception.Message, Does.Contain("Per-query headers cannot be used inside a batch"));
+        await Assert.That(exception.Message).Contains("Per-query headers cannot be used inside a batch");
     }
 
     [Test]
-    public void StreamingInABatchIsRefused()
+    public async Task StreamingInABatchIsRefused()
     {
         using var context = TestContext.CreateSeeded();
         var client = BatchingClientFor(context);
         var batch = client.Batch();
 
-        var exception = Assert.ThrowsAsync<NotSupportedException>(
+        var exception = (await Assert.ThrowsExactlyAsync<NotSupportedException>(
             async () =>
             {
                 await foreach (var _ in client.Source<Employee>("Employee").InBatch(batch).ToAsyncEnumerable())
                 {
                 }
-            })!;
+            }))!;
 
-        Assert.That(exception.Message, Does.Contain("cannot be batched"));
+        await Assert.That(exception.Message).Contains("cannot be batched");
     }
 
     [Test]
-    public void ATransportThatCannotBatchSaysSo()
+    public async Task ATransportThatCannotBatchSaysSo()
     {
         // Mirrors the streaming rule: a transport with no batch support refuses rather than quietly
         // sending the queries one at a time and calling it a batch.
         var client = new ScryClient((_, _) => throw new InvalidOperationException("unused"));
 
-        var exception = Assert.Throws<NotSupportedException>(() => client.Batch())!;
+        var exception = Assert.ThrowsExactly<NotSupportedException>(() => client.Batch())!;
 
-        Assert.That(exception.Message, Does.Contain("does not batch"));
+        await Assert.That(exception.Message).Contains("does not batch");
     }
 
     static ScryClient BatchingClientFor(TestContext context) =>

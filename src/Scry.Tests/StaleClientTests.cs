@@ -1,4 +1,3 @@
-[TestFixture]
 public class StaleClientTests
 {
     // The invalid request in these tests references a property the server does not allow-list —
@@ -10,53 +9,53 @@ public class StaleClientTests
             stamp);
 
     [Test]
-    public void MismatchedStampReportsStaleClient()
+    public async Task MismatchedStampReportsStaleClient()
     {
         using var context = TestContext.CreateSeeded();
         var processor = SharedProcessor.Instance;
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => processor.Execute(InvalidRequest("stamp-from-an-older-model"), context))!;
 
-        Assert.That(exception.Message, Does.Contain("not allow-listed"));
-        Assert.That(exception.Message, Does.Contain("regenerate the client"));
+        await Assert.That(exception.Message).Contains("not allow-listed");
+        await Assert.That(exception.Message).Contains("regenerate the client");
         // The structured counterpart of the prose: the HTTP endpoint forwards it as
         // ScryError.StaleClient so client code can prompt a reload without parsing messages.
-        Assert.That(exception.StaleClient, Is.True);
+        await Assert.That(exception.StaleClient).IsTrue();
     }
 
     [Test]
-    public void MatchingStampReportsPlainRejection()
+    public async Task MatchingStampReportsPlainRejection()
     {
         using var context = TestContext.CreateSeeded();
         var processor = SharedProcessor.Instance;
         var current = processor.Describe().SchemaStamp;
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => processor.Execute(InvalidRequest(current), context))!;
 
-        Assert.That(exception.Message, Does.Contain("not allow-listed"));
-        Assert.That(exception.Message, Does.Not.Contain("regenerate the client"));
-        Assert.That(exception.StaleClient, Is.False);
+        await Assert.That(exception.Message).Contains("not allow-listed");
+        await Assert.That(exception.Message).DoesNotContain("regenerate the client");
+        await Assert.That(exception.StaleClient).IsFalse();
     }
 
     [Test]
-    public void MissingStampReportsPlainRejection()
+    public async Task MissingStampReportsPlainRejection()
     {
         using var context = TestContext.CreateSeeded();
         var processor = SharedProcessor.Instance;
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => processor.Execute(InvalidRequest(stamp: null), context))!;
 
-        Assert.That(exception.Message, Does.Not.Contain("regenerate the client"));
-        Assert.That(exception.StaleClient, Is.False);
+        await Assert.That(exception.Message).DoesNotContain("regenerate the client");
+        await Assert.That(exception.StaleClient).IsFalse();
     }
 
     // Schema drift alone must not reject anything: a valid query from an outdated client (e.g. after
     // a purely additive model change) still executes.
     [Test]
-    public void MismatchedStampWithValidQueryExecutes()
+    public async Task MismatchedStampWithValidQueryExecutes()
     {
         using var context = TestContext.CreateSeeded();
         var processor = SharedProcessor.Instance;
@@ -64,7 +63,7 @@ public class StaleClientTests
         var request = QueryRequest.Create("Employee", [new CountOp()], "stamp-from-an-older-model");
         var response = processor.Execute(request, context);
 
-        Assert.That(response.Kind, Is.EqualTo(ResultKind.Scalar));
+        await Assert.That(response.Kind).IsEqualTo(ResultKind.Scalar);
     }
 
 }

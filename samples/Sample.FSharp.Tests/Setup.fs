@@ -2,11 +2,17 @@ namespace Sample.FSharp.Tests
 
 open System.Text
 open System.Text.RegularExpressions
-open NUnit.Framework
+open System.Threading.Tasks
+open TUnit.Assertions.Core
+open TUnit.Core
 open VerifyTests
 open VerifyTests.DiffPlex
 
-[<SetUpFixture>]
+/// Awaits a TUnit assertion from inside a task.
+[<AutoOpen>]
+module Check =
+    let check (assertion: Assertion<'T>) : Task = assertion.AssertAsync() :> Task
+
 type Setup() =
 
     /// The stamp is a hash over the whole queryable surface, so a snapshot carrying it would move
@@ -17,7 +23,7 @@ type Setup() =
         let scrubbed = stamp.Replace(builder.ToString(), "$1\"{scrubbed stamp}\"")
         builder.Clear().Append scrubbed |> ignore
 
-    [<OneTimeSetUp>]
-    member _.Init() =
+    [<Before(HookType.TestSession)>]
+    static member Init() =
         VerifyDiffPlex.Initialize OutputType.Compact
         VerifierSettings.AddScrubber scrubStamps

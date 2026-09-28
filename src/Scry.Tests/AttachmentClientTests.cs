@@ -3,7 +3,6 @@
 /// materialized row comes back carrying. Fetching through one is HTTP-only and is covered by the
 /// integration tests; what is asserted here is that the handle knows what to fetch.
 /// </summary>
-[TestFixture]
 public class AttachmentClientTests
 {
     /// <summary>
@@ -52,13 +51,13 @@ public class AttachmentClientTests
             .Select(_ => new ContractRow(_.Id, _.Document))
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows, Has.Count.EqualTo(1));
-            Assert.That(rows[0].Document, Is.Not.Null);
-            Assert.That(rows[0].Document.Source, Is.EqualTo("Contract"));
-            Assert.That(rows[0].Document.Member, Is.EqualTo("Document"));
-        });
+            await Assert.That(rows).Count().IsEqualTo(1);
+            await Assert.That(rows[0].Document).IsNotNull();
+            await Assert.That(rows[0].Document.Source).IsEqualTo("Contract");
+            await Assert.That(rows[0].Document.Member).IsEqualTo("Document");
+        }
     }
 
     // No Select at all: every member the model declares comes back, so the key is already there and
@@ -72,13 +71,13 @@ public class AttachmentClientTests
             .OrderBy(_ => _.Id)
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows, Has.Count.EqualTo(3));
-            Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Lease", "Draft", "Sealed"]));
+            await Assert.That(rows).Count().IsEqualTo(3);
+            await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(["Lease", "Draft", "Sealed"], CollectionOrdering.Matching);
             // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
-            Assert.That(rows.All(_ => _.Document is not null), Is.True);
-        });
+            await Assert.That(rows.All(_ => _.Document is not null)).IsTrue();
+        }
     }
 
     // Streaming binds each row as it arrives — there is no materialized list to walk afterwards — so
@@ -96,11 +95,11 @@ public class AttachmentClientTests
             rows.Add(row);
         }
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Lease", "Draft", "Sealed"]));
-            Assert.That(rows[0].Document.Member, Is.EqualTo("Document"));
-        });
+            await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(["Lease", "Draft", "Sealed"], CollectionOrdering.Matching);
+            await Assert.That(rows[0].Document.Member).IsEqualTo("Document");
+        }
     }
 
     // A projected row has no setter to fill, so taking the handle rebuilds it through its
@@ -119,13 +118,13 @@ public class AttachmentClientTests
             rows.Add(row);
         }
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows, Has.Count.EqualTo(1));
-            Assert.That(rows[0].Id, Is.EqualTo(1));
-            Assert.That(rows[0].Document.Source, Is.EqualTo("Contract"));
-            Assert.That(rows[0].Document.Member, Is.EqualTo("Document"));
-        });
+            await Assert.That(rows).Count().IsEqualTo(1);
+            await Assert.That(rows[0].Id).IsEqualTo(1);
+            await Assert.That(rows[0].Document.Source).IsEqualTo("Contract");
+            await Assert.That(rows[0].Document.Member).IsEqualTo("Document");
+        }
     }
 
     [Test]
@@ -136,7 +135,7 @@ public class AttachmentClientTests
         var row = await ClientFor(context).Source<ContractModel>("Contract", ["Id", "Name"])
             .FirstAsync(_ => _.Id == 2);
 
-        Assert.That(row!.Document, Is.Not.Null);
+        await Assert.That(row!.Document).IsNotNull();
     }
 
     // A client whose transport cannot fetch says so when the handle is opened, rather than at
@@ -149,93 +148,93 @@ public class AttachmentClientTests
         var row = await ClientFor(context).Source<ContractModel>("Contract", ["Id", "Name"])
             .FirstAsync(_ => _.Id == 1);
 
-        var exception = Assert.ThrowsAsync<NotSupportedException>(() => row!.Document.OpenAsync());
-        Assert.That(exception!.Message, Does.Contain("does not fetch attachments"));
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() => row!.Document.OpenAsync());
+        await Assert.That(exception!.Message).Contains("does not fetch attachments");
     }
 
     [Test]
-    public void ProjectingAnAttachmentWithoutItsKeyIsRefused()
+    public async Task ProjectingAnAttachmentWithoutItsKeyIsRefused()
     {
         using var context = TestContext.CreateSeeded();
 
-        var exception = Assert.Throws<NotSupportedException>(
+        var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => ClientFor(context).Source<ContractModel>("Contract", ["Id", "Name"])
                 .Select(_ => new {_.Name, _.Document})
                 .ToScryRequest());
 
-        Assert.That(exception!.Message, Does.Contain("_.Id"));
+        await Assert.That(exception!.Message).Contains("_.Id");
     }
 
     [Test]
-    public void FilteringOnAnAttachmentIsRefused()
+    public async Task FilteringOnAnAttachmentIsRefused()
     {
         using var context = TestContext.CreateSeeded();
 
-        var exception = Assert.Throws<NotSupportedException>(
+        var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => ClientFor(context).Source<ContractModel>("Contract", ["Id", "Name"])
                 // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
                 .Where(_ => _.Document != null)
                 .ToScryRequest());
 
-        Assert.That(exception!.Message, Does.Contain("is not a value"));
+        await Assert.That(exception!.Message).Contains("is not a value");
     }
 
     [Test]
-    public void OrderingByAnAttachmentIsRefused()
+    public async Task OrderingByAnAttachmentIsRefused()
     {
         using var context = TestContext.CreateSeeded();
 
-        var exception = Assert.Throws<NotSupportedException>(
+        var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => ClientFor(context).Source<ContractModel>("Contract", ["Id", "Name"])
                 .OrderBy(_ => _.Document)
                 .ToScryRequest());
 
-        Assert.That(exception!.Message, Does.Contain("is not a value"));
+        await Assert.That(exception!.Message).Contains("is not a value");
     }
 
     // Distinct rewrites what a row is, so a key projected beside an attachment no longer identifies
     // one row of the source.
     [Test]
-    public void DistinctCarryingAnAttachmentIsRefused()
+    public async Task DistinctCarryingAnAttachmentIsRefused()
     {
         using var context = TestContext.CreateSeeded();
 
-        var exception = Assert.Throws<NotSupportedException>(
+        var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => ClientFor(context).Source<ContractModel>("Contract", ["Id", "Name"])
                 .Select(_ => new ContractRow(_.Id, _.Document))
                 .Distinct()
                 .ToScryRequest());
 
-        Assert.That(exception!.Message, Does.Contain("cannot be carried through Distinct"));
+        await Assert.That(exception!.Message).Contains("cannot be carried through Distinct");
     }
 
     [Test]
-    public void GroupingByAnAttachmentIsRefused()
+    public async Task GroupingByAnAttachmentIsRefused()
     {
         using var context = TestContext.CreateSeeded();
 
-        var exception = Assert.Throws<NotSupportedException>(
+        var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => ClientFor(context).Source<ContractModel>("Contract", ["Id", "Name"])
                 .GroupBy(_ => _.Document)
                 .Select(_ => new {Count = _.Count()})
                 .ToScryRequest());
 
-        Assert.That(exception!.Message, Does.Contain("is not a value"));
+        await Assert.That(exception!.Message).Contains("is not a value");
     }
 
     // A projection reading nothing but the attachment has no members left to send once it is taken
     // out. Reported as the missing key it really is, rather than as an empty projection.
     [Test]
-    public void ProjectingOnlyAnAttachmentIsRefused()
+    public async Task ProjectingOnlyAnAttachmentIsRefused()
     {
         using var context = TestContext.CreateSeeded();
 
-        var exception = Assert.Throws<NotSupportedException>(
+        var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => ClientFor(context).Source<ContractModel>("Contract", ["Id", "Name"])
                 .Select(_ => new {_.Document})
                 .ToScryRequest());
 
-        Assert.That(exception!.Message, Does.Contain("Project the row's key beside the attachment"));
+        await Assert.That(exception!.Message).Contains("Project the row's key beside the attachment");
     }
 
     // A query over a model with no attachment is untouched by any of this — the same request, and no
@@ -250,7 +249,7 @@ public class AttachmentClientTests
             .Select(_ => new NamedRow(_.Name))
             .ToListAsync();
 
-        Assert.That(rows.Single().Name, Is.EqualTo("Alice"));
+        await Assert.That(rows.Single().Name).IsEqualTo("Alice");
     }
 
     static ScryClient ClientFor(TestContext context) =>

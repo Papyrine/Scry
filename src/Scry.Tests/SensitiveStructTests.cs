@@ -4,11 +4,10 @@
 /// wrapper up as it stood found nothing and answered that nothing beneath it was marked, which let a
 /// constant compared against the member into a URL and a response returning it into a cache.
 /// </summary>
-[TestFixture]
 public class SensitiveStructTests
 {
     [Test]
-    public void AConstantAgainstAMarkedMemberIsRefusedFromAUrl()
+    public async Task AConstantAgainstAMarkedMemberIsRefusedFromAUrl()
     {
         using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
@@ -22,18 +21,18 @@ public class SensitiveStructTests
                 new CountOp()
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(() => Execute(request, context, fromUrl: true, out _));
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => Execute(request, context, fromUrl: true, out _));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(exception!.RequiresBody, Is.True);
-            Assert.That(exception.Message, Does.Contain("request body"));
-        });
+            await Assert.That(exception!.RequiresBody).IsTrue();
+            await Assert.That(exception.Message).Contains("request body");
+        }
     }
 
     // The same member, sent as a body: accepted, and reading through the Nullable reaches the row.
     [Test]
-    public void AConstantAgainstAMarkedMemberIsAcceptedAsABody()
+    public async Task AConstantAgainstAMarkedMemberIsAcceptedAsABody()
     {
         using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
@@ -49,11 +48,11 @@ public class SensitiveStructTests
 
         var response = Execute(request, context, fromUrl: false, out _);
 
-        Assert.That(response.Payload.GetInt32(), Is.EqualTo(1));
+        await Assert.That(response.Payload.GetInt32()).IsEqualTo(1);
     }
 
     [Test]
-    public void AnUnmarkedMemberOfTheSameStructTravelsInTheUrl()
+    public async Task AnUnmarkedMemberOfTheSameStructTravelsInTheUrl()
     {
         using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
@@ -69,11 +68,11 @@ public class SensitiveStructTests
 
         var response = Execute(request, context, fromUrl: true, out _);
 
-        Assert.That(response.Payload.GetInt32(), Is.EqualTo(1));
+        await Assert.That(response.Payload.GetInt32()).IsEqualTo(1);
     }
 
     [Test]
-    public void ReturningAMarkedMemberIsNotStored()
+    public async Task ReturningAMarkedMemberIsNotStored()
     {
         using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
@@ -88,16 +87,16 @@ public class SensitiveStructTests
         var extensions = response.Payload.EnumerateArray()
             .Select(_ => _.GetProperty("extension").GetString())
             .ToList();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(responseHeaders.CacheControl.ToString(), Is.EqualTo("no-store"));
+            await Assert.That(responseHeaders.CacheControl.ToString()).IsEqualTo("no-store");
             // Aaron, Alice, Bob, Carol: the two without a workstation read as null.
-            Assert.That(extensions, Is.EqualTo([null, "4471", "4482", null]));
-        });
+            await Assert.That(extensions).IsEquivalentTo([null, "4471", "4482", null], CollectionOrdering.Matching);
+        }
     }
 
     [Test]
-    public void ReturningAnUnmarkedMemberIsStorable()
+    public async Task ReturningAnUnmarkedMemberIsStorable()
     {
         using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
@@ -106,7 +105,7 @@ public class SensitiveStructTests
 
         Execute(request, context, fromUrl: true, out var responseHeaders);
 
-        Assert.That(responseHeaders.CacheControl.ToString(), Is.Empty);
+        await Assert.That(responseHeaders.CacheControl.ToString()).IsEmpty();
     }
 
     static QueryResponse Execute(QueryRequest request, TestContext context, bool fromUrl, out IHeaderDictionary responseHeaders)

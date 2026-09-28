@@ -5,11 +5,10 @@
 //
 // So the table is pinned here — in the tree that can see both the wire and the framework — rather
 // than only in the analyzer's own tests, which would pin it against itself.
-[TestFixture]
 public class SupportedLinqTests
 {
     [Test]
-    public void EveryWireFunctionIsNamedByTheTable()
+    public async Task EveryWireFunctionIsNamedByTheTable()
     {
         var covered = SupportedLinq.Functions
             .Select(_ => _.Function)
@@ -20,14 +19,11 @@ public class SupportedLinqTests
             .Where(_ => !covered.Contains(_))
             .ToList();
 
-        Assert.That(
-            missing,
-            Is.Empty,
-            () => $"KnownFunction has values the analyzer's table does not spell, so a query using them would be reported as unsupported: {string.Join(", ", missing)}");
+        await Assert.That(missing).IsEmpty().Because($"KnownFunction has values the analyzer's table does not spell, so a query using them would be reported as unsupported: {string.Join(", ", missing)}");
     }
 
     [Test]
-    public void EveryTableEntryNamesARealMember()
+    public async Task EveryTableEntryNamesARealMember()
     {
         foreach (var (signature, _) in SupportedLinq.Functions)
         {
@@ -41,15 +37,12 @@ public class SupportedLinqTests
                 continue;
             }
 
-            Assert.That(
-                Owners(owner).Any(_ => Exists(_, member, arity)),
-                Is.True,
-                () => $"'{signature}' names no member that exists.");
+            await Assert.That(Owners(owner).Any(_ => Exists(_, member, arity))).IsTrue().Because($"'{signature}' names no member that exists.");
         }
     }
 
     [Test]
-    public void EveryOperatorMatchesQueryable()
+    public async Task EveryOperatorMatchesQueryable()
     {
         foreach (var (name, arities) in SupportedLinq.Operators)
         {
@@ -59,13 +52,10 @@ public class SupportedLinqTests
                 .Select(_ => _.GetParameters().Length)
                 .ToHashSet();
 
-            Assert.That(overloads, Is.Not.Empty, () => $"Queryable has no '{name}'.");
+            await Assert.That(overloads).IsNotEmpty().Because($"Queryable has no '{name}'.");
             foreach (var arity in arities)
             {
-                Assert.That(
-                    overloads,
-                    Does.Contain(arity),
-                    () => $"Queryable.{name} has no {arity}-argument overload, so the analyzer would report every call to it as an unsupported overload.");
+                await Assert.That(overloads).Contains(arity).Because($"Queryable.{name} has no {arity}-argument overload, so the analyzer would report every call to it as an unsupported overload.");
             }
         }
     }
@@ -73,21 +63,21 @@ public class SupportedLinqTests
     // Every operator the analyzer allows at most once, and every one it counts as establishing an
     // ordering, has to be an operator it knows in the first place.
     [Test]
-    public void CompositionRulesNameKnownOperators()
+    public async Task CompositionRulesNameKnownOperators()
     {
         foreach (var name in SupportedLinq.SingleUse.Keys.Concat(SupportedLinq.Ordering))
         {
-            Assert.That(SupportedLinq.Operators.ContainsKey(name), Is.True, () => $"'{name}' is not an operator.");
+            await Assert.That(SupportedLinq.Operators.ContainsKey(name)).IsTrue().Because($"'{name}' is not an operator.");
         }
     }
 
     // Kept in step with QueryTranslator.IsTemporal, which decides the same thing by CLR type.
     [Test]
-    public void TemporalTypesResolve()
+    public async Task TemporalTypesResolve()
     {
         foreach (var name in SupportedLinq.Temporal)
         {
-            Assert.That(Type.GetType(name), Is.Not.Null, () => $"'{name}' is not a type.");
+            await Assert.That(Type.GetType(name)).IsNotNull().Because($"'{name}' is not a type.");
         }
     }
 

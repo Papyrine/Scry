@@ -5,17 +5,17 @@
 /// answer as an explorer that was never mapped. Plus the SQL preview's own guard, the paths a caller
 /// might try to walk out of the asset catalogue with, and the preview's content-type rule.
 /// </summary>
-[TestFixture]
+[NotInParallel]
 public class ExplorerGuardTests
 {
-    ScryTestServer production = null!;
-    ScryTestServer development = null!;
-    ScryTestServer previewOff = null!;
+    static ScryTestServer production = null!;
+    static ScryTestServer development = null!;
+    static ScryTestServer previewOff = null!;
 
     // Three servers from the one member, so each is told which database is its own: two of them would
     // otherwise be handed a name a live server already holds, which re-clones it underneath that server.
-    [OneTimeSetUp]
-    public async Task StartServers()
+    [Before(Class)]
+    public static async Task StartServers()
     {
         production = await ScryTestServer
             .StartAsync(
@@ -39,25 +39,26 @@ public class ExplorerGuardTests
             databaseSuffix: "previewOff");
     }
 
-    [OneTimeTearDown]
-    public async Task StopServers()
+    [After(Class)]
+    public static async Task StopServers()
     {
         await production.DisposeAsync();
         await development.DisposeAsync();
         await previewOff.DisposeAsync();
     }
 
-    [TestCase("/scry")]
-    [TestCase("/scry/")]
-    [TestCase("/scry/introspect")]
-    [TestCase("/scry/_framework/blazor.boot.json")]
-    [TestCase("/scry/index.html")]
+    [Test]
+    [Arguments("/scry")]
+    [Arguments("/scry/")]
+    [Arguments("/scry/introspect")]
+    [Arguments("/scry/_framework/blazor.boot.json")]
+    [Arguments("/scry/index.html")]
     public async Task OutsideDevelopmentEveryRouteIsNotFound(string path)
     {
         using var http = production.CreateClient();
         using var response = await http.GetAsync(path);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
     }
 
     [Test]
@@ -66,7 +67,7 @@ public class ExplorerGuardTests
         using var http = production.CreateClient();
         using var response = await http.PostAsync("/scry/sql", Json());
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
     }
 
     [Test]
@@ -76,11 +77,11 @@ public class ExplorerGuardTests
         using var page = await http.GetAsync("/scry");
         using var sql = await http.PostAsync("/scry/sql", Json());
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(page.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(sql.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        });
+            await Assert.That(page.StatusCode).IsEqualTo(HttpStatusCode.OK);
+            await Assert.That(sql.StatusCode).IsEqualTo(HttpStatusCode.OK);
+        }
     }
 
     [Test]
@@ -92,33 +93,34 @@ public class ExplorerGuardTests
         using var sql = await http.PostAsync("/scry/sql", Json());
         var described = ScryJson.DeserializeIntrospection(await introspection.Content.ReadAsStringAsync());
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(page.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(introspection.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(described.SqlPreview, Is.False);
-            Assert.That(sql.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
-        });
+            await Assert.That(page.StatusCode).IsEqualTo(HttpStatusCode.OK);
+            await Assert.That(introspection.StatusCode).IsEqualTo(HttpStatusCode.OK);
+            await Assert.That(described.SqlPreview).IsFalse();
+            await Assert.That(sql.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+        }
     }
 
     // The assets are manifest resources read by name; nothing about a path reaches a file system. A
     // path that tries to walk out of the catalogue is a 404, or refused by the host before routing,
     // and never a file.
-    [TestCase("/scry/%2e%2e/appsettings.json")]
-    [TestCase("/scry/..%5cappsettings.json")]
-    [TestCase("/scry/_framework/%2e%2e/%2e%2e/appsettings.json")]
-    [TestCase("/scry/_framework%5c..%5cindex.html")]
+    [Test]
+    [Arguments("/scry/%2e%2e/appsettings.json")]
+    [Arguments("/scry/..%5cappsettings.json")]
+    [Arguments("/scry/_framework/%2e%2e/%2e%2e/appsettings.json")]
+    [Arguments("/scry/_framework%5c..%5cindex.html")]
     public async Task AnAssetPathCannotLeaveTheCatalogue(string path)
     {
         using var http = development.CreateClient();
         using var response = await http.GetAsync(path);
         var body = await response.Content.ReadAsStringAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(response.StatusCode, Is.AnyOf(HttpStatusCode.NotFound, HttpStatusCode.BadRequest));
-            Assert.That(body, Does.Not.Contain("ConnectionStrings"));
-        });
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NotFound).Or.IsEqualTo(HttpStatusCode.BadRequest);
+            await Assert.That(body).DoesNotContain("ConnectionStrings");
+        }
     }
 
     // The same rule the query endpoints apply: a form cannot send application/json, so requiring it
@@ -136,7 +138,7 @@ public class ExplorerGuardTests
                     [new SelectOp(new([new("Name", nodeValue)]))])), Encoding.UTF8, "text/plain");
         using var response = await http.PostAsync("/scry/sql", content);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.UnsupportedMediaType));
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.UnsupportedMediaType);
     }
 
     static StringContent Json()

@@ -4,7 +4,6 @@
 /// predicate and faults in a projection. The server composes the same answer from comparisons
 /// instead, which any relational provider translates and which yields an int by construction.
 /// </summary>
-[TestFixture]
 public class SignTests
 {
     [Test]
@@ -21,12 +20,12 @@ public class SignTests
             .ToListAsync();
         // end-snippet
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows.Single(_ => _.Amount == 100m).Sign, Is.Zero);
-            Assert.That(rows.Single(_ => _.Amount == 250m).Sign, Is.EqualTo(1));
-            Assert.That(rows.Single(_ => _.Amount == 75m).Sign, Is.EqualTo(-1));
-        });
+            await Assert.That(rows.Single(_ => _.Amount == 100m).Sign).IsZero();
+            await Assert.That(rows.Single(_ => _.Amount == 250m).Sign).IsEqualTo(1);
+            await Assert.That(rows.Single(_ => _.Amount == 75m).Sign).IsEqualTo(-1);
+        }
     }
 
     [Test]
@@ -39,12 +38,12 @@ public class SignTests
             .Select(_ => new {_.Quantity, Sign = Math.Sign((int)_.Quantity - 3)})
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(rows.Single(_ => _.Quantity == 1).Sign, Is.EqualTo(-1));
-            Assert.That(rows.Single(_ => _.Quantity == 3).Sign, Is.Zero);
-            Assert.That(rows.Single(_ => _.Quantity == 7).Sign, Is.EqualTo(1));
-        });
+            await Assert.That(rows.Single(_ => _.Quantity == 1).Sign).IsEqualTo(-1);
+            await Assert.That(rows.Single(_ => _.Quantity == 3).Sign).IsZero();
+            await Assert.That(rows.Single(_ => _.Quantity == 7).Sign).IsEqualTo(1);
+        }
     }
 
     [Test]
@@ -58,7 +57,7 @@ public class SignTests
             .Select(_ => new {_.Amount})
             .ToListAsync();
 
-        Assert.That(rows.Single().Amount, Is.EqualTo(75m));
+        await Assert.That(rows.Single().Amount).IsEqualTo(75m);
     }
 
     [Test]
@@ -72,7 +71,7 @@ public class SignTests
             .Select(_ => new {_.Amount})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Amount), Is.EqualTo([75m, 100m, 250m]));
+        await Assert.That(rows.Select(_ => _.Amount)).IsEquivalentTo([75m, 100m, 250m], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -86,11 +85,11 @@ public class SignTests
             .Select(_ => new {Sign = Math.Sign(_.Quantity - 5d)})
             .ToListAsync();
 
-        Assert.That(rows.Single().Sign, Is.EqualTo(-1));
+        await Assert.That(rows.Single().Sign).IsEqualTo(-1);
     }
 
     [Test]
-    public void KeepsNullNullRatherThanCallingItZero()
+    public async Task KeepsNullNullRatherThanCallingItZero()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -110,18 +109,18 @@ public class SignTests
         var response = SharedProcessor.Instance.Execute(request, context);
         var rows = response.Payload.EnumerateArray().ToList();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
             var absent = rows.Single(_ => _.GetProperty("discount").ValueKind == JsonValueKind.Null);
-            Assert.That(absent.GetProperty("sign").ValueKind, Is.EqualTo(JsonValueKind.Null));
+            await Assert.That(absent.GetProperty("sign").ValueKind).IsEqualTo(JsonValueKind.Null);
 
             var present = rows.Where(_ => _.GetProperty("discount").ValueKind != JsonValueKind.Null);
-            Assert.That(present.Select(_ => _.GetProperty("sign").GetInt32()), Is.All.EqualTo(1));
-        });
+            await Assert.That(present.Select(_ => _.GetProperty("sign").GetInt32())).All(_ => Equals(_, 1));
+        }
     }
 
     [Test]
-    public void RejectsTheSignOfSomethingNotNumeric()
+    public async Task RejectsTheSignOfSomethingNotNumeric()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -129,10 +128,10 @@ public class SignTests
             "Order",
             [new SelectOp(new([new("Sign", new NodeValue(new CallNode(KnownFunction.MathSign, new MemberNode(["Region"]), [])))]))]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("Sign is not supported over"));
+        await Assert.That(exception!.Message).Contains("Sign is not supported over");
     }
 
     static ScryClient ClientFor(TestContext context) =>

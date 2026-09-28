@@ -3,7 +3,6 @@
 /// as a JSON column. It aggregates like any other collection; the difference is that its elements have
 /// no members, so a question about one reads the element itself.
 /// </summary>
-[TestFixture]
 public class PrimitiveCollectionTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -26,7 +25,7 @@ public class PrimitiveCollectionTests
             .ToListAsync();
         // end-snippet
 
-        Assert.That(rows.Single().Region, Is.EqualTo("North"));
+        await Assert.That(rows.Single().Region).IsEqualTo("North");
     }
 
     [Test]
@@ -37,7 +36,7 @@ public class PrimitiveCollectionTests
 
         var count = await client.Source<Order>("Order").CountAsync(_ => _.Tags.Any(tag => tag == "export"));
 
-        Assert.That(count, Is.EqualTo(2));
+        await Assert.That(count).IsEqualTo(2);
     }
 
     [Test]
@@ -49,7 +48,7 @@ public class PrimitiveCollectionTests
         // The element is a value, so the string functions apply to it directly.
         var count = await client.Source<Order>("Order").CountAsync(_ => _.Tags.Any(tag => tag.StartsWith("ex")));
 
-        Assert.That(count, Is.EqualTo(2));
+        await Assert.That(count).IsEqualTo(2);
     }
 
     [Test]
@@ -61,7 +60,7 @@ public class PrimitiveCollectionTests
         // True for the second order and vacuously true for the third, whose collection is empty.
         var count = await client.Source<Order>("Order").CountAsync(_ => _.Tags.All(tag => tag != "urgent"));
 
-        Assert.That(count, Is.EqualTo(2));
+        await Assert.That(count).IsEqualTo(2);
     }
 
     [Test]
@@ -75,7 +74,7 @@ public class PrimitiveCollectionTests
             .Select(_ => new TagRow(_.Region, _.Tags.Count))
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Tags), Is.EqualTo([2, 1, 0]));
+        await Assert.That(rows.Select(_ => _.Tags)).IsEquivalentTo([2, 1, 0], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -91,10 +90,10 @@ public class PrimitiveCollectionTests
             .ToListAsync();
         // end-snippet
 
-        Assert.That(rows.Select(_ => _.Total), Is.EqualTo([8, 8, 0]));
+        await Assert.That(rows.Select(_ => _.Total)).IsEquivalentTo([8, 8, 0], CollectionOrdering.Matching);
 
         // Max over the empty collection is null rather than a fault, as it is over a collection of rows.
-        Assert.That(rows.Select(_ => _.Best), Is.EqualTo(new int?[] {5, 8, null}));
+        await Assert.That(rows.Select(_ => _.Best)).IsEquivalentTo(new int?[] {5, 8, null}, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -105,7 +104,7 @@ public class PrimitiveCollectionTests
 
         var count = await client.Source<Order>("Order").CountAsync(_ => _.Scores.Sum() > 7);
 
-        Assert.That(count, Is.EqualTo(2));
+        await Assert.That(count).IsEqualTo(2);
     }
 
     [Test]
@@ -118,11 +117,11 @@ public class PrimitiveCollectionTests
         // re-emitted to clients at all, and its value name resolves back to the enum server-side.
         var count = await client.Source<Order>("Order").CountAsync(_ => _.Priorities.Contains(Priority.Low));
 
-        Assert.That(count, Is.EqualTo(1));
+        await Assert.That(count).IsEqualTo(1);
     }
 
     [Test]
-    public void AnUnOptedInCollectionOfValuesStaysInvisible()
+    public async Task AnUnOptedInCollectionOfValuesStaysInvisible()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -132,14 +131,14 @@ public class PrimitiveCollectionTests
             "Order",
             [new WhereOp(new SubqueryNode(["Notes"], SubqueryFn.Any))]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("not allow-listed"));
+        await Assert.That(exception!.Message).Contains("not allow-listed");
     }
 
     [Test]
-    public void ReadingAMemberOfAValueElementIsRejected()
+    public async Task ReadingAMemberOfAValueElementIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -156,14 +155,14 @@ public class PrimitiveCollectionTests
                         new ConstNode("6", ClrTypeTag.Int32))))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("has no members"));
+        await Assert.That(exception!.Message).Contains("has no members");
     }
 
     [Test]
-    public void ReadingAnElementOutsideASubqueryIsRejected()
+    public async Task ReadingAnElementOutsideASubqueryIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -178,14 +177,14 @@ public class PrimitiveCollectionTests
                     new ConstNode("urgent", ClrTypeTag.String)))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("subquery over a collection of values"));
+        await Assert.That(exception!.Message).Contains("subquery over a collection of values");
     }
 
     [Test]
-    public void ReadingAnElementInsideACollectionOfRowsIsRejected()
+    public async Task ReadingAnElementInsideACollectionOfRowsIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -203,14 +202,14 @@ public class PrimitiveCollectionTests
                         new ConstNode("A-1", ClrTypeTag.String))))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("subquery over a collection of values"));
+        await Assert.That(exception!.Message).Contains("subquery over a collection of values");
     }
 
     [Test]
-    public void FlatteningACollectionOfValuesIsRejected()
+    public async Task FlatteningACollectionOfValuesIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -218,10 +217,10 @@ public class PrimitiveCollectionTests
         // of the row it reads.
         var request = QueryRequest.Create("Order", [new SelectManyOp(["Tags"])]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("cannot be flattened"));
+        await Assert.That(exception!.Message).Contains("cannot be flattened");
     }
 
     [Test]
@@ -234,24 +233,24 @@ public class PrimitiveCollectionTests
             "Order",
             [new SelectOp(new([new("Tags", new NodeValue(new MemberNode(["Tags"])))]))]);
 
-        Assert.Throws<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
+        Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
     }
 
     [Test]
-    public void CorrelatingAContainsWithTheRowIsRefusedByTheClient()
+    public async Task CorrelatingAContainsWithTheRowIsRefusedByTheClient()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // The test reads the collection's elements, where the owning row is not in scope. Refused where
         // it is written rather than sent as a request the server would reject.
-        var exception = Assert.ThrowsAsync<NotSupportedException>(
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(
             () => client.Source<Order>("Order")
                 .Where(_ => _.Tags.Contains(_.Region))
                 .Select(_ => new {_.Region})
                 .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("takes a constant"));
+        await Assert.That(exception!.Message).Contains("takes a constant");
     }
 
     static ScryClient ClientFor(TestContext context) =>

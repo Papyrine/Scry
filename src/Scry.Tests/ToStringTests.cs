@@ -3,7 +3,6 @@
 /// position; the overload taking a format is not translated anywhere, so it is refused rather than
 /// shipped — see <see cref="RejectsAFormatSpecifier"/>.
 /// </summary>
-[TestFixture]
 public class ToStringTests
 {
     [Test]
@@ -25,11 +24,11 @@ public class ToStringTests
 
         var row = rows.Single();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(row.Quantity, Is.EqualTo("1"));
-            Assert.That(row.Amount, Does.StartWith("75"));
-        });
+            await Assert.That(row.Quantity).IsEqualTo("1");
+            await Assert.That(row.Amount).StartsWith("75");
+        }
     }
 
     [Test]
@@ -45,7 +44,7 @@ public class ToStringTests
             .Select(_ => new {_.Region})
             .ToListAsync();
 
-        Assert.That(rows.Single().Region, Is.EqualTo("South"));
+        await Assert.That(rows.Single().Region).IsEqualTo("South");
     }
 
     [Test]
@@ -59,7 +58,7 @@ public class ToStringTests
             .Select(_ => new {_.Quantity})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Quantity), Is.EqualTo([1u, 3u, 7u]));
+        await Assert.That(rows.Select(_ => _.Quantity)).IsEquivalentTo([1u, 3u, 7u], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -76,7 +75,7 @@ public class ToStringTests
             })
             .ToListAsync();
 
-        Assert.That(rows.Single().Label, Is.EqualTo("South/1"));
+        await Assert.That(rows.Single().Label).IsEqualTo("South/1");
     }
 
     [Test]
@@ -90,52 +89,52 @@ public class ToStringTests
             .Select(_ => new {Placed = _.Placed.ToString()})
             .ToListAsync();
 
-        Assert.That(rows.Single().Placed, Does.Contain("2025"));
+        await Assert.That(rows.Single().Placed).Contains("2025");
     }
 
     [Test]
-    public void RejectsAFormatSpecifier()
+    public async Task RejectsAFormatSpecifier()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // Refused at translation, on the client, before a request is sent.
-        var exception = Assert.ThrowsAsync<NotSupportedException>(
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(
             () => client.Source<Order>("Order")
                 .Select(_ => new {Text = _.Amount.ToString("N2")})
                 .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("ToString with a format is not supported"));
+        await Assert.That(exception!.Message).Contains("ToString with a format is not supported");
     }
 
     [Test]
-    public void RejectsAnInterpolatedFormatSpecifier()
+    public async Task RejectsAnInterpolatedFormatSpecifier()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<NotSupportedException>(
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(
             () => client.Source<Order>("Order")
                 .Select(_ => new {Text = $"{_.Amount:N2}"})
                 .ToListAsync());
 
-        Assert.That(exception, Is.Not.Null);
+        await Assert.That(exception).IsNotNull();
     }
 
     [Test]
-    public void RejectsReadingAnEnumAsText()
+    public async Task RejectsReadingAnEnumAsText()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // An enum's text is a member name the database does not hold — the column carries the
         // underlying value — so converting one in SQL would answer with a number.
-        var exception = Assert.ThrowsAsync<ScryValidationException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(
             () => client.Source<Employee>("Employee")
                 .Select(_ => new {Text = _.Status.ToString()})
                 .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("not supported over an enum"));
+        await Assert.That(exception!.Message).Contains("not supported over an enum");
     }
 
     static ScryClient ClientFor(TestContext context) =>

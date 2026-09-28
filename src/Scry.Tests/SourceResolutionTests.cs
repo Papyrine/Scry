@@ -6,7 +6,6 @@ using Microsoft.EntityFrameworkCore.Query;
 /// startup rather than a reflective invoke per resolution. What the delegate has to keep is what the
 /// invoke had: the set is the request's own context's, never one held across requests.
 /// </summary>
-[TestFixture]
 public class SourceResolutionTests
 {
     static Schema schema = Build();
@@ -19,58 +18,54 @@ public class SourceResolutionTests
     }
 
     [Test]
-    public void AnEntitySourceResolvesToItsSet()
+    public async Task AnEntitySourceResolvesToItsSet()
     {
         using var context = TestContext.CreateSeeded();
 
-        var query = Source("Employee").Resolve(context, EmptyServiceProvider.Instance);
+        var query = (await Source("Employee")).Resolve(context, EmptyServiceProvider.Instance);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(query.ElementType, Is.EqualTo(typeof(Employee)));
-            Assert.That(query.Provider, Is.InstanceOf<IAsyncQueryProvider>());
-        });
+            await Assert.That(query.ElementType).IsEqualTo(typeof(Employee));
+            await Assert.That(query.Provider).IsAssignableTo<IAsyncQueryProvider>();
+        }
     }
 
     // The delegate binds the context it is given rather than capturing one: a context answers with its
     // one set however often it is asked, and another context answers with its own.
     [Test]
-    public void TheSetIsTheContextsOwn()
+    public async Task TheSetIsTheContextsOwn()
     {
         using var first = TestContext.CreateSeeded();
         using var second = TestContext.CreateSeeded();
-        var source = Source("Employee");
+        var source = await Source("Employee");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(
-                source.Resolve(first, EmptyServiceProvider.Instance),
-                Is.SameAs(source.Resolve(first, EmptyServiceProvider.Instance)));
-            Assert.That(
-                source.Resolve(first, EmptyServiceProvider.Instance),
-                Is.Not.SameAs(source.Resolve(second, EmptyServiceProvider.Instance)));
-        });
+            await Assert.That(source.Resolve(first, EmptyServiceProvider.Instance)).IsSameReferenceAs(source.Resolve(first, EmptyServiceProvider.Instance));
+            await Assert.That(source.Resolve(first, EmptyServiceProvider.Instance)).IsNotSameReferenceAs(source.Resolve(second, EmptyServiceProvider.Instance));
+        }
     }
 
     // A derived POCO reads its base's registered rows narrowed by type, through a delegate of the same
     // kind over OfType.
     [Test]
-    public void ADerivedPocoResolvesToTheBaseRowsNarrowed()
+    public async Task ADerivedPocoResolvesToTheBaseRowsNarrowed()
     {
         using var context = TestContext.CreateSeeded();
 
-        var query = Source("PublicHoliday").Resolve(context, EmptyServiceProvider.Instance);
+        var query = (await Source("PublicHoliday")).Resolve(context, EmptyServiceProvider.Instance);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(query.ElementType, Is.EqualTo(typeof(PublicHoliday)));
-            Assert.That(query.Cast<object>().Count(), Is.EqualTo(Holiday.Seed().OfType<PublicHoliday>().Count()));
-        });
+            await Assert.That(query.ElementType).IsEqualTo(typeof(PublicHoliday));
+            await Assert.That(query.Cast<object>().Count()).IsEqualTo(Holiday.Seed().OfType<PublicHoliday>().Count());
+        }
     }
 
-    static ScrySource Source(string name)
+    static async Task<ScrySource> Source(string name)
     {
-        Assert.That(schema.TryGetSource(name, out var source), Is.True);
+        await Assert.That(schema.TryGetSource(name, out var source)).IsTrue();
         return source!;
     }
 }

@@ -3,7 +3,6 @@
 /// so the parts that identify a response — the freshness token and the cache scope — are fingerprinted
 /// rather than written in, the way the query already is.
 /// </summary>
-[TestFixture]
 public class QueryEtagTests
 {
     [Test]
@@ -17,24 +16,24 @@ public class QueryEtagTests
         context.Request.Headers.IfNoneMatch = etag;
         var notModified = await QueryEtag.NotModified(context, SharedProcessor.Instance, Options("log-position-0000123", "tenant-42"));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(notModified, Is.True);
-            Assert.That(context.Response.Headers.ETag.ToString(), Is.EqualTo(etag));
-            Assert.That(etag, Does.StartWith("\"").And.EndWith("\""));
-            Assert.That(etag, Does.Not.Contain("tenant-42"));
-            Assert.That(etag, Does.Not.Contain("log-position"));
-            Assert.That(etag, Does.Contain(SharedProcessor.Instance.SchemaStamp));
-        });
+            await Assert.That(notModified).IsTrue();
+            await Assert.That(context.Response.Headers.ETag.ToString()).IsEqualTo(etag);
+            await Assert.That(etag).StartsWith("\"").And.EndsWith("\"");
+            await Assert.That(etag).DoesNotContain("tenant-42");
+            await Assert.That(etag).DoesNotContain("log-position");
+            await Assert.That(etag).Contains(SharedProcessor.Instance.SchemaStamp);
+        }
     }
 
     [Test]
-    public void DifferentScopesGetDifferentTags()
+    public async Task DifferentScopesGetDifferentTags()
     {
         var first = TagFor(Request(), "fresh", "tenant-1");
         var second = TagFor(Request(), "fresh", "tenant-2");
 
-        Assert.That(first, Is.Not.EqualTo(second));
+        await Assert.That(first).IsNotEqualTo(second);
     }
 
     // A bare "*" would answer 304 to a request whose query was never decoded — including one the
@@ -47,11 +46,11 @@ public class QueryEtagTests
 
         var notModified = await QueryEtag.NotModified(context, SharedProcessor.Instance, Options("fresh", "tenant-1"));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(notModified, Is.False);
-            Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status200OK));
-        });
+            await Assert.That(notModified).IsFalse();
+            await Assert.That(context.Response.StatusCode).IsEqualTo(StatusCodes.Status200OK);
+        }
     }
 
     static DefaultHttpContext Request() =>

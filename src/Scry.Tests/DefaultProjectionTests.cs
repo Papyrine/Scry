@@ -3,7 +3,6 @@
 /// <c>Select</c> still projects them explicitly. That keeps the response keyed by the names the client
 /// was generated with, instead of whatever the server's current model calls them.
 /// </summary>
-[TestFixture]
 public class DefaultProjectionTests
 {
     // ReSharper disable once NotAccessedPositionalProperty.Local
@@ -25,7 +24,7 @@ public class DefaultProjectionTests
     // generated with, with no need for the server to guess which vintage of client it is talking to.
     // 'FullName' is Employee.Name's previous name, so this stands in for a pre-rename client.
     [Test]
-    public void ResponseIsKeyedByTheClientsMemberNames()
+    public async Task ResponseIsKeyedByTheClientsMemberNames()
     {
         using var context = TestContext.CreateSeeded();
         var processor = SharedProcessor.Instance;
@@ -37,24 +36,24 @@ public class DefaultProjectionTests
 
         var json = ScryJson.Serialize(processor.Execute(request, context));
 
-        Assert.That(json, Does.Contain("\"fullName\":\"Alice\""));
-        Assert.That(json, Does.Not.Contain("\"name\""));
+        await Assert.That(json).Contains("\"fullName\":\"Alice\"");
+        await Assert.That(json).DoesNotContain("\"name\"");
     }
 
     // Count and Any return a scalar; bolting a member projection onto them would be pointless SQL.
     [Test]
-    public void ScalarTerminalsAreNotProjected()
+    public async Task ScalarTerminalsAreNotProjected()
     {
         var source = Client().Source<Employee>("Employee", ["Name"]);
 
-        Assert.That(source.ToScryRequest(new CountOp()).Pipeline.OfType<SelectOp>(), Is.Empty);
-        Assert.That(source.ToScryRequest(new AnyOp(Predicate: null)).Pipeline.OfType<SelectOp>(), Is.Empty);
+        await Assert.That(source.ToScryRequest(new CountOp()).Pipeline.OfType<SelectOp>()).IsEmpty();
+        await Assert.That(source.ToScryRequest(new AnyOp(Predicate: null)).Pipeline.OfType<SelectOp>()).IsEmpty();
     }
 
     // The validator rejects a terminal predicate once a Select is present, so injecting one would turn
     // a valid hand-built request into an invalid one. It falls back to the server's default instead.
     [Test]
-    public void TerminalCarryingItsOwnPredicateIsNotProjected()
+    public async Task TerminalCarryingItsOwnPredicateIsNotProjected()
     {
         var source = Client().Source<Employee>("Employee", ["Name"]);
         var predicate = new BinaryNode(
@@ -65,44 +64,44 @@ public class DefaultProjectionTests
         var first = source.ToScryRequest(new FirstOp(OrDefault: false, predicate));
         var single = source.ToScryRequest(new SingleOp(OrDefault: false, predicate));
 
-        Assert.That(first.Pipeline.OfType<SelectOp>(), Is.Empty);
-        Assert.That(single.Pipeline.OfType<SelectOp>(), Is.Empty);
+        await Assert.That(first.Pipeline.OfType<SelectOp>()).IsEmpty();
+        await Assert.That(single.Pipeline.OfType<SelectOp>()).IsEmpty();
     }
 
     // A terminal with no predicate of its own is the normal case and does get projected.
     [Test]
-    public void PredicatelessRowTerminalIsProjected()
+    public async Task PredicatelessRowTerminalIsProjected()
     {
         var request = Client()
             .Source<Employee>("Employee", ["Name"])
             .ToScryRequest(new FirstOp(OrDefault: false, Predicate: null));
 
-        Assert.That(request.Pipeline.OfType<SelectOp>().Count(), Is.EqualTo(1));
+        await Assert.That(request.Pipeline.OfType<SelectOp>().Count()).IsEqualTo(1);
     }
 
     [Test]
-    public void ExplicitSelectIsNotDuplicated()
+    public async Task ExplicitSelectIsNotDuplicated()
     {
         var request = Client()
             .Source<Employee>("Employee", ["Name", "Status"])
             .Select(_ => new EmployeeRow(_.Name))
             .ToScryRequest();
 
-        Assert.That(request.Pipeline.OfType<SelectOp>().Count(), Is.EqualTo(1));
+        await Assert.That(request.Pipeline.OfType<SelectOp>().Count()).IsEqualTo(1);
     }
 
     // A source built by hand carries no member list and no fixed model to disappoint, so it still
     // falls back to the server's default projection.
     [Test]
-    public void HandBuiltSourceFallsBackToTheServerDefault()
+    public async Task HandBuiltSourceFallsBackToTheServerDefault()
     {
         var request = Client().Source<Employee>("Employee").ToScryRequest();
 
-        Assert.That(request.Pipeline.OfType<SelectOp>(), Is.Empty);
+        await Assert.That(request.Pipeline.OfType<SelectOp>()).IsEmpty();
     }
 
     [Test]
-    public void ProjectionPrecedesTheTerminal()
+    public async Task ProjectionPrecedesTheTerminal()
     {
         var request = Client()
             .Source<Employee>("Employee", ["Name"])
@@ -110,8 +109,8 @@ public class DefaultProjectionTests
             .ToScryRequest(new PageOp(Size: 2));
 
         // The validator rejects any operator after a terminal, so order matters here.
-        Assert.That(request.Pipeline[^1], Is.InstanceOf<PageOp>());
-        Assert.That(request.Pipeline[^2], Is.InstanceOf<SelectOp>());
+        await Assert.That(request.Pipeline[^1]).IsAssignableTo<PageOp>();
+        await Assert.That(request.Pipeline[^2]).IsAssignableTo<SelectOp>();
     }
 
     static ScryClient Client() =>

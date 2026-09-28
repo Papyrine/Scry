@@ -3,7 +3,6 @@
 /// hands over, and what it refuses. The HTTP shape those answers become — 200, 204, 404, 400 — is
 /// pinned by the integration tests; this is about the decision, not the transport.
 /// </summary>
-[TestFixture]
 public class AttachmentFetchTests
 {
     static ScryAttachmentResult Fetch(int id, string member = "Document")
@@ -15,35 +14,35 @@ public class AttachmentFetchTests
     }
 
     [Test]
-    public void FetchesTheBytes()
+    public async Task FetchesTheBytes()
     {
         var result = Fetch(1);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(result.Found, Is.True);
-            Assert.That(result.Value, Is.EqualTo(new byte[] {0x11, 0x22, 0x33}));
-        });
+            await Assert.That(result.Found).IsTrue();
+            await Assert.That(result.Value).IsEquivalentTo(new byte[] {0x11, 0x22, 0x33}, CollectionOrdering.Matching);
+        }
     }
 
     // What the member declared, carried back on the result so a transport of its own serves the same
     // type the HTTP endpoint does.
     [Test]
-    public void CarriesTheDeclaredContentType() =>
-        Assert.That(Fetch(1).ContentType, Is.EqualTo("application/pdf"));
+    public async Task CarriesTheDeclaredContentType() =>
+        await Assert.That(Fetch(1).ContentType).IsEqualTo("application/pdf");
 
     // A row that is there holding a value that is not. Distinct from the refusals below: the caller
     // may read it, and what it reads is nothing.
     [Test]
-    public void NullValueIsFoundWithNoBytes()
+    public async Task NullValueIsFoundWithNoBytes()
     {
         var result = Fetch(2);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(result.Found, Is.True);
-            Assert.That(result.Value, Is.Null);
-        });
+            await Assert.That(result.Found).IsTrue();
+            await Assert.That(result.Value).IsNull();
+        }
     }
 
     // A policy declared on the base applies to a derived source, as a row policy would: the derived
@@ -74,19 +73,19 @@ public class AttachmentFetchTests
             AttachmentRequest.Create("SignedContract", "Document", [new(UnsealedContractsPolicy.SealedId.ToString(), ClrTypeTag.Int32)]),
             data);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(granted.Found, Is.True);
-            Assert.That(granted.Value, Is.EqualTo(new byte[] {0x44}));
+            await Assert.That(granted.Found).IsTrue();
+            await Assert.That(granted.Value).IsEquivalentTo(new byte[] {0x44}, CollectionOrdering.Matching);
             // The base's policy is the one answering: its sealed id is refused here too.
-            Assert.That(refused.Found, Is.False);
-        });
+            await Assert.That(refused.Found).IsFalse();
+        }
     }
 
     // The tag on a key value is the client's hint; the key is parsed as the member's own type, as a
     // constant in a predicate is.
     [Test]
-    public void AKeyValueIsParsedAsTheKeysTypeWhateverItsTag()
+    public async Task AKeyValueIsParsedAsTheKeysTypeWhateverItsTag()
     {
         using var data = TestContext.CreateSeeded();
 
@@ -94,38 +93,38 @@ public class AttachmentFetchTests
             AttachmentRequest.Create("Contract", "Document", [new("1", ClrTypeTag.String)]),
             data);
 
-        Assert.That(result.Found, Is.True);
+        await Assert.That(result.Found).IsTrue();
     }
 
     // A policy may replace the declared type for one fetch — the hook for a column holding more
     // than one kind of thing — and what it sets is what the result carries.
     [Test]
-    public void APolicyMayRelabelTheBytes()
+    public async Task APolicyMayRelabelTheBytes()
     {
         using var data = TestContext.CreateSeeded();
 
         var result = With<RelabellingPolicy>().FetchAttachment(Request(1), data);
 
-        Assert.That(result.ContentType, Is.EqualTo("image/png"));
+        await Assert.That(result.ContentType).IsEqualTo("image/png");
     }
 
     // The model's declaration is checked at startup; a policy's replacement can only be checked when
     // it is made. Host code, so a fault rather than a rejection — but a fault naming the policy,
     // never a response header carrying whatever was set.
     [Test]
-    public void AReplacementThatIsNotAMediaTypeFaults()
+    public async Task AReplacementThatIsNotAMediaTypeFaults()
     {
         using var data = TestContext.CreateSeeded();
         var processor = With<MislabellingPolicy>();
 
-        var exception = Assert.Throws<Exception>(() => processor.FetchAttachment(Request(1), data))!;
+        var exception = Assert.ThrowsExactly<Exception>(() => processor.FetchAttachment(Request(1), data))!;
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(exception, Is.Not.InstanceOf<ScryValidationException>());
-            Assert.That(exception.Message, Does.Contain("MislabellingPolicy"));
-            Assert.That(exception.Message, Does.Contain("not a media type"));
-        });
+            await Assert.That(exception).IsNotAssignableTo<ScryValidationException>();
+            await Assert.That(exception.Message).Contains("MislabellingPolicy");
+            await Assert.That(exception.Message).Contains("not a media type");
+        }
     }
 
     static AttachmentRequest Request(int id) =>
@@ -162,109 +161,110 @@ public class AttachmentFetchTests
     }
 
     [Test]
-    public void DeniedByPolicyIsNotFound() =>
-        Assert.That(Fetch(UnsealedContractsPolicy.SealedId).Found, Is.False);
+    public async Task DeniedByPolicyIsNotFound() =>
+        await Assert.That(Fetch(UnsealedContractsPolicy.SealedId).Found).IsFalse();
 
     [Test]
-    public void MissingRowIsNotFound() =>
-        Assert.That(Fetch(404).Found, Is.False);
+    public async Task MissingRowIsNotFound() =>
+        await Assert.That(Fetch(404).Found).IsFalse();
 
     // The two answers a caller must not be able to tell apart: one row exists and is refused, the
     // other does not exist at all. Asserted together, since the guarantee is that they are equal.
     [Test]
-    public void DeniedAndMissingAreIndistinguishable() =>
-        Assert.That(Fetch(UnsealedContractsPolicy.SealedId), Is.EqualTo(Fetch(404)));
+    public async Task DeniedAndMissingAreIndistinguishable() =>
+        await Assert.That(Fetch(UnsealedContractsPolicy.SealedId)).IsEqualTo(Fetch(404));
 
     [Test]
-    public void UnknownMemberIsRejected()
+    public async Task UnknownMemberIsRejected()
     {
-        var exception = Assert.Throws<ScryValidationException>(() => Fetch(1, "Ssn"));
-        Assert.That(exception!.Message, Does.Contain("is not an attachment member"));
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => Fetch(1, "Ssn"));
+        await Assert.That(exception!.Message).Contains("is not an attachment member");
     }
 
     // A member that exists and is readable, but is not an attachment — the endpoint is not a way to
     // read an ordinary column.
     [Test]
-    public void ScalarMemberIsRejected()
+    public async Task ScalarMemberIsRejected()
     {
-        var exception = Assert.Throws<ScryValidationException>(() => Fetch(1, "Name"));
-        Assert.That(exception!.Message, Does.Contain("is not an attachment member"));
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => Fetch(1, "Name"));
+        await Assert.That(exception!.Message).Contains("is not an attachment member");
     }
 
     [Test]
-    public void UnknownSourceIsRejected()
+    public async Task UnknownSourceIsRejected()
     {
         using var data = TestContext.CreateSeeded();
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.FetchAttachment(
                 AttachmentRequest.Create("Secret", "Document", [new("1", ClrTypeTag.Int32)]),
                 data));
 
-        Assert.That(exception!.Message, Does.Contain("Unknown source"));
+        await Assert.That(exception!.Message).Contains("Unknown source");
     }
 
     [Test]
-    public void WrongKeyCountIsRejected()
+    public async Task WrongKeyCountIsRejected()
     {
         using var data = TestContext.CreateSeeded();
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.FetchAttachment(
                 AttachmentRequest.Create("Contract", "Document", [new("1", ClrTypeTag.Int32), new("2", ClrTypeTag.Int32)]),
                 data));
 
-        Assert.That(exception!.Message, Does.Contain("keyed by 1 value"));
+        await Assert.That(exception!.Message).Contains("keyed by 1 value");
     }
 
     // The tag says Int32 and the value is not one. Rejected because the key is parsed into the
     // member's own type — the tag is a hint, and a value that does not parse is a malformed request
     // rather than a server fault.
     [Test]
-    public void UnparseableKeyIsRejected()
+    public async Task UnparseableKeyIsRejected()
     {
         using var data = TestContext.CreateSeeded();
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.FetchAttachment(
                 AttachmentRequest.Create("Contract", "Document", [new("not-a-number", ClrTypeTag.Int32)]),
                 data));
 
-        Assert.That(exception!.Message, Does.Contain("not a valid Int32"));
+        await Assert.That(exception!.Message).Contains("not a valid Int32");
     }
 
     // A primary key is never null, so a null key identifies no row. Answered as not-found rather than
     // rejected — it is a key that matches nothing, not a malformed one.
     [Test]
-    public void NullKeyIsNotFound()
+    public async Task NullKeyIsNotFound()
     {
         using var data = TestContext.CreateSeeded();
         var result = SharedProcessor.Instance.FetchAttachment(
             AttachmentRequest.Create("Contract", "Document", [new(null, ClrTypeTag.Null)]),
             data);
 
-        Assert.That(result.Found, Is.False);
+        await Assert.That(result.Found).IsFalse();
     }
 
     [Test]
-    public void NewerVersionIsRejected()
+    public async Task NewerVersionIsRejected()
     {
         using var data = TestContext.CreateSeeded();
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.FetchAttachment(
                 new(AttachmentRequest.CurrentVersion + 1, "Contract", "Document", [new("1", ClrTypeTag.Int32)]),
                 data));
 
-        Assert.That(exception!.Message, Does.Contain("Unsupported attachment request version"));
+        await Assert.That(exception!.Message).Contains("Unsupported attachment request version");
     }
 
-    [TestCase(0)]
-    [TestCase(-1)]
-    public void AVersionBelowOneIsRejected(int version)
+    [Test]
+    [Arguments(0)]
+    [Arguments(-1)]
+    public async Task AVersionBelowOneIsRejected(int version)
     {
         using var data = TestContext.CreateSeeded();
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.FetchAttachment(
                 new(version, "Contract", "Document", [new("1", ClrTypeTag.Int32)]),
                 data));
 
-        Assert.That(exception!.Message, Does.Contain("Unsupported attachment request version"));
+        await Assert.That(exception!.Message).Contains("Unsupported attachment request version");
     }
 }

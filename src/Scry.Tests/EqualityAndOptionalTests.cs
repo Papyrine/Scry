@@ -4,7 +4,6 @@
 /// are the member itself and a comparison against null. Both are client-side rewrites, so each is
 /// executed against LocalDB here to pin that what they rewrite into survives validation and rebinding.
 /// </summary>
-[TestFixture]
 public class EqualityAndOptionalTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -27,7 +26,7 @@ public class EqualityAndOptionalTests
             .ToListAsync();
         // end-snippet
 
-        Assert.That(rows.Single().Name, Is.EqualTo("Alice"));
+        await Assert.That(rows.Single().Name).IsEqualTo("Alice");
     }
 
     [Test]
@@ -41,7 +40,7 @@ public class EqualityAndOptionalTests
             .Select(_ => new NameRow(_.Name))
             .ToListAsync();
 
-        Assert.That(rows.Single().Name, Is.EqualTo("Alice"));
+        await Assert.That(rows.Single().Name).IsEqualTo("Alice");
     }
 
     [Test]
@@ -55,7 +54,7 @@ public class EqualityAndOptionalTests
             .Select(_ => new OrderShape(_.Region, _.Amount))
             .ToListAsync();
 
-        Assert.That(rows.Single().Amount, Is.EqualTo(100m));
+        await Assert.That(rows.Single().Amount).IsEqualTo(100m);
     }
 
     // The enum spelling compiles to Object.Equals against a boxed operand, so it arrives with a Convert
@@ -71,7 +70,7 @@ public class EqualityAndOptionalTests
             .Select(_ => new NameRow(_.Name))
             .ToListAsync();
 
-        Assert.That(rows.Single().Name, Is.EqualTo("Carol"));
+        await Assert.That(rows.Single().Name).IsEqualTo("Carol");
     }
 
     // An Equals reading nothing from the row is closure state, evaluated before the query the way any
@@ -86,7 +85,7 @@ public class EqualityAndOptionalTests
         var count = await client.Source<Order>("Order")
             .CountAsync(_ => wanted.Equals("North") && _.Region == wanted);
 
-        Assert.That(count, Is.EqualTo(2));
+        await Assert.That(count).IsEqualTo(2);
     }
 
     [Test]
@@ -103,7 +102,7 @@ public class EqualityAndOptionalTests
             .ToListAsync();
         // end-snippet
 
-        Assert.That(managed.Select(_ => _.Name), Is.EqualTo(["Aaron", "Bob"]));
+        await Assert.That(managed.Select(_ => _.Name)).IsEquivalentTo(["Aaron", "Bob"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -118,7 +117,7 @@ public class EqualityAndOptionalTests
             .Select(_ => new NameRow(_.Name))
             .ToListAsync();
 
-        Assert.That(unmanaged.Select(_ => _.Name), Is.EqualTo(["Alice", "Carol"]));
+        await Assert.That(unmanaged.Select(_ => _.Name)).IsEquivalentTo(["Alice", "Carol"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -133,7 +132,7 @@ public class EqualityAndOptionalTests
             .Select(_ => new OrderShape(_.Region, _.Amount))
             .ToListAsync();
 
-        Assert.That(rows.Single().Amount, Is.EqualTo(100m));
+        await Assert.That(rows.Single().Amount).IsEqualTo(100m);
     }
 
     // Value in front of a date part: the wrapper is stripped and the function reads the member under
@@ -149,7 +148,7 @@ public class EqualityAndOptionalTests
             .Select(_ => new NameRow(_.Name))
             .ToListAsync();
 
-        Assert.That(rows, Has.Count.EqualTo(2));
+        await Assert.That(rows).Count().IsEqualTo(2);
     }
 
     static ScryClient ClientFor(TestContext context) =>

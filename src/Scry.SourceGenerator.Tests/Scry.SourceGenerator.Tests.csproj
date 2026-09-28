@@ -1,16 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
     <!-- Compiled here as well as into the generator and the server, so the hand-rolled identifier
          rules can be pinned against Roslyn's own — which the server cannot reference. -->
     <Compile Include="..\Shared\CSharpIdentifier.cs" Link="CSharpIdentifier.cs" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="NUnit" />
-    <PackageReference Include="NUnit3TestAdapter" />
-    <PackageReference Include="Verify.NUnit" />
+    <PackageReference Include="TUnit" />
+    <PackageReference Include="Verify.TUnit" />
     <PackageReference Include="Verify.DiffPlex" />
     <PackageReference Include="Verify.SourceGenerators" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />

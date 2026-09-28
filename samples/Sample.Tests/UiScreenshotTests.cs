@@ -12,8 +12,6 @@
 // pngs are compared with a tolerance rather than by byte (see PngComparer) because what survives that
 // is a pixel or two at the end of a rule, rendered a shade lighter on one machine than on another. A
 // baseline seeded here therefore holds on CI, which is what lets these run there at all.
-[TestFixture]
-[Parallelizable(ParallelScope.Children)]
 [Category("Browser")]
 public class UiScreenshotTests :
     BrowserFixture

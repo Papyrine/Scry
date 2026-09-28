@@ -3,7 +3,6 @@
 /// blunt ones: a path with no source behind it is answered from the names every allow-listed type
 /// marks, and that table is built with the schema rather than by the first request to need it.
 /// </summary>
-[TestFixture]
 public class SensitiveSchemaTests
 {
     static SensitiveSchema sensitive = Build();
@@ -16,53 +15,63 @@ public class SensitiveSchemaTests
     }
 
     [Test]
-    public void AMarkedMemberIsReachedThroughAnOptionalStruct() =>
-        Assert.Multiple(() =>
+    public async Task AMarkedMemberIsReachedThroughAnOptionalStruct()
+    {
+        using (Assert.Multiple())
         {
-            Assert.That(sensitive.IsSensitive("Employee", ["Workstation", "Extension"]), Is.True);
-            Assert.That(sensitive.IsSensitive("Employee", ["Workstation", "Room"]), Is.False);
-            Assert.That(sensitive.IsSensitive("Employee", ["Workstation"]), Is.False);
-        });
+            await Assert.That(sensitive.IsSensitive("Employee", ["Workstation", "Extension"])).IsTrue();
+            await Assert.That(sensitive.IsSensitive("Employee", ["Workstation", "Room"])).IsFalse();
+            await Assert.That(sensitive.IsSensitive("Employee", ["Workstation"])).IsFalse();
+        }
+    }
 
     [Test]
-    public void AMarkedTypeMarksEveryPathInto() =>
-        Assert.Multiple(() =>
+    public async Task AMarkedTypeMarksEveryPathInto()
+    {
+        using (Assert.Multiple())
         {
-            Assert.That(sensitive.IsSensitive("Employee", ["Address"]), Is.True);
-            Assert.That(sensitive.IsSensitive("Employee", ["Address", "City"]), Is.True);
-            Assert.That(sensitive.IsSensitive("Employee", ["PreviousAddresses"]), Is.True);
-        });
+            await Assert.That(sensitive.IsSensitive("Employee", ["Address"])).IsTrue();
+            await Assert.That(sensitive.IsSensitive("Employee", ["Address", "City"])).IsTrue();
+            await Assert.That(sensitive.IsSensitive("Employee", ["PreviousAddresses"])).IsTrue();
+        }
+    }
 
     // Marked on a base and overridden without the attribute: the generator carries the base's marking
     // onto the override, and the server has to agree, or the member is sensitive to the client and
     // not to the server.
     [Test]
-    public void AMarkedBasePropertyIsMarkedThroughItsOverride() =>
-        Assert.Multiple(() =>
+    public async Task AMarkedBasePropertyIsMarkedThroughItsOverride()
+    {
+        using (Assert.Multiple())
         {
-            Assert.That(sensitive.IsSensitive("Invoice", ["Reviewer"]), Is.True);
-            Assert.That(sensitive.IsSensitive("Invoice", ["Notes"]), Is.False);
-        });
+            await Assert.That(sensitive.IsSensitive("Invoice", ["Reviewer"])).IsTrue();
+            await Assert.That(sensitive.IsSensitive("Invoice", ["Notes"])).IsFalse();
+        }
+    }
 
     // A source returned whole returns its marked members with it.
     [Test]
-    public void AnEmptyPathAsksAboutTheSource() =>
-        Assert.Multiple(() =>
+    public async Task AnEmptyPathAsksAboutTheSource()
+    {
+        using (Assert.Multiple())
         {
-            Assert.That(sensitive.IsSensitive("Employee", []), Is.True);
-            Assert.That(sensitive.IsSensitive("Department", []), Is.False);
-        });
+            await Assert.That(sensitive.IsSensitive("Employee", [])).IsTrue();
+            await Assert.That(sensitive.IsSensitive("Department", [])).IsFalse();
+        }
+    }
 
     // With no source to read off — after a flatten, a group, a join — any segment naming a member some
     // type marks answers yes, and one naming nothing marked answers no, whichever type it is really on.
     [Test]
-    public void AnUnresolvedPathIsAnsweredByName() =>
-        Assert.Multiple(() =>
+    public async Task AnUnresolvedPathIsAnsweredByName()
+    {
+        using (Assert.Multiple())
         {
-            Assert.That(sensitive.IsSensitive(null, ["Extension"]), Is.True);
-            Assert.That(sensitive.IsSensitive(null, ["Region", "Avatar"]), Is.True);
-            Assert.That(sensitive.IsSensitive(null, ["Room"]), Is.False);
-            Assert.That(sensitive.IsSensitive("NoSuchSource", ["Extension"]), Is.True);
-            Assert.That(sensitive.IsSensitive("Employee", ["NoSuchMember", "Extension"]), Is.True);
-        });
+            await Assert.That(sensitive.IsSensitive(null, ["Extension"])).IsTrue();
+            await Assert.That(sensitive.IsSensitive(null, ["Region", "Avatar"])).IsTrue();
+            await Assert.That(sensitive.IsSensitive(null, ["Room"])).IsFalse();
+            await Assert.That(sensitive.IsSensitive("NoSuchSource", ["Extension"])).IsTrue();
+            await Assert.That(sensitive.IsSensitive("Employee", ["NoSuchMember", "Extension"])).IsTrue();
+        }
+    }
 }

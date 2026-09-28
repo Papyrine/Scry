@@ -42,7 +42,7 @@ services.AddScoped(
 services.AddScryClient("/api/query");
 services.AddScoped<ScryQuery>();
 ```
-<sup><a href='/samples/Sample.Tests/ClientRegistrationTests.cs#L19-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientWasmRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Tests/ClientRegistrationTests.cs#L18-L26' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientWasmRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: clientQuery -->

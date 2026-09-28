@@ -4,7 +4,6 @@
 /// one — <c>WITHIN GROUP</c> on SQL Server, the same <c>OrderBy</c> in memory — and the answer reads
 /// identically from either source.
 /// </summary>
-[TestFixture]
 public class StringJoinAggregateTests
 {
     [Test]
@@ -23,11 +22,11 @@ public class StringJoinAggregateTests
             })
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(regions.Single(_ => _.Region == "North").Codes, Is.EqualTo("40,8"));
-            Assert.That(regions.Single(_ => _.Region == "South").Codes, Is.EqualTo("17"));
-        });
+            await Assert.That(regions.Single(_ => _.Region == "North").Codes).IsEqualTo("40,8");
+            await Assert.That(regions.Single(_ => _.Region == "South").Codes).IsEqualTo("17");
+        }
     }
 
     [Test]
@@ -46,11 +45,11 @@ public class StringJoinAggregateTests
             })
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(regions.Single(_ => _.Region == "North").Codes, Is.EqualTo("40,8"));
-            Assert.That(regions.Single(_ => _.Region == "South").Codes, Is.EqualTo("17"));
-        });
+            await Assert.That(regions.Single(_ => _.Region == "North").Codes).IsEqualTo("40,8");
+            await Assert.That(regions.Single(_ => _.Region == "South").Codes).IsEqualTo("17");
+        }
     }
 
     // string.Concat is string.Join's empty-separator spelling, and reaches the wire as exactly that.
@@ -69,21 +68,21 @@ public class StringJoinAggregateTests
             })
             .ToListAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(regions.Single(_ => _.Region == "North").Codes, Is.EqualTo("408"));
-            Assert.That(regions.Single(_ => _.Region == "South").Codes, Is.EqualTo("17"));
-        });
+            await Assert.That(regions.Single(_ => _.Region == "North").Codes).IsEqualTo("408");
+            await Assert.That(regions.Single(_ => _.Region == "South").Codes).IsEqualTo("17");
+        }
     }
 
     // Like Join, Concat folds the whole group: the composed forms stay off the text aggregate.
     [Test]
-    public void AFilteredConcatIsRefusedAtTranslation()
+    public async Task AFilteredConcatIsRefusedAtTranslation()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<NotSupportedException>(() =>
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>
             client.Source<Order>("Order")
                 .GroupBy(_ => _.Region)
                 .Select(_ => new
@@ -92,16 +91,16 @@ public class StringJoinAggregateTests
                 })
                 .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("folds the whole group"));
+        await Assert.That(exception!.Message).Contains("folds the whole group");
     }
 
     [Test]
-    public void AConcatOverSomethingNotTextIsRefusedAtTranslation()
+    public async Task AConcatOverSomethingNotTextIsRefusedAtTranslation()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<NotSupportedException>(() =>
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>
             client.Source<Order>("Order")
                 .GroupBy(_ => _.Region)
                 .Select(_ => new
@@ -110,7 +109,7 @@ public class StringJoinAggregateTests
                 })
                 .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("select a string member"));
+        await Assert.That(exception!.Message).Contains("select a string member");
     }
 
     // The result-selector spelling unfolds into the same GroupBy + Select, so the aggregate reads
@@ -131,7 +130,7 @@ public class StringJoinAggregateTests
                 })
             .ToListAsync();
 
-        Assert.That(regions.Single(_ => _.Region == "North").Codes, Is.EqualTo("40|8"));
+        await Assert.That(regions.Single(_ => _.Region == "North").Codes).IsEqualTo("40|8");
     }
 
     [Test]
@@ -150,7 +149,7 @@ public class StringJoinAggregateTests
                 })
             .ToListAsync();
 
-        Assert.That(regions.Single(_ => _.Region == "North").Codes, Is.EqualTo("40|8"));
+        await Assert.That(regions.Single(_ => _.Region == "North").Codes).IsEqualTo("40|8");
     }
 
     [Test]
@@ -170,21 +169,21 @@ public class StringJoinAggregateTests
             .ToListAsync();
 
         var north = regions.Single(_ => _.Region == "North");
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(north.Codes, Is.EqualTo("40, 8"));
-            Assert.That(north.Total, Is.EqualTo(350m));
-        });
+            await Assert.That(north.Codes).IsEqualTo("40, 8");
+            await Assert.That(north.Total).IsEqualTo(350m);
+        }
     }
 
     // The separator is text either way; it is the values the selector reads that are not.
     [Test]
-    public void ANonTextSelectorIsRefusedAtTranslation()
+    public async Task ANonTextSelectorIsRefusedAtTranslation()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<NotSupportedException>(() =>
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>
             client.Source<Order>("Order")
                 .GroupBy(_ => _.Region)
                 .Select(_ => new
@@ -193,12 +192,12 @@ public class StringJoinAggregateTests
                 })
                 .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("joins text"));
+        await Assert.That(exception!.Message).Contains("joins text");
     }
 
     // The separator travels only on Join: any other aggregate carrying one is a malformed request.
     [Test]
-    public void ASeparatorOnAnotherAggregateIsRejected()
+    public async Task ASeparatorOnAnotherAggregateIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -214,14 +213,14 @@ public class StringJoinAggregateTests
                     ]))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("does not take a separator"));
+        await Assert.That(exception!.Message).Contains("does not take a separator");
     }
 
     [Test]
-    public void AJoinWithoutASeparatorIsRejected()
+    public async Task AJoinWithoutASeparatorIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -232,14 +231,14 @@ public class StringJoinAggregateTests
                 new SelectOp(new([new("Codes", new NodeValue(new AggregateNode(AggregateFn.Join, new MemberNode(["Code"]))))]))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("Join requires a separator"));
+        await Assert.That(exception!.Message).Contains("Join requires a separator");
     }
 
     [Test]
-    public void AJoinOverSomethingNotTextIsRejected()
+    public async Task AJoinOverSomethingNotTextIsRejected()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -250,17 +249,17 @@ public class StringJoinAggregateTests
                 new SelectOp(new([new("Amounts", new NodeValue(new AggregateNode(AggregateFn.Join, new MemberNode(["Amount"]), ",")))]))
             ]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("Join aggregates text"));
+        await Assert.That(exception!.Message).Contains("Join aggregates text");
     }
 
     // The separator is the one string a client hands the aggregate, and it reaches SQL the way every
     // client value does — as a parameter, not as a literal in the statement text. Inlined, each
     // distinct separator would compile and cache a plan of its own.
     [Test]
-    public void TheSeparatorIsAParameter()
+    public async Task TheSeparatorIsAParameter()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
@@ -275,7 +274,7 @@ public class StringJoinAggregateTests
             .ToScryRequest();
         var sql = SharedProcessor.Instance.ToQueryString(request, context, NoServices.Instance);
 
-        Assert.That(sql, Does.Match(@"STRING_AGG\([^,]+, @\w+\)"));
+        await Assert.That(sql).Matches(@"STRING_AGG\([^,]+, @\w+\)");
     }
 
     static ScryClient ClientFor(TestContext context) =>

@@ -12,19 +12,19 @@ using Sample.WebClient.Pages;
 /// far longer than any handler here takes but the slow rename's four, so an answer these expect inline
 /// stays inline on a loaded machine, and the pending path is still real.
 /// </remarks>
-[TestFixture]
+[NotInParallel]
 public class CommandsPageTests
 {
-    ScryTestServer server = null!;
+    static ScryTestServer server = null!;
 
     static readonly string[] seeded = ["Aaron", "Alice", "Bob", "Carol"];
 
-    [OneTimeSetUp]
-    public async Task StartServer() =>
+    [Before(Class)]
+    public static async Task StartServer() =>
         server = await ScryTestServer.StartAsync(liveQueries: true, commands: true, slowDelay: TimeSpan.FromSeconds(4));
 
-    [OneTimeTearDown]
-    public async Task StopServer() =>
+    [After(Class)]
+    public static async Task StopServer() =>
         await server.DisposeAsync();
 
     [Test]
@@ -34,12 +34,12 @@ public class CommandsPageTests
         var page = await Ready(context);
 
         var row = Row(page, "Carol")!;
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(row.QuerySelector(".toggle")!.TextContent, Is.EqualTo("Deactivate"));
-            Assert.That(row.QuerySelector(".rename")!.HasAttribute("disabled"), Is.False);
-            Assert.That(page.Find("#create-submit").HasAttribute("disabled"), Is.False);
-        });
+            await Assert.That(row.QuerySelector(".toggle")!.TextContent).IsEqualTo("Deactivate");
+            await Assert.That(row.QuerySelector(".rename")!.HasAttribute("disabled")).IsFalse();
+            await Assert.That(page.Find("#create-submit").HasAttribute("disabled")).IsFalse();
+        }
     }
 
     // The Delete button is the row's CanDeleteEmployee: the policy's condition, decided in the database.
@@ -51,7 +51,7 @@ public class CommandsPageTests
 
         var deletable = seeded.Where(_ => !Row(page, _)!.QuerySelector(".delete")!.HasAttribute("disabled"));
 
-        Assert.That(deletable, Is.EqualTo(["Bob"]));
+        await Assert.That(deletable).IsEquivalentTo(["Bob"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -64,7 +64,7 @@ public class CommandsPageTests
         await Row(page, name)!.QuerySelector(".toggle")!.ClickAsync(new());
 
         await page.WaitForStateAsync(() => Row(page, name)?.QuerySelector(".delete")?.HasAttribute("disabled") == false, patience);
-        Assert.That(Row(page, name)!.QuerySelector(".active")!.TextContent, Is.EqualTo("no"));
+        await Assert.That(Row(page, name)!.QuerySelector(".active")!.TextContent).IsEqualTo("no");
     }
 
     [Test]
@@ -79,7 +79,7 @@ public class CommandsPageTests
         await Row(page, name)!.QuerySelector(".delete")!.ClickAsync(new());
 
         await page.WaitForStateAsync(() => Row(page, name) is null, patience);
-        Assert.That(Status(page), Is.EqualTo($"Deleted {name}."));
+        await Assert.That(Status(page)).IsEqualTo($"Deleted {name}.");
     }
 
     // Refused by the handler, which says why in words of its own: the one failure the sample shows.
@@ -108,7 +108,7 @@ public class CommandsPageTests
         await Row(page, name)!.QuerySelector(".delete")!.ClickAsync(new());
 
         await page.WaitForStateAsync(() => Status(page)?.Contains("manages others") == true, patience);
-        Assert.That(Row(page, name), Is.Not.Null);
+        await Assert.That(Row(page, name)).IsNotNull();
     }
 
     // The typed outcome: the new row's id, read off the result the handler answered with.
@@ -121,7 +121,7 @@ public class CommandsPageTests
         var name = await Hire(page, "Hired");
 
         var id = Row(page, name)!.GetAttribute("data-id");
-        Assert.That(Status(page), Is.EqualTo($"Hired {name} as #{id}."));
+        await Assert.That(Status(page)).IsEqualTo($"Hired {name} as #{id}.");
     }
 
     // Past the client's wait the rename is the pending-work panel's, which follows it until it lands —
@@ -153,7 +153,7 @@ public class CommandsPageTests
         await using var context = Context(refusing);
         var page = await Ready(context);
 
-        Assert.That(page.Find("#create-submit").HasAttribute("disabled"), Is.True);
+        await Assert.That(page.Find("#create-submit").HasAttribute("disabled")).IsTrue();
     }
 
     static TimeSpan patience = TimeSpan.FromSeconds(20);

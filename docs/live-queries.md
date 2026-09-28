@@ -809,7 +809,7 @@ static ScryClient ClientFor(ScryProcessor processor, TestContext context) =>
         (request, _) => Task.FromResult(processor.Execute(request, context)),
         subscribeTransport: (request, cancel) => processor.Subscribe(request, context, cancel));
 ```
-<sup><a href='/src/Scry.Tests/LiveQueryRoundTripTests.cs#L91-L96' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessLiveClient' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/LiveQueryRoundTripTests.cs#L90-L95' title='Snippet source file'>snippet source</a> | <a href='#snippet-inProcessLiveClient' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 

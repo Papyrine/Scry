@@ -1,4 +1,3 @@
-[TestFixture]
 public class ExecutionTests
 {
     [Test]
@@ -36,7 +35,7 @@ public class ExecutionTests
         var response = SharedProcessor.Instance.Execute(request, context);
         var json = ScryJson.Serialize(response);
 
-        Assert.That(json, Does.Not.Contain("Salary").IgnoreCase);
+        await Assert.That(json).DoesNotContain("Salary").IgnoringCase();
         await VerifyResponse(request);
     }
 
@@ -197,7 +196,7 @@ public class ExecutionTests
     }
 
     [Test]
-    public void ReturnableWithAttributeScopesRows()
+    public async Task ReturnableWithAttributeScopesRows()
     {
         // Ticket carries [ReturnableWith(typeof(OpenTicketsOnlyPolicy))] and no programmatic policy is
         // registered, so the attribute-declared policy must scope the result to open tickets.
@@ -206,13 +205,13 @@ public class ExecutionTests
         using var context = TestContext.CreateSeeded();
         var json = ScryJson.Serialize(SharedProcessor.Instance.Execute(request, context));
 
-        Assert.That(json, Does.Contain("Login bug"));
-        Assert.That(json, Does.Contain("Signup crash"));
-        Assert.That(json, Does.Not.Contain("Old typo"));
+        await Assert.That(json).Contains("Login bug");
+        await Assert.That(json).Contains("Signup crash");
+        await Assert.That(json).DoesNotContain("Old typo");
     }
 
     [Test]
-    public void AddPolicyOverridesReturnableWithAttribute()
+    public async Task AddPolicyOverridesReturnableWithAttribute()
     {
         // A programmatic AddPolicy must win over the [ReturnableWith] attribute. ClosedTicketsOnlyPolicy
         // is the inverse of the attribute's policy, so the flipped result set proves which one ran.
@@ -222,9 +221,9 @@ public class ExecutionTests
         var json = ScryJson.Serialize(
             Processor(_ => _.AddPolicy<Ticket, ClosedTicketsOnlyPolicy>()).Execute(request, context));
 
-        Assert.That(json, Does.Contain("Old typo"));
-        Assert.That(json, Does.Not.Contain("Login bug"));
-        Assert.That(json, Does.Not.Contain("Signup crash"));
+        await Assert.That(json).Contains("Old typo");
+        await Assert.That(json).DoesNotContain("Login bug");
+        await Assert.That(json).DoesNotContain("Signup crash");
     }
 
     static Task VerifyResponse(QueryRequest request)

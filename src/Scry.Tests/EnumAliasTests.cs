@@ -4,7 +4,6 @@
 /// enum reader resolves a name it does not know to a previous name it does. Server model:
 /// Status.Contractor was previously 'Freelancer'.
 /// </summary>
-[TestFixture]
 public class EnumAliasTests
 {
     // Frozen at the surface a client generated before the Freelancer -> Contractor rename saw. Nested
@@ -24,7 +23,7 @@ public class EnumAliasTests
     }
 
     [Test]
-    public void ResponseCarriesAliasesForDriftedClient()
+    public async Task ResponseCarriesAliasesForDriftedClient()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -32,18 +31,18 @@ public class EnumAliasTests
         var response = SharedProcessor.Instance.Execute(request, context);
 
         var alias = response.EnumAliases!.Single();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(alias.EnumName, Is.EqualTo("Status"));
-            Assert.That(alias.ValueName, Is.EqualTo("Contractor"));
-            Assert.That(alias.PreviousNames, Is.EqualTo(["Freelancer"]));
-        });
+            await Assert.That(alias.EnumName).IsEqualTo("Status");
+            await Assert.That(alias.ValueName).IsEqualTo("Contractor");
+            await Assert.That(alias.PreviousNames).IsEquivalentTo(["Freelancer"], CollectionOrdering.Matching);
+        }
     }
 
     // Value names are hashed into the stamp, so a matching (or absent) stamp proves the client
     // already knows the current names — nothing is sent in the common case.
     [Test]
-    public void ResponseOmitsAliasesWhenStampMatchesOrIsAbsent()
+    public async Task ResponseOmitsAliasesWhenStampMatchesOrIsAbsent()
     {
         using var context = TestContext.CreateSeeded();
         var processor = SharedProcessor.Instance;
@@ -53,11 +52,11 @@ public class EnumAliasTests
             context);
         var absent = processor.Execute(QueryRequest.Create("Employee", [new CountOp()]), context);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(matched.EnumAliases, Is.Null);
-            Assert.That(absent.EnumAliases, Is.Null);
-        });
+            await Assert.That(matched.EnumAliases).IsNull();
+            await Assert.That(absent.EnumAliases).IsNull();
+        }
     }
 
     // The full round trip a deployed pre-rename client experiences: it filters by the name it was
@@ -75,29 +74,29 @@ public class EnumAliasTests
             .ToListAsync();
 
         var carol = rows.Single();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(carol.Name, Is.EqualTo("Carol"));
-            Assert.That(carol.Status, Is.EqualTo(Status.Freelancer));
-        });
+            await Assert.That(carol.Name).IsEqualTo("Carol");
+            await Assert.That(carol.Status).IsEqualTo(Status.Freelancer);
+        }
     }
 
     // Without aliases (no stamp -> server sends none), an unknown value name is still reported as a
     // stale client rather than a bare JsonException, so the failure diagnoses itself.
     [Test]
-    public void UnresolvableEnumValueReportsStaleClient()
+    public async Task UnresolvableEnumValueReportsStaleClient()
     {
         using var context = TestContext.CreateSeeded();
         var processor = SharedProcessor.Instance;
         var client = new ScryClient((request, _) => Task.FromResult(processor.Execute(request, context)));
 
-        var exception = Assert.ThrowsAsync<ScryStaleClientException>(() =>
+        var exception = (await Assert.ThrowsExactlyAsync<ScryStaleClientException>(() =>
             client.Source<Employee>("Employee")
                 .Where(_ => _.Status == Status.Freelancer)
-                .ToListAsync())!;
+                .ToListAsync()))!;
 
-        Assert.That(exception.Message, Does.Contain("'Contractor' is not a value of enum 'Status'"));
-        Assert.That(exception.Message, Does.Contain("regenerate"));
+        await Assert.That(exception.Message).Contains("'Contractor' is not a value of enum 'Status'");
+        await Assert.That(exception.Message).Contains("regenerate");
     }
 
     // A scalar terminal once read its payload directly, outside the alias scope a list's reader
@@ -113,11 +112,11 @@ public class EnumAliasTests
 
         var status = await client.Source<Employee>("Employee").MaxAsync(_ => _.Status);
 
-        Assert.That(status, Is.EqualTo(Status.Freelancer));
+        await Assert.That(status).IsEqualTo(Status.Freelancer);
     }
 
     [Test]
-    public void AliasesRoundTripTheWireAndAreOmittedWhenNull()
+    public async Task AliasesRoundTripTheWireAndAreOmittedWhenNull()
     {
         var payload = JsonSerializer.SerializeToElement(1);
         var response = QueryResponse.Create(ResultKind.Scalar, payload) with
@@ -127,16 +126,16 @@ public class EnumAliasTests
 
         var json = ScryJson.Serialize(response);
         var round = ScryJson.DeserializeResponse(json).EnumAliases!.Single();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(round.EnumName, Is.EqualTo("Status"));
-            Assert.That(round.ValueName, Is.EqualTo("Contractor"));
-            Assert.That(round.PreviousNames, Is.EqualTo(["Freelancer"]));
-        });
+            await Assert.That(round.EnumName).IsEqualTo("Status");
+            await Assert.That(round.ValueName).IsEqualTo("Contractor");
+            await Assert.That(round.PreviousNames).IsEquivalentTo(["Freelancer"], CollectionOrdering.Matching);
+        }
 
         // Absent aliases add nothing to the wire, and a response written before the field existed
         // still deserializes — the field is additive, not a wire break.
-        Assert.That(ScryJson.Serialize(QueryResponse.Create(ResultKind.Scalar, payload)), Does.Not.Contain("enumAliases"));
+        await Assert.That(ScryJson.Serialize(QueryResponse.Create(ResultKind.Scalar, payload))).DoesNotContain("enumAliases");
         var legacy = ScryJson.DeserializeResponse(
             """
             {
@@ -145,7 +144,7 @@ public class EnumAliasTests
               "payload": 1
             }
             """);
-        Assert.That(legacy.EnumAliases, Is.Null);
+        await Assert.That(legacy.EnumAliases).IsNull();
     }
 
     static ScryClient StaleClient(TestContext context)

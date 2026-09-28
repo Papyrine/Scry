@@ -1,5 +1,4 @@
-﻿[TestFixture]
-public class ClientRoundTripTests
+﻿public class ClientRoundTripTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
     record EmployeeRow(string Name, Status Status, string? ManagerName);
@@ -208,7 +207,7 @@ public class ClientRoundTripTests
             .Where(_ => _.Active)
             .CountAsync();
 
-        await Assert.ThatAsync(() => Task.FromResult(count), Is.EqualTo(3));
+        await Assert.That(count).IsEqualTo(3);
     }
 
     [Test]
@@ -222,7 +221,7 @@ public class ClientRoundTripTests
             .Where(_ => _.Name.StartsWith(prefix))
             .AnyAsync();
 
-        Assert.That(any, Is.False);
+        await Assert.That(any).IsFalse();
     }
 
     [Test]
@@ -246,14 +245,14 @@ public class ClientRoundTripTests
         var namesByStatus = await query.ToDictionaryAsync(_ => _.Name, _ => _.Status);
         var byStatus = await query.ToLookupAsync(_ => _.Status);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(array.Select(_ => _.Name), Is.EqualTo(["Aaron", "Alice", "Bob", "Carol"]));
-            Assert.That(hashSet, Has.Count.EqualTo(4));
-            Assert.That(byName.Keys, Is.EquivalentTo(["Aaron", "Alice", "Bob", "Carol"]));
-            Assert.That(namesByStatus["Alice"], Is.EqualTo(Status.FullTime));
-            Assert.That(byStatus[Status.FullTime].Select(_ => _.Name), Is.EquivalentTo(["Aaron", "Alice"]));
-        });
+            await Assert.That(array.Select(_ => _.Name)).IsEquivalentTo(["Aaron", "Alice", "Bob", "Carol"], CollectionOrdering.Matching);
+            await Assert.That(hashSet).Count().IsEqualTo(4);
+            await Assert.That(byName.Keys).IsEquivalentTo(["Aaron", "Alice", "Bob", "Carol"]);
+            await Assert.That(namesByStatus["Alice"]).IsEqualTo(Status.FullTime);
+            await Assert.That(byStatus[Status.FullTime].Select(_ => _.Name)).IsEquivalentTo(["Aaron", "Alice"]);
+        }
     }
 
     [Test]
@@ -283,15 +282,15 @@ public class ClientRoundTripTests
                     _.Manager!.Name))
             .ToPageAsync(2);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(first.Items.Select(_ => _.Name), Is.EqualTo(["Aaron", "Alice"]));
-            Assert.That(first.HasMore, Is.True);
-            Assert.That(second.Items.Select(_ => _.Name), Is.EqualTo(["Bob", "Carol"]));
-            Assert.That(second.HasMore, Is.False);
+            await Assert.That(first.Items.Select(_ => _.Name)).IsEquivalentTo(["Aaron", "Alice"], CollectionOrdering.Matching);
+            await Assert.That(first.HasMore).IsTrue();
+            await Assert.That(second.Items.Select(_ => _.Name)).IsEquivalentTo(["Bob", "Carol"], CollectionOrdering.Matching);
+            await Assert.That(second.HasMore).IsFalse();
             // The Skip page is offset paging, so it carries no cursor; the unskipped page is seek-safe.
-            Assert.That(second.Cursor, Is.Null);
-        });
+            await Assert.That(second.Cursor).IsNull();
+        }
     }
 
     [Test]
@@ -316,16 +315,16 @@ public class ClientRoundTripTests
 
         string[] firstPage = ["Aaron", "Alice"];
         string[] secondPage = ["Bob", "Carol"];
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(first.Items.Select(_ => _.Name), Is.EqualTo(firstPage));
-            Assert.That(first.HasMore, Is.True);
-            Assert.That(first.Cursor, Is.Not.Null);
-            Assert.That(second.Items.Select(_ => _.Name), Is.EqualTo(secondPage));
-            Assert.That(second.HasMore, Is.False);
+            await Assert.That(first.Items.Select(_ => _.Name)).IsEquivalentTo(firstPage, CollectionOrdering.Matching);
+            await Assert.That(first.HasMore).IsTrue();
+            await Assert.That(first.Cursor).IsNotNull();
+            await Assert.That(second.Items.Select(_ => _.Name)).IsEquivalentTo(secondPage, CollectionOrdering.Matching);
+            await Assert.That(second.HasMore).IsFalse();
             // Last page — nothing left to resume.
-            Assert.That(second.Cursor, Is.Null);
-        });
+            await Assert.That(second.Cursor).IsNull();
+        }
     }
 
     // Guid and bool define no relational operator, so the seek past a cursor cannot be written as a
@@ -346,13 +345,13 @@ public class ClientRoundTripTests
 
         // The policy hides the closed ticket, so the two open ones are the whole result.
         string[] open = ["Login bug", "Signup crash"];
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(first.Cursor, Is.Not.Null);
-            Assert.That(first.HasMore, Is.True);
-            Assert.That(second.HasMore, Is.False);
-            Assert.That(first.Items.Concat(second.Items).Select(_ => _.Name), Is.EquivalentTo(open));
-        });
+            await Assert.That(first.Cursor).IsNotNull();
+            await Assert.That(first.HasMore).IsTrue();
+            await Assert.That(second.HasMore).IsFalse();
+            await Assert.That(first.Items.Concat(second.Items).Select(_ => _.Name)).IsEquivalentTo(open);
+        }
     }
 
     [Test]
@@ -382,7 +381,7 @@ public class ClientRoundTripTests
         }
 
         string[] all = ["Aaron", "Alice", "Bob", "Carol"];
-        Assert.That(names, Is.EquivalentTo(all));
+        await Assert.That(names).IsEquivalentTo(all);
     }
 
     [Test]
@@ -402,12 +401,12 @@ public class ClientRoundTripTests
                     _.Manager!.Name))
             .ToPageAsync(2);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(page.Items, Has.Count.EqualTo(2));
-            Assert.That(page.HasMore, Is.True);
-            Assert.That(page.Cursor, Is.Null);
-        });
+            await Assert.That(page.Items).Count().IsEqualTo(2);
+            await Assert.That(page.HasMore).IsTrue();
+            await Assert.That(page.Cursor).IsNull();
+        }
     }
 
     record TicketName(string Name);
@@ -441,7 +440,7 @@ public class ClientRoundTripTests
 
         // Status order is FullTime, PartTime, Contractor; the two full-timers (by Name) come first.
         string[] all = ["Aaron", "Alice", "Bob", "Carol"];
-        Assert.That(names, Is.EqualTo(all));
+        await Assert.That(names).IsEquivalentTo(all, CollectionOrdering.Matching);
     }
 
     [Test]
@@ -457,23 +456,23 @@ public class ClientRoundTripTests
             .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name))
             .ToPageAsync(2);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(page.Items, Has.Count.EqualTo(2));
-            Assert.That(page.HasMore, Is.True);
-            Assert.That(page.Cursor, Is.Null);
-        });
+            await Assert.That(page.Items).Count().IsEqualTo(2);
+            await Assert.That(page.HasMore).IsTrue();
+            await Assert.That(page.Cursor).IsNull();
+        }
     }
 
     [Test]
-    public void ToAsyncEnumerableNeedsATransportThatStreams()
+    public async Task ToAsyncEnumerableNeedsATransportThatStreams()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // This client is built over a single-response transport. Rather than quietly buffering the
         // whole result and calling it a stream, the terminal says so.
-        var exception = Assert.ThrowsAsync<NotSupportedException>(async () =>
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(async () =>
         {
             await foreach (var _ in client.Source<Employee>("Employee").ToAsyncEnumerable())
             {
@@ -481,7 +480,7 @@ public class ClientRoundTripTests
             }
         });
 
-        Assert.That(exception!.Message, Does.Contain("does not stream"));
+        await Assert.That(exception!.Message).Contains("does not stream");
     }
 
     [Test]
@@ -519,12 +518,12 @@ public class ClientRoundTripTests
     }
 
     [Test]
-    public void UnsupportedProjectionThrows()
+    public async Task UnsupportedProjectionThrows()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        Assert.ThrowsAsync<NotSupportedException>(() =>
+        await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>
             client.Source<Employee>("Employee")
                 .Select(_ => _.Name)
                 .ToListAsync());
@@ -533,12 +532,12 @@ public class ClientRoundTripTests
     // A method outside the callable set that reads the row has nowhere to run. The refusal names it,
     // since the translator is the only reporter for a query the analyzer could not see into.
     [Test]
-    public void ClientSideCallIsNamedInTheRefusal()
+    public async Task ClientSideCallIsNamedInTheRefusal()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
-        var exception = Assert.ThrowsAsync<NotSupportedException>(() =>
+        var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>
             client.Source<Employee>("Employee")
                 .Where(_ => Munge(_.Name) == "x")
                 .Select(_ => new
@@ -547,8 +546,8 @@ public class ClientRoundTripTests
                 })
                 .ToListAsync());
 
-        Assert.That(exception!.Message, Does.Contain("ClientRoundTripTests.Munge"));
-        Assert.That(exception.Message, Does.Contain("client-side"));
+        await Assert.That(exception!.Message).Contains("ClientRoundTripTests.Munge");
+        await Assert.That(exception.Message).Contains("client-side");
     }
 
     static string Munge(string value) => value;

@@ -4,7 +4,6 @@
 /// reported to an auditor and still answered, which is what makes tightening a limit something other
 /// than a guess.
 /// </summary>
-[TestFixture]
 public class LimitWatchTests
 {
     [Test]
@@ -38,7 +37,7 @@ public class LimitWatchTests
         await using var context = TestContext.CreateSeeded();
         Watching(0.5).Execute(Take(4), context, provider);
 
-        Assert.That(auditor.Entries.Single().ApproachedLimits, Is.Null);
+        await Assert.That(auditor.Entries.Single().ApproachedLimits).IsNull();
     }
 
     [Test]
@@ -50,7 +49,7 @@ public class LimitWatchTests
         await using var context = TestContext.CreateSeeded();
         SharedProcessor.Instance.Execute(Take(6), context, provider);
 
-        Assert.That(auditor.Entries.Single().ApproachedLimits, Is.Null);
+        await Assert.That(auditor.Entries.Single().ApproachedLimits).IsNull();
     }
 
     // A rejected query broke a limit rather than approached one, and measuring it would mean walking
@@ -63,14 +62,14 @@ public class LimitWatchTests
         var processor = Watching(0.5);
 
         await using var context = TestContext.CreateSeeded();
-        Assert.Throws<ScryValidationException>(() => processor.Execute(Take(50), context, provider));
+        Assert.ThrowsExactly<ScryValidationException>(() => processor.Execute(Take(50), context, provider));
 
         var entry = auditor.Entries.Single();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(entry.Outcome, Is.EqualTo(ScryQueryOutcome.Rejected));
-            Assert.That(entry.ApproachedLimits, Is.Null);
-        });
+            await Assert.That(entry.Outcome).IsEqualTo(ScryQueryOutcome.Rejected);
+            await Assert.That(entry.ApproachedLimits).IsNull();
+        }
     }
 
     // Nothing is measured until something is there to read it, so the walk is not paid for by a
@@ -80,7 +79,7 @@ public class LimitWatchTests
     {
         await using var context = TestContext.CreateSeeded();
 
-        Assert.DoesNotThrow(() => Watching(0.5).Execute(Take(6), context));
+        await Assert.That(() => Watching(0.5).Execute(Take(6), context)).ThrowsNothing();
     }
 
     // Each of the counts below mirrors a rule the validator applies as it walks, so both sides are
@@ -116,7 +115,7 @@ public class LimitWatchTests
         var processor = Watching(1, _ => _.MaxInValues = 3);
 
         await using var context = TestContext.CreateSeeded();
-        Assert.Throws<ScryValidationException>(() => processor.Execute(In(4), context));
+        Assert.ThrowsExactly<ScryValidationException>(() => processor.Execute(In(4), context));
     }
 
     [Test]
@@ -147,7 +146,7 @@ public class LimitWatchTests
         var processor = Watching(1, _ => _.MaxNavigationDepth = 2);
 
         await using var context = TestContext.CreateSeeded();
-        Assert.Throws<ScryValidationException>(
+        Assert.ThrowsExactly<ScryValidationException>(
             () => processor.Execute(Path(["Manager", "Manager", "Name"]), context));
     }
 
@@ -179,22 +178,23 @@ public class LimitWatchTests
         var processor = Watching(1, _ => _.MaxProjectionMembers = 2);
 
         await using var context = TestContext.CreateSeeded();
-        Assert.Throws<ScryValidationException>(() => processor.Execute(Select(3), context));
-    }
-
-    [TestCase(0d)]
-    [TestCase(1.5d)]
-    [TestCase(-0.5d)]
-    public void TheFractionIsCheckedAtStartup(double fraction)
-    {
-        var exception = Assert.Throws<Exception>(() => Watching(fraction));
-
-        Assert.That(exception!.Message, Does.Contain("LimitWatchFraction"));
+        Assert.ThrowsExactly<ScryValidationException>(() => processor.Execute(Select(3), context));
     }
 
     [Test]
-    public void OneIsAllowed() =>
-        Assert.DoesNotThrow(() => Watching(1));
+    [Arguments(0d)]
+    [Arguments(1.5d)]
+    [Arguments(-0.5d)]
+    public async Task TheFractionIsCheckedAtStartup(double fraction)
+    {
+        var exception = Assert.ThrowsExactly<Exception>(() => Watching(fraction));
+
+        await Assert.That(exception!.Message).Contains("LimitWatchFraction");
+    }
+
+    [Test]
+    public async Task OneIsAllowed() =>
+        await Assert.That(() => Watching(1)).ThrowsNothing();
 
     static ScryProcessor Watching(double fraction, Action<ScryOptions>? configure = null) =>
         ScryProcessor.Create<TestContext>(

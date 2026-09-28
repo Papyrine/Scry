@@ -5,7 +5,7 @@ using Bunit;
 /// <see cref="ScrySidecarOptions.Never"/>, and decidable by a predicate over the app's services —
 /// which is how an app keys it off the current user.
 /// </summary>
-[TestFixture]
+[NotInParallel]
 public class SidecarComponentTests
 {
     [Test]
@@ -32,7 +32,7 @@ public class SidecarComponentTests
         // The predicate runs after the first render; give it that pass before asserting absence.
         await Task.Delay(50);
         component.Render();
-        Assert.That(component.FindAll("[data-testid=sidecar-toggle]"), Is.Empty);
+        await Assert.That(component.FindAll("[data-testid=sidecar-toggle]")).IsEmpty();
     }
 
     // The predicate receives the app's services, so a decision from the current context — here a
@@ -73,13 +73,14 @@ public class SidecarComponentTests
 
         await Task.Delay(50);
         component.Render();
-        Assert.That(component.FindAll("[data-testid=sidecar-toggle]"), Is.Empty);
+        await Assert.That(component.FindAll("[data-testid=sidecar-toggle]")).IsEmpty();
     }
 
     // Two kinds of exchange are shown without a body, each for a reason of its own, and the panel
     // says which — an empty pane would read as a response that was empty.
-    [TestCase("/api/query/stream", "application/x-ndjson", "streams are read row by row")]
-    [TestCase("/api/query/attachment", "application/octet-stream", "attachment bytes are never cached")]
+    [Test]
+    [Arguments("/api/query/stream", "application/x-ndjson", "streams are read row by row")]
+    [Arguments("/api/query/attachment", "application/octet-stream", "attachment bytes are never cached")]
     public async Task AnExchangeWhoseBodyIsNeverReadSaysWhy(string path, string contentType, string why)
     {
         var options = new ScrySidecarOptions();
@@ -108,11 +109,11 @@ public class SidecarComponentTests
         await component.Find("[data-testid=sidecar-entries] .scry-sidecar-row").ClickAsync(new());
 
         var detail = component.Find("[data-testid=sidecar-detail]");
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(detail.TextContent, Does.Contain($"Body not captured — {why}"));
-            Assert.That(component.FindAll("[data-testid=sidecar-response]"), Is.Empty);
-        });
+            await Assert.That(detail.TextContent).Contains($"Body not captured — {why}");
+            await Assert.That(component.FindAll("[data-testid=sidecar-response]")).IsEmpty();
+        }
     }
 
     // A live query is a session rather than an exchange, so its row shows what state it is in and
@@ -126,14 +127,14 @@ public class SidecarComponentTests
         var component = await Panel(context, options, store);
         var row = component.Find("[data-testid=sidecar-session]");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(row.TextContent, Does.Contain("Order"));
-            Assert.That(component.Find("[data-testid=sidecar-session-state]").TextContent, Is.EqualTo("closed"));
+            await Assert.That(row.TextContent).Contains("Order");
+            await Assert.That(component.Find("[data-testid=sidecar-session-state]").TextContent).IsEqualTo("closed");
 
             // One answer, and how long since anything last arrived.
-            Assert.That(component.Find("[data-testid=sidecar-session-counts]").TextContent, Does.StartWith("1 ·"));
-        });
+            await Assert.That(component.Find("[data-testid=sidecar-session-counts]").TextContent).StartsWith("1 ·");
+        }
     }
 
     // The pane the panel could never fill before: a live query's answer.
@@ -146,11 +147,11 @@ public class SidecarComponentTests
         var component = await Panel(context, options, store);
         await component.Find("[data-testid=sidecar-session]").ClickAsync(new());
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(component.Find("[data-testid=sidecar-session-summary]").TextContent, Does.Contain("1 answer"));
-            Assert.That(component.Find("[data-testid=sidecar-latest-answer]").TextContent, Does.Contain("\"kind\""));
-        });
+            await Assert.That(component.Find("[data-testid=sidecar-session-summary]").TextContent).Contains("1 answer");
+            await Assert.That(component.Find("[data-testid=sidecar-latest-answer]").TextContent).Contains("\"kind\"");
+        }
     }
 
     // The connections are under the row they held open, and each one's events under it.
@@ -161,29 +162,29 @@ public class SidecarComponentTests
         await using var context = new BunitContext();
         var component = await Panel(context, options, store);
 
-        Assert.That(component.FindAll("[data-testid=sidecar-connection]"), Is.Empty);
+        await Assert.That(component.FindAll("[data-testid=sidecar-connection]")).IsEmpty();
         await component.Find("[data-testid=sidecar-expand]").ClickAsync(new());
 
         var connections = component.FindAll("[data-testid=sidecar-connection]");
-        Assert.That(connections, Has.Count.EqualTo(1));
+        await Assert.That(connections).Count().IsEqualTo(1);
         await connections[0].ClickAsync(new());
 
         var events = component.Find("[data-testid=sidecar-events]").TextContent;
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(events, Does.Contain(ScryLive.Result));
-            Assert.That(events, Does.Contain(ScryLive.Ping));
-            Assert.That(events, Does.Contain("a3f1"));
-            Assert.That(component.Find("[data-testid=sidecar-connection-summary]").TextContent, Does.Contain("lifetime"));
-        });
+            await Assert.That(events).Contains(ScryLive.Result);
+            await Assert.That(events).Contains(ScryLive.Ping);
+            await Assert.That(events).Contains("a3f1");
+            await Assert.That(component.Find("[data-testid=sidecar-connection-summary]").TextContent).Contains("lifetime");
+        }
 
         // An answer that was kept opens onto itself; a heartbeat has nothing to open onto.
-        Assert.That(component.FindAll("[data-testid=sidecar-event-data]"), Is.Empty);
+        await Assert.That(component.FindAll("[data-testid=sidecar-event-data]")).IsEmpty();
         await component.FindAll("[data-testid=sidecar-events] tr")[0].ClickAsync(new());
-        Assert.That(component.Find("[data-testid=sidecar-event-data]").TextContent, Does.Contain("\"kind\""));
+        await Assert.That(component.Find("[data-testid=sidecar-event-data]").TextContent).Contains("\"kind\"");
 
         await component.FindAll("[data-testid=sidecar-events] tr")[1].ClickAsync(new());
-        Assert.That(component.FindAll("[data-testid=sidecar-event-data]"), Is.Empty);
+        await Assert.That(component.FindAll("[data-testid=sidecar-event-data]")).IsEmpty();
     }
 
     // A command is named by what it is rather than by the path it was posted to, and its row says
@@ -208,18 +209,18 @@ public class SidecarComponentTests
         var component = await Panel(context, options, store);
         var row = component.Find("[data-testid=sidecar-entries] .scry-sidecar-row");
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(row.TextContent, Does.Contain("RenameThing"));
-            Assert.That(component.Find("[data-testid=sidecar-command-state]").TextContent, Is.EqualTo("completed"));
-        });
+            await Assert.That(row.TextContent).Contains("RenameThing");
+            await Assert.That(component.Find("[data-testid=sidecar-command-state]").TextContent).IsEqualTo("completed");
+        }
 
         await row.ClickAsync(new());
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(component.Find("[data-testid=sidecar-command-summary]").TextContent, Does.Contain(stub.LastId.ToString("D")));
-            Assert.That(component.Find("[data-testid=sidecar-command-result]").TextContent, Does.Contain("\"id\": 3"));
-        });
+            await Assert.That(component.Find("[data-testid=sidecar-command-summary]").TextContent).Contains(stub.LastId.ToString("D"));
+            await Assert.That(component.Find("[data-testid=sidecar-command-result]").TextContent).Contains("\"id\": 3");
+        }
     }
 
     // A command sent somewhere the handler cannot watch — a hub connection, here a transport of the
@@ -240,12 +241,12 @@ public class SidecarComponentTests
         var row = component.Find("[data-testid=sidecar-entries] .scry-sidecar-row");
         await row.ClickAsync(new());
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(row.TextContent, Does.Contain("COMMAND"));
-            Assert.That(component.Find("[data-testid=sidecar-command-state]").TextContent, Is.EqualTo("completed"));
-            Assert.That(component.Find("[data-testid=sidecar-command-summary]").TextContent, Does.Contain("reported by the client"));
-        });
+            await Assert.That(row.TextContent).Contains("COMMAND");
+            await Assert.That(component.Find("[data-testid=sidecar-command-state]").TextContent).IsEqualTo("completed");
+            await Assert.That(component.Find("[data-testid=sidecar-command-summary]").TextContent).Contains("reported by the client");
+        }
     }
 
     static async IAsyncEnumerable<CommandReceipt> Receipts(params CommandReceipt[] receipts)

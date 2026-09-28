@@ -4,7 +4,6 @@
 /// to read exactly the rows its base's policy hides. Every source applies the whole chain, base-most
 /// first, however each level declares it — <c>[ReturnableWith]</c> or a programmatic AddPolicy.
 /// </summary>
-[TestFixture]
 public class PolicyInheritanceTests
 {
     [Test]
@@ -20,7 +19,7 @@ public class PolicyInheritanceTests
             .Select(_ => new {_.Name})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Live notice"]));
+        await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(["Live notice"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -40,8 +39,8 @@ public class PolicyInheritanceTests
             .Select(_ => new {_.Name})
             .ToListAsync();
 
-        Assert.That(narrowed.Select(_ => _.Name), Is.EqualTo(direct.Select(_ => _.Name)));
-        Assert.That(narrowed.Select(_ => _.Name), Is.EqualTo(["Live notice"]));
+        await Assert.That(narrowed.Select(_ => _.Name)).IsEquivalentTo(direct.Select(_ => _.Name), CollectionOrdering.Matching);
+        await Assert.That(narrowed.Select(_ => _.Name)).IsEquivalentTo(["Live notice"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -57,7 +56,7 @@ public class PolicyInheritanceTests
             .Select(_ => new {_.Name})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Live notice", "Live post", "Unpinned notice"]));
+        await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(["Live notice", "Live post", "Unpinned notice"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -73,7 +72,7 @@ public class PolicyInheritanceTests
             .Select(_ => new {_.Name})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Van"]));
+        await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(["Van"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -91,7 +90,7 @@ public class PolicyInheritanceTests
             .Select(_ => new {_.Name})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Name), Is.EqualTo(["Live notice", "Unpinned notice"]));
+        await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(["Live notice", "Unpinned notice"], CollectionOrdering.Matching);
     }
 
     static ScryProcessor Processor(Action<ScryOptions> extra) =>

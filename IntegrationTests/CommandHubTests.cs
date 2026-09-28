@@ -13,17 +13,18 @@ using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 /// exceptions they surface as, the limits — except the connection, which a pending command outlives.
 /// </summary>
 /// <remarks>Long polling, because the test server has no sockets.</remarks>
-[TestFixture]
+[NotInParallel]
+[DependsOn<HttpRoundTripTests.StaleClient>(nameof(HttpRoundTripTests.StaleClient.AClientThatDoesNotKnowRetriesInABody), ProceedOnFailure = true)]
 public class CommandHubTests
 {
-    SqlDatabase<LedgerContext> database = null!;
+    static SqlDatabase<LedgerContext> database = null!;
 
-    [OneTimeSetUp]
-    public async Task BuildDatabase() =>
+    [Before(Class)]
+    public static async Task BuildDatabase() =>
         database = await LedgerData.Instance.Build();
 
-    [OneTimeTearDown]
-    public async Task DropDatabase() =>
+    [After(Class)]
+    public static async Task DropDatabase() =>
         await database.DisposeAsync();
 
     [Test]
@@ -33,11 +34,11 @@ public class CommandHubTests
 
         var outcome = await server.Client.SendCommandAsync<OpenLedgerRequest, OpenedLedger>(new() {Name = "Over the hub"});
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(outcome.Status, Is.EqualTo(ScryCommandStatus.Completed));
-            Assert.That(outcome.Value.Id, Is.GreaterThan(3));
-        });
+            await Assert.That(outcome.Status).IsEqualTo(ScryCommandStatus.Completed);
+            await Assert.That(outcome.Value.Id).IsGreaterThan(3);
+        }
     }
 
     [Test]
@@ -48,11 +49,11 @@ public class CommandHubTests
         server.Client.CommandWait = TimeSpan.FromMilliseconds(100);
 
         var outcome = await server.Client.SendCommandAsync(new RenameLedgerRequest {Id = 1, Name = "Cash"});
-        Assert.That(outcome.Status, Is.EqualTo(ScryCommandStatus.Pending));
+        await Assert.That(outcome.Status).IsEqualTo(ScryCommandStatus.Pending);
 
         gate.SetResult();
 
-        Assert.That((await outcome.Completion.WaitAsync(patience)).Status, Is.EqualTo(ScryCommandStatus.Completed));
+        await Assert.That((await outcome.Completion.WaitAsync(patience)).Status).IsEqualTo(ScryCommandStatus.Completed);
     }
 
     // The connection goes while the command is in flight. The command does not: the server finishes
@@ -75,14 +76,14 @@ public class CommandHubTests
         };
 
         var outcome = await client.SendCommandAsync(new RenameLedgerRequest {Id = 2, Name = "Bank"});
-        Assert.That(outcome.Status, Is.EqualTo(ScryCommandStatus.Pending));
+        await Assert.That(outcome.Status).IsEqualTo(ScryCommandStatus.Pending);
 
         await server.Connection.StopAsync();
         await reattaching.Task.WaitAsync(patience);
         gate.SetResult();
         await server.Connection.StartAsync();
 
-        Assert.That((await outcome.Completion.WaitAsync(patience)).Status, Is.EqualTo(ScryCommandStatus.Completed));
+        await Assert.That((await outcome.Completion.WaitAsync(patience)).Status).IsEqualTo(ScryCommandStatus.Completed);
     }
 
     [Test]
@@ -92,11 +93,11 @@ public class CommandHubTests
 
         var outcome = await server.Client.SendCommandAsync(new RenameLedgerRequest {Id = 3, Name = "Unlocked"});
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(outcome.Status, Is.EqualTo(ScryCommandStatus.Failed));
-            Assert.That(outcome.Error, Is.EqualTo(ScryCommandNotFoundException.TargetMessage));
-        });
+            await Assert.That(outcome.Status).IsEqualTo(ScryCommandStatus.Failed);
+            await Assert.That(outcome.Error).IsEqualTo(ScryCommandNotFoundException.TargetMessage);
+        }
     }
 
     [Test]
@@ -104,13 +105,13 @@ public class CommandHubTests
     {
         await using var server = await Server.Start(database);
 
-        var exception = Assert.ThrowsAsync<ScryRequestException>(() => server.Client.SendCommandAsync(new TeleportLedger()))!;
+        var exception = (await Assert.ThrowsExactlyAsync<ScryRequestException>(() => server.Client.SendCommandAsync(new TeleportLedger())))!;
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(exception.Code, Is.EqualTo(ScryErrorCode.Validation));
-            Assert.That(exception.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        });
+            await Assert.That(exception.Code).IsEqualTo(ScryErrorCode.Validation);
+            await Assert.That(exception.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        }
     }
 
     [Test]
@@ -118,7 +119,7 @@ public class CommandHubTests
     {
         await using var server = await Server.Start(database, user: "mallory");
 
-        Assert.ThrowsAsync<ScryPermissionException>(() => server.Client.SendCommandAsync(new RenameLedgerRequest {Id = 1, Name = "Mine"}));
+        await Assert.ThrowsExactlyAsync<ScryPermissionException>(() => server.Client.SendCommandAsync(new RenameLedgerRequest {Id = 1, Name = "Mine"}));
     }
 
     // SignalR bounds a message's size and nothing about what it means; the command limit is the processor's.
@@ -127,9 +128,9 @@ public class CommandHubTests
     {
         await using var server = await Server.Start(database, _ => _.MaxCommandBytes = 64);
 
-        var exception = Assert.ThrowsAsync<ScryRequestException>(() => server.Client.SendCommandAsync(new OpenLedgerRequest {Name = new('x', 200)}))!;
+        var exception = (await Assert.ThrowsExactlyAsync<ScryRequestException>(() => server.Client.SendCommandAsync(new OpenLedgerRequest {Name = new('x', 200)})))!;
 
-        Assert.That(exception.Code, Is.EqualTo(ScryErrorCode.PayloadTooLarge));
+        await Assert.That(exception.Code).IsEqualTo(ScryErrorCode.PayloadTooLarge);
     }
 
     [Test]
@@ -145,12 +146,12 @@ public class CommandHubTests
         var gate = server.Gate();
         server.Client.CommandWait = TimeSpan.Zero;
         var held = await server.Client.SendCommandAsync(new RenameLedgerRequest {Id = 1, Name = "Cash"});
-        Assert.That(held.Status, Is.EqualTo(ScryCommandStatus.Pending));
+        await Assert.That(held.Status).IsEqualTo(ScryCommandStatus.Pending);
 
-        var exception = Assert.ThrowsAsync<ScryRequestException>(() => server.Client.SendCommandAsync(new RenameLedgerRequest {Id = 2, Name = "Bank"}))!;
+        var exception = (await Assert.ThrowsExactlyAsync<ScryRequestException>(() => server.Client.SendCommandAsync(new RenameLedgerRequest {Id = 2, Name = "Bank"})))!;
         gate.SetResult();
 
-        Assert.That(exception.Code, Is.EqualTo(ScryErrorCode.CommandLimit));
+        await Assert.That(exception.Code).IsEqualTo(ScryErrorCode.CommandLimit);
     }
 
     [Test]
@@ -162,12 +163,12 @@ public class CommandHubTests
         await alice.Client.Ready;
         await mallory.Client.Ready;
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(alice.Client.Can("RenameLedger"), Is.True);
-            Assert.That(mallory.Client.Can("RenameLedger"), Is.False);
-            Assert.That(mallory.Client.Can("OpenLedger"), Is.True);
-        });
+            await Assert.That(alice.Client.Can("RenameLedger")).IsTrue();
+            await Assert.That(mallory.Client.Can("RenameLedger")).IsFalse();
+            await Assert.That(mallory.Client.Can("OpenLedger")).IsTrue();
+        }
     }
 
     // A hub's methods are its type's, so a server with commands off has a method that says so.
@@ -176,14 +177,14 @@ public class CommandHubTests
     {
         await using var server = await Server.Start(database, _ => _.MaxPendingCommands = 0);
 
-        var exception = Assert.ThrowsAsync<ScryRequestException>(() => server.Client.SendCommandAsync(new OpenLedgerRequest {Name = "x"}))!;
+        var exception = (await Assert.ThrowsExactlyAsync<ScryRequestException>(() => server.Client.SendCommandAsync(new OpenLedgerRequest {Name = "x"})))!;
         await server.Client.Ready;
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(exception.Body, Does.Contain(nameof(ScryOptions.MaxPendingCommands)));
-            Assert.That(server.Client.Can("OpenLedger"), Is.False);
-        });
+            await Assert.That(exception.Body).Contains(nameof(ScryOptions.MaxPendingCommands));
+            await Assert.That(server.Client.Can("OpenLedger")).IsFalse();
+        }
     }
 
     static TimeSpan patience = TimeSpan.FromSeconds(20);

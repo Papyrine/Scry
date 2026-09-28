@@ -1,8 +1,9 @@
-// Eight at a time, against NUnit's default of one worker per core. What a running test costs here is a
-// booted WASM runtime, so the ceiling is the agent's memory rather than the machine's cores, and a
-// core's worth of workers apiece is the "sbrk failed to allocate" BrowserFixture warns about arriving
-// all at once. Eight is where the wall clock stops falling anyway: twelve measured within noise of it.
-[assembly: LevelOfParallelism(8)]
+// Eight at a time, against TUnit's default of as many as the machine's cores allow. What a running test
+// costs here is a booted WASM runtime, so the ceiling is the agent's memory rather than the machine's
+// cores, and a core's worth of workers apiece is the "sbrk failed to allocate" BrowserFixture warns
+// about arriving all at once. Eight is where the wall clock stops falling anyway: twelve measured
+// within noise of it.
+[assembly: ParallelLimiter<EightAtOnce>]
 
 // Drives the live WebAssembly UI in a headless browser, asserting behaviour and snapshotting the
 // rendered markup as text. The pixel snapshots live in UiScreenshotTests.
@@ -11,8 +12,6 @@
 // Its tests run in parallel with each other: the cost of one is a WASM boot that the machine spends
 // mostly waiting on, and a page opened through the fixture already carries a context — and so a
 // storage — of its own, which is what keeps two of them from meeting.
-[TestFixture]
-[Parallelizable(ParallelScope.Children)]
 [Category("Browser")]
 public class UiSnapshotTests :
     BrowserFixture
@@ -56,30 +55,31 @@ public class UiSnapshotTests :
     // Every embedded asset, and the host page, carries an ETag and asks to be revalidated: an
     // unchanged asset is a 304 on the next visit rather than a download of the Roslyn bundle, and a
     // changed one is new bytes rather than a stale copy failing the boot manifest's integrity check.
-    [TestCase("/scry")]
-    [TestCase("/scry/_framework/dotnet.js")]
-    [TestCase("/scry/_framework/Scry.Client.dll")]
-    [TestCase("/scry/js/scry.js")]
+    [Test]
+    [Arguments("/scry")]
+    [Arguments("/scry/_framework/dotnet.js")]
+    [Arguments("/scry/_framework/Scry.Client.dll")]
+    [Arguments("/scry/js/scry.js")]
     public async Task ExplorerAssetsRevalidate(string path)
     {
         using var http = new HttpClient();
         using var first = await http.GetAsync($"{BaseUrl}{path}");
 
-        Assert.That(first.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        Assert.That(first.Headers.CacheControl?.NoCache, Is.True);
+        await Assert.That(first.StatusCode).IsEqualTo(HttpStatusCode.OK);
+        await Assert.That(first.Headers.CacheControl?.NoCache).IsTrue();
         var tag = first.Headers.ETag;
-        Assert.That(tag, Is.Not.Null);
+        await Assert.That(tag).IsNotNull();
 
         using var held = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}{path}");
         held.Headers.IfNoneMatch.Add(tag!);
         using var second = await http.SendAsync(held);
-        Assert.That(second.StatusCode, Is.EqualTo(HttpStatusCode.NotModified));
-        Assert.That(second.Headers.ETag, Is.EqualTo(tag));
+        await Assert.That(second.StatusCode).IsEqualTo(HttpStatusCode.NotModified);
+        await Assert.That(second.Headers.ETag).IsEqualTo(tag);
 
         using var stale = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}{path}");
         stale.Headers.IfNoneMatch.Add(new("\"stale\""));
         using var third = await http.SendAsync(stale);
-        Assert.That(third.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        await Assert.That(third.StatusCode).IsEqualTo(HttpStatusCode.OK);
     }
 
     // The host page is served under a Content-Security-Policy: its own origin for everything, the .NET
@@ -102,14 +102,12 @@ public class UiSnapshotTests :
             .Select(_ => $"'sha256-{Convert.ToBase64String(_)}'")
             .ToList();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(hashes, Has.Count.EqualTo(2));
-            Assert.That(
-                policy,
-                Is.EqualTo(
-                    $"default-src 'self'; script-src 'self' 'wasm-unsafe-eval' {hashes[0]} {hashes[1]}; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'none'"));
-        });
+            await Assert.That(hashes).Count().IsEqualTo(2);
+            await Assert.That(policy).IsEqualTo(
+                    $"default-src 'self'; script-src 'self' 'wasm-unsafe-eval' {hashes[0]} {hashes[1]}; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'none'");
+        }
     }
 
     // A browser folds a 304's headers into the copy it kept, so the policy has to be on the
@@ -126,11 +124,11 @@ public class UiSnapshotTests :
         held.Headers.IfNoneMatch.Add(first.Headers.ETag!);
         using var second = await http.SendAsync(held);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(second.StatusCode, Is.EqualTo(HttpStatusCode.NotModified));
-            Assert.That(second.Headers.GetValues("Content-Security-Policy").Single(), Is.EqualTo(policy));
-        });
+            await Assert.That(second.StatusCode).IsEqualTo(HttpStatusCode.NotModified);
+            await Assert.That(second.Headers.GetValues("Content-Security-Policy").Single()).IsEqualTo(policy);
+        }
     }
 
     // The check behind every browser test here: a refusal reaches the console the fixture records. A
@@ -146,11 +144,11 @@ public class UiSnapshotTests :
 
         var refused = TakePolicyRefusals();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(refused, Is.Not.Empty);
-            Assert.That(refused[0], Does.Contain("inline script"));
-        });
+            await Assert.That(refused).IsNotEmpty();
+            await Assert.That(refused[0]).Contains("inline script");
+        }
     }
 
     // An asset carries no policy of its own: what a page loads is governed by the page's.
@@ -160,7 +158,7 @@ public class UiSnapshotTests :
         using var http = new HttpClient();
         using var response = await http.GetAsync($"{BaseUrl}/scry/js/scry.js");
 
-        Assert.That(response.Headers.Contains("Content-Security-Policy"), Is.False);
+        await Assert.That(response.Headers.Contains("Content-Security-Policy")).IsFalse();
     }
 
     // Verifies the Scry explorer (a separate Blazor WASM app, embedded in and served by the
@@ -181,7 +179,7 @@ public class UiSnapshotTests :
 
         // The action buttons carry explanatory tooltips.
         var runTooltip = await page.Locator("[data-testid='run']").GetAttributeAsync("title");
-        Assert.That(runTooltip, Does.Contain("Ctrl+Enter"));
+        await Assert.That(runTooltip).Contains("Ctrl+Enter");
     }
 
     // Snapshots the explorer's own rendered markup (the App.razor chrome: heading, action bar, and
@@ -242,7 +240,7 @@ public class UiSnapshotTests :
 
         var height = await page.EvaluateAsync<double>(
             "() => document.querySelector('.scry-editor').getBoundingClientRect().height");
-        Assert.That(height, Is.GreaterThan(100), "editor host height (the bug rendered it ~0)");
+        await Assert.That(height).IsGreaterThan(100).Because("editor host height (the bug rendered it ~0)");
 
         // Type the way a user does: click into the editor to focus it, then type on the keyboard.
         await page.SetEditorValueAsync("");
@@ -250,7 +248,7 @@ public class UiSnapshotTests :
         await page.Keyboard.TypeAsync("Query");
 
         var value = await page.EvaluateAsync<string>("() => monaco.editor.getEditors()[0].getValue()");
-        Assert.That(value, Is.EqualTo("Query"), "typed text should reach the editor model");
+        await Assert.That(value).IsEqualTo("Query").Because("typed text should reach the editor model");
     }
 
     // Proves Roslyn runs in the browser and completes against the introspected schema: the explorer opens
@@ -264,12 +262,12 @@ public class UiSnapshotTests :
         await page.GoToExplorerAsync(BaseUrl);
 
         // Alphabetically first, so it is on screen whatever the virtualized widget scrolled to.
-        Assert.That(await page.SuggestAsync(), Does.Contain("Active"));
+        await Assert.That(await page.SuggestAsync()).Contains("Active");
 
         // A member further down the list, reached the way a user reaches it: by typing enough of it that
         // the dropdown narrows to it. See SuggestAsync for why the list cannot simply be read whole.
         await page.SetEditorValueAsync("Query.Employee.Where(_ => _.Stat");
-        Assert.That(await page.SuggestAsync(), Does.Contain("Status"));
+        await Assert.That(await page.SuggestAsync()).Contains("Status");
     }
 
     // Word-based suggestions are off, so the dropdown offers the allow-listed schema or nothing. Monaco's
@@ -302,7 +300,7 @@ public class UiSnapshotTests :
         // the instant the trigger was sent.
         await Task.Delay(2000);
 
-        Assert.That(await page.SuggestionsAsync(), Is.Empty);
+        await Assert.That(await page.SuggestionsAsync()).IsEmpty();
     }
 
     // Regression guard for the class of failure where a Microsoft.CodeAnalysis (Roslyn) or runtime upgrade
@@ -392,8 +390,8 @@ public class UiSnapshotTests :
         }
 
         // The runtime is alive AND completion produced results against the introspected schema.
-        Assert.That(fatal, Is.Empty, $"fatal WASM runtime error(s): {string.Join(" || ", fatal)}");
-        Assert.That(items, Does.Contain("Active"), "in-browser Roslyn completion returned no schema members");
+        await Assert.That(fatal).IsEmpty().Because($"fatal WASM runtime error(s): {string.Join(" || ", fatal)}");
+        await Assert.That(items).Contains("Active").Because("in-browser Roslyn completion returned no schema members");
     }
 
     // Full terminal support: the Scry terminal operators are discoverable via IntelliSense — completing
@@ -409,15 +407,15 @@ public class UiSnapshotTests :
         await page.SetEditorValueAsync("Query.Employee.To");
         var items = await page.SuggestAsync();
 
-        Assert.That(items, Does.Contain("ToListAsync"));
-        Assert.That(items, Does.Contain("ToArrayAsync"));
-        Assert.That(items, Does.Contain("ToDictionaryAsync"));
+        await Assert.That(items).Contains("ToListAsync");
+        await Assert.That(items).Contains("ToArrayAsync");
+        await Assert.That(items).Contains("ToDictionaryAsync");
 
         await page.SetEditorValueAsync("Query.Employee.First");
-        Assert.That(await page.SuggestAsync(), Does.Contain("FirstAsync"));
+        await Assert.That(await page.SuggestAsync()).Contains("FirstAsync");
 
         await page.SetEditorValueAsync("Query.Employee.Count");
-        Assert.That(await page.SuggestAsync(), Does.Contain("CountAsync"));
+        await Assert.That(await page.SuggestAsync()).Contains("CountAsync");
     }
 
     // Accepting a suggestion types it where the caret is. The range Monaco replaces is the one the
@@ -443,7 +441,7 @@ public class UiSnapshotTests :
         await page.AcceptSuggestionAsync();
 
         var value = await page.EvaluateAsync<string>("() => monaco.editor.getEditors()[0].getValue()");
-        Assert.That(value, Is.EqualTo($"Query.Employee.Where(_ => _.{member})"));
+        await Assert.That(value).IsEqualTo($"Query.Employee.Where(_ => _.{member})");
     }
 
     // The completion is the one for the caret rather than for the end of the text — the provider is handed
@@ -462,7 +460,7 @@ public class UiSnapshotTests :
         await page.EvaluateAsync(
             "() => monaco.editor.getEditors()[0].setPosition({ lineNumber: 1, column: 29 })");
 
-        Assert.That(await page.SuggestAsync(), Does.Contain("Active"));
+        await Assert.That(await page.SuggestAsync()).Contains("Active");
     }
 
     // The same accept onto a partially typed name. The replaced range starts at the word the caret is in,
@@ -480,11 +478,11 @@ public class UiSnapshotTests :
             "() => monaco.editor.getEditors()[0].setPosition({ lineNumber: 1, column: 31 })");
 
         // The prefix narrows the dropdown to the one member, so what Enter accepts is not in doubt.
-        Assert.That(await page.SuggestAsync(), Does.Contain("Active"));
+        await Assert.That(await page.SuggestAsync()).Contains("Active");
         await page.AcceptSuggestionAsync();
 
         var value = await page.EvaluateAsync<string>("() => monaco.editor.getEditors()[0].getValue()");
-        Assert.That(value, Is.EqualTo("Query.Employee.Where(_ => _.Active)"));
+        await Assert.That(value).IsEqualTo("Query.Employee.Where(_ => _.Active)");
     }
 
     // The SQL pane: the server builds the query and reads its SQL back without executing it. The
@@ -506,10 +504,10 @@ public class UiSnapshotTests :
 
         var sql = await page.Locator("[data-testid='sql']").InnerTextAsync();
 
-        Assert.That(sql, Does.Contain("SELECT"));
-        Assert.That(sql, Does.Contain("[Employees]"));
+        await Assert.That(sql).Contains("SELECT");
+        await Assert.That(sql).Contains("[Employees]");
         // The client's Where reached the SQL, so what is shown is this query rather than the table.
-        Assert.That(sql, Does.Contain("WHERE"));
+        await Assert.That(sql).Contains("WHERE");
     }
 
     // A shared link carries the query in the fragment, so it survives a full reload — and a fragment
@@ -530,7 +528,7 @@ public class UiSnapshotTests :
         await page.Locator("[data-testid='share']").ClickAsync();
 
         var shared = await page.EvaluateAsync<string>("() => location.href");
-        Assert.That(shared, Does.Contain("#q="));
+        await Assert.That(shared).Contains("#q=");
 
         // A fresh load of the shared link, not a fragment change on the running app: a hash-only
         // navigation would leave the editor as it is and prove nothing.
@@ -543,7 +541,7 @@ public class UiSnapshotTests :
             new() {Timeout = 30_000});
 
         var restored = await opened.EvaluateAsync<string>("() => monaco.editor.getEditors()[0].getValue()");
-        Assert.That(restored, Is.EqualTo(query));
+        await Assert.That(restored).IsEqualTo(query);
     }
 
     // Following a shared link loads the query and nothing more; the opener decides whether to run it.
@@ -578,13 +576,13 @@ public class UiSnapshotTests :
         var restored = await opened.EvaluateAsync<string>("() => monaco.editor.getEditors()[0].getValue()");
         var wire = await opened.Locator("[data-testid='wire']").CountAsync();
         var results = await opened.Locator("[data-testid='result-table']").CountAsync();
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(restored, Does.StartWith("Query.Employee"));
-            Assert.That(queries, Is.Empty);
-            Assert.That(wire, Is.Zero);
-            Assert.That(results, Is.Zero);
-        });
+            await Assert.That(restored).StartsWith("Query.Employee");
+            await Assert.That(queries).IsEmpty();
+            await Assert.That(wire).IsZero();
+            await Assert.That(results).IsZero();
+        }
     }
 
     // A link whose fragment is not a query the explorer wrote is ignored rather than surfaced: a URL
@@ -602,8 +600,8 @@ public class UiSnapshotTests :
 
         var value = await page.EvaluateAsync<string>("() => monaco.editor.getEditors()[0].getValue()");
 
-        Assert.That(value, Does.StartWith("Query.Employee.Where"));
-        Assert.That(await page.Locator("[data-testid='error']").CountAsync(), Is.Zero);
+        await Assert.That(value).StartsWith("Query.Employee.Where");
+        await Assert.That(await page.Locator("[data-testid='error']").CountAsync()).IsZero();
     }
 
     // A flat result exports in all three formats. The download itself is the browser's, so the test
@@ -626,30 +624,26 @@ public class UiSnapshotTests :
         await InterceptDownloadsAsync(page);
 
         var csv = await ExportAsync(page, "csv");
-        Assert.That(csv.Name, Is.EqualTo("scry-result.csv"));
-        Assert.That(csv.Text, Does.StartWith("name,status"));
-        Assert.That(csv.Text, Does.Contain("Alice,FullTime"));
+        await Assert.That(csv.Name).IsEqualTo("scry-result.csv");
+        await Assert.That(csv.Text).StartsWith("name,status");
+        await Assert.That(csv.Text).Contains("Alice,FullTime");
         // Excel reads a BOM-less UTF-8 CSV as the local codepage; the other two formats do not want one.
-        Assert.That(csv.Bom, Is.True);
+        await Assert.That(csv.Bom).IsTrue();
 
         var json = await ExportAsync(page, "json");
-        Assert.That(json.Name, Is.EqualTo("scry-result.json"));
-        Assert.That(json.Bom, Is.False, "a leading U+FEFF is not valid JSON");
+        await Assert.That(json.Name).IsEqualTo("scry-result.json");
+        await Assert.That(json.Bom).IsFalse().Because("a leading U+FEFF is not valid JSON");
         using var document = JsonDocument.Parse(json.Text);
         var rows = document.RootElement.EnumerateArray().ToList();
-        Assert.That(rows, Is.Not.Empty);
-        Assert.That(
-            rows.Select(_ => _.GetProperty("name").GetString()),
-            Does.Contain("Alice"));
+        await Assert.That(rows).IsNotEmpty();
+        await Assert.That(rows.Select(_ => _.GetProperty("name").GetString())).Contains("Alice");
 
         var xml = await ExportAsync(page, "xml");
-        Assert.That(xml.Name, Is.EqualTo("scry-result.xml"));
-        Assert.That(xml.Bom, Is.False);
+        await Assert.That(xml.Name).IsEqualTo("scry-result.xml");
+        await Assert.That(xml.Bom).IsFalse();
         var results = XDocument.Parse(xml.Text).Root!;
-        Assert.That(results.Name.LocalName, Is.EqualTo("results"));
-        Assert.That(
-            results.Elements("row").Select(_ => _.Element("name")!.Value),
-            Does.Contain("Alice"));
+        await Assert.That(results.Name.LocalName).IsEqualTo("results");
+        await Assert.That(results.Elements("row").Select(_ => _.Element("name")!.Value)).Contains("Alice");
     }
 
     // CSV is a grid, so it is offered only for a result that is one. Projecting into a navigation
@@ -670,17 +664,17 @@ public class UiSnapshotTests :
         await page.Locator("[data-testid='run']").ClickAsync();
         await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr:not([aria-hidden])", 30);
 
-        Assert.That(await page.Locator("[data-testid='csv']").CountAsync(), Is.Zero, "nested rows are not a grid");
-        Assert.That(await page.Locator("[data-testid='json']").CountAsync(), Is.EqualTo(1));
-        Assert.That(await page.Locator("[data-testid='xml']").CountAsync(), Is.EqualTo(1));
+        await Assert.That(await page.Locator("[data-testid='csv']").CountAsync()).IsZero().Because("nested rows are not a grid");
+        await Assert.That(await page.Locator("[data-testid='json']").CountAsync()).IsEqualTo(1);
+        await Assert.That(await page.Locator("[data-testid='xml']").CountAsync()).IsEqualTo(1);
 
         await InterceptDownloadsAsync(page);
         var xml = await ExportAsync(page, "xml");
 
         // The navigation is a child element rather than a flattened column.
         var department = XDocument.Parse(xml.Text).Root!.Elements("row").First().Element("department");
-        Assert.That(department, Is.Not.Null);
-        Assert.That(department!.Element("name")!.Value, Is.Not.Empty);
+        await Assert.That(department).IsNotNull();
+        await Assert.That(department!.Element("name")!.Value).IsNotEmpty();
     }
 
     /// <summary>
@@ -701,7 +695,7 @@ public class UiSnapshotTests :
         // The attachment is in no projection the client could write, so the column below is the
         // explorer's own offer — built from the key the row does carry.
         var wire = await page.Locator("[data-testid='wire']").InnerTextAsync();
-        Assert.That(wire, Does.Not.Contain("Handbook"));
+        await Assert.That(wire).DoesNotContain("Handbook");
 
         await InterceptDownloadsAsync(page);
         var links = page.Locator("[data-testid='attachment']");
@@ -711,12 +705,8 @@ public class UiSnapshotTests :
         // named .txt because the member declared text/plain, not because anything sniffed the bytes.
         await links.Nth(0).ClickAsync();
         await page.WaitForFunctionAsync("() => window.__file !== null", null, new() {Timeout = 30_000});
-        Assert.That(
-            await page.EvaluateAsync<string>("() => window.__file.name"),
-            Is.EqualTo("Department-Handbook-1.txt"));
-        Assert.That(
-            await page.EvaluateAsync<string>("() => atob(window.__file.base64)"),
-            Is.EqualTo("Engineering handbook."));
+        await Assert.That(await page.EvaluateAsync<string>("() => window.__file.name")).IsEqualTo("Department-Handbook-1.txt");
+        await Assert.That(await page.EvaluateAsync<string>("() => atob(window.__file.base64)")).IsEqualTo("Engineering handbook.");
 
         // Sales holds none. Reported beside the row rather than as a page error: it is an answer
         // about that row, not a failure of the query.
@@ -769,7 +759,7 @@ public class UiSnapshotTests :
 
         await page.WaitForSelectorAsync(".suggest-widget .monaco-list-row", 30);
         var rows = await page.Locator(".suggest-widget .monaco-list-row").AllInnerTextsAsync();
-        Assert.That(rows.Any(_ => _.Contains("Active")), Is.True, $"suggest rows: {string.Join(" | ", rows)}");
+        await Assert.That(rows.Any(_ => _.Contains("Active"))).IsTrue().Because($"suggest rows: {string.Join(" | ", rows)}");
     }
 
     // Proves end-to-end execution: the browser compiles + runs the query, translates it to the wire
@@ -801,20 +791,20 @@ public class UiSnapshotTests :
         await page.SelectOutputTabAsync("response");
         var result = await page.Locator("[data-testid='result']").InnerTextAsync();
 
-        Assert.That(wire, Does.Contain("\"root\": \"Employee\"").Or.Contain("\"root\":\"Employee\""));
-        Assert.That(result, Does.Contain("Aaron"));
-        Assert.That(result, Does.Contain("Carol"));
+        await Assert.That(wire).Contains("\"root\": \"Employee\"").Or.Contains("\"root\":\"Employee\"");
+        await Assert.That(result).Contains("Aaron");
+        await Assert.That(result).Contains("Carol");
 
-        Assert.That(table, Does.Contain("Aaron"));
-        Assert.That(table, Does.Contain("FullTime"));
+        await Assert.That(table).Contains("Aaron");
+        await Assert.That(table).Contains("FullTime");
 
         // Stage 3: the executed query is recorded in history. The list renders the multi-line
         // query joined onto one line, so match fragments rather than the contiguous text.
         await page.ShowHistoryAsync();
         await page.WaitForSelectorAsync("[data-testid='history'] li", 10);
         var historyText = await page.Locator("[data-testid='history']").InnerTextAsync();
-        Assert.That(historyText, Does.Contain("Query.Employee"));
-        Assert.That(historyText, Does.Contain(".Where(_ => _.Active)"));
+        await Assert.That(historyText).Contains("Query.Employee");
+        await Assert.That(historyText).Contains(".Where(_ => _.Active)");
     }
 
     // The executor strips a trailing collection terminal — arguments and all — before it compiles, so
@@ -822,9 +812,10 @@ public class UiSnapshotTests :
     // by the editor, and every one of them used to run: a wire request, rows, and an entry in the
     // history, for a query a real client project would not build. Salary is the one that stings — it is
     // [QueryIgnore]d, and the explorer's claim is that what completes is the allow-list.
-    [TestCase("Query.Employee.ToDictionaryAsync()", "takes 0 arguments")]
-    [TestCase("Query.Employee.ToDictionaryAsync(_ => _.Salary)", "'Salary'")]
-    [TestCase("Query.Employee.ToListAsync(totalGarbage, 42)", "'totalGarbage'")]
+    [Test]
+    [Arguments("Query.Employee.ToDictionaryAsync()", "takes 0 arguments")]
+    [Arguments("Query.Employee.ToDictionaryAsync(_ => _.Salary)", "'Salary'")]
+    [Arguments("Query.Employee.ToListAsync(totalGarbage, 42)", "'totalGarbage'")]
     public async Task ExplorerRefusesAQueryThatDoesNotCompile(string query, string expected)
     {
         var page = await NewPageAsync();
@@ -894,9 +885,7 @@ public class UiSnapshotTests :
         await RunQueryAsync(page, "Query.Employee.ToDictionaryAsync(_ => _.Name)", 1);
 
         await Assertions.Expect(page.Locator("[data-testid='error']")).ToHaveCountAsync(0);
-        Assert.That(
-            await page.Locator("[data-testid='wire']").InnerTextAsync(),
-            Does.Contain("\"root\"").And.Contain("Employee"));
+        await Assert.That(await page.Locator("[data-testid='wire']").InnerTextAsync()).Contains("\"root\"").And.Contains("Employee");
     }
 
     // The history is the explorer's only state that outlives the tab, so it is the only thing a user can
@@ -916,10 +905,8 @@ public class UiSnapshotTests :
         await entries.Nth(1).Locator("[data-testid='history-remove']").ClickAsync();
 
         await Assertions.Expect(entries).ToHaveCountAsync(1);
-        Assert.That(await entries.InnerTextAsync(), Does.Contain("Query.Department"));
-        Assert.That(
-            await StoredHistoryAsync(page),
-            Does.Contain("Query.Department").And.Not.Contain("Query.Employee"));
+        await Assert.That(await entries.InnerTextAsync()).Contains("Query.Department");
+        await Assert.That(await StoredHistoryAsync(page)).Contains("Query.Department").And.DoesNotContain("Query.Employee");
     }
 
     [Test]
@@ -937,7 +924,7 @@ public class UiSnapshotTests :
         // Clear is disabled rather than removed, which is what says there is nothing left to clear.
         await Assertions.Expect(page.Locator("[data-testid='history']")).ToHaveCountAsync(0);
         await Assertions.Expect(page.Locator("[data-testid='history-clear']")).ToBeDisabledAsync();
-        Assert.That(await StoredHistoryAsync(page), Is.EqualTo("[]"));
+        await Assert.That(await StoredHistoryAsync(page)).IsEqualTo("[]");
     }
 
     /// <summary>
@@ -994,15 +981,15 @@ public class UiSnapshotTests :
         var result = await page.Locator("[data-testid='result']").InnerTextAsync();
 
         // Engineering's seeded PNG signature, base64 — the encoding an undiverted byte[] arrives in.
-        Assert.That(table, Does.Contain("iVBORw0KGgo="));
-        Assert.That(result, Does.Contain("iVBORw0KGgo="));
+        await Assert.That(table).Contains("iVBORw0KGgo=");
+        await Assert.That(result).Contains("iVBORw0KGgo=");
         // Sales has no logo: a null stays inline in the JSON and produces no part at all.
-        Assert.That(result, Does.Contain("null"));
+        await Assert.That(result).Contains("null");
         // The response pane shows the reassembled envelope rather than the placeholder or the raw
         // multipart body it arrived as.
-        Assert.That(result, Does.Not.Contain("$bin"));
-        Assert.That(result, Does.Not.Contain("Content-Type"));
-        Assert.That(csv, Is.EqualTo(1));
+        await Assert.That(result).DoesNotContain("$bin");
+        await Assert.That(result).DoesNotContain("Content-Type");
+        await Assert.That(csv).IsEqualTo(1);
     }
 
     // Terminal support: a plain LINQ '.ToList()' (the habitual way to ask for all rows) is folded into
@@ -1019,8 +1006,8 @@ public class UiSnapshotTests :
         await page.WaitForSelectorAsync("[data-testid='result-table']", 60);
         var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
         // No Where → all four employees, including the inactive Bob.
-        Assert.That(table, Does.Contain("Aaron"));
-        Assert.That(table, Does.Contain("Bob"));
+        await Assert.That(table).Contains("Aaron");
+        await Assert.That(table).Contains("Bob");
     }
 
     // Terminal support: a scalar terminal (CountAsync) is reflected as a 'count' op in the wire
@@ -1043,9 +1030,9 @@ public class UiSnapshotTests :
         var wire = await page.Locator("[data-testid='wire']").InnerTextAsync();
         var scalar = await page.Locator("[data-testid='result-scalar']").InnerTextAsync();
 
-        Assert.That(wire, Does.Contain("\"count\""));
+        await Assert.That(wire).Contains("\"count\"");
         // Three active employees (Alice, Aaron, Carol).
-        Assert.That(scalar.Trim(), Is.EqualTo("3"));
+        await Assert.That(scalar.Trim()).IsEqualTo("3");
     }
 
     // Terminal support: a single-element terminal (FirstAsync) is reflected as a 'first' op and
@@ -1070,9 +1057,9 @@ public class UiSnapshotTests :
         var wire = await page.Locator("[data-testid='wire']").InnerTextAsync();
         var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
 
-        Assert.That(wire, Does.Contain("\"first\""));
+        await Assert.That(wire).Contains("\"first\"");
         // First active employee alphabetically.
-        Assert.That(table, Does.Contain("Aaron"));
+        await Assert.That(table).Contains("Aaron");
     }
 
     // Variables declared ahead of the query, proved inside WASM rather than only on the desktop host.
@@ -1098,9 +1085,9 @@ public class UiSnapshotTests :
         var wire = await page.Locator("[data-testid='wire']").InnerTextAsync();
         var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
 
-        Assert.That(wire, Does.Contain("Aaron").And.Contain("Carol").And.Not.Contain("wanted"));
+        await Assert.That(wire).Contains("Aaron").And.Contains("Carol").And.DoesNotContain("wanted");
         // Alice is active and was left out, so the set is what narrowed the rows.
-        Assert.That(table, Does.Contain("Aaron").And.Contain("Carol").And.Not.Contain("Alice"));
+        await Assert.That(table).Contains("Aaron").And.Contains("Carol").And.DoesNotContain("Alice");
     }
 
     // Only a declaration may come ahead of the query. Nothing else there could change the request, so
@@ -1148,7 +1135,7 @@ public class UiSnapshotTests :
         await page.ReloadAsync();
         await page.WaitForSelectorAsync(".monaco-editor", 90);
         var theme = await page.EvaluateAsync<string>("() => document.documentElement.dataset.theme");
-        Assert.That(theme, Is.EqualTo("dark"), "theme should persist across reload");
+        await Assert.That(theme).IsEqualTo("dark").Because("theme should persist across reload");
         await page.WaitForSelectorAsync(".monaco-editor.vs-dark", 10);
     }
 
@@ -1190,7 +1177,7 @@ public class UiSnapshotTests :
 
         // Mounted, not merely present: the editor is only usable if it reached BlazorMonaco's registry.
         var editors = await page.EvaluateAsync<int>("() => monaco.editor.getEditors().length");
-        Assert.That(editors, Is.EqualTo(1));
+        await Assert.That(editors).IsEqualTo(1);
     }
 
     // The Ctrl+Enter editor action runs the query without clicking Run.
@@ -1212,7 +1199,7 @@ public class UiSnapshotTests :
 
         await page.WaitForSelectorAsync("[data-testid='result-table']", 60);
         var table = await page.Locator("[data-testid='result-table']").InnerTextAsync();
-        Assert.That(table, Does.Contain("Aaron"));
+        await Assert.That(table).Contains("Aaron");
     }
 
     // Stage 3: invalid code surfaces Roslyn diagnostics as Monaco markers (editor squiggles).
@@ -1233,7 +1220,7 @@ public class UiSnapshotTests :
             });
 
         var count = await page.EvaluateAsync<int>("() => monaco.editor.getModelMarkers({}).length");
-        Assert.That(count, Is.GreaterThan(0));
+        await Assert.That(count).IsGreaterThan(0);
     }
 
     // The shell. Everything below is about the app frame rather than about the query pipeline: the
@@ -1269,10 +1256,10 @@ public class UiSnapshotTests :
         await page.SetEditorValueAsync("Query.Order");
         await tabs.First.ClickAsync();
         await Assertions.Expect(tabs.First).ToHaveTextAsync("Department");
-        Assert.That(await EditorValueAsync(page), Is.EqualTo("Query.Department.Select(_ => new { _.Name })"));
+        await Assert.That(await EditorValueAsync(page)).IsEqualTo("Query.Department.Select(_ => new { _.Name })");
 
         await tabs.Last.ClickAsync();
-        Assert.That(await EditorValueAsync(page), Is.EqualTo("Query.Order"));
+        await Assert.That(await EditorValueAsync(page)).IsEqualTo("Query.Order");
 
         await page.Locator("[data-testid='tab-close']").Last.ClickAsync();
         await Assertions.Expect(tabs).ToHaveCountAsync(1);
@@ -1300,7 +1287,7 @@ public class UiSnapshotTests :
         await page.WaitForSelectorAsync("main[data-ready]", 90);
 
         await Assertions.Expect(page.Locator("[data-testid='tab']")).ToHaveCountAsync(2);
-        Assert.That(await EditorValueAsync(page), Is.EqualTo("Query.Holiday"));
+        await Assert.That(await EditorValueAsync(page)).IsEqualTo("Query.Holiday");
     }
 
     // The edit made a moment before a reload is written on the way out rather than lost to the
@@ -1318,7 +1305,7 @@ public class UiSnapshotTests :
         await page.ReloadAsync();
         await page.WaitForSelectorAsync("main[data-ready]", 90);
 
-        Assert.That(await EditorValueAsync(page), Is.EqualTo("Query.Holiday"));
+        await Assert.That(await EditorValueAsync(page)).IsEqualTo("Query.Holiday");
     }
 
     // Two explorer windows on one origin share the store. A tab opened in the second appears in the
@@ -1343,9 +1330,7 @@ public class UiSnapshotTests :
 
         await Assertions.Expect(first.Locator("[data-testid='tab']")).ToHaveCountAsync(2, new() {Timeout = 10_000});
         await WaitForStoredTabsAsync(first, "_.Name");
-        Assert.That(
-            await first.EvaluateAsync<string>("() => localStorage.getItem('scry:tabs')"),
-            Does.Contain("Query.Holiday"));
+        await Assert.That(await first.EvaluateAsync<string>("() => localStorage.getItem('scry:tabs')")).Contains("Query.Holiday");
     }
 
     // Past the persist debounce, which is what actually writes the tabs.
@@ -1418,18 +1403,18 @@ public class UiSnapshotTests :
         await page.WaitForSelectorAsync("[data-testid='schema-type']", 10);
 
         var members = await type.InnerTextAsync();
-        Assert.That(members, Does.Contain("EmployeeQueryModel"));
-        Assert.That(members, Does.Contain("queryable as"));
+        await Assert.That(members).Contains("EmployeeQueryModel");
+        await Assert.That(members).Contains("queryable as");
 
         // The badges are the rest of what the contract says: a key, a navigation, an attachment, and
         // a member marked sensitive.
-        Assert.That(members, Does.Contain("key"));
-        Assert.That(members, Does.Contain("nav"));
-        Assert.That(members, Does.Contain("attachment"));
-        Assert.That(members, Does.Contain("sensitive"));
+        await Assert.That(members).Contains("key");
+        await Assert.That(members).Contains("nav");
+        await Assert.That(members).Contains("attachment");
+        await Assert.That(members).Contains("sensitive");
 
         // [QueryIgnore]d, so it is not in the contract and cannot be here either.
-        Assert.That(members, Does.Not.Contain("Salary"));
+        await Assert.That(members).DoesNotContain("Salary");
 
         // A navigation is a link, and the stack walks back out of it.
         await page.Locator("[data-testid='schema-type'] .schema-link", new() {HasTextString = "DepartmentQueryModel"})
@@ -1448,10 +1433,10 @@ public class UiSnapshotTests :
         // What the pane offers is already in the house style, so formatting it changes nothing.
         await page.Locator("[data-testid='schema-insert']").First.ClickAsync();
         var offered = await EditorValueAsync(page);
-        Assert.That(offered, Does.Contain("Department ="));
+        await Assert.That(offered).Contains("Department =");
 
         await page.Locator("[data-testid='prettify']").ClickAsync();
-        Assert.That(await EditorValueAsync(page), Is.EqualTo(offered));
+        await Assert.That(await EditorValueAsync(page)).IsEqualTo(offered);
     }
 
     // The starter query a source offers has to be one the server will actually run — which is more
@@ -1475,7 +1460,7 @@ public class UiSnapshotTests :
             await page.Locator("[data-testid='schema-source']", new() {HasTextString = source}).First.ClickAsync();
             await page.Locator("[data-testid='schema-insert']").First.ClickAsync();
 
-            Assert.That(await EditorValueAsync(page), Does.StartWith($"Query.{source}"), $"starter query for {source}");
+            await Assert.That(await EditorValueAsync(page)).StartsWith($"Query.{source}").Because($"starter query for {source}");
 
             await page.Locator("[data-testid='run']").ClickAsync();
             await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr:not([aria-hidden])", 60);
@@ -1524,10 +1509,10 @@ public class UiSnapshotTests :
         await page.WaitForSelectorAsync("[data-testid='status-line']", 60);
 
         var status = await page.Locator("[data-testid='status-line']").InnerTextAsync();
-        Assert.That(status, Does.Contain("200"));
-        Assert.That(status, Does.Contain("GET").Or.Contain("POST"));
-        Assert.That(status, Does.Contain("rows"));
-        Assert.That(status, Does.Contain("ms"));
+        await Assert.That(status).Contains("200");
+        await Assert.That(status).Contains("GET").Or.Contains("POST");
+        await Assert.That(status).Contains("rows");
+        await Assert.That(status).Contains("ms");
     }
 
     // The clipboard answers whether a copy landed. Refused — by a stub here, the way a document without
@@ -1600,16 +1585,16 @@ public class UiSnapshotTests :
 
         await Assertions.Expect(page.Locator("[data-testid='history'] li"))
             .ToHaveCountAsync(1, new() {Timeout = 60_000});
-        Assert.That(await page.Locator("[data-testid='wire']").InnerTextAsync(), Does.Contain("Holiday"));
+        await Assert.That(await page.Locator("[data-testid='wire']").InnerTextAsync()).Contains("Holiday");
 
         release.SetResult();
         await delivered.Task.WaitAsync(TimeSpan.FromSeconds(60));
         await page.WaitForTimeoutAsync(1000);
 
-        Assert.That(await page.Locator("[data-testid='wire']").InnerTextAsync(), Does.Contain("Holiday"));
-        Assert.That(await page.Locator("[data-testid='result-table']").InnerTextAsync(), Does.Not.Contain("Engineering"));
+        await Assert.That(await page.Locator("[data-testid='wire']").InnerTextAsync()).Contains("Holiday");
+        await Assert.That(await page.Locator("[data-testid='result-table']").InnerTextAsync()).DoesNotContain("Engineering");
         await Assertions.Expect(page.Locator("[data-testid='history'] li")).ToHaveCountAsync(1);
-        Assert.That(await page.Locator("[data-testid='history']").InnerTextAsync(), Does.Not.Contain("Department"));
+        await Assert.That(await page.Locator("[data-testid='history']").InnerTextAsync()).DoesNotContain("Department");
     }
 
     // The settings dialog's Clear removes the explorer's own keys and nothing else on the origin — and
@@ -1633,10 +1618,8 @@ public class UiSnapshotTests :
         await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-theme", "dark");
         await page.Locator("[data-testid='settings-clear']").ClickAsync();
 
-        Assert.That(await StoredHistoryAsync(page), Is.Null);
-        Assert.That(
-            await page.EvaluateAsync<string>("() => localStorage.getItem('someone-elses-key')"),
-            Is.EqualTo("keep me"));
+        await Assert.That(await StoredHistoryAsync(page)).IsNull();
+        await Assert.That(await page.EvaluateAsync<string>("() => localStorage.getItem('someone-elses-key')")).IsEqualTo("keep me");
 
         // The shell is back at its defaults: one tab on the sample, the system theme.
         await Assertions.Expect(page.Locator("[data-testid='tab']")).ToHaveCountAsync(1);
@@ -1653,7 +1636,7 @@ public class UiSnapshotTests :
         await page.WaitForSelectorAsync("main[data-ready]", 90);
         await Assertions.Expect(page.Locator("[data-testid='tab']")).ToHaveCountAsync(1);
         await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-theme", "system");
-        Assert.That(await EditorValueAsync(page), Does.StartWith("Query.Employee.Where"));
+        await Assert.That(await EditorValueAsync(page)).StartsWith("Query.Employee.Where");
     }
 
     // The drag bars are wired once at boot, and the ratio they produce is persisted. Its own page,
@@ -1677,7 +1660,7 @@ public class UiSnapshotTests :
             new() {Timeout = 10_000});
 
         var stored = await page.EvaluateAsync<string>("() => localStorage.getItem('scry:sessionFlex')");
-        Assert.That(double.Parse(stored, CultureInfo.InvariantCulture), Is.GreaterThan(0.5));
+        await Assert.That(double.Parse(stored, CultureInfo.InvariantCulture)).IsGreaterThan(0.5);
     }
 
     // Formatting rewrites the query in the house style: the chain down the page, the projection down
@@ -1692,9 +1675,7 @@ public class UiSnapshotTests :
             "Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name, _.Status })");
         await page.Locator("[data-testid='prettify']").ClickAsync();
 
-        Assert.That(
-            await EditorValueAsync(page),
-            Is.EqualTo(
+        await Assert.That(await EditorValueAsync(page)).IsEqualTo(
                 """
                 Query.Employee
                     .Where(_ => _.Active)
@@ -1704,15 +1685,13 @@ public class UiSnapshotTests :
                             _.Name,
                             _.Status
                         })
-                """));
+                """);
 
         await page.SetEditorValueAsync(
             "Query.Employee.Select(_ => new { _.Name, Department = new { _.Department!.Name } })");
         await page.Locator("[data-testid='prettify']").ClickAsync();
 
-        Assert.That(
-            await EditorValueAsync(page),
-            Is.EqualTo(
+        await Assert.That(await EditorValueAsync(page)).IsEqualTo(
                 """
                 Query.Employee
                     .Select(_ =>
@@ -1725,7 +1704,7 @@ public class UiSnapshotTests :
                                     _.Department!.Name
                                 }
                         })
-                """));
+                """);
 
         // Reported rather than rewritten: a formatter guessing at a half-typed query produces a
         // differently half-typed one.
@@ -1733,7 +1712,7 @@ public class UiSnapshotTests :
         await page.Locator("[data-testid='prettify']").ClickAsync();
 
         await Assertions.Expect(page.Locator("[data-testid='error']")).ToContainTextAsync("does not parse");
-        Assert.That(await EditorValueAsync(page), Is.EqualTo("Query.Employee.Where(_ => "));
+        await Assert.That(await EditorValueAsync(page)).IsEqualTo("Query.Employee.Where(_ => ");
     }
 
     // A formatted query still has to be one the server runs — the point of the button is the shape,
@@ -1758,3 +1737,8 @@ public class UiSnapshotTests :
         page.EvaluateAsync<string>("() => monaco.editor.getEditors()[0].getValue()");
 }
 
+public sealed class EightAtOnce :
+    TUnit.Core.Interfaces.IParallelLimit
+{
+    public int Limit => 8;
+}

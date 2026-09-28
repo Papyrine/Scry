@@ -3,7 +3,6 @@
 /// lambda, or a parameter that is not a row, was compiled as closure state and failed with the
 /// expression compiler's message about an undefined variable rather than with what Scry cannot carry.
 /// </summary>
-[TestFixture]
 public class NestedRowReadTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -11,39 +10,39 @@ public class NestedRowReadTests
     // ReSharper restore NotAccessedPositionalProperty.Local
 
     [Test]
-    public void AnOuterRowReadInsideASubquery() =>
-        Refuses(_ => _.Lines.Any(line => line.Quantity > _.Id), "'_'");
+    public async Task AnOuterRowReadInsideASubquery() =>
+        await Refuses(_ => _.Lines.Any(line => line.Quantity > _.Id), "'_'");
 
     [Test]
-    public void AMemberReadOffAnElementOfASubquery() =>
-        Refuses(_ => _.Lines.First().Quantity > 1, "'_'");
+    public async Task AMemberReadOffAnElementOfASubquery() =>
+        await Refuses(_ => _.Lines.First().Quantity > 1, "'_'");
 
     [Test]
-    public void AnIndexedFilter()
+    public async Task AnIndexedFilter()
     {
-        var exception = Assert.Throws<NotSupportedException>(
+        var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => Client().Source<Order>("Order").Where((order, index) => index < 5).ToScryRequest());
 
-        Assert.That(exception!.Message, Does.Contain("'index'"));
+        await Assert.That(exception!.Message).Contains("'index'");
     }
 
     // The group read as a value rather than folded: not an aggregate, and once an index past the
     // end of an argument list.
     [Test]
     public void AGroupReadAsText() =>
-        Assert.Throws<NotSupportedException>(
+        Assert.ThrowsExactly<NotSupportedException>(
             () => Client()
                 .Source<Order>("Order")
                 .GroupBy(_ => _.Region)
                 .Select(_ => new TextRow(_.ToString()!))
                 .ToScryRequest());
 
-    static void Refuses(Expression<Func<Order, bool>> predicate, string mentions)
+    static async Task Refuses(Expression<Func<Order, bool>> predicate, string mentions)
     {
-        var exception = Assert.Throws<NotSupportedException>(
+        var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => Client().Source<Order>("Order").Where(predicate).ToScryRequest());
 
-        Assert.That(exception!.Message, Does.Contain(mentions));
+        await Assert.That(exception!.Message).Contains(mentions);
     }
 
     static ScryClient Client() =>

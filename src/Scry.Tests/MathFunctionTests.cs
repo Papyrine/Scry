@@ -3,7 +3,6 @@
 /// reached the wire: one that Scry validates and rebinds but the provider cannot translate would fail
 /// at execution rather than at validation, which is the trap <c>DayOfWeek</c> is kept out for.
 /// </summary>
-[TestFixture]
 public class MathFunctionTests
 {
     [Test]
@@ -20,8 +19,8 @@ public class MathFunctionTests
         // end-snippet
 
         // 100 and 250 clear log10 >= 2; 75 does not.
-        Assert.That(rows, Has.Count.EqualTo(2));
-        Assert.That(rows.Min(_ => _.Log), Is.EqualTo(Math.Log(100d)).Within(0.0001));
+        await Assert.That(rows).Count().IsEqualTo(2);
+        await Assert.That(rows.Min(_ => _.Log)).IsEqualTo(Math.Log(100d)).Within(0.0001);
     }
 
     [Test]
@@ -35,7 +34,7 @@ public class MathFunctionTests
             .Select(_ => new {Value = Math.Log((double)_.Amount, 10d)})
             .ToListAsync();
 
-        Assert.That(rows.Single().Value, Is.EqualTo(2d).Within(0.0001));
+        await Assert.That(rows.Single().Value).IsEqualTo(2d).Within(0.0001);
     }
 
     [Test]
@@ -49,7 +48,7 @@ public class MathFunctionTests
             .Select(_ => new {Value = Math.Exp(_.Quantity)})
             .ToListAsync();
 
-        Assert.That(rows.Single().Value, Is.EqualTo(Math.Exp(1d)).Within(0.0001));
+        await Assert.That(rows.Single().Value).IsEqualTo(Math.Exp(1d)).Within(0.0001);
     }
 
     [Test]
@@ -72,13 +71,13 @@ public class MathFunctionTests
 
         var row = rows.Single();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(row.Sin, Is.EqualTo(Math.Sin(1d)).Within(0.0001));
-            Assert.That(row.Cos, Is.EqualTo(Math.Cos(1d)).Within(0.0001));
-            Assert.That(row.Tan, Is.EqualTo(Math.Tan(1d)).Within(0.0001));
-            Assert.That(row.Atan, Is.EqualTo(Math.Atan(1d)).Within(0.0001));
-        });
+            await Assert.That(row.Sin).IsEqualTo(Math.Sin(1d)).Within(0.0001);
+            await Assert.That(row.Cos).IsEqualTo(Math.Cos(1d)).Within(0.0001);
+            await Assert.That(row.Tan).IsEqualTo(Math.Tan(1d)).Within(0.0001);
+            await Assert.That(row.Atan).IsEqualTo(Math.Atan(1d)).Within(0.0001);
+        }
     }
 
     [Test]
@@ -100,11 +99,11 @@ public class MathFunctionTests
 
         var row = rows.Single();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(row.Asin, Is.EqualTo(Math.Asin(0.5d)).Within(0.0001));
-            Assert.That(row.Acos, Is.EqualTo(Math.Acos(0.5d)).Within(0.0001));
-        });
+            await Assert.That(row.Asin).IsEqualTo(Math.Asin(0.5d)).Within(0.0001);
+            await Assert.That(row.Acos).IsEqualTo(Math.Acos(0.5d)).Within(0.0001);
+        }
     }
 
     [Test]
@@ -118,7 +117,7 @@ public class MathFunctionTests
             .Select(_ => new {Value = Math.Atan2(_.Quantity, 2d)})
             .ToListAsync();
 
-        Assert.That(rows.Single().Value, Is.EqualTo(Math.Atan2(1d, 2d)).Within(0.0001));
+        await Assert.That(rows.Single().Value).IsEqualTo(Math.Atan2(1d, 2d)).Within(0.0001);
     }
 
     [Test]
@@ -133,7 +132,7 @@ public class MathFunctionTests
             .Select(_ => new {_.Amount})
             .ToListAsync();
 
-        Assert.That(rows.First().Amount, Is.EqualTo(250m));
+        await Assert.That(rows.First().Amount).IsEqualTo(250m);
     }
 
     [Test]
@@ -157,16 +156,16 @@ public class MathFunctionTests
 
         var row = rows.Single();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(row.Halved, Is.EqualTo(0.5d).Within(0.0001));
+            await Assert.That(row.Halved).IsEqualTo(0.5d).Within(0.0001);
 
             // A narrower constant still widens to the member rather than the other way about.
-            Assert.That(row.Scaled, Is.EqualTo(150m));
+            await Assert.That(row.Scaled).IsEqualTo(150m);
 
             // Integer division stays integer division, exactly as the same expression does in C#.
-            Assert.That(row.Integral, Is.Zero);
-        });
+            await Assert.That(row.Integral).IsZero();
+        }
     }
 
     [Test]
@@ -182,7 +181,7 @@ public class MathFunctionTests
             .Select(_ => new {_.Amount})
             .ToListAsync();
 
-        Assert.That(rows.Select(_ => _.Amount).Order(), Is.EqualTo([100m, 250m]));
+        await Assert.That(rows.Select(_ => _.Amount).Order()).IsEquivalentTo([100m, 250m], CollectionOrdering.Matching);
     }
 
     static ScryClient ClientFor(TestContext context) =>

@@ -1,88 +1,86 @@
 // The three download formats. These ran only through the browser suite before the exporter moved out
 // of App.razor.cs, so the edge cases below — quoting, escaping, and the names and characters a server
 // response can carry that XML cannot — were never covered directly.
-[TestFixture]
 public class ResultExporterTests
 {
     [Test]
-    public void CsvWritesAHeaderAndTheRowsInOrder()
+    public async Task CsvWritesAHeaderAndTheRowsInOrder()
     {
         var csv = ResultExporter.Csv(
             ["Name", "Status"],
             [["Aaron", "FullTime"], ["Carol", "Contractor"]]);
 
-        Assert.That(
-            csv.ReplaceLineEndings("\n"),
-            Is.EqualTo(
+        await Assert.That(csv.ReplaceLineEndings("\n")).IsEqualTo(
                 """
                 Name,Status
                 Aaron,FullTime
                 Carol,Contractor
 
-                """));
+                """);
     }
 
     // RFC 4180: only a field carrying a comma, a quote, or a newline is quoted.
-    [TestCase("plain", "plain")]
-    [TestCase("has,comma", "\"has,comma\"")]
-    [TestCase("has\"quote", "\"has\"\"quote\"")]
-    [TestCase("", "")]
-    public void CsvQuotesOnlyWhatRfc4180Requires(string value, string expected)
+    [Test]
+    [Arguments("plain", "plain")]
+    [Arguments("has,comma", "\"has,comma\"")]
+    [Arguments("has\"quote", "\"has\"\"quote\"")]
+    [Arguments("", "")]
+    public async Task CsvQuotesOnlyWhatRfc4180Requires(string value, string expected)
     {
         var csv = ResultExporter.Csv(["Column"], [[value]]);
 
-        Assert.That(csv.ReplaceLineEndings("\n").Split('\n')[1], Is.EqualTo(expected));
+        await Assert.That(csv.ReplaceLineEndings("\n").Split('\n')[1]).IsEqualTo(expected);
     }
 
     // A field carrying a newline is quoted and spans two lines of the output, so it is asserted
     // against the whole body rather than against one split line.
-    [TestCase("has\nnewline")]
-    [TestCase("has\rreturn")]
-    public void CsvQuotesAFieldCarryingANewline(string value)
+    [Test]
+    [Arguments("has\nnewline")]
+    [Arguments("has\rreturn")]
+    public async Task CsvQuotesAFieldCarryingANewline(string value)
     {
         var csv = ResultExporter.Csv(["Column"], [[value]]);
 
-        Assert.That(csv, Does.StartWith($"Column{Environment.NewLine}\"{value}\""));
+        await Assert.That(csv).StartsWith($"Column{Environment.NewLine}\"{value}\"");
     }
 
     // A cell a spreadsheet would read as a formula is prefixed with an apostrophe, which it takes as
     // "text follows" and does not display. The rows are database content, so a value beginning with
     // '=' is not a curiosity: it is whatever an end user typed into a form. A number keeps its sign —
     // it is a value, and no formula is a number.
-    [TestCase("=1+1", "'=1+1")]
-    [TestCase("=HYPERLINK(\"http://evil\")", "\"'=HYPERLINK(\"\"http://evil\"\")\"")]
-    [TestCase("+cmd", "'+cmd")]
-    [TestCase("-cmd", "'-cmd")]
-    [TestCase("@SUM(A1)", "'@SUM(A1)")]
-    [TestCase("\tx", "'\tx")]
-    [TestCase("-5", "-5")]
-    [TestCase("-1.5e3", "-1.5e3")]
-    [TestCase("+7", "+7")]
-    [TestCase("a=b", "a=b")]
-    public void CsvNeutralisesAFieldASpreadsheetWouldExecute(string value, string expected)
+    [Test]
+    [Arguments("=1+1", "'=1+1")]
+    [Arguments("=HYPERLINK(\"http://evil\")", "\"'=HYPERLINK(\"\"http://evil\"\")\"")]
+    [Arguments("+cmd", "'+cmd")]
+    [Arguments("-cmd", "'-cmd")]
+    [Arguments("@SUM(A1)", "'@SUM(A1)")]
+    [Arguments("\tx", "'\tx")]
+    [Arguments("-5", "-5")]
+    [Arguments("-1.5e3", "-1.5e3")]
+    [Arguments("+7", "+7")]
+    [Arguments("a=b", "a=b")]
+    public async Task CsvNeutralisesAFieldASpreadsheetWouldExecute(string value, string expected)
     {
         var csv = ResultExporter.Csv(["Column"], [[value]]);
 
-        Assert.That(csv.ReplaceLineEndings("\n").Split('\n')[1], Is.EqualTo(expected));
+        await Assert.That(csv.ReplaceLineEndings("\n").Split('\n')[1]).IsEqualTo(expected);
     }
 
     // A leading carriage return is both a formula trigger and a character that forces quoting.
     [Test]
-    public void CsvNeutralisesAndQuotesALeadingReturn()
+    public async Task CsvNeutralisesAndQuotesALeadingReturn()
     {
         var csv = ResultExporter.Csv(["Column"], [["\rx"]]);
 
-        Assert.That(csv, Does.StartWith($"Column{Environment.NewLine}\"'\rx\""));
+        await Assert.That(csv).StartsWith($"Column{Environment.NewLine}\"'\rx\"");
     }
 
     [Test]
-    public void XmlNestsAProjectedNavigation()
+    public async Task XmlNestsAProjectedNavigation()
     {
         var xml = ResultExporter.Xml(Rows("""[{"name":"Aaron","department":{"name":"Ops"}}]"""));
 
-        Assert.That(
-            xml.ReplaceLineEndings("\n"),
-            Is.EqualTo(
+        await Assert.That(xml.ReplaceLineEndings("\n")).IsEqualTo(
                 """
                 <?xml version="1.0" encoding="utf-8"?>
                 <results>
@@ -93,89 +91,87 @@ public class ResultExporterTests
                     </department>
                   </row>
                 </results>
-                """));
+                """);
     }
 
     [Test]
-    public void XmlWritesACollectionAsItemElements()
+    public async Task XmlWritesACollectionAsItemElements()
     {
         var xml = ResultExporter.Xml(Rows("""[{"tags":["a","b"]}]"""));
 
-        Assert.That(xml, Does.Contain("<item>a</item>"));
-        Assert.That(xml, Does.Contain("<item>b</item>"));
+        await Assert.That(xml).Contains("<item>a</item>");
+        await Assert.That(xml).Contains("<item>b</item>");
     }
 
     // An absent value stays an empty element rather than being dropped, so every row keeps the same
     // shape.
     [Test]
-    public void XmlKeepsANullAsAnEmptyElement()
+    public async Task XmlKeepsANullAsAnEmptyElement()
     {
         var xml = ResultExporter.Xml(Rows("""[{"manager":null}]"""));
 
-        Assert.That(xml, Does.Contain("<manager />"));
+        await Assert.That(xml).Contains("<manager />");
     }
 
     [Test]
-    public void XmlEscapesTextContent()
+    public async Task XmlEscapesTextContent()
     {
         var xml = ResultExporter.Xml(Rows("""[{"name":"a & b < c > d"}]"""));
 
-        Assert.That(xml, Does.Contain("<name>a &amp; b &lt; c &gt; d</name>"));
+        await Assert.That(xml).Contains("<name>a &amp; b &lt; c &gt; d</name>");
     }
 
     // XML 1.0 has no spelling at all for most control characters, so a value carrying one must not be
     // able to produce a document no parser will open.
     [Test]
-    public void XmlDropsControlCharactersItCannotSpell()
+    public async Task XmlDropsControlCharactersItCannotSpell()
     {
         // Built rather than written: a literal control character cannot appear inside a JSON
         // string, so the serializer is what puts it there in the escaped form a server would.
         var value = "a" + (char) 0 + "b" + (char) 7 + "c";
         var xml = ResultExporter.Xml(Rows(JsonSerializer.Serialize(new[] { new { name = value } })));
 
-        Assert.That(xml, Does.Contain("<name>abc</name>"));
+        await Assert.That(xml).Contains("<name>abc</name>");
     }
 
     [Test]
-    public void XmlKeepsTheWhitespaceItCanSpell()
+    public async Task XmlKeepsTheWhitespaceItCanSpell()
     {
         var xml = ResultExporter.Xml(Rows("""[{"name":"a\tb"}]"""));
 
-        Assert.That(xml, Does.Contain("<name>a\tb</name>"));
+        await Assert.That(xml).Contains("<name>a\tb</name>");
     }
 
     // Member names are the caller's own C# identifiers, but the rows are the server's response.
     [Test]
-    public void XmlSanitizesAMemberNameThatIsNotAnXmlName()
+    public async Task XmlSanitizesAMemberNameThatIsNotAnXmlName()
     {
         var xml = ResultExporter.Xml(Rows("""[{"1st name":"Aaron"}]"""));
 
-        Assert.That(xml, Does.Contain("<_st_name>Aaron</_st_name>"));
+        await Assert.That(xml).Contains("<_st_name>Aaron</_st_name>");
     }
 
     [Test]
-    public void XmlSanitizesAnEmptyMemberName()
+    public async Task XmlSanitizesAnEmptyMemberName()
     {
         var xml = ResultExporter.Xml(Rows("""[{"":"Aaron"}]"""));
 
-        Assert.That(xml, Does.Contain("<_>Aaron</_>"));
+        await Assert.That(xml).Contains("<_>Aaron</_>");
     }
 
     [Test]
-    public void JsonWritesTheRowsAsTheServerSentThem()
+    public async Task JsonWritesTheRowsAsTheServerSentThem()
     {
         var json = ResultExporter.Json(Rows("""[{"name":"Aaron"}]"""));
 
-        Assert.That(
-            json.ReplaceLineEndings("\n"),
-            Is.EqualTo(
+        await Assert.That(json.ReplaceLineEndings("\n")).IsEqualTo(
                 """
                 [
                   {
                     "name": "Aaron"
                   }
                 ]
-                """));
+                """);
     }
 
     static IReadOnlyList<JsonElement> Rows(string json) =>

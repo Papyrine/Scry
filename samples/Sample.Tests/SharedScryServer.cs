@@ -5,8 +5,7 @@
 /// repeating the (~4s) build/clone/start on every test. Started on first use so a <c>Browser</c>-only
 /// run, which never touches it, pays nothing.
 /// </summary>
-[SetUpFixture]
-public class SharedScryServer
+public static class SharedScryServer
 {
     static ScryTestServer? server;
 
@@ -14,8 +13,8 @@ public class SharedScryServer
         // The in-process fixtures are not parallelised, so first-use construction is never concurrent.
         server ??= await ScryTestServer.StartAsync();
 
-    [OneTimeTearDown]
-    public async Task Stop()
+    [After(TestSession)]
+    public static async Task Stop()
     {
         if (server is not null)
         {

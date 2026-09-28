@@ -8,81 +8,81 @@ using Microsoft.EntityFrameworkCore;
 /// for, so one bad type would fail every fixture — so each case compiles its own model with Roslyn
 /// and builds the schema over that. Pinned by message, since the message is the fix a host is told.
 /// </summary>
-[TestFixture]
 public class StartupRefusalTests
 {
-    [TestCase(
+    [Test]
+    [Arguments(
         "[Queryable] public class A { public int Id { get; set; } [Attachment] public string Doc { get; set; } = \"\"; }",
         "[Attachment]",
-        TestName = "an attachment that is not a byte array")]
-    [TestCase(
+        DisplayName = "an attachment that is not a byte array")]
+    [Arguments(
         "[Queryable] public class A { public int Id { get; set; } [QueryIgnore] [Attachment] public byte[]? Doc { get; set; } }",
         "not exposed to clients",
-        TestName = "an attachment on a hidden member")]
-    [TestCase(
+        DisplayName = "an attachment on a hidden member")]
+    [Arguments(
         "[Queryable] public class A { public int Id { get; set; } [Attachment] [BinaryTransfer] public byte[]? Doc { get; set; } }",
         "carries both [Attachment] and [BinaryTransfer]",
-        TestName = "an attachment that is also a binary transfer")]
-    [TestCase(
+        DisplayName = "an attachment that is also a binary transfer")]
+    [Arguments(
         "[QueryableComplex] public class C { [Attachment] public byte[]? Doc { get; set; } } [Queryable] public class A { public int Id { get; set; } public C Part { get; set; } = new(); }",
         "[Attachment]",
-        TestName = "an attachment on a complex type")]
-    [TestCase(
+        DisplayName = "an attachment on a complex type")]
+    [Arguments(
         "[Queryable] [AttachmentWith(typeof(P))] public class A { public int Id { get; set; } [Attachment(ContentType = \"nope\")] public byte[]? Doc { get; set; } } public sealed class P : IAttachmentPolicy<A> { public bool Authorize(ScryAttachmentContext c) => true; }",
         "not a media type",
-        TestName = "a declared content type that is not a media type")]
-    [TestCase(
+        DisplayName = "a declared content type that is not a media type")]
+    [Arguments(
         "[Queryable] public class A { public int Id { get; set; } [Attachment] public byte[]? Doc { get; set; } }",
         "attachment",
-        TestName = "an attachment with no policy to authorize it")]
-    [TestCase(
+        DisplayName = "an attachment with no policy to authorize it")]
+    [Arguments(
         "[Queryable(Name = \"Same\")] public class A { public int Id { get; set; } } [Queryable(Name = \"Same\")] public class B { public int Id { get; set; } }",
         "Duplicate queryable source name 'Same'",
-        TestName = "two sources with one name")]
-    [TestCase(
+        DisplayName = "two sources with one name")]
+    [Arguments(
         "[Queryable(Name = \"not valid\")] public class A { public int Id { get; set; } }",
         "not valid",
-        TestName = "a source name that is not an identifier")]
-    [TestCase(
+        DisplayName = "a source name that is not an identifier")]
+    [Arguments(
         "[Queryable] [ReturnableWith(typeof(P))] public class A { public int Id { get; set; } } [Queryable] public class B { public int Id { get; set; } } public sealed class P : IReturnablePolicy<A>, IReturnablePolicy<B> { public IQueryable<A> Filter(IQueryable<A> s, ScryPolicyContext c) => s; public IQueryable<B> Filter(IQueryable<B> s, ScryPolicyContext c) => s; }",
         "ambiguous",
-        TestName = "a policy filtering two types")]
-    [TestCase(
+        DisplayName = "a policy filtering two types")]
+    [Arguments(
         "[Queryable] [ReturnableWith(typeof(P))] public class A { public int Id { get; set; } } [Queryable] public class B { public int Id { get; set; } } public sealed class P : IReturnablePolicy<B> { public IQueryable<B> Filter(IQueryable<B> s, ScryPolicyContext c) => s; }",
         "P",
-        TestName = "a policy attached outside the hierarchy it filters")]
-    [TestCase(
+        DisplayName = "a policy attached outside the hierarchy it filters")]
+    [Arguments(
         "[Queryable] [PreviousNames(\"\")] public class A { public int Id { get; set; } }",
         "contains a blank name",
-        TestName = "a blank previous name")]
-    [TestCase(
+        DisplayName = "a blank previous name")]
+    [Arguments(
         "[Queryable] [PreviousNames(\"A\")] public class A { public int Id { get; set; } }",
         "already its current source name",
-        TestName = "a previous name that is the current name")]
-    [TestCase(
+        DisplayName = "a previous name that is the current name")]
+    [Arguments(
         "[Queryable] [PreviousNames(\"Old\")] public class A { public int Id { get; set; } } [Queryable] [PreviousNames(\"Old\")] public class B { public int Id { get; set; } }",
         "already a previous name of source",
-        TestName = "a previous name claimed twice")]
-    [TestCase(
+        DisplayName = "a previous name claimed twice")]
+    [Arguments(
         "[Queryable] public class A { public int Id { get; set; } [QueryIgnore] [PreviousNames(\"Old\")] public int Hidden { get; set; } }",
         "not exposed to clients",
-        TestName = "a previous name on a hidden member")]
-    [TestCase(
+        DisplayName = "a previous name on a hidden member")]
+    [Arguments(
         "[QueryableComplex] [PreviousNames(\"Old\")] public class C { public int X { get; set; } } [Queryable] public class A { public int Id { get; set; } public C Part { get; set; } = new(); }",
         "has no effect",
-        TestName = "a previous name on a complex type")]
-    [TestCase(
+        DisplayName = "a previous name on a complex type")]
+    [Arguments(
         "[PreviousNames(\"Old\")] public class Plain { public int Id { get; set; } }",
         "has no wire name",
-        TestName = "a previous name on a type that is not a source")]
-    public void RefusesToStart(string model, string expected)
+        DisplayName = "a previous name on a type that is not a source")]
+    public async Task RefusesToStart(string model, string expected)
     {
-        var exception = Refusal(model);
+        var exception = await Refusal(model);
 
-        Assert.That(exception.Message, Does.Contain(expected));
+        await Assert.That(exception.Message).Contains(expected);
     }
 
-    static Exception Refusal(string model)
+    static async Task<Exception> Refusal(string model)
     {
         var source =
             $$"""
@@ -105,11 +105,11 @@ public class StartupRefusalTests
         using var stream = new MemoryStream();
         var emitted = compilation.Emit(stream);
         var errors = emitted.Diagnostics.Where(_ => _.Severity == DiagnosticSeverity.Error).ToList();
-        Assert.That(errors, Is.Empty, string.Join("\n", errors));
+        await Assert.That(errors).IsEmpty().Because(string.Join("\n", errors));
 
-        var assembly = Assembly.Load(stream.ToArray());
+        var assembly = System.Reflection.Assembly.Load(stream.ToArray());
         var options = new ScryOptions(assembly.GetType("ShapesContext")!);
-        return Assert.Throws<Exception>(() => Schema.Build(options))!;
+        return Assert.ThrowsExactly<Exception>(() => Schema.Build(options))!;
     }
 
     static List<MetadataReference> References()

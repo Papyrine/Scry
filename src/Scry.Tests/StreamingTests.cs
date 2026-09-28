@@ -3,7 +3,6 @@
 /// same validation — a rejected query never reaches EF, so nothing has been written when a stream is
 /// refused. What differs is that neither side holds the whole result.
 /// </summary>
-[TestFixture]
 public class StreamingTests
 {
     [Test]
@@ -24,13 +23,13 @@ public class StreamingTests
 
         var listed = SharedProcessor.Instance.Execute(request, context);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(begin.Kind, Is.EqualTo(ScryStream.Begin));
-            Assert.That(begin.Stamp, Is.EqualTo(SharedProcessor.Instance.SchemaStamp));
-            Assert.That(streamed.Select(_ => _["Name"]), Is.EqualTo(["Aaron", "Alice", "Carol"]));
-            Assert.That(streamed, Has.Count.EqualTo(listed.Payload.GetArrayLength()));
-        });
+            await Assert.That(begin.Kind).IsEqualTo(ScryStream.Begin);
+            await Assert.That(begin.Stamp).IsEqualTo(SharedProcessor.Instance.SchemaStamp);
+            await Assert.That(streamed.Select(_ => _["Name"])).IsEquivalentTo(new object?[] {"Aaron", "Alice", "Carol"}, CollectionOrdering.Matching);
+            await Assert.That(streamed).Count().IsEqualTo(listed.Payload.GetArrayLength());
+        }
     }
 
     [Test]
@@ -46,11 +45,11 @@ public class StreamingTests
 
         var (_, rows) = SharedProcessor.Instance.Stream(request, context);
 
-        Assert.That((await Read(rows)).Select(_ => _["Name"]), Does.Not.Contain("Old typo"));
+        await Assert.That((await Read(rows)).Select(_ => _["Name"])).DoesNotContain("Old typo");
     }
 
     [Test]
-    public void RejectsAStreamOfAScalarResult()
+    public async Task RejectsAStreamOfAScalarResult()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -58,14 +57,14 @@ public class StreamingTests
         // transport can still answer with a status rather than a half-sent stream.
         var request = QueryRequest.Create("Employee", [new CountOp(Predicate: null)]);
 
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Stream(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("Only a query that returns rows can be streamed"));
+        await Assert.That(exception!.Message).Contains("Only a query that returns rows can be streamed");
     }
 
     [Test]
-    public void RejectsADisallowedMemberBeforeStreaming()
+    public async Task RejectsADisallowedMemberBeforeStreaming()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -75,14 +74,14 @@ public class StreamingTests
 
         // Validation runs to completion before anything is rebound, so this is a rejection rather
         // than a stream that fails part-way.
-        var exception = Assert.Throws<ScryValidationException>(
+        var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Stream(request, context));
 
-        Assert.That(exception!.Message, Does.Contain("Salary"));
+        await Assert.That(exception!.Message).Contains("Salary");
     }
 
     [Test]
-    public void EndsAStreamThatExceedsTheRowLimitWithAFailure()
+    public async Task EndsAStreamThatExceedsTheRowLimitWithAFailure()
     {
         using var context = TestContext.CreateSeeded();
 
@@ -101,9 +100,9 @@ public class StreamingTests
 
         // Four employees against a limit of two: the enumeration faults rather than stopping short,
         // so a reader cannot mistake the truncation for the end of the data.
-        var exception = Assert.ThrowsAsync<ScryValidationException>(() => Read(rows));
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(() => Read(rows));
 
-        Assert.That(exception!.Message, Does.Contain("more than the maximum of 2 streamed rows"));
+        await Assert.That(exception!.Message).Contains("more than the maximum of 2 streamed rows");
     }
 
     [Test]
@@ -128,7 +127,7 @@ public class StreamingTests
 
         var (_, rows) = SharedProcessor.Instance.Stream(request, context);
 
-        Assert.That(await Read(rows), Has.Count.EqualTo(4));
+        await Assert.That(await Read(rows)).Count().IsEqualTo(4);
     }
 
     [Test]
@@ -146,7 +145,7 @@ public class StreamingTests
 
         var (_, rows) = SharedProcessor.Instance.Stream(request, context);
 
-        Assert.That((await Read(rows)).Select(_ => _["Region"]), Is.EqualTo(["North", "South"]));
+        await Assert.That((await Read(rows)).Select(_ => _["Region"])).IsEquivalentTo(new object?[] {"North", "South"}, CollectionOrdering.Matching);
     }
 
     // An attachment is not a scalar, so it is absent from a streamed row exactly as it is from a
@@ -164,12 +163,12 @@ public class StreamingTests
         var (_, rows) = SharedProcessor.Instance.Stream(request, context);
         var streamed = await Read(rows);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(streamed.Select(_ => _["Id"]), Is.EqualTo([1, 2, UnsealedContractsPolicy.SealedId]));
-            Assert.That(streamed.Select(_ => _["Name"]), Is.EqualTo(["Lease", "Draft", "Sealed"]));
-            Assert.That(streamed.Any(_ => _.ContainsKey("Document")), Is.False);
-        });
+            await Assert.That(streamed.Select(_ => _["Id"])).IsEquivalentTo(new object?[] {1, 2, UnsealedContractsPolicy.SealedId}, CollectionOrdering.Matching);
+            await Assert.That(streamed.Select(_ => _["Name"])).IsEquivalentTo(new object?[] {"Lease", "Draft", "Sealed"}, CollectionOrdering.Matching);
+            await Assert.That(streamed.Any(_ => _.ContainsKey("Document"))).IsFalse();
+        }
     }
 
     static async Task<List<Dictionary<string, object?>>> Read(IAsyncEnumerable<Dictionary<string, object?>> rows)

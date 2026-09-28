@@ -4,11 +4,11 @@
 /// registered there, a fresh instance otherwise — and its failure arrives as it was thrown, which is
 /// also how a cached policy's has always arrived.
 /// </summary>
-[TestFixture]
+[NotInParallel]
 public class PolicyInvocationTests
 {
     [Test]
-    public void ARegisteredPolicyIsTheScopesOwn()
+    public async Task ARegisteredPolicyIsTheScopesOwn()
     {
         using var context = TestContext.CreateSeeded();
         var processor = Build(_ => _.AddPolicy<Employee, RecordingPolicy>());
@@ -26,18 +26,18 @@ public class PolicyInvocationTests
             processor.Execute(Count(), context, second.ServiceProvider);
         }
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(RecordingPolicy.Applied, Has.Count.EqualTo(3));
-            Assert.That(RecordingPolicy.Applied[1], Is.SameAs(RecordingPolicy.Applied[0]));
-            Assert.That(RecordingPolicy.Applied[2], Is.Not.SameAs(RecordingPolicy.Applied[0]));
-        });
+            await Assert.That(RecordingPolicy.Applied).Count().IsEqualTo(3);
+            await Assert.That(RecordingPolicy.Applied[1]).IsSameReferenceAs(RecordingPolicy.Applied[0]);
+            await Assert.That(RecordingPolicy.Applied[2]).IsNotSameReferenceAs(RecordingPolicy.Applied[0]);
+        }
     }
 
     // Where the services have nothing, the policy is constructed — per request, since a policy may
     // carry state of its own, and never held across requests.
     [Test]
-    public void AnUnregisteredPolicyIsConstructedPerRequest()
+    public async Task AnUnregisteredPolicyIsConstructedPerRequest()
     {
         using var context = TestContext.CreateSeeded();
         var processor = Build(_ => _.AddPolicy<Employee, RecordingPolicy>());
@@ -46,24 +46,24 @@ public class PolicyInvocationTests
         processor.Execute(Count(), context);
         processor.Execute(Count(), context);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(RecordingPolicy.Applied, Has.Count.EqualTo(2));
-            Assert.That(RecordingPolicy.Applied[1], Is.Not.SameAs(RecordingPolicy.Applied[0]));
-        });
+            await Assert.That(RecordingPolicy.Applied).Count().IsEqualTo(2);
+            await Assert.That(RecordingPolicy.Applied[1]).IsNotSameReferenceAs(RecordingPolicy.Applied[0]);
+        }
     }
 
     // A policy's refusal is a rejection, as a cached policy's has always been — not a fault wrapped
     // in the invoke that reached it.
     [Test]
-    public void APolicysRefusalArrivesAsItWasThrown()
+    public async Task APolicysRefusalArrivesAsItWasThrown()
     {
         using var context = TestContext.CreateSeeded();
         var processor = Build(_ => _.AddPolicy<Employee, RefusingPolicy>());
 
-        var exception = Assert.Throws<ScryValidationException>(() => processor.Execute(Count(), context))!;
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => processor.Execute(Count(), context))!;
 
-        Assert.That(exception.Message, Is.EqualTo("Refused by the policy."));
+        await Assert.That(exception.Message).IsEqualTo("Refused by the policy.");
     }
 
     static QueryRequest Count() =>

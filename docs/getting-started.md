@@ -233,7 +233,7 @@ services.AddScoped(
 services.AddScryClient("/api/query");
 services.AddScoped<ScryQuery>();
 ```
-<sup><a href='/samples/Sample.Tests/ClientRegistrationTests.cs#L19-L27' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientWasmRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Tests/ClientRegistrationTests.cs#L18-L26' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientWasmRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 That is a fair shortcut in WebAssembly, where the browser backs `HttpClient`, there is exactly one, and it already points at the app's own origin — so there is nothing for a name to disambiguate, and it saves the app a `Microsoft.Extensions.Http` reference it would otherwise carry into the browser. Prefer naming the client anywhere else: a bare `HttpClient` registration is discouraged outside WASM to begin with, and an ambient one may well belong to another API, which Scry would then quietly post to. A desktop or console client also has a socket pool and a DNS lifetime for the factory to manage, which the browser does not — see [Client hosts](clients.md).

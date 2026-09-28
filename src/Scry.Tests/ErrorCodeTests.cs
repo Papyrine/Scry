@@ -3,36 +3,36 @@
 /// part a client branches on — the message is for a person — so every answer the endpoints give has
 /// one, and the two that have a specific remedy keep exceptions of their own.
 /// </summary>
-[TestFixture]
 public class ErrorCodeTests
 {
-    [TestCase(ScryErrorCode.WireFormat)]
-    [TestCase(ScryErrorCode.Validation)]
-    [TestCase(ScryErrorCode.UnsupportedMedia)]
-    [TestCase(ScryErrorCode.ExecutionFailed)]
-    public void ACodeWithNoRemedyOfItsOwnKeepsTheRequestException(ScryErrorCode code)
+    [Test]
+    [Arguments(ScryErrorCode.WireFormat)]
+    [Arguments(ScryErrorCode.Validation)]
+    [Arguments(ScryErrorCode.UnsupportedMedia)]
+    [Arguments(ScryErrorCode.ExecutionFailed)]
+    public async Task ACodeWithNoRemedyOfItsOwnKeepsTheRequestException(ScryErrorCode code)
     {
         var client = StubbedClient(_ => Failure(HttpStatusCode.BadRequest, "nope", code));
 
-        var exception = Assert.ThrowsAsync<ScryRequestException>(() => Count(client))!;
-        Assert.That(exception.Code, Is.EqualTo(code));
+        var exception = (await Assert.ThrowsExactlyAsync<ScryRequestException>(() => Count(client)))!;
+        await Assert.That(exception.Code).IsEqualTo(code);
     }
 
     // The two the client acts on rather than reports: one prompts a reload, the other is final.
     [Test]
-    public void TheStaleClientCodeIsItsOwnException() =>
-        Assert.ThrowsAsync<ScryStaleClientException>(
+    public async Task TheStaleClientCodeIsItsOwnException() =>
+        await Assert.ThrowsExactlyAsync<ScryStaleClientException>(
             () => Count(StubbedClient(_ => Failure(HttpStatusCode.BadRequest, "drifted", ScryErrorCode.StaleClient))));
 
     [Test]
-    public void TheForbiddenCodeIsItsOwnException() =>
-        Assert.ThrowsAsync<ScryPermissionException>(
+    public async Task TheForbiddenCodeIsItsOwnException() =>
+        await Assert.ThrowsExactlyAsync<ScryPermissionException>(
             () => Count(StubbedClient(_ => Failure(HttpStatusCode.Forbidden, "denied", ScryErrorCode.Forbidden))));
 
     // A 403 from something in the way is not a policy denial: the endpoint says so with a code, and
     // nothing else gets to claim one. Without a code there is only the status to report.
     [Test]
-    public void AForbiddenStatusWithoutTheCodeIsNotADenial()
+    public async Task AForbiddenStatusWithoutTheCodeIsNotADenial()
     {
         var client = StubbedClient(
             _ => new(HttpStatusCode.Forbidden)
@@ -40,16 +40,16 @@ public class ErrorCodeTests
                 Content = new StringContent("""{"error":"blocked by the gateway"}""")
             });
 
-        var exception = Assert.ThrowsAsync<ScryRequestException>(() => Count(client))!;
-        Assert.Multiple(() =>
+        var exception = (await Assert.ThrowsExactlyAsync<ScryRequestException>(() => Count(client)))!;
+        using (Assert.Multiple())
         {
-            Assert.That(exception.Code, Is.EqualTo(ScryErrorCode.Unknown));
-            Assert.That(exception.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
-        });
+            await Assert.That(exception.Code).IsEqualTo(ScryErrorCode.Unknown);
+            await Assert.That(exception.StatusCode).IsEqualTo(HttpStatusCode.Forbidden);
+        }
     }
 
     [Test]
-    public void ABodyThatIsNotAnErrorCarriesNoCode()
+    public async Task ABodyThatIsNotAnErrorCarriesNoCode()
     {
         var client = StubbedClient(
             _ => new(HttpStatusCode.BadGateway)
@@ -57,12 +57,12 @@ public class ErrorCodeTests
                 Content = new StringContent("<html>502 from a proxy</html>")
             });
 
-        var exception = Assert.ThrowsAsync<ScryRequestException>(() => Count(client))!;
-        Assert.Multiple(() =>
+        var exception = (await Assert.ThrowsExactlyAsync<ScryRequestException>(() => Count(client)))!;
+        using (Assert.Multiple())
         {
-            Assert.That(exception.Code, Is.EqualTo(ScryErrorCode.Unknown));
-            Assert.That(exception.Body, Does.Contain("502 from a proxy"));
-        });
+            await Assert.That(exception.Code).IsEqualTo(ScryErrorCode.Unknown);
+            await Assert.That(exception.Body).Contains("502 from a proxy");
+        }
     }
 
     /// <summary>
@@ -88,8 +88,8 @@ public class ErrorCodeTests
                 return Scalar(3);
             });
 
-        Assert.That(await Count(client), Is.EqualTo(3));
-        Assert.That(methods, Is.EqualTo([HttpMethod.Get, HttpMethod.Post]));
+        await Assert.That(await Count(client)).IsEqualTo(3);
+        await Assert.That(methods).IsEquivalentTo([HttpMethod.Get, HttpMethod.Post], CollectionOrdering.Matching);
     }
 
     /// <summary>
@@ -99,7 +99,7 @@ public class ErrorCodeTests
     /// act on a code it does not have, and <c>Body</c> still carries everything that was said.
     /// </summary>
     [Test]
-    public void ACodeThisClientDoesNotKnowReadsAsUnknown()
+    public async Task ACodeThisClientDoesNotKnowReadsAsUnknown()
     {
         var client = StubbedClient(
             _ => new(HttpStatusCode.BadRequest)
@@ -107,12 +107,12 @@ public class ErrorCodeTests
                 Content = new StringContent("""{"error":"something new","code":"RateLimited"}""")
             });
 
-        var exception = Assert.ThrowsAsync<ScryRequestException>(() => Count(client))!;
-        Assert.Multiple(() =>
+        var exception = (await Assert.ThrowsExactlyAsync<ScryRequestException>(() => Count(client)))!;
+        using (Assert.Multiple())
         {
-            Assert.That(exception.Code, Is.EqualTo(ScryErrorCode.Unknown));
-            Assert.That(exception.Body, Does.Contain("something new"));
-        });
+            await Assert.That(exception.Code).IsEqualTo(ScryErrorCode.Unknown);
+            await Assert.That(exception.Body).Contains("something new");
+        }
     }
 
     // The batch reports an entry exactly as the same query sent alone would, codes included.
@@ -129,8 +129,8 @@ public class ErrorCodeTests
 
         await batch.SendAsync();
 
-        var exception = Assert.ThrowsAsync<ScryRequestException>(async () => await rejected)!;
-        Assert.That(exception.Code, Is.EqualTo(ScryErrorCode.Validation));
+        var exception = (await Assert.ThrowsExactlyAsync<ScryRequestException>(async () => await rejected))!;
+        await Assert.That(exception.Code).IsEqualTo(ScryErrorCode.Validation);
     }
 
     static ScryClient BatchingClientFor(TestContext context) =>

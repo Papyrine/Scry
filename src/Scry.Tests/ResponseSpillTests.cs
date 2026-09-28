@@ -3,7 +3,6 @@
 /// enough to be answered whole still is — declaring its length, with nothing sent early — and that one
 /// which is not gives up the length rather than the bytes.
 /// </summary>
-[TestFixture]
 public class ResponseSpillTests
 {
     [Test]
@@ -16,13 +15,13 @@ public class ResponseSpillTests
         Fill(spill.Output, 100);
         await spill.CompleteAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(spill.Committed, Is.False);
-            Assert.That(context.Response.ContentLength, Is.EqualTo(100));
-            Assert.That(context.Response.ContentType, Is.EqualTo("application/json"));
-            Assert.That(body.Length, Is.EqualTo(100));
-        });
+            await Assert.That(spill.Committed).IsFalse();
+            await Assert.That(context.Response.ContentLength).IsEqualTo(100);
+            await Assert.That(context.Response.ContentType).IsEqualTo("application/json");
+            await Assert.That(body.Length).IsEqualTo(100);
+        }
     }
 
     // A length can only describe the whole body, and past the first drain the pending bytes are not it.
@@ -38,12 +37,12 @@ public class ResponseSpillTests
         Fill(spill.Output, 50);
         await spill.CompleteAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(spill.Committed, Is.True);
-            Assert.That(context.Response.ContentLength, Is.Null);
-            Assert.That(body.Length, Is.EqualTo(200));
-        });
+            await Assert.That(spill.Committed).IsTrue();
+            await Assert.That(context.Response.ContentLength).IsNull();
+            await Assert.That(body.Length).IsEqualTo(200);
+        }
     }
 
     [Test]
@@ -66,7 +65,7 @@ public class ResponseSpillTests
 
         await spill.CompleteAsync();
 
-        Assert.That(body.ToArray(), Is.EqualTo(written.ToArray()));
+        await Assert.That(body.ToArray()).IsEquivalentTo(written.ToArray(), CollectionOrdering.Matching);
     }
 
     // Withheld is the default, so a path that never asks keeps behaving as it did before spilling existed.
@@ -79,27 +78,27 @@ public class ResponseSpillTests
         Fill(spill.Output, 500);
         await spill.DrainAsync();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(spill.Committed, Is.False);
-            Assert.That(body.Length, Is.Zero);
-            Assert.That(spill.Pending.Length, Is.EqualTo(500));
-        });
+            await Assert.That(spill.Committed).IsFalse();
+            await Assert.That(body.Length).IsZero();
+            await Assert.That(spill.Pending.Length).IsEqualTo(500);
+        }
     }
 
     [Test]
-    public void NeverReachesTheThresholdWithoutPermission()
+    public async Task NeverReachesTheThresholdWithoutPermission()
     {
         var (context, _) = Context();
         using var spill = new ResponseSpill(context, 10);
 
         Fill(spill.Output, 500);
 
-        Assert.That(spill.ShouldDrain(0), Is.False);
+        await Assert.That(spill.ShouldDrain(0)).IsFalse();
     }
 
     [Test]
-    public void CountsWhatTheJsonWriterIsStillHoldingTowardsTheThreshold()
+    public async Task CountsWhatTheJsonWriterIsStillHoldingTowardsTheThreshold()
     {
         var (context, _) = Context();
         using var spill = new ResponseSpill(context, 100);
@@ -107,13 +106,13 @@ public class ResponseSpillTests
 
         Fill(spill.Output, 60);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
             // Sixty in the buffer reaches nothing; sixty more still in the writer reaches the threshold.
-            Assert.That(spill.ShouldDrain(0), Is.False);
-            Assert.That(spill.ShouldDrain(40), Is.True);
-            Assert.That(spill.ShouldDrain(60), Is.True);
-        });
+            await Assert.That(spill.ShouldDrain(0)).IsFalse();
+            await Assert.That(spill.ShouldDrain(40)).IsTrue();
+            await Assert.That(spill.ShouldDrain(60)).IsTrue();
+        }
     }
 
     [Test]
@@ -130,7 +129,7 @@ public class ResponseSpillTests
         await spill.DrainAsync();
 
         // Re-set on the first drain only: past that the headers are the response's own and are fixed.
-        Assert.That(context.Response.ContentType, Is.EqualTo("changed/by-nobody"));
+        await Assert.That(context.Response.ContentType).IsEqualTo("changed/by-nobody");
     }
 
     [Test]
@@ -156,9 +155,7 @@ public class ResponseSpillTests
         await json.FlushAsync();
         await spill.CompleteAsync();
 
-        Assert.That(
-            Encoding.UTF8.GetString(body.ToArray()),
-            Is.EqualTo($"[{string.Join(',', Enumerable.Range(0, 200))}]"));
+        await Assert.That(Encoding.UTF8.GetString(body.ToArray())).IsEqualTo($"[{string.Join(',', Enumerable.Range(0, 200))}]");
     }
 
     static void Fill(IBufferWriter<byte> output, int count)

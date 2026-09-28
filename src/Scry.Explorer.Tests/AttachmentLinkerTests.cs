@@ -3,7 +3,6 @@
 /// explorer never materializes a row into a model, so this stands in for the plan a generated client
 /// builds while it translates — and has to agree with it.
 /// </summary>
-[TestFixture]
 public class AttachmentLinkerTests
 {
     // Mirrors the Contract fixture the server-side tests use: a key, an ordinary member, and an
@@ -60,38 +59,38 @@ public class AttachmentLinkerTests
         ]));
 
     [Test]
-    public void LinksAWholeModelQuery()
+    public async Task LinksAWholeModelQuery()
     {
         var links = AttachmentLinker.Link(introspection, Request(WholeModel));
 
-        Assert.That(links, Has.Count.EqualTo(1));
-        Assert.Multiple(() =>
+        await Assert.That(links).Count().IsEqualTo(1);
+        using (Assert.Multiple())
         {
-            Assert.That(links[0].Root, Is.EqualTo("Contract"));
-            Assert.That(links[0].Member, Is.EqualTo("Document"));
+            await Assert.That(links[0].Root).IsEqualTo("Contract");
+            await Assert.That(links[0].Member).IsEqualTo("Document");
             // Camel-cased: the response is keyed by ScryJson's dictionary policy, and the table's
             // columns are the response's own property names.
-            Assert.That(links[0].KeyColumns, Is.EqualTo(["id"]));
+            await Assert.That(links[0].KeyColumns).IsEquivalentTo(["id"], CollectionOrdering.Matching);
             // Carried off introspection so the download can be named before the fetch is made — the
             // explorer has to write a file name at the moment the bytes arrive.
-            Assert.That(links[0].ContentType, Is.EqualTo("application/pdf"));
-        });
+            await Assert.That(links[0].ContentType).IsEqualTo("application/pdf");
+        }
     }
 
     // A hand-built request with no projection at all falls back to the server's default projection,
     // which keys the row by the model's own member names.
     [Test]
-    public void LinksAQueryWithNoProjection()
+    public async Task LinksAQueryWithNoProjection()
     {
         var links = AttachmentLinker.Link(introspection, Request(new WhereOp(new MemberNode(["Name"]))));
 
-        Assert.That(links[0].KeyColumns, Is.EqualTo(["id"]));
+        await Assert.That(links[0].KeyColumns).IsEquivalentTo(["id"], CollectionOrdering.Matching);
     }
 
     // The key is matched by the member it reads rather than by the name it was given, so a renamed
     // projection is still fetchable — and the column named is the one the row actually carries.
     [Test]
-    public void LinksAProjectionThroughItsAlias()
+    public async Task LinksAProjectionThroughItsAlias()
     {
         var request = Request(
             new SelectOp(new(
@@ -100,39 +99,40 @@ public class AttachmentLinkerTests
                 new("Title", new NodeValue(new MemberNode(["Name"])))
             ])));
 
-        Assert.That(AttachmentLinker.Link(introspection, request)[0].KeyColumns, Is.EqualTo(["reference"]));
+        await Assert.That(AttachmentLinker.Link(introspection, request)[0].KeyColumns).IsEquivalentTo(["reference"], CollectionOrdering.Matching);
     }
 
     // Nothing identifies the row, so nothing is offered. The alternative is a button whose only
     // possible outcome is a rejection.
     [Test]
-    public void RefusesAProjectionWithoutTheKey()
+    public async Task RefusesAProjectionWithoutTheKey()
     {
         var request = Request(
             new SelectOp(new([new("Title", new NodeValue(new MemberNode(["Name"])))])));
 
-        Assert.That(AttachmentLinker.Link(introspection, request), Is.Empty);
+        await Assert.That(AttachmentLinker.Link(introspection, request)).IsEmpty();
     }
 
     // A key reached through a navigation belongs to that row rather than this one.
     [Test]
-    public void RefusesAKeyReadThroughANavigation()
+    public async Task RefusesAKeyReadThroughANavigation()
     {
         var request = Request(
             new SelectOp(new([new("Id", new NodeValue(new MemberNode(["Manager", "Id"])))])));
 
-        Assert.That(AttachmentLinker.Link(introspection, request), Is.Empty);
+        await Assert.That(AttachmentLinker.Link(introspection, request)).IsEmpty();
     }
 
     /// <summary>
     /// The operators the client refuses to carry an attachment through, for the same reason: each
     /// rewrites what a row is, so a key beside one no longer identifies a row of the source.
     /// </summary>
-    [TestCaseSource(nameof(Rewriting))]
-    public void RefusesAnOperatorThatRewritesTheRow(QueryOp op) =>
-        Assert.That(AttachmentLinker.Link(introspection, Request(WholeModel, op)), Is.Empty);
+    [Test]
+    [MethodDataSource(nameof(Rewriting))]
+    public async Task RefusesAnOperatorThatRewritesTheRow(QueryOp op) =>
+        await Assert.That(AttachmentLinker.Link(introspection, Request(WholeModel, op))).IsEmpty();
 
-    static IEnumerable<QueryOp> Rewriting()
+    public static IEnumerable<QueryOp> Rewriting()
     {
         yield return new DistinctOp();
         yield return new SelectManyOp(["Tags"]);
@@ -153,43 +153,43 @@ public class AttachmentLinkerTests
 
     // Narrowing keeps the row and its key, so the attachment stays fetchable.
     [Test]
-    public void LinksThroughOfType()
+    public async Task LinksThroughOfType()
     {
         var links = AttachmentLinker.Link(introspection, Request(new OfTypeOp("SealedContract"), WholeModel));
 
-        Assert.That(links, Has.Count.EqualTo(1));
+        await Assert.That(links).Count().IsEqualTo(1);
     }
 
     [Test]
-    public void LinksAnInheritedAttachment()
+    public async Task LinksAnInheritedAttachment()
     {
         var request = QueryRequest.Create("Sealed", [WholeModel]);
 
         var links = AttachmentLinker.Link(introspection, request);
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(links, Has.Count.EqualTo(1));
-            Assert.That(links[0].Root, Is.EqualTo("Sealed"));
-            Assert.That(links[0].Member, Is.EqualTo("Document"));
-            Assert.That(links[0].KeyColumns, Is.EqualTo(["id"]));
-        });
+            await Assert.That(links).Count().IsEqualTo(1);
+            await Assert.That(links[0].Root).IsEqualTo("Sealed");
+            await Assert.That(links[0].Member).IsEqualTo("Document");
+            await Assert.That(links[0].KeyColumns).IsEquivalentTo(["id"], CollectionOrdering.Matching);
+        }
     }
 
     // A model with no attachment anywhere is untouched by all of this — no column, no offer.
     [Test]
-    public void OffersNothingForASourceWithoutAttachments()
+    public async Task OffersNothingForASourceWithoutAttachments()
     {
         var request = QueryRequest.Create(
             "Employee",
             [new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))]))]);
 
-        Assert.That(AttachmentLinker.Link(introspection, request), Is.Empty);
+        await Assert.That(AttachmentLinker.Link(introspection, request)).IsEmpty();
     }
 
     [Test]
-    public void OffersNothingForAnUnknownSource() =>
-        Assert.That(AttachmentLinker.Link(introspection, QueryRequest.Create("Secret", [])), Is.Empty);
+    public async Task OffersNothingForAnUnknownSource() =>
+        await Assert.That(AttachmentLinker.Link(introspection, QueryRequest.Create("Secret", []))).IsEmpty();
 
     /// <summary>
     /// The parity that matters: the columns are resolved against a request a real translation
@@ -197,7 +197,7 @@ public class AttachmentLinkerTests
     /// against a hand-built pipeline that only looks like one.
     /// </summary>
     [Test]
-    public void LinksARequestTheExecutorTranslated()
+    public async Task LinksARequestTheExecutorTranslated()
     {
         var executor = SnippetExecutor.Create(
             introspection,
@@ -211,10 +211,10 @@ public class AttachmentLinkerTests
             introspection,
             executor.Translate("Query.Contract.Select(_ => new { Reference = _.Id })"));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(whole[0].KeyColumns, Is.EqualTo(["id"]));
-            Assert.That(projected[0].KeyColumns, Is.EqualTo(["reference"]));
-        });
+            await Assert.That(whole[0].KeyColumns).IsEquivalentTo(["id"], CollectionOrdering.Matching);
+            await Assert.That(projected[0].KeyColumns).IsEquivalentTo(["reference"], CollectionOrdering.Matching);
+        }
     }
 }

@@ -3,7 +3,6 @@
 /// server serves no commands or cannot be asked, and never an exception — a button's enabled state is
 /// no place for one.
 /// </summary>
-[TestFixture]
 public class CapabilityClientTests
 {
     [Test]
@@ -15,15 +14,15 @@ public class CapabilityClientTests
         };
         var client = stub.Client();
 
-        Assert.That(client.Can("RenameThing"), Is.False);
+        await Assert.That(client.Can("RenameThing")).IsFalse();
         await client.Ready;
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(client.Can("RenameThing"), Is.True);
-            Assert.That(client.Can("CreateThing"), Is.False);
-            Assert.That(stub.CapabilityReads, Is.EqualTo(1));
-        });
+            await Assert.That(client.Can("RenameThing")).IsTrue();
+            await Assert.That(client.Can("CreateThing")).IsFalse();
+            await Assert.That(stub.CapabilityReads).IsEqualTo(1);
+        }
     }
 
     // Where there is no context the change is said before the read completes, which is what lets this
@@ -44,16 +43,16 @@ public class CapabilityClientTests
 
                 await client.Ready;
                 await client.RefreshCapabilitiesAsync();
-                Assert.That(raised, Is.EqualTo(1));
+                await Assert.That(raised).IsEqualTo(1);
 
                 stub.Capabilities = () => CommandStub.CapabilitiesOf("RenameThing", "CreateThing");
                 await client.RefreshCapabilitiesAsync();
 
-                Assert.Multiple(() =>
+                using (Assert.Multiple())
                 {
-                    Assert.That(raised, Is.EqualTo(2));
-                    Assert.That(client.Can("CreateThing"), Is.True);
-                });
+                    await Assert.That(raised).IsEqualTo(2);
+                    await Assert.That(client.Can("CreateThing")).IsTrue();
+                }
             });
 
     [Test]
@@ -63,7 +62,7 @@ public class CapabilityClientTests
 
         await client.Ready;
 
-        Assert.That(client.Can("RenameThing"), Is.False);
+        await Assert.That(client.Can("RenameThing")).IsFalse();
     }
 
     [Test]
@@ -78,7 +77,7 @@ public class CapabilityClientTests
         await client.Ready;
         await client.RefreshCapabilitiesAsync();
 
-        Assert.That(client.Can("RenameThing"), Is.False);
+        await Assert.That(client.Can("RenameThing")).IsFalse();
     }
 
     // Once allowed, a server that cannot be asked again leaves the last answer standing.
@@ -95,7 +94,7 @@ public class CapabilityClientTests
         stub.Capabilities = () => new(HttpStatusCode.InternalServerError);
         await client.RefreshCapabilitiesAsync();
 
-        Assert.That(client.Can("RenameThing"), Is.True);
+        await Assert.That(client.Can("RenameThing")).IsTrue();
     }
 
     [Test]
@@ -105,7 +104,7 @@ public class CapabilityClientTests
 
         await client.Ready;
 
-        Assert.That(client.Can("RenameThing"), Is.False);
+        await Assert.That(client.Can("RenameThing")).IsFalse();
     }
 
     [Test]
@@ -124,7 +123,7 @@ public class CapabilityClientTests
 
         await client.Ready;
 
-        Assert.That(client.ServerSchemaStamp, Is.EqualTo("server-stamp"));
+        await Assert.That(client.ServerSchemaStamp).IsEqualTo("server-stamp");
     }
 
     // Where the read started on a UI thread, the change is said there, so a component can redraw.
@@ -151,7 +150,7 @@ public class CapabilityClientTests
             SynchronizationContext.SetSynchronizationContext(previous);
         }
 
-        Assert.That(await raisedOn.Task.WaitAsync(TimeSpan.FromSeconds(20)), Is.SameAs(context));
+        await Assert.That(await raisedOn.Task.WaitAsync(TimeSpan.FromSeconds(20))).IsSameReferenceAs(context);
     }
 
     // Starts a test's body with no context, so that everything it awaits resumes without one, and puts

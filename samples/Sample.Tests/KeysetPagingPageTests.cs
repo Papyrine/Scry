@@ -3,7 +3,7 @@ using KeysetPage = Sample.WebClient.Pages.KeysetPaging;
 
 // Renders the real Keyset paging page against the real Scry server pipeline (in-memory) and drives the
 // Next button, proving cursor round-tripping (page 1 emits a cursor, Next resumes past it) end to end.
-[TestFixture]
+[NotInParallel]
 public class KeysetPagingPageTests
 {
     [Test]
@@ -26,8 +26,8 @@ public class KeysetPagingPageTests
         string[] secondPage = ["Bob", "Carol"];
 
         // Page 1 — Aaron, Alice — with a further page reachable by cursor.
-        Assert.That(Names(), Is.EqualTo(firstPage));
-        Assert.That(page.FindAll("button")[0].HasAttribute("disabled"), Is.False, "Next enabled on page 1");
+        await Assert.That(Names()).IsEquivalentTo(firstPage, CollectionOrdering.Matching);
+        await Assert.That(page.FindAll("button")[0].HasAttribute("disabled")).IsFalse().Because("Next enabled on page 1");
 
         await page.FindAll("button")[0].ClickAsync();
         await page.WaitForStateAsync(
@@ -35,7 +35,7 @@ public class KeysetPagingPageTests
             TimeSpan.FromSeconds(10));
 
         // Page 2 — Bob, Carol — the last page, so Next is disabled (no cursor to resume from).
-        Assert.That(Names(), Is.EqualTo(secondPage));
-        Assert.That(page.FindAll("button")[0].HasAttribute("disabled"), Is.True, "Next disabled on last page");
+        await Assert.That(Names()).IsEquivalentTo(secondPage, CollectionOrdering.Matching);
+        await Assert.That(page.FindAll("button")[0].HasAttribute("disabled")).IsTrue().Because("Next disabled on last page");
     }
 }

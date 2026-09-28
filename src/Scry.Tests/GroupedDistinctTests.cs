@@ -3,7 +3,6 @@
 /// rows LINQ means distinct rows, which is every row. The row spelling was accepted and translated as
 /// the value spelling, so two orders of equal amount summed once.
 /// </summary>
-[TestFixture]
 public class GroupedDistinctTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -11,7 +10,7 @@ public class GroupedDistinctTests
     // ReSharper restore NotAccessedPositionalProperty.Local
 
     [Test]
-    public void DistinctOverTheSelectedValuesFolds()
+    public async Task DistinctOverTheSelectedValuesFolds()
     {
         var request = Client()
             .Source<Order>("Order")
@@ -24,20 +23,20 @@ public class GroupedDistinctTests
 
         var aggregate = (AggregateNode) ((NodeValue) ((SelectOp) request.Pipeline[1]).Projection.Members[1].Value).Node;
 
-        Assert.That(aggregate.Distinct, Is.True);
+        await Assert.That(aggregate.Distinct).IsTrue();
     }
 
     [Test]
-    public void DistinctOverTheRowsIsRefused()
+    public async Task DistinctOverTheRowsIsRefused()
     {
-        var exception = Assert.Throws<NotSupportedException>(
+        var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => Client()
                 .Source<Order>("Order")
                 .GroupBy(_ => _.Region)
                 .Select(_ => new RegionTotal(_.Key, _.Distinct().Sum(_ => _.Amount)))
                 .ToScryRequest());
 
-        Assert.That(exception!.Message, Does.Contain("Select the value first"));
+        await Assert.That(exception!.Message).Contains("Select the value first");
     }
 
     static ScryClient Client() =>

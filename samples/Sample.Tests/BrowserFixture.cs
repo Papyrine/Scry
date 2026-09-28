@@ -4,24 +4,22 @@
 /// </summary>
 /// <remarks>
 /// One server and one browser per derived fixture rather than one shared across the assembly: a
-/// second <c>[SetUpFixture]</c> in the global namespace would collide with <see cref="SharedScryServer"/>,
-/// and a server start is seconds against a suite whose cost is dominated by the WASM boot on each
-/// page load.
+/// server start is seconds against a suite whose cost is dominated by the WASM boot on each page load.
 /// </remarks>
 public abstract class BrowserFixture
 {
-    Process server = null!;
-    IPlaywright playwright = null!;
-    string workDir = null!;
-    IBrowser browser = null!;
+    /// <summary>
+    /// The server and browser this fixture's tests share, started before its first test and stopped
+    /// after its last.
+    /// </summary>
+    [ClassDataSource<BrowserHost>(Shared = SharedType.PerClass)]
+    public required BrowserHost Host { get; init; }
 
     /// <summary>
     /// What one running test opened and what it logged.
     /// </summary>
     /// <remarks>
-    /// Held per test rather than as fields on the fixture because NUnit runs a fixture's parallel tests
-    /// against one instance of it: a field here would be every test in flight at once, and the page a
-    /// tear-down closed would be some other test's.
+    /// Held per test: each test runs on an instance of its own, so this is only ever the one test's.
     /// </remarks>
     sealed class RunningTest
     {
@@ -41,14 +39,10 @@ public abstract class BrowserFixture
         public ConcurrentBag<IBrowserContext> Contexts { get; } = [];
     }
 
-    // Keyed by NUnit's id for the test, which is what tells two tests running at once apart.
-    ConcurrentDictionary<string, RunningTest> running = new();
-
-    RunningTest Current =>
-        running.GetOrAdd(TestContext.CurrentContext.Test.ID, _ => new());
+    RunningTest Current { get; } = new();
 
     /// <summary>The origin the sample server is listening on, with no trailing slash.</summary>
-    protected string BaseUrl { get; private set; } = null!;
+    protected string BaseUrl => Host.BaseUrl;
 
     /// <summary>
     /// Opens a page, recording everything it logs for the duration of the test.
@@ -58,7 +52,7 @@ public abstract class BrowserFixture
     /// that quietly opts out of the recording.
     /// </remarks>
     protected async Task<IPage> NewPageAsync(BrowserNewPageOptions? options = null) =>
-        Track(await browser.NewPageAsync(options));
+        Track(await Host.Browser.NewPageAsync(options));
 
     /// <summary>
     /// A context for pages that share an origin's storage — what two explorer windows in one browser
@@ -67,7 +61,7 @@ public abstract class BrowserFixture
     /// </summary>
     protected async Task<IBrowserContext> NewContextAsync()
     {
-        var context = await browser.NewContextAsync();
+        var context = await Host.Browser.NewContextAsync();
         Current.Contexts.Add(context);
         return context;
     }
@@ -77,18 +71,13 @@ public abstract class BrowserFixture
 
     IPage Track(IPage page)
     {
-        // Resolved once, here, rather than inside the handlers: those run on Playwright's threads, where
-        // the test NUnit thinks is current is not this one.
+        // Resolved once, here, rather than inside the handlers, which run on Playwright's threads.
         var test = Current;
         test.Pages.Add(page);
         page.Console += (_, message) => test.Console.Enqueue($"[{message.Type}] {message.Text}");
         page.PageError += (_, error) => test.Console.Enqueue($"[pageerror] {error}");
         return page;
     }
-
-    [SetUp]
-    public void StartTest() =>
-        running[TestContext.CurrentContext.Test.ID] = new();
 
     /// <summary>
     /// Reports what the page logged, but only for a test that failed.
@@ -101,7 +90,7 @@ public abstract class BrowserFixture
     /// exception out of the in-browser Roslyn, a 404 for an asset. None of that reached the test output
     /// before, which made a whole suite of timeouts say nothing about which of those it was.
     /// </remarks>
-    [TearDown]
+    [After(Test)]
     public async Task EndTest()
     {
         var test = Current;
@@ -134,10 +123,7 @@ public abstract class BrowserFixture
             }
         }
 
-        // Before the check, which throws on a refusal and would otherwise leave the entry behind.
-        running.TryRemove(TestContext.CurrentContext.Test.ID, out _);
-
-        RefuseContentSecurityPolicyViolations(test);
+        await RefuseContentSecurityPolicyViolations(test);
     }
 
     /// <summary>
@@ -147,14 +133,14 @@ public abstract class BrowserFixture
     /// tightened past what Monaco or the runtime needs fails here naming the refusal, rather than as a
     /// page that quietly stopped completing or booting somewhere else in the suite.
     /// </summary>
-    static void RefuseContentSecurityPolicyViolations(RunningTest test)
+    static async Task RefuseContentSecurityPolicyViolations(RunningTest test)
     {
-        if (TestContext.CurrentContext.Result.Outcome.Status == TestStatus.Failed)
+        if (Failed())
         {
             return;
         }
 
-        Assert.That(TakePolicyRefusals(test), Is.Empty, "The browser refused something under the explorer's Content-Security-Policy.");
+        await Assert.That(TakePolicyRefusals(test)).IsEmpty().Because("The browser refused something under the explorer's Content-Security-Policy.");
     }
 
     /// <summary>
@@ -191,21 +177,42 @@ public abstract class BrowserFixture
 
     static void ReportConsoleOnFailure(RunningTest test)
     {
-        if (TestContext.CurrentContext.Result.Outcome.Status != TestStatus.Failed ||
+        if (!Failed() ||
             test.Console.IsEmpty)
         {
             return;
         }
 
-        TestContext.Out.WriteLine($"Browser console during {TestContext.CurrentContext.Test.Name}:");
+        var context = TestContext.Current!;
+        context.Output.WriteLine($"Browser console during {context.Metadata.TestName}:");
         foreach (var message in test.Console)
         {
-            TestContext.Out.WriteLine($"  {message}");
+            context.Output.WriteLine($"  {message}");
         }
     }
 
-    [OneTimeSetUp]
-    public async Task StartServer()
+    static bool Failed() =>
+        TestContext.Current?.Execution.Result?.State == TestState.Failed;
+}
+
+/// <summary>
+/// The real Sample.WebServer, launched as its own process, and a headless Chromium to drive it: one
+/// pair per browser fixture.
+/// </summary>
+public sealed class BrowserHost :
+    TUnit.Core.Interfaces.IAsyncInitializer,
+    IAsyncDisposable
+{
+    Process server = null!;
+    IPlaywright playwright = null!;
+    string workDir = null!;
+
+    /// <summary>The origin the sample server is listening on, with no trailing slash.</summary>
+    public string BaseUrl { get; private set; } = null!;
+
+    public IBrowser Browser { get; private set; } = null!;
+
+    public async Task InitializeAsync()
     {
         var port = GetFreePort();
         BaseUrl = $"http://127.0.0.1:{port}";
@@ -232,7 +239,7 @@ public abstract class BrowserFixture
         await WaitForServer(port);
 
         playwright = await Playwright.CreateAsync();
-        browser = await playwright.Chromium.LaunchAsync(
+        Browser = await playwright.Chromium.LaunchAsync(
             new()
             {
                 // Grayscale text rather than Chromium's default LCD subpixel antialiasing. The colour
@@ -245,13 +252,12 @@ public abstract class BrowserFixture
             });
     }
 
-    [OneTimeTearDown]
-    public async Task Stop()
+    public async ValueTask DisposeAsync()
     {
         // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
-        if (browser is not null)
+        if (Browser is not null)
         {
-            await browser.DisposeAsync();
+            await Browser.DisposeAsync();
         }
 
         // ReSharper disable once ConditionalAccessQualifierIsNonNullableAccordingToAPIContract

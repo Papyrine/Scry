@@ -2,7 +2,6 @@
 /// What a client does once a GET has been answered 405. The fallback is meant to happen once for the
 /// life of the client, and the budget every response advertises must not re-open it.
 /// </summary>
-[TestFixture]
 public class UrlFallbackTests
 {
     // A gateway in front of a normally configured server blocks GET; the server's own responses still
@@ -25,23 +24,24 @@ public class UrlFallbackTests
         await client.Source<NameOnly>("Employee", ["Name"]).CountAsync();
         await client.Source<NameOnly>("Employee", ["Name"]).CountAsync();
 
-        Assert.That(methods, Is.EqualTo([HttpMethod.Get, HttpMethod.Post, HttpMethod.Post]));
+        await Assert.That(methods).IsEquivalentTo([HttpMethod.Get, HttpMethod.Post, HttpMethod.Post], CollectionOrdering.Matching);
     }
 
     // The pre-encoding length check agrees with the encoding it stands in for at the boundary, so
     // nothing that would have fitted is refused unencoded and nothing past the budget is encoded.
-    [TestCase(0)]
-    [TestCase(1)]
-    [TestCase(2)]
-    [TestCase(3)]
-    [TestCase(3071)]
-    [TestCase(3072)]
-    [TestCase(3073)]
-    public void CouldFitAgreesWithTheEncoding(int length)
+    [Test]
+    [Arguments(0)]
+    [Arguments(1)]
+    [Arguments(2)]
+    [Arguments(3)]
+    [Arguments(3071)]
+    [Arguments(3072)]
+    [Arguments(3073)]
+    public async Task CouldFitAgreesWithTheEncoding(int length)
     {
         var encoded = QueryUrl.Encode(new byte[length]);
 
-        Assert.That(QueryUrl.CouldFit(length, QueryUrl.MaxLength), Is.EqualTo(QueryUrl.WithinLimit(encoded, QueryUrl.MaxLength)));
+        await Assert.That(QueryUrl.CouldFit(length, QueryUrl.MaxLength)).IsEqualTo(QueryUrl.WithinLimit(encoded, QueryUrl.MaxLength));
     }
 
     public class NameOnly

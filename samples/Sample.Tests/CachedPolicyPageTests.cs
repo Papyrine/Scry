@@ -10,17 +10,17 @@ using PermissionsPage = Sample.WebClient.Pages.Permissions;
 /// A server of its own rather than the shared one. Revoking a region is server state every other
 /// in-process fixture would then be reading, and one of them renders the same orders.
 /// </remarks>
-[TestFixture]
+[NotInParallel]
 public class CachedPolicyPageTests
 {
-    ScryTestServer server = null!;
+    static ScryTestServer server = null!;
 
-    [OneTimeSetUp]
-    public async Task StartServer() =>
+    [Before(Class)]
+    public static async Task StartServer() =>
         server = await ScryTestServer.StartAsync();
 
-    [OneTimeTearDown]
-    public async Task StopServer() =>
+    [After(Class)]
+    public static async Task StopServer() =>
         await server.DisposeAsync();
 
     [Test]
@@ -41,7 +41,7 @@ public class CachedPolicyPageTests
         int Decisions() => int.Parse(page.Find("#decisions").TextContent);
 
         // The seeded orders, all of them: the sample grants both regions until something revokes one.
-        Assert.That(Regions(), Is.EqualTo(["North", "North", "South"]));
+        await Assert.That(Regions()).IsEquivalentTo(["North", "North", "South"], CollectionOrdering.Matching);
 
         // Running the query again decides nothing. This is the whole point of the feature — an
         // ordinary policy would have re-run its filter over every row.
@@ -49,8 +49,8 @@ public class CachedPolicyPageTests
         await page.Find("#reload").ClickAsync();
         await page.WaitForStateAsync(() => page.FindAll("tbody tr").Count == 3, TimeSpan.FromSeconds(10));
 
-        Assert.That(Decisions(), Is.EqualTo(before), "a repeat query decided a row again");
-        Assert.That(Regions(), Is.EqualTo(["North", "North", "South"]));
+        await Assert.That(Decisions()).IsEqualTo(before).Because("a repeat query decided a row again");
+        await Assert.That(Regions()).IsEquivalentTo(["North", "North", "South"], CollectionOrdering.Matching);
 
         // Revising one order moves its revision past the watermark this scope was decided up to, so
         // the next query decides that row and no other. The same path makes an inserted row correct
@@ -58,8 +58,8 @@ public class CachedPolicyPageTests
         await page.Find("#revise").ClickAsync();
         await page.WaitForStateAsync(() => Decisions() > before, TimeSpan.FromSeconds(10));
 
-        Assert.That(Decisions(), Is.EqualTo(before + 1), "revising one order decided more than one row");
-        Assert.That(Regions(), Is.EqualTo(["North", "North", "South"]));
+        await Assert.That(Decisions()).IsEqualTo(before + 1).Because("revising one order decided more than one row");
+        await Assert.That(Regions()).IsEquivalentTo(["North", "North", "South"], CollectionOrdering.Matching);
 
         // Revoking a region changes no order, so nothing but the host could know the answers are
         // stale. The rows go, which proves the invalidation reached the query.
@@ -67,8 +67,8 @@ public class CachedPolicyPageTests
         await page.Find("#grant-South").ChangeAsync(new() {Value = false});
         await page.WaitForStateAsync(() => page.FindAll("tbody tr").Count == 2, TimeSpan.FromSeconds(10));
 
-        Assert.That(Regions(), Is.EqualTo(["North", "North"]));
-        Assert.That(Decisions(), Is.EqualTo(before + 3), "the scope was not decided again from scratch");
+        await Assert.That(Regions()).IsEquivalentTo(["North", "North"], CollectionOrdering.Matching);
+        await Assert.That(Decisions()).IsEqualTo(before + 3).Because("the scope was not decided again from scratch");
     }
 
     /// <summary>Hands the page a client bound to the test server, in place of the browser's factory.</summary>

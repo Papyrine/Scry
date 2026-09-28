@@ -3,7 +3,6 @@
 /// collation is the one value that cannot be a query parameter — it is emitted into the SQL text —
 /// so it is never carried on the wire.
 /// </summary>
-[TestFixture]
 public class CollationTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
@@ -43,12 +42,12 @@ public class CollationTests
         var matching = await client.Source<Employee>("Employee")
             .CountAsync(_ => _.Name.StartsWith("Ali", StringComparison.Ordinal));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(insensitive, Is.EqualTo(1));
-            Assert.That(sensitive, Is.Zero);
-            Assert.That(matching, Is.EqualTo(1));
-        });
+            await Assert.That(insensitive).IsEqualTo(1);
+            await Assert.That(sensitive).IsZero();
+            await Assert.That(matching).IsEqualTo(1);
+        }
     }
 
     [Test]
@@ -64,7 +63,7 @@ public class CollationTests
             .ToListAsync();
         // end-snippet
 
-        Assert.That(rows.Single().Name, Is.EqualTo("Alice"));
+        await Assert.That(rows.Single().Name).IsEqualTo("Alice");
     }
 
     [Test]
@@ -76,7 +75,7 @@ public class CollationTests
         var sensitive = await client.Source<Employee>("Employee")
             .CountAsync(_ => _.Name.Equals("alice", StringComparison.Ordinal));
 
-        Assert.That(sensitive, Is.Zero);
+        await Assert.That(sensitive).IsZero();
     }
 
     // The static spelling puts the target in its first argument rather than in the instance, and means
@@ -93,29 +92,29 @@ public class CollationTests
         var insensitive = await client.Source<Employee>("Employee")
             .CountAsync(_ => string.Equals(_.Name, "alice", StringComparison.OrdinalIgnoreCase));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(sensitive, Is.Zero);
-            Assert.That(insensitive, Is.EqualTo(1));
-        });
+            await Assert.That(sensitive).IsZero();
+            await Assert.That(insensitive).IsEqualTo(1);
+        }
     }
 
     [Test]
-    public void AnUnconfiguredCollationIsRejected()
+    public async Task AnUnconfiguredCollationIsRejected()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, SharedProcessor.Instance);
 
         // The shared processor configures none, so the feature is off rather than guessed at.
-        var exception = Assert.ThrowsAsync<ScryValidationException>(
+        var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(
             () => client.Source<Employee>("Employee")
                 .CountAsync(_ => _.Name.StartsWith("al", StringComparison.Ordinal)));
 
-        Assert.That(exception!.Message, Does.Contain("collation configured"));
+        await Assert.That(exception!.Message).Contains("collation configured");
     }
 
     [Test]
-    public void TheCollationIsNeverCarriedOnTheWire()
+    public async Task TheCollationIsNeverCarriedOnTheWire()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, Collating());
@@ -127,15 +126,15 @@ public class CollationTests
         // A request names only the sensitivity it wants. The collation is a server setting, so no
         // request can put a string of its own choosing into the SQL text.
         var json = ScryJson.Serialize(request);
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(json, Does.Contain("CaseSensitive"));
-            Assert.That(json, Does.Not.Contain("Latin1"));
-        });
+            await Assert.That(json).Contains("CaseSensitive");
+            await Assert.That(json).DoesNotContain("Latin1");
+        }
     }
 
     [Test]
-    public void ACollatedMemberIsRebasedOntoTheNestedNavigation()
+    public async Task ACollatedMemberIsRebasedOntoTheNestedNavigation()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, Collating());
@@ -149,11 +148,11 @@ public class CollationTests
                 new(_.Department!.Name, _.Department!.Name.Contains("Eng", StringComparison.OrdinalIgnoreCase))))
             .ToScryRequest();
 
-        Assert.That(CollatedPathIn(request, "Matches"), Is.EqualTo(["Name"]));
+        await Assert.That(CollatedPathIn(request, "Matches")).IsEquivalentTo(["Name"], CollectionOrdering.Matching);
     }
 
     [Test]
-    public void ACollatedMemberAloneNamesTheNestedNavigation()
+    public async Task ACollatedMemberAloneNamesTheNestedNavigation()
     {
         using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, Collating());
@@ -166,19 +165,19 @@ public class CollationTests
                 new(_.Department!.Name.Contains("Eng", StringComparison.OrdinalIgnoreCase))))
             .ToScryRequest();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(Nested(request).Path, Is.EqualTo(["Department"]));
-            Assert.That(CollatedPathIn(request, "Matches"), Is.EqualTo(["Name"]));
-        });
+            await Assert.That(Nested(request).Path).IsEquivalentTo(["Department"], CollectionOrdering.Matching);
+            await Assert.That(CollatedPathIn(request, "Matches")).IsEquivalentTo(["Name"], CollectionOrdering.Matching);
+        }
     }
 
     [Test]
-    public void AMalformedCollationIsRefusedAtStartup()
+    public async Task AMalformedCollationIsRefusedAtStartup()
     {
         // The wire cannot carry a collation, so this guards the remaining path: a deployment wiring
         // the option up from somewhere it does not control. Checked once, at startup.
-        var exception = Assert.Throws<Exception>(
+        var exception = Assert.ThrowsExactly<Exception>(
             () => ScryProcessor.Create<TestContext>(
                 options =>
                 {
@@ -186,12 +185,12 @@ public class CollationTests
                     options.CaseSensitiveCollation = "Latin1_General_CS_AS; DROP TABLE Orders --";
                 }));
 
-        Assert.That(exception!.Message, Does.Contain("plain collation name"));
+        await Assert.That(exception!.Message).Contains("plain collation name");
     }
 
     [Test]
-    public void AWellFormedCollationIsAccepted() =>
-        Assert.DoesNotThrow(() => Collating());
+    public async Task AWellFormedCollationIsAccepted() =>
+        await Assert.That(() => Collating()).ThrowsNothing();
 
     // The member path under a collation, as the nested projection sends it.
     static IReadOnlyList<string> CollatedPathIn(QueryRequest request, string member)

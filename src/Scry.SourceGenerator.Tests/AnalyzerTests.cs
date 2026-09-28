@@ -1,4 +1,3 @@
-[TestFixture]
 public class AnalyzerTests
 {
     [Test]
@@ -206,7 +205,7 @@ public class AnalyzerTests
     // GetAsyncEnumerator of its own, so nothing else can be written this way — and reporting it would
     // advise buffering the whole result, which is what streaming exists to avoid.
     [Test]
-    public void AsynchronousEnumerationIsClean()
+    public async Task AsynchronousEnumerationIsClean()
     {
         const string queries =
             """
@@ -220,14 +219,14 @@ public class AnalyzerTests
             }
             """;
 
-        Assert.That(Analyze(queries), Is.Empty);
+        await Assert.That(Analyze(queries)).IsEmpty();
     }
 
     // A live query is enumerated the same way, and for the same reason is not a mistake: what is read
     // is what the Live terminal returned. The terminals are told from anything else by the type that
     // declares them, so these need no registration of their own — which is what this pins.
     [Test]
-    public void ALiveQueryIsClean()
+    public async Task ALiveQueryIsClean()
     {
         const string queries =
             """
@@ -240,7 +239,7 @@ public class AnalyzerTests
             }
             """;
 
-        Assert.That(Analyze(queries), Is.Empty);
+        await Assert.That(Analyze(queries)).IsEmpty();
     }
 
     [Test]
@@ -356,7 +355,7 @@ public class AnalyzerTests
                     """);
 
     [Test]
-    public void SupportedQueriesAreClean()
+    public async Task SupportedQueriesAreClean()
     {
         const string queries =
             """
@@ -448,13 +447,13 @@ public class AnalyzerTests
             await Query.Contract.Select(_ => new {_.Name, Parent = new {_.Parent!.Id, _.Parent!.Document}}).ToListAsync();
             """;
 
-        Assert.That(Analyze(queries), Is.Empty);
+        await Assert.That(Analyze(queries)).IsEmpty();
     }
 
     // A value that does not come off the row is closure state: the translator evaluates it into a
     // constant before the query is sent, so what was called on it is beside the point.
     [Test]
-    public void ClosureStateIsNotAFunctionCall()
+    public async Task ClosureStateIsNotAFunctionCall()
     {
         const string queries =
             """
@@ -465,14 +464,14 @@ public class AnalyzerTests
             await Query.Order.Where(_ => _.Amount > decimal.Parse(prefix)).ToListAsync();
             """;
 
-        Assert.That(Analyze(queries), Is.Empty);
+        await Assert.That(Analyze(queries)).IsEmpty();
     }
 
     // A chain inside a query lambda reads a row rather than composing the query, and answers to a
     // different rule set — a Select of one value is required there, and Contains is a SQL IN rather
     // than a synchronous terminal.
     [Test]
-    public void ChainsInsideQueryLambdasAreLeftToTheTranslator()
+    public async Task ChainsInsideQueryLambdasAreLeftToTheTranslator()
     {
         const string queries =
             """
@@ -483,7 +482,7 @@ public class AnalyzerTests
                 .ToListAsync();
             """;
 
-        Assert.That(Analyze(queries), Is.Empty);
+        await Assert.That(Analyze(queries)).IsEmpty();
     }
 
     // The element type stops being a query model the moment a Select projects an anonymous type, so
@@ -535,14 +534,14 @@ public class AnalyzerTests
     // What the generator itself emits into a generated file: an entry point opening a source, with
     // no chain on it. Reading generated code must not turn that into a report the consumer cannot act on.
     [Test]
-    public void TheGeneratedEntryPointReportsNothing() =>
-        Assert.That(Analyze("var orders = client.Source<HandBuilt>(\"Order\");", generated: true), Is.Empty);
+    public async Task TheGeneratedEntryPointReportsNothing() =>
+        await Assert.That(Analyze("var orders = client.Source<HandBuilt>(\"Order\");", generated: true)).IsEmpty();
 
     // Equals is == spelled as a method, which the translator carries over any operands. Owners the
     // callable set has no functions for — a Guid, an enum, a char, a TimeSpan — once read as
     // client-side code or as a function the set lacks, though the same query ran.
     [Test]
-    public void EqualsOverAnyScalarIsClean()
+    public async Task EqualsOverAnyScalarIsClean()
     {
         const string queries =
             """
@@ -553,12 +552,12 @@ public class AnalyzerTests
             await Query.Order.Where(_ => _.Id.Equals(1) && Equals(_.Amount, 1m)).ToListAsync();
             """;
 
-        Assert.That(Analyze(queries), Is.Empty);
+        await Assert.That(Analyze(queries)).IsEmpty();
     }
 
     // Ordinary LINQ over an ordinary collection is not Scry's business.
     [Test]
-    public void NonScryQueriesAreIgnored()
+    public async Task NonScryQueriesAreIgnored()
     {
         const string queries =
             """
@@ -570,11 +569,11 @@ public class AnalyzerTests
             }
             """;
 
-        Assert.That(Analyze(queries), Is.Empty);
+        await Assert.That(Analyze(queries)).IsEmpty();
     }
 
     // Generated, the file carries the header and the name Razor gives a component's tree.
-    static string Analyze(string queries, bool generated = false)
+    static async Task<string> Analyze(string queries, bool generated = false)
     {
         var tree = generated
             ? CSharpSyntaxTree.ParseText("// <auto-generated/>" + Environment.NewLine + Wrap(queries), path: "Index.razor.g.cs")
@@ -591,7 +590,7 @@ public class AnalyzerTests
         var errors = compilation.GetDiagnostics()
             .Where(_ => _.Severity == DiagnosticSeverity.Error)
             .ToList();
-        Assert.That(errors, Is.Empty, () => string.Join('\n', errors));
+        await Assert.That(errors).IsEmpty().Because(string.Join('\n', errors));
 
         var diagnostics = compilation
             .WithAnalyzers([new ScryLinqAnalyzer()])

@@ -1,142 +1,141 @@
 // The schema pane's data model: the introspection contract arranged for browsing. The type-display
 // spellings below are the real ones the server publishes — see
 // samples/Sample.Tests/UiSnapshotTests.ExplorerIntrospectionEndpoint.verified.txt.
-[TestFixture]
 public class SchemaIndexTests
 {
     [Test]
-    public void FindsASourcesModel()
+    public async Task FindsASourcesModel()
     {
         var index = Build();
 
-        Assert.That(index.SourceFor("EmployeeQueryModel")!.Name, Is.EqualTo("Employee"));
+        await Assert.That(index.SourceFor("EmployeeQueryModel")!.Name).IsEqualTo("Employee");
     }
 
     // A model only reachable as a navigation is queryable through nothing, and the pane says so by
     // omitting the "queryable as" line.
     [Test]
-    public void ReportsNoSourceForAModelNoSourceNames()
+    public async Task ReportsNoSourceForAModelNoSourceNames()
     {
         var index = Build();
 
-        Assert.That(index.SourceFor("AssetQueryModel"), Is.Null);
+        await Assert.That(index.SourceFor("AssetQueryModel")).IsNull();
     }
 
     // Mirrors the walk the generated code is synthesized from, so what the pane lists is what a
     // client would get.
     [Test]
-    public void ListsInheritedMembersFirst()
+    public async Task ListsInheritedMembersFirst()
     {
         var index = Build();
 
         var members = index.AllMembers("BuildingQueryModel");
 
-        Assert.That(members.Select(_ => _.Member.Name), Is.EqualTo(["Id", "Name", "Floors"]));
-        Assert.That(members[0].DeclaringModel, Is.EqualTo("AssetQueryModel"));
-        Assert.That(members[2].DeclaringModel, Is.EqualTo("BuildingQueryModel"));
+        await Assert.That(members.Select(_ => _.Member.Name)).IsEquivalentTo(["Id", "Name", "Floors"], CollectionOrdering.Matching);
+        await Assert.That(members[0].DeclaringModel).IsEqualTo("AssetQueryModel");
+        await Assert.That(members[2].DeclaringModel).IsEqualTo("BuildingQueryModel");
     }
 
     [Test]
-    public void LinksABaseModelDownToWhatInheritsIt()
+    public async Task LinksABaseModelDownToWhatInheritsIt()
     {
         var index = Build();
 
-        Assert.That(index.Derived("AssetQueryModel"), Is.EqualTo(["BuildingQueryModel", "VehicleQueryModel"]));
+        await Assert.That(index.Derived("AssetQueryModel")).IsEquivalentTo(["BuildingQueryModel", "VehicleQueryModel"], CollectionOrdering.Matching);
     }
 
     [Test]
-    public void ReportsNothingDerivedFromALeaf()
+    public async Task ReportsNothingDerivedFromALeaf()
     {
         var index = Build();
 
-        Assert.That(index.Derived("EmployeeQueryModel"), Is.Empty);
+        await Assert.That(index.Derived("EmployeeQueryModel")).IsEmpty();
     }
 
-    [TestCase("int", "int", null)]
-    [TestCase("string", "string", null)]
-    [TestCase("int?", "int?", null)]
-    [TestCase("byte[]", "byte[]", null)]
-    [TestCase("global::System.DateOnly", "System.DateOnly", null)]
-    [TestCase("global::Scry.ScryAttachment", "Scry.ScryAttachment", null)]
-    public void ResolvesAScalarWithoutALink(string display, string expected, string? target)
+    [Test]
+    [Arguments("int", "int", null)]
+    [Arguments("string", "string", null)]
+    [Arguments("int?", "int?", null)]
+    [Arguments("byte[]", "byte[]", null)]
+    [Arguments("global::System.DateOnly", "System.DateOnly", null)]
+    [Arguments("global::Scry.ScryAttachment", "Scry.ScryAttachment", null)]
+    public async Task ResolvesAScalarWithoutALink(string display, string expected, string? target)
     {
         var reference = Build().Resolve(display);
 
-        Assert.That(reference.Display, Is.EqualTo(expected));
-        Assert.That(reference.LinkTarget, Is.EqualTo(target));
+        await Assert.That(reference.Display).IsEqualTo(expected);
+        await Assert.That(reference.LinkTarget).IsEqualTo(target);
     }
 
     [Test]
-    public void LinksANavigationToItsModel()
+    public async Task LinksANavigationToItsModel()
     {
         var reference = Build().Resolve("DepartmentQueryModel?");
 
-        Assert.That(reference.Display, Is.EqualTo("DepartmentQueryModel?"));
-        Assert.That(reference.LinkTarget, Is.EqualTo("DepartmentQueryModel"));
+        await Assert.That(reference.Display).IsEqualTo("DepartmentQueryModel?");
+        await Assert.That(reference.LinkTarget).IsEqualTo("DepartmentQueryModel");
     }
 
     [Test]
-    public void LinksAnEnumToItsValues()
+    public async Task LinksAnEnumToItsValues()
     {
         var reference = Build().Resolve("Status");
 
-        Assert.That(reference.LinkTarget, Is.EqualTo("Status"));
+        await Assert.That(reference.LinkTarget).IsEqualTo("Status");
     }
 
     // A collection is shown as what it holds, so the link goes to the model rather than to the list.
     [Test]
-    public void UnwrapsACollectionToWhatItHolds()
+    public async Task UnwrapsACollectionToWhatItHolds()
     {
         var reference = Build().Resolve("global::System.Collections.Generic.IReadOnlyList<EmployeeQueryModel>");
 
-        Assert.That(reference.Display, Is.EqualTo("EmployeeQueryModel[]"));
-        Assert.That(reference.LinkTarget, Is.EqualTo("EmployeeQueryModel"));
+        await Assert.That(reference.Display).IsEqualTo("EmployeeQueryModel[]");
+        await Assert.That(reference.LinkTarget).IsEqualTo("EmployeeQueryModel");
     }
 
     [Test]
-    public void UnwrapsACollectionOfScalars()
+    public async Task UnwrapsACollectionOfScalars()
     {
         var reference = Build().Resolve("global::System.Collections.Generic.IReadOnlyList<string>");
 
-        Assert.That(reference.Display, Is.EqualTo("string[]"));
-        Assert.That(reference.LinkTarget, Is.Null);
+        await Assert.That(reference.Display).IsEqualTo("string[]");
+        await Assert.That(reference.LinkTarget).IsNull();
     }
 
     [Test]
-    public void SearchesModelAndMemberNames()
+    public async Task SearchesModelAndMemberNames()
     {
         var matches = Build().Search("Depart");
 
-        Assert.That(matches.Select(_ => $"{_.Model}.{_.Member}"), Does.Contain("EmployeeQueryModel.Department"));
-        Assert.That(matches.Any(_ => _ is {Model: "DepartmentQueryModel", Member: null}));
+        await Assert.That(matches.Select(_ => $"{_.Model}.{_.Member}")).Contains("EmployeeQueryModel.Department");
+        await Assert.That(matches.Any(_ => _ is {Model: "DepartmentQueryModel", Member: null})).IsTrue();
     }
 
     [Test]
-    public void SearchesCaseInsensitively() =>
-        Assert.That(Build().Search("depart"), Is.Not.Empty);
+    public async Task SearchesCaseInsensitively() =>
+        await Assert.That(Build().Search("depart")).IsNotEmpty();
 
     // A search made while reading a type answers about that type before the rest of the schema.
     [Test]
-    public void PutsMatchesInsideTheOpenTypeFirst()
+    public async Task PutsMatchesInsideTheOpenTypeFirst()
     {
         var matches = Build().Search("Name", within: "OrderQueryModel");
 
-        Assert.That(matches[0].Model, Is.EqualTo("OrderQueryModel"));
+        await Assert.That(matches[0].Model).IsEqualTo("OrderQueryModel");
     }
 
-    [TestCase(null)]
-    [TestCase("")]
-    [TestCase("   ")]
-    public void SearchesNothingForABlankTerm(string? term) =>
-        Assert.That(Build().Search(term), Is.Empty);
+    [Test]
+    [Arguments(null)]
+    [Arguments("")]
+    [Arguments("   ")]
+    public async Task SearchesNothingForABlankTerm(string? term) =>
+        await Assert.That(Build().Search(term)).IsEmpty();
 
     // A starter query has to be one the server will run, which is more than "it compiles": a
     // projection carries scalars and objects projected into navigations, and nothing else.
     [Test]
-    public void BuildsAStarterQueryOverScalarsAndNavigations() =>
-        Assert.That(
-            Build().StarterQuery(Build().SourceFor("EmployeeQueryModel")!),
-            Is.EqualTo(
+    public async Task BuildsAStarterQueryOverScalarsAndNavigations() =>
+        await Assert.That(Build().StarterQuery(Build().SourceFor("EmployeeQueryModel")!)).IsEqualTo(
                 """
                 Query.Employee
                     .Select(_ =>
@@ -152,27 +151,25 @@ public class SchemaIndexTests
                                     _.Department!.Name
                                 }
                         })
-                """));
+                """);
 
     // Password is sensitive and Photo is an attachment; neither belongs in a suggested query, for
     // different reasons.
     [Test]
-    public void LeavesSensitiveAndAttachmentMembersOutOfAStarterQuery()
+    public async Task LeavesSensitiveAndAttachmentMembersOutOfAStarterQuery()
     {
         var query = Build().StarterQuery(Build().SourceFor("EmployeeQueryModel")!);
 
-        Assert.That(query, Does.Not.Contain("Password"));
-        Assert.That(query, Does.Not.Contain("Photo"));
+        await Assert.That(query).DoesNotContain("Password");
+        await Assert.That(query).DoesNotContain("Photo");
     }
 
     // A collection is published with IsNavigation false, so it needs excluding on its own terms.
     // Missing that produced a query the editor compiled and the server rejected with "Projection
     // member must reference a scalar value."
     [Test]
-    public void LeavesACollectionOfValuesOutOfAStarterQuery() =>
-        Assert.That(
-            Build().StarterQuery(Build().SourceFor("OrderQueryModel")!),
-            Is.EqualTo(
+    public async Task LeavesACollectionOfValuesOutOfAStarterQuery() =>
+        await Assert.That(Build().StarterQuery(Build().SourceFor("OrderQueryModel")!)).IsEqualTo(
                 """
                 Query.Order
                     .Select(_ =>
@@ -180,27 +177,25 @@ public class SchemaIndexTests
                         {
                             _.Name
                         })
-                """));
+                """);
 
     // A byte[] is bulk bytes whichever way it travels. The contract publishes no flag for the diverted
     // kind — [BinaryTransfer] deliberately does not change the queryable surface — so the rule is the
     // declared type, and it catches both.
     [Test]
-    public void LeavesAByteArrayOutOfAStarterQuery()
+    public async Task LeavesAByteArrayOutOfAStarterQuery()
     {
         var index = Build();
 
-        Assert.That(index.StarterQuery(index.SourceFor("DepartmentQueryModel")!), Does.Not.Contain("Logo"));
+        await Assert.That(index.StarterQuery(index.SourceFor("DepartmentQueryModel")!)).DoesNotContain("Logo");
 
         // And through a navigation, where the same member is reached a second way.
-        Assert.That(index.StarterQuery(index.SourceFor("EmployeeQueryModel")!), Does.Not.Contain("Logo"));
+        await Assert.That(index.StarterQuery(index.SourceFor("EmployeeQueryModel")!)).DoesNotContain("Logo");
     }
 
     [Test]
-    public void LeavesACollectionOfRowsOutOfAStarterQuery() =>
-        Assert.That(
-            Build().StarterQuery(Build().SourceFor("DepartmentQueryModel")!),
-            Is.EqualTo(
+    public async Task LeavesACollectionOfRowsOutOfAStarterQuery() =>
+        await Assert.That(Build().StarterQuery(Build().SourceFor("DepartmentQueryModel")!)).IsEqualTo(
                 """
                 Query.Department
                     .Select(_ =>
@@ -209,19 +204,17 @@ public class SchemaIndexTests
                             _.Id,
                             _.Name
                         })
-                """));
+                """);
 
     // The navigation is declared nullable, so reading through it warns without the suppression. A
     // model reached through a non-nullable one takes no '!'.
     [Test]
-    public void SuppressesTheNullWarningOnANullableNavigation() =>
-        Assert.That(
-            Build().StarterQuery(Build().SourceFor("EmployeeQueryModel")!),
-            Does.Contain("_.Department!.Name"));
+    public async Task SuppressesTheNullWarningOnANullableNavigation() =>
+        await Assert.That(Build().StarterQuery(Build().SourceFor("EmployeeQueryModel")!)).Contains("_.Department!.Name");
 
     // One level, so a self-navigation terminates rather than recurring.
     [Test]
-    public void NestsOnlyOneLevel()
+    public async Task NestsOnlyOneLevel()
     {
         var index = new SchemaIndex(
             new(
@@ -237,9 +230,7 @@ public class SchemaIndexTests
                 ],
                 []));
 
-        Assert.That(
-            index.StarterQuery(index.Sources[0]),
-            Is.EqualTo(
+        await Assert.That(index.StarterQuery(index.Sources[0])).IsEqualTo(
                 """
                 Query.Employee
                     .Select(_ =>
@@ -252,13 +243,13 @@ public class SchemaIndexTests
                                     _.Manager!.Name
                                 }
                         })
-                """));
+                """);
     }
 
     // An empty `new { }` is not a projection the server would accept, so a navigation whose model has
     // no scalar to carry is left out rather than nested empty.
     [Test]
-    public void LeavesOutANavigationWithNothingToCarry()
+    public async Task LeavesOutANavigationWithNothingToCarry()
     {
         var index = new SchemaIndex(
             new(
@@ -278,39 +269,39 @@ public class SchemaIndexTests
                 ],
                 []));
 
-        Assert.That(index.StarterQuery(index.Sources[0]), Does.Not.Contain("Photos"));
+        await Assert.That(index.StarterQuery(index.Sources[0])).DoesNotContain("Photos");
     }
 
     // A command acts on its target's rows and on the rows of anything deriving from it, which inherits
     // the capability; the others are listed only on the pane's first page.
     [Test]
-    public void ListsCommandsTargetingAModel()
+    public async Task ListsCommandsTargetingAModel()
     {
         var index = Commanded();
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(index.CommandsTargeting("AssetQueryModel").Select(_ => _.Name), Is.EqualTo(["Retire"]));
-            Assert.That(index.CommandsTargeting("VehicleQueryModel").Select(_ => _.Name), Is.EqualTo(["Retire"]));
-            Assert.That(index.CommandsTargeting("DepotQueryModel"), Is.Empty);
-            Assert.That(index.Command("Order")!.Result!.Name, Is.EqualTo("Ordered"));
-        });
+            await Assert.That(index.CommandsTargeting("AssetQueryModel").Select(_ => _.Name)).IsEquivalentTo(["Retire"], CollectionOrdering.Matching);
+            await Assert.That(index.CommandsTargeting("VehicleQueryModel").Select(_ => _.Name)).IsEquivalentTo(["Retire"], CollectionOrdering.Matching);
+            await Assert.That(index.CommandsTargeting("DepotQueryModel")).IsEmpty();
+            await Assert.That(index.Command("Order")!.Result!.Name).IsEqualTo("Ordered");
+        }
     }
 
     // A capability projects like any bool, but it is the command's policy run per row — a cost a
     // suggested query should not open with.
     [Test]
-    public void LeavesCapabilitiesOutOfAStarterQuery()
+    public async Task LeavesCapabilitiesOutOfAStarterQuery()
     {
         var index = Commanded();
 
         var query = index.StarterQuery(index.Sources.Single(_ => _.Name == "Asset"));
 
-        Assert.Multiple(() =>
+        using (Assert.Multiple())
         {
-            Assert.That(query, Does.Contain("_.Name"));
-            Assert.That(query, Does.Not.Contain("CanRetire"));
-        });
+            await Assert.That(query).Contains("_.Name");
+            await Assert.That(query).DoesNotContain("CanRetire");
+        }
     }
 
     static SchemaIndex Commanded() =>
@@ -354,7 +345,7 @@ public class SchemaIndexTests
             });
 
     [Test]
-    public void BuildsABareQueryForASourceWithNothingProjectable()
+    public async Task BuildsABareQueryForASourceWithNothingProjectable()
     {
         var introspection = new ScryIntrospection(
             1,
@@ -365,7 +356,7 @@ public class SchemaIndexTests
 
         var index = new SchemaIndex(introspection);
 
-        Assert.That(index.StarterQuery(index.Sources[0]), Is.EqualTo("Query.Locked"));
+        await Assert.That(index.StarterQuery(index.Sources[0])).IsEqualTo("Query.Locked");
     }
 
     static SchemaIndex Build() =>
