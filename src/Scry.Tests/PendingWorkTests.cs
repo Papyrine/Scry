@@ -22,7 +22,7 @@ public class PendingWorkTests
 
         using (Assert.Multiple())
         {
-            await Assert.That(store.Items).IsEquivalentTo([item], CollectionOrdering.Matching);
+            await Assert.That(store.Items.Single()).IsSameReferenceAs(item);
             await Assert.That(store.PendingCount).IsZero();
             await Assert.That(item.Finished).IsNotNull();
         }
@@ -55,7 +55,7 @@ public class PendingWorkTests
 
         using (Assert.Multiple())
         {
-            await Assert.That(store.Items).IsEquivalentTo([item], CollectionOrdering.Matching);
+            await Assert.That(store.Items.Single()).IsSameReferenceAs(item);
             await Assert.That(item.Error).IsEqualTo("No.");
         }
 
