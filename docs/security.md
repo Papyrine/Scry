@@ -635,6 +635,19 @@ A [command](commands.md) is a write, and it is held to what a query is held to, 
 A write over a [SignalR hub](live-queries.md#over-signalr-instead-of-http) is not guarded the way one over HTTP is: there is no JSON content type for a cross-site form to be unable to declare, and a WebSocket handshake is not subject to CORS. A hub that authenticates by cookie keeps that cookie at `SameSite=Lax` or `Strict`, or checks the handshake's `Origin`; one that authenticates by bearer token is not exposed, since a browser never attaches one on another site's behalf. A hub call also has no request of its own, so a policy that reads the caller reads it from a scoped service a hub filter fills rather than from `IHttpContextAccessor`.
 
 
+## AI agents over MCP
+
+An agent reached through [MCP](mcp.md) is one more hostile client, and it is held to exactly what any other is. It is not trusted any further because it is a model acting for a user, since what it sends can be steered by anything it has read. Every tool is a thin transport over the same `ScryProcessor`:
+
+- **Off by default.** `ScryOptions.Mcp` at `Off` maps no route. `Read` serves the schema and queries, and nothing that writes is registered, or described in the schema it is given. `ReadWrite` adds commands, and refuses to start where commands are off.
+- **The wire format, read strictly.** A query arrives as the JSON AST and is read by `ScryJson`, exactly as a generated client's is. Unknown operators, nodes and members are refused, and the result then goes through the validator and the allow-list.
+- **No code is run.** The explorer compiles C# in the browser; the MCP transport accepts no C# at all. Compiling an agent's snippet on the server would run attacker-chosen code in-process, ahead of every check the processor makes.
+- **The caller is the request's.** The server is stateless, so each tool call is an HTTP request of its own, answered in its own scope. Authentication, `RequireAuthorization` on `MapScryMcp`, row and command policies, and `ScryOptions.Caller` all see the same user they would over `MapScry`.
+- **Rejections are said to the agent.** A query refused for its own shape names what was wrong, so the agent can correct itself. Any other failure is the fixed text, as over HTTP.
+
+Put authorization on the endpoint, and prefer a bearer token to a cookie, as MCP's own authorization does. An agent asks what its user asks, and a row policy that scopes by the authenticated principal scopes the agent too.
+
+
 ## What Scry does not do
 
 **Authentication and authorization.** Scry has no notion of a user. Put it on the endpoint:

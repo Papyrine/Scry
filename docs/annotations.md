@@ -420,9 +420,13 @@ builder.Services
         // how many it will have in flight, which is also what maps the routes — see
         // /docs/commands.md.
         _.UseSampleCommands();
+
+        // An AI agent's way in: the schema, queries and commands over MCP, at /mcp. Off
+        // until a server says what an agent may do — see /docs/mcp.md.
+        _.Mcp = ScryMcpAccess.ReadWrite;
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L44-L98' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L56-L114' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The registered sequence is wrapped with `AsQueryable()`, so the pipeline runs in memory over LINQ to<!-- include: poco-in-memory. path: /docs/includes/poco-in-memory.include.md -->

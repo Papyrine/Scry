@@ -21,6 +21,7 @@
   <Project Path="Scry.Server.Wolverine/Scry.Server.Wolverine.csproj" />
   <Project Path="Scry.Server.Redis/Scry.Server.Redis.csproj" />
   <Project Path="Scry.Server.SignalR/Scry.Server.SignalR.csproj" />
+  <Project Path="Scry.Server.Mcp/Scry.Server.Mcp.csproj" />
     <Project Path="Scry.Server.Explorer/Scry.Server.Explorer.csproj" />
   <Project Path="Scry.Explorer.Core/Scry.Explorer.Core.csproj" />
   <Project Path="Scry.SourceGenerator/Scry.SourceGenerator.csproj" />

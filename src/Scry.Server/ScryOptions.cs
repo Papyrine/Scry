@@ -288,6 +288,21 @@ public sealed class ScryOptions(Type contextType)
     public int MaxCommandBytes { get; set; } = 64 * 1024;
     // end-snippet
 
+    // begin-snippet: scryOptionsMcp
+    /// <summary>
+    /// What an AI agent may do over MCP, where Scry.Server.Mcp is mapped. Default
+    /// <see cref="ScryMcpAccess.Off"/>, which maps no MCP route at all.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ScryMcpAccess.Read"/> serves the schema and queries;
+    /// <see cref="ScryMcpAccess.ReadWrite"/> adds commands, and so needs
+    /// <see cref="MaxPendingCommands"/> set, or the server refuses to start. Either way an agent is
+    /// held to exactly what any other client is: the allow-list, validation, row and command policies,
+    /// the limits and the audit.
+    /// </remarks>
+    public ScryMcpAccess Mcp { get; set; }
+    // end-snippet
+
     internal List<Type> Dispatchers { get; } = [];
 
     /// <summary>

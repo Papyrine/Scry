@@ -106,11 +106,18 @@
                 // how many it will have in flight, which is also what maps the routes — see
                 // /docs/commands.md.
                 _.UseSampleCommands();
+
+                // An AI agent's way in: the schema, queries and commands over MCP, at /mcp. Off
+                // until a server says what an agent may do — see /docs/mcp.md.
+                _.Mcp = ScryMcpAccess.ReadWrite;
             });
         // end-snippet
 
         // For MapScryHub below. Scry.Server.SignalR needs nothing registered beyond SignalR itself.
         builder.Services.AddSignalR();
+
+        // For MapScryMcp below.
+        builder.Services.AddScryMcp();
 
         // Scry's telemetry is dormant until something subscribes; opting in is one AddSource and one
         // AddMeter. See /docs/observability.md for the spans, instruments, and tags.
@@ -134,6 +141,12 @@
         // then shares the one connection. Optional — see /docs/live-queries.md.
         // begin-snippet: mapScryHubSample
         app.MapScryHub("/api/query-hub");
+        // end-snippet
+
+        // Point an MCP client at http://localhost:<port>/mcp. A real host puts RequireAuthorization on
+        // what this returns; the sample has no sign-in.
+        // begin-snippet: mapScryMcpSample
+        app.MapScryMcp("/mcp");
         // end-snippet
 
         // What the /permissions page drives. None of it is Scry's — it is the sample standing in for

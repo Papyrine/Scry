@@ -128,10 +128,10 @@ Task SetActive(EmployeeRow row)
 }
 
 // The typed outcome: the new row's id, read off the result the handler answered with.
-async Task Create()
+Task Create()
 {
     var name = hireName;
-    await Send(
+    return Send(
         async () =>
         {
             var hired = await Query.Commands.CreateEmployee(new() {Name = name, DepartmentId = 1, Status = Status.FullTime});

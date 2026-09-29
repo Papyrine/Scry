@@ -108,6 +108,7 @@ Queries never write. Writes are [commands](docs/commands.md): a class in the mod
 | [Scry.Server.Delta](https://nuget.org/packages/Scry.Server.Delta/) | Opt-in `304 Not Modified`, and a change probe for live queries, backed by [Delta](https://github.com/SimonCropp/Delta). |
 | [Scry.Server.SignalR](https://nuget.org/packages/Scry.Server.SignalR/) | Opt-in: the query surface over a SignalR hub, so many [live queries](docs/live-queries.md) share one connection. |
 | [Scry.Client.SignalR](https://nuget.org/packages/Scry.Client.SignalR/) | Opt-in: a `ScryClient` over a SignalR hub connection. |
+| [Scry.Server.Mcp](https://nuget.org/packages/Scry.Server.Mcp/) | Opt-in: the query surface, and optionally [commands](docs/commands.md), served to AI agents over [MCP](docs/mcp.md). |
 | [Scry.Server.Redis](https://nuget.org/packages/Scry.Server.Redis/) | Opt-in: carries live-query change notifications between server nodes over Redis pub/sub. |
 | [Scry.Server.MessagePipe](https://nuget.org/packages/Scry.Server.MessagePipe/) | Opt-in: the same over [MessagePipe](https://github.com/Cysharp/MessagePipe)'s distributed pub/sub. |
 | [Scry.Server.NServiceBus](https://nuget.org/packages/Scry.Server.NServiceBus/) | Opt-in: the same over [NServiceBus](https://docs.particular.net/nservicebus/), including what a worker endpoint's handlers save — and [commands](docs/commands.md) carried to a worker and answered when it replies. |
@@ -219,9 +220,13 @@ builder.Services
         // how many it will have in flight, which is also what maps the routes — see
         // /docs/commands.md.
         _.UseSampleCommands();
+
+        // An AI agent's way in: the schema, queries and commands over MCP, at /mcp. Off
+        // until a server says what an agent may do — see /docs/mcp.md.
+        _.Mcp = ScryMcpAccess.ReadWrite;
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L44-L98' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L56-L114' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddPocoSource` supplies the rows for a `[QueryablePoco]` type — see [POCO sources](docs/server.md#poco-sources).
@@ -231,7 +236,7 @@ builder.Services
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L116-L118' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L135-L137' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Point the client at the model by path — no reference:
@@ -257,7 +262,7 @@ employees = await Query
     .Select(_ => new EmployeeRow(_.Name, _.Status, _.Manager!.Name, _.Department!.Name))
     .ToListAsync();
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L89-L96' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L82-L89' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Then send a command, and read what came of it:
@@ -441,6 +446,7 @@ A Blazor client has a companion: a [debug sidecar](docs/sidecar.md) that opens o
 - [Batching](docs/batching.md)
 - [Live queries](docs/live-queries.md)
 - [Commands](docs/commands.md)
+- [MCP](docs/mcp.md)
 - [Observability](docs/observability.md)
 - [Caching and 304](docs/caching.md)
 - [Performance](docs/performance.md)

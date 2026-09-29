@@ -26,6 +26,8 @@
          call, which is a contract for code in this repository and not for a consumer's. Versioned
          and shipped with this package, so the friendship is never between two versions. -->
     <InternalsVisibleTo Include="Scry.Server.SignalR" Key="$(ScryPublicKey)" />
+    <!-- MCP is a third way of serving them, through the same buffered paths and for the same reason. -->
+    <InternalsVisibleTo Include="Scry.Server.Mcp" Key="$(ScryPublicKey)" />
     <!-- A backplane is tested by raising a change on one node and watching for it on another, and
          both ends of that are internal: a host reports changes by type, and only a live query listens. -->
     <InternalsVisibleTo Include="Scry.Backplane.Tests" Key="$(ScryPublicKey)" />
