@@ -144,15 +144,11 @@ public class CommandHttpTests
         await Assert.That(end.EventType).IsEqualTo(ScryLive.End);
         await Assert.That(ScryJson.DeserializeLiveEnd(Encoding.UTF8.GetBytes(end.Data)).Reconnect).IsTrue();
 
-        gate.SetResult();
         await using var again = await server.StreamReceipt(id);
-        var receipt = ScryJson.DeserializeReceipt((await again.Next()).Data);
-        if (receipt.Status == CommandStatus.Pending)
-        {
-            receipt = ScryJson.DeserializeReceipt((await again.Next()).Data);
-        }
+        await Assert.That(ScryJson.DeserializeReceipt((await again.Next()).Data).Status).IsEqualTo(CommandStatus.Pending);
 
-        await Assert.That(receipt.Status).IsEqualTo(CommandStatus.Completed);
+        gate.SetResult();
+        await Assert.That(ScryJson.DeserializeReceipt((await again.Next()).Data).Status).IsEqualTo(CommandStatus.Completed);
     }
 
     [Test]
