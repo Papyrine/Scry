@@ -14,6 +14,13 @@ static class LiveSessionStamp
     public static void Write(HttpRequestMessage message, long session) =>
         message.Options.Set(key, session);
 
-    public static long? Read(HttpRequestMessage message) =>
-        message.Options.TryGetValue(key, out var session) ? session : null;
+    public static long? Read(HttpRequestMessage message)
+    {
+        if (message.Options.TryGetValue(key, out var session))
+        {
+            return session;
+        }
+
+        return null;
+    }
 }

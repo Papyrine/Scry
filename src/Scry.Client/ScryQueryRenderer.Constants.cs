@@ -566,14 +566,20 @@ partial class QueryRenderer
             }
 
             case ClrTypeTag.Guid:
-                return value is null
-                    ? throw Refuse(RenderRefusal.UnsupportedShape)
-                    : $"Guid.Parse({CSharpLiteral.String(value)})";
+                if (value is null)
+                {
+                    throw Refuse(RenderRefusal.UnsupportedShape);
+                }
+
+                return $"Guid.Parse({CSharpLiteral.String(value)})";
 
             case ClrTypeTag.Bytes:
-                return value is null
-                    ? throw Refuse(RenderRefusal.UnsupportedShape)
-                    : $"Convert.FromBase64String({CSharpLiteral.String(value)})";
+                if (value is null)
+                {
+                    throw Refuse(RenderRefusal.UnsupportedShape);
+                }
+
+                return $"Convert.FromBase64String({CSharpLiteral.String(value)})";
 
             case ClrTypeTag.Enum:
                 return RenderEnum(constant, expected);

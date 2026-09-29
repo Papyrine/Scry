@@ -411,8 +411,15 @@ public class ScryGenerator :
     /// is what a client reads to decide that a query has to travel in a body, and it moves the schema
     /// stamp because it changes what an already-deployed client is allowed to do.
     /// </summary>
-    static string Sensitive(bool sensitive, string indent = "") =>
-        sensitive ? $"{indent}[global::Scry.ScrySensitive]{Environment.NewLine}" : "";
+    static string Sensitive(bool sensitive, string indent = "")
+    {
+        if (sensitive)
+        {
+            return $"{indent}[global::Scry.ScrySensitive]{Environment.NewLine}";
+        }
+
+        return "";
+    }
 
     /// <summary>
     /// The type the generated member is declared as. Everything but an attachment is spelled as the
@@ -420,8 +427,15 @@ public class ScryGenerator :
     /// and the reason — unlike <c>[BinaryTransfer]</c> — that it moves the schema stamp.
     /// </summary>
     /// <remarks>Mirrored by <c>Schema.DescribeMember</c>, which the schema stamp requires to agree.</remarks>
-    internal static string Display(PropertyInfo property) =>
-        property.IsAttachment ? "global::Scry.ScryAttachment" : property.TypeDisplay;
+    internal static string Display(PropertyInfo property)
+    {
+        if (property.IsAttachment)
+        {
+            return "global::Scry.ScryAttachment";
+        }
+
+        return property.TypeDisplay;
+    }
 
     // The scalar members a query written against this model projects when it writes no Select: the
     // ones it declares plus everything it inherits, base-first so the generated order matches the

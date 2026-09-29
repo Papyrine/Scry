@@ -343,11 +343,16 @@ public sealed class ScryLinqAnalyzer :
 
     // The row type a link reads — the source's element, before the operator reshapes it. What says
     // whether a whole-model query would have carried attachments into the operator.
-    static ITypeSymbol? ElementOf(IInvocationOperation link) =>
-        link.Arguments.Length > 0 &&
-        link.Arguments[0].Value.Type is INamedTypeSymbol {IsGenericType: true} source
-            ? source.TypeArguments[0]
-            : null;
+    static ITypeSymbol? ElementOf(IInvocationOperation link)
+    {
+        if (link.Arguments.Length > 0 &&
+                link.Arguments[0].Value.Type is INamedTypeSymbol {IsGenericType: true} source)
+        {
+            return source.TypeArguments[0];
+        }
+
+        return null;
+    }
 
     static void Report(OperationAnalysisContext context, DiagnosticDescriptor rule, IInvocationOperation link, params object?[] arguments) =>
         context.ReportDiagnostic(Diagnostic.Create(rule, QueryChain.Where(link), arguments));

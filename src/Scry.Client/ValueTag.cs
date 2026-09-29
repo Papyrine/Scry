@@ -58,8 +58,13 @@ static class ValueTag
     /// its own wall clock reaches SQL as that wall clock, exactly as the same LINQ would in process,
     /// and identically wherever the server runs.
     /// </remarks>
-    static string Timestamp(DateTime date, CultureInfo culture) =>
-        date.Kind == DateTimeKind.Local
-            ? date.ToString("yyyy-MM-ddTHH:mm:ss.fffffff", culture)
-            : date.ToString("o", culture);
+    static string Timestamp(DateTime date, CultureInfo culture)
+    {
+        if (date.Kind == DateTimeKind.Local)
+        {
+            return date.ToString("yyyy-MM-ddTHH:mm:ss.fffffff", culture);
+        }
+
+        return date.ToString("o", culture);
+    }
 }

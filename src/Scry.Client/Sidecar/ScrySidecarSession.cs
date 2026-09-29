@@ -117,7 +117,12 @@ public sealed class ScrySidecarSession
         {
             lock (sync)
             {
-                return connections.Count == 0 ? null : connections[^1];
+                if (connections.Count == 0)
+                {
+                    return null;
+                }
+
+                return connections[^1];
             }
         }
     }

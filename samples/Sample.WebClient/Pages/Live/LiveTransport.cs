@@ -31,7 +31,18 @@ public sealed class LiveTransport :
     public bool SignalR { get; private set; }
 
     /// <summary>The entry point over whichever transport is selected.</summary>
-    public ScryQuery Query => SignalR ? hub! : field;
+    public ScryQuery Query
+    {
+        get
+        {
+            if (SignalR)
+            {
+                return hub!;
+            }
+
+            return field;
+        }
+    }
 
     /// <summary>Raised after the transport changed, for a page to ask again over the new one.</summary>
     public event Func<Task>? Changed;

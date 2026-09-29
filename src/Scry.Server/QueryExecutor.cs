@@ -312,11 +312,28 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// </summary>
     internal readonly record struct Fold(IQueryable Query, MethodCallExpression Call, ProjectionPlan? Plan, BinaryPartCollector? Binary)
     {
-        public ResultKind Kind =>
-            Plan is null ? ResultKind.Scalar : ResultKind.Single;
+        public ResultKind Kind
+        {
+            get
+            {
+                if (Plan is null)
+                {
+                    return ResultKind.Scalar;
+                }
 
-        public Terminal Finish(object? value) =>
-            Plan is { } plan ? Single((object[]?)value, plan, Binary) : Scalar(value);
+                return ResultKind.Single;
+            }
+        }
+
+        public Terminal Finish(object? value)
+        {
+            if (Plan is { } plan)
+            {
+                return Single((object[]?)value, plan, Binary);
+            }
+
+            return Scalar(value);
+        }
     }
 
     /// <summary>

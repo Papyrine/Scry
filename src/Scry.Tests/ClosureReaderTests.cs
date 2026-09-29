@@ -143,8 +143,15 @@ public class ClosureReaderTests
     static Type[] Lifted(Type type) =>
         [type, typeof(Nullable<>).MakeGenericType(type)];
 
-    static IEnumerable<object?> Operands(IReadOnlyList<object?> values, bool includeAbsent) =>
-        includeAbsent ? [..values, null] : values;
+    static IEnumerable<object?> Operands(IReadOnlyList<object?> values, bool includeAbsent)
+    {
+        if (includeAbsent)
+        {
+            return [..values, null];
+        }
+
+        return values;
+    }
 
     // A shift counts in ints whatever it shifts, so the right operand of one is not the left's type.
     static Type? ShiftCount(ExpressionType op)

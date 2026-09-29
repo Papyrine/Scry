@@ -29,7 +29,15 @@ public sealed class MemoryCachedPolicyStore :
             key,
             // Never read before, so the round can only have been decided against nothing: a
             // generation other than zero names a scope this store has since forgotten it ever held.
-            _ => update.Generation == 0 ? Merge(CachedPolicyScope.Empty, update, resolves: true) : CachedPolicyScope.Empty,
+            _ =>
+            {
+                if (update.Generation == 0)
+                {
+                    return Merge(CachedPolicyScope.Empty, update, resolves: true);
+                }
+
+                return CachedPolicyScope.Empty;
+            },
             (_, current) =>
             {
                 if (update.Generation == current.Generation)

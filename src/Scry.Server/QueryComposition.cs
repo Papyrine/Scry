@@ -120,10 +120,23 @@ static class QueryComposition
     // deduplicated projection is closed over.
     readonly record struct Closing(MemberInfo Definition, Type Arg0, Type? Arg1 = null, Type? Arg2 = null, Type? Arg3 = null)
     {
-        public Type[] Arguments =>
-            Arg1 is null ? [Arg0] :
-            Arg2 is null ? [Arg0, Arg1] :
-            [Arg0, Arg1, Arg2, Arg3!];
+        public Type[] Arguments
+        {
+            get
+            {
+                if (Arg1 is null)
+                {
+                    return [Arg0];
+                }
+
+                if (Arg2 is null)
+                {
+                    return [Arg0, Arg1];
+                }
+
+                return [Arg0, Arg1, Arg2, Arg3!];
+            }
+        }
     }
 
     // A row type is closed over whatever member types a client projected, in the order it projected

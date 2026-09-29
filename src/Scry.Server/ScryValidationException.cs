@@ -15,10 +15,15 @@ public sealed class ScryValidationException(string message) :
     /// </summary>
     public const int MaxMessageLength = 1024;
 
-    static string Bounded(string message) =>
-        message.Length <= MaxMessageLength
-            ? message
-            : string.Concat(message.AsSpan(0, MaxMessageLength), "…");
+    static string Bounded(string message)
+    {
+        if (message.Length <= MaxMessageLength)
+        {
+            return message;
+        }
+
+        return string.Concat(message.AsSpan(0, MaxMessageLength), "…");
+    }
 
     /// <summary>
     /// True when the rejection is attributed to the request's schema stamp differing from the

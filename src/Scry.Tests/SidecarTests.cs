@@ -260,9 +260,15 @@ public class SidecarTests
     public async Task AnOpenLiveQueryIsNotEvicted()
     {
         var (store, client) = Stubbed(
-            _ => _.RequestUri!.AbsolutePath.EndsWith("subscribe", StringComparison.Ordinal)
-                ? Sse(new ChunkStream(Ping()))
-                : List(),
+            _ =>
+            {
+                if (_.RequestUri!.AbsolutePath.EndsWith("subscribe", StringComparison.Ordinal))
+                {
+                    return Sse(new ChunkStream(Ping()));
+                }
+
+                return List();
+            },
             _ => _.MaxEntries = 2);
 
         using var request = Subscribe();
@@ -442,7 +448,12 @@ public class SidecarTests
             await gate.Task.WaitAsync(cancel);
             if (chunks.Count == 0)
             {
-                return ending is null ? 0 : throw ending;
+                if (ending is null)
+                {
+                    return 0;
+                }
+
+                throw ending;
             }
 
             var chunk = chunks.Dequeue();

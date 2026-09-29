@@ -23,10 +23,18 @@ public partial class ScrySidecar :
     ScrySidecarEntry? Selected =>
         Store.Entries.FirstOrDefault(_ => _.Id == selectedId);
 
-    ScrySidecarConnection? SelectedConnection =>
-        selectedAttempt is { } attempt
-            ? Selected?.Session?.Connections.FirstOrDefault(_ => _.Attempt == attempt)
-            : null;
+    ScrySidecarConnection? SelectedConnection
+    {
+        get
+        {
+            if (selectedAttempt is { } attempt)
+            {
+                return Selected?.Session?.Connections.FirstOrDefault(_ => _.Attempt == attempt);
+            }
+
+            return null;
+        }
+    }
 
     // The selected event, where it carries data to show.
     ScrySidecarEvent? ShownEvent
@@ -196,8 +204,15 @@ public partial class ScrySidecar :
         return $"{clickable} {chosen}";
     }
 
-    string? Chosen(int id, int? attempt) =>
-        selectedId == id && selectedAttempt == attempt ? "scry-sidecar-selected" : null;
+    string? Chosen(int id, int? attempt)
+    {
+        if (selectedId == id && selectedAttempt == attempt)
+        {
+            return "scry-sidecar-selected";
+        }
+
+        return null;
+    }
 
     void Clear()
     {
@@ -370,8 +385,15 @@ public partial class ScrySidecar :
         }
     }
 
-    static string Size(int bytes) =>
-        bytes < 1024 ? $"{bytes} B" : $"{bytes / 1024d:0.#} KiB";
+    static string Size(int bytes)
+    {
+        if (bytes < 1024)
+        {
+            return $"{bytes} B";
+        }
+
+        return $"{bytes / 1024d:0.#} KiB";
+    }
 
     static string Ago(DateTimeOffset? at)
     {
@@ -384,13 +406,30 @@ public partial class ScrySidecar :
         return Elapsed(since < TimeSpan.Zero ? TimeSpan.Zero : since);
     }
 
-    static string Elapsed(TimeSpan span) =>
-        span.TotalMinutes < 1 ? $"{span.TotalSeconds:0}s" :
-        span.TotalHours < 1 ? $"{(int) span.TotalMinutes}m {span.Seconds}s" :
-        $"{(int) span.TotalHours}h {span.Minutes}m";
+    static string Elapsed(TimeSpan span)
+    {
+        if (span.TotalMinutes < 1)
+        {
+            return $"{span.TotalSeconds:0}s";
+        }
 
-    static string Plural(int count, string what) =>
-        count == 1 ? $"1 {what}" : $"{count} {what}s";
+        if (span.TotalHours < 1)
+        {
+            return $"{(int) span.TotalMinutes}m {span.Seconds}s";
+        }
+
+        return $"{(int) span.TotalHours}h {span.Minutes}m";
+    }
+
+    static string Plural(int count, string what)
+    {
+        if (count == 1)
+        {
+            return $"1 {what}";
+        }
+
+        return $"{count} {what}s";
+    }
 
     // A live query's failure is the session's, and a command's its own; everything else carries its own.
     static string? Failure(ScrySidecarEntry entry) =>

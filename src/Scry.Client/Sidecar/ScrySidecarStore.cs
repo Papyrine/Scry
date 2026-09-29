@@ -317,7 +317,12 @@ public sealed class ScrySidecarStore(ScrySidecarOptions options)
         try
         {
             var json = ScryJson.Serialize(answer);
-            return json.Length > options.MaxRetainedAnswerBytes ? null : SidecarJson.Prettify(json);
+            if (json.Length > options.MaxRetainedAnswerBytes)
+            {
+                return null;
+            }
+
+            return SidecarJson.Prettify(json);
         }
         catch
         {

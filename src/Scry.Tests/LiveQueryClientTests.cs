@@ -779,10 +779,15 @@ public class LiveQueryClientTests
                     Code = code
                 }));
 
-    static string Event(string name, string? id, string data) =>
-        id is null
-            ? $"event: {name}\ndata: {data}\n\n"
-            : $"event: {name}\nid: {id}\ndata: {data}\n\n";
+    static string Event(string name, string? id, string data)
+    {
+        if (id is null)
+        {
+            return $"event: {name}\ndata: {data}\n\n";
+        }
+
+        return $"event: {name}\nid: {id}\ndata: {data}\n\n";
+    }
 
     static HttpResponseMessage Failure(HttpStatusCode status, ScryErrorCode? code)
     {

@@ -225,8 +225,15 @@ static partial class ClosureReader
 
     // What a type counts as: an enum counts as the integer it is written on, since that is what the
     // compiler compares and converts.
-    static Type Numeric(Type type) =>
-        type.IsEnum ? Enum.GetUnderlyingType(type) : type;
+    static Type Numeric(Type type)
+    {
+        if (type.IsEnum)
+        {
+            return Enum.GetUnderlyingType(type);
+        }
+
+        return type;
+    }
 
     static Type Underlying(Type type) =>
         Nullable.GetUnderlyingType(type) ?? type;
@@ -310,10 +317,15 @@ static partial class ClosureReader
         return values;
     }
 
-    static object? ReadMember(MemberInfo member, object? instance) =>
-        member is FieldInfo field
-            ? field.GetValue(instance)
-            : ((PropertyInfo) member).GetValue(instance);
+    static object? ReadMember(MemberInfo member, object? instance)
+    {
+        if (member is FieldInfo field)
+        {
+            return field.GetValue(instance);
+        }
+
+        return ((PropertyInfo) member).GetValue(instance);
+    }
 
     static object ReadArray(NewArrayExpression array)
     {
@@ -368,7 +380,12 @@ static partial class ClosureReader
         switch (unary.NodeType)
         {
             case ExpressionType.TypeAs:
-                return unary.Type.IsInstanceOfType(operand) ? operand : null;
+                if (unary.Type.IsInstanceOfType(operand))
+                {
+                    return operand;
+                }
+
+                return null;
 
             case ExpressionType.ArrayLength:
                 return ((Array) Instance(operand)).Length;
@@ -424,9 +441,12 @@ static partial class ClosureReader
 
         if (!Underlying(binary.Left.Type).IsValueType)
         {
-            return binary.NodeType == ExpressionType.Equal
-                ? ReferenceEquals(left, right)
-                : !ReferenceEquals(left, right);
+            if (binary.NodeType == ExpressionType.Equal)
+            {
+                return ReferenceEquals(left, right);
+            }
+
+            return !ReferenceEquals(left, right);
         }
 
         return Compute(
@@ -450,18 +470,26 @@ static partial class ClosureReader
     // An enum compares as the integer it is written on. Only equality reaches here — the factory
     // refuses every other operator over an enum, and Roslyn converts to the underlying type before
     // comparing — so this widens rather than narrowing what an operator can answer.
-    static object? Widen(object? value) =>
-        value is Enum
-            ? Convert.ChangeType(value, Enum.GetUnderlyingType(value.GetType()), CultureInfo.InvariantCulture)
-            : value;
+    static object? Widen(object? value)
+    {
+        if (value is Enum)
+        {
+            return Convert.ChangeType(value, Enum.GetUnderlyingType(value.GetType()), CultureInfo.InvariantCulture);
+        }
+
+        return value;
+    }
 
     static object? Invoke(MethodBase method, object? instance, object?[] arguments)
     {
         try
         {
-            return method is ConstructorInfo constructor
-                ? constructor.Invoke(arguments)
-                : method.Invoke(instance, arguments);
+            if (method is ConstructorInfo constructor)
+            {
+                return constructor.Invoke(arguments);
+            }
+
+            return method.Invoke(instance, arguments);
         }
         // What the member threw is what the query wrote. Reflection wraps it, and so does the
         // compiled fallback's DynamicInvoke — see QueryTranslator.Evaluate, which unwraps there too,

@@ -57,9 +57,12 @@ public class HeaderTests
             request =>
             {
                 sent.Add(request.Headers.GetValues("X-Request-Id").Single());
-                return request.Method == HttpMethod.Get
-                    ? new(HttpStatusCode.MethodNotAllowed)
-                    : Scalar(3);
+                if (request.Method == HttpMethod.Get)
+                {
+                    return new(HttpStatusCode.MethodNotAllowed);
+                }
+
+                return Scalar(3);
             });
 
         await client.Source<Employee>("Employee", ["Name"])

@@ -94,8 +94,15 @@ public class FunctionMatrixTests
         }
     }
 
-    static string Describe(IReadOnlyList<Node> arguments) =>
-        arguments.Count == 0 ? "no args" : $"{arguments.Count} x {((ConstNode) arguments[0]).Tag}";
+    static string Describe(IReadOnlyList<Node> arguments)
+    {
+        if (arguments.Count == 0)
+        {
+            return "no args";
+        }
+
+        return $"{arguments.Count} x {((ConstNode) arguments[0]).Tag}";
+    }
 
     // Every scalar member of every source the context maps, read off the schema so a member added to
     // the model is in the matrix without anyone adding it here. A POCO has no SQL to ask for, and a

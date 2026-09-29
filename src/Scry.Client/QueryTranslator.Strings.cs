@@ -32,9 +32,12 @@ sealed partial class QueryTranslator
             var collated = new CollateNode(TranslateExpr(compared, root), Sensitivity(call.Arguments[^1]));
 
             // Equals is a comparison rather than a function; under a collation it is an ordinary one.
-            return function is null
-                ? new BinaryNode(BinaryOp.Equal, collated, TranslateExpr(operand, root))
-                : new CallNode(function.Value, collated, [TranslateExpr(operand, root)]);
+            if (function is null)
+            {
+                return new BinaryNode(BinaryOp.Equal, collated, TranslateExpr(operand, root));
+            }
+
+            return new CallNode(function.Value, collated, [TranslateExpr(operand, root)]);
         }
 
         switch (call.Method.Name)

@@ -18,8 +18,15 @@ public partial class LiveChrome
     [EditorRequired]
     public string Active { get; set; } = "";
 
-    string Class(string tab) =>
-        tab == Active ? "active" : "";
+    string Class(string tab)
+    {
+        if (tab == Active)
+        {
+            return "active";
+        }
+
+        return "";
+    }
 
     string TransportName
     {

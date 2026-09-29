@@ -1192,10 +1192,15 @@ sealed class ExpressionBuilder(
 
     // A value able to carry a null: the expression as it is where it already can, and lifted to its
     // nullable where it cannot.
-    static Expression Widened(Expression expression) =>
-        expression.Type.IsValueType && Nullable.GetUnderlyingType(expression.Type) is null
-            ? Expression.Convert(expression, QueryComposition.Close(typeof(Nullable<>), expression.Type))
-            : expression;
+    static Expression Widened(Expression expression)
+    {
+        if (expression.Type.IsValueType && Nullable.GetUnderlyingType(expression.Type) is null)
+        {
+            return Expression.Convert(expression, QueryComposition.Close(typeof(Nullable<>), expression.Type));
+        }
+
+        return expression;
+    }
 
     Expression BuildBinary(BinaryNode binary, Expression row)
     {
@@ -1561,10 +1566,15 @@ sealed class ExpressionBuilder(
     /// nullability; under EF the unwrap is part of the translated expression, so a null row simply
     /// yields null rather than faulting.
     /// </summary>
-    static Expression NonNullable(Expression target) =>
-        Nullable.GetUnderlyingType(target.Type) is null
-            ? target
-            : Expression.Property(target, NullableValue(target.Type));
+    static Expression NonNullable(Expression target)
+    {
+        if (Nullable.GetUnderlyingType(target.Type) is null)
+        {
+            return target;
+        }
+
+        return Expression.Property(target, NullableValue(target.Type));
+    }
 
     // The Value of a closed Nullable<T>, found once per closing: the string overload of
     // Expression.Property looks it up by name on every call.
@@ -2314,9 +2324,12 @@ sealed class ExpressionBuilder(
         var declared = TagToType(constant.Tag);
         var value = Nullable.GetUnderlyingType(other) ?? other;
 
-        return Rank(declared) is { } declaredRank && Rank(value) is { } valueRank && declaredRank > valueRank
-            ? declared
-            : other;
+        if (Rank(declared) is { } declaredRank && Rank(value) is { } valueRank && declaredRank > valueRank)
+        {
+            return declared;
+        }
+
+        return other;
     }
 
     /// <summary>

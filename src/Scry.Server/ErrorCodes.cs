@@ -10,18 +10,28 @@ static class ErrorCodes
     /// it also is: what the client does about it — regenerate, or reload — is the same whichever rule
     /// it tripped, and the status still says it was a rejection.
     /// </summary>
-    public static ScryErrorCode Classify(ScryValidationException exception) =>
-        exception.StaleClient
-            ? ScryErrorCode.StaleClient
-            : ScryErrorCode.Validation;
+    public static ScryErrorCode Classify(ScryValidationException exception)
+    {
+        if (exception.StaleClient)
+        {
+            return ScryErrorCode.StaleClient;
+        }
+
+        return ScryErrorCode.Validation;
+    }
 
     /// <summary>
     /// The same attribution for an execution failure, where there is no rejection to classify: a
     /// drifted client faulting the server is far more likely stale than the server broken, and saying
     /// so is what lets the client prompt a reload rather than present an unexplained server error.
     /// </summary>
-    public static ScryErrorCode Failed(bool drifted) =>
-        drifted
-            ? ScryErrorCode.StaleClient
-            : ScryErrorCode.ExecutionFailed;
+    public static ScryErrorCode Failed(bool drifted)
+    {
+        if (drifted)
+        {
+            return ScryErrorCode.StaleClient;
+        }
+
+        return ScryErrorCode.ExecutionFailed;
+    }
 }

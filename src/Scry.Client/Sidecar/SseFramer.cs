@@ -265,13 +265,35 @@ sealed class SseFramer :
     }
 
     // The names this server writes, matched without allocating one to compare against.
-    static string EventName(ReadOnlySpan<byte> value) =>
-        value.SequenceEqual("result"u8) ? ScryLive.Result :
-        value.SequenceEqual("unchanged"u8) ? ScryLive.Unchanged :
-        value.SequenceEqual("ping"u8) ? ScryLive.Ping :
-        value.SequenceEqual("error"u8) ? ScryLive.Error :
-        value.SequenceEqual("end"u8) ? ScryLive.End :
-        Encoding.UTF8.GetString(value);
+    static string EventName(ReadOnlySpan<byte> value)
+    {
+        if (value.SequenceEqual("result"u8))
+        {
+            return ScryLive.Result;
+        }
+
+        if (value.SequenceEqual("unchanged"u8))
+        {
+            return ScryLive.Unchanged;
+        }
+
+        if (value.SequenceEqual("ping"u8))
+        {
+            return ScryLive.Ping;
+        }
+
+        if (value.SequenceEqual("error"u8))
+        {
+            return ScryLive.Error;
+        }
+
+        if (value.SequenceEqual("end"u8))
+        {
+            return ScryLive.End;
+        }
+
+        return Encoding.UTF8.GetString(value);
+    }
 
     // Disposed twice in the ordinary case: the consumer gives up the stream, and then the response
     // that carried it is disposed in turn.

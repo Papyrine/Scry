@@ -171,10 +171,15 @@ static class ResponseWriter
         return rows;
     }
 
-    public static object[] Row(object row, QueryExecutor.RowSet set) =>
-        set.Deduplicated
-            ? ExpressionBuilder.ReadDistinctRow(row)
-            : (object[])row;
+    public static object[] Row(object row, QueryExecutor.RowSet set)
+    {
+        if (set.Deduplicated)
+        {
+            return ExpressionBuilder.ReadDistinctRow(row);
+        }
+
+        return (object[])row;
+    }
 
     /// <summary>Opens a batch envelope: its version, then the array its entries are written into.</summary>
     public static void BeginBatch(Utf8JsonWriter json)

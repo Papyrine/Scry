@@ -782,12 +782,20 @@ public partial class App
     }
 
     // The label on a pane's copy button: what the last click did, or the offer.
-    string CopyLabel(string key) =>
-        copied == key
-            ? "✓ Copied"
-            : copyFailed == key
-                ? "✗ Not copied"
-                : "Copy";
+    string CopyLabel(string key)
+    {
+        if (copied == key)
+        {
+            return "✓ Copied";
+        }
+
+        if (copyFailed == key)
+        {
+            return "✗ Not copied";
+        }
+
+        return "Copy";
+    }
 
     // Register the completion provider once both the workspace (schema) and the editor are ready.
     async Task TryRegister()

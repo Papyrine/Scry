@@ -393,8 +393,15 @@ public class CachedPolicyTests
     sealed class StubProvider(CountingRegionPolicy policy) :
         IServiceProvider
     {
-        public object? GetService(Type serviceType) =>
-            serviceType == typeof(CountingRegionPolicy) ? policy : null;
+        public object? GetService(Type serviceType)
+        {
+            if (serviceType == typeof(CountingRegionPolicy))
+            {
+                return policy;
+            }
+
+            return null;
+        }
     }
 }
 

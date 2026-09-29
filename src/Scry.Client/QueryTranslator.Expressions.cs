@@ -76,10 +76,13 @@ sealed partial class QueryTranslator
                 // One part of a composite key: 'g.Key.Region' is the member the query grouped by.
                 case MemberExpression {Expression: MemberExpression {Member.Name: "Key"} owner} part
                     when owner.Expression == root && IsGrouping(root.Type) && groupKeyParts is not null:
-                    return groupKeyParts.TryGetValue(part.Member.Name, out var resolved)
-                        ? resolved
-                        : throw new NotSupportedException(
-                            $"'{part.Member.Name}' is not one of the query's group keys.");
+                    if (groupKeyParts.TryGetValue(part.Member.Name, out var resolved))
+                    {
+                        return resolved;
+                    }
+
+                    throw new NotSupportedException(
+                        $"'{part.Member.Name}' is not one of the query's group keys.");
 
                 case MemberExpression {Member.Name: "Key"} key
                     when key.Expression == root && IsGrouping(root.Type):
@@ -118,9 +121,12 @@ sealed partial class QueryTranslator
                 // function over the constant instead, the server would read a part of a value that
                 // travels as text for an offset, a time of day, or an elapsed time, and refuse.
                 case MemberExpression member when IsKnownProperty(member, out var function):
-                    return ReferencesParameter(member, root)
-                        ? new CallNode(function, TranslateExpr(member.Expression!, root), [])
-                        : ConstantOf(Evaluate(member));
+                    if (ReferencesParameter(member, root))
+                    {
+                        return new CallNode(function, TranslateExpr(member.Expression!, root), []);
+                    }
+
+                    return ConstantOf(Evaluate(member));
 
                 // An attachment reached anywhere an expression is being built. A projection leaf is
                 // handled before this, so arriving here means it was used as a value — compared,

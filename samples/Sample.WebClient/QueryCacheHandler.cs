@@ -99,10 +99,15 @@ public sealed class QueryCacheHandler(QueryCache cache) :
         return rebuilt;
     }
 
-    static string? Stamp(HttpResponseMessage response) =>
-        response.Headers.TryGetValues(WireFormat.SchemaStampHeader, out var values)
-            ? values.FirstOrDefault()
-            : null;
+    static string? Stamp(HttpResponseMessage response)
+    {
+        if (response.Headers.TryGetValues(WireFormat.SchemaStampHeader, out var values))
+        {
+            return values.FirstOrDefault();
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// The cache key: the URL, which is the query. Null for anything else — a query too long for a URL

@@ -72,7 +72,12 @@ static partial class ClosureReader
             ? Convert.ChangeType(value, Enum.GetUnderlyingType(value.GetType()), CultureInfo.InvariantCulture)
             : value;
         var numeric = ToNumeric(source, Type.GetTypeCode(Numeric(target)));
-        return target.IsEnum ? Enum.ToObject(target, numeric) : numeric;
+        if (target.IsEnum)
+        {
+            return Enum.ToObject(target, numeric);
+        }
+
+        return numeric;
     }
 
     static object ToNumeric(object value, TypeCode target) =>
@@ -196,14 +201,35 @@ static partial class ClosureReader
         });
 
     // An unsigned long has no negation to emit, so only its complement reaches here.
-    static object Unary(ExpressionType op, ulong operand) =>
-        op is ExpressionType.Not ? ~operand : operand;
+    static object Unary(ExpressionType op, ulong operand)
+    {
+        if (op is ExpressionType.Not)
+        {
+            return ~operand;
+        }
 
-    static object Unary(ExpressionType op, float operand) =>
-        op is ExpressionType.Negate ? -operand : operand;
+        return operand;
+    }
 
-    static object Unary(ExpressionType op, double operand) =>
-        op is ExpressionType.Negate ? -operand : operand;
+    static object Unary(ExpressionType op, float operand)
+    {
+        if (op is ExpressionType.Negate)
+        {
+            return -operand;
+        }
+
+        return operand;
+    }
+
+    static object Unary(ExpressionType op, double operand)
+    {
+        if (op is ExpressionType.Negate)
+        {
+            return -operand;
+        }
+
+        return operand;
+    }
 
     static object Compute(ExpressionType op, object left, object right)
     {

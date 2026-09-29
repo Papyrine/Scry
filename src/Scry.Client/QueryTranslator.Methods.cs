@@ -250,9 +250,12 @@ sealed partial class QueryTranslator
             IsSetContains(call, root, out var set, out var value))
         {
             var candidates = Evaluate(set);
-            return candidates is IQueryable {Provider: QueryProvider provider} queryable
-                ? InSource(queryable, provider, value, root)
-                : new CallNode(KnownFunction.In, TranslateExpr(value, root), [..SetConstants(candidates)]);
+            if (candidates is IQueryable {Provider: QueryProvider provider} queryable)
+            {
+                return InSource(queryable, provider, value, root);
+            }
+
+            return new CallNode(KnownFunction.In, TranslateExpr(value, root), [..SetConstants(candidates)]);
         }
 
         // The call reads the row, so it cannot be evaluated into a constant — and it is not on the
@@ -299,9 +302,12 @@ sealed partial class QueryTranslator
                 _ => (KnownFunction?)null
             };
 
-            return text is { } reading
-                ? new CallNode(reading, TranslateExpr(source, root), [])
-                : null;
+            if (text is { } reading)
+            {
+                return new CallNode(reading, TranslateExpr(source, root), []);
+            }
+
+            return null;
         }
 
         if (source.Type != typeof(byte[]))

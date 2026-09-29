@@ -207,12 +207,17 @@ sealed class NavigationPolicy(
     /// Widens one side of a key comparison where the other is nullable, so an optional foreign key and
     /// the non-nullable primary key it points at still compare.
     /// </summary>
-    static Expression Lift(Expression value, Type other) =>
-        Nullable.GetUnderlyingType(other) is not null &&
-        value.Type.IsValueType &&
-        Nullable.GetUnderlyingType(value.Type) is null
-            ? Expression.Convert(value, QueryComposition.Close(typeof(Nullable<>), value.Type))
-            : value;
+    static Expression Lift(Expression value, Type other)
+    {
+        if (Nullable.GetUnderlyingType(other) is not null &&
+                value.Type.IsValueType &&
+                Nullable.GetUnderlyingType(value.Type) is null)
+        {
+            return Expression.Convert(value, QueryComposition.Close(typeof(Nullable<>), value.Type));
+        }
+
+        return value;
+    }
 
     // The predicate overload specifically: the other two-parameter one takes a default value, which
     // would bind a row rather than filter to one.
