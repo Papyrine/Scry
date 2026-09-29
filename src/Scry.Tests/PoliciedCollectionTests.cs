@@ -11,7 +11,7 @@ public class PoliciedCollectionTests
         // The default, and what the server did before there was anything else to say: a policy that has
         // not been asked the question does not get guessed at.
         var exception = Assert.ThrowsExactly<Exception>(
-            () => Build(_ => _.AddPolicy<OrderLine, BulkLinesOnlyPolicy>()))!;
+            () => Build(_ => _.AddPolicy<OrderLine, BulkLinesOnlyPolicy>()));
 
         await Assert.That(exception.Message).Contains("Order.Lines");
         await Assert.That(exception.Message).Contains("CollectionNavigation");

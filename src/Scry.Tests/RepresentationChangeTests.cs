@@ -69,7 +69,7 @@ public class RepresentationChangeTests
     public async Task LooseningToStringRejectsOrdering()
     {
         var exception = Assert.ThrowsExactly<ScryValidationException>(
-            () => RowCount("Employee", "Name", BinaryOp.GreaterThan, new("30", ClrTypeTag.Int32)))!;
+            () => RowCount("Employee", "Name", BinaryOp.GreaterThan, new("30", ClrTypeTag.Int32)));
 
         await Assert.That(exception.Message).Contains("'GreaterThan' is not defined for 'String' and 'String'");
         Assert.ThrowsExactly<ScryValidationException>(
@@ -82,9 +82,9 @@ public class RepresentationChangeTests
     public async Task TighteningRejectsTextThatIsNotAValueOfTheNewType()
     {
         var status = Assert.ThrowsExactly<ScryValidationException>(
-            () => RowCount("Employee", "Status", BinaryOp.Equal, new("Alice", ClrTypeTag.String)))!;
+            () => RowCount("Employee", "Status", BinaryOp.Equal, new("Alice", ClrTypeTag.String)));
         var grade = Assert.ThrowsExactly<ScryValidationException>(
-            () => RowCount("Order", "Grade", BinaryOp.Equal, new("Alice", ClrTypeTag.String)))!;
+            () => RowCount("Order", "Grade", BinaryOp.Equal, new("Alice", ClrTypeTag.String)));
 
         using (Assert.Multiple())
         {
@@ -103,13 +103,13 @@ public class RepresentationChangeTests
         using (Assert.Multiple())
         {
             await Assert.That(Assert.ThrowsExactly<ScryValidationException>(
-                    () => RowCount("Employee", "Id", BinaryOp.Equal, new("Alice", ClrTypeTag.String)))!.Message).Contains("is not a valid Int32 value");
+                () => RowCount("Employee", "Id", BinaryOp.Equal, new("Alice", ClrTypeTag.String))).Message).Contains("is not a valid Int32 value");
             await Assert.That(Assert.ThrowsExactly<ScryValidationException>(
-                    () => RowCount("Employee", "Active", BinaryOp.Equal, new("Alice", ClrTypeTag.String)))!.Message).Contains("is not a valid Boolean value");
+                () => RowCount("Employee", "Active", BinaryOp.Equal, new("Alice", ClrTypeTag.String))).Message).Contains("is not a valid Boolean value");
             await Assert.That(Assert.ThrowsExactly<ScryValidationException>(
-                    () => RowCount("Order", "Amount", BinaryOp.Equal, new("Alice", ClrTypeTag.String)))!.Message).Contains("is not a valid Decimal value");
+                () => RowCount("Order", "Amount", BinaryOp.Equal, new("Alice", ClrTypeTag.String))).Message).Contains("is not a valid Decimal value");
             await Assert.That(Assert.ThrowsExactly<ScryValidationException>(
-                    () => RowCount("Order", "Placed", BinaryOp.Equal, new("Alice", ClrTypeTag.String)))!.Message).Contains("is not a valid DateTime value");
+                () => RowCount("Order", "Placed", BinaryOp.Equal, new("Alice", ClrTypeTag.String))).Message).Contains("is not a valid DateTime value");
         }
     }
 
@@ -132,7 +132,7 @@ public class RepresentationChangeTests
     public async Task NarrowingRejectsAValueThatNoLongerFits()
     {
         var exception = Assert.ThrowsExactly<ScryValidationException>(
-            () => RowCount("Employee", "Id", BinaryOp.Equal, new("99999999999", ClrTypeTag.Int64)))!;
+            () => RowCount("Employee", "Id", BinaryOp.Equal, new("99999999999", ClrTypeTag.Int64)));
         await Assert.That(exception.Message).Contains("is not a valid Int32 value");
 
         await Assert.That(RowCount("Employee", "Id", BinaryOp.Equal, new("1", ClrTypeTag.Int64))).IsEqualTo(1);

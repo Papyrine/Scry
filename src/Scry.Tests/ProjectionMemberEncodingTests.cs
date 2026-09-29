@@ -45,7 +45,7 @@ public class ProjectionMemberEncodingTests
     public async Task TheObjectSpellingOfAMemberReadingItsOwnNameIsRefused()
     {
         var exception = Assert.ThrowsExactly<ScryWireException>(
-            () => Deserialize("""[{"name":"Active","value":{"$type":"node","node":{"$type":"member","path":"Active"}}}]"""))!;
+            () => Deserialize("""[{"name":"Active","value":{"$type":"node","node":{"$type":"member","path":"Active"}}}]"""));
 
         await Assert.That(exception.Message).Contains("""is written as a string: "Active".""");
     }

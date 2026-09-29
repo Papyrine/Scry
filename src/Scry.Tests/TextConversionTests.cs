@@ -176,7 +176,7 @@ public class TextConversionTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("would narrow");
+        await Assert.That(exception.Message).Contains("would narrow");
     }
 
     [Test]
@@ -221,7 +221,7 @@ public class TextConversionTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("reads text as a value");
+        await Assert.That(exception.Message).Contains("reads text as a value");
     }
 
     static ScryClient ClientFor(TestContext context) =>

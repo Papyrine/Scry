@@ -117,7 +117,7 @@ public class AttachmentFetchTests
         using var data = TestContext.CreateSeeded();
         var processor = With<MislabellingPolicy>();
 
-        var exception = Assert.ThrowsExactly<Exception>(() => processor.FetchAttachment(Request(1), data))!;
+        var exception = Assert.ThrowsExactly<Exception>(() => processor.FetchAttachment(Request(1), data));
 
         using (Assert.Multiple())
         {
@@ -178,7 +178,7 @@ public class AttachmentFetchTests
     public async Task UnknownMemberIsRejected()
     {
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => Fetch(1, "Ssn"));
-        await Assert.That(exception!.Message).Contains("is not an attachment member");
+        await Assert.That(exception.Message).Contains("is not an attachment member");
     }
 
     // A member that exists and is readable, but is not an attachment — the endpoint is not a way to
@@ -187,7 +187,7 @@ public class AttachmentFetchTests
     public async Task ScalarMemberIsRejected()
     {
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => Fetch(1, "Name"));
-        await Assert.That(exception!.Message).Contains("is not an attachment member");
+        await Assert.That(exception.Message).Contains("is not an attachment member");
     }
 
     [Test]
@@ -199,7 +199,7 @@ public class AttachmentFetchTests
                 AttachmentRequest.Create("Secret", "Document", [new("1", ClrTypeTag.Int32)]),
                 data));
 
-        await Assert.That(exception!.Message).Contains("Unknown source");
+        await Assert.That(exception.Message).Contains("Unknown source");
     }
 
     [Test]
@@ -211,7 +211,7 @@ public class AttachmentFetchTests
                 AttachmentRequest.Create("Contract", "Document", [new("1", ClrTypeTag.Int32), new("2", ClrTypeTag.Int32)]),
                 data));
 
-        await Assert.That(exception!.Message).Contains("keyed by 1 value");
+        await Assert.That(exception.Message).Contains("keyed by 1 value");
     }
 
     // The tag says Int32 and the value is not one. Rejected because the key is parsed into the
@@ -226,7 +226,7 @@ public class AttachmentFetchTests
                 AttachmentRequest.Create("Contract", "Document", [new("not-a-number", ClrTypeTag.Int32)]),
                 data));
 
-        await Assert.That(exception!.Message).Contains("not a valid Int32");
+        await Assert.That(exception.Message).Contains("not a valid Int32");
     }
 
     // A primary key is never null, so a null key identifies no row. Answered as not-found rather than
@@ -251,7 +251,7 @@ public class AttachmentFetchTests
                 new(AttachmentRequest.CurrentVersion + 1, "Contract", "Document", [new("1", ClrTypeTag.Int32)]),
                 data));
 
-        await Assert.That(exception!.Message).Contains("Unsupported attachment request version");
+        await Assert.That(exception.Message).Contains("Unsupported attachment request version");
     }
 
     [Test]
@@ -265,6 +265,6 @@ public class AttachmentFetchTests
                 new(version, "Contract", "Document", [new("1", ClrTypeTag.Int32)]),
                 data));
 
-        await Assert.That(exception!.Message).Contains("Unsupported attachment request version");
+        await Assert.That(exception.Message).Contains("Unsupported attachment request version");
     }
 }

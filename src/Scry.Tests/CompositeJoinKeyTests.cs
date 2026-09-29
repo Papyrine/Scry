@@ -88,7 +88,7 @@ public class CompositeJoinKeyTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("composite on both sides");
+        await Assert.That(exception.Message).Contains("composite on both sides");
     }
 
     [Test]
@@ -111,7 +111,7 @@ public class CompositeJoinKeyTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("pairs its parts");
+        await Assert.That(exception.Message).Contains("pairs its parts");
     }
 
     // A composite has no value of its own, so anywhere a value is expected it is an unsupported
@@ -135,7 +135,7 @@ public class CompositeJoinKeyTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("Unsupported expression");
+        await Assert.That(exception.Message).Contains("Unsupported expression");
     }
 
     static ScryClient ClientFor(TestContext context) =>

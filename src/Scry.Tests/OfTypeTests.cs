@@ -97,7 +97,7 @@ public class OfTypeTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("Unknown source 'Artwork'");
+        await Assert.That(exception.Message).Contains("Unknown source 'Artwork'");
     }
 
     [Test]
@@ -112,7 +112,7 @@ public class OfTypeTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("does not derive from 'Asset'");
+        await Assert.That(exception.Message).Contains("does not derive from 'Asset'");
     }
 
     [Test]
@@ -125,7 +125,7 @@ public class OfTypeTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("does not narrow");
+        await Assert.That(exception.Message).Contains("does not narrow");
     }
 
     [Test]
@@ -140,7 +140,7 @@ public class OfTypeTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("does not derive from 'Vehicle'");
+        await Assert.That(exception.Message).Contains("does not derive from 'Vehicle'");
     }
 
     [Test]
@@ -156,7 +156,7 @@ public class OfTypeTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("Wheels");
+        await Assert.That(exception.Message).Contains("Wheels");
     }
 
     static ScryClient ClientFor(TestContext context) =>

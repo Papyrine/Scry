@@ -189,7 +189,7 @@ public class LimitWatchTests
     {
         var exception = Assert.ThrowsExactly<Exception>(() => Watching(fraction));
 
-        await Assert.That(exception!.Message).Contains("LimitWatchFraction");
+        await Assert.That(exception.Message).Contains("LimitWatchFraction");
     }
 
     [Test]

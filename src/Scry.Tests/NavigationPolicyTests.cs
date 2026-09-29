@@ -258,7 +258,7 @@ public class NavigationPolicyTests
 
         using (Assert.Multiple())
         {
-            await Assert.That(exception!.Message).Contains("'Department'");
+            await Assert.That(exception.Message).Contains("'Department'");
             await Assert.That(exception.Message).Contains("Employee.Department");
             await Assert.That(exception.Message).Contains("correlated subquery");
         }

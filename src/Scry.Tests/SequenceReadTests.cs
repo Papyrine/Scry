@@ -84,8 +84,8 @@ public class SequenceReadTests
 
         using (Assert.Multiple())
         {
-            await Assert.That(first).IsEquivalentTo(1, CollectionOrdering.Matching);
-            await Assert.That(second).IsEquivalentTo(1, CollectionOrdering.Matching);
+            await Assert.That(first).IsEqualTo(1);
+            await Assert.That(second).IsEqualTo(1);
         }
     }
 

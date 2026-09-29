@@ -82,7 +82,7 @@ public class HasFlagTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("HasFlag is not supported over");
+        await Assert.That(exception.Message).Contains("HasFlag is not supported over");
     }
 
     static ScryClient ClientFor(TestContext context) =>

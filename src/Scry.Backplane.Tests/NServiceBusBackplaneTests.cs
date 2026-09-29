@@ -157,26 +157,26 @@ public class NServiceBusBackplaneTests
             builder.Logging.ClearProviders();
             builder.Services.AddScryNServiceBusBackplane();
 
-            var configuration = new EndpointConfiguration(name);
-            configuration.UseSerialization<SystemJsonSerializer>();
-            configuration.UseTransport(
+            var endpoint = new EndpointConfiguration(name);
+            endpoint.UseSerialization<SystemJsonSerializer>();
+            endpoint.UseTransport(
                 new LearningTransport
                 {
                     StorageDirectory = storage
                 });
-            configuration.SendFailedMessagesTo("ScryTests.Error");
-            configuration.EnableInstallers();
+            endpoint.SendFailedMessagesTo("ScryTests.Error");
+            endpoint.EnableInstallers();
 
             // A failure is left failed, so that a test about one is over when the handler has thrown
             // once rather than after a schedule of retries.
-            configuration.Recoverability().Immediate(_ => _.NumberOfRetries(0));
-            configuration.Recoverability().Delayed(_ => _.NumberOfRetries(0));
+            endpoint.Recoverability().Immediate(_ => _.NumberOfRetries(0));
+            endpoint.Recoverability().Delayed(_ => _.NumberOfRetries(0));
             if (worker)
             {
-                configuration.UseScryChanges();
+                endpoint.UseScryChanges();
             }
 
-            builder.Services.AddNServiceBusEndpoint(configuration);
+            builder.Services.AddNServiceBusEndpoint(endpoint);
             var host = builder.Build();
             await host.StartAsync();
 

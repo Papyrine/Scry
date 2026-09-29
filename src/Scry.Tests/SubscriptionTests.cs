@@ -600,7 +600,7 @@ public class SubscriptionTests
     [MethodDataSource(nameof(OptionsOutOfRange))]
     public async Task AnOptionOutOfRangeIsRefusedAtStartup(string option, Action<ScryOptions> set)
     {
-        var exception = Assert.Throws<Exception>(() => Live(set))!;
+        var exception = Assert.Throws<Exception>(() => Live(set));
 
         await Assert.That(exception.Message).Contains($"ScryOptions.{option} ");
     }

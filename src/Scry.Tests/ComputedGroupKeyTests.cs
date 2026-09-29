@@ -124,7 +124,7 @@ public class ComputedGroupKeyTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("only be read in the Select or Where that follows a GroupBy");
+        await Assert.That(exception.Message).Contains("only be read in the Select or Where that follows a GroupBy");
     }
 
     [Test]
@@ -142,7 +142,7 @@ public class ComputedGroupKeyTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("Group key 3 is out of range");
+        await Assert.That(exception.Message).Contains("Group key 3 is out of range");
     }
 
     static ScryClient ClientFor(TestContext context) =>

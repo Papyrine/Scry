@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.Components;
-
 namespace Scry;
 
 /// <summary>

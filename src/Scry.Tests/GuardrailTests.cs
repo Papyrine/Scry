@@ -21,6 +21,6 @@ public class GuardrailTests
         using var context = new AddressAsEntityContext(options);
 
         var exception = Assert.ThrowsExactly<Exception>(() => SharedProcessor.Instance.ValidateAgainstModel(context));
-        await Assert.That(exception!.Message).Contains("[QueryableComplex] but is a mapped entity");
+        await Assert.That(exception.Message).Contains("[QueryableComplex] but is a mapped entity");
     }
 }

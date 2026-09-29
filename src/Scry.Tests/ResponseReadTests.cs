@@ -159,7 +159,7 @@ public class ResponseReadTests
 
         var exception = Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeResponse(Utf8(json)));
 
-        await Assert.That(exception!.Message).Contains("Unsupported response wire version");
+        await Assert.That(exception.Message).Contains("Unsupported response wire version");
     }
 
     [Test]
@@ -168,7 +168,7 @@ public class ResponseReadTests
         var exception = Assert.ThrowsExactly<ScryWireException>(
             () => ScryJson.DeserializeResponse(Utf8("""{"version":1,"kind":"List","payload":[}""")));
 
-        await Assert.That(exception!.Message).StartsWith("Invalid query response");
+        await Assert.That(exception.Message).StartsWith("Invalid query response");
     }
 
     // A payload read leaves the scope that told the reader to step over payloads; a failed one has to
@@ -244,7 +244,7 @@ public class ResponseReadTests
             "{\"name\":\"Alice\",\"rank\":1,\"status\":\"FullTime\"}"u8,
             aliases: null);
 
-        await Assert.That(row).IsEqualTo(new Row("Alice", 1, Status.FullTime));
+        await Assert.That(row).IsEqualTo(new("Alice", 1, Status.FullTime));
     }
 
     // The aliases reach the enum reader the same way they do on the element overload, so a client

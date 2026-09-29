@@ -82,7 +82,7 @@ public class PipelineShapeTests
 
     static string Rejects(string root, IReadOnlyList<QueryOp> pipeline)
     {
-        var exception = Assert.ThrowsExactly<ScryValidationException>(() => Execute(root, pipeline))!;
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => Execute(root, pipeline));
         return exception.Message;
     }
 

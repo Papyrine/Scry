@@ -441,7 +441,7 @@ public class RoslynLayerTests
         var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => executor.Translate("Query.Employee.Where(_ => _.Name.GetHashCode() == 3)"));
 
-        await Assert.That(exception!.Message).Contains("GetHashCode").And.Contains("client-side code");
+        await Assert.That(exception.Message).Contains("GetHashCode").And.Contains("client-side code");
     }
 
     // A variable's initializer is the snippet's own code, and what it throws is reported as what it
@@ -457,7 +457,7 @@ public class RoslynLayerTests
 
         var exception = Assert.ThrowsExactly<FormatException>(() => executor.Translate(code));
 
-        await Assert.That(exception!.Message).Contains("nope");
+        await Assert.That(exception.Message).Contains("nope");
     }
 
     // Everything a declaration holds is evaluated here and folds into a constant, so a statement that
@@ -475,7 +475,7 @@ public class RoslynLayerTests
         var diagnostics = await workspace.DiagnoseAsync(code);
 
         await Assert.That(diagnostics.Any(_ => _.IsError && _.Message.Contains("variable declaration"))).IsTrue();
-        await Assert.That(Assert.ThrowsExactly<Exception>(() => executor.Translate(code))!.Message).Contains("variable declaration");
+        await Assert.That(Assert.ThrowsExactly<Exception>(() => executor.Translate(code)).Message).Contains("variable declaration");
     }
 
     // The rule above is about the snippet's shape, not a boundary around what runs: a declaration's

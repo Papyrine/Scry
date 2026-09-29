@@ -20,7 +20,7 @@ public class TypeMismatchTests
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("cannot be built").Or.Contains("must be a condition").Because(label);
+        await Assert.That(exception.Message).Contains("cannot be built").Or.Contains("must be a condition").Because(label);
     }
 
     public static IEnumerable<TestDataRow<(string, Node)>> Mismatches()
@@ -49,6 +49,6 @@ public class TypeMismatchTests
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("must be a condition");
+        await Assert.That(exception.Message).Contains("must be a condition");
     }
 }

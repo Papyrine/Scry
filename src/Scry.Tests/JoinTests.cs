@@ -5,7 +5,7 @@
 public class JoinTests
 {
     // ReSharper disable NotAccessedPositionalProperty.Local
-    record EmployeeDepartment(string Employee, string Department);
+    record EmployeeDepartment(string Employee, string? Department);
 
     record TicketRow(string Employee, string Ticket);
 
@@ -265,7 +265,7 @@ public class JoinTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("Unknown source");
+        await Assert.That(exception.Message).Contains("Unknown source");
     }
 
     [Test]
@@ -310,7 +310,7 @@ public class JoinTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("not allow-listed");
+        await Assert.That(exception.Message).Contains("not allow-listed");
     }
 
     [Test]
@@ -333,7 +333,7 @@ public class JoinTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("same type");
+        await Assert.That(exception.Message).Contains("same type");
     }
 
     [Test]
@@ -358,7 +358,7 @@ public class JoinTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("may follow a Join");
+        await Assert.That(exception.Message).Contains("may follow a Join");
     }
 
     [Test]

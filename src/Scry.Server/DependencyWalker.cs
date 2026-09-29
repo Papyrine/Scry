@@ -21,7 +21,7 @@
 sealed class DependencyWalker(IModel model) :
     ExpressionVisitor
 {
-    HashSet<string> names = new(StringComparer.Ordinal);
+    HashSet<string> names = [with(StringComparer.Ordinal)];
     bool unknown;
 
     public static IReadOnlySet<string>? Read(IModel model, IEnumerable<Expression?> expressions)

@@ -12,7 +12,7 @@ public class PolicyResolutionTests
         var processor = Build(_ => _.AddPolicy<Order, NeedsAClockPolicy>());
         var services = new ServiceCollection().BuildServiceProvider();
 
-        var exception = Assert.ThrowsExactly<Exception>(() => processor.EnsurePoliciesResolvable(services))!;
+        var exception = Assert.ThrowsExactly<Exception>(() => processor.EnsurePoliciesResolvable(services));
 
         using (Assert.Multiple())
         {
@@ -31,7 +31,7 @@ public class PolicyResolutionTests
         using var context = TestContext.CreateSeeded();
         var processor = Build(_ => _.AddPolicy<Department, NeedsAPrincipalPolicy>());
 
-        var exception = Assert.ThrowsExactly<Exception>(() => processor.ProbePoliciedNavigations(context, new ServiceCollection().BuildServiceProvider()))!;
+        var exception = Assert.ThrowsExactly<Exception>(() => processor.ProbePoliciedNavigations(context, new ServiceCollection().BuildServiceProvider()));
 
         await Assert.That(exception.ToString()).Contains("NeedsAPrincipalPolicy");
     }

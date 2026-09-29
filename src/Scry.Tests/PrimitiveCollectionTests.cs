@@ -134,7 +134,7 @@ public class PrimitiveCollectionTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("not allow-listed");
+        await Assert.That(exception.Message).Contains("not allow-listed");
     }
 
     [Test]
@@ -158,7 +158,7 @@ public class PrimitiveCollectionTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("has no members");
+        await Assert.That(exception.Message).Contains("has no members");
     }
 
     [Test]
@@ -180,7 +180,7 @@ public class PrimitiveCollectionTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("subquery over a collection of values");
+        await Assert.That(exception.Message).Contains("subquery over a collection of values");
     }
 
     [Test]
@@ -205,7 +205,7 @@ public class PrimitiveCollectionTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("subquery over a collection of values");
+        await Assert.That(exception.Message).Contains("subquery over a collection of values");
     }
 
     [Test]
@@ -220,7 +220,7 @@ public class PrimitiveCollectionTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("cannot be flattened");
+        await Assert.That(exception.Message).Contains("cannot be flattened");
     }
 
     [Test]

@@ -54,8 +54,8 @@ public class TemporalPartTests
         using (Assert.Multiple())
         {
             await Assert.That(first.Cursor).IsNotNull();
-            await Assert.That(first.Items.Single().Duration).IsEqualTo(new TimeSpan(7, 30, 15));
-            await Assert.That(second.Items.Single().Duration).IsEqualTo(new TimeSpan(9, 45, 50));
+            await Assert.That(first.Items.Single().Duration).IsEqualTo(new(7, 30, 15));
+            await Assert.That(second.Items.Single().Duration).IsEqualTo(new(9, 45, 50));
             await Assert.That(second.HasMore).IsFalse();
         }
     }

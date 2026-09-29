@@ -11,7 +11,7 @@ public class SourceMappingTests
     {
         using var context = TestContext.CreateSeeded();
 
-        var exception = Assert.ThrowsExactly<Exception>(() => SharedProcessor.Instance.EnsureSourcesMapped(context))!;
+        var exception = Assert.ThrowsExactly<Exception>(() => SharedProcessor.Instance.EnsureSourcesMapped(context));
 
         using (Assert.Multiple())
         {
@@ -44,7 +44,7 @@ public class SourceMappingTests
         using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create("Region", [new CountOp()]);
 
-        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context))!;
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
         await Assert.That(exception.Message).IsEqualTo("Unknown source 'Region'.");
     }
@@ -55,7 +55,7 @@ public class SourceMappingTests
     {
         using var context = TestContext.CreateSeeded();
 
-        var exception = Assert.ThrowsExactly<Exception>(() => SharedProcessor.Instance.EnsureSourcesMapped(context))!;
+        var exception = Assert.ThrowsExactly<Exception>(() => SharedProcessor.Instance.EnsureSourcesMapped(context));
 
         await Assert.That(exception.Message).Matches("Source '(DepartmentHeadcount|Region)'");
     }

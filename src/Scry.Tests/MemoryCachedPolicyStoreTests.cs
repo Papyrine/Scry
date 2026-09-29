@@ -108,7 +108,7 @@ public class MemoryCachedPolicyStoreTests
 
         using (Assert.Multiple())
         {
-            await Assert.That(second).IsEquivalentTo(first, CollectionOrdering.Matching);
+            await Assert.That(second).IsEqualTo(first);
             await Assert.That(third).IsGreaterThan(second);
         }
     }

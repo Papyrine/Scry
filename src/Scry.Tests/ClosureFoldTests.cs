@@ -126,7 +126,7 @@ public class ClosureFoldTests
         var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => PredicateOf(_ => _.Placed.ToString("yyyy", CultureInfo.InvariantCulture) == "2026"));
 
-        await Assert.That(exception!.Message).StartsWith("ToString with a format is not supported");
+        await Assert.That(exception.Message).StartsWith("ToString with a format is not supported");
     }
 
     static BinaryNode PredicateOf(Expression<Func<Order, bool>> predicate)

@@ -162,7 +162,7 @@ public class AttachmentClientTests
                 .Select(_ => new {_.Name, _.Document})
                 .ToScryRequest());
 
-        await Assert.That(exception!.Message).Contains("_.Id");
+        await Assert.That(exception.Message).Contains("_.Id");
     }
 
     [Test]
@@ -176,7 +176,7 @@ public class AttachmentClientTests
                 .Where(_ => _.Document != null)
                 .ToScryRequest());
 
-        await Assert.That(exception!.Message).Contains("is not a value");
+        await Assert.That(exception.Message).Contains("is not a value");
     }
 
     [Test]
@@ -189,7 +189,7 @@ public class AttachmentClientTests
                 .OrderBy(_ => _.Document)
                 .ToScryRequest());
 
-        await Assert.That(exception!.Message).Contains("is not a value");
+        await Assert.That(exception.Message).Contains("is not a value");
     }
 
     // Distinct rewrites what a row is, so a key projected beside an attachment no longer identifies
@@ -205,7 +205,7 @@ public class AttachmentClientTests
                 .Distinct()
                 .ToScryRequest());
 
-        await Assert.That(exception!.Message).Contains("cannot be carried through Distinct");
+        await Assert.That(exception.Message).Contains("cannot be carried through Distinct");
     }
 
     [Test]
@@ -219,7 +219,7 @@ public class AttachmentClientTests
                 .Select(_ => new {Count = _.Count()})
                 .ToScryRequest());
 
-        await Assert.That(exception!.Message).Contains("is not a value");
+        await Assert.That(exception.Message).Contains("is not a value");
     }
 
     // A projection reading nothing but the attachment has no members left to send once it is taken
@@ -234,7 +234,7 @@ public class AttachmentClientTests
                 .Select(_ => new {_.Document})
                 .ToScryRequest());
 
-        await Assert.That(exception!.Message).Contains("Project the row's key beside the attachment");
+        await Assert.That(exception.Message).Contains("Project the row's key beside the attachment");
     }
 
     // A query over a model with no attachment is untouched by any of this — the same request, and no

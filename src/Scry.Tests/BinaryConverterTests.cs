@@ -53,7 +53,7 @@ public class BinaryConverterTests
     {
         var response = Response("""[{"name":"Alice","avatar":{"$bin":0}}]""");
         var exception = Assert.ThrowsExactly<JsonException>(() => ScryJson.DeserializePayload<List<Row>>(response));
-        await Assert.That(exception!.Message).Contains("outside a response carrying binary parts");
+        await Assert.That(exception.Message).Contains("outside a response carrying binary parts");
     }
 
     [Test]
@@ -64,7 +64,7 @@ public class BinaryConverterTests
             BinaryParts = [[0x01]]
         };
         var exception = Assert.ThrowsExactly<JsonException>(() => ScryJson.DeserializePayload<List<Row>>(response));
-        await Assert.That(exception!.Message).Contains("references part 1");
+        await Assert.That(exception.Message).Contains("references part 1");
     }
 
     [Test]
@@ -86,7 +86,7 @@ public class BinaryConverterTests
     {
         var response = Response($$"""[{"name":"Alice","avatar":{{avatar}}}]""");
         var exception = Assert.ThrowsExactly<JsonException>(() => ScryJson.DeserializePayload<List<Row>>(response));
-        await Assert.That(exception!.Message).Contains("Expected a base64 string");
+        await Assert.That(exception.Message).Contains("Expected a base64 string");
     }
 
     [Test]
@@ -94,7 +94,7 @@ public class BinaryConverterTests
     {
         var response = Response("""[{"name":"Alice","avatar":{}}]""");
         var exception = Assert.ThrowsExactly<JsonException>(() => ScryJson.DeserializePayload<List<Row>>(response));
-        await Assert.That(exception!.Message).Contains("Expected a single $bin property");
+        await Assert.That(exception.Message).Contains("Expected a single $bin property");
     }
 
     // The index is read as a number, so a part cannot be named by a string that merely looks like one.
@@ -106,7 +106,7 @@ public class BinaryConverterTests
             BinaryParts = [[0x01]]
         };
         var exception = Assert.ThrowsExactly<JsonException>(() => ScryJson.DeserializePayload<List<Row>>(response));
-        await Assert.That(exception!.Message).Contains("Expected a part index");
+        await Assert.That(exception.Message).Contains("Expected a part index");
     }
 
     // A number that is not an Int32 is not an index either — and it fails as a wire fault rather than
@@ -121,7 +121,7 @@ public class BinaryConverterTests
             BinaryParts = [[0x01]]
         };
         var exception = Assert.ThrowsExactly<JsonException>(() => ScryJson.DeserializePayload<List<Row>>(response));
-        await Assert.That(exception!.Message).Contains("Expected a part index");
+        await Assert.That(exception.Message).Contains("Expected a part index");
     }
 
     [Test]
@@ -132,7 +132,7 @@ public class BinaryConverterTests
             BinaryParts = [[0x01]]
         };
         var exception = Assert.ThrowsExactly<JsonException>(() => ScryJson.DeserializePayload<List<Row>>(response));
-        await Assert.That(exception!.Message).Contains("references part -1");
+        await Assert.That(exception.Message).Contains("references part -1");
     }
 
     // A placeholder names one part and nothing else: a second property would be a shape the writer
@@ -145,7 +145,7 @@ public class BinaryConverterTests
             BinaryParts = [[0x01]]
         };
         var exception = Assert.ThrowsExactly<JsonException>(() => ScryJson.DeserializePayload<List<Row>>(response));
-        await Assert.That(exception!.Message).Contains("carry only");
+        await Assert.That(exception.Message).Contains("carry only");
     }
 
     [Test]

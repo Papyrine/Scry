@@ -60,7 +60,7 @@ public class StreamingTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Stream(request, context));
 
-        await Assert.That(exception!.Message).Contains("Only a query that returns rows can be streamed");
+        await Assert.That(exception.Message).Contains("Only a query that returns rows can be streamed");
     }
 
     [Test]
@@ -77,7 +77,7 @@ public class StreamingTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Stream(request, context));
 
-        await Assert.That(exception!.Message).Contains("Salary");
+        await Assert.That(exception.Message).Contains("Salary");
     }
 
     [Test]

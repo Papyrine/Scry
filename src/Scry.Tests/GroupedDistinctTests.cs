@@ -36,7 +36,7 @@ public class GroupedDistinctTests
                 .Select(_ => new RegionTotal(_.Key, _.Distinct().Sum(_ => _.Amount)))
                 .ToScryRequest());
 
-        await Assert.That(exception!.Message).Contains("Select the value first");
+        await Assert.That(exception.Message).Contains("Select the value first");
     }
 
     static ScryClient Client() =>

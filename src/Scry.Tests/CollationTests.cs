@@ -185,12 +185,12 @@ public class CollationTests
                     options.CaseSensitiveCollation = "Latin1_General_CS_AS; DROP TABLE Orders --";
                 }));
 
-        await Assert.That(exception!.Message).Contains("plain collation name");
+        await Assert.That(exception.Message).Contains("plain collation name");
     }
 
     [Test]
     public async Task AWellFormedCollationIsAccepted() =>
-        await Assert.That(() => Collating()).ThrowsNothing();
+        await Assert.That(Collating).ThrowsNothing();
 
     // The member path under a collation, as the nested projection sends it.
     static IReadOnlyList<string> CollatedPathIn(QueryRequest request, string member)

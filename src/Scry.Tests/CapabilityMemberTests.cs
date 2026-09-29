@@ -173,7 +173,7 @@ public class CapabilityMemberTests
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("Cannot traverse through non-navigation 'CanSealContract'");
+        await Assert.That(exception.Message).Contains("Cannot traverse through non-navigation 'CanSealContract'");
     }
 
     // Described as the plain bool it reads as, and never as part of a key, a sensitive member, or bytes.

@@ -108,6 +108,6 @@ sealed class CommandRowsPolicyInvoker<TCommand, TEntity> :
     public bool Allow(object policy, ScryPolicyContext context) =>
         ((ICommandPolicy<TCommand>) policy).Allow(context);
 
-    public LambdaExpression? Rows(object policy, ScryPolicyContext context) =>
+    public LambdaExpression Rows(object policy, ScryPolicyContext context) =>
         ((ICommandPolicy<TCommand, TEntity>) policy).Rows(context);
 }

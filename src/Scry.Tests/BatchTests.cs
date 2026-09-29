@@ -63,7 +63,7 @@ public class BatchTests
             [.. Enumerable.Repeat(QueryRequest.Create("Employee", [new CountOp()]), 3)]);
 
         using var context = TestContext.CreateSeeded();
-        var exception = Assert.ThrowsExactly<ScryValidationException>(() => processor.ExecuteBatch(batch, context))!;
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => processor.ExecuteBatch(batch, context));
 
         await Assert.That(exception.Message).Contains("more than the maximum of 2");
     }
@@ -101,7 +101,7 @@ public class BatchTests
 
         using var context = TestContext.CreateSeeded();
         var exception = Assert.ThrowsExactly<ScryValidationException>(
-            () => SharedProcessor.Instance.ExecuteBatch(batch, context))!;
+            () => SharedProcessor.Instance.ExecuteBatch(batch, context));
 
         await Assert.That(exception.Message).Contains("Unsupported wire version");
     }
@@ -145,7 +145,7 @@ public class BatchTests
 
         using var context = TestContext.CreateSeeded();
         var exception = Assert.ThrowsExactly<ScryValidationException>(
-            () => SharedProcessor.Instance.ExecuteBatch(batch, context))!;
+            () => SharedProcessor.Instance.ExecuteBatch(batch, context));
 
         await Assert.That(exception.Message).Contains("Unsupported wire version");
     }
@@ -302,7 +302,7 @@ public class BatchTests
         var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => client.Source<Employee>("Employee")
                 .WithHeader("X-Trace", "1")
-                .InBatch(batch))!;
+                .InBatch(batch));
 
         await Assert.That(exception.Message).Contains("Per-query headers cannot be used inside a batch");
     }
@@ -332,7 +332,7 @@ public class BatchTests
         // sending the queries one at a time and calling it a batch.
         var client = new ScryClient((_, _) => throw new InvalidOperationException("unused"));
 
-        var exception = Assert.ThrowsExactly<NotSupportedException>(() => client.Batch())!;
+        var exception = Assert.ThrowsExactly<NotSupportedException>(() => client.Batch());
 
         await Assert.That(exception.Message).Contains("does not batch");
     }

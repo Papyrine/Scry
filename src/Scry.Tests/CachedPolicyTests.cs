@@ -340,7 +340,7 @@ public class CachedPolicyTests
     {
         // Answers are filed per row by one key value, so a type without one has nowhere to put them.
         var exception = Assert.ThrowsExactly<Exception>(
-            () => Build(_ => _.AddCachedPolicy<Holiday, Date, HolidayPolicy>(holiday => holiday.Date)))!;
+            () => Build(_ => _.AddCachedPolicy<Holiday, Date, HolidayPolicy>(holiday => holiday.Date)));
 
         await Assert.That(exception.Message).Contains("key");
     }

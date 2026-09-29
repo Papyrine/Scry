@@ -205,7 +205,8 @@ public class FlattenNarrowPolicyTests
             .Order()
             .ToList();
 
-        await Assert.That(rows).IsEquivalentTo(new (string?, string?)[] {("Annex press", "Annex"), ("Big press", "Main"), ("Depot press", "Depot"), ("Drill", "Main"), ("Old press", "Retired")}, CollectionOrdering.Matching);
+        await Assert.That(rows)
+            .IsEquivalentTo<IList<(string? Machine, string? Fleet)>, (string?, string?)>([("Annex press", "Annex"), ("Big press", "Main"), ("Depot press", "Depot"), ("Drill", "Main"), ("Old press", "Retired")], CollectionOrdering.Matching);
     }
 
     static SelectOp SelectName() =>

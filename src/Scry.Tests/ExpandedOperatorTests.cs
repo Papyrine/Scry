@@ -334,7 +334,7 @@ public class ExpandedOperatorTests
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("projected member");
+        await Assert.That(exception.Message).Contains("projected member");
     }
 
     [Test]
@@ -694,7 +694,7 @@ public class ExpandedOperatorTests
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("group key or aggregates");
+        await Assert.That(exception.Message).Contains("group key or aggregates");
     }
 
     [Test]
@@ -769,7 +769,7 @@ public class ExpandedOperatorTests
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("group key or aggregates");
+        await Assert.That(exception.Message).Contains("group key or aggregates");
     }
 
     [Test]
@@ -996,7 +996,7 @@ public class ExpandedOperatorTests
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("nested projection member");
+        await Assert.That(exception.Message).Contains("nested projection member");
     }
 
     static ScryClient ClientFor(TestContext context) =>

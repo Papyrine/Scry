@@ -25,7 +25,7 @@ public class SensitiveStructTests
 
         using (Assert.Multiple())
         {
-            await Assert.That(exception!.RequiresBody).IsTrue();
+            await Assert.That(exception.RequiresBody).IsTrue();
             await Assert.That(exception.Message).Contains("request body");
         }
     }

@@ -132,7 +132,7 @@ public class SetOperationTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("same members");
+        await Assert.That(exception.Message).Contains("same members");
     }
 
     [Test]
@@ -154,7 +154,7 @@ public class SetOperationTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("same types");
+        await Assert.That(exception.Message).Contains("same types");
     }
 
     [Test]

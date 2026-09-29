@@ -109,7 +109,7 @@ public class StartupRefusalTests
 
         var assembly = System.Reflection.Assembly.Load(stream.ToArray());
         var options = new ScryOptions(assembly.GetType("ShapesContext")!);
-        return Assert.ThrowsExactly<Exception>(() => Schema.Build(options))!;
+        return Assert.ThrowsExactly<Exception>(() => Schema.Build(options));
     }
 
     static List<MetadataReference> References()

@@ -216,7 +216,7 @@ public class StringJoinAggregateTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("does not take a separator");
+        await Assert.That(exception.Message).Contains("does not take a separator");
     }
 
     [Test]
@@ -234,7 +234,7 @@ public class StringJoinAggregateTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("Join requires a separator");
+        await Assert.That(exception.Message).Contains("Join requires a separator");
     }
 
     [Test]
@@ -252,7 +252,7 @@ public class StringJoinAggregateTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("Join aggregates text");
+        await Assert.That(exception.Message).Contains("Join aggregates text");
     }
 
     // The separator is the one string a client hands the aggregate, and it reaches SQL the way every

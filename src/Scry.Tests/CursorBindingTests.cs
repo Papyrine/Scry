@@ -16,7 +16,7 @@ public class CursorBindingTests
         var cursor = await CursorFor(context, "Employee", new OrderByOp(new MemberNode(["Name"]), Descending: false));
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(
-            () => Page(context, "Employee", cursor, new OrderByOp(new MemberNode(["Name"]), Descending: true)))!;
+            () => Page(context, "Employee", cursor, new OrderByOp(new MemberNode(["Name"]), Descending: true)));
 
         await Assert.That(exception.Message).Contains("does not match the query's ordering");
     }
@@ -30,7 +30,7 @@ public class CursorBindingTests
         var cursor = await CursorFor(context, "Employee", new OrderByOp(new MemberNode(["Name"]), Descending: false));
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(
-            () => Page(context, "Order", cursor, new OrderByOp(new MemberNode(["Region"]), Descending: false)))!;
+            () => Page(context, "Order", cursor, new OrderByOp(new MemberNode(["Region"]), Descending: false)));
 
         await Assert.That(exception.Message).Contains("does not match the query's ordering");
     }
@@ -94,7 +94,7 @@ public class CursorBindingTests
         var cursor = await CursorFor(context, "Fleet", ordering);
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(
-            () => Page(context, "Fleet", cursor, new SelectManyOp(["Machines"]), ordering))!;
+            () => Page(context, "Fleet", cursor, new SelectManyOp(["Machines"]), ordering));
 
         await Assert.That(exception.Message).Contains("does not match the query's ordering");
     }
@@ -107,7 +107,7 @@ public class CursorBindingTests
         var cursor = await CursorFor(context, "Fleet", new SelectManyOp(["Machines"]), ordering);
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(
-            () => Page(context, "Fleet", cursor, ordering))!;
+            () => Page(context, "Fleet", cursor, ordering));
 
         await Assert.That(exception.Message).Contains("does not match the query's ordering");
     }
@@ -134,7 +134,7 @@ public class CursorBindingTests
         var cursor = await CursorFor(context, "Asset", new OfTypeOp("Vehicle"), ordering);
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(
-            () => Page(context, "Asset", cursor, ordering))!;
+            () => Page(context, "Asset", cursor, ordering));
 
         await Assert.That(exception.Message).Contains("does not match the query's ordering");
     }
@@ -166,7 +166,7 @@ public class CursorBindingTests
         var cursor = CursorCodec.Encode([("Ann", ClrTypeTag.String), ("abc", ClrTypeTag.Int32)], EmployeeByNameOrder(), sharedKey);
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(
-            () => processor.Execute(QueryRequest.Create("Employee", [byName, new PageOp(Size: 1, cursor)]), context))!;
+            () => processor.Execute(QueryRequest.Create("Employee", [byName, new PageOp(Size: 1, cursor)]), context));
 
         await Assert.That(exception.Message).Contains("not a valid Int32 value");
     }

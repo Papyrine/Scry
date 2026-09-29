@@ -66,7 +66,7 @@ public class SensitivePositionTests
     {
         using var context = TestContext.CreateSeeded();
 
-        var exception = Assert.ThrowsExactly<ScryValidationException>(() => Execute(request, context, fromUrl: true, out _))!;
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => Execute(request, context, fromUrl: true, out _));
 
         using (Assert.Multiple())
         {

@@ -21,7 +21,7 @@ sealed class HandledChanges
 {
     static AsyncLocal<HandledChanges?> current = new();
 
-    HashSet<string> entities = new(StringComparer.Ordinal);
+    HashSet<string> entities = [with(StringComparer.Ordinal)];
     bool everything;
     bool any;
     Guid origin;

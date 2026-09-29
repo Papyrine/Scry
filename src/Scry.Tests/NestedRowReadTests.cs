@@ -10,12 +10,12 @@ public class NestedRowReadTests
     // ReSharper restore NotAccessedPositionalProperty.Local
 
     [Test]
-    public async Task AnOuterRowReadInsideASubquery() =>
-        await Refuses(_ => _.Lines.Any(line => line.Quantity > _.Id), "'_'");
+    public Task AnOuterRowReadInsideASubquery() =>
+        Refuses(_ => _.Lines.Any(line => line.Quantity > _.Id), "'_'");
 
     [Test]
-    public async Task AMemberReadOffAnElementOfASubquery() =>
-        await Refuses(_ => _.Lines.First().Quantity > 1, "'_'");
+    public Task AMemberReadOffAnElementOfASubquery() =>
+        Refuses(_ => _.Lines.First().Quantity > 1, "'_'");
 
     [Test]
     public async Task AnIndexedFilter()
@@ -23,7 +23,7 @@ public class NestedRowReadTests
         var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => Client().Source<Order>("Order").Where((order, index) => index < 5).ToScryRequest());
 
-        await Assert.That(exception!.Message).Contains("'index'");
+        await Assert.That(exception.Message).Contains("'index'");
     }
 
     // The group read as a value rather than folded: not an aggregate, and once an index past the
@@ -42,7 +42,7 @@ public class NestedRowReadTests
         var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => Client().Source<Order>("Order").Where(predicate).ToScryRequest());
 
-        await Assert.That(exception!.Message).Contains(mentions);
+        await Assert.That(exception.Message).Contains(mentions);
     }
 
     static ScryClient Client() =>

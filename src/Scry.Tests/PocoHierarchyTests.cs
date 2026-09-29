@@ -62,7 +62,7 @@ public class PocoHierarchyTests
     [Test]
     public async Task ABaseWithNoRegistrationIsStillRefusedAtStartup()
     {
-        var exception = Assert.ThrowsExactly<Exception>(() => ScryProcessor.Create<TestContext>(_ => { }))!;
+        var exception = Assert.ThrowsExactly<Exception>(() => ScryProcessor.Create<TestContext>(_ => { }));
 
         await Assert.That(exception.Message).Contains("has no data registered");
     }

@@ -106,7 +106,7 @@ public class SourceMembershipTests
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("Unknown source");
+        await Assert.That(exception.Message).Contains("Unknown source");
     }
 
     [Test]
@@ -148,7 +148,7 @@ public class SourceMembershipTests
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("inside another");
+        await Assert.That(exception.Message).Contains("inside another");
     }
 
     [Test]
@@ -170,7 +170,7 @@ public class SourceMembershipTests
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("inside a membership test");
+        await Assert.That(exception.Message).Contains("inside a membership test");
     }
 
     [Test]
@@ -216,7 +216,7 @@ public class SourceMembershipTests
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("inside a subquery");
+        await Assert.That(exception.Message).Contains("inside a subquery");
     }
 
     [Test]

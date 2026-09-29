@@ -190,7 +190,7 @@ public class CollectionSubqueryTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("not allow-listed");
+        await Assert.That(exception.Message).Contains("not allow-listed");
     }
 
     [Test]
@@ -210,7 +210,7 @@ public class CollectionSubqueryTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("inside another subquery");
+        await Assert.That(exception.Message).Contains("inside another subquery");
     }
 
     [Test]
@@ -231,7 +231,7 @@ public class CollectionSubqueryTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("inside a subquery");
+        await Assert.That(exception.Message).Contains("inside a subquery");
     }
 
     [Test]
@@ -257,7 +257,7 @@ public class CollectionSubqueryTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("inside another subquery");
+        await Assert.That(exception.Message).Contains("inside another subquery");
     }
 
     [Test]
@@ -282,7 +282,7 @@ public class CollectionSubqueryTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("not allow-listed");
+        await Assert.That(exception.Message).Contains("not allow-listed");
     }
 
     [Test]
@@ -297,7 +297,7 @@ public class CollectionSubqueryTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("requires a predicate");
+        await Assert.That(exception.Message).Contains("requires a predicate");
     }
 
     [Test]
@@ -313,7 +313,7 @@ public class CollectionSubqueryTests
                     options.AddPolicy<OrderLine, BulkLinesOnlyPolicy>();
                 }));
 
-        await Assert.That(exception!.Message).Contains("row policy");
+        await Assert.That(exception.Message).Contains("row policy");
     }
 
     static ScryClient ClientFor(TestContext context) =>

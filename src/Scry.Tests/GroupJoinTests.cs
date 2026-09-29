@@ -138,7 +138,7 @@ public class GroupJoinTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("reads the inner side of a GroupJoin directly");
+        await Assert.That(exception.Message).Contains("reads the inner side of a GroupJoin directly");
     }
 
     [Test]
@@ -161,7 +161,7 @@ public class GroupJoinTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("must aggregate its inner side");
+        await Assert.That(exception.Message).Contains("must aggregate its inner side");
     }
 
     [Test]
@@ -190,7 +190,7 @@ public class GroupJoinTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("only the inner side of a GroupJoin may do");
+        await Assert.That(exception.Message).Contains("only the inner side of a GroupJoin may do");
     }
 
     static ScryClient ClientFor(TestContext context) =>

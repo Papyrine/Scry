@@ -124,7 +124,7 @@ public class PreviousNamesTests
         using var context = TestContext.CreateSeeded();
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(
-            () => SharedProcessor.Instance.Execute(request, context))!;
+            () => SharedProcessor.Instance.Execute(request, context));
 
         await Assert.That(exception.Message).Contains("'Departed' is not a value of enum 'Status'");
     }
@@ -165,7 +165,7 @@ public class PreviousNamesTests
         using var context = TestContext.CreateSeeded();
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(
-            () => SharedProcessor.Instance.Execute(request, context))!;
+            () => SharedProcessor.Instance.Execute(request, context));
 
         await Assert.That(exception.Message).Contains("'Surname' is not allow-listed");
     }

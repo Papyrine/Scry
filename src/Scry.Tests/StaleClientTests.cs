@@ -15,7 +15,7 @@ public class StaleClientTests
         var processor = SharedProcessor.Instance;
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(
-            () => processor.Execute(InvalidRequest("stamp-from-an-older-model"), context))!;
+            () => processor.Execute(InvalidRequest("stamp-from-an-older-model"), context));
 
         await Assert.That(exception.Message).Contains("not allow-listed");
         await Assert.That(exception.Message).Contains("regenerate the client");
@@ -32,7 +32,7 @@ public class StaleClientTests
         var current = processor.Describe().SchemaStamp;
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(
-            () => processor.Execute(InvalidRequest(current), context))!;
+            () => processor.Execute(InvalidRequest(current), context));
 
         await Assert.That(exception.Message).Contains("not allow-listed");
         await Assert.That(exception.Message).DoesNotContain("regenerate the client");
@@ -46,7 +46,7 @@ public class StaleClientTests
         var processor = SharedProcessor.Instance;
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(
-            () => processor.Execute(InvalidRequest(stamp: null), context))!;
+            () => processor.Execute(InvalidRequest(stamp: null), context));
 
         await Assert.That(exception.Message).DoesNotContain("regenerate the client");
         await Assert.That(exception.StaleClient).IsFalse();

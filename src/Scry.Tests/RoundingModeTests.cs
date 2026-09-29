@@ -32,7 +32,7 @@ public class RoundingModeTests
         var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => RoundOf(_ => Math.Round(_.Amount, 2, MidpointRounding.ToEven) > 1));
 
-        await Assert.That(exception!.Message).Contains("AwayFromZero");
+        await Assert.That(exception.Message).Contains("AwayFromZero");
     }
 
     static CallNode RoundOf(Expression<Func<Order, bool>> predicate)

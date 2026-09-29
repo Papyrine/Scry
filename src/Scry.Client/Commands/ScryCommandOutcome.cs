@@ -110,7 +110,6 @@ public sealed class ScryCommandOutcome<TResult> :
     ScryCommandOutcome
 {
     bool read;
-    TResult value = default!;
 
     ScryCommandOutcome(ScryCommandOutcome outcome) :
         base(outcome.Command, outcome.Id, outcome.Status, outcome.Result, outcome.Error, outcome.Pending)
@@ -154,13 +153,13 @@ public sealed class ScryCommandOutcome<TResult> :
             Check();
             if (!read)
             {
-                value = Result is { } element ? element.Deserialize<TResult>(ScryJson.Options)! : default!;
+                field = Result is { } element ? element.Deserialize<TResult>(ScryJson.Options)! : default!;
                 read = true;
             }
 
-            return value;
+            return field;
         }
-    }
+    } = default!;
 
     /// <inheritdoc cref="ScryCommandOutcome.EnsureCompleted"/>
     public new ScryCommandOutcome<TResult> EnsureCompleted()

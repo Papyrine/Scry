@@ -82,7 +82,7 @@ public class WolverineCommandTests
     {
         using var host = await Start(second: true);
 
-        var exception = Assert.ThrowsExactly<Exception>(() => ScryServer.EnsureDispatchable(host.Services))!;
+        var exception = Assert.ThrowsExactly<Exception>(() => ScryServer.EnsureDispatchable(host.Services));
 
         await Assert.That(exception.Message).Contains("claimed by");
     }

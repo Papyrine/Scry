@@ -85,7 +85,7 @@ public class RebusCommandTests
     {
         await using var pair = await Pair.Start(second: true);
 
-        var exception = Assert.ThrowsExactly<Exception>(() => ScryServer.EnsureDispatchable(pair.Server.Services))!;
+        var exception = Assert.ThrowsExactly<Exception>(() => ScryServer.EnsureDispatchable(pair.Server.Services));
 
         await Assert.That(exception.Message).Contains("claimed by");
     }

@@ -65,7 +65,7 @@ public class BinaryResponseTests
         var exception = Assert.ThrowsExactly<ScryWireException>(
             () => BinaryResponseReader.Inline(Envelope("""[{"avatar":{"$bin":1}}]"""), [[0x01]]));
 
-        await Assert.That(exception!.Message).Contains("references part 1");
+        await Assert.That(exception.Message).Contains("references part 1");
     }
 
     [Test]
@@ -74,7 +74,7 @@ public class BinaryResponseTests
         var exception = Assert.ThrowsExactly<ScryWireException>(
             () => BinaryResponseReader.Inline(Envelope("""[{"avatar":{"$bin":-1}}]"""), [[0x01]]));
 
-        await Assert.That(exception!.Message).Contains("references part -1");
+        await Assert.That(exception.Message).Contains("references part -1");
     }
 
     // A part cannot be named by a string that merely looks like an index, nor by a number no index
@@ -90,7 +90,7 @@ public class BinaryResponseTests
     {
         var exception = Assert.ThrowsExactly<ScryWireException>(() => BinaryResponseReader.Inline(Envelope($$$"""[{"avatar":{"$bin":{{{index}}}}}]"""), [[0x01]]));
 
-        await Assert.That(exception!.Message).Contains("Expected a part index");
+        await Assert.That(exception.Message).Contains("Expected a part index");
     }
 
     [Test]
@@ -99,7 +99,7 @@ public class BinaryResponseTests
         var exception = Assert.ThrowsExactly<ScryWireException>(
             () => BinaryResponseReader.Inline(Envelope("""[{"avatar":{"$bin":0,"other":1}}]"""), [[0x01]]));
 
-        await Assert.That(exception!.Message).Contains("carry only");
+        await Assert.That(exception.Message).Contains("carry only");
     }
 
     // A member name comes from the caller's own C# identifiers, so a nested projection can never

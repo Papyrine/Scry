@@ -61,7 +61,7 @@ public class PolicyInvocationTests
         using var context = TestContext.CreateSeeded();
         var processor = Build(_ => _.AddPolicy<Employee, RefusingPolicy>());
 
-        var exception = Assert.ThrowsExactly<ScryValidationException>(() => processor.Execute(Count(), context))!;
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => processor.Execute(Count(), context));
 
         await Assert.That(exception.Message).IsEqualTo("Refused by the policy.");
     }

@@ -91,7 +91,7 @@ public class InitializerProjectionTests
                 })
                 .ToScryRequest());
 
-        await Assert.That(exception!.Message).Contains("projected twice");
+        await Assert.That(exception.Message).Contains("projected twice");
     }
 
     static ScryClient ClientFor(TestContext context) =>

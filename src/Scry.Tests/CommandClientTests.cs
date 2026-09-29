@@ -79,7 +79,7 @@ public class CommandClientTests
             await Assert.That(outcome.Error).IsEqualTo("The manager still has reports.");
         }
         var exception = Assert.ThrowsExactly<ScryCommandFailedException>(() => outcome.EnsureCompleted());
-        await Assert.That(exception!.Message).Contains("The manager still has reports.");
+        await Assert.That(exception.Message).Contains("The manager still has reports.");
     }
 
     // Past the wait the command is the pending-work store's, and its outcome follows on the same stream.
@@ -101,7 +101,8 @@ public class CommandClientTests
             await Assert.That(outcome.Status).IsEqualTo(ScryCommandStatus.Pending);
             await Assert.That(outcome.Pending).IsNotNull();
             await Assert.That(client.PendingWork.PendingCount).IsEqualTo(1);
-            await Assert.That(client.PendingWork.Items.Single().Keys).IsEquivalentTo(new string?[] {"5"}, CollectionOrdering.Matching);
+            await Assert.That(client.PendingWork.Items.Single().Keys)
+                .IsEquivalentTo<IReadOnlyList<string?>, string?>(["5"], CollectionOrdering.Matching);
             await Assert.That(client.PendingWork.Items.Single().Target).IsEqualTo("Thing");
         }
         Assert.ThrowsExactly<InvalidOperationException>(() => outcome.EnsureCompleted());

@@ -73,7 +73,7 @@ public class LockstepTests
     {
         var exception = Assert.ThrowsExactly<Exception>(() => Schema.EnsureConcreteCommand(typeof(AbstractCommand)));
 
-        await Assert.That(exception!.Message).Contains("is not a concrete class with a public parameterless constructor");
+        await Assert.That(exception.Message).Contains("is not a concrete class with a public parameterless constructor");
     }
 
     [Test]
@@ -81,7 +81,7 @@ public class LockstepTests
     {
         var exception = Assert.ThrowsExactly<Exception>(() => Schema.CommandPayload(typeof(QueryIgnoredCommand), typeof(LockstepTests).Assembly));
 
-        await Assert.That(exception!.Message).Contains("carries [QueryIgnore], which hides a member from queries and means nothing on a command");
+        await Assert.That(exception.Message).Contains("carries [QueryIgnore], which hides a member from queries and means nothing on a command");
     }
 
     [Test]
@@ -89,7 +89,7 @@ public class LockstepTests
     {
         var exception = Assert.ThrowsExactly<Exception>(() => Schema.CommandPayload(typeof(ObjectCommand), typeof(LockstepTests).Assembly));
 
-        await Assert.That(exception!.Message).Contains("'ObjectCommand.Anything' is a 'Object', which a command cannot carry");
+        await Assert.That(exception.Message).Contains("'ObjectCommand.Anything' is a 'Object', which a command cannot carry");
     }
 
     [Test]
@@ -97,7 +97,7 @@ public class LockstepTests
     {
         var exception = Assert.ThrowsExactly<Exception>(() => Schema.CommandPayload(typeof(ForeignEnumCommand), typeof(LockstepTests).Assembly));
 
-        await Assert.That(exception!.Message).Contains("'ForeignEnumCommand.Day' is a 'DayOfWeek', which a command cannot carry");
+        await Assert.That(exception.Message).Contains("'ForeignEnumCommand.Day' is a 'DayOfWeek', which a command cannot carry");
     }
 
     [Test]
@@ -127,7 +127,7 @@ public class LockstepTests
 
         var exception = Assert.ThrowsExactly<Exception>(() => Schema.BindCommandKeys(typeof(AmbiguousKeyCommand), target, payload));
 
-        await Assert.That(exception!.Message).Contains("carries both 'Id' and 'BadgeId', so which one is the key of 'Badge' is ambiguous");
+        await Assert.That(exception.Message).Contains("carries both 'Id' and 'BadgeId', so which one is the key of 'Badge' is ambiguous");
     }
 
     [Test]
@@ -138,7 +138,7 @@ public class LockstepTests
 
         var exception = Assert.ThrowsExactly<Exception>(() => Schema.BindCommandKeys(typeof(WrongKeyCommand), target, payload));
 
-        await Assert.That(exception!.Message).Contains("keyed by 'Id', but carries no 'int' property named 'Id' or 'BadgeId'");
+        await Assert.That(exception.Message).Contains("keyed by 'Id', but carries no 'int' property named 'Id' or 'BadgeId'");
     }
 
     [Test]
@@ -146,7 +146,7 @@ public class LockstepTests
     {
         var exception = Assert.ThrowsExactly<Exception>(() => Schema.ResultProperties(typeof(MixedCommand), typeof(Uri), typeof(LockstepTests).Assembly));
 
-        await Assert.That(exception!.Message).Contains("answers with 'Uri', which is declared in assembly");
+        await Assert.That(exception.Message).Contains("answers with 'Uri', which is declared in assembly");
     }
 
     // The base's members are the derived type's own on both sides; the override is described once,
@@ -183,7 +183,7 @@ public class LockstepTests
 
         var exception = Assert.ThrowsExactly<Exception>(() => Schema.EnsureOneOptIn(type));
 
-        await Assert.That(exception!.Message).Contains("'Both' carries [Queryable] and [QueryableComplex]");
+        await Assert.That(exception.Message).Contains("'Both' carries [Queryable] and [QueryableComplex]");
     }
 
     [Test]
@@ -191,7 +191,7 @@ public class LockstepTests
     {
         var exception = Assert.ThrowsExactly<Exception>(() => Schema.BuildTypeMeta(typeof(ForeignBaseRow), []));
 
-        await Assert.That(exception!.Message).Contains("inherited from 'List`1'");
+        await Assert.That(exception.Message).Contains("inherited from 'List`1'");
     }
 
     [Test]
@@ -199,7 +199,7 @@ public class LockstepTests
     {
         var exception = Assert.ThrowsExactly<Exception>(() => Schema.BuildTypeMeta(typeof(ForeignEnumRow), []));
 
-        await Assert.That(exception!.Message).Contains("'DayOfWeek', an enum declared in assembly");
+        await Assert.That(exception.Message).Contains("'DayOfWeek', an enum declared in assembly");
     }
 
     [Test]
@@ -207,7 +207,7 @@ public class LockstepTests
     {
         var exception = Assert.ThrowsExactly<Exception>(() => Schema.BuildTypeMeta(typeof(OddCollectionRow), []));
 
-        await Assert.That(exception!.Message).Contains("a collection shape the generator does not read");
+        await Assert.That(exception.Message).Contains("a collection shape the generator does not read");
     }
 
     [Test]

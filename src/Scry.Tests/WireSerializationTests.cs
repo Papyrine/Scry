@@ -192,7 +192,7 @@ public class WireSerializationTests
             """;
 
         var exception = Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeRequest(json));
-        await Assert.That(exception!.Message).Contains("predicate");
+        await Assert.That(exception.Message).Contains("predicate");
     }
 
     // The same member spelled as an explicit null: the absence's twin, and refused the same way.
@@ -214,7 +214,7 @@ public class WireSerializationTests
             """;
 
         var exception = Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeRequest(json));
-        await Assert.That(exception!.Message).Contains("predicate");
+        await Assert.That(exception.Message).Contains("predicate");
     }
 
     // A null element of a wire array is the absence's twin one level down: RespectNullableAnnotations
@@ -231,7 +231,7 @@ public class WireSerializationTests
     public async Task ANullArrayElementFailsClosed(string json, string element)
     {
         var exception = Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeRequest(json));
-        await Assert.That(exception!.Message).Contains($"array of {element} cannot be null");
+        await Assert.That(exception.Message).Contains($"array of {element} cannot be null");
     }
 
     [Test]
@@ -239,7 +239,7 @@ public class WireSerializationTests
     {
         var exception = Assert.ThrowsExactly<ScryWireException>(
             () => ScryJson.DeserializeBatchRequest("""{"version":1,"queries":[null]}"""));
-        await Assert.That(exception!.Message).Contains("array of QueryRequest cannot be null");
+        await Assert.That(exception.Message).Contains("array of QueryRequest cannot be null");
     }
 
     [Test]
@@ -247,7 +247,7 @@ public class WireSerializationTests
     {
         var exception = Assert.ThrowsExactly<ScryWireException>(
             () => ScryJson.DeserializeAttachmentRequest("""{"version":1,"root":"Employee","member":"Photo","keys":[null]}"""));
-        await Assert.That(exception!.Message).Contains("array of AttachmentKey cannot be null");
+        await Assert.That(exception.Message).Contains("array of AttachmentKey cannot be null");
     }
 
     // A request names only what the vocabulary names: a member nothing reads is refused rather than
@@ -270,7 +270,7 @@ public class WireSerializationTests
     {
         const string json = """{"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"equal","left":{"$type":"member","path":"Id"},"right":{"$type":"const","value":"1","tag":"Int32"}}}]}""";
 
-        var exception = Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeRequest(json))!;
+        var exception = Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeRequest(json));
 
         await Assert.That(exception.Message).Contains("case-sensitive");
     }
@@ -312,7 +312,7 @@ public class WireSerializationTests
             """;
 
         var exception = Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeRequest(json));
-        await Assert.That(exception!.Message).Contains("root");
+        await Assert.That(exception.Message).Contains("root");
     }
 
     [Test]
@@ -327,7 +327,7 @@ public class WireSerializationTests
             """;
 
         var exception = Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeRequest(json));
-        await Assert.That(exception!.Message).Contains("root");
+        await Assert.That(exception.Message).Contains("root");
     }
 
     [Test]
@@ -343,7 +343,7 @@ public class WireSerializationTests
             """;
 
         var exception = Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeAttachmentRequest(json));
-        await Assert.That(exception!.Message).Contains("keys");
+        await Assert.That(exception.Message).Contains("keys");
     }
 
     // The other half of that rule: every member the writer leaves out when null has to read back as
@@ -428,7 +428,7 @@ public class WireSerializationTests
             """;
 
         var exception = Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeRequest(json));
-        await Assert.That(exception!.Message).Contains("written as a string");
+        await Assert.That(exception.Message).Contains("written as a string");
     }
 
     [Test]
@@ -444,7 +444,7 @@ public class WireSerializationTests
               """;
 
         var exception = Assert.ThrowsExactly<ScryWireException>(() => ScryJson.DeserializeResponse(json));
-        await Assert.That(exception!.Message).Contains($"wire version {WireFormat.Version + 1}");
+        await Assert.That(exception.Message).Contains($"wire version {WireFormat.Version + 1}");
     }
 
     [Test]

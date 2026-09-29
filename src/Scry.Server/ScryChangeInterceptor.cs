@@ -101,7 +101,7 @@ public sealed class ScryChangeInterceptor(ScryChanges changes) :
 
         // Entries() runs change detection, which the save itself has not yet done at this point: a
         // property set on a snapshot-tracked entity is still Unchanged until something looks.
-        HashSet<string> names = new(StringComparer.Ordinal);
+        HashSet<string> names = [with(StringComparer.Ordinal)];
         foreach (var entry in context.ChangeTracker.Entries())
         {
             if (entry.State is not (EntityState.Added or EntityState.Modified or EntityState.Deleted))

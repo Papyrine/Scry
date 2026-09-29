@@ -508,7 +508,7 @@ public class CommandPipelineTests
 
         var exception = Assert.ThrowsExactly<Exception>(() => host.Processor.EnsureCommandsDispatchable(empty));
 
-        await Assert.That(exception!.Message).StartsWith("Command 'CreateShift' has nowhere to go: no dispatcher claims it and no ICommandHandler<CreateShift, ShiftCreated> is registered.");
+        await Assert.That(exception.Message).StartsWith("Command 'CreateShift' has nowhere to go: no dispatcher claims it and no ICommandHandler<CreateShift, ShiftCreated> is registered.");
     }
 
     [Test]
@@ -525,7 +525,7 @@ public class CommandPipelineTests
 
         var exception = Assert.ThrowsExactly<Exception>(() => host.Processor.EnsureCommandsDispatchable(host.Services));
 
-        await Assert.That(exception!.Message).Contains("is claimed by ClaimsEverything and AlsoClaimsEverything");
+        await Assert.That(exception.Message).Contains("is claimed by ClaimsEverything and AlsoClaimsEverything");
     }
 
     // A dispatcher claims what it says it claims and reports the outcome back: the pipeline around it

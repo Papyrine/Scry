@@ -185,7 +185,7 @@ public class SidePipelineTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("bounded by Skip or Take");
+        await Assert.That(exception.Message).Contains("bounded by Skip or Take");
     }
 
     [Test]
@@ -211,7 +211,7 @@ public class SidePipelineTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("never both");
+        await Assert.That(exception.Message).Contains("never both");
     }
 
     [Test]
@@ -237,7 +237,7 @@ public class SidePipelineTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("is not allowed on a join's inner side");
+        await Assert.That(exception.Message).Contains("is not allowed on a join's inner side");
     }
 
     static ScryClient ClientFor(TestContext context) =>

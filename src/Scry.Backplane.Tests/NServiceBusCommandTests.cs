@@ -158,7 +158,7 @@ public class NServiceBusCommandTests
     {
         await using var server = await Server.Start("ScryTests.CommandsTwoClaims", storage, second: true);
 
-        var exception = Assert.ThrowsExactly<Exception>(server.EnsureDispatchable)!;
+        var exception = Assert.ThrowsExactly<Exception>(server.EnsureDispatchable);
 
         await Assert.That(exception.Message).Contains("claimed by");
     }
@@ -172,10 +172,10 @@ public class NServiceBusCommandTests
             var builder = Host.CreateApplicationBuilder();
             builder.Logging.ClearProviders();
             builder.Services.AddScryNServiceBusBackplane();
-            var configuration = Endpoint(workerName, storage);
-            configuration.UseScryChanges();
-            configuration.UseScryCommands();
-            builder.Services.AddNServiceBusEndpoint(configuration);
+            var endpoint = Endpoint(workerName, storage);
+            endpoint.UseScryChanges();
+            endpoint.UseScryCommands();
+            builder.Services.AddNServiceBusEndpoint(endpoint);
             var host = builder.Build();
             await host.StartAsync();
             return new(host);
@@ -223,8 +223,8 @@ public class NServiceBusCommandTests
             builder.Services.AddSingleton<ClaimsEverything>();
             builder.Services.AddScoped<ICommandHandler<LocalChore>, LocalChoreHandler>();
 
-            var configuration = Endpoint(name, storage);
-            builder.Services.AddNServiceBusEndpoint(configuration);
+            var endpoint = Endpoint(name, storage);
+            builder.Services.AddNServiceBusEndpoint(endpoint);
             var host = builder.Build();
             await host.StartAsync();
 
@@ -266,9 +266,9 @@ public class NServiceBusCommandTests
 
     static EndpointConfiguration Endpoint(string name, string storage)
     {
-        var configuration = new EndpointConfiguration(name);
-        configuration.UseSerialization<SystemJsonSerializer>();
-        var routing = configuration.UseTransport(
+        var endpoint = new EndpointConfiguration(name);
+        endpoint.UseSerialization<SystemJsonSerializer>();
+        var routing = endpoint.UseTransport(
             new LearningTransport
             {
                 StorageDirectory = storage
@@ -276,14 +276,16 @@ public class NServiceBusCommandTests
         routing.RouteToEndpoint(typeof(ShipParcel), workerName);
         routing.RouteToEndpoint(typeof(WeighParcel), workerName);
         routing.RouteToEndpoint(typeof(NamedChore), workerName);
-        configuration.Conventions().DefiningCommandsAs(_ => _ == typeof(NamedChore));
-        configuration.SendFailedMessagesTo("ScryTests.CommandErrors");
-        configuration.EnableInstallers();
+        endpoint
+            .Conventions()
+            .DefiningCommandsAs(_ => _ == typeof(NamedChore));
+        endpoint.SendFailedMessagesTo("ScryTests.CommandErrors");
+        endpoint.EnableInstallers();
 
         // A failure is left failed, so a test about one is over when the handler has thrown once.
-        configuration.Recoverability().Immediate(_ => _.NumberOfRetries(0));
-        configuration.Recoverability().Delayed(_ => _.NumberOfRetries(0));
-        return configuration;
+        endpoint.Recoverability().Immediate(_ => _.NumberOfRetries(0));
+        endpoint.Recoverability().Delayed(_ => _.NumberOfRetries(0));
+        return endpoint;
     }
 
     sealed class ClaimsEverything :

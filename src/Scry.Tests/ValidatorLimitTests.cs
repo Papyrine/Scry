@@ -339,6 +339,6 @@ public class ValidatorLimitTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => processor.Execute(request, context));
 
-        return exception!.Message;
+        return exception.Message;
     }
 }

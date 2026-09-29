@@ -134,7 +134,7 @@ public class SelectManyTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("Only one SelectMany is allowed.");
+        await Assert.That(exception.Message).Contains("Only one SelectMany is allowed.");
     }
 
     [Test]
@@ -147,7 +147,7 @@ public class SelectManyTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("is not a queryable collection");
+        await Assert.That(exception.Message).Contains("is not a queryable collection");
     }
 
     [Test]

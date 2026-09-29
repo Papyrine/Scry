@@ -792,7 +792,7 @@ await connection.StartAsync();
 var client = ScrySignalRClient.Create(connection);
 hub = new(client);
 ```
-<sup><a href='/samples/Sample.WebClient/Pages/Live/LiveTransport.cs#L63-L71' title='Snippet source file'>snippet source</a> | <a href='#snippet-signalRTransport' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Pages/Live/LiveTransport.cs#L74-L82' title='Snippet source file'>snippet source</a> | <a href='#snippet-signalRTransport' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Everything written against a `ScryClient` works unchanged — the terminals, streaming, batching, live queries — and a failure surfaces as the same exception it does over HTTP. Requests and answers cross the hub as strings of the JSON the HTTP endpoints speak, read and written by `ScryJson`: a hub would otherwise bind its arguments with its own serializer, whose options know nothing of what makes the wire format fail closed. `MapScryHub` runs the startup checks `MapScry` runs, so a host that serves queries over a hub alone is held to the same ones.

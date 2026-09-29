@@ -334,8 +334,8 @@ The optional [schema stamp](wire-format.md#schema-stamp) on a request is **not**
 <a id='snippet-rejectIgnoredProperty'></a>
 ```cs
 [Test]
-public async Task RejectsIgnoredProperty() =>
-    await AssertRejected(QueryRequest.Create(
+public Task RejectsIgnoredProperty() =>
+    AssertRejected(QueryRequest.Create(
         "Employee",
         [
             new WhereOp(new BinaryNode(

@@ -172,7 +172,7 @@ public class FilteredAggregateTests
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("requires a selector");
+        await Assert.That(exception.Message).Contains("requires a selector");
     }
 
     [Test]
@@ -200,7 +200,7 @@ public class FilteredAggregateTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("folds the whole group");
+        await Assert.That(exception.Message).Contains("folds the whole group");
     }
 
     [Test]

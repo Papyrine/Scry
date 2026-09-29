@@ -78,7 +78,7 @@ static class TransactionWatch
 
     sealed class Held(ScryChanges changes)
     {
-        HashSet<string> names = new(StringComparer.Ordinal);
+        HashSet<string> names = [with(StringComparer.Ordinal)];
 
         public void Add(HashSet<string> saved)
         {

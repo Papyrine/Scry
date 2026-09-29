@@ -23,7 +23,7 @@ public class LetBindingTests
     // {| Name = e.Name; Id = e.Id |}: the fields are declared Id then Name and written the other way
     // round, so each is bound in the order written and the constructor reads them in the order declared.
     [Test]
-    public async Task ABindingPerFieldInAProjection()
+    public Task ABindingPerFieldInAProjection()
     {
         var row = Parameter();
         var name = Expression.Variable(typeof(string), "Name");
@@ -33,14 +33,14 @@ public class LetBindingTests
             Member(row, "Name"),
             Bind(id, Member(row, "Id"), New<Row>(id, name)));
 
-        await AssertSameRequest(
+        return AssertSameRequest(
             Employees().Select(Lambda<Row>(body, row)),
             Employees().Select(_ => new Row(_.Id, _.Name)));
     }
 
     // let n = e.Name in n.StartsWith "Al" && n.Length > 2: the one binding read twice.
     [Test]
-    public async Task ABindingReadTwiceInAPredicate()
+    public Task ABindingReadTwiceInAPredicate()
     {
         var row = Parameter();
         var name = Expression.Variable(typeof(string), "n");
@@ -51,14 +51,14 @@ public class LetBindingTests
                 Expression.Call(name, "StartsWith", Type.EmptyTypes, Expression.Constant("Al")),
                 Expression.GreaterThan(Member(name, "Length"), Expression.Constant(2))));
 
-        await AssertSameRequest(
+        return AssertSameRequest(
             Employees().Where(Lambda<bool>(body, row)),
             Employees().Where(_ => _.Name.StartsWith("Al") && _.Name.Length > 2));
     }
 
     // A nested record written out of order binds inside the constructor argument it is passed as.
     [Test]
-    public async Task ABindingInsideAConstructedMember()
+    public Task ABindingInsideAConstructedMember()
     {
         var row = Parameter();
         var name = Expression.Variable(typeof(string), "Name");
@@ -66,7 +66,7 @@ public class LetBindingTests
             Member(row, "Name"),
             Bind(name, Member(Member(row, "Department"), "Name"), New<Detail>(name)));
 
-        await AssertSameRequest(
+        return AssertSameRequest(
             Employees().Select(Lambda<Card>(body, row)),
             Employees().Select(_ => new Card(_.Name, new(_.Department!.Name))));
     }
@@ -74,7 +74,7 @@ public class LetBindingTests
     // let d = e.Department in …: the bound expression is a navigation, and the member read off the
     // variable becomes the path read off the row.
     [Test]
-    public async Task ABindingOfANavigation()
+    public Task ABindingOfANavigation()
     {
         var row = Parameter();
         var department = Expression.Variable(typeof(Department), "d");
@@ -83,7 +83,7 @@ public class LetBindingTests
             Member(row, "Department"),
             New<Row>(Member(row, "Id"), Member(department, "Name")));
 
-        await AssertSameRequest(
+        return AssertSameRequest(
             Employees().Select(Lambda<Row>(body, row)),
             Employees().Select(_ => new Row(_.Id, _.Department!.Name)));
     }
@@ -117,7 +117,7 @@ public class LetBindingTests
 
         var exception = Assert.ThrowsExactly<NotSupportedException>(() => Employees().Select(Lambda<Row>(body, row)).ToScryRequest());
 
-        await Assert.That(exception!.Message).StartsWith("A block inside a query lambda may only bind variables");
+        await Assert.That(exception.Message).StartsWith("A block inside a query lambda may only bind variables");
     }
 
     [Test]
@@ -129,7 +129,7 @@ public class LetBindingTests
 
         var exception = Assert.ThrowsExactly<NotSupportedException>(() => Employees().Select(Lambda<Row>(body, row)).ToScryRequest());
 
-        await Assert.That(exception!.Message).IsEqualTo("Variable 'Name' is read before anything is bound to it.");
+        await Assert.That(exception.Message).IsEqualTo("Variable 'Name' is read before anything is bound to it.");
     }
 
     static ParameterExpression Parameter() =>

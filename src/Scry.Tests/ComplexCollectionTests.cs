@@ -121,7 +121,7 @@ public class ComplexCollectionTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("not allow-listed");
+        await Assert.That(exception.Message).Contains("not allow-listed");
     }
 
     [Test]
@@ -171,7 +171,7 @@ public class ComplexCollectionTests
                     options.AddPolicy<Address, UkAddressesOnlyPolicy>();
                 }));
 
-        await Assert.That(exception!.Message).Contains("row policy");
+        await Assert.That(exception.Message).Contains("row policy");
     }
 
     static ScryClient ClientFor(TestContext context) =>

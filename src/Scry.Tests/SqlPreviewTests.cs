@@ -54,7 +54,7 @@ public class SqlPreviewTests
 
         using var context = TestContext.CreateSeeded();
         var exception = Assert.ThrowsExactly<ScryValidationException>(
-            () => SharedProcessor.Instance.ToQueryString(request, context, EmptyServices.Instance))!;
+            () => SharedProcessor.Instance.ToQueryString(request, context, EmptyServices.Instance));
 
         await Assert.That(exception.Message).Contains("ends in Count");
     }
@@ -71,7 +71,7 @@ public class SqlPreviewTests
 
         using var context = TestContext.CreateSeeded();
         var exception = Assert.ThrowsExactly<ScryValidationException>(
-            () => SharedProcessor.Instance.ToQueryString(request, context, EmptyServices.Instance))!;
+            () => SharedProcessor.Instance.ToQueryString(request, context, EmptyServices.Instance));
 
         await Assert.That(exception.Message).Contains("ends in Page");
     }
@@ -86,7 +86,7 @@ public class SqlPreviewTests
 
         using var context = TestContext.CreateSeeded();
         var exception = Assert.ThrowsExactly<ScryValidationException>(
-            () => SharedProcessor.Instance.ToQueryString(request, context, EmptyServices.Instance))!;
+            () => SharedProcessor.Instance.ToQueryString(request, context, EmptyServices.Instance));
 
         await Assert.That(exception.Message).Contains("not backed by the database");
     }
@@ -100,7 +100,7 @@ public class SqlPreviewTests
 
         using var context = TestContext.CreateSeeded();
         var exception = Assert.ThrowsExactly<ScryValidationException>(
-            () => SharedProcessor.Instance.ToQueryString(request, context, EmptyServices.Instance))!;
+            () => SharedProcessor.Instance.ToQueryString(request, context, EmptyServices.Instance));
 
         await Assert.That(exception.Message).Contains("not allow-listed");
     }

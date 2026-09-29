@@ -52,7 +52,7 @@ public class MaxByMinByTests
 
         var latest = await client.Source<Order>("Order").MaxByAsync(_ => _.Placed);
 
-        await Assert.That(latest!.Placed).IsEqualTo(new DateTime(2026, 7, 20, 14, 5, 0));
+        await Assert.That(latest!.Placed).IsEqualTo(new(2026, 7, 20, 14, 5, 0));
     }
 
     [Test]

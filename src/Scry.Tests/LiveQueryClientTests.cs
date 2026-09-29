@@ -355,7 +355,7 @@ public class LiveQueryClientTests
 
         var exception = Assert.ThrowsExactly<NotSupportedException>(() => Names(client).InBatch(client.Batch()).Live());
 
-        await Assert.That(exception!.Message).Contains("batch");
+        await Assert.That(exception.Message).Contains("batch");
     }
 
     [Test]

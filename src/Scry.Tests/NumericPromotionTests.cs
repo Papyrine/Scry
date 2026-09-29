@@ -100,7 +100,7 @@ public class NumericPromotionTests
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
-        await Assert.That(exception!.Message).Contains("'Sum' is not supported over 'Status'");
+        await Assert.That(exception.Message).Contains("'Sum' is not supported over 'Status'");
     }
 
     [Test]
@@ -226,7 +226,7 @@ public class NumericPromotionTests
             })
             .ToScryRequest());
 
-        await Assert.That(exception!.Message).Contains("reads an enum as a number");
+        await Assert.That(exception.Message).Contains("reads an enum as a number");
     }
 
     [Test]
@@ -239,7 +239,7 @@ public class NumericPromotionTests
             .Where(_ => (int) _.Amount > 5)
             .ToScryRequest());
 
-        await Assert.That(exception!.Message).Contains("narrows");
+        await Assert.That(exception.Message).Contains("narrows");
     }
 
     // The conversions C# writes into a comparison — an enum to its number, a narrower operand to the

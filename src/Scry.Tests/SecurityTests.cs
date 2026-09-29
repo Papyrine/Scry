@@ -2,8 +2,8 @@ public class SecurityTests
 {
     // begin-snippet: rejectIgnoredProperty
     [Test]
-    public async Task RejectsIgnoredProperty() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsIgnoredProperty() =>
+        AssertRejected(QueryRequest.Create(
             "Employee",
             [
                 new WhereOp(new BinaryNode(
@@ -14,92 +14,92 @@ public class SecurityTests
     // end-snippet
 
     [Test]
-    public async Task RejectsUnknownRoot() =>
-        await AssertRejected(QueryRequest.Create("Secret", []));
+    public Task RejectsUnknownRoot() =>
+        AssertRejected(QueryRequest.Create("Secret", []));
 
     [Test]
-    public async Task RejectsUnknownProperty() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsUnknownProperty() =>
+        AssertRejected(QueryRequest.Create(
             "Employee",
             [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Ssn"]), new ConstNode("x", ClrTypeTag.String)))]));
 
     [Test]
-    public async Task RejectsTraversalThroughScalar() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsTraversalThroughScalar() =>
+        AssertRejected(QueryRequest.Create(
             "Employee",
             [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Name", "Length"]), new ConstNode("3", ClrTypeTag.Int32)))]));
 
     // A [QueryIgnore] member of a complex type is hidden just like on an entity — traversing to it is
     // rejected, so a JSON column cannot smuggle in an unlisted field.
     [Test]
-    public async Task RejectsIgnoredComplexMember() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsIgnoredComplexMember() =>
+        AssertRejected(QueryRequest.Create(
             "Employee",
             [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Address", "Zip"]), new ConstNode("x", ClrTypeTag.String)))]));
 
     // A complex member is not a scalar; using it where a value is required is rejected (you must name
     // a scalar leaf such as Address.City).
     [Test]
-    public async Task RejectsComplexMemberAsScalar() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsComplexMemberAsScalar() =>
+        AssertRejected(QueryRequest.Create(
             "Employee",
             [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Address"]), new ConstNode("x", ClrTypeTag.String)))]));
 
     // An attachment's value is never read by a query, so naming it anywhere is rejected — a generated
     // client cannot express it, which makes every request below a hand-built one.
     [Test]
-    public async Task RejectsAttachmentInPredicate() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsAttachmentInPredicate() =>
+        AssertRejected(QueryRequest.Create(
             "Contract",
             [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Document"]), new ConstNode(null, ClrTypeTag.Null)))]));
 
     [Test]
-    public async Task RejectsAttachmentInProjection() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsAttachmentInProjection() =>
+        AssertRejected(QueryRequest.Create(
             "Contract",
             [new SelectOp(new([new("Document", new NodeValue(new MemberNode(["Document"])))]))]));
 
     [Test]
-    public async Task RejectsAttachmentInOrdering() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsAttachmentInOrdering() =>
+        AssertRejected(QueryRequest.Create(
             "Contract",
             [new OrderByOp(new MemberNode(["Document"]), Descending: false)]));
 
     // Reached by traversing a navigation rather than named on the root, which is the path a validator
     // checking only the leaf would miss.
     [Test]
-    public async Task RejectsAttachmentThroughNavigation() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsAttachmentThroughNavigation() =>
+        AssertRejected(QueryRequest.Create(
             "Employee",
             [new SelectOp(new([new("Doc", new NodeValue(new MemberNode(["Manager", "Document"])))]))]));
 
     [Test]
-    public async Task RejectsTakeOverMaxPageSize() =>
-        await AssertRejected(
+    public Task RejectsTakeOverMaxPageSize() =>
+        AssertRejected(
             QueryRequest.Create("Employee", [new TakeOp(50)]),
             options => options.MaxPageSize = 2);
 
     [Test]
-    public async Task RejectsPageSizeOverMaxPageSize() =>
-        await AssertRejected(
+    public Task RejectsPageSizeOverMaxPageSize() =>
+        AssertRejected(
             QueryRequest.Create("Employee", [new PageOp(50)]),
             options => options.MaxPageSize = 2);
 
     [Test]
-    public async Task RejectsInvalidPagingCursor() =>
+    public Task RejectsInvalidPagingCursor() =>
         // Ordered query is seek-safe, so the server tries to decode the (garbage) cursor and rejects it.
-        await AssertRejected(QueryRequest.Create(
+        AssertRejected(QueryRequest.Create(
             "Employee",
             [new OrderByOp(new MemberNode(["Name"]), false), new PageOp(2, "not-a-valid-cursor")]));
 
     [Test]
-    public async Task RejectsCursorOnUnorderedQuery() =>
+    public Task RejectsCursorOnUnorderedQuery() =>
         // A cursor needs an ordering to resume; an unordered page with a cursor is rejected.
-        await AssertRejected(QueryRequest.Create("Employee", [new PageOp(2, "anything")]));
+        AssertRejected(QueryRequest.Create("Employee", [new PageOp(2, "anything")]));
 
     [Test]
-    public async Task RejectsPagingGroupedQuery() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsPagingGroupedQuery() =>
+        AssertRejected(QueryRequest.Create(
             "Order",
             [
                 new GroupByOp([new MemberNode(["Region"])]),
@@ -108,26 +108,26 @@ public class SecurityTests
             ]));
 
     [Test]
-    public async Task RejectsAggregateWithoutGroupBy() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsAggregateWithoutGroupBy() =>
+        AssertRejected(QueryRequest.Create(
             "Order",
             [new SelectOp(new([new("Total", new NodeValue(new AggregateNode(AggregateFn.Sum, new MemberNode(["Amount"]))))]))]));
 
     [Test]
-    public async Task RejectsThenByWithoutOrderBy() =>
-        await AssertRejected(QueryRequest.Create("Employee", [new ThenByOp(new MemberNode(["Name"]), false)]));
+    public Task RejectsThenByWithoutOrderBy() =>
+        AssertRejected(QueryRequest.Create("Employee", [new ThenByOp(new MemberNode(["Name"]), false)]));
 
     [Test]
-    public async Task RejectsOperatorAfterTerminal() =>
-        await AssertRejected(QueryRequest.Create("Employee", [new CountOp(), new TakeOp(5)]));
+    public Task RejectsOperatorAfterTerminal() =>
+        AssertRejected(QueryRequest.Create("Employee", [new CountOp(), new TakeOp(5)]));
 
     [Test]
-    public async Task RejectsUnsupportedWireVersion() =>
-        await AssertRejected(new(99, "Employee", []));
+    public Task RejectsUnsupportedWireVersion() =>
+        AssertRejected(new(99, "Employee", []));
 
     [Test]
-    public async Task RejectsGroupedProjectionReferencingNonKey() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsGroupedProjectionReferencingNonKey() =>
+        AssertRejected(QueryRequest.Create(
             "Order",
             [
                 new GroupByOp([new MemberNode(["Region"])]),
@@ -137,14 +137,14 @@ public class SecurityTests
     // A function is validated for arity before anything is rebound, so a call the builder would read
     // more arguments from than were sent is a rejected query rather than a faulted one.
     [Test]
-    public async Task RejectsFunctionWithMissingArgument() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsFunctionWithMissingArgument() =>
+        AssertRejected(QueryRequest.Create(
             "Employee",
             [new WhereOp(new CallNode(KnownFunction.StringContains, new MemberNode(["Name"]), []))]));
 
     [Test]
-    public async Task RejectsFunctionWithExtraArguments() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsFunctionWithExtraArguments() =>
+        AssertRejected(QueryRequest.Create(
             "Employee",
             [
                 new WhereOp(new CallNode(
@@ -156,8 +156,8 @@ public class SecurityTests
     // A date part applied to a member that has none cannot be rebound; it is reported as a rejection
     // rather than surfacing as a server fault.
     [Test]
-    public async Task RejectsDatePartOnNonTemporalMember() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsDatePartOnNonTemporalMember() =>
+        AssertRejected(QueryRequest.Create(
             "Employee",
             [
                 new WhereOp(new BinaryNode(
@@ -167,8 +167,8 @@ public class SecurityTests
             ]));
 
     [Test]
-    public async Task RejectsInSetOverTheConfiguredLimit() =>
-        await AssertRejected(
+    public Task RejectsInSetOverTheConfiguredLimit() =>
+        AssertRejected(
             QueryRequest.Create(
                 "Employee",
                 [
@@ -182,8 +182,8 @@ public class SecurityTests
     // Every candidate value must be a literal: a member node here would be comparing the row against
     // itself through a path that was never validated as a set.
     [Test]
-    public async Task RejectsInSetContainingANonConstant() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsInSetContainingANonConstant() =>
+        AssertRejected(QueryRequest.Create(
             "Employee",
             [
                 new WhereOp(new CallNode(
@@ -195,8 +195,8 @@ public class SecurityTests
     // The same two rules hold over a group. A HAVING predicate and a grouped projection read a different
     // vocabulary from a row predicate, and the cap has to reach a call wherever one is written.
     [Test]
-    public async Task RejectsInSetOverTheConfiguredLimitInAGroupFilter() =>
-        await AssertRejected(
+    public Task RejectsInSetOverTheConfiguredLimitInAGroupFilter() =>
+        AssertRejected(
             QueryRequest.Create(
                 "Employee",
                 [
@@ -211,22 +211,22 @@ public class SecurityTests
             reason: "exceeds the maximum");
 
     [Test]
-    public async Task RejectsInSetContainingANonConstantInAGroupFilter() =>
-        await AssertRejected(QueryRequest.Create(
-            "Employee",
-            [
-                new GroupByOp([new MemberNode(["Name"])]),
-                new WhereOp(new CallNode(
-                    KnownFunction.In,
-                    new MemberNode(["Name"]),
-                    [new MemberNode(["Name"])])),
-                new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))]))
-            ]),
+    public Task RejectsInSetContainingANonConstantInAGroupFilter() =>
+        AssertRejected(QueryRequest.Create(
+                "Employee",
+                [
+                    new GroupByOp([new MemberNode(["Name"])]),
+                    new WhereOp(new CallNode(
+                        KnownFunction.In,
+                        new MemberNode(["Name"]),
+                        [new MemberNode(["Name"])])),
+                    new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))]))
+                ]),
             reason: "must be a constant");
 
     [Test]
-    public async Task RejectsInSetOverTheConfiguredLimitInAGroupedProjection() =>
-        await AssertRejected(
+    public Task RejectsInSetOverTheConfiguredLimitInAGroupedProjection() =>
+        AssertRejected(
             QueryRequest.Create(
                 "Employee",
                 [
@@ -245,8 +245,8 @@ public class SecurityTests
     // A join's inner side and a set operand each carry a pipeline of their own, which the top-level
     // count never sees; each is held to the same length.
     [Test]
-    public async Task RejectsJoinInnerPipelineOverTheConfiguredLength() =>
-        await AssertRejected(
+    public Task RejectsJoinInnerPipelineOverTheConfiguredLength() =>
+        AssertRejected(
             QueryRequest.Create(
                 "Employee",
                 [
@@ -266,8 +266,8 @@ public class SecurityTests
             reason: "exceeds the maximum length");
 
     [Test]
-    public async Task RejectsSetOperandPipelineOverTheConfiguredLength() =>
-        await AssertRejected(
+    public Task RejectsSetOperandPipelineOverTheConfiguredLength() =>
+        AssertRejected(
             QueryRequest.Create(
                 "Employee",
                 [
@@ -287,8 +287,8 @@ public class SecurityTests
     // Every projected member is an expression the provider compiles and a column the query returns,
     // so a projection's width is bounded like a pipeline's length — across nesting, and for a join.
     [Test]
-    public async Task RejectsProjectionOverTheConfiguredWidth() =>
-        await AssertRejected(
+    public Task RejectsProjectionOverTheConfiguredWidth() =>
+        AssertRejected(
             QueryRequest.Create(
                 "Employee",
                 [new SelectOp(new([..Enumerable.Range(0, 5).Select(_ => NameMember($"Name{_}"))]))]),
@@ -296,8 +296,8 @@ public class SecurityTests
             reason: "exceeds the maximum of 3 members");
 
     [Test]
-    public async Task CountsNestedMembersTowardTheProjectionWidth() =>
-        await AssertRejected(
+    public Task CountsNestedMembersTowardTheProjectionWidth() =>
+        AssertRejected(
             QueryRequest.Create(
                 "Employee",
                 [
@@ -313,8 +313,8 @@ public class SecurityTests
             reason: "exceeds the maximum of 3 members");
 
     [Test]
-    public async Task RejectsJoinResultOverTheConfiguredWidth() =>
-        await AssertRejected(
+    public Task RejectsJoinResultOverTheConfiguredWidth() =>
+        AssertRejected(
             QueryRequest.Create(
                 "Employee",
                 [
@@ -336,8 +336,8 @@ public class SecurityTests
     // Ordering a deduplicated query is allowed, but only by the member it deduplicated: every other
     // column was folded away, so naming one would order by something the rows no longer carry.
     [Test]
-    public async Task RejectsOrderByAfterDistinctOnAnUnprojectedMember() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsOrderByAfterDistinctOnAnUnprojectedMember() =>
+        AssertRejected(QueryRequest.Create(
             "Employee",
             [
                 new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))])),
@@ -346,8 +346,8 @@ public class SecurityTests
             ]));
 
     [Test]
-    public async Task RejectsPagingAfterDistinct() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsPagingAfterDistinct() =>
+        AssertRejected(QueryRequest.Create(
             "Employee",
             [
                 new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))])),
@@ -358,8 +358,8 @@ public class SecurityTests
     // Ordering, paging and counting a deduplicated query materialize it as a row with one property per
     // projected member, so the arity is bounded. Beyond it the query can still be enumerated.
     [Test]
-    public async Task RejectsCountingADistinctQueryBeyondTheRowArity() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsCountingADistinctQueryBeyondTheRowArity() =>
+        AssertRejected(QueryRequest.Create(
             "Employee",
             [
                 new SelectOp(new(
@@ -379,18 +379,18 @@ public class SecurityTests
             ]));
 
     [Test]
-    public async Task RejectsLastWithoutOrdering() =>
-        await AssertRejected(QueryRequest.Create("Employee", [new LastOp(OrDefault: false, Predicate: null)]));
+    public Task RejectsLastWithoutOrdering() =>
+        AssertRejected(QueryRequest.Create("Employee", [new LastOp(OrDefault: false, Predicate: null)]));
 
     [Test]
-    public async Task RejectsAggregateTerminalOverAnIgnoredMember() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsAggregateTerminalOverAnIgnoredMember() =>
+        AssertRejected(QueryRequest.Create(
             "Employee",
             [new AggregateOp(AggregateFn.Sum, new MemberNode(["Salary"]))]));
 
     [Test]
-    public async Task RejectsAggregateTerminalAfterSelect() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsAggregateTerminalAfterSelect() =>
+        AssertRejected(QueryRequest.Create(
             "Order",
             [
                 new SelectOp(new([new("Amount", new NodeValue(new MemberNode(["Amount"])))])),
@@ -400,20 +400,20 @@ public class SecurityTests
     // Count has its own terminal; carrying it as an aggregate would be a second spelling of the same
     // operation with a different result type.
     [Test]
-    public async Task RejectsCountAsAnAggregateTerminal() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsCountAsAnAggregateTerminal() =>
+        AssertRejected(QueryRequest.Create(
             "Order",
             [new AggregateOp(AggregateFn.Count, new MemberNode(["Amount"]))]));
 
     [Test]
-    public async Task RejectsSummingANonNumericMember() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsSummingANonNumericMember() =>
+        AssertRejected(QueryRequest.Create(
             "Employee",
             [new AggregateOp(AggregateFn.Sum, new MemberNode(["Name"]))]));
 
     [Test]
-    public async Task RejectsTerminalPredicateAfterSelect() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsTerminalPredicateAfterSelect() =>
+        AssertRejected(QueryRequest.Create(
             "Employee",
             [
                 new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))])),
@@ -423,8 +423,8 @@ public class SecurityTests
     // A projection expression is one more place a row can be read from, not a place where more can be
     // read: the allow-list applies inside it exactly as it does inside a predicate.
     [Test]
-    public async Task RejectsIgnoredPropertyInsideAProjectionExpression() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsIgnoredPropertyInsideAProjectionExpression() =>
+        AssertRejected(QueryRequest.Create(
             "Employee",
             [
                 new SelectOp(new(
@@ -437,8 +437,8 @@ public class SecurityTests
             ]));
 
     [Test]
-    public async Task RejectsNavigationAsAProjectionExpressionOperand() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsNavigationAsAProjectionExpressionOperand() =>
+        AssertRejected(QueryRequest.Create(
             "Employee",
             [
                 new SelectOp(new(
@@ -451,8 +451,8 @@ public class SecurityTests
             ]));
 
     [Test]
-    public async Task RejectsProjectionMemberThatReadsNothing() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsProjectionMemberThatReadsNothing() =>
+        AssertRejected(QueryRequest.Create(
             "Employee",
             [
                 new SelectOp(new(
@@ -471,7 +471,7 @@ public class SecurityTests
             "Region",
             [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Nope"]), new ConstNode("x", ClrTypeTag.String)))]);
 
-        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context))!;
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
         using (Assert.Multiple())
         {
@@ -482,17 +482,17 @@ public class SecurityTests
 
     // Lookups are ordinal: a name is one spelling, on the source and on the member.
     [Test]
-    public async Task RejectsASourceNameInAnotherCase() =>
-        await AssertRejected(QueryRequest.Create("employee", [new CountOp()]));
+    public Task RejectsASourceNameInAnotherCase() =>
+        AssertRejected(QueryRequest.Create("employee", [new CountOp()]));
 
     [Test]
-    public async Task RejectsAMemberNameInAnotherCase() =>
-        await AssertRejected(QueryRequest.Create("Employee", [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["name"]), new ConstNode("x", ClrTypeTag.String)))]));
+    public Task RejectsAMemberNameInAnotherCase() =>
+        AssertRejected(QueryRequest.Create("Employee", [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["name"]), new ConstNode("x", ClrTypeTag.String)))]));
 
     // A collation is a rule about text; over anything else it is a rejection, not a provider fault.
     [Test]
-    public async Task RejectsACollationOverANonStringMember() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsACollationOverANonStringMember() =>
+        AssertRejected(QueryRequest.Create(
             "Employee",
             [new WhereOp(new BinaryNode(BinaryOp.Equal, new CollateNode(new MemberNode(["Id"]), StringMatch.CaseInsensitive), new ConstNode("1", ClrTypeTag.String)))]));
 
@@ -520,7 +520,7 @@ public class SecurityTests
         using var context = TestContext.CreateSeeded();
         var request = new QueryRequest(version, "Employee", [new CountOp()]);
 
-        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context))!;
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
         await Assert.That(exception.Message).Contains("Unsupported wire version");
     }
@@ -534,7 +534,7 @@ public class SecurityTests
             "Employee",
             [new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"]))), new("Name", new NodeValue(new MemberNode(["Id"])))]))]);
 
-        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context))!;
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
         await Assert.That(exception.Message).Contains("'Name' is named more than once");
     }
@@ -555,7 +555,7 @@ public class SecurityTests
                     [new("Name", JoinSide.Outer, ["Name"]), new("Name", JoinSide.Inner, ["Name"])])
             ]);
 
-        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context))!;
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
         await Assert.That(exception.Message).Contains("'Name' is named more than once");
     }
@@ -572,7 +572,7 @@ public class SecurityTests
             "Employee",
             [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Status"]), new ConstNode(value, ClrTypeTag.Enum)))]);
 
-        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context))!;
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
         await Assert.That(exception.Message).Contains("is not a value of enum 'Status'");
     }
@@ -589,7 +589,7 @@ public class SecurityTests
         var call = new CallNode(function, new MemberNode([member]), [.. indexes.Select(_ => new ConstNode(_, ClrTypeTag.Int32))]);
         var request = QueryRequest.Create("Employee", [new SelectOp(new([new("x", new NodeValue(call))]))]);
 
-        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context))!;
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
         await Assert.That(exception.Message).Contains("cannot take a negative index");
     }
@@ -613,7 +613,7 @@ public class SecurityTests
                 [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Id"]), new ConstNode(huge, ClrTypeTag.Int32)))])
         };
 
-        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context))!;
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
         using (Assert.Multiple())
         {
@@ -629,7 +629,7 @@ public class SecurityTests
         using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create("Region", [new OfTypeOp("Employee")]);
 
-        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context))!;
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
         using (Assert.Multiple())
         {
@@ -648,7 +648,7 @@ public class SecurityTests
             "Employee",
             [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Address", "Nope"]), new ConstNode("x", ClrTypeTag.String)))]);
 
-        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context))!;
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
 
         await Assert.That(exception.Message).Contains("on 'AddressQueryModel'");
     }
@@ -657,8 +657,8 @@ public class SecurityTests
     // the override, on both sides — the generator carries every declaration's attributes onto the one
     // member, and the server reads the same chain.
     [Test]
-    public async Task RejectsAnIgnoredBasePropertyThroughItsOverride() =>
-        await AssertRejected(QueryRequest.Create(
+    public Task RejectsAnIgnoredBasePropertyThroughItsOverride() =>
+        AssertRejected(QueryRequest.Create(
             "Invoice",
             [new SelectOp(new([new("AuditTrail", new NodeValue(new MemberNode(["AuditTrail"])))]))]));
 
@@ -675,20 +675,20 @@ public class SecurityTests
     [Arguments("""[{"$type":"join","root":"Department","kind":999,"outerKey":{"$type":"member","path":"DepartmentId"},"innerKey":{"$type":"member","path":"Id"},"result":[{"name":"Name","side":"Outer","path":"Name"}]}]""", "Join kind")]
     [Arguments("""[{"$type":"join","root":"Department","kind":"Inner","outerKey":{"$type":"member","path":"DepartmentId"},"innerKey":{"$type":"member","path":"Id"},"result":[{"name":"Name","side":999,"path":"Name"}]}]""", "Join side")]
     [Arguments("""[{"$type":"groupBy","keys":[{"$type":"member","path":"Name"}]},{"$type":"select","projection":{"members":[{"name":"C","value":{"$type":"node","node":{"$type":"aggregate","function":999,"selector":{"$type":"member","path":"Id"}}}}]}}]""", "Aggregate function")]
-    public async Task RejectsAnUndefinedEnumValue(string pipeline, string what)
+    public Task RejectsAnUndefinedEnumValue(string pipeline, string what)
     {
         var request = ScryJson.DeserializeRequest($$"""{"version":1,"root":"Employee","pipeline":{{pipeline}}}""");
 
-        await AssertRejected(request, reason: $"'{what}' has no value 999");
+        return AssertRejected(request, reason: $"'{what}' has no value 999");
     }
 
     [Test]
-    public async Task RejectsAnUndefinedSubqueryFunction()
+    public Task RejectsAnUndefinedSubqueryFunction()
     {
         var request = ScryJson.DeserializeRequest(
             """{"version":1,"root":"Order","pipeline":[{"$type":"where","predicate":{"$type":"subquery","path":"Lines","function":999}}]}""");
 
-        await AssertRejected(request, reason: "'Subquery function' has no value 999");
+        return AssertRejected(request, reason: "'Subquery function' has no value 999");
     }
 
     // A reason pins which rule refused the request, for a shape more than one rule could have.
@@ -707,7 +707,7 @@ public class SecurityTests
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => processor.Execute(request, context));
         if (reason is not null)
         {
-            await Assert.That(exception!.Message).Contains(reason);
+            await Assert.That(exception.Message).Contains(reason);
         }
     }
 }

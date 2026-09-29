@@ -19,7 +19,7 @@ public class SensitiveOverrideTests
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => Execute(request, context, fromUrl: true, out _));
 
-        await Assert.That(exception!.RequiresBody).IsTrue();
+        await Assert.That(exception.RequiresBody).IsTrue();
     }
 
     [Test]
