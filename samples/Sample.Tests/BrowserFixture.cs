@@ -203,6 +203,11 @@ public sealed class BrowserHost :
     TUnit.Core.Interfaces.IAsyncInitializer,
     IAsyncDisposable
 {
+    // Numbers each launch, to name its database: the fixtures run at once, and two servers building
+    // one name knock each other's database offline. Counted rather than random so the names a run
+    // leaves behind are the same few every run.
+    static int launches;
+
     Process server = null!;
     IPlaywright playwright = null!;
     string workDir = null!;
@@ -234,6 +239,7 @@ public sealed class BrowserHost :
         // Development so the (Development-only) Scry explorer is reachable; the server's explicit
         // UseStaticWebAssets() call means the WASM client is served in this environment too.
         server.StartInfo.Environment["DOTNET_ENVIRONMENT"] = "Development";
+        server.StartInfo.Environment["SAMPLE_DATABASE"] = $"Browser{Interlocked.Increment(ref launches)}";
         server.Start();
 
         await WaitForServer(port);

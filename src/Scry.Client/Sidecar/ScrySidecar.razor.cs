@@ -52,7 +52,9 @@ public partial class ScrySidecar :
 
     bool ShowsLauncher => !open && toggleButton;
 
+#pragma warning disable CA1822
     bool Empty => Store.Entries.Count == 0;
+#pragma warning restore CA1822
 
     protected override void OnInitialized()
     {
@@ -488,7 +490,9 @@ public partial class ScrySidecar :
     /// decoded request, or the request cannot be rendered (a sensitive constant, an unsupported
     /// terminal).
     /// </summary>
+#pragma warning disable CA1822
     string? ExplorerHref(ScrySidecarEntry entry)
+#pragma warning restore CA1822
     {
         if (Options.ExplorerRoute is not { } route ||
             entry.Request is null ||

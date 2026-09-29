@@ -8,28 +8,31 @@ sealed partial class QueryTranslator
     {
         Node Target() => TranslateExpr(call.Object!, root);
 
-        Node Argument(int index) => TranslateExpr(call.Arguments[index], root);
+        var arguments = call.Arguments;
+
+        Node Argument(int index) => TranslateExpr(arguments[index], root);
 
         // The StringComparison overloads ask for a case sensitivity rather than a different operation,
         // so the target is read under it and the ordinary function applies on top. Equals also has a
         // static spelling, which puts the target in the first argument rather than in the instance.
+        var method = call.Method;
         if (TakesComparison(call) &&
-            call.Arguments.Count == (call.Object is null ? 3 : 2) &&
-            call.Method.Name is "Contains" or "StartsWith" or "EndsWith" or "Equals")
+            arguments.Count == (call.Object is null ? 3 : 2) &&
+            method.Name is "Contains" or "StartsWith" or "EndsWith" or "Equals")
         {
-            var function = call.Method.Name switch
+            var function = method.Name switch
             {
                 "Contains" => KnownFunction.StringContains,
                 "StartsWith" => KnownFunction.StringStartsWith,
                 "EndsWith" => KnownFunction.StringEndsWith,
-                _ => (KnownFunction?)null
+                _ => (KnownFunction?) null
             };
 
             var (compared, operand) = call.Object is { } instance
-                ? (instance, call.Arguments[0])
-                : (call.Arguments[0], call.Arguments[1]);
+                ? (instance, arguments[0])
+                : (arguments[0], arguments[1]);
 
-            var collated = new CollateNode(TranslateExpr(compared, root), Sensitivity(call.Arguments[^1]));
+            var collated = new CollateNode(TranslateExpr(compared, root), Sensitivity(arguments[^1]));
 
             // Equals is a comparison rather than a function; under a collation it is an ordinary one.
             if (function is null)
@@ -40,20 +43,20 @@ sealed partial class QueryTranslator
             return new CallNode(function.Value, collated, [TranslateExpr(operand, root)]);
         }
 
-        switch (call.Method.Name)
+        switch (method.Name)
         {
-            case "Contains" when call.Arguments.Count == 1:
+            case "Contains" when arguments.Count == 1:
                 return new CallNode(KnownFunction.StringContains, Target(), [Argument(0)]);
-            case "StartsWith" when call.Arguments.Count == 1:
+            case "StartsWith" when arguments.Count == 1:
                 return new CallNode(KnownFunction.StringStartsWith, Target(), [Argument(0)]);
-            case "EndsWith" when call.Arguments.Count == 1:
+            case "EndsWith" when arguments.Count == 1:
                 return new CallNode(KnownFunction.StringEndsWith, Target(), [Argument(0)]);
-            case "ToLower" when call.Arguments.Count == 0:
+            case "ToLower" when arguments.Count == 0:
                 return new CallNode(KnownFunction.StringToLower, Target(), []);
-            case "ToUpper" when call.Arguments.Count == 0:
+            case "ToUpper" when arguments.Count == 0:
                 return new CallNode(KnownFunction.StringToUpper, Target(), []);
             // The static spelling of the instance CompareTo handled before this switch.
-            case "Compare" when call.Arguments.Count == 2:
+            case "Compare" when arguments.Count == 2:
                 return new CallNode(KnownFunction.CompareTo, Argument(0), [Argument(1)]);
 
             case "IsNullOrEmpty":
@@ -63,28 +66,28 @@ sealed partial class QueryTranslator
 
             // The char-set overloads (Trim(params char[])) have no SQL equivalent — only the
             // whitespace-trimming forms translate.
-            case "Trim" when call.Arguments.Count == 0:
+            case "Trim" when arguments.Count == 0:
                 return new CallNode(KnownFunction.StringTrim, Target(), []);
-            case "TrimStart" when call.Arguments.Count == 0:
+            case "TrimStart" when arguments.Count == 0:
                 return new CallNode(KnownFunction.StringTrimStart, Target(), []);
-            case "TrimEnd" when call.Arguments.Count == 0:
+            case "TrimEnd" when arguments.Count == 0:
                 return new CallNode(KnownFunction.StringTrimEnd, Target(), []);
 
-            case "Substring" when call.Arguments.Count is 1 or 2:
-                return new CallNode(KnownFunction.StringSubstring, Target(), [..call.Arguments.Select(_ => TranslateExpr(_, root))]);
-            case "IndexOf" when call.Arguments.Count == 1:
+            case "Substring" when arguments.Count is 1 or 2:
+                return new CallNode(KnownFunction.StringSubstring, Target(), [.. arguments.Select(_ => TranslateExpr(_, root))]);
+            case "IndexOf" when arguments.Count == 1:
                 return new CallNode(KnownFunction.StringIndexOf, Target(), [Argument(0)]);
-            case "Replace" when call.Arguments.Count == 2:
+            case "Replace" when arguments.Count == 2:
                 return new CallNode(KnownFunction.StringReplace, Target(), [Argument(0), Argument(1)]);
 
             case "Concat":
-                return ConcatChain([..ConcatArguments(call).Select(_ => TranslateExpr(_, root))]);
+                return ConcatChain([.. ConcatArguments(call).Select(_ => TranslateExpr(_, root))]);
 
             // An interpolated string lowers to string.Format inside an expression tree, which no
             // provider translates. Plain holes carry no formatting, so they mean the same as a
             // concatenation and are rewritten into one.
-            case "Format" when call.Arguments is [ConstantExpression {Value: string format}, ..]:
-                return ConcatChain(Interpolation(format, [..ConcatArguments(call).Skip(1)], root));
+            case "Format" when arguments is [ConstantExpression {Value: string format}, ..]:
+                return ConcatChain(Interpolation(format, [.. ConcatArguments(call).Skip(1)], root));
 
             case "Format":
                 throw new NotSupportedException("Only an interpolated string with a literal format is supported.");

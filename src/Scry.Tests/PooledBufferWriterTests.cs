@@ -81,7 +81,7 @@ public class PooledBufferWriterTests
             json.WriteString("name", "Alice");
             json.WriteNumber("rank", 1);
             json.WriteEndObject();
-            json.Flush();
+            await json.FlushAsync();
         }
 
         await Assert.That(pooled.WrittenMemory.ToArray()).IsEquivalentTo(expected.WrittenMemory.ToArray(), CollectionOrdering.Matching);

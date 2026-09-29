@@ -10,13 +10,17 @@ using Sample.Model;
 public sealed class ScryTestServer :
     IAsyncDisposable
 {
+    // An instance apart from Sample.WebServer's, which the browser suite runs beside these. The two
+    // declare their templates in different assemblies, so their timestamps never agree: on one
+    // instance each would rebuild the template under the other.
     static SqlInstance<SampleContext> sqlInstance = new(
         constructInstance: _ => new(_.Options),
         buildTemplate: _ =>
         {
             SampleContext.Initialize(_);
             return Task.CompletedTask;
-        });
+        },
+        storage: Storage.FromSuffix<SampleContext>("Tests"));
 
     WebApplication app;
     SqlDatabase<SampleContext> database;

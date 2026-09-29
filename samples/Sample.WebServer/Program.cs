@@ -1,6 +1,6 @@
 ﻿class Program
 {
-    // Back the sample with EfLocalDb: each launch runs against its own LocalDB database, cloned from a
+    // Back the sample with EfLocalDb: each launch runs against a fresh LocalDB database, cloned from a
     // seeded template. EfLocalDb manages its own instance and self-heals orphaned files, so the sample
     // can never wedge on a leftover .mdf the way a fixed-name EnsureCreated database can.
     static SqlInstance<SampleContext> sqlInstance = new(
@@ -13,7 +13,19 @@
 
     static async Task Main(string[] args)
     {
-        var database = await sqlInstance.Build();
+        // Named after this method, unless the launcher names it. The browser suite runs several of these
+        // servers at once, and EfLocalDb takes an existing database of the same name offline to replace
+        // it — under whichever server was already running on it.
+        var name = Environment.GetEnvironmentVariable("SAMPLE_DATABASE");
+        SqlDatabase<SampleContext> database;
+        if (name is null)
+        {
+            database = await sqlInstance.Build();
+        }
+        else
+        {
+            database = await sqlInstance.Build(name);
+        }
 
         var builder = WebApplication.CreateBuilder(args);
 
