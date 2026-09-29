@@ -69,15 +69,8 @@ public partial class Index
         }
     }
 
-    string? Face(EmployeePhoto photo)
-    {
-        if (faces.TryGetValue(photo.Id, out var face))
-        {
-            return face;
-        }
-
-        return null;
-    }
+    string? Face(EmployeePhoto photo) =>
+        faces.GetValueOrDefault(photo.Id);
 
     static string OrDash(string? value) =>
         value ?? "—";

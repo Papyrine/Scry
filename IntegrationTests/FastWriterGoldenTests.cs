@@ -15,7 +15,7 @@ using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 [DependsOn<HttpRoundTripTests.StaleClient>(nameof(HttpRoundTripTests.StaleClient.AClientThatDoesNotKnowRetriesInABody), ProceedOnFailure = true)]
 public partial class FastWriterGoldenTests
 {
-    static readonly SqlInstance<Sample.Model.SampleContext> sqlInstance = new(
+    static SqlInstance<Sample.Model.SampleContext> sqlInstance = new(
         constructInstance: _ => new(_.Options),
         buildTemplate: _ =>
         {
@@ -29,7 +29,7 @@ public partial class FastWriterGoldenTests
 
     // Every JSON escaping and encoding path in one list: quotes, backslashes, control characters,
     // multi-codepoint emoji, right-to-left marks, HTML-sensitive text, and a SQL-looking string.
-    static readonly string[] naughty =
+    static string[] naughty =
     [
         """quote " and \ backslash""",
         "line\nbreak\ttab\rreturn",

@@ -19,14 +19,14 @@ using Microsoft.Extensions.Options;
 [DependsOn<HttpRoundTripTests.StaleClient>(nameof(HttpRoundTripTests.StaleClient.AClientThatDoesNotKnowRetriesInABody), ProceedOnFailure = true)]
 public class AttachmentTests
 {
-    static readonly byte[] leasePayload = [0x11, 0x22, 0x33];
-    static readonly byte[] managerPayload = [..Enumerable.Range(0, 256).Select(_ => (byte) _)];
+    static byte[] leasePayload = [0x11, 0x22, 0x33];
+    static byte[] managerPayload = [..Enumerable.Range(0, 256).Select(_ => (byte) _)];
 
     // The header the policy refuses on. Client-chosen, and named that way deliberately: a real policy
     // reads identity from the authenticated principal, and this exists to toggle the branch.
     const string denyHeader = "X-Test-Deny";
 
-    static readonly SqlInstance<AttachmentContext> sqlInstance = new(
+    static SqlInstance<AttachmentContext> sqlInstance = new(
         constructInstance: _ => new(_.Options),
         buildTemplate: async context =>
         {
@@ -66,9 +66,9 @@ public class AttachmentTests
 
     record ManagerCard(int Id, ScryAttachment Photo);
 
-    static readonly string[] personMembers = ["Id", "Name"];
+    static string[] personMembers = ["Id", "Name"];
 
-    static readonly string[] seededNames = ["Ada", "Grace", "Alan"];
+    static string[] seededNames = ["Ada", "Grace", "Alan"];
 
     static IQueryable<PersonModel> People =>
         client.Source<PersonModel>("Person", personMembers);

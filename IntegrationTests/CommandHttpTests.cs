@@ -830,7 +830,7 @@ sealed class LedgerGate
 sealed class RenameLedgerHandler(LedgerContext data, LedgerGate gate) :
     ICommandHandler<RenameLedger>
 {
-    public async Task Handle(RenameLedger command, ScryCommandContext context, CancellationToken cancel)
+    public async Task Handle(RenameLedger command, ScryCommandContext context, Cancel cancel)
     {
         if (gate.Held is { } held)
         {
@@ -844,7 +844,7 @@ sealed class RenameLedgerHandler(LedgerContext data, LedgerGate gate) :
 sealed class OpenLedgerHandler(LedgerContext data) :
     ICommandHandler<OpenLedger, LedgerOpened>
 {
-    public async Task<LedgerOpened> Handle(OpenLedger command, ScryCommandContext context, CancellationToken cancel)
+    public async Task<LedgerOpened> Handle(OpenLedger command, ScryCommandContext context, Cancel cancel)
     {
         var ledger = new Ledger
         {

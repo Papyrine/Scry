@@ -238,14 +238,12 @@ public class SignalRTests
     }
 
     [Test]
-    public async Task AuthorizationOnTheHubRefusesTheConnection()
-    {
+    public async Task AuthorizationOnTheHubRefusesTheConnection() =>
         await Assert.ThrowsExactlyAsync<HttpRequestException>(
             async () =>
             {
                 await using var server = await Server.Start(database, configure: null, refuseEveryone: true);
             });
-    }
 
     static Task<bool> Next<T>(IAsyncEnumerator<T> answers) =>
         answers.MoveNextAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(30));

@@ -4,7 +4,7 @@ using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 // ReSharper disable NotAccessedPositionalProperty.Local
 
 [NotInParallel]
-[DependsOn<HttpRoundTripTests.StaleClient>(nameof(HttpRoundTripTests.StaleClient.AClientThatDoesNotKnowRetriesInABody), ProceedOnFailure = true)]
+[DependsOn<StaleClient>(nameof(StaleClient.AClientThatDoesNotKnowRetriesInABody), ProceedOnFailure = true)]
 public class HttpRoundTripTests
 {
     static readonly SqlInstance<Sample.Model.SampleContext> sqlInstance = new(

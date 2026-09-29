@@ -11,9 +11,9 @@ namespace Sample.Model;
 /// </remarks>
 public static class CartoonFace
 {
-    static readonly string[] backgrounds = ["#dcecff", "#ffe3d4", "#dff3e0", "#efe1ff"];
-    static readonly string[] skins = ["#f6d5b8", "#e0ac7e", "#c68642", "#8d5524"];
-    static readonly string[] hairColors = ["#2f2a26", "#7b4a2d", "#c9a227", "#5b5f6b"];
+    static string[] backgrounds = ["#dcecff", "#ffe3d4", "#dff3e0", "#efe1ff"];
+    static string[] skins = ["#f6d5b8", "#e0ac7e", "#c68642", "#8d5524"];
+    static string[] hairColors = ["#2f2a26", "#7b4a2d", "#c9a227", "#5b5f6b"];
 
     // Top of the head, drawn over the skin: a full cap, a receding sweep, and a spiked crop.
     static readonly string[] hairStyles =
@@ -24,13 +24,13 @@ public static class CartoonFace
     ];
 
     // Open, and creased-shut the way a drawn smile does it.
-    static readonly string[] eyeStyles =
+    static string[] eyeStyles =
     [
         """<circle cx="25" cy="35" r="2.4" fill="#2f2a26"/><circle cx="39" cy="35" r="2.4" fill="#2f2a26"/>""",
         """<path d="M22 36q3-4 6 0M36 36q3-4 6 0" fill="none" stroke="#2f2a26" stroke-width="2" stroke-linecap="round"/>"""
     ];
 
-    static readonly string[] mouthStyles =
+    static string[] mouthStyles =
     [
         """<path d="M25 44q7 6 14 0" fill="none" stroke="#8c4a3f" stroke-width="2" stroke-linecap="round"/>""",
         """<path d="M25 43h14a7 7 0 0 1-14 0z" fill="#8c4a3f"/>""",

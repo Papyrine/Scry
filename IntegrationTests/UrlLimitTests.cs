@@ -118,7 +118,7 @@ public class UrlLimitTests
     {
         var exception = Assert.ThrowsExactly<Exception>(() => Server(-1));
 
-        await Assert.That(exception!.Message).Contains(nameof(ScryOptions.QueryUrlLimit));
+        await Assert.That(exception.Message).Contains(nameof(ScryOptions.QueryUrlLimit));
     }
 
     // A policied source answers differently for different callers, and an ETag over a URL says nothing
@@ -144,7 +144,7 @@ public class UrlLimitTests
 
         using (Assert.Multiple())
         {
-            await Assert.That(exception!.Message).Contains("Department");
+            await Assert.That(exception.Message).Contains("Department");
             await Assert.That(exception.Message).Contains(nameof(ScryOptions.CacheScope));
         }
     }

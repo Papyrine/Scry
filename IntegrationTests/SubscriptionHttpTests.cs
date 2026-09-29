@@ -27,7 +27,7 @@ using SampleContext = Sample.Model.SampleContext;
 [DependsOn<HttpRoundTripTests.StaleClient>(nameof(HttpRoundTripTests.StaleClient.AClientThatDoesNotKnowRetriesInABody), ProceedOnFailure = true)]
 public class SubscriptionHttpTests
 {
-    static readonly SqlInstance<SampleContext> sqlInstance = new(
+    static SqlInstance<SampleContext> sqlInstance = new(
         constructInstance: _ => new(_.Options),
         buildTemplate: _ =>
         {

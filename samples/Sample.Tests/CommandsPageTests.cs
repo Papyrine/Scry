@@ -107,7 +107,7 @@ public class CommandsPageTests
         await page.WaitForStateAsync(() => Row(page, name)?.QuerySelector(".delete")?.HasAttribute("disabled") == false, patience);
         await Row(page, name)!.QuerySelector(".delete")!.ClickAsync(new());
 
-        await page.WaitForStateAsync(() => Status(page)?.Contains("manages others") == true, patience);
+        await page.WaitForStateAsync(() => Status(page).Contains("manages others"), patience);
         await Assert.That(Row(page, name)).IsNotNull();
     }
 
@@ -138,7 +138,7 @@ public class CommandsPageTests
 
         await Row(page, name)!.QuerySelector(".rename")!.ClickAsync(new());
 
-        await page.WaitForStateAsync(() => Status(page)?.Contains("taking a while") == true, patience);
+        await page.WaitForStateAsync(() => Status(page).Contains("taking a while"), patience);
         await panel.WaitForStateAsync(() => PanelStatus(panel) == "pending", patience);
         await page.WaitForStateAsync(() => Row(page, renamed) is not null, patience);
         await panel.WaitForStateAsync(() => PanelStatus(panel) == "done", patience);
@@ -180,7 +180,7 @@ public class CommandsPageTests
     static AngleSharp.Dom.IElement? Row(IRenderedComponent<Commands> page, string name) =>
         page.FindAll("#employees tbody tr").FirstOrDefault(_ => _.QuerySelector(".name")?.TextContent == name);
 
-    static string? Status(IRenderedComponent<Commands> page) =>
+    static string Status(IRenderedComponent<Commands> page) =>
         page.Find("[data-testid=command-status]").TextContent;
 
     static string? PanelStatus(IRenderedComponent<ScryPendingWork> panel)

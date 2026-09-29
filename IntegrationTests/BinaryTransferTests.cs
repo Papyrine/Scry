@@ -17,17 +17,17 @@ using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 [DependsOn<HttpRoundTripTests.StaleClient>(nameof(HttpRoundTripTests.StaleClient.AClientThatDoesNotKnowRetriesInABody), ProceedOnFailure = true)]
 public class BinaryTransferTests
 {
-    static readonly byte[] alphaPayload = [0x01, 0x02, 0x03];
+    static byte[] alphaPayload = [0x01, 0x02, 0x03];
 
     // Boundary-shaped content: the delimiter prefix in the part bytes proves the random boundary is
     // never confused by content, and the 0x00/0xFF spread catches any text-mode mangling.
-    static readonly byte[] boundaryPayload = [.."\r\n--scry"u8.ToArray(), 0x00, 0xFF, 0x0D, 0x0A];
+    static byte[] boundaryPayload = [.."\r\n--scry"u8.ToArray(), 0x00, 0xFF, 0x0D, 0x0A];
 
-    static readonly byte[] emptyPayload = [];
+    static byte[] emptyPayload = [];
 
-    static readonly byte[] fullPayload = [..Enumerable.Range(0, 256).Select(_ => (byte)_)];
+    static byte[] fullPayload = [..Enumerable.Range(0, 256).Select(_ => (byte)_)];
 
-    static readonly SqlInstance<BinaryContext> sqlInstance = new(
+    static SqlInstance<BinaryContext> sqlInstance = new(
         constructInstance: _ => new(_.Options),
         buildTemplate: async context =>
         {
@@ -48,7 +48,7 @@ public class BinaryTransferTests
 
     record Doc(int Id, string Name, byte[]? Payload, DocumentKind Kind);
 
-    static readonly string[] docMembers = ["Id", "Name", "Payload", "Kind"];
+    static string[] docMembers = ["Id", "Name", "Payload", "Kind"];
 
     static IQueryable<Doc> Documents =>
         client.Source<Doc>("Document", docMembers);
@@ -158,7 +158,7 @@ public class BinaryTransferTests
         await Assert.That(sections[1].Content).IsEquivalentTo(boundaryPayload, CollectionOrdering.Matching);
         await Assert.That(sections[2].Content).IsEmpty();
         await Assert.That(sections[3].Content).IsEquivalentTo(fullPayload, CollectionOrdering.Matching);
-        await Assert.That(sections[..4].Select(_ => int.Parse(_.Headers["Content-Length"]))).IsEquivalentTo(new[] {3, boundaryPayload.Length, 0, 256}, CollectionOrdering.Matching);
+        await Assert.That(sections[..4].Select(_ => int.Parse(_.Headers["Content-Length"]))).IsEquivalentTo([3, boundaryPayload.Length, 0, 256], CollectionOrdering.Matching);
 
         await Assert.That(sections[4].Headers["Content-Type"]).IsEqualTo("application/json");
         var envelope = Encoding.UTF8.GetString(sections[4].Content);

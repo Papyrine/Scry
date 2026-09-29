@@ -5,7 +5,7 @@ public partial class LiveStream
     IReadOnlyList<OrderRow>? orders;
     int answers;
     string? error;
-    CancellationTokenSource? leaving;
+    CancelSource? leaving;
     Task reading = Task.CompletedTask;
 
     protected override void Start()
@@ -15,7 +15,7 @@ public partial class LiveStream
     }
 
     // begin-snippet: liveStream
-    async Task Read(CancellationToken leaving)
+    async Task Read(Cancel leaving)
     {
         try
         {

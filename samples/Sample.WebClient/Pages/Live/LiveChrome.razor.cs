@@ -28,7 +28,9 @@ public partial class LiveChrome
         return "";
     }
 
+#pragma warning disable CA1822
     string TransportName
+#pragma warning restore CA1822
     {
         get
         {

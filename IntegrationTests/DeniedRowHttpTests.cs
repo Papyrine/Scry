@@ -14,7 +14,7 @@ using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 [DependsOn<HttpRoundTripTests.StaleClient>(nameof(HttpRoundTripTests.StaleClient.AClientThatDoesNotKnowRetriesInABody), ProceedOnFailure = true)]
 public class DeniedRowHttpTests
 {
-    static readonly SqlInstance<Sample.Model.SampleContext> sqlInstance = new(
+    static SqlInstance<Sample.Model.SampleContext> sqlInstance = new(
         constructInstance: _ => new(_.Options),
         buildTemplate: _ =>
         {
