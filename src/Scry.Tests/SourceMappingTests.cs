@@ -9,7 +9,7 @@ public class SourceMappingTests
     [Test]
     public async Task AnOptedInTypeTheContextDoesNotMapIsRefusedAtStartup()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var exception = Assert.ThrowsExactly<Exception>(() => SharedProcessor.Instance.EnsureSourcesMapped(context));
 
@@ -26,7 +26,7 @@ public class SourceMappingTests
     [Test]
     public async Task TheRefusalIsWaivedForAnAssemblyServingSeveralContexts()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = ScryProcessor.Create<TestContext>(options =>
         {
             options.AddPocoSource<Holiday>(_ => Holiday.Seed());
@@ -41,7 +41,7 @@ public class SourceMappingTests
     [Test]
     public async Task AQueryOfAnUnmappedSourceIsRejectedNotFaulted()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create("Region", [new CountOp()]);
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
@@ -53,7 +53,7 @@ public class SourceMappingTests
     [Test]
     public async Task TheRefusalNamesTheSource()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var exception = Assert.ThrowsExactly<Exception>(() => SharedProcessor.Instance.EnsureSourcesMapped(context));
 

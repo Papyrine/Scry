@@ -44,7 +44,10 @@ public class AttachmentLinkerTests
                 Keys = ["Id"]
             }
         ],
-        Enums: []);
+        Enums: [])
+    {
+        SchemaStamp = "attachment-linker"
+    };
 
     static QueryRequest Request(params QueryOp[] pipeline) =>
         QueryRequest.Create("Contract", pipeline);

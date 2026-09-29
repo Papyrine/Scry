@@ -39,7 +39,7 @@ public class SqlPreviewTests
             "Employee",
             [new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))]))]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var sql = processor.ToQueryString(request, context, EmptyServices.Instance);
 
         await Assert.That(sql).Contains("Active");
@@ -52,7 +52,7 @@ public class SqlPreviewTests
         // one — refused rather than run, and refused before the executor reaches the terminal.
         var request = QueryRequest.Create("Employee", [new CountOp()]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.ToQueryString(request, context, EmptyServices.Instance));
 
@@ -69,7 +69,7 @@ public class SqlPreviewTests
                 new PageOp(Size: 2)
             ]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.ToQueryString(request, context, EmptyServices.Instance));
 
@@ -84,7 +84,7 @@ public class SqlPreviewTests
             "Holiday",
             [new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))]))]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.ToQueryString(request, context, EmptyServices.Instance));
 
@@ -98,7 +98,7 @@ public class SqlPreviewTests
         // a member a query could not.
         var request = QueryRequest.Create("Employee", [new WhereOp(new MemberNode(["Salary"]))]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.ToQueryString(request, context, EmptyServices.Instance));
 

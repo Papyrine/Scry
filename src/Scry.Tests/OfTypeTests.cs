@@ -89,7 +89,7 @@ public class OfTypeTests
     [Test]
     public async Task RejectsNarrowingToATypeThatIsNotOptedIn()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // Artwork derives from Asset but carries no [Queryable], so it has no wire name at all.
         var request = QueryRequest.Create("Asset", [new OfTypeOp("Artwork")]);
@@ -103,7 +103,7 @@ public class OfTypeTests
     [Test]
     public async Task RejectsNarrowingToAnUnrelatedType()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // Order is opted in, so it has a name — but it is not on this hierarchy, so narrowing to it
         // would widen the query to a source the request never named.
@@ -118,7 +118,7 @@ public class OfTypeTests
     [Test]
     public async Task RejectsNarrowingToTheSameType()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create("Asset", [new OfTypeOp("Asset")]);
 
@@ -131,7 +131,7 @@ public class OfTypeTests
     [Test]
     public async Task RejectsWideningToTheBase()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // The reverse direction is not a narrowing: it would let a query rooted at a derived source
         // reach rows the source it named never contained.
@@ -146,7 +146,7 @@ public class OfTypeTests
     [Test]
     public async Task RejectsReadingADerivedMemberWithoutNarrowing()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // Without the OfType the row is an Asset, whose allow-list has no Wheels.
         var request = QueryRequest.Create(

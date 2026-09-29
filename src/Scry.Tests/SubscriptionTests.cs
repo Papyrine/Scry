@@ -383,7 +383,7 @@ public class SubscriptionTests
     [Test]
     public async Task AQueryAskedOnceIsNotRecordedAsALiveQuerys()
     {
-        using var reading = TestContext.CreateSeeded();
+        await using var reading = TestContext.CreateSeeded();
         var runs = new RunCounter();
 
         Live().Execute(Regions(), reading, Services(runs));
@@ -580,7 +580,7 @@ public class SubscriptionTests
     {
         List<(string Instrument, object Value, Dictionary<string, object?> Tags)> measurements = [];
         List<Activity> stopped = [];
-        using var reading = TestContext.CreateSeeded();
+        await using var reading = TestContext.CreateSeeded();
         using (ListenMeters(measurements))
         using (ListenActivities(stopped))
         {

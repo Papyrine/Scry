@@ -16,7 +16,7 @@ public class FunctionMatrixTests
     [Test]
     public async Task EveryFunctionOverEveryMemberTranslatesOrIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var faults = new List<string>();
         foreach (var (source, member) in ScalarMembers())
         {
@@ -36,7 +36,7 @@ public class FunctionMatrixTests
     [Test]
     public async Task EveryOperatorOverEveryPairOfMembersTranslatesOrIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var faults = new List<string>();
         foreach (var group in ScalarMembers().GroupBy(_ => _.Source))
         {

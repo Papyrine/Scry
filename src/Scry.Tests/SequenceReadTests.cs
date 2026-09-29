@@ -95,7 +95,7 @@ public class SequenceReadTests
     [Test]
     public async Task AnAttachmentAnswersNoneOfThem()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(

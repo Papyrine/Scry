@@ -95,7 +95,7 @@ public class CompositeGroupKeyTests
     [Test]
     public async Task RejectsAKeyPartTheQueryDidNotGroupBy()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // Reaching a member off the key that is not part of it is refused rather than silently

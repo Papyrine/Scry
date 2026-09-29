@@ -15,7 +15,7 @@ public class TypeMismatchTests
     [MethodDataSource(nameof(Mismatches))]
     public async Task IsRejected(string label, Node predicate)
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create("Employee", [new WhereOp(predicate), new CountOp()]);
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
@@ -38,7 +38,7 @@ public class TypeMismatchTests
     [Test]
     public async Task AGroupedPredicateThatIsNotAConditionIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Employee",
             [

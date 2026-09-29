@@ -9,7 +9,7 @@ public class SensitiveOverrideTests
     [Test]
     public async Task AConstantAgainstTheOverrideIsRefusedFromAUrl()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Invoice",
             [
@@ -25,7 +25,7 @@ public class SensitiveOverrideTests
     [Test]
     public async Task ReturningTheOverrideIsNotStored()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Invoice",
             [new SelectOp(new([new("Reviewer", new NodeValue(new MemberNode(["Reviewer"])))]))]);
@@ -39,7 +39,7 @@ public class SensitiveOverrideTests
     [Test]
     public async Task AnUnmarkedMemberOfTheSameTypeTravelsInTheUrl()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Invoice",
             [

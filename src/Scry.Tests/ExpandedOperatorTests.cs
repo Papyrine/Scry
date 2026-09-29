@@ -286,7 +286,7 @@ public class ExpandedOperatorTests
     [Test]
     public async Task PagingADeduplicatedQueryWithoutOrderingIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // Without an ordering the slice would be of an order the deduplication never defined.
@@ -305,7 +305,7 @@ public class ExpandedOperatorTests
     [Test]
     public async Task PagingADeduplicatedQueryOrderedBeforeTheDistinctIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(() => client.Source<Order>("Order")
@@ -321,7 +321,7 @@ public class ExpandedOperatorTests
     [Test]
     public async Task OrderingADeduplicatedQueryByAnotherMemberIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // Only the deduplicated member survives the Distinct, so it is the only thing to order by.
         var request = QueryRequest.Create(
@@ -380,7 +380,7 @@ public class ExpandedOperatorTests
     [Test]
     public async Task LastWithoutOrderingIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(() => client.Source<Employee>("Employee")
@@ -573,7 +573,7 @@ public class ExpandedOperatorTests
     [Test]
     public async Task ConstantOnlyProjectionMemberIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // A leaf that reads nothing from the row is a value the client already has, and EF rejects a
@@ -674,7 +674,7 @@ public class ExpandedOperatorTests
     [Test]
     public async Task ANonKeyMemberInAGroupedProjectionIsStillRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // Composition does not widen what a group can read: every column but the key has been folded
         // away, so burying one inside an expression must not smuggle it back.
@@ -753,7 +753,7 @@ public class ExpandedOperatorTests
     [Test]
     public async Task HavingOverANonKeyMemberIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // Region is the key, Amount is not: every other column has been folded away by the grouping.
         var request = QueryRequest.Create(
@@ -790,7 +790,7 @@ public class ExpandedOperatorTests
     [Test]
     public async Task ReverseWithoutOrderingIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(() => client.Source<Employee>("Employee")
@@ -839,7 +839,7 @@ public class ExpandedOperatorTests
     [Test]
     public async Task AFormattedInterpolationHoleIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // A format specifier would change the value, and the database has no equivalent spelling.
@@ -977,7 +977,7 @@ public class ExpandedOperatorTests
     [Test]
     public async Task OrderingADeduplicatedQueryByANestedMemberIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // A nested object contributes several leaves under one name, leaving nothing to order by.
         var request = QueryRequest.Create(

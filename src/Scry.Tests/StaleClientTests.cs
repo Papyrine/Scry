@@ -11,7 +11,7 @@ public class StaleClientTests
     [Test]
     public async Task MismatchedStampReportsStaleClient()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = SharedProcessor.Instance;
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(
@@ -27,7 +27,7 @@ public class StaleClientTests
     [Test]
     public async Task MatchingStampReportsPlainRejection()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = SharedProcessor.Instance;
         var current = processor.Describe().SchemaStamp;
 
@@ -42,7 +42,7 @@ public class StaleClientTests
     [Test]
     public async Task MissingStampReportsPlainRejection()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = SharedProcessor.Instance;
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(
@@ -57,7 +57,7 @@ public class StaleClientTests
     [Test]
     public async Task MismatchedStampWithValidQueryExecutes()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = SharedProcessor.Instance;
 
         var request = QueryRequest.Create("Employee", [new CountOp()], "stamp-from-an-older-model");

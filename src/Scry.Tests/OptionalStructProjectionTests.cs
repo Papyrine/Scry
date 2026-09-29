@@ -30,7 +30,7 @@ public class OptionalStructProjectionTests
     [Test]
     public async Task TheWireShapeIsANestedProjection()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var request = client.Source<Employee>("Employee")

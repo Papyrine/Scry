@@ -31,7 +31,7 @@ public class DeniedRowTests
     [Test]
     public async Task AListWhosePolicyErrorsFailsRatherThanQuietlyDroppingARow()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, ErroringOnLists());
 
         await Assert.ThrowsExactlyAsync<ScryPermissionException>(
@@ -59,7 +59,7 @@ public class DeniedRowTests
     [Test]
     public async Task ACountIsAListPositionToo()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, ErroringOnLists());
 
         // Folding the rows into a number does not make the denial disappear: the count would have been
@@ -87,7 +87,7 @@ public class DeniedRowTests
     [Test]
     public async Task ASingleRowTerminalErrorsWhereThatPositionSaysSo()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(
             context,
             With(_ => _.AddPolicy<Employee, ActiveOnlyPolicy>(new()
@@ -128,7 +128,7 @@ public class DeniedRowTests
     [Test]
     public async Task ARowOnlyTheErroringPolicyDeniesFailsTheRequest()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // The other direction over the same pair: the trailer is hidden as before, but the van — which
         // the hiding policy allows — is the one denied, and losing it is what gets reported.
@@ -149,7 +149,7 @@ public class DeniedRowTests
     [Test]
     public async Task NarrowingAppliesTheDerivedTypesModeToo()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // Rooted at Asset, where nothing errors, and narrowed to Vehicle, where something does. The
         // policy the narrowing added is the one that answers.
@@ -165,7 +165,7 @@ public class DeniedRowTests
     [Test]
     public async Task ADeniedRowBeyondThePageStillFailsTheRequest()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, ErroringOnLists());
 
         // Paging picks among the rows that matched, so a denial is reported for the rows the query
@@ -182,7 +182,7 @@ public class DeniedRowTests
     [Test]
     public async Task ABatchEntryIsDeniedWithoutTakingTheBatchWithIt()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var batch = new QueryBatchRequest(
             WireFormat.Version,
             [
@@ -201,7 +201,7 @@ public class DeniedRowTests
     [Test]
     public async Task TheDeniedMessageNamesNothingAboutWhatDeniedIt()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, ErroringOnLists());
 
         var exception = await Assert.ThrowsExactlyAsync<ScryPermissionException>(
@@ -219,7 +219,7 @@ public class DeniedRowTests
     [Test]
     public async Task ShowingTheSqlRunsNothingAndSoDeniesNothing()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Employee",
             [new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))]))]);
@@ -237,7 +237,7 @@ public class DeniedRowTests
     [Test]
     public async Task AJoinsInnerSideErrorsWhereItsListPositionSaysSo()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, ErroringOnLists());
 
         await Assert.ThrowsExactlyAsync<ScryPermissionException>(
@@ -272,7 +272,7 @@ public class DeniedRowTests
     [Test]
     public async Task ASetOperandErrorsWhereItsListPositionSaysSo()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, ErroringOnLists());
 
         await Assert.ThrowsExactlyAsync<ScryPermissionException>(
@@ -285,7 +285,7 @@ public class DeniedRowTests
     [Test]
     public async Task AMembershipSetErrorsWhereItsListPositionSaysSo()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, ErroringOnLists());
 
         await Assert.ThrowsExactlyAsync<ScryPermissionException>(

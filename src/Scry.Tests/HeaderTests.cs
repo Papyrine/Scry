@@ -144,7 +144,7 @@ public class HeaderTests
     [Test]
     public async Task HeadersOverANonHttpTransportAreRefused()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = SharedProcessor.Instance;
         var client = new ScryClient((request, _) => Task.FromResult(processor.Execute(request, context)));
 
@@ -158,7 +158,7 @@ public class HeaderTests
     [Test]
     public async Task PolicyReadsTheRequestHeaderAndWritesToTheResponse()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Employee",
             [
@@ -187,7 +187,7 @@ public class HeaderTests
     [Test]
     public async Task PolicyOutsideTheHttpEndpointSeesEmptyHeaders()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Employee",
             [new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))]))]);

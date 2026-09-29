@@ -70,7 +70,7 @@ public class HasFlagTests
     [Test]
     public async Task RejectsHasFlagOverSomethingNotAnEnum()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Employee",

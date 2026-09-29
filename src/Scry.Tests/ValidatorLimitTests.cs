@@ -199,7 +199,7 @@ public class ValidatorLimitTests
         Projection two = new([new("Name", new NodeValue(new MemberNode(["Name"]))), new("Id", new NodeValue(new MemberNode(["Id"])))]);
         QueryOp[] ops = [new SelectOp(two), new SetOp(SetKind.Union, "Employee", null, two), new CountOp()];
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = ScryProcessor.Create<TestContext>(options =>
         {
             options.AddPocoSource<Holiday>(_ => Holiday.Seed());
@@ -259,7 +259,7 @@ public class ValidatorLimitTests
             "Employee",
             [new WhereOp(new BinaryNode(BinaryOp.AndAlso, Set("Id"), Set("DepartmentId"))), new CountOp()]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = ScryProcessor.Create<TestContext>(options =>
         {
             options.AddPocoSource<Holiday>(_ => Holiday.Seed());

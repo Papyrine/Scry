@@ -87,7 +87,7 @@ public class AttachmentFetchTests
     [Test]
     public async Task AKeyValueIsParsedAsTheKeysTypeWhateverItsTag()
     {
-        using var data = TestContext.CreateSeeded();
+        await using var data = TestContext.CreateSeeded();
 
         var result = SharedProcessor.Instance.FetchAttachment(
             AttachmentRequest.Create("Contract", "Document", [new("1", ClrTypeTag.String)]),
@@ -101,7 +101,7 @@ public class AttachmentFetchTests
     [Test]
     public async Task APolicyMayRelabelTheBytes()
     {
-        using var data = TestContext.CreateSeeded();
+        await using var data = TestContext.CreateSeeded();
 
         var result = With<RelabellingPolicy>().FetchAttachment(Request(1), data);
 
@@ -114,7 +114,7 @@ public class AttachmentFetchTests
     [Test]
     public async Task AReplacementThatIsNotAMediaTypeFaults()
     {
-        using var data = TestContext.CreateSeeded();
+        await using var data = TestContext.CreateSeeded();
         var processor = With<MislabellingPolicy>();
 
         var exception = Assert.ThrowsExactly<Exception>(() => processor.FetchAttachment(Request(1), data));
@@ -193,7 +193,7 @@ public class AttachmentFetchTests
     [Test]
     public async Task UnknownSourceIsRejected()
     {
-        using var data = TestContext.CreateSeeded();
+        await using var data = TestContext.CreateSeeded();
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.FetchAttachment(
                 AttachmentRequest.Create("Secret", "Document", [new("1", ClrTypeTag.Int32)]),
@@ -205,7 +205,7 @@ public class AttachmentFetchTests
     [Test]
     public async Task WrongKeyCountIsRejected()
     {
-        using var data = TestContext.CreateSeeded();
+        await using var data = TestContext.CreateSeeded();
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.FetchAttachment(
                 AttachmentRequest.Create("Contract", "Document", [new("1", ClrTypeTag.Int32), new("2", ClrTypeTag.Int32)]),
@@ -220,7 +220,7 @@ public class AttachmentFetchTests
     [Test]
     public async Task UnparseableKeyIsRejected()
     {
-        using var data = TestContext.CreateSeeded();
+        await using var data = TestContext.CreateSeeded();
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.FetchAttachment(
                 AttachmentRequest.Create("Contract", "Document", [new("not-a-number", ClrTypeTag.Int32)]),
@@ -234,7 +234,7 @@ public class AttachmentFetchTests
     [Test]
     public async Task NullKeyIsNotFound()
     {
-        using var data = TestContext.CreateSeeded();
+        await using var data = TestContext.CreateSeeded();
         var result = SharedProcessor.Instance.FetchAttachment(
             AttachmentRequest.Create("Contract", "Document", [new(null, ClrTypeTag.Null)]),
             data);
@@ -245,7 +245,7 @@ public class AttachmentFetchTests
     [Test]
     public async Task NewerVersionIsRejected()
     {
-        using var data = TestContext.CreateSeeded();
+        await using var data = TestContext.CreateSeeded();
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.FetchAttachment(
                 new(AttachmentRequest.CurrentVersion + 1, "Contract", "Document", [new("1", ClrTypeTag.Int32)]),
@@ -259,7 +259,7 @@ public class AttachmentFetchTests
     [Arguments(-1)]
     public async Task AVersionBelowOneIsRejected(int version)
     {
-        using var data = TestContext.CreateSeeded();
+        await using var data = TestContext.CreateSeeded();
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.FetchAttachment(
                 new(version, "Contract", "Document", [new("1", ClrTypeTag.Int32)]),

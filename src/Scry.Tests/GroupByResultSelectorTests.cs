@@ -59,7 +59,7 @@ public class GroupByResultSelectorTests
     [Test]
     public async Task ElementSelectorIsRefused()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>
@@ -75,7 +75,7 @@ public class GroupByResultSelectorTests
     [Test]
     public async Task ASelectAfterTheResultSelectorIsASecond()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(() =>

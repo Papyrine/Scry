@@ -46,7 +46,7 @@ public class BatchTests
             QueryRequest.Create("Employee", [new CountOp()])
         ]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var response = SharedProcessor.Instance.ExecuteBatch(batch, context);
 
         await Assert.That(response.Results[0].Response).IsNotNull();
@@ -62,7 +62,7 @@ public class BatchTests
         var batch = QueryBatchRequest.Create(
             [.. Enumerable.Repeat(QueryRequest.Create("Employee", [new CountOp()]), 3)]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => processor.ExecuteBatch(batch, context));
 
         await Assert.That(exception.Message).Contains("more than the maximum of 2");
@@ -76,12 +76,12 @@ public class BatchTests
         var auditor = new RecordingAuditor();
         var services = new ServiceCollection();
         services.AddSingleton<IScryAuditor>(auditor);
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
         var processor = Processor(_ => _.MaxBatchSize = 2);
         var batch = QueryBatchRequest.Create(
             [.. Enumerable.Repeat(QueryRequest.Create("Employee", [new CountOp()]), 3)]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         Assert.ThrowsExactly<ScryValidationException>(() => processor.ExecuteBatch(batch, context, provider));
 
         var entry = auditor.Entries.Single();
@@ -99,7 +99,7 @@ public class BatchTests
     {
         var batch = new QueryBatchRequest(WireFormat.Version + 1, [QueryRequest.Create("Employee", [new CountOp()])]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.ExecuteBatch(batch, context));
 
@@ -123,7 +123,7 @@ public class BatchTests
             ]);
         var batch = QueryBatchRequest.Create([QueryRequest.Create("Employee", [new CountOp()]), failing]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var response = SharedProcessor.Instance.ExecuteBatch(batch, context);
 
         using (Assert.Multiple())
@@ -143,7 +143,7 @@ public class BatchTests
     {
         var batch = new QueryBatchRequest(version, [QueryRequest.Create("Employee", [new CountOp()])]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.ExecuteBatch(batch, context));
 
@@ -162,7 +162,7 @@ public class BatchTests
             QueryRequest.Create("Employee", [new CountOp()])
         ]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var json = ScryJson.Serialize(processor.ExecuteBatch(batch, context));
 
         await Assert.That(json).Contains("Alice");
@@ -175,7 +175,7 @@ public class BatchTests
         var auditor = new RecordingAuditor();
         var services = new ServiceCollection();
         services.AddSingleton<IScryAuditor>(auditor);
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
         var batch = QueryBatchRequest.Create(
         [
@@ -183,7 +183,7 @@ public class BatchTests
             QueryRequest.Create("Employee", [new WhereOp(new MemberNode(["Salary"]))])
         ]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         SharedProcessor.Instance.ExecuteBatch(batch, context, provider);
 
         // A batch is not one audit entry: the trail records what was asked, and a batch asked twice.
@@ -294,7 +294,7 @@ public class BatchTests
     [Test]
     public async Task HeadersInABatchAreRefused()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = BatchingClientFor(context);
         var batch = client.Batch();
 
@@ -310,7 +310,7 @@ public class BatchTests
     [Test]
     public async Task StreamingInABatchIsRefused()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = BatchingClientFor(context);
         var batch = client.Batch();
 

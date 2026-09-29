@@ -129,7 +129,7 @@ public class TextConversionTests
     [Test]
     public async Task ConvertToSingleStaysClientSide()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>
@@ -143,7 +143,7 @@ public class TextConversionTests
     [Test]
     public async Task ANumericMemberIsRefusedAtTranslation()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>
@@ -160,7 +160,7 @@ public class TextConversionTests
     {
         // Over a number the function is a cast, and only a widening one is carried: reading a decimal
         // as an int would truncate in the database where the CLR rounds.
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",
@@ -184,7 +184,7 @@ public class TextConversionTests
     {
         // The same function over a narrower member is the cast a client writes as (double)_.Quantity.
         // Quantities are 3, 7 and 1, so two are above 2.5 once compared as doubles.
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",
@@ -205,7 +205,7 @@ public class TextConversionTests
     [Test]
     public async Task AValueThatIsNeitherTextNorANumberIsRefusedByTheServer()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",

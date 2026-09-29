@@ -155,7 +155,7 @@ public class AttachmentClientTests
     [Test]
     public async Task ProjectingAnAttachmentWithoutItsKeyIsRefused()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => ClientFor(context).Source<ContractModel>("Contract", ["Id", "Name"])
@@ -168,7 +168,7 @@ public class AttachmentClientTests
     [Test]
     public async Task FilteringOnAnAttachmentIsRefused()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => ClientFor(context).Source<ContractModel>("Contract", ["Id", "Name"])
@@ -182,7 +182,7 @@ public class AttachmentClientTests
     [Test]
     public async Task OrderingByAnAttachmentIsRefused()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => ClientFor(context).Source<ContractModel>("Contract", ["Id", "Name"])
@@ -197,7 +197,7 @@ public class AttachmentClientTests
     [Test]
     public async Task DistinctCarryingAnAttachmentIsRefused()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => ClientFor(context).Source<ContractModel>("Contract", ["Id", "Name"])
@@ -211,7 +211,7 @@ public class AttachmentClientTests
     [Test]
     public async Task GroupingByAnAttachmentIsRefused()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => ClientFor(context).Source<ContractModel>("Contract", ["Id", "Name"])
@@ -227,7 +227,7 @@ public class AttachmentClientTests
     [Test]
     public async Task ProjectingOnlyAnAttachmentIsRefused()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var exception = Assert.ThrowsExactly<NotSupportedException>(
             () => ClientFor(context).Source<ContractModel>("Contract", ["Id", "Name"])

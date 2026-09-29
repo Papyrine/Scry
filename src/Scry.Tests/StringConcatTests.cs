@@ -167,7 +167,7 @@ public class StringConcatTests
     [Test]
     public async Task StillRejectsAFormattedHole()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // A format specifier would change the value, and the database has no equivalent spelling.

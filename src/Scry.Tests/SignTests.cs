@@ -91,7 +91,7 @@ public class SignTests
     [Test]
     public async Task KeepsNullNullRatherThanCallingItZero()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // Discount is null on one row. A comparison against null is neither greater nor less, so an
         // unguarded chain would answer zero — the sign of a value that is not there.
@@ -122,7 +122,7 @@ public class SignTests
     [Test]
     public async Task RejectsTheSignOfSomethingNotNumeric()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",

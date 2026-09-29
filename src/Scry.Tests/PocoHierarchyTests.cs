@@ -10,7 +10,7 @@ public class PocoHierarchyTests
     [Test]
     public async Task NarrowingFromAPocoRootAppliesTheBasePolicy()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = Build(_ => _.AddPolicy<Holiday, PublishedHolidaysOnlyPolicy>());
 
         var narrowed = Names(processor, context, "Holiday", [new OfTypeOp("PublicHoliday"), SelectName()]);
@@ -26,7 +26,7 @@ public class PocoHierarchyTests
     [Test]
     public async Task ADerivedPocoReadsTheBaseRowsNarrowedByType()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = Build();
 
         var derived = Names(processor, context, "PublicHoliday", [SelectName()]);
@@ -44,7 +44,7 @@ public class PocoHierarchyTests
     [Test]
     public async Task TheDerivedMembersAreReadableOnceNarrowed()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = Build();
         var region = new SelectOp(new([new("Region", new NodeValue(new MemberNode(["Region"])))]));
 

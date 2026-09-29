@@ -109,7 +109,7 @@ public class IntrospectionTests
     [Test]
     public async Task GuardrailAcceptsCorrectlyAnnotatedModel()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // Against the live EF model, Address is a complex type (not an entity) and the sources are real
         // entities/views — so the startup guardrail passes.

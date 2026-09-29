@@ -14,7 +14,7 @@ public class ResponseStampTests
     [Test]
     public async Task EveryResponseCarriesTheServerStamp()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = SharedProcessor.Instance;
 
         var response = processor.Execute(QueryRequest.Create("Employee", [new CountOp()]), context);
@@ -85,7 +85,7 @@ public class ResponseStampTests
     [Test]
     public async Task UnreadablePayloadFromDriftedClientThrowsStaleClientException()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = StaleClient(context);
 
         var exception = (await Assert.ThrowsExactlyAsync<ScryStaleClientException>(() =>

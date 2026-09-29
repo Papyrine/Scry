@@ -113,7 +113,7 @@ public class ComputedGroupKeyTests
     [Test]
     public async Task RejectsAGroupKeyOutsideAGroupedQuery()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // No generated client can write this — the node only exists inside a grouped projection — so
         // the guard is tested on the wire.
@@ -130,7 +130,7 @@ public class ComputedGroupKeyTests
     [Test]
     public async Task RejectsAGroupKeyBeyondTheKeysTheQueryHas()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",

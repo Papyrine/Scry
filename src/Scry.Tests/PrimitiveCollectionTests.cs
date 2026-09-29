@@ -123,7 +123,7 @@ public class PrimitiveCollectionTests
     [Test]
     public async Task AnUnOptedInCollectionOfValuesStaysInvisible()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // Order.Notes carries no [QueryableCollection]. Being a collection of values changes nothing:
         // default-deny applies to the member.
@@ -140,7 +140,7 @@ public class PrimitiveCollectionTests
     [Test]
     public async Task ReadingAMemberOfAValueElementIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // A string element has no allow-listed members — not even the ones the CLR type has.
         var request = QueryRequest.Create(
@@ -164,7 +164,7 @@ public class PrimitiveCollectionTests
     [Test]
     public async Task ReadingAnElementOutsideASubqueryIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // An element node names the row it is read against. Outside a subquery over values that row is
         // an entity, so allowing it would let a query compare a whole row to a constant.
@@ -186,7 +186,7 @@ public class PrimitiveCollectionTests
     [Test]
     public async Task ReadingAnElementInsideACollectionOfRowsIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // Order.Lines holds rows, so its element is an OrderLine — a whole row, which is not a value a
         // query may compare. Its members are what a predicate reads.
@@ -211,7 +211,7 @@ public class PrimitiveCollectionTests
     [Test]
     public async Task FlatteningACollectionOfValuesIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // The rows a flatten would produce are bare values, and every operator after it names members
         // of the row it reads.
@@ -239,7 +239,7 @@ public class PrimitiveCollectionTests
     [Test]
     public async Task CorrelatingAContainsWithTheRowIsRefusedByTheClient()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // The test reads the collection's elements, where the owning row is not in scope. Refused where

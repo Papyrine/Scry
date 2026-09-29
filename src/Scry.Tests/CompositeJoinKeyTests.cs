@@ -71,7 +71,7 @@ public class CompositeJoinKeyTests
     [Test]
     public async Task ACompositeOnOneSideAloneIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",
@@ -94,7 +94,7 @@ public class CompositeJoinKeyTests
     [Test]
     public async Task MismatchedPartCountsAreRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",
@@ -119,7 +119,7 @@ public class CompositeJoinKeyTests
     [Test]
     public async Task ACompositeKeyOutsideAJoinIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",

@@ -63,7 +63,7 @@ public class TemporalPartTests
     [Test]
     public async Task AnElapsedTimeConstantParsesOnTheServer()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // Hand-built, as another client would send it: the round-trip spelling, tagged as text.
         var request = QueryRequest.Create(
@@ -230,7 +230,7 @@ public class TemporalPartTests
     [Test]
     public async Task TotalsAreNotCarried()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var rows = client.Source<Shift>("Shift")

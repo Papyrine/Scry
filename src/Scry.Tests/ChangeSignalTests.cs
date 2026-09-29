@@ -240,7 +240,7 @@ public class ChangeSignalTests
     [Test]
     public async Task NotifyReportsADerivedTypeAsItsRoot()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var (changes, reported) = Listening();
         changes.Attach(context.Model);
 
@@ -252,7 +252,7 @@ public class ChangeSignalTests
     [Test]
     public async Task NotifyNamesEachRootOnce()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var (changes, reported) = Listening();
         changes.Attach(context.Model);
 
@@ -265,7 +265,7 @@ public class ChangeSignalTests
     [Test]
     public async Task NotifyNamesAnUnmappedTypeAsItself()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var (changes, reported) = Listening();
         changes.Attach(context.Model);
 
@@ -327,7 +327,7 @@ public class ChangeSignalTests
     [Test]
     public async Task APolicyCacheInvalidationReportsTheEntity()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = ScryProcessor.Create<TestContext>(options =>
         {
             options.AddPocoSource<Holiday>(_ => Holiday.Seed());
@@ -480,7 +480,7 @@ public class ChangeSignalTests
     [Test]
     public async Task OwnedTypesAndJoinTablesAreNamedByWhatTheyAreReadThrough()
     {
-        using var context = new ShapesContext(
+        await using var context = new ShapesContext(
             new DbContextOptionsBuilder<ShapesContext>()
                 .UseSqlServer("Server=(none)")
                 .Options);
@@ -502,7 +502,7 @@ public class ChangeSignalTests
     [Test]
     public async Task ADeleteNamesWhatTheDatabaseNullsAndStopsThere()
     {
-        using var context = new ShelvesContext(
+        await using var context = new ShelvesContext(
             new DbContextOptionsBuilder<ShelvesContext>()
                 .UseSqlServer("Server=(none)")
                 .Options);
@@ -540,7 +540,7 @@ public class ChangeSignalTests
     [Test]
     public async Task ABackplaneNamedByTypeIsBuiltFromTheContainer()
     {
-        using var provider = new ServiceCollection()
+        await using var provider = new ServiceCollection()
             .AddSingleton(new BackplaneSetting("from the container"))
             .AddScry<TestContext>(options =>
             {
@@ -563,7 +563,7 @@ public class ChangeSignalTests
     public async Task ABackplaneBuiltByAFactoryIsTheOneRegistered()
     {
         var built = new LoopbackBackplane();
-        using var provider = new ServiceCollection()
+        await using var provider = new ServiceCollection()
             .AddScry<TestContext>(options =>
             {
                 options.AddPocoSource<Holiday>(_ => Holiday.Seed());
@@ -577,7 +577,7 @@ public class ChangeSignalTests
     [Test]
     public async Task ABackplanesOwnServicesAreRegisteredBesideIt()
     {
-        using var provider = new ServiceCollection()
+        await using var provider = new ServiceCollection()
             .AddScry<TestContext>(options =>
             {
                 options.AddPocoSource<Holiday>(_ => Holiday.Seed());
@@ -597,7 +597,7 @@ public class ChangeSignalTests
     public async Task TheRegisteredBackplaneIsTheOneChangesArePublishedOn()
     {
         var built = new LoopbackBackplane();
-        using var provider = new ServiceCollection()
+        await using var provider = new ServiceCollection()
             .AddScry<TestContext>(options =>
             {
                 options.AddPocoSource<Holiday>(_ => Holiday.Seed());

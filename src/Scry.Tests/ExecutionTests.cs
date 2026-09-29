@@ -202,7 +202,7 @@ public class ExecutionTests
         // registered, so the attribute-declared policy must scope the result to open tickets.
         var request = QueryRequest.Create("Ticket", [new OrderByOp(new MemberNode(["Name"]), false)]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var json = ScryJson.Serialize(SharedProcessor.Instance.Execute(request, context));
 
         await Assert.That(json).Contains("Login bug");
@@ -217,7 +217,7 @@ public class ExecutionTests
         // is the inverse of the attribute's policy, so the flipped result set proves which one ran.
         var request = QueryRequest.Create("Ticket", [new OrderByOp(new MemberNode(["Name"]), false)]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var json = ScryJson.Serialize(
             Processor(_ => _.AddPolicy<Ticket, ClosedTicketsOnlyPolicy>()).Execute(request, context));
 

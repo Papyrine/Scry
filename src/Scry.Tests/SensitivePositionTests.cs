@@ -64,7 +64,7 @@ public class SensitivePositionTests
     [MethodDataSource(nameof(ConstantPositions))]
     public async Task AConstantAgainstAMarkedMemberIsRefusedFromAUrl(QueryRequest request)
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => Execute(request, context, fromUrl: true, out _));
 
@@ -79,7 +79,7 @@ public class SensitivePositionTests
     [MethodDataSource(nameof(ConstantPositions))]
     public async Task TheSameQueryIsAnsweredFromABody(QueryRequest request)
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         await Assert.That(() => Execute(request, context, fromUrl: false, out _)).ThrowsNothing();
     }
@@ -105,7 +105,7 @@ public class SensitivePositionTests
     [MethodDataSource(nameof(ProjectedPositions))]
     public async Task AMarkedMemberInTheResultIsNotStorable(QueryRequest request)
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         Execute(request, context, fromUrl: true, out var responseHeaders);
 

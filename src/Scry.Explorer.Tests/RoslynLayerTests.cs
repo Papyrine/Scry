@@ -29,7 +29,10 @@ public class RoslynLayerTests
                 new("Country", "string", NeedsNullDefault: true, IsNavigation: false)
             ])
         ],
-        Enums: [new("Status", ["FullTime", "PartTime", "Contractor"])]);
+        Enums: [new("Status", ["FullTime", "PartTime", "Contractor"])])
+    {
+        SchemaStamp = "roslyn-layer"
+    };
 
     // The real Scry.Client/Scry.Wire assemblies on disk become the snippet's metadata references —
     // exactly what the browser fetches from _framework, minus the HTTP.
@@ -233,7 +236,10 @@ public class RoslynLayerTests
                     new("class", "Kind", NeedsNullDefault: false, IsNavigation: false)
                 ])
             ],
-            Enums: [new("Kind", ["default", "override"])]);
+            Enums: [new("Kind", ["default", "override"])])
+        {
+            SchemaStamp = "keyword-names"
+        };
 
         var source = ModelSynthesizer.Synthesize(keyworded);
 

@@ -76,7 +76,7 @@ public class PooledBufferWriterTests
 
         foreach (var writer in new IBufferWriter<byte>[] {expected, pooled})
         {
-            using var json = new Utf8JsonWriter(writer);
+            await using var json = new Utf8JsonWriter(writer);
             json.WriteStartObject();
             json.WriteString("name", "Alice");
             json.WriteNumber("rank", 1);

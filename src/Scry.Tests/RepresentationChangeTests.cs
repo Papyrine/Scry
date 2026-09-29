@@ -184,7 +184,7 @@ public class RepresentationChangeTests
     [Test]
     public async Task UnreadableRowReportsStaleClient()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = StaleClient(context);
 
         var exception = (await Assert.ThrowsExactlyAsync<ScryStaleClientException>(

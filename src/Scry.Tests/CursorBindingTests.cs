@@ -12,7 +12,7 @@ public class CursorBindingTests
         // The sharpest case: same source, same column, same type, same key count. Only the direction
         // differs, and the seek reads its direction from the new request — so the predicate becomes
         // "before Alice" while claiming to be the page after her.
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var cursor = await CursorFor(context, "Employee", new OrderByOp(new MemberNode(["Name"]), Descending: false));
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(
@@ -26,7 +26,7 @@ public class CursorBindingTests
     {
         // Employee ordered by Name and Order ordered by Region both seek (string, int) — the appended
         // primary key makes the shapes identical — so only the source and column names part them.
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var cursor = await CursorFor(context, "Employee", new OrderByOp(new MemberNode(["Name"]), Descending: false));
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(
@@ -39,7 +39,7 @@ public class CursorBindingTests
     public async Task RejectsADifferentKeyCount()
     {
         // What the old key-count check caught; the stamp subsumes it rather than sitting beside it.
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var cursor = await CursorFor(context, "Employee", new OrderByOp(new MemberNode(["Name"]), Descending: false));
 
         Assert.ThrowsExactly<ScryValidationException>(
@@ -54,7 +54,7 @@ public class CursorBindingTests
     [Test]
     public async Task ResumesTheSameOrdering()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var ordering = new OrderByOp(new MemberNode(["Name"]), Descending: false);
         var cursor = await CursorFor(context, "Employee", ordering);
 
@@ -69,7 +69,7 @@ public class CursorBindingTests
         // The deliberate limit of the stamp: it binds the ordering, not the whole pipeline. Narrowing
         // the set between pages leaves "the rows of this set ordered after this key" well defined, so
         // it stays legal — where hashing the pipeline would have refused it.
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var ordering = new OrderByOp(new MemberNode(["Name"]), Descending: false);
         var cursor = await CursorFor(context, "Employee", ordering);
 
@@ -89,7 +89,7 @@ public class CursorBindingTests
     [Test]
     public async Task RejectsACursorFromTheRootOnAFlattenedQuery()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var ordering = new OrderByOp(new MemberNode(["Name"]), Descending: false);
         var cursor = await CursorFor(context, "Fleet", ordering);
 
@@ -102,7 +102,7 @@ public class CursorBindingTests
     [Test]
     public async Task RejectsACursorFromAFlattenedQueryOnTheRoot()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var ordering = new OrderByOp(new MemberNode(["Name"]), Descending: false);
         var cursor = await CursorFor(context, "Fleet", new SelectManyOp(["Machines"]), ordering);
 
@@ -115,7 +115,7 @@ public class CursorBindingTests
     [Test]
     public async Task ResumesAFlattenedOrdering()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var ordering = new OrderByOp(new MemberNode(["Name"]), Descending: false);
         var cursor = await CursorFor(context, "Fleet", new SelectManyOp(["Machines"]), ordering);
 
@@ -129,7 +129,7 @@ public class CursorBindingTests
     [Test]
     public async Task RejectsACursorFromANarrowedQueryOnTheBase()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var ordering = new OrderByOp(new MemberNode(["Name"]), Descending: false);
         var cursor = await CursorFor(context, "Asset", new OfTypeOp("Vehicle"), ordering);
 
@@ -161,7 +161,7 @@ public class CursorBindingTests
     [Test]
     public async Task RejectsACursorValueThatDoesNotParseAsTheKey()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = Keyed(sharedKey);
         var cursor = CursorCodec.Encode([("Ann", ClrTypeTag.String), ("abc", ClrTypeTag.Int32)], EmployeeByNameOrder(), sharedKey);
 
@@ -176,7 +176,7 @@ public class CursorBindingTests
     [Test]
     public async Task ANullCursorValueForANonNullableKeyDoesNotFault()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = Keyed(sharedKey);
         var cursor = CursorCodec.Encode([(null, ClrTypeTag.Null), ("1", ClrTypeTag.Int32)], EmployeeByNameOrder(), sharedKey);
 
@@ -196,7 +196,7 @@ public class CursorBindingTests
     [Test]
     public async Task ACursorKeyLetsAnotherProcessorResumeTheCursor()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var first = Keyed(sharedKey);
         var second = Keyed(sharedKey);
         var cursor = first.Execute(QueryRequest.Create("Employee", [byName, new PageOp(Size: 1)]), context).Payload.GetProperty("cursor").GetString()!;
@@ -223,7 +223,7 @@ public class CursorBindingTests
     [Test]
     public async Task WithoutACursorKeyCursorsArePerProcess()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var first = Keyed(null);
         var second = Keyed(null);
         var cursor = first.Execute(QueryRequest.Create("Employee", [byName, new PageOp(Size: 1)]), context).Payload.GetProperty("cursor").GetString()!;

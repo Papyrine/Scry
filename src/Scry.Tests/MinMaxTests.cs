@@ -72,7 +72,7 @@ public class MinMaxTests
     [Test]
     public async Task KeepsNullNullRatherThanAnsweringTheOtherOperand()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",
@@ -103,7 +103,7 @@ public class MinMaxTests
     [Test]
     public async Task RejectsSomethingNotNumeric()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",

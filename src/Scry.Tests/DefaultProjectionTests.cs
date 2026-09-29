@@ -26,7 +26,7 @@ public class DefaultProjectionTests
     [Test]
     public async Task ResponseIsKeyedByTheClientsMemberNames()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = SharedProcessor.Instance;
 
         var request = Client()

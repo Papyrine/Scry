@@ -456,7 +456,7 @@ public class CommandPipelineTests
     [Test]
     public async Task CommandsAreOffUntilAServerSaysHowManyItWillHold()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(async () =>
         {

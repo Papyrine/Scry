@@ -180,7 +180,7 @@ public class CollectionSubqueryTests
     [Test]
     public async Task AnUnOptedInCollectionStaysInvisible()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // Department.Employees carries no [QueryableCollection], so it is not on the allow-list at all.
         var request = QueryRequest.Create(
@@ -196,7 +196,7 @@ public class CollectionSubqueryTests
     [Test]
     public async Task ASubqueryInsideASubqueryIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",
@@ -216,7 +216,7 @@ public class CollectionSubqueryTests
     [Test]
     public async Task AMembershipTestInsideASubqueryIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // A membership test is a correlated query too, so inside a subquery it would run per element.
         var request = QueryRequest.Create(
@@ -237,7 +237,7 @@ public class CollectionSubqueryTests
     [Test]
     public async Task ASubqueryWrappedInACollationIsStillNested()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // The guard walks every node kind, so a wrapper the walker once skipped cannot hide the nesting.
         var request = QueryRequest.Create(
@@ -263,7 +263,7 @@ public class CollectionSubqueryTests
     [Test]
     public async Task AnIgnoredMemberStaysHiddenInsideASubquery()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // The element type's own allow-list applies inside the subquery, against OrderLine rather than
         // the row the subquery hangs off.
@@ -288,7 +288,7 @@ public class CollectionSubqueryTests
     [Test]
     public async Task AllWithoutAPredicateIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",

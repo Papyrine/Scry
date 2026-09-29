@@ -20,7 +20,7 @@ public class SourceResolutionTests
     [Test]
     public async Task AnEntitySourceResolvesToItsSet()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var query = (await Source("Employee")).Resolve(context, EmptyServiceProvider.Instance);
 
@@ -36,8 +36,8 @@ public class SourceResolutionTests
     [Test]
     public async Task TheSetIsTheContextsOwn()
     {
-        using var first = TestContext.CreateSeeded();
-        using var second = TestContext.CreateSeeded();
+        await using var first = TestContext.CreateSeeded();
+        await using var second = TestContext.CreateSeeded();
         var source = await Source("Employee");
 
         using (Assert.Multiple())
@@ -52,7 +52,7 @@ public class SourceResolutionTests
     [Test]
     public async Task ADerivedPocoResolvesToTheBaseRowsNarrowed()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var query = (await Source("PublicHoliday")).Resolve(context, EmptyServiceProvider.Instance);
 

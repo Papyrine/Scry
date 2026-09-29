@@ -149,7 +149,7 @@ public class CapabilityMemberTests
     [Test]
     public async Task TheRowConditionIsInTheStatementWithItsLiteralsBound()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = Translator()
             .Source<ContractModel>("Contract", contractMembers)
             .Select(_ => new {_.CanSealContract})
@@ -168,7 +168,7 @@ public class CapabilityMemberTests
     [Test]
     public async Task ItIsNotTraversable()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create("Contract", [new WhereOp(new MemberNode(["CanSealContract", "Value"]))]);
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));

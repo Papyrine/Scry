@@ -276,7 +276,7 @@ public class CachedPolicyTests
     [Test]
     public async Task ATooLargeAllowedSetIsRefusedRatherThanSentToTheDatabase()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var policy = new CountingRegionPolicy {Allowing = null};
         var processor = Build(_ =>
         {
@@ -317,7 +317,7 @@ public class CachedPolicyTests
     [Test]
     public async Task ATooLargeColdScopeIsRefusedBeforeItsRowsAreRead()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var policy = new CountingRegionPolicy();
         var processor = Build(_ =>
         {

@@ -57,7 +57,7 @@ public class NumericPromotionTests
     [Test]
     public async Task ADistinctGroupedSumWidensANarrowMember()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Order",
             [
@@ -89,7 +89,7 @@ public class NumericPromotionTests
     [Test]
     public async Task ASumOverANonNumericMemberIsRefused()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Employee",
             [
@@ -216,7 +216,7 @@ public class NumericPromotionTests
     [Test]
     public async Task ReadingAnEnumAsANumberIsRefused()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = Assert.ThrowsExactly<NotSupportedException>(() => client.Source<Employee>("Employee")
@@ -232,7 +232,7 @@ public class NumericPromotionTests
     [Test]
     public async Task ANarrowingCastIsRefused()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = Assert.ThrowsExactly<NotSupportedException>(() => client.Source<Order>("Order")
@@ -249,7 +249,7 @@ public class NumericPromotionTests
     [Test]
     public async Task AComparisonStillTravelsAsWritten()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
         var wanted = Status.FullTime;
 

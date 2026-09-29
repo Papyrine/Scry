@@ -289,7 +289,7 @@ public class NavigationPolicyTests
     [Test]
     public async Task ATraversalIntoADeniedRowFailsWhereThePolicySaysSo()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // Bob and Carol are in Sales, which the policy hides. Reading the department reads nothing for
         // them, and this policy would rather say so than answer with a null.
@@ -304,7 +304,7 @@ public class NavigationPolicyTests
     [Test]
     public async Task APredicateOverTheTraversalIsTheSameRead()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, Erroring());
 
         // Nothing is projected, but the predicate still runs over rows the policy hides — the oracle
@@ -319,7 +319,7 @@ public class NavigationPolicyTests
     [Test]
     public async Task AQueryThatNeverStepsIntoTheSourceIsUnaffected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, Erroring());
 
         // The denial is about the traversal. A query that does not name it reads no policied row and
@@ -332,7 +332,7 @@ public class NavigationPolicyTests
     [Test]
     public async Task ShowingTheSqlStepsIntoNothing()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Employee",
             [new SelectOp(new([new("Department", new NodeValue(new MemberNode(["Department", "Name"])))]))]);

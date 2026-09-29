@@ -67,7 +67,7 @@ public class AngleConversionTests
     [Test]
     public async Task RejectsSomethingNotNumeric()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",

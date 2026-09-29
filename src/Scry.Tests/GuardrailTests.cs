@@ -18,7 +18,7 @@ public class GuardrailTests
         var options = new DbContextOptionsBuilder<AddressAsEntityContext>()
             .UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=ScryGuardrail")
             .Options;
-        using var context = new AddressAsEntityContext(options);
+        await using var context = new AddressAsEntityContext(options);
 
         var exception = Assert.ThrowsExactly<Exception>(() => SharedProcessor.Instance.ValidateAgainstModel(context));
         await Assert.That(exception.Message).Contains("[QueryableComplex] but is a mapped entity");

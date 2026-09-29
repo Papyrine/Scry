@@ -12,7 +12,7 @@ public class FlattenNarrowPolicyTests
     [Test]
     public async Task NarrowingAfterAFlattenAppliesTheDerivedPolicy()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = Build(
             _ => _.AddPolicy<Fleet, ActiveFleetsOnlyPolicy>(),
             _ => _.AddPolicy<Press, HeavyPressesOnlyPolicy>());
@@ -31,7 +31,7 @@ public class FlattenNarrowPolicyTests
     [Test]
     public async Task NarrowingAfterAFlattenHidesTheDerivedMembersOfADeniedRow()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = Build(
             _ => _.AddPolicy<Fleet, ActiveFleetsOnlyPolicy>(),
             _ => _.AddPolicy<Press, HeavyPressesOnlyPolicy>());
@@ -56,7 +56,7 @@ public class FlattenNarrowPolicyTests
     [Test]
     public async Task NarrowingAfterAFlattenOfAPoliciedElementAppliesBothChains()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = Build(
             _ => _.AddPolicy<Fleet, ActiveFleetsOnlyPolicy>(),
             _ => _.AddPolicy<Machine, WorkingMachinesOnlyPolicy>(new()
@@ -93,7 +93,7 @@ public class FlattenNarrowPolicyTests
     [Test]
     public async Task NarrowingAfterAFlattenOfAnUnpoliciedRootAppliesTheDerivedPolicy()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = Build(_ => _.AddPolicy<Press, HeavyPressesOnlyPolicy>());
 
         var flattened = Names(processor, context, "Fleet", [new SelectManyOp(["Machines"]), new OfTypeOp("Press"), SelectName()]);
@@ -105,7 +105,7 @@ public class FlattenNarrowPolicyTests
     [Test]
     public async Task TheRootPolicyStillFiltersWhatIsFlattened()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = Build(_ => _.AddPolicy<Fleet, ActiveFleetsOnlyPolicy>());
 
         var flattened = Names(processor, context, "Fleet", [new SelectManyOp(["Machines"]), SelectName()]);
@@ -118,7 +118,7 @@ public class FlattenNarrowPolicyTests
     [Test]
     public async Task NarrowingAfterAFlattenFromATwiceRootAppliesTheDerivedPolicy()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = Build(
             _ => _.AddPolicy<Fleet, ActiveFleetsOnlyPolicy>(),
             _ => _.AddPolicy<Yard, StaffedYardsOnlyPolicy>(),
@@ -139,7 +139,7 @@ public class FlattenNarrowPolicyTests
     [Test]
     public async Task AnErroringDerivedPolicyHidesRatherThanFailsAfterAFlatten()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = Build(
             _ => _.AddPolicy<Press, HeavyPressesOnlyPolicy>(new()
             {
@@ -156,7 +156,7 @@ public class FlattenNarrowPolicyTests
     [Test]
     public async Task NarrowingTwiceAppliesEachLevelOnce()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = Build(
             _ => _.AddPolicy<Press, TalliedPressPolicy>(),
             _ => _.AddPolicy<HeavyPress, TalliedHeavyPressPolicy>());
@@ -180,7 +180,7 @@ public class FlattenNarrowPolicyTests
     [Test]
     public async Task ARightJoinAfterAFlattenKeepsTheElementPolicy()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = Build(
             _ => _.AddPolicy<Machine, WorkingMachinesOnlyPolicy>(new()
             {

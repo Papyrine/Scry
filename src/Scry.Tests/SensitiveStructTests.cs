@@ -9,7 +9,7 @@ public class SensitiveStructTests
     [Test]
     public async Task AConstantAgainstAMarkedMemberIsRefusedFromAUrl()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Employee",
             [
@@ -34,7 +34,7 @@ public class SensitiveStructTests
     [Test]
     public async Task AConstantAgainstAMarkedMemberIsAcceptedAsABody()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Employee",
             [
@@ -54,7 +54,7 @@ public class SensitiveStructTests
     [Test]
     public async Task AnUnmarkedMemberOfTheSameStructTravelsInTheUrl()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Employee",
             [
@@ -74,7 +74,7 @@ public class SensitiveStructTests
     [Test]
     public async Task ReturningAMarkedMemberIsNotStored()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Employee",
             [
@@ -98,7 +98,7 @@ public class SensitiveStructTests
     [Test]
     public async Task ReturningAnUnmarkedMemberIsStorable()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Employee",
             [new SelectOp(new([new("Room", new NodeValue(new MemberNode(["Workstation", "Room"])))]))]);

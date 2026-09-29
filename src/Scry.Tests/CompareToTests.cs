@@ -87,7 +87,7 @@ public class CompareToTests
     [Test]
     public async Task KeepsNullNullRatherThanPickingADirection()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",
@@ -118,7 +118,7 @@ public class CompareToTests
     [Test]
     public async Task RejectsSomethingWithoutAnOrdering()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Employee",

@@ -42,5 +42,5 @@ public sealed record ScryIntrospection(
     /// A hash of the queryable surface. Equals the generated client's <c>ScryQuery.SchemaStamp</c>
     /// exactly when client and server were built from the same model surface.
     /// </summary>
-    public string SchemaStamp { get; init; } = "";
+    public required string SchemaStamp { get; init; }
 }

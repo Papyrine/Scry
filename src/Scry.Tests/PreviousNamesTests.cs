@@ -10,7 +10,7 @@ public class PreviousNamesTests
     {
         var request = QueryRequest.Create("Issue", [new OrderByOp(new MemberNode(["Name"]), false)]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var json = ScryJson.Serialize(SharedProcessor.Instance.Execute(request, context));
 
         await Assert.That(json).Contains("Login bug");
@@ -32,7 +32,7 @@ public class PreviousNamesTests
                 new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))]))
             ]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var json = ScryJson.Serialize(SharedProcessor.Instance.Execute(request, context));
 
         await Assert.That(json).Contains("Alice");
@@ -51,7 +51,7 @@ public class PreviousNamesTests
                 new SelectOp(new([new("FullName", new NodeValue(new MemberNode(["FullName"])))]))
             ]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var json = ScryJson.Serialize(SharedProcessor.Instance.Execute(request, context));
 
         await Assert.That(json).Contains("\"fullName\"");
@@ -72,7 +72,7 @@ public class PreviousNamesTests
                 new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"])))]))
             ]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var json = ScryJson.Serialize(SharedProcessor.Instance.Execute(request, context));
 
         // Carol is the only Contractor.
@@ -98,7 +98,7 @@ public class PreviousNamesTests
                 new SelectOp(new([new("Status", new NodeValue(new MemberNode(["Status"])))]))
             ]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var json = ScryJson.Serialize(SharedProcessor.Instance.Execute(request, context));
 
         // Filtered by the previous name, returned under the current one.
@@ -121,7 +121,7 @@ public class PreviousNamesTests
                         new ConstNode("Departed", ClrTypeTag.Enum)))
             ]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));
@@ -162,7 +162,7 @@ public class PreviousNamesTests
                         new ConstNode("Alice", ClrTypeTag.String)))
             ]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(
             () => SharedProcessor.Instance.Execute(request, context));

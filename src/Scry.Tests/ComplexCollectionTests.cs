@@ -101,7 +101,7 @@ public class ComplexCollectionTests
     [Test]
     public async Task AnIgnoredMemberStaysHiddenInsideAJsonArray()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // Zip is [QueryIgnore]d on Address. EF still maps it, so it is physically in the JSON — the
         // allow-list is the only thing keeping it unreadable, and it applies to the array's element

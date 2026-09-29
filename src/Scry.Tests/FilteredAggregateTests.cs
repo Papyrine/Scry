@@ -152,7 +152,7 @@ public class FilteredAggregateTests
     [Test]
     public async Task ADistinctFoldWithoutASelectorIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",
@@ -178,7 +178,7 @@ public class FilteredAggregateTests
     [Test]
     public async Task TheTextAggregateStaysWhole()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",
@@ -206,7 +206,7 @@ public class FilteredAggregateTests
     [Test]
     public async Task AFoldOverSelectedValuesRefusesAFilterWrittenAfterTheSelect()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>

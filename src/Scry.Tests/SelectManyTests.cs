@@ -105,7 +105,7 @@ public class SelectManyTests
     [Test]
     public async Task RejectsFlatteningAMemberThatIsNotACollection()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(
@@ -120,7 +120,7 @@ public class SelectManyTests
     [Test]
     public async Task RejectsASecondFlatten()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // The model has no collection of collections, so a second flatten is not something a
         // generated client can write — which is exactly why the guard is tested on the wire instead.
@@ -140,7 +140,7 @@ public class SelectManyTests
     [Test]
     public async Task RejectsFlatteningAMemberThatIsNotAQueryableCollection()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create("Order", [new SelectManyOp(["Region"])]);
 
@@ -153,7 +153,7 @@ public class SelectManyTests
     [Test]
     public async Task RejectsFlatteningAfterASelect()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(

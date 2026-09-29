@@ -102,7 +102,7 @@ public class CollationTests
     [Test]
     public async Task AnUnconfiguredCollationIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, SharedProcessor.Instance);
 
         // The shared processor configures none, so the feature is off rather than guessed at.
@@ -116,7 +116,7 @@ public class CollationTests
     [Test]
     public async Task TheCollationIsNeverCarriedOnTheWire()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, Collating());
 
         var request = client.Source<Employee>("Employee")
@@ -136,7 +136,7 @@ public class CollationTests
     [Test]
     public async Task ACollatedMemberIsRebasedOntoTheNestedNavigation()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, Collating());
 
         // A nested projection rebases its members onto the navigation it descends into, so every path
@@ -154,7 +154,7 @@ public class CollationTests
     [Test]
     public async Task ACollatedMemberAloneNamesTheNestedNavigation()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, Collating());
 
         // The navigation is inferred from the paths the members read. A collated member is the only

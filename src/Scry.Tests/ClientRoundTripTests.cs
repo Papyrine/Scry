@@ -467,7 +467,7 @@
     [Test]
     public async Task ToAsyncEnumerableNeedsATransportThatStreams()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // This client is built over a single-response transport. Rather than quietly buffering the
@@ -520,7 +520,7 @@
     [Test]
     public async Task UnsupportedProjectionThrows()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>
@@ -534,7 +534,7 @@
     [Test]
     public async Task ClientSideCallIsNamedInTheRefusal()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>

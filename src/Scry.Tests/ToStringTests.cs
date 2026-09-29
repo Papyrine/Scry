@@ -95,7 +95,7 @@ public class ToStringTests
     [Test]
     public async Task RejectsAFormatSpecifier()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // Refused at translation, on the client, before a request is sent.
@@ -110,7 +110,7 @@ public class ToStringTests
     [Test]
     public async Task RejectsAnInterpolatedFormatSpecifier()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(
@@ -124,7 +124,7 @@ public class ToStringTests
     [Test]
     public async Task RejectsReadingAnEnumAsText()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // An enum's text is a member name the database does not hold — the column carries the

@@ -118,7 +118,7 @@ public class GroupJoinTests
     [Test]
     public async Task RejectsReadingTheInnerSideDirectly()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Department",
@@ -144,7 +144,7 @@ public class GroupJoinTests
     [Test]
     public async Task RejectsAGroupJoinThatAggregatesNothing()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Department",
@@ -167,7 +167,7 @@ public class GroupJoinTests
     [Test]
     public async Task RejectsAnAggregateOnAnOrdinaryJoin()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Department",

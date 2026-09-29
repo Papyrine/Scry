@@ -115,7 +115,7 @@ public class JoinTests
     [Test]
     public async Task RightJoinRejectsANarrowedOuterSide()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // EF hoists the outer predicate out of the join, silently turning the right join into an inner
@@ -138,7 +138,7 @@ public class JoinTests
     [Test]
     public async Task RightJoinRejectsANarrowedToDerivedOuterSide()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = await Assert.ThrowsExactlyAsync<ScryValidationException>(
@@ -157,7 +157,7 @@ public class JoinTests
     [Test]
     public async Task RightJoinRejectsAPoliciedOuterSide()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // A row policy is a filter, so it would be hoisted the same way — leaving the policy applied
@@ -248,7 +248,7 @@ public class JoinTests
     [Test]
     public async Task JoiningAnUnknownSourceIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Employee",
@@ -292,7 +292,7 @@ public class JoinTests
     [Test]
     public async Task ReadingTheWrongSideIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // Region is a member of Order, not of Department: each side is validated against its own type.
         var request = QueryRequest.Create(
@@ -316,7 +316,7 @@ public class JoinTests
     [Test]
     public async Task MismatchedKeyTypesAreRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Employee",
@@ -339,7 +339,7 @@ public class JoinTests
     [Test]
     public async Task OperatorsAfterAJoinAreRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // Every later operator is single-rooted and could not say which side it meant.
         var request = QueryRequest.Create(
@@ -384,7 +384,7 @@ public class JoinTests
     [Test]
     public async Task UnsupportedOperatorsOnTheInnerSideAreRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // Only Where crosses into the inner side; anything else would describe rows the join consumed.

@@ -78,7 +78,7 @@ public class InitializerProjectionTests
     [Test]
     public async Task AMemberSetInBothHalvesIsRefused()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         // Legal C# — the positional member is init-only — but two values for one member is a

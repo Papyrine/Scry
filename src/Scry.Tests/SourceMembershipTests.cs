@@ -93,7 +93,7 @@ public class SourceMembershipTests
     [Test]
     public async Task MembershipAgainstAnUnknownSourceIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Employee",
@@ -130,7 +130,7 @@ public class SourceMembershipTests
     [Test]
     public async Task ANestedMembershipTestIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Employee",
@@ -154,7 +154,7 @@ public class SourceMembershipTests
     [Test]
     public async Task ASubqueryInsideAMembershipTestIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // The filter reads a row of the other source, so a subquery there runs once per row of the set.
         var request = QueryRequest.Create(
@@ -176,7 +176,7 @@ public class SourceMembershipTests
     [Test]
     public async Task ASubqueryMayBeTheMembershipValue()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // The value reads the row being tested, so a subquery there is one correlated query per row —
         // the same cost it has in any other predicate.
@@ -197,7 +197,7 @@ public class SourceMembershipTests
     [Test]
     public async Task AMembershipTestInsideASubqueryInTheValueIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // The one place a subquery may sit inside a membership test is the value; its own expressions
         // are still guarded, so the two cannot be chained through it.
@@ -222,7 +222,7 @@ public class SourceMembershipTests
     [Test]
     public async Task AnUnsupportedOperatorOnTheOtherSourceIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() => client.Source<Employee>("Employee")

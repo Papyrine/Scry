@@ -69,7 +69,7 @@ public class QueryCompositionTests
     [Test]
     public async Task ComposesOverTheDatabaseProvider()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         IQueryable set = context.Set<Employee>();
 
         var call = QueryComposition.Call("Where", [typeof(Employee)], set.Expression, Expression.Quote(True<Employee>()));

@@ -51,7 +51,7 @@ public class StreamingTests
     [Test]
     public async Task RejectsAStreamOfAScalarResult()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         // A folded terminal has one value, not rows. Refused before anything is written, so the
         // transport can still answer with a status rather than a half-sent stream.
@@ -66,7 +66,7 @@ public class StreamingTests
     [Test]
     public async Task RejectsADisallowedMemberBeforeStreaming()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Employee",
@@ -83,7 +83,7 @@ public class StreamingTests
     [Test]
     public async Task EndsAStreamThatExceedsTheRowLimitWithAFailure()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var processor = ScryProcessor.Create<TestContext>(
             options =>

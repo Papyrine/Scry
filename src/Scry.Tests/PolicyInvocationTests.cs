@@ -10,9 +10,9 @@ public class PolicyInvocationTests
     [Test]
     public async Task ARegisteredPolicyIsTheScopesOwn()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = Build(_ => _.AddPolicy<Employee, RecordingPolicy>());
-        using var provider = new ServiceCollection().AddScoped<RecordingPolicy>().BuildServiceProvider();
+        await using var provider = new ServiceCollection().AddScoped<RecordingPolicy>().BuildServiceProvider();
         RecordingPolicy.Applied.Clear();
 
         using (var first = provider.CreateScope())
@@ -39,7 +39,7 @@ public class PolicyInvocationTests
     [Test]
     public async Task AnUnregisteredPolicyIsConstructedPerRequest()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = Build(_ => _.AddPolicy<Employee, RecordingPolicy>());
         RecordingPolicy.Applied.Clear();
 
@@ -58,7 +58,7 @@ public class PolicyInvocationTests
     [Test]
     public async Task APolicysRefusalArrivesAsItWasThrown()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = Build(_ => _.AddPolicy<Employee, RefusingPolicy>());
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => processor.Execute(Count(), context));

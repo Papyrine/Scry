@@ -128,7 +128,7 @@ public class SidePipelineTests
     [Test]
     public async Task AnUnboundedOrderingIsRefusedAtTranslation()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>
@@ -146,7 +146,7 @@ public class SidePipelineTests
     [Test]
     public async Task UnorderedPagingIsRefusedAtTranslation()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>
@@ -165,7 +165,7 @@ public class SidePipelineTests
     [Test]
     public async Task TheServerRefusesAnUnboundedOrdering()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",
@@ -191,7 +191,7 @@ public class SidePipelineTests
     [Test]
     public async Task BothSpellingsOfTheInnerFilterAreRefused()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",
@@ -217,7 +217,7 @@ public class SidePipelineTests
     [Test]
     public async Task AGroupByCannotCrossToTheSide()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",

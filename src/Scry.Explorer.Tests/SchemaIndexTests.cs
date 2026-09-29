@@ -228,7 +228,10 @@ public class SchemaIndexTests
                         new("Manager", "EmployeeQueryModel?", false, true)
                     ])
                 ],
-                []));
+                [])
+            {
+                SchemaStamp = "one-level"
+            });
 
         await Assert.That(index.StarterQuery(index.Sources[0])).IsEqualTo(
                 """
@@ -267,7 +270,10 @@ public class SchemaIndexTests
                         new("Image", "global::Scry.ScryAttachment", true, false) {IsAttachment = true}
                     ])
                 ],
-                []));
+                [])
+            {
+                SchemaStamp = "nothing-to-carry"
+            });
 
         await Assert.That(index.StarterQuery(index.Sources[0])).DoesNotContain("Photos");
     }
@@ -330,6 +336,7 @@ public class SchemaIndexTests
                 ],
                 [])
             {
+                SchemaStamp = "commanded",
                 Commands =
                 [
                     new("Order", [new("Name", "string", true, false)])
@@ -352,7 +359,10 @@ public class SchemaIndexTests
             200,
             [new("Locked", "Entity", "LockedQueryModel")],
             [new("LockedQueryModel", [new("Secret", "string", true, false) {IsSensitive = true}])],
-            []);
+            [])
+        {
+            SchemaStamp = "bare-query"
+        };
 
         var index = new SchemaIndex(introspection);
 
@@ -401,5 +411,8 @@ public class SchemaIndexTests
                         new("Tags", "global::System.Collections.Generic.IReadOnlyList<string>", true, false, true)
                     ])
                 ],
-                [new("Status", ["FullTime", "PartTime", "Contractor"])]));
+                [new("Status", ["FullTime", "PartTime", "Contractor"])])
+            {
+                SchemaStamp = "schema-index"
+            });
 }

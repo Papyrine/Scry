@@ -287,7 +287,7 @@ public class ObservabilityTests
             QueryRequest.Create("Employee", [new CountOp()])
         ]);
 
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         Assert.ThrowsExactly<ScryValidationException>(() => processor.ExecuteBatch(batch, context));
 
         var duration = measurements.Single(_ => _.Instrument == "scry.server.query.duration");

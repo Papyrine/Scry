@@ -25,7 +25,7 @@ public class EnumAliasTests
     [Test]
     public async Task ResponseCarriesAliasesForDriftedClient()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create("Employee", [new CountOp()], "stamp-from-an-older-model");
         var response = SharedProcessor.Instance.Execute(request, context);
@@ -44,7 +44,7 @@ public class EnumAliasTests
     [Test]
     public async Task ResponseOmitsAliasesWhenStampMatchesOrIsAbsent()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = SharedProcessor.Instance;
 
         var matched = processor.Execute(
@@ -86,7 +86,7 @@ public class EnumAliasTests
     [Test]
     public async Task UnresolvableEnumValueReportsStaleClient()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = SharedProcessor.Instance;
         var client = new ScryClient((request, _) => Task.FromResult(processor.Execute(request, context)));
 

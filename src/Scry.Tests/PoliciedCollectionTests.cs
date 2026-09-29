@@ -73,7 +73,7 @@ public class PoliciedCollectionTests
     [Test]
     public async Task ErroringFailsTheRequestWhereAnElementWasDenied()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, Erroring());
 
         await Assert.ThrowsExactlyAsync<ScryPermissionException>(
@@ -88,7 +88,7 @@ public class PoliciedCollectionTests
     [Test]
     public async Task ACollectionNobodyReadsDeniesNothing()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context, Erroring());
 
         // The denial is reported for reading through the collection, not for the policy existing. A

@@ -28,7 +28,7 @@ public class PolicyResolutionTests
     [Test]
     public async Task APolicyThatThrowsUnderTheStartupProbeFailsStartupNamingIt()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var processor = Build(_ => _.AddPolicy<Department, NeedsAPrincipalPolicy>());
 
         var exception = Assert.ThrowsExactly<Exception>(() => processor.ProbePoliciedNavigations(context, new ServiceCollection().BuildServiceProvider()));

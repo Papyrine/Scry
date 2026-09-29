@@ -466,7 +466,7 @@ public class SecurityTests
     [Test]
     public async Task RejectionNamesTheWireNameNotTheClrType()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Region",
             [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Nope"]), new ConstNode("x", ClrTypeTag.String)))]);
@@ -501,7 +501,7 @@ public class SecurityTests
     [Test]
     public async Task AcceptsAComparisonOfTwoConstants()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Employee",
             [new WhereOp(new BinaryNode(BinaryOp.Equal, new ConstNode("1", ClrTypeTag.Int32), new ConstNode("1", ClrTypeTag.Int32))), new CountOp()]);
@@ -517,7 +517,7 @@ public class SecurityTests
     [Arguments(-1)]
     public async Task RejectsAWireVersionBelowOne(int version)
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = new QueryRequest(version, "Employee", [new CountOp()]);
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
@@ -529,7 +529,7 @@ public class SecurityTests
     [Test]
     public async Task RejectsAProjectionNamingAMemberTwice()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Employee",
             [new SelectOp(new([new("Name", new NodeValue(new MemberNode(["Name"]))), new("Name", new NodeValue(new MemberNode(["Id"])))]))]);
@@ -542,7 +542,7 @@ public class SecurityTests
     [Test]
     public async Task RejectsAJoinResultNamingAMemberTwice()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Employee",
             [
@@ -567,7 +567,7 @@ public class SecurityTests
     [Arguments("-1")]
     public async Task RejectsAnEnumConstantSpelledAsAnUndefinedInteger(string value)
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Employee",
             [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Status"]), new ConstNode(value, ClrTypeTag.Enum)))]);
@@ -585,7 +585,7 @@ public class SecurityTests
     [Arguments(KnownFunction.StringSubstring, "Name", "0", "-1")]
     public async Task RejectsANegativeIndex(KnownFunction function, string member, params string[] indexes)
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var call = new CallNode(function, new MemberNode([member]), [.. indexes.Select(_ => new ConstNode(_, ClrTypeTag.Int32))]);
         var request = QueryRequest.Create("Employee", [new SelectOp(new([new("x", new NodeValue(call))]))]);
 
@@ -602,7 +602,7 @@ public class SecurityTests
     [Arguments("constant")]
     public async Task ARejectionEchoingALongClientStringIsBounded(string where)
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var huge = new string('x', 100_000);
         var request = where switch
         {
@@ -626,7 +626,7 @@ public class SecurityTests
     [Test]
     public async Task RejectionOnANarrowingNamesTheWireName()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create("Region", [new OfTypeOp("Employee")]);
 
         var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(request, context));
@@ -643,7 +643,7 @@ public class SecurityTests
     [Test]
     public async Task RejectionOnAComplexTypeNamesItsModel()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var request = QueryRequest.Create(
             "Employee",
             [new WhereOp(new BinaryNode(BinaryOp.Equal, new MemberNode(["Address", "Nope"]), new ConstNode("x", ClrTypeTag.String)))]);
@@ -694,7 +694,7 @@ public class SecurityTests
     // A reason pins which rule refused the request, for a shape more than one rule could have.
     static async Task AssertRejected(QueryRequest request, Action<ScryOptions>? extra = null, string? reason = null)
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         // Only a custom limit warrants a fresh processor; the default configuration is shared.
         var processor = extra is null
             ? SharedProcessor.Instance

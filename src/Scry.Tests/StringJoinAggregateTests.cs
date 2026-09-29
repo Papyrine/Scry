@@ -79,7 +79,7 @@ public class StringJoinAggregateTests
     [Test]
     public async Task AFilteredConcatIsRefusedAtTranslation()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>
@@ -97,7 +97,7 @@ public class StringJoinAggregateTests
     [Test]
     public async Task AConcatOverSomethingNotTextIsRefusedAtTranslation()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>
@@ -180,7 +180,7 @@ public class StringJoinAggregateTests
     [Test]
     public async Task ANonTextSelectorIsRefusedAtTranslation()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var exception = await Assert.ThrowsExactlyAsync<NotSupportedException>(() =>
@@ -199,7 +199,7 @@ public class StringJoinAggregateTests
     [Test]
     public async Task ASeparatorOnAnotherAggregateIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",
@@ -222,7 +222,7 @@ public class StringJoinAggregateTests
     [Test]
     public async Task AJoinWithoutASeparatorIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",
@@ -240,7 +240,7 @@ public class StringJoinAggregateTests
     [Test]
     public async Task AJoinOverSomethingNotTextIsRejected()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
 
         var request = QueryRequest.Create(
             "Order",
@@ -261,7 +261,7 @@ public class StringJoinAggregateTests
     [Test]
     public async Task TheSeparatorIsAParameter()
     {
-        using var context = TestContext.CreateSeeded();
+        await using var context = TestContext.CreateSeeded();
         var client = ClientFor(context);
 
         var request = client.Source<Order>("Order")
