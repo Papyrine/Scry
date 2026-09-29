@@ -65,5 +65,4 @@ public class StaleClientTests
 
         await Assert.That(response.Kind).IsEqualTo(ResultKind.Scalar);
     }
-
 }

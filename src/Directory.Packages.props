@@ -27,7 +27,7 @@
     <PackageVersion Include="Delta.EF" Version="9.0.1" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
-    <PackageVersion Include="EfLocalDb" Version="27.0.0" />
+    <PackageVersion Include="EfLocalDb" Version="27.1.0" />
     <!-- Pinned to 5.3.0 (do not bump without running the Explorer UI tests). 5.6.0 is the next published
          version — nuget.org has no 5.4.x/5.5.x — and it calls System.Threading.Volatile.ReadBarrier, which
          the net10 mono-wasm interpreter does not implement: the managed fallback recurses into itself and
@@ -60,7 +60,7 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.Scripting" Version="5.3.0" Pinned="true" />
     <PackageVersion Include="Basic.Reference.Assemblies.Net100" Version="1.8.12" />
     <PackageVersion Include="BlazorMonaco" Version="3.5.0" />
-    <PackageVersion Include="TUnit" Version="1.70.1" />
+    <PackageVersion Include="TUnit" Version="1.71.0" />
     <PackageVersion Include="Verify" Version="33.1.5" />
     <PackageVersion Include="Verify.TUnit" Version="33.1.5" />
     <PackageVersion Include="Verify.DiffPlex" Version="3.3.1" />

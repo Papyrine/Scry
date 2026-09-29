@@ -169,5 +169,4 @@ public class PreviousNamesTests
 
         await Assert.That(exception.Message).Contains("'Surname' is not allow-listed");
     }
-
 }
