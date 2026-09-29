@@ -93,7 +93,9 @@ public class ConditionalQueryTests
                     Active = true,
                     Status = Sample.Model.Status.FullTime,
                     Created = new(2026, 1, 1),
-                    DepartmentId = data.Departments.OrderBy(_ => _.Id).First().Id
+                    // Into the department this test asks about. Anywhere else it would reach the rows
+                    // another test in this fixture snapshots, and fail that one whenever it ran second.
+                    DepartmentId = data.Departments.Single(_ => _.Name == "Sales").Id
                 });
             await data.SaveChangesAsync();
 
@@ -165,6 +167,9 @@ public class ConditionalQueryTests
     {
         var query = new ScryQuery(server.CreateScryClient());
 
+        // Both shapes run before either tag is taken: the first run of the second would otherwise move
+        // the timestamp under the first's tag, and the comparison below would fail for that alone.
+        await Active(query, "Sales").ToListAsync();
         var engineering = await Warm(query, "Engineering");
         var sales = await Warm(query, "Sales");
 
@@ -320,13 +325,18 @@ public class ConditionalQueryTests
     }
 
     /// <summary>
-    /// Runs a query once to settle the database, then again to capture the ETag the server minted for
-    /// it. The first execution of a shape can move the timestamp by itself, and an ETag captured from
-    /// that one would be stale before it was ever used.
+    /// Runs a query once, waits for the database to settle, then runs it again to capture the ETag the
+    /// server minted for it. The first execution of a shape can move the timestamp by itself, and so can
+    /// whatever ran before it — seeding a fresh server, or another test's write — and an ETag captured
+    /// while it is still moving would be stale before it was ever used.
     /// </summary>
     static async Task<string> Warm(ScryQuery query, string department)
     {
         await Active(query, department).ToListAsync();
+        await using (var data = server.NewContext())
+        {
+            await Settle(data);
+        }
 
         string? etag = null;
         await Active(query, department)
