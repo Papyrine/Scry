@@ -1,6 +1,9 @@
 // The trailing-edge debounce behind both the explorer's persist and its diagnostics pass. Its work
 // runs on a task nothing awaits, so what it drops, what it lets through, and where a failure inside
 // it surfaces are only observable here.
+// Every test waits on a short timer, which a busy pool can hold past any window worth waiting, and
+// one swaps the process-wide error writer, so nothing else may run beside them.
+[NotInParallel]
 public class DebouncerTests
 {
     // Short enough to keep the suite fast, long enough to be clear of scheduler jitter.
@@ -170,9 +173,7 @@ public class DebouncerTests
     // Nothing awaits the debounced task, so an exception inside the action has nowhere to surface but
     // the console. Dropping it silently would leave an update that never happened looking exactly
     // like one that found nothing to do.
-    // Swaps the process-wide error writer, so nothing else may run while it is swapped.
     [Test]
-    [NotInParallel]
     public async Task ReportsAnActionThatThrewAndKeepsGoing()
     {
         using var debouncer = new Debouncer(window);
