@@ -19,17 +19,17 @@
     <PackageVersion Include="MassTransit" Version="9.2.2" />
     <PackageVersion Include="Rebus" Version="8.9.5" />
     <PackageVersion Include="Rebus.ServiceProvider" Version="10.7.2" />
-    <PackageVersion Include="WolverineFx" Version="6.41.0" />
+    <PackageVersion Include="WolverineFx" Version="6.43.0" />
     <!-- Core Wolverine no longer compiles handler chains at runtime. The adapter needs neither; the tests
          run in dynamic mode, so they bring the compiler. A host picks this or static codegen itself. -->
-    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.41.0" />
+    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.43.0" />
     <!-- Scry.Server.Mcp's one dependency: the official MCP SDK's streamable-HTTP server. -->
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
     <PackageVersion Include="Delta.EF" Version="9.0.1" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
-    <PackageVersion Include="EfLocalDb" Version="27.2.1" />
+    <PackageVersion Include="EfLocalDb" Version="27.2.2" />
     <!-- Pinned to 5.3.0 (do not bump without running the Explorer UI tests). 5.6.0 is the next published
          version — nuget.org has no 5.4.x/5.5.x — and it calls System.Threading.Volatile.ReadBarrier, which
          the net10 mono-wasm interpreter does not implement: the managed fallback recurses into itself and
@@ -62,10 +62,9 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.Scripting" Version="5.3.0" Pinned="true" />
     <PackageVersion Include="Basic.Reference.Assemblies.Net100" Version="1.8.12" />
     <PackageVersion Include="BlazorMonaco" Version="3.5.0" />
-    <PackageVersion Include="TUnit" Version="1.71.0" />
-    <PackageVersion Include="Verify" Version="33.1.5" />
-    <PackageVersion Include="Verify.TUnit" Version="33.1.5" />
-    <PackageVersion Include="Verify.DiffPlex" Version="3.3.1" />
+    <PackageVersion Include="TUnit" Version="1.72.4" />
+    <PackageVersion Include="Verify" Version="33.2.0" />
+    <PackageVersion Include="Verify.TUnit" Version="33.2.0" />
     <PackageVersion Include="Verify.SourceGenerators" Version="2.5.0" />
     <PackageVersion Include="HttpMultipart" Version="0.1.4" />
     <PackageVersion Include="Polyfill" Version="11.4.1" />
@@ -73,6 +72,6 @@
     <PackageVersion Include="MarkdownSnippets.MsBuild" Version="28.5.0" />
     <PackageVersion Include="NaughtyStrings" Version="3.0.0" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
-    <PackageVersion Include="DiffEngine" Version="20.5.2" />
+    <PackageVersion Include="DiffEngine" Version="20.6.0" />
   </ItemGroup>
 </Project>

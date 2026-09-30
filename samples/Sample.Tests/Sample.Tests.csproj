@@ -21,7 +21,6 @@
     <PackageReference Include="Microsoft.Playwright" />
     <PackageReference Include="Verify.TUnit" />
     <PackageReference Include="Verify.AngleSharp" />
-    <PackageReference Include="Verify.DiffPlex" />
     <PackageReference Include="Verify.Bunit" />
     <PackageReference Include="Verify.Playwright" />
     <PackageReference Include="Verify.Http" />

@@ -8,7 +8,6 @@ global using System.Text.RegularExpressions;
 global using System.Threading.Tasks;
 global using Microsoft.Extensions.DependencyInjection;
 global using Scry;
-global using VerifyTests.DiffPlex;
 global using static VerifyTUnit.Verifier;
 global using System.Buffers.Text;
 global using System.Diagnostics.CodeAnalysis;

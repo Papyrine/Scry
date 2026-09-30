@@ -5,5 +5,4 @@ global using Microsoft.CodeAnalysis;
 global using Microsoft.CodeAnalysis.CSharp;
 global using Microsoft.CodeAnalysis.Diagnostics;
 global using Scry;
-global using VerifyTests.DiffPlex;
 global using TUnit.Assertions.Enums;

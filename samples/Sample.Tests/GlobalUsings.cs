@@ -15,7 +15,6 @@ global using Microsoft.Playwright;
 global using Scry;
 global using Scry.Generated;
 global using VerifyTests.AngleSharp;
-global using VerifyTests.DiffPlex;
 global using static VerifyTUnit.Verifier;
 global using System.Buffers.Text;
 global using Delta;

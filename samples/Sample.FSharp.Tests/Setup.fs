@@ -25,5 +25,4 @@ type Setup() =
 
     [<Before(HookType.TestSession)>]
     static member Init() =
-        VerifyDiffPlex.Initialize OutputType.Compact
         VerifierSettings.AddScrubber scrubStamps
