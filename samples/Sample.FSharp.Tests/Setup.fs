@@ -6,7 +6,6 @@ open System.Threading.Tasks
 open TUnit.Assertions.Core
 open TUnit.Core
 open VerifyTests
-open VerifyTests.DiffPlex
 
 /// Awaits a TUnit assertion from inside a task.
 [<AutoOpen>]
