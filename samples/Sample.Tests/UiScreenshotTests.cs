@@ -393,7 +393,9 @@ public class UiScreenshotTests :
     // transition on the compositor, so polling getComputedStyle reads it as finished while the painted
     // pixels are still moving — three runs of the same capture read that column as three different
     // greys. Dropping the transition snaps every scrollbar straight to the state it was heading for, so
-    // the capture is of the settled UI whenever the shutter falls.
+    // the capture is of the settled UI whenever the shutter falls. The suggest widget's scrollbar is
+    // also pinned visible: Monaco hides it on a timer after the list opens, so a capture that takes
+    // longer than that on a slow runner would otherwise be of a list with no scrollbar at all.
     static Task SettleScrollbarsAsync(IPage page) =>
         page.AddStyleTagAsync(
             new()
@@ -403,6 +405,9 @@ public class UiScreenshotTests :
                     .monaco-scrollable-element > .scrollbar,
                     .monaco-scrollable-element > .scrollbar > .slider {
                         transition: none !important;
+                    }
+                    .suggest-widget .monaco-scrollable-element > .scrollbar.invisible {
+                        opacity: 1 !important;
                     }
                     """
             });
