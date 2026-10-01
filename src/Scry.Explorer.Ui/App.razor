@@ -36,7 +36,9 @@
                         OnHistoryClear="ClearHistory"
                         OnHistoryLabel="LabelHistory"
                         OnHistoryFavorite="FavoriteHistory"
-                        OnInsertQuery="InsertQuery" />
+                        OnInsertQuery="InsertQuery"
+                        Query="@tabs.Active.Query"
+                        OnBuilderEdit="ApplyBuilderEdit" />
         }
         @* Always rendered, hidden by CSS: scry.trackPointer attaches to it once at boot. *@
         <PaneResizer Id="plugin-resizer" Direction="x" Hidden="PluginClosed"

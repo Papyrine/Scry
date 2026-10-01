@@ -5,5 +5,8 @@ public enum PluginKind
     Schema,
 
     /// <summary>The queries this browser remembers.</summary>
-    History
+    History,
+
+    /// <summary>The query in the editor as rows: its source, columns, filters, sorts and paging.</summary>
+    Builder
 }

@@ -35,24 +35,25 @@ public partial class PluginPane
     [Parameter]
     public EventCallback<string> OnInsertQuery { get; set; }
 
+    /// <summary>The active tab's query, which the query builder reads its rows from.</summary>
+    [Parameter]
+    public string Query { get; set; } = "";
+
+    /// <summary>Raised with an edit the query builder made, for the app to apply to the editor.</summary>
+    [Parameter]
+    public EventCallback<Func<string, string?>> OnBuilderEdit { get; set; }
+
     // Null until the contract has arrived, which is what the pane says it is loading.
     SchemaIndex? index;
     ScryIntrospection? indexed;
 
-    bool ShowsSchema => Kind == PluginKind.Schema;
-
-    string Title
-    {
-        get
+    string Title =>
+        Kind switch
         {
-            if (ShowsSchema)
-            {
-                return "Schema";
-            }
-
-            return "History";
-        }
-    }
+            PluginKind.Schema => "Schema",
+            PluginKind.Builder => "Query builder",
+            _ => "History"
+        };
 
     // The index is derived from the contract, so it is rebuilt only when the contract itself changes —
     // a refetch — rather than on every render of the pane.

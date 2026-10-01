@@ -1007,6 +1007,71 @@ public partial class App
     }
 
     /// <summary>
+    /// Applies a query builder edit to what the editor holds right now — which can be a keystroke
+    /// ahead of the tab the pane was drawn from — as one step of the editor's undo.
+    /// </summary>
+    /// <remarks>
+    /// Only the span that changed is replaced, through ExecuteEdits rather than SetValue: SetValue would
+    /// wipe the undo stack, which is the obvious way back from a wrong click, and put the caret back at
+    /// the start. Read with LF line ends, which is what the builder writes and what the offsets count;
+    /// Monaco writes the model's own line ends back.
+    /// </remarks>
+    async Task ApplyBuilderEdit(Func<string, string?> edit)
+    {
+        if (!editorReady)
+        {
+            return;
+        }
+
+        var model = await editor.GetModel();
+        var text = await model.GetValue(EndOfLinePreference.LF, false);
+        if (edit(text) is not { } edited ||
+            edited == text)
+        {
+            return;
+        }
+
+        var limit = Math.Min(text.Length, edited.Length);
+        var prefix = 0;
+        while (prefix < limit &&
+               text[prefix] == edited[prefix])
+        {
+            prefix++;
+        }
+
+        var suffix = 0;
+        while (suffix < limit - prefix &&
+               text[text.Length - 1 - suffix] == edited[edited.Length - 1 - suffix])
+        {
+            suffix++;
+        }
+
+        var inserted = edited[prefix..(edited.Length - suffix)];
+        await editor.PushUndoStop();
+        await editor.ExecuteEdits(
+            "scry-builder",
+            [
+                new()
+                {
+                    Range = ToRange(text, prefix, text.Length - suffix),
+                    Text = inserted
+                }
+            ],
+            (List<Selection>?) null);
+        await editor.PushUndoStop();
+
+        // What changed is brought into view, by line: a range would scroll sideways to its end.
+        if (inserted.Length > 0)
+        {
+            var (line, _) = ToLineColumn(edited, prefix);
+            await editor.RevealLineInCenterIfOutsideViewport(line, null);
+        }
+
+        tabs.Active.Query = edited;
+        SchedulePersist();
+    }
+
+    /// <summary>
     /// Sends a query the way <c>ScryClient</c> would: as a body where the query compares a
     /// <c>[Sensitive]</c> member against a constant or is too long for a URL, and as a URL otherwise.
     /// The explorer does not send through the client — it translates the snippet and sends the result

@@ -35,6 +35,21 @@
                 <path d="M12 7v5l3.5 2" />
             </svg>
         </button>
+        <button type="button"
+                class="@ButtonClass(PluginKind.Builder)"
+                data-testid="rail-builder"
+                title="Build the query from its parts"
+                aria-label="Build the query from its parts"
+                aria-pressed="@Pressed(PluginKind.Builder)"
+                @onclick="() => OnToggle.InvokeAsync(PluginKind.Builder)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <rect x="3" y="3" width="7" height="5" rx="1.5" />
+                <rect x="14" y="9.5" width="7" height="5" rx="1.5" />
+                <rect x="14" y="16" width="7" height="5" rx="1.5" />
+                <path d="M6.5 8v10.5H14M6.5 12H14" />
+            </svg>
+        </button>
     </div>
     <div class="rail-group">
         <button type="button"

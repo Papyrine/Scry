@@ -425,7 +425,7 @@ app.MapScryExplorer("/scry");
 
 <img src="samples/Sample.Tests/UiScreenshotTests.ExplorerRun.verified.png" border="1" alt="The Scry explorer: the schema pane, the LINQ, the wire request it translated to, and the rows the server returned">
 
-It is off unless mapped, and Development-only by default. See [Query explorer](docs/explorer.md).
+It is off unless mapped, and Development-only by default. A [query builder](docs/explorer.md#query-builder) beside the editor shows the query as rows — columns, filters, sorts, paging — and writes back whatever is changed there, for building a query without typing one. See [Query explorer](docs/explorer.md).
 
 A Blazor client has a companion: a [debug sidecar](docs/sidecar.md) that opens over the running app (<kbd>Alt</kbd>+<kbd>Q</kbd>) and shows every Scry exchange the page has made — decoded requests, pretty-printed responses, headers, and a one-click jump into the explorer with the captured query pre-populated.
 

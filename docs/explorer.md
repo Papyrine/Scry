@@ -14,9 +14,9 @@ One screen shows the whole pipeline: the LINQ as written, the wire request it tr
 
 The explorer fills the window rather than flowing down it, and every region scrolls inside itself.
 
-**The rail**, down the left edge, opens one pane at a time: the [schema](#schema-pane) and the
-[history](#working-with-a-query). Under them sit re-fetch, the theme toggle, the shortcut list, and
-settings.
+**The rail**, down the left edge, opens one pane at a time: the [schema](#schema-pane), the
+[history](#working-with-a-query), and the [query builder](#query-builder). Under them sit re-fetch,
+the theme toggle, the shortcut list, and settings.
 
 **Tabs** hold a query each. A tab takes its name from the source the query reads — `Query.Employee`
 becomes *Employee* — until it is renamed by double-clicking it. Tabs, the open pane, the theme and
@@ -102,6 +102,45 @@ Naming any of the four explicitly still works; only the suggestion leaves them o
 A [command](commands.md)'s capability member — `CanDeleteEmployee` on `Employee` — is listed with a `command` badge naming the command it answers for, and projects like any `bool`. The suggestion leaves it out too: it is computed from a policy on every row, which is a cost a query should ask for by name.
 
 The root page lists the model's commands under **Commands**, each with its payload's properties, the source it targets or the class it answers with, and a model's page lists the commands that target it. The explorer runs queries only: a command is sent through `Query.Commands` from an application, not from here, so the list is there to read.
+
+
+## Query builder
+
+<img src="../samples/Sample.Tests/UiScreenshotTests.ExplorerQueryBuilder.verified.png" border="1" alt="The query builder beside the query it reads: the Employee source, checked columns with Department projected into, a filter on Active and one on the department's name, a sort, and a Take">
+
+The query in the editor, as rows: its source, the columns it projects, its conditions, its sort keys,
+its paging, and what it answers with. The pane keeps no query of its own — every change it makes is an
+edit to the editor's text, so typing shows up in the pane, and a change made in the pane is one step of
+the editor's undo.
+
+- **Columns** are the source's members as check boxes. A navigation is projected *into*: checking it
+  adds a nested object carrying the scalars the [schema pane](#schema-pane)'s starter query would
+  pick, and its members then check in and out of that object. One level deep, which is as far as a
+  nested projection is translated. A collection and an attachment are not offered, since a projection
+  can carry neither; with nothing checked there is no `Select`, and the server answers with every
+  scalar member.
+- **Filters** are a member, a comparison, and a value, joined with `&&`. The member is one of the
+  source's own or one a navigation reaches; the comparisons are the ones its type has — `contains`,
+  `starts with` and `ends with` for text, `is true` and `is false` for a `bool`, `is null` for anything
+  nullable — and the value goes in an input that suits it: a list for an enum, a picker for a date or a
+  time. A value that is not one of its type, letters in a number or the thirty-first of February, is
+  refused rather than written. A date is written as the constructor that makes it,
+  `new DateOnly(2026, 1, 31)`, which the translator folds into the constant it stands for.
+- **Sort** keys are a member and a direction: the first an `OrderBy`, the rest `ThenBy`.
+- **Paging** is `Skip` and `Take`, and **Result** the terminal: rows, `CountAsync`, `AnyAsync`, or
+  `FirstOrDefaultAsync`.
+
+Each change writes the query back whole, in the layout of the [format button](#working-with-a-query),
+with the declarations ahead of it kept as written. What the builder reads but cannot show as a row — a
+condition joined with `||`, a column computed from two members, a comparison against a variable from
+the declarations — it keeps as the code it was written as, shows as such, and writes back unchanged
+around the parts that are edited. What a rewrite would *lose* it does not read at all: a comment inside
+the query, lambdas naming their parameter differently, an operator it does not write (`GroupBy`, a
+join), or its operators in an order it would not write them in. The pane then says which, and offers to
+start a new query in a tab of its own rather than overwrite that one.
+
+Everything the builder writes compiles in the editor's own workspace and translates into a wire
+request — a test runs every comparison over a member of every type to keep it that way.
 
 
 ## Mapping it
@@ -242,8 +281,9 @@ The declarations ahead of the query are left as written, comments and all; reind
 code is not what the button is for. Text that does not parse is reported rather than rewritten, since
 a formatter guessing at a half-typed query produces a differently half-typed one.
 
-It is the same printer the schema pane composes its starter query through, so what the pane offers is
-already formatted and the two shapes cannot drift apart.
+It is the same printer the schema pane composes its starter query through, and the one the
+[query builder](#query-builder) writes with, so what either offers is already formatted and the shapes
+cannot drift apart.
 
 **See the SQL.** Covered next.
 
@@ -259,6 +299,7 @@ already formatted and the two shapes cannot drift apart.
 | `Ctrl+Alt+S` | Schema pane |
 | `Ctrl+Alt+K` | Search the schema |
 | `Ctrl+Alt+H` | History pane |
+| `Ctrl+Alt+B` | Query builder |
 | `Ctrl+,` | Settings |
 
 The rail's keyboard button lists these in-app as well. The editor is Monaco, so its own keymap

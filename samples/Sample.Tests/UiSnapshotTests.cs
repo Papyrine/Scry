@@ -1468,6 +1468,105 @@ public class UiSnapshotTests :
         }
     }
 
+    // The query builder, end to end: a blank tab started on a source, columns checked, a condition, a
+    // sort and a Take added, and the query it wrote run — without a character of it typed. Every step
+    // is an edit to the editor's text, so the text is what is asserted.
+    [Test]
+    public async Task ExplorerBuildsAQueryWithTheBuilder()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+        await page.Locator("[data-testid='tab-add']").ClickAsync();
+        await page.Locator("[data-testid='rail-builder']").ClickAsync();
+
+        await page.Locator("[data-testid='builder-start-source']").SelectOptionAsync("Employee");
+        await page.Locator("[data-testid='builder-start']").ClickAsync();
+        await WaitForEditorAsync(page, "Query.Employee");
+
+        await page.Locator("[data-testid='builder-column'][data-path='Name']").ClickAsync();
+        await WaitForEditorAsync(page, "Query.Employee\n    .Select(_ =>\n        new\n        {\n            _.Name\n        })");
+
+        await page.Locator("[data-testid='builder-column'][data-path='Department']").ClickAsync();
+        await page.Locator("[data-testid='builder-add-filter']").ClickAsync();
+        await page.Locator("[data-testid='builder-filter']").WaitForAsync();
+        await page.Locator("[data-testid='builder-add-sort']").ClickAsync();
+        await page.Locator("[data-testid='builder-sort'] [data-testid='builder-member']").SelectOptionAsync("Name");
+        await page.Locator("[data-testid='builder-take']").FillAsync("2");
+        await page.Locator("[data-testid='builder-take']").PressAsync("Enter");
+
+        await WaitForEditorAsync(
+            page,
+            """
+            Query.Employee
+                .Where(_ => _.Active)
+                .OrderBy(_ => _.Name)
+                .Take(2)
+                .Select(_ =>
+                    new
+                    {
+                        _.Name,
+                        Department =
+                            new
+                            {
+                                _.Department!.Id,
+                                _.Department!.Name
+                            }
+                    })
+            """);
+
+        await page.Locator("[data-testid='run']").ClickAsync();
+        await Assertions.Expect(page.Locator("[data-testid='result-table'] tbody tr:not([aria-hidden])"))
+            .ToHaveCountAsync(2, new() {Timeout = 60_000});
+        await Assertions.Expect(page.Locator("[data-testid='error']")).ToHaveCountAsync(0);
+
+        // A builder edit is one step of the editor's undo, so the obvious way back from a click works.
+        await page.Locator("[data-testid='builder-filter'] [data-testid='builder-remove']").ClickAsync();
+        await page.Locator("[data-testid='builder-filter']").WaitForAsync(new() {State = WaitForSelectorState.Detached});
+        await page.EvaluateAsync(
+            """
+            () => {
+                const editor = monaco.editor.getEditors()[0];
+                editor.focus();
+                editor.trigger('test', 'undo', null);
+            }
+            """);
+        await page.Locator("[data-testid='builder-filter']").WaitForAsync();
+    }
+
+    // The pane is a reading of the editor: what is typed shows up in it, and what it cannot read it
+    // says so about and leaves alone, starting anything new in a tab of its own.
+    [Test]
+    public async Task ExplorerBuilderFollowsTheEditor()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+        await page.Locator("[data-testid='rail-builder']").ClickAsync();
+
+        await page.SetEditorValueAsync("Query.Department.Where(_ => _.Name.Contains(\"g\")).Select(_ => new { _.Name })");
+        await Assertions.Expect(page.Locator("[data-testid='builder-source']")).ToHaveValueAsync("Department");
+        await Assertions.Expect(page.Locator("[data-testid='builder-filter'] [data-testid='builder-value']")).ToHaveValueAsync("g");
+        await Assertions.Expect(page.Locator("[data-testid='builder-column'][data-path='Name']")).ToHaveAttributeAsync("aria-checked", "true");
+
+        const string grouped = "Query.Employee.GroupBy(_ => _.Status).Select(_ => new { _.Key, Count = _.Count() })";
+        await page.SetEditorValueAsync(grouped);
+        await Assertions.Expect(page.Locator("[data-testid='builder-notice']")).ToContainTextAsync("GroupBy");
+
+        await page.Locator("[data-testid='builder-start-source']").SelectOptionAsync("Holiday");
+        await page.Locator("[data-testid='builder-start']").ClickAsync();
+        await WaitForEditorAsync(page, "Query.Holiday");
+        await Assertions.Expect(page.Locator("[data-testid='tab']")).ToHaveCountAsync(2);
+
+        // The query the builder could not read is still there, in the tab it was in.
+        await page.Locator("[data-testid='tab']").First.ClickAsync();
+        await WaitForEditorAsync(page, grouped);
+    }
+
+    static Task WaitForEditorAsync(IPage page, string expected) =>
+        page.WaitForFunctionAsync(
+            "expected => monaco.editor.getEditors()[0].getValue().replace(/\\r\\n/g, '\\n') === expected",
+            expected,
+            new() {Timeout = 30_000});
+
     // What the history pane does with what it remembers. One page for both because the expensive half
     // is the two runs that fill it.
     [Test]

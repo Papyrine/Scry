@@ -350,6 +350,7 @@ public partial class App
         new("schema", "s", Ctrl: true, Shift: false, Alt: true, Meta: false),
         new("schema-search", "k", Ctrl: true, Shift: false, Alt: true, Meta: false),
         new("history", "h", Ctrl: true, Shift: false, Alt: true, Meta: false),
+        new("builder", "b", Ctrl: true, Shift: false, Alt: true, Meta: false),
         new("settings", ",", Ctrl: true, Shift: false, Alt: false, Meta: false)
     ];
 
@@ -369,6 +370,9 @@ public partial class App
                 return;
             case "history":
                 TogglePlugin(PluginKind.History);
+                break;
+            case "builder":
+                TogglePlugin(PluginKind.Builder);
                 break;
             case "settings":
                 settingsOpen = !settingsOpen;

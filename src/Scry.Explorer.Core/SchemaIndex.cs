@@ -273,8 +273,11 @@ public sealed class SchemaIndex
     /// A capability is left out too: it projects like any bool, but it is the command's policy run per
     /// row, which is a cost a suggested query should not open with either.
     /// </para>
+    /// <para>
+    /// Shared with the query builder, which fills a newly nested object by the same rule.
+    /// </para>
     /// </remarks>
-    static bool Suggestable(ScryMemberInfo member) =>
+    internal static bool Suggestable(ScryMemberInfo member) =>
         member is
         {
             IsCollection: false,

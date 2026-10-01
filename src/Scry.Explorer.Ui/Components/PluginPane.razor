@@ -3,15 +3,19 @@
 <aside class="plugin-pane" style="@Style" data-testid="plugin-pane"
        aria-label="@Title">
     <div class="plugin-title">@Title</div>
-    @if (ShowsSchema)
+    @if (Kind is PluginKind.Schema or PluginKind.Builder)
     {
         @if (index is null)
         {
             <p class="pane-empty muted">Loading schema…</p>
         }
-        else
+        else if (Kind == PluginKind.Schema)
         {
             <SchemaPane Index="index" OnInsertQuery="OnInsertQuery" />
+        }
+        else
+        {
+            <BuilderPane Index="index" Query="@Query" OnEdit="OnBuilderEdit" OnStart="OnInsertQuery" />
         }
     }
     else

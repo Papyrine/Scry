@@ -1,0 +1,362 @@
+@namespace Scry
+
+@*
+    The query builder: the editor's query as rows — its source, its columns, its conditions, its sort
+    keys, its paging, and what it answers with. Every change is an edit to the editor's text rather
+    than state of its own, so typing in the editor shows up here and a change made here is one step of
+    the editor's undo.
+*@
+<div class="builder-pane" data-testid="builder-pane">
+    @if (Current is not { } query)
+    {
+        <div class="builder-body">
+            @if (Problem is { } problem)
+            {
+                <p class="builder-notice" data-testid="builder-notice">@problem</p>
+            }
+            else
+            {
+                <p class="builder-notice muted">Choose a source to start a query.</p>
+            }
+            <div class="builder-start">
+                <select class="builder-select" data-testid="builder-start-source" aria-label="Source" @bind="startSource">
+                    @SourceOptions(startSource)
+                </select>
+                <button type="button" class="btn" data-testid="builder-start" @onclick="Start">
+                    @(Problem is null ? "Start" : "New query")
+                </button>
+            </div>
+        </div>
+    }
+    else
+    {
+        var model = QueryBuilder.Model(Index, query);
+        <div class="builder-body">
+            <section class="builder-section">
+                <h4>Source</h4>
+                <select class="builder-select" data-testid="builder-source" aria-label="Source"
+                        value="@query.Source" @onchange="_ => ChangeSource(_.Value)">
+                    @SourceOptions(query.Source)
+                </select>
+            </section>
+
+            @if (model is null)
+            {
+                <p class="builder-notice">The server no longer publishes @query.Source.</p>
+            }
+            else
+            {
+                <section class="builder-section" data-testid="builder-columns">
+                    <h4>Columns</h4>
+                    @if (query.Projection is { } projection)
+                    {
+                        <p class="builder-note muted">
+                            The query selects <code class="mono">@projection</code>, which is not a set of columns.
+                            <button type="button" class="builder-link" data-testid="builder-use-columns" @onclick="UseColumns">Choose columns instead</button>
+                        </p>
+                    }
+                    else
+                    {
+                        @if (query.Columns is null)
+                        {
+                            <p class="builder-note muted">None chosen, so the server answers with every scalar member.</p>
+                        }
+                        <ul class="builder-tree">
+                            @foreach (var member in QueryBuilder.Projectable(Index, model))
+                            {
+                                @if (!member.IsNavigation)
+                                {
+                                    @ColumnRow([member.Name], member, query.Columns ?? [])
+                                }
+                                else if (QueryBuilder.Target(Index, member) is { } target)
+                                {
+                                    @NestedRow(member, target, query.Columns ?? [])
+                                }
+                            }
+                            @CodeColumns(null, query.Columns ?? [])
+                        </ul>
+                    }
+                </section>
+
+                <section class="builder-section" data-testid="builder-filters">
+                    <h4>Filters</h4>
+                    @for (var position = 0; position < query.Filters.Count; position++)
+                    {
+                        var at = position;
+                        @switch (query.Filters[at])
+                        {
+                            case ComparisonFilter comparison:
+                                @FilterRow(model, at, comparison)
+                                break;
+                            case CodeFilter kept:
+                                <div class="builder-card builder-row" data-testid="builder-filter">
+                                    <code class="builder-code mono" title="Kept as written: the builder cannot show it as a member, a comparison and a value">@kept.Code</code>
+                                    @RemoveButton("Remove this condition", () => Change(_ => _ with {Filters = Without(_.Filters, at)}))
+                                </div>
+                                break;
+                        }
+                    }
+                    <button type="button" class="builder-add" data-testid="builder-add-filter"
+                            @onclick="() => Change(_ => QueryBuilder.AddFilter(Index, _))">+ Add filter</button>
+                </section>
+
+                <section class="builder-section" data-testid="builder-sorts">
+                    <h4>Sort</h4>
+                    @for (var position = 0; position < query.Orders.Count; position++)
+                    {
+                        var at = position;
+                        @OrderRow(model, at, query.Orders[at])
+                    }
+                    <button type="button" class="builder-add" data-testid="builder-add-sort"
+                            @onclick="() => Change(_ => QueryBuilder.AddOrder(Index, _))">+ Add sort</button>
+                </section>
+
+                <section class="builder-section">
+                    <h4>Paging</h4>
+                    <div class="builder-row">
+                        <label class="builder-label" for="builder-skip">Skip</label>
+                        @CountInput("builder-skip", query.Skip, "0", skip: true)
+                        <label class="builder-label" for="builder-take">Take</label>
+                        @CountInput("builder-take", query.Take, $"≤ {Index.Introspection.MaxPageSize}", skip: false)
+                    </div>
+                </section>
+
+                <section class="builder-section">
+                    <h4>Result</h4>
+                    <select class="builder-select" data-testid="builder-result" aria-label="Result"
+                            value="@(query.Terminal ?? "")" @onchange="_ => SetTerminal(_.Value)">
+                        @foreach (var (terminal, label) in Terminals(query.Terminal))
+                        {
+                            <option value="@terminal">@label</option>
+                        }
+                    </select>
+                </section>
+            }
+        </div>
+    }
+</div>
+
+@code {
+
+    RenderFragment SourceOptions(string selected) =>
+        @<text>
+            @foreach (var group in Index.Sources.GroupBy(_ => _.Kind).OrderBy(_ => _.Key, StringComparer.Ordinal))
+            {
+                <optgroup label="@group.Key">
+                    @foreach (var source in group.OrderBy(_ => _.Name, StringComparer.Ordinal))
+                    {
+                        <option value="@source.Name" selected="@(source.Name == selected)">@source.Name</option>
+                    }
+                </optgroup>
+            }
+        </text>;
+
+    // A scalar column: checked when the query projects it.
+    RenderFragment ColumnRow(IReadOnlyList<string> path, ScryMemberInfo member, IReadOnlyList<BuilderColumn> columns)
+    {
+        var selected = columns.OfType<MemberColumn>().Any(_ => _.Member == member.Name);
+        return @<li class="builder-node" @key="string.Join('.', path)">
+            <button type="button" class="builder-toggle" role="checkbox" aria-checked="@Checked(selected)"
+                    data-testid="builder-column" data-path="@string.Join('.', path)"
+                    title="@member.Name: @Index.Resolve(member.TypeDisplay).Display"
+                    @onclick="() => Change(_ => QueryBuilder.ToggleColumn(_, path))">
+                @Caret(false, false)
+                @Check(selected)
+                <span class="builder-member">@member.Name</span>
+            </button>
+            <span class="builder-type mono">@Index.Resolve(member.TypeDisplay).Display</span>
+            @Badges(member)
+        </li>;
+    }
+
+    // A navigation: checked when the query projects into it, open on the target's scalars when it does.
+    RenderFragment NestedRow(ScryMemberInfo member, string target, IReadOnlyList<BuilderColumn> columns)
+    {
+        var nested = columns.OfType<NestedColumn>().FirstOrDefault(_ => _.Member == member.Name);
+        string[] path = [member.Name];
+        return @<li class="builder-node" @key="member.Name">
+            <button type="button" class="builder-toggle" role="checkbox" aria-checked="@Checked(nested is not null)"
+                    data-testid="builder-column" data-path="@member.Name"
+                    title="Project into @member.Name: a nested object carrying its own columns"
+                    @onclick="() => Change(_ => QueryBuilder.ToggleNested(Index, _, path))">
+                @Caret(true, nested is not null)
+                @Check(nested is not null)
+                <span class="builder-member">@member.Name</span>
+            </button>
+            <span class="builder-type mono">@Index.Resolve(member.TypeDisplay).Display</span>
+            @if (nested is not null)
+            {
+                <ul class="builder-tree builder-children">
+                    @foreach (var inner in QueryBuilder.Projectable(Index, target).Where(_ => !_.IsNavigation))
+                    {
+                        @ColumnRow([member.Name, inner.Name], inner, nested.Columns)
+                    }
+                    @CodeColumns(member.Name, nested.Columns)
+                </ul>
+            }
+        </li>;
+    }
+
+    // The columns kept as code, each with a way to take it out.
+    RenderFragment CodeColumns(string? group, IReadOnlyList<BuilderColumn> columns) =>
+        @<text>
+            @foreach (var column in columns.OfType<CodeColumn>())
+            {
+                <li class="builder-node builder-row" data-testid="builder-code-column">
+                    <code class="builder-code mono" title="Kept as written: the builder cannot show it as a column">@column.Code</code>
+                    @RemoveButton("Remove this column", () => Change(_ => QueryBuilder.RemoveCodeColumn(_, group, column.Code)))
+                </li>
+            }
+        </text>;
+
+    RenderFragment FilterRow(string model, int at, ComparisonFilter filter)
+    {
+        var member = QueryBuilder.Member(Index, model, filter.Path);
+        var type = member?.TypeDisplay ?? "";
+        var key = $"filter/{at}";
+        // Two lines rather than one: a pane this narrow cannot hold a member path, a comparison and a
+        // value side by side, and wrapping them wherever they happen to break reads as clutter.
+        return @<div class="builder-card" data-testid="builder-filter">
+            <div class="builder-row">
+                @MemberSelect(model, filter.Path, $"Filter {at + 1} member", _ => SetFilterMember(at, _))
+                @RemoveButton("Remove this condition", () => Change(_ => _ with {Filters = Without(_.Filters, at)}))
+            </div>
+            <div class="builder-row">
+                <select class="builder-select" data-testid="builder-operator" aria-label="Filter @(at + 1) comparison"
+                        value="@filter.Operator" @onchange="_ => SetFilterOperator(at, type, _.Value)">
+                    @foreach (var comparison in QueryBuilder.Operators(Index, type))
+                    {
+                        <option value="@comparison">@Label(comparison)</option>
+                    }
+                </select>
+                @if (QueryBuilder.TakesValue(filter.Operator))
+                {
+                    @ValueInput(key, type, filter.Value, $"Filter {at + 1} value", _ => SetFilterValue(at, type, key, _))
+                }
+            </div>
+        </div>;
+    }
+
+    RenderFragment OrderRow(string model, int at, BuilderOrder order) =>
+        @<div class="builder-row" data-testid="builder-sort">
+            @if (order.Path is { } path)
+            {
+                @MemberSelect(model, path, $"Sort {at + 1} member", _ => SetOrderMember(at, _))
+            }
+            else
+            {
+                <code class="builder-code mono" title="Kept as written: the builder cannot show it as a member">@order.Code</code>
+            }
+            <select class="builder-select" data-testid="builder-direction" aria-label="Sort @(at + 1) direction"
+                    value="@(order.Descending ? "descending" : "ascending")" @onchange="_ => SetDirection(at, _.Value)">
+                <option value="ascending">ascending</option>
+                <option value="descending">descending</option>
+            </select>
+            @RemoveButton("Remove this sort", () => Change(_ => _ with {Orders = Without(_.Orders, at)}))
+        </div>;
+
+    // The members a filter or sort can name, by path. One it names that is not among them — deeper than
+    // the list goes — is offered too, so the select can show what the query says.
+    RenderFragment MemberSelect(string model, IReadOnlyList<string> path, string label, Func<string, Task> onChange)
+    {
+        var members = QueryBuilder.Comparable(Index, model);
+        var current = string.Join('.', path);
+        return @<select class="builder-select builder-grow" data-testid="builder-member" aria-label="@label"
+                        value="@current" @onchange="_ => onChange(Text(_))">
+            @if (members.All(_ => _.Display != current))
+            {
+                <option value="@current">@current</option>
+            }
+            @foreach (var member in members)
+            {
+                <option value="@member.Display">@member.Display</option>
+            }
+        </select>;
+    }
+
+    // The input a value is typed into, by the kind of its type: a list for an enum, a picker for a date
+    // or a time, and text for the rest — read back through QueryBuilder.Literal when it changes.
+    RenderFragment ValueInput(string key, string type, string? code, string label, Func<string, Task> onChange)
+    {
+        var kind = QueryBuilder.Kind(Index, type);
+        var shown = code is null ? "" : QueryBuilder.Display(Index, type, code) ?? "";
+        var invalidClass = invalid.Contains(key) ? "builder-input invalid" : "builder-input";
+        if (kind == ValueKind.Enum &&
+            Index.Enum(type.TrimEnd('?')) is { } enumInfo)
+        {
+            return @<select class="builder-select" data-testid="builder-value" aria-label="@label"
+                            value="@shown" @onchange="_ => onChange(Text(_))">
+                @foreach (var value in enumInfo.Values)
+                {
+                    <option value="@value">@value</option>
+                }
+            </select>;
+        }
+
+        return @<input class="@invalidClass" data-testid="builder-value" aria-label="@label"
+                       aria-invalid="@(invalid.Contains(key) ? "true" : null)"
+                       type="@InputType(kind)" step="@(kind is ValueKind.DateTime or ValueKind.DateTimeOffset or ValueKind.Time ? "1" : null)"
+                       inputmode="@InputMode(kind)" spellcheck="false"
+                       maxlength="@(kind == ValueKind.Character ? "1" : null)"
+                       placeholder="@Placeholder(kind)"
+                       value="@shown" @onchange="_ => onChange(Text(_))" />;
+    }
+
+    // Text rather than type=number: a number input hands back an empty value for anything it cannot
+    // read, which would take the Skip or Take out rather than say the entry was not a number.
+    RenderFragment CountInput(string id, int? value, string placeholder, bool skip) =>
+        @<input id="@id" class="@(invalid.Contains(id) ? "builder-input builder-count invalid" : "builder-input builder-count")"
+                data-testid="@id" type="text" inputmode="numeric" spellcheck="false"
+                aria-invalid="@(invalid.Contains(id) ? "true" : null)"
+                placeholder="@placeholder" value="@value"
+                @onchange="_ => SetCount(id, _.Value?.ToString(), skip)" />;
+
+    static RenderFragment Badges(ScryMemberInfo member) =>
+        @<text>
+            @if (member.IsSensitive)
+            {
+                <span class="badge badge-sensitive" title="Comparing against this sends the request as a body rather than a URL, and projecting it answers no-store">sensitive</span>
+            }
+            @if (member.IsCapability)
+            {
+                <span class="badge badge-command" title="Whether this caller may send @member.Command against the row, decided by the server's policy">command</span>
+            }
+            @if (member.Obsolete is not null)
+            {
+                <span class="badge badge-obsolete" title="@member.Obsolete">obsolete</span>
+            }
+        </text>;
+
+    RenderFragment RemoveButton(string label, Func<Task> remove) =>
+        @<button type="button" class="icon-btn builder-remove" data-testid="builder-remove" title="@label" aria-label="@label" @onclick="remove">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+        </button>;
+
+    // A spacer where there is nothing to open, so every name starts in the same column.
+    static RenderFragment Caret(bool expandable, bool expanded)
+    {
+        if (!expandable)
+        {
+            return @<span class="builder-caret" aria-hidden="true"></span>;
+        }
+
+        return @<svg class="@(expanded ? "builder-caret expanded" : "builder-caret")" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                     aria-hidden="true" focusable="false">
+            <path d="M9 6l6 6-6 6" />
+        </svg>;
+    }
+
+    static RenderFragment Check(bool selected) =>
+        @<svg class="builder-check" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <rect x="1.5" y="1.5" width="13" height="13" rx="3" />
+            @if (selected)
+            {
+                <path d="M4.5 8.2l2.4 2.4 4.6-4.9" />
+            }
+        </svg>;
+
+}

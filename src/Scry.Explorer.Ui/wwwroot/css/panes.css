@@ -327,6 +327,241 @@
     overflow-wrap: anywhere;
 }
 
+/* Query builder */
+
+.builder-pane {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1;
+}
+
+.builder-body {
+    flex: 1;
+    padding: 0.6rem 0.8rem 1.2rem;
+    overflow-y: auto;
+    font-size: 0.82rem;
+}
+
+.builder-section + .builder-section {
+    margin-top: 1rem;
+}
+
+.builder-section h4 {
+    margin: 0 0 0.4rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.builder-notice {
+    margin: 0 0 0.6rem;
+}
+
+.builder-note {
+    margin: 0 0 0.35rem;
+    font-size: 0.78rem;
+}
+
+.builder-start {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+}
+
+.builder-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+    margin-bottom: 0.3rem;
+}
+
+/* A filter: what it compares on the first line, how and against what on the second. */
+.builder-card {
+    margin-bottom: 0.4rem;
+    padding: 0.35rem 0.4rem;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+}
+
+.builder-card .builder-row:last-child {
+    margin-bottom: 0;
+}
+
+/* A member select sizes to its longest option, which a navigation's path makes long; it takes the
+   row's width instead, and the controls beside it keep theirs. */
+.builder-grow {
+    flex: 1 1 8rem;
+}
+
+.builder-select,
+.builder-input {
+    min-width: 0;
+    padding: 0.2rem 0.4rem;
+    font: inherit;
+    font-size: 0.8rem;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+}
+
+.builder-input {
+    flex: 1;
+    min-width: 6rem;
+    font-family: var(--mono);
+}
+
+.builder-count {
+    flex: 0 0 5.5rem;
+    min-width: 0;
+}
+
+.builder-select:focus-visible,
+.builder-input:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: -1px;
+}
+
+.builder-input.invalid {
+    border-color: var(--danger);
+}
+
+.builder-label {
+    color: var(--muted);
+}
+
+.builder-label + .builder-input {
+    margin-right: 0.6rem;
+}
+
+.builder-code {
+    flex: 1;
+    min-width: 0;
+    padding: 0.15rem 0.4rem;
+    font-size: 0.76rem;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    overflow-wrap: anywhere;
+}
+
+.builder-add,
+.builder-link {
+    padding: 0.15rem 0.25rem;
+    font: inherit;
+    font-size: 0.8rem;
+    color: var(--accent);
+    background: none;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.builder-add:hover,
+.builder-link:hover {
+    text-decoration: underline;
+}
+
+.builder-remove:hover {
+    color: var(--danger);
+}
+
+.builder-tree {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+/* One level in, hung from a rule under the navigation's caret. */
+.builder-children {
+    margin: 0.1rem 0 0.2rem 0.55rem;
+    padding-left: 0.6rem;
+    border-left: 1px solid var(--border);
+}
+
+.builder-node {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+    min-width: 0;
+}
+
+.builder-node > .builder-children {
+    flex-basis: 100%;
+}
+
+/* The whole label is the check box: caret, box and name toggle together. */
+.builder-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.12rem 0.3rem 0.12rem 0.1rem;
+    font: inherit;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--text);
+    background: none;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: left;
+}
+
+.builder-toggle:hover {
+    background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+
+.builder-toggle:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: -1px;
+}
+
+.builder-caret {
+    display: inline-block;
+    flex: none;
+    width: 0.75rem;
+    height: 0.75rem;
+    color: var(--muted);
+}
+
+.builder-caret.expanded {
+    transform: rotate(90deg);
+}
+
+.builder-check {
+    flex: none;
+    width: 0.85rem;
+    height: 0.85rem;
+    fill: none;
+    stroke: var(--muted);
+    stroke-width: 1.3;
+}
+
+.builder-toggle[aria-checked="true"] .builder-check rect {
+    fill: var(--accent-strong);
+    stroke: var(--accent-strong);
+}
+
+.builder-toggle[aria-checked="true"] .builder-check path {
+    stroke: #fff;
+    stroke-width: 2;
+}
+
+.builder-member {
+    color: var(--accent);
+}
+
+.builder-type {
+    font-size: 0.72rem;
+    color: var(--muted);
+}
+
 /* Dialogs */
 
 .dialog-overlay {

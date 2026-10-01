@@ -386,6 +386,45 @@ public class UiScreenshotTests :
             .PageScreenshotOptions(new(), screenshotOnly: true);
     }
 
+    // The query builder beside the query it reads, run: columns with a navigation projected into, a
+    // condition of each kind the pane writes, a sort and a Take. The docs' picture of the builder, so
+    // laid out at the docs width.
+    [Test]
+    public async Task ExplorerQueryBuilder()
+    {
+        var page = await NewSizedPageAsync(explorerDocsViewport);
+        await GoToExplorer(page);
+
+        await page.SetEditorValueAsync(
+            """
+            Query.Employee
+                .Where(_ => _.Active && _.Department!.Name.StartsWith("E"))
+                .OrderBy(_ => _.Name)
+                .Take(5)
+                .Select(_ =>
+                    new
+                    {
+                        _.Name,
+                        _.Status,
+                        Department =
+                            new
+                            {
+                                _.Department!.Name
+                            }
+                    })
+            """);
+        await page.Locator("[data-testid='rail-builder']").ClickAsync();
+        // The pane reads the editor as it reports changes, so wait for it to have read this query.
+        await page.WaitForSelectorAsync("[data-testid='builder-filter'] >> nth=1", 30);
+        await page.Locator("[data-testid='run']").ClickAsync();
+        await page.WaitForSelectorAsync("[data-testid='result-table'] tbody tr:not([aria-hidden])", 60);
+
+        await SettleScrollbarsAsync(page);
+
+        await Verify(page)
+            .PageScreenshotOptions(new(), screenshotOnly: true);
+    }
+
     // Monaco fades a scrollbar out once whatever it belongs to stops being touched — the editor's after
     // the query is set, the suggest widget's after the list opens. A capture taken mid-fade differs from
     // the last one by a column of part-transparent pixels, which is the whole of the difference between
