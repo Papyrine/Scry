@@ -67,7 +67,7 @@ public class HttpStatusCodeTests
         using (Assert.Multiple())
         {
             await Assert.That(retried.Select(_ => _.Url)).IsEquivalentTo(["https://example.com/busy"], CollectionOrdering.Matching);
-            await Assert.That(none.Select(_ => _.Url)).IsEquivalentTo(["https://example.com/ok", "https://example.com/moved"], CollectionOrdering.Any);
+            await Assert.That(none.Select(_ => _.Url)).IsEquivalentTo(["https://example.com/ok", "https://example.com/moved"]);
         }
     }
 
@@ -124,9 +124,12 @@ public class HttpStatusCodeTests
 
         using (Assert.Multiple())
         {
-            await Assert.That(BclEnumTests.Constant(callbacks.Where(_ => _.Status == HttpStatusCode.NotFound).ToScryRequest())).IsEqualTo(new ConstNode("404", ClrTypeTag.Int32));
-            await Assert.That(BclEnumTests.Constant(callbacks.Where(_ => _.Status == ok).ToScryRequest())).IsEqualTo(new ConstNode("OK", ClrTypeTag.Enum));
-            await Assert.That(BclEnumTests.Constant(callbacks.Where(_ => _.Status == redirect).ToScryRequest())).IsEqualTo(new ConstNode(redirect.ToString(), ClrTypeTag.Enum));
+            await Assert.That(BclEnumTests.Constant(callbacks.Where(_ => _.Status == HttpStatusCode.NotFound).ToScryRequest()))
+                .IsEqualTo(new("404", ClrTypeTag.Int32));
+            await Assert.That(BclEnumTests.Constant(callbacks.Where(_ => _.Status == ok).ToScryRequest()))
+                .IsEqualTo(new("OK", ClrTypeTag.Enum));
+            await Assert.That(BclEnumTests.Constant(callbacks.Where(_ => _.Status == redirect).ToScryRequest()))
+                .IsEqualTo(new(redirect.ToString(), ClrTypeTag.Enum));
         }
     }
 

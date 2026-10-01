@@ -46,7 +46,10 @@ public static class ScryJson
         options.TypeInfoResolverChain.Add(
             new DefaultJsonTypeInfoResolver
             {
-                Modifiers = {RelaxAnnotations}
+                Modifiers =
+                {
+                    RelaxAnnotations
+                }
             });
         return options;
     }

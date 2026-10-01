@@ -165,11 +165,16 @@ public class BclEnumTests
 
         using (Assert.Multiple())
         {
-            await Assert.That(Constant(sittings.Where(_ => _.DayOfWeek == DayOfWeek.Thursday).ToScryRequest())).IsEqualTo(new ConstNode("4", ClrTypeTag.Int32));
-            await Assert.That(Constant(sittings.Where(_ => _.DayOfWeek == day).ToScryRequest())).IsEqualTo(new ConstNode("6", ClrTypeTag.Int32));
-            await Assert.That(Constant(sittings.Where(_ => _.Alternates.Contains(DayOfWeek.Friday)).ToScryRequest())).IsEqualTo(new ConstNode("5", ClrTypeTag.Int32));
-            await Assert.That(Constant(sittings.Where(_ => _.Clock == DateTimeKind.Local).ToScryRequest())).IsEqualTo(new ConstNode("2", ClrTypeTag.Int32));
-            await Assert.That(Constant(sittings.Where(_ => _.Clock == clock).ToScryRequest())).IsEqualTo(new ConstNode("Utc", ClrTypeTag.Enum));
+            await Assert.That(Constant(sittings.Where(_ => _.DayOfWeek == DayOfWeek.Thursday).ToScryRequest()))
+                .IsEqualTo(new("4", ClrTypeTag.Int32));
+            await Assert.That(Constant(sittings.Where(_ => _.DayOfWeek == day).ToScryRequest()))
+                .IsEqualTo(new("6", ClrTypeTag.Int32));
+            await Assert.That(Constant(sittings.Where(_ => _.Alternates.Contains(DayOfWeek.Friday)).ToScryRequest()))
+                .IsEqualTo(new("5", ClrTypeTag.Int32));
+            await Assert.That(Constant(sittings.Where(_ => _.Clock == DateTimeKind.Local).ToScryRequest()))
+                .IsEqualTo(new("2", ClrTypeTag.Int32));
+            await Assert.That(Constant(sittings.Where(_ => _.Clock == clock).ToScryRequest()))
+                .IsEqualTo(new("Utc", ClrTypeTag.Enum));
         }
     }
 

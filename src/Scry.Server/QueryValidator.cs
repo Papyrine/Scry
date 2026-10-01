@@ -471,7 +471,8 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
                     if (grouped)
                     {
                         if (groupKeys is null ||
-                            !groupKeys.OfType<MemberNode>().Any(_ => PathEquals(_.Path, memberNode.Path)))
+                            !groupKeys.OfType<MemberNode>()
+                                .Any(_ => PathEquals(_.Path, memberNode.Path)))
                         {
                             throw Reject("A grouped projection may only reference the group key or aggregates.");
                         }
@@ -561,7 +562,8 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
                 case MemberNode member:
                     if (groupKeys is null ||
-                        !groupKeys.OfType<MemberNode>().Any(_ => PathEquals(_.Path, member.Path)))
+                        !groupKeys.OfType<MemberNode>()
+                            .Any(_ => PathEquals(_.Path, member.Path)))
                     {
                         throw Reject("A predicate after GroupBy may only reference the group key or aggregates.");
                     }
@@ -633,12 +635,15 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
         {
             MemberNode => true,
             ConstNode => false,
-            BinaryNode binary => ReadsRow(binary.Left) || ReadsRow(binary.Right),
+            BinaryNode binary => ReadsRow(binary.Left) ||
+                                 ReadsRow(binary.Right),
             UnaryNode unary => ReadsRow(unary.Operand),
-            ConditionalNode conditional => ReadsRow(conditional.Test) ||
+            ConditionalNode conditional =>
+                ReadsRow(conditional.Test) ||
                                            ReadsRow(conditional.IfTrue) ||
                                            ReadsRow(conditional.IfFalse),
-            CallNode call => ReadsRow(call.Target) || call.Arguments.Any(ReadsRow),
+            CallNode call => ReadsRow(call.Target) ||
+                             call.Arguments.Any(ReadsRow),
             _ => true
         };
 
@@ -828,10 +833,11 @@ sealed class QueryValidator(Schema schema, ScryOptions options)
 
         for (var i = 0; i < projection.Members.Count; i++)
         {
-            if (!string.Equals(projection.Members[i].Name, set.Projection.Members[i].Name, StringComparison.Ordinal))
+            var members = projection.Members;
+            if (!string.Equals(members[i].Name, set.Projection.Members[i].Name, StringComparison.Ordinal))
             {
                 throw Reject(
-                    $"Both sides of a set operation must project the same members, but '{projection.Members[i].Name}' and '{set.Projection.Members[i].Name}' differ.");
+                    $"Both sides of a set operation must project the same members, but '{members[i].Name}' and '{set.Projection.Members[i].Name}' differ.");
             }
         }
 

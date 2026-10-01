@@ -183,8 +183,8 @@ public class Callback
 {
     public int Id { get; set; }
     public string Url { get; set; } = "";
-    public System.Net.HttpStatusCode Status { get; set; }
-    public System.Net.HttpStatusCode? Retry { get; set; }
+    public HttpStatusCode Status { get; set; }
+    public HttpStatusCode? Retry { get; set; }
 }
 
 /// <summary>

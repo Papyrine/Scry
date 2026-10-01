@@ -26,7 +26,7 @@ static class BclEnums
     [
         typeof(DayOfWeek),
         typeof(DateTimeKind),
-        typeof(System.Net.HttpStatusCode)
+        typeof(HttpStatusCode)
     ];
 
     /// <summary>The enums, by metadata full name.</summary>
