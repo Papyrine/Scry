@@ -12,8 +12,7 @@ static class MultipartResponse
     public static bool TryGetBoundary(HttpResponseMessage response, [NotNullWhen(true)] out string? boundary)
     {
         boundary = null;
-        var contentType = response.Content.Headers.ContentType;
-        if (!string.Equals(contentType?.MediaType, ScryBinary.ContentType, StringComparison.OrdinalIgnoreCase))
+        if (!response.Content.HasMediaType(ScryBinary.ContentType))
         {
             return false;
         }
@@ -66,7 +65,7 @@ static class MultipartResponse
 
     /// <summary>Whether the section carries a raw binary part rather than the JSON that references it.</summary>
     public static bool IsBinary(MultipartSection section) =>
-        string.Equals(section.ContentType, ScryBinary.PartContentType, StringComparison.OrdinalIgnoreCase);
+        section.HasMediaType(ScryBinary.PartContentType);
 
     /// <summary>
     /// Reads one section's body into an array. A section that declared its length — the server
@@ -80,30 +79,15 @@ static class MultipartResponse
     /// </remarks>
     public static async Task<byte[]> ReadPartBytes(MultipartSection section, Cancel cancel)
     {
-        if (section.ContentLength is not (> 0 and <= ResponseBody.PresizeCeiling))
+        try
         {
-            return await section.ReadAsBytesAsync(cancel);
+            return await section.ReadAsBytesStrictAsync(ResponseBody.PresizeCeiling, cancel);
         }
-
-        var declared = (int) section.ContentLength;
-        var exact = new byte[declared];
-        var read = await section.Body.ReadAtLeastAsync(exact, declared, throwOnEndOfStream: false, cancel);
-        if (read != declared)
+        // A part that does not match its Content-Length is a malformed response, which callers know
+        // as a wire failure rather than the library's own exception.
+        catch (InvalidDataException exception)
         {
-            throw new ScryWireException(
-                $"A multipart part ended after {read} of the {declared} bytes its Content-Length declared.");
+            throw new ScryWireException(exception.Message, exception);
         }
-
-        // One more read stands where the boundary should: anything but the end means the part is
-        // longer than it declared, and the reader would have dropped the rest on the way to the next
-        // section.
-        var probe = new byte[1];
-        if (await section.Body.ReadAsync(probe, cancel) != 0)
-        {
-            throw new ScryWireException(
-                $"A multipart part carried more than the {declared} bytes its Content-Length declared.");
-        }
-
-        return exact;
     }
 }
