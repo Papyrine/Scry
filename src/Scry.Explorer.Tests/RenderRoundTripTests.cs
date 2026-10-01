@@ -231,8 +231,8 @@ public class RenderRoundTripTests
     }
 
     [Test]
-    public async Task OrderingAndPaging() =>
-        await RoundTrip(
+    public Task OrderingAndPaging() =>
+        RoundTrip(
             Employee
                 .OrderBy(_ => _.Name)
                 .ThenByDescending(_ => _.Salary)
@@ -241,27 +241,27 @@ public class RenderRoundTripTests
                 .ToScryRequest());
 
     [Test]
-    public async Task ExplicitSelect() =>
-        await RoundTrip(Employee.Select(_ => new {_.Name, _.Salary}).ToScryRequest());
+    public Task ExplicitSelect() =>
+        RoundTrip(Employee.Select(_ => new {_.Name, _.Salary}).ToScryRequest());
 
     [Test]
-    public async Task SelectWithRenamedMember() =>
-        await RoundTrip(Employee.Select(_ => new {Label = _.Name, _.Active}).ToScryRequest());
+    public Task SelectWithRenamedMember() =>
+        RoundTrip(Employee.Select(_ => new {Label = _.Name, _.Active}).ToScryRequest());
 
     [Test]
-    public async Task SelectNestedNavigation() =>
-        await RoundTrip(
+    public Task SelectNestedNavigation() =>
+        RoundTrip(
             Employee
                 .Select(_ => new {_.Name, Dept = new {_.Department!.Code, City = _.Department.Name}})
                 .ToScryRequest());
 
     [Test]
-    public async Task DistinctAfterSelect() =>
-        await RoundTrip(Employee.Select(_ => new {_.Name}).Distinct().ToScryRequest());
+    public Task DistinctAfterSelect() =>
+        RoundTrip(Employee.Select(_ => new {_.Name}).Distinct().ToScryRequest());
 
     [Test]
-    public async Task ReverseAfterOrdering() =>
-        await RoundTrip(Employee.OrderBy(_ => _.Name).Reverse().ToScryRequest());
+    public Task ReverseAfterOrdering() =>
+        RoundTrip(Employee.OrderBy(_ => _.Name).Reverse().ToScryRequest());
 
     [Test]
     public async Task OfTypeUsesDerivedDefaultProjection()
@@ -279,37 +279,37 @@ public class RenderRoundTripTests
     }
 
     [Test]
-    public async Task SelectManyWithExplicitSelect() =>
-        await RoundTrip(Employee.SelectMany(_ => _.Orders).Select(_ => new {_.Total}).ToScryRequest());
+    public Task SelectManyWithExplicitSelect() =>
+        RoundTrip(Employee.SelectMany(_ => _.Orders).Select(_ => new {_.Total}).ToScryRequest());
 
     // Every renderable terminal, spelled back and folded to the identical wire op.
     [Test]
-    public async Task TerminalToList() =>
-        await RoundTrip(Employee.Where(_ => _.Active).ToScryRequest());
+    public Task TerminalToList() =>
+        RoundTrip(Employee.Where(_ => _.Active).ToScryRequest());
 
     [Test]
-    public async Task TerminalCount() =>
-        await RoundTrip(Employee.Where(_ => _.Active).ToScryRequest(new CountOp()));
+    public Task TerminalCount() =>
+        RoundTrip(Employee.Where(_ => _.Active).ToScryRequest(new CountOp()));
 
     [Test]
-    public async Task TerminalAny() =>
-        await RoundTrip(Employee.Where(_ => _.Active).ToScryRequest(new AnyOp()));
+    public Task TerminalAny() =>
+        RoundTrip(Employee.Where(_ => _.Active).ToScryRequest(new AnyOp()));
 
     [Test]
-    public async Task TerminalFirst() =>
-        await RoundTrip(Employee.OrderBy(_ => _.Name).ToScryRequest(new FirstOp(false)));
+    public Task TerminalFirst() =>
+        RoundTrip(Employee.OrderBy(_ => _.Name).ToScryRequest(new FirstOp(false)));
 
     [Test]
-    public async Task TerminalFirstOrDefault() =>
-        await RoundTrip(Employee.OrderBy(_ => _.Name).ToScryRequest(new FirstOp(true)));
+    public Task TerminalFirstOrDefault() =>
+        RoundTrip(Employee.OrderBy(_ => _.Name).ToScryRequest(new FirstOp(true)));
 
     [Test]
-    public async Task TerminalSingle() =>
-        await RoundTrip(Employee.Where(_ => _.Id == 1).ToScryRequest(new SingleOp(false)));
+    public Task TerminalSingle() =>
+        RoundTrip(Employee.Where(_ => _.Id == 1).ToScryRequest(new SingleOp(false)));
 
     [Test]
-    public async Task TerminalSingleOrDefault() =>
-        await RoundTrip(Employee.Where(_ => _.Id == 1).ToScryRequest(new SingleOp(true)));
+    public Task TerminalSingleOrDefault() =>
+        RoundTrip(Employee.Where(_ => _.Id == 1).ToScryRequest(new SingleOp(true)));
 
     static Node NamePredicate() =>
         new BinaryNode(BinaryOp.Equal, new MemberNode(["Name"]), new ConstNode("x", ClrTypeTag.String));
@@ -355,8 +355,8 @@ public class RenderRoundTripTests
         AssertRefused(Employee.Where(_ => _.Ssn == "123-45-6789").ToScryRequest(), RenderRefusal.SensitiveConstants);
 
     [Test]
-    public async Task RendersSensitiveOrderingOnly() =>
-        await RoundTrip(Employee.OrderBy(_ => _.Ssn).ToScryRequest());
+    public Task RendersSensitiveOrderingOnly() =>
+        RoundTrip(Employee.OrderBy(_ => _.Ssn).ToScryRequest());
 
     [Test]
     public Task RefusesEnumConstantOnUnregisteredSource() =>
@@ -375,86 +375,86 @@ public class RenderRoundTripTests
 
     // Literal edge cases.
     [Test]
-    public async Task StringEscapes() =>
-        await RoundTrip(Employee.Where(_ => _.Name == "he said \"hi\" \\ twice\nover\théllo→").ToScryRequest());
+    public Task StringEscapes() =>
+        RoundTrip(Employee.Where(_ => _.Name == "he said \"hi\" \\ twice\nover\théllo→").ToScryRequest());
 
     [Test]
-    public async Task NullComparison() =>
-        await RoundTrip(Employee.Where(_ => _.Age == null).ToScryRequest());
+    public Task NullComparison() =>
+        RoundTrip(Employee.Where(_ => _.Age == null).ToScryRequest());
 
     [Test]
-    public async Task HasValueComparison() =>
-        await RoundTrip(Employee.Where(_ => _.When.HasValue).ToScryRequest());
+    public Task HasValueComparison() =>
+        RoundTrip(Employee.Where(_ => _.When.HasValue).ToScryRequest());
 
     [Test]
-    public async Task NegativeNumbers() =>
-        await RoundTrip(Employee.Where(_ => _.Age > -5 && _.Salary > -10.5m).ToScryRequest());
+    public Task NegativeNumbers() =>
+        RoundTrip(Employee.Where(_ => _.Age > -5 && _.Salary > -10.5m).ToScryRequest());
 
     [Test]
-    public async Task LongAndDoubleSuffixes() =>
-        await RoundTrip(Employee.Where(_ => _.Offset.ToUnixTimeSeconds() > 100L && _.Rating >= 100d).ToScryRequest());
+    public Task LongAndDoubleSuffixes() =>
+        RoundTrip(Employee.Where(_ => _.Offset.ToUnixTimeSeconds() > 100L && _.Rating >= 100d).ToScryRequest());
 
     [Test]
-    public async Task DoubleSpecials() =>
-        await RoundTrip(Employee.Where(_ => _.Rating == double.NaN || _.Rating == double.PositiveInfinity || _.Rating > 4.5).ToScryRequest());
+    public Task DoubleSpecials() =>
+        RoundTrip(Employee.Where(_ => _.Rating == double.NaN || _.Rating == double.PositiveInfinity || _.Rating > 4.5).ToScryRequest());
 
     [Test]
-    public async Task UtcDateTimeConstant() =>
-        await RoundTrip(Employee.Where(_ => _.When > new DateTime(2026, 5, 1, 12, 30, 0, DateTimeKind.Utc)).ToScryRequest());
+    public Task UtcDateTimeConstant() =>
+        RoundTrip(Employee.Where(_ => _.When > new DateTime(2026, 5, 1, 12, 30, 0, DateTimeKind.Utc)).ToScryRequest());
 
     [Test]
-    public async Task DateOnlyConstant() =>
-        await RoundTrip(Employee.Where(_ => _.StartDate >= new Date(2026, 1, 15)).ToScryRequest());
+    public Task DateOnlyConstant() =>
+        RoundTrip(Employee.Where(_ => _.StartDate >= new Date(2026, 1, 15)).ToScryRequest());
 
     [Test]
-    public async Task GuidConstant() =>
-        await RoundTrip(Employee.Where(_ => _.Key == Guid.Parse("11111111-2222-3333-4444-555555555555")).ToScryRequest());
+    public Task GuidConstant() =>
+        RoundTrip(Employee.Where(_ => _.Key == Guid.Parse("11111111-2222-3333-4444-555555555555")).ToScryRequest());
 
     [Test]
-    public async Task BytesConstant() =>
-        await RoundTrip(Employee.Where(_ => _.Blob == new byte[] {1, 2, 250}).ToScryRequest());
+    public Task BytesConstant() =>
+        RoundTrip(Employee.Where(_ => _.Blob == new byte[] {1, 2, 250}).ToScryRequest());
 
     [Test]
-    public async Task TimeSpanConstant() =>
-        await RoundTrip(Employee.Where(_ => _.Duration > TimeSpan.FromMinutes(90)).ToScryRequest());
+    public Task TimeSpanConstant() =>
+        RoundTrip(Employee.Where(_ => _.Duration > TimeSpan.FromMinutes(90)).ToScryRequest());
 
     [Test]
-    public async Task DateTimeOffsetConstant() =>
-        await RoundTrip(Employee.Where(_ => _.Offset > new DateTimeOffset(2026, 3, 4, 5, 6, 7, TimeSpan.Zero)).ToScryRequest());
+    public Task DateTimeOffsetConstant() =>
+        RoundTrip(Employee.Where(_ => _.Offset > new DateTimeOffset(2026, 3, 4, 5, 6, 7, TimeSpan.Zero)).ToScryRequest());
 
     // The sub-second part and the offset are both on the wire, so the constructed value the renderer
     // spells has to reproduce the text exactly — a default spelling on either side drops one of them
     // and the render is refused instead.
     [Test]
-    public async Task SubSecondDateTimeOffsetConstant() =>
-        await RoundTrip(Employee.Where(_ => _.Offset > new DateTimeOffset(2026, 3, 4, 5, 6, 7, 123, TimeSpan.FromHours(2))).ToScryRequest());
+    public Task SubSecondDateTimeOffsetConstant() =>
+        RoundTrip(Employee.Where(_ => _.Offset > new DateTimeOffset(2026, 3, 4, 5, 6, 7, 123, TimeSpan.FromHours(2))).ToScryRequest());
 
     // A time of day reaches the renderer as the argument that composes a timestamp, and carries its
     // seconds there for the same reason.
     [Test]
-    public async Task TimeOfDayConstant() =>
-        await RoundTrip(Employee.Where(_ => _.StartDate.ToDateTime(new(5, 6, 7, 123)) > new DateTime(2026, 1, 1)).ToScryRequest());
+    public Task TimeOfDayConstant() =>
+        RoundTrip(Employee.Where(_ => _.StartDate.ToDateTime(new(5, 6, 7, 123)) > new DateTime(2026, 1, 1)).ToScryRequest());
 
     [Test]
-    public async Task EnumConstant() =>
-        await RoundTrip(Employee.Where(_ => _.Status == Status.PartTime).ToScryRequest());
+    public Task EnumConstant() =>
+        RoundTrip(Employee.Where(_ => _.Status == Status.PartTime).ToScryRequest());
 
     [Test]
-    public async Task UndefinedEnumConstant() =>
-        await RoundTrip(Employee.Where(_ => _.Status == (Status) 7).ToScryRequest());
+    public Task UndefinedEnumConstant() =>
+        RoundTrip(Employee.Where(_ => _.Status == (Status) 7).ToScryRequest());
 
     [Test]
-    public async Task EnumHasFlag() =>
-        await RoundTrip(Employee.Where(_ => _.Perks.HasFlag(Perks.Gym)).ToScryRequest());
+    public Task EnumHasFlag() =>
+        RoundTrip(Employee.Where(_ => _.Perks.HasFlag(Perks.Gym)).ToScryRequest());
 
     [Test]
-    public async Task DayOfWeekComparison() =>
-        await RoundTrip(Employee.Where(_ => _.When!.Value.DayOfWeek == DayOfWeek.Monday).ToScryRequest());
+    public Task DayOfWeekComparison() =>
+        RoundTrip(Employee.Where(_ => _.When!.Value.DayOfWeek == DayOfWeek.Monday).ToScryRequest());
 
     // String functions.
     [Test]
-    public async Task StringFunctions() =>
-        await RoundTrip(
+    public Task StringFunctions() =>
+        RoundTrip(
             Employee
                 .Where(_ => _.Name.Contains("xx") && _.Name.StartsWith("aa") && _.Name.EndsWith("zz"))
                 .Where(_ => _.Name.ToLower().Trim().Length > 2)
@@ -463,77 +463,77 @@ public class RenderRoundTripTests
                 .ToScryRequest());
 
     [Test]
-    public async Task StringStatics() =>
-        await RoundTrip(Employee.Where(_ => !string.IsNullOrEmpty(_.Name) && !string.IsNullOrWhiteSpace(_.Name)).ToScryRequest());
+    public Task StringStatics() =>
+        RoundTrip(Employee.Where(_ => !string.IsNullOrEmpty(_.Name) && !string.IsNullOrWhiteSpace(_.Name)).ToScryRequest());
 
     [Test]
-    public async Task CollatedComparisons() =>
-        await RoundTrip(
+    public Task CollatedComparisons() =>
+        RoundTrip(
             Employee
                 .Where(_ => _.Name.Equals("x", StringComparison.OrdinalIgnoreCase))
                 .Where(_ => _.Name.StartsWith("yy", StringComparison.Ordinal))
                 .ToScryRequest());
 
     [Test]
-    public async Task StringFirstAsCharComparison() =>
-        await RoundTrip(Employee.Where(_ => _.Name.FirstOrDefault() == 'x' && _.Name.LastOrDefault() == 'z').ToScryRequest());
+    public Task StringFirstAsCharComparison() =>
+        RoundTrip(Employee.Where(_ => _.Name.FirstOrDefault() == 'x' && _.Name.LastOrDefault() == 'z').ToScryRequest());
 
     [Test]
-    public async Task StringConcatChain() =>
-        await RoundTrip(Employee.Select(_ => new {Label = _.Name + "-" + _.Id}).ToScryRequest());
+    public Task StringConcatChain() =>
+        RoundTrip(Employee.Select(_ => new {Label = _.Name + "-" + _.Id}).ToScryRequest());
 
     [Test]
-    public async Task ToStringOnNullableMember() =>
-        await RoundTrip(Employee.Where(_ => _.Age.ToString() == "30").ToScryRequest());
+    public Task ToStringOnNullableMember() =>
+        RoundTrip(Employee.Where(_ => _.Age.ToString() == "30").ToScryRequest());
 
     [Test]
-    public async Task CompareTo() =>
-        await RoundTrip(Employee.Where(_ => _.Name.CompareTo("m") > 0).ToScryRequest());
+    public Task CompareTo() =>
+        RoundTrip(Employee.Where(_ => _.Name.CompareTo("m") > 0).ToScryRequest());
 
     [Test]
-    public async Task NumericParse() =>
-        await RoundTrip(Employee.Where(_ => int.Parse(_.Name) > 5 && double.Parse(_.Name) < 9.5).ToScryRequest());
+    public Task NumericParse() =>
+        RoundTrip(Employee.Where(_ => int.Parse(_.Name) > 5 && double.Parse(_.Name) < 9.5).ToScryRequest());
 
     // Dates and times.
     [Test]
-    public async Task DateParts() =>
-        await RoundTrip(
+    public Task DateParts() =>
+        RoundTrip(
             Employee
                 .Where(_ => _.StartDate.Year == 2026 && _.When!.Value.Month == 5 && _.When.Value.DayOfYear > 100)
                 .ToScryRequest());
 
     [Test]
-    public async Task DateAdds() =>
-        await RoundTrip(Employee.Where(_ => _.When!.Value.AddDays(1).AddYears(2) > new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc)).ToScryRequest());
+    public Task DateAdds() =>
+        RoundTrip(Employee.Where(_ => _.When!.Value.AddDays(1).AddYears(2) > new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc)).ToScryRequest());
 
     [Test]
-    public async Task TimeOfDayComparison() =>
-        await RoundTrip(Employee.Where(_ => _.When!.Value.TimeOfDay > TimeSpan.FromHours(9)).ToScryRequest());
+    public Task TimeOfDayComparison() =>
+        RoundTrip(Employee.Where(_ => _.When!.Value.TimeOfDay > TimeSpan.FromHours(9)).ToScryRequest());
 
     [Test]
-    public async Task TimeSpanParts() =>
-        await RoundTrip(Employee.Where(_ => _.Duration.Hours > 1 && _.Duration.Minutes < 30).ToScryRequest());
+    public Task TimeSpanParts() =>
+        RoundTrip(Employee.Where(_ => _.Duration.Hours > 1 && _.Duration.Minutes < 30).ToScryRequest());
 
     [Test]
-    public async Task DateOnlyFromDateTime() =>
-        await RoundTrip(Employee.Where(_ => Date.FromDateTime(_.When!.Value) == new Date(2026, 2, 3)).ToScryRequest());
+    public Task DateOnlyFromDateTime() =>
+        RoundTrip(Employee.Where(_ => Date.FromDateTime(_.When!.Value) == new Date(2026, 2, 3)).ToScryRequest());
 
     // Math.
     [Test]
-    public async Task MathFunctions() =>
-        await RoundTrip(
+    public Task MathFunctions() =>
+        RoundTrip(
             Employee
                 .Where(_ => Math.Abs(_.Rating) > 1 && Math.Round(_.Rating, 1) < 5 && Math.Pow(_.Rating, 2d) > 4)
                 .ToScryRequest());
 
     [Test]
-    public async Task AngleConversions() =>
-        await RoundTrip(Employee.Where(_ => double.DegreesToRadians(_.Rating) > 1).ToScryRequest());
+    public Task AngleConversions() =>
+        RoundTrip(Employee.Where(_ => double.DegreesToRadians(_.Rating) > 1).ToScryRequest());
 
     // Bytes.
     [Test]
-    public async Task ByteFunctions() =>
-        await RoundTrip(
+    public Task ByteFunctions() =>
+        RoundTrip(
             Employee
                 .Where(_ => _.Blob.Length > 3 && _.Blob.Contains((byte) 7) && _.Blob.ElementAt(1) == 9)
                 .ToScryRequest());
@@ -588,74 +588,74 @@ public class RenderRoundTripTests
 
     // Subqueries over collection navigations.
     [Test]
-    public async Task SubqueryAnyWithPredicate() =>
-        await RoundTrip(Employee.Where(_ => _.Orders.Any(_ => _.Total > 10)).ToScryRequest());
+    public Task SubqueryAnyWithPredicate() =>
+        RoundTrip(Employee.Where(_ => _.Orders.Any(_ => _.Total > 10)).ToScryRequest());
 
     [Test]
-    public async Task SubqueryCountProperty() =>
-        await RoundTrip(Employee.Where(_ => _.Orders.Count > 2).ToScryRequest());
+    public Task SubqueryCountProperty() =>
+        RoundTrip(Employee.Where(_ => _.Orders.Count > 2).ToScryRequest());
 
     [Test]
-    public async Task SubquerySumSelector() =>
-        await RoundTrip(Employee.Where(_ => _.Orders.Sum(_ => _.Total) > 100).ToScryRequest());
+    public Task SubquerySumSelector() =>
+        RoundTrip(Employee.Where(_ => _.Orders.Sum(_ => _.Total) > 100).ToScryRequest());
 
     [Test]
-    public async Task SubqueryFilteredFold() =>
-        await RoundTrip(Employee.Where(_ => _.Orders.Where(_ => _.Total > 1).Max(_ => _.Total) > 50).ToScryRequest());
+    public Task SubqueryFilteredFold() =>
+        RoundTrip(Employee.Where(_ => _.Orders.Where(_ => _.Total > 1).Max(_ => _.Total) > 50).ToScryRequest());
 
     [Test]
-    public async Task SubqueryContainsOverValues() =>
-        await RoundTrip(Employee.Where(_ => _.Tags.Contains("urgent")).ToScryRequest());
+    public Task SubqueryContainsOverValues() =>
+        RoundTrip(Employee.Where(_ => _.Tags.Contains("urgent")).ToScryRequest());
 
     // Conditionals and arithmetic.
     [Test]
-    public async Task ConditionalProjection() =>
-        await RoundTrip(Employee.Select(_ => new {_.Name, Band = _.Age > 30 ? "old" : "young"}).ToScryRequest());
+    public Task ConditionalProjection() =>
+        RoundTrip(Employee.Select(_ => new {_.Name, Band = _.Age > 30 ? "old" : "young"}).ToScryRequest());
 
     [Test]
-    public async Task CoalesceAndArithmetic() =>
-        await RoundTrip(Employee.Where(_ => (_.Age ?? 0) * 2 + 1 > 19 && _.Salary % 2 == 0).ToScryRequest());
+    public Task CoalesceAndArithmetic() =>
+        RoundTrip(Employee.Where(_ => (_.Age ?? 0) * 2 + 1 > 19 && _.Salary % 2 == 0).ToScryRequest());
 
     [Test]
-    public async Task UnaryOperators() =>
-        await RoundTrip(Employee.Where(_ => !_.Active || -_.Salary < -10m).ToScryRequest());
+    public Task UnaryOperators() =>
+        RoundTrip(Employee.Where(_ => !_.Active || -_.Salary < -10m).ToScryRequest());
 
     // Grouping.
     [Test]
-    public async Task GroupBySingleKey() =>
-        await RoundTrip(
+    public Task GroupBySingleKey() =>
+        RoundTrip(
             Employee
                 .GroupBy(_ => _.Status)
                 .Select(g => new {g.Key, Count = g.Count(), Total = g.Sum(_ => _.Salary)})
                 .ToScryRequest());
 
     [Test]
-    public async Task GroupByCompositeKey() =>
-        await RoundTrip(
+    public Task GroupByCompositeKey() =>
+        RoundTrip(
             Employee
                 .GroupBy(_ => new {_.Status, _.Active})
                 .Select(g => new {g.Key.Status, g.Key.Active, Count = g.Count()})
                 .ToScryRequest());
 
     [Test]
-    public async Task GroupByComputedKeyPart() =>
-        await RoundTrip(
+    public Task GroupByComputedKeyPart() =>
+        RoundTrip(
             Employee
                 .GroupBy(_ => new {_.Status, Key1 = _.Name.ToUpper()})
                 .Select(g => new {g.Key.Status, Up = g.Key.Key1, Count = g.Count()})
                 .ToScryRequest());
 
     [Test]
-    public async Task GroupByComputedSingleKey() =>
-        await RoundTrip(
+    public Task GroupByComputedSingleKey() =>
+        RoundTrip(
             Employee
                 .GroupBy(_ => _.Name.ToUpper())
                 .Select(g => new {g.Key, Count = g.Count()})
                 .ToScryRequest());
 
     [Test]
-    public async Task GroupByHaving() =>
-        await RoundTrip(
+    public Task GroupByHaving() =>
+        RoundTrip(
             Employee
                 .GroupBy(_ => _.Status)
                 .Where(g => g.Count() > 1)
@@ -663,8 +663,8 @@ public class RenderRoundTripTests
                 .ToScryRequest());
 
     [Test]
-    public async Task GroupByAggregateForms() =>
-        await RoundTrip(
+    public Task GroupByAggregateForms() =>
+        RoundTrip(
             Employee
                 .GroupBy(_ => _.Status)
                 .Select(g => new
@@ -680,8 +680,8 @@ public class RenderRoundTripTests
 
     // Joins.
     [Test]
-    public async Task InnerJoinWithInnerPredicate() =>
-        await RoundTrip(
+    public Task InnerJoinWithInnerPredicate() =>
+        RoundTrip(
             Employee
                 .Join(
                     Department.Where(d => d.Active),
@@ -691,8 +691,8 @@ public class RenderRoundTripTests
                 .ToScryRequest());
 
     [Test]
-    public async Task LeftJoin() =>
-        await RoundTrip(
+    public Task LeftJoin() =>
+        RoundTrip(
             Employee
                 .LeftJoin(
                     Department,
@@ -702,8 +702,8 @@ public class RenderRoundTripTests
                 .ToScryRequest());
 
     [Test]
-    public async Task CompositeKeyJoin() =>
-        await RoundTrip(
+    public Task CompositeKeyJoin() =>
+        RoundTrip(
             Employee
                 .Join(
                     Department,
@@ -713,8 +713,8 @@ public class RenderRoundTripTests
                 .ToScryRequest());
 
     [Test]
-    public async Task GroupJoinWithAggregates() =>
-        await RoundTrip(
+    public Task GroupJoinWithAggregates() =>
+        RoundTrip(
             Employee
                 .GroupJoin(
                     Order,
@@ -726,8 +726,8 @@ public class RenderRoundTripTests
                 .ToScryRequest());
 
     [Test]
-    public async Task JoinWithInnerOps() =>
-        await RoundTrip(
+    public Task JoinWithInnerOps() =>
+        RoundTrip(
             Employee
                 .Join(
                     Department.OrderBy(d => d.Name).Take(5),
@@ -738,8 +738,8 @@ public class RenderRoundTripTests
 
     // Set operators.
     [Test]
-    public async Task UnionWithPredicateOperand() =>
-        await RoundTrip(
+    public Task UnionWithPredicateOperand() =>
+        RoundTrip(
             Employee
                 .Where(_ => _.Active)
                 .Select(_ => new {_.Name})
@@ -747,16 +747,16 @@ public class RenderRoundTripTests
                 .ToScryRequest());
 
     [Test]
-    public async Task ConcatWithOperandOps() =>
-        await RoundTrip(
+    public Task ConcatWithOperandOps() =>
+        RoundTrip(
             Employee
                 .Select(_ => new {_.Name})
                 .Concat(Employee.OrderBy(_ => _.Name).Take(3).Select(_ => new {_.Name}))
                 .ToScryRequest());
 
     [Test]
-    public async Task ExceptOperand() =>
-        await RoundTrip(
+    public Task ExceptOperand() =>
+        RoundTrip(
             Employee
                 .Select(_ => new {_.Name})
                 .Except(Employee.Select(x => new {x.Name}))
