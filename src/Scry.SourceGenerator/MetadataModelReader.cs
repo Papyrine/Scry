@@ -330,7 +330,7 @@ static class MetadataModelReader
             if (reader.GetString(method.Name) == ".ctor" &&
                 (method.Attributes & MethodAttributes.MemberAccessMask) == MethodAttributes.Public &&
                 (method.Attributes & MethodAttributes.Static) == 0 &&
-                method.DecodeSignature(decoder, ImmutableArray<DecodedType>.Empty).ParameterTypes.Length == 0)
+                method.DecodeSignature(decoder, []).ParameterTypes.Length == 0)
             {
                 return true;
             }
@@ -513,7 +513,7 @@ static class MetadataModelReader
     /// </remarks>
     static IEnumerable<Level> Chain(MetadataReader reader, TypeDefinition type, SignatureDecoder decoder)
     {
-        var level = new Level(type, ImmutableArray<DecodedType>.Empty);
+        var level = new Level(type, []);
         while (true)
         {
             yield return level;
@@ -526,7 +526,7 @@ static class MetadataModelReader
 
             if (baseType.Kind == HandleKind.TypeDefinition)
             {
-                level = new(reader.GetTypeDefinition((TypeDefinitionHandle) baseType), ImmutableArray<DecodedType>.Empty);
+                level = new(reader.GetTypeDefinition((TypeDefinitionHandle) baseType), []);
                 continue;
             }
 

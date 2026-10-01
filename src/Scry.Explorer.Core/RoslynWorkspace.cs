@@ -141,11 +141,10 @@ public sealed class RoslynWorkspace :
     /// again for one completion, one diagnostic pass, or one hover. Called once, after the workspace
     /// is created, and the first request pays for nothing but itself.
     /// </remarks>
-    public async Task WarmAsync()
-    {
-        var project = workspace.CurrentSolution.GetProject(editorDocumentId.ProjectId)!;
-        await project.GetCompilationAsync();
-    }
+    public Task WarmAsync() =>
+        workspace.CurrentSolution
+            .GetProject(editorDocumentId.ProjectId)!
+            .GetCompilationAsync();
 
     /// <summary>
     /// Whether the base compilation is built and in hand, which is what a request's fork derives its

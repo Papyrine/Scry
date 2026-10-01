@@ -6,8 +6,9 @@
 static class StorageJson
 {
     // camelCase to match everything else the browser holds.
-    public static JsonSerializerOptions Options { get; } = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
+    public static JsonSerializerOptions Options { get; } =
+        new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
 }

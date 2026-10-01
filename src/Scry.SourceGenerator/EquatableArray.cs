@@ -6,8 +6,6 @@ readonly struct EquatableArray<T>(ImmutableArray<T> array) :
     IEnumerable<T>
     where T : IEquatable<T>
 {
-    readonly ImmutableArray<T> items = array;
-
     /// <summary>
     /// The wrapped array, with a default instance reading as empty. A record field left unset is
     /// <c>default</c> rather than constructed, and an uninitialized <see cref="ImmutableArray{T}"/>
@@ -17,12 +15,12 @@ readonly struct EquatableArray<T>(ImmutableArray<T> array) :
     {
         get
         {
-            if (items.IsDefault)
+            if (array.IsDefault)
             {
-                return ImmutableArray<T>.Empty;
+                return [];
             }
 
-            return items;
+            return array;
         }
     }
 

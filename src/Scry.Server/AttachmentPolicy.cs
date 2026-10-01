@@ -38,7 +38,8 @@ static class AttachmentPolicy
             type =>
             {
                 var interfaces = type.GetInterfaces()
-                    .Where(_ => _.IsGenericType && _.GetGenericTypeDefinition() == typeof(IAttachmentPolicy<>))
+                    .Where(_ => _.IsGenericType &&
+                                _.GetGenericTypeDefinition() == typeof(IAttachmentPolicy<>))
                     .ToList();
 
                 if (interfaces.Count == 0)
