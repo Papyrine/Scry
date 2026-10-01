@@ -12,4 +12,15 @@
     <ProjectReference Include="..\..\src\Scry.Annotations\Scry.Annotations.csproj" />
   </ItemGroup>
   <!-- end-snippet -->
+  <!-- Packed only by samples/Sample.ModelPackageClient/pack-model.ps1, at the version it derives from this
+       assembly's content. A property of this project's own, so the projects it references keep theirs. -->
+  <PropertyGroup Condition="'$(SampleModelPackageVersion)' != ''">
+    <IsPackable>true</IsPackable>
+    <PackageVersion>$(SampleModelPackageVersion)</PackageVersion>
+  </PropertyGroup>
+  <!-- Packed without the Scry.Annotations dependency a published model package would carry: this
+       repository's version of it need not be on any feed, and that client restores nothing from it. -->
+  <ItemGroup Condition="'$(SampleModelPackageVersion)' != ''">
+    <ProjectReference Update="..\..\src\Scry.Annotations\Scry.Annotations.csproj" PrivateAssets="all" />
+  </ItemGroup>
 </Project>

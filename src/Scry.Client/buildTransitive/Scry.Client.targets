@@ -3,9 +3,11 @@
   <!--
     Wires the Scry source generator. A consuming project only needs to:
       1. Set <ScryModelDll> to the path of the server model's built DLL.
-      2. Add a <ProjectReference ... ReferenceOutputAssembly="false" /> to the model project for
-         build ordering (NOT a real reference).
-    This props file surfaces the path to the generator and folds the DLL's content hash into a
+      2. Make sure that DLL exists before it compiles. A model project: add a
+         <ProjectReference ... ReferenceOutputAssembly="false" /> to it, for build ordering only (NOT a
+         real reference). A model package: reference it with ExcludeAssets="all" PrivateAssets="all"
+         GeneratePathProperty="true" and build the path from the Pkg property, as restore puts it in place.
+    This targets file surfaces the path to the generator and folds the DLL's content hash into a
     compiler-visible property so the generator re-reads it exactly when the model changes.
   -->
   <!-- begin-snippet: buildTransitiveProps -->
@@ -36,7 +38,10 @@
           BeforeTargets="CoreCompile"
           Condition="'$(ScryModelDll)' != '' and !Exists('$(ScryModelDll)')">
     <Error Text="Scry: the model assembly '$(ScryModelDll)' was not found.
-Reference the model project with ReferenceOutputAssembly=&quot;false&quot; so it builds first." />
+A model project: reference it with ReferenceOutputAssembly=&quot;false&quot; so it builds first.
+A model package: reference it with GeneratePathProperty=&quot;true&quot;, and build the path from the
+Pkg property that generates (see obj/*.nuget.g.props).
+See https://github.com/Papyrine/Scry/blob/main/docs/model-package.md" />
   </Target>
   <!-- end-snippet -->
 </Project>

@@ -8,7 +8,9 @@ What a client project needs is the same everywhere, and is covered in [Getting s
 [Source generator](source-generator.md):
 
 - a `<ScryModelDll>` property pointing at the server model's built DLL
-- a `ProjectReference` to the model project with `ReferenceOutputAssembly="false"`, for build ordering alone
+- a `ProjectReference` to the model project with `ReferenceOutputAssembly="false"`, for build ordering alone — or, for a
+  model shipped as a NuGet package, a `PackageReference` that downloads it without referencing it
+  ([The model as a package](model-package.md))
 - a reference to `Scry.Client`, which brings the generator and the MSBuild targets that feed it the path
 
 The target framework of the client is its own business. A `net10.0-windows` WPF project reads the same `net10.0` model DLL a

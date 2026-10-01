@@ -150,7 +150,7 @@ public static partial class QueryBuilder
     /// goes into that navigation's nested object, made when it is not there and taken out with its last
     /// column — an empty <c>new { }</c> is not a projection the server accepts — and the <c>Select</c>
     /// goes with its last column, leaving the server's default projection. Null for a path more than
-    /// one navigation deep: see <see cref="ToggleNested"/>.
+    /// one navigation deep: see <see cref="ToggleNested(SchemaIndex, BuilderQuery, IReadOnlyList{string})"/>.
     /// </summary>
     public static BuilderQuery? ToggleColumn(BuilderQuery query, IReadOnlyList<string> path)
     {

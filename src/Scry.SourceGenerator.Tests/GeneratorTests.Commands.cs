@@ -283,6 +283,20 @@ public partial class GeneratorTests
         "[Command(Result = typeof(System.Uri))] public class Touch { public int Id { get; set; } }",
         "'Touch' answers with 'Uri', which is not declared in the model assembly.")]
     [Arguments(
+        "SCRY015",
+        """
+        public class Envelope<T> { public T Value { get; set; } = default!; }
+        [Command(Result = typeof(Envelope<int>))] public class Touch { public int Id { get; set; } }
+        """,
+        "'Touch' answers with 'Envelope', which is generic.")]
+    [Arguments(
+        "SCRY015",
+        """
+        public class Envelope<T> { public int Count { get; set; } }
+        [Command(Result = typeof(Envelope<>))] public class Touch { public int Id { get; set; } }
+        """,
+        "'Touch' answers with 'Envelope', which is generic.")]
+    [Arguments(
         "SCRY016",
         """
         [Queryable] public class Badge { public int Id { get; set; } public bool CanTouch { get; set; } }

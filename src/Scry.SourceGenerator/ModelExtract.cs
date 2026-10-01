@@ -14,6 +14,10 @@
 /// Every way a command was found to be misdeclared, each with the diagnostic it is reported as. A model
 /// carrying any is emitted as nothing, as one carrying a conflicting opt-in is.
 /// </param>
+/// <param name="Generics">
+/// One line per open generic type that opted in, naming the type and the attribute. Such a type has no
+/// query model it could be emitted as, so it is reported, and the model emitted as nothing.
+/// </param>
 record struct ModelExtract(
     string? Error,
     EquatableArray<SourceInfo> Sources,
@@ -21,7 +25,8 @@ record struct ModelExtract(
     EquatableArray<string> Conflicts,
     EquatableArray<CommandInfo> Commands = default,
     EquatableArray<ResultInfo> Results = default,
-    EquatableArray<CommandProblem> Problems = default)
+    EquatableArray<CommandProblem> Problems = default,
+    EquatableArray<string> Generics = default)
 {
     public static readonly ModelExtract Empty = new(null, new([]), new([]), new([]));
 }

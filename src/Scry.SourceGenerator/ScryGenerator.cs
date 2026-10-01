@@ -104,6 +104,14 @@ public class ScryGenerator :
         DiagnosticSeverity.Error,
         true);
 
+    static DiagnosticDescriptor genericOptIn = new(
+        "SCRY018",
+        "A generic type opts in",
+        "{0} but is generic. A client is generated with a query model per opted-in type, and an open generic type has no members a client could name until its type parameters are filled in. Opt in the types deriving from it instead: a generic base in the model assembly gives each of them its members, with its parameters filled in.",
+        "Scry",
+        DiagnosticSeverity.Error,
+        true);
+
     // The command diagnostics carry their whole message: the reader composes it, since only the reader
     // knows which of a rule's several failures it met.
     static Dictionary<string, DiagnosticDescriptor> commandProblems = new[]
@@ -138,6 +146,17 @@ public class ScryGenerator :
             foreach (var conflict in extract.Conflicts)
             {
                 context.ReportDiagnostic(Diagnostic.Create(conflictingOptIn, Location.None, conflict));
+            }
+
+            return;
+        }
+
+        // Refused at startup by the server too, and nothing is emitted, for the same reason.
+        if (extract.Generics.Length > 0)
+        {
+            foreach (var generic in extract.Generics)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(genericOptIn, Location.None, generic));
             }
 
             return;

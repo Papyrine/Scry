@@ -17,6 +17,7 @@
 | `Sample.FSharp.Tests` | The F# queries run through the server, hosted in-process, with the requests and rows snapshotted. |
 | `Sample.RedisServer`, `Sample.MessagePipeServer` | A minimal server each, for running twice: a [backplane](#live-queries-across-more-than-one-process) carrying changes from one node to the other. |
 | `Sample.NServiceBusServer`, `Sample.NServiceBusWorker` | The same over NServiceBus, plus a worker whose handler writes from another process. |
+| `Sample.ModelPackageClient` | The console client's first query, generated from `Sample.Model` packed as a NuGet package. Outside the solution: see [The model as a package](#the-model-as-a-package). |
 
 The three desktop and console clients are there to show that the client half is not tied to a browser.
 [Client hosts](clients.md) covers what each host needs and where they differ.
@@ -336,7 +337,7 @@ The client half — re-asking with `If-None-Match` and replaying what the 304 st
 <sup><a href='/samples/Sample.WebClient/Sample.WebClient.csproj#L29-L51' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientGeneratorWiring' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-Because the sample uses project references rather than the NuGet package, the generator wiring that `Scry.Client`'s `buildTransitive` props would normally supply is written out explicitly. See [Source generator](source-generator.md).
+Because the sample uses project references rather than the NuGet package, the generator wiring that `Scry.Client`'s `buildTransitive` targets would normally supply is written out explicitly. See [Source generator](source-generator.md).
 
 <!-- snippet: clientRegistration -->
 <a id='snippet-clientRegistration'></a>
@@ -351,6 +352,21 @@ builder.Services.AddScoped<ScryQuery>();
 ```
 <sup><a href='/samples/Sample.WebClient/Program.cs#L14-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
+
+
+### The model as a package
+
+`Sample.ModelPackageClient` is generated from `Sample.Model` as a NuGet package rather than a project: the layout of a model one team publishes and others consume ([The model as a package](model-package.md)). It is outside `Scry.Samples.slnx`, because the package has to exist before it restores. `pack-model.ps1` packs the model into the project's `feed` folder, at a version derived from what the package is made of, so the NuGet cache never serves a stale one:
+
+```bash
+pwsh samples/Sample.ModelPackageClient/pack-model.ps1
+```
+
+```bash
+dotnet run --project samples/Sample.ModelPackageClient
+```
+
+Its build fails if the model, or the EF Core beneath it, reaches its references or its output, which is the point of the package reference it shows.
 
 
 ## The queries

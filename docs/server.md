@@ -69,7 +69,7 @@ builder.Services
 
 `AddScry<TContext>`:
 
-- Scans `typeof(TContext).Assembly` for types carrying `[Queryable]`, `[QueryableView]`, or `[QueryablePoco]`.
+- Scans the model assembly for types carrying `[Queryable]`, `[QueryableView]`, or `[QueryablePoco]`: `typeof(TContext).Assembly`, unless `options.ModelAssembly` names another — as a host does whose model ships as a package and whose context it declares itself ([The model as a package](model-package.md#the-server)).
 - Builds the allow-list schema **once**, at registration time.
 - Registers the `ScryOptions` and a `ScryProcessor` as singletons.
 
@@ -77,6 +77,7 @@ The `DbContext` itself is resolved per request from DI, so the usual `AddDbConte
 
 Failures surface at startup, not at first request:
 
+- A model assembly with nothing opted in — read from the wrong assembly, a model would otherwise be served with no sources at all.
 - A `[QueryablePoco]` type with no registered data.
 - Two sources resolving to the same name.
 - An opted-in entity or view type the context does not map (`MapScry` checks every source against the model, since introspection would advertise a source every query of which fails). One model assembly serving several contexts sets `options.AllowUnmappedSources`, and a query naming a source this context lacks is then rejected as unknown rather than faulted.

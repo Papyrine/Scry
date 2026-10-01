@@ -12,6 +12,7 @@ Type-safe, serializable LINQ from a client to a server-side EF Core model.
 | [Comparisons](comparisons.md) | Scry against GraphQL, OData, hand-written endpoints, gRPC, and expression-tree serializers — and when to pick one of those instead. |
 | [Annotations](annotations.md) | `[Queryable]`, `[QueryableView]`, `[QueryablePoco]`, `[QueryIgnore]`, `[ReturnableWith]`, `[Command]`, and what each exposes. |
 | [Source generator](source-generator.md) | How the model assembly is read by path, the MSBuild wiring, what is emitted, and troubleshooting. |
+| [The model as a package](model-package.md) | A model shipped as a NuGet package: the client's package reference, one version on both sides, `ModelAssembly`, and what the package has to hold. |
 | [Writing queries](querying.md) | The supported LINQ surface: operators, expressions, functions, projections, grouping, terminals. |
 | [LINQ coverage](linq-coverage.md) | Scry vs the EF Core–translatable surface: what is supported, and why anything left out is left out. |
 | [Paging](paging.md) | The `ToPageAsync` page envelope and limits (offset paging); the keyset-cursor design (slices 2–3, pending). |
@@ -88,7 +89,7 @@ Every package puts its public types in the single `Scry` namespace, so one `usin
 ## Requirements
 
 - .NET 10 (`net10.0`) for `Scry.Wire`, `Scry.Client`, `Scry.Server`, `Scry.Server.Explorer`, `Scry.Server.Delta`, and the SignalR, backplane and bus packages.
-- `Scry.Annotations` targets `netstandard2.0`, so any model project can reference it.
+- `Scry.Annotations` targets `net10.0`, so a model project referencing it targets `net10.0` or later.
 - EF Core on the server. The client has no EF dependency, which keeps it small under trimmed Blazor WebAssembly and light in a desktop or console app.
 
 

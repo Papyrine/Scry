@@ -13,6 +13,8 @@ This package also ships the Scry source generator, so a client project needs onl
 <sup><a href='/samples/Sample.WebClient/Sample.WebClient.csproj#L7-L10' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientModelPath' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
+A model shipped as a NuGet package is pointed at inside the package, which is downloaded and never referenced: see [The model as a package](https://github.com/Papyrine/Scry/blob/main/docs/model-package.md).
+
 Register the client over a **named** `HttpClient`, so its base address — and any handler pipeline it grows — stays separate from every other call the application makes:
 
 <!-- snippet: clientRegistration -->
@@ -58,4 +60,4 @@ employees = await Query
 <sup><a href='/samples/Sample.WebClient/Pages/Index.razor.cs#L82-L89' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientQuery' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-Docs: [Getting started](https://github.com/Papyrine/Scry/blob/main/docs/getting-started.md) · [Writing queries](https://github.com/Papyrine/Scry/blob/main/docs/querying.md) · [Source generator](https://github.com/Papyrine/Scry/blob/main/docs/source-generator.md)
+Docs: [Getting started](https://github.com/Papyrine/Scry/blob/main/docs/getting-started.md) · [Writing queries](https://github.com/Papyrine/Scry/blob/main/docs/querying.md) · [Source generator](https://github.com/Papyrine/Scry/blob/main/docs/source-generator.md) · [The model as a package](https://github.com/Papyrine/Scry/blob/main/docs/model-package.md)

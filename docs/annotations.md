@@ -1,6 +1,6 @@
 # Annotations
 
-`Scry.Annotations` (namespace `Scry`, targeting `netstandard2.0`) holds the attributes that define the allow-list. They are applied to the **server** model. Both the source generator and the server runtime read the same attributes and derive the same surface from them.
+`Scry.Annotations` (namespace `Scry`, targeting `net10.0`) holds the attributes that define the allow-list. They are applied to the **server** model. Both the source generator and the server runtime read the same attributes and derive the same surface from them.
 
 The model is **default-deny**: a type that carries none of the opt-in attributes is invisible to clients, and a request naming it is rejected as an unknown source. A type opts in as exactly one of them: carrying two is refused by the generator (`SCRY008`) and at server startup, since the two sides would otherwise classify the type differently.
 
@@ -65,7 +65,7 @@ public class Employee
 
 The source name exposed to clients defaults to the **type name** — `Employee`. That is what appears as the `root` of a wire request, as the property name on the generated `ScryQuery`, and in the introspection output.
 
-If the type also carries EF Core's `[Keyless]`, Scry classifies it as a view rather than an entity. The two are resolved identically (`DbContext.Set<T>()`); the distinction is reported through introspection so tooling can label it.
+If the type also carries EF Core's `[Keyless]`, Scry classifies it as a view rather than an entity — inherited from a base too, as EF reads it, though only from a base in the model assembly: one only a base elsewhere carries is refused at startup until the type repeats it. The two are resolved identically (`DbContext.Set<T>()`); the distinction is reported through introspection so tooling can label it.
 
 
 ### Inheritance
@@ -99,7 +99,11 @@ public class Building : Asset
 
 That is default-deny applied to the hierarchy: adding a subclass to the model exposes nothing until it is annotated. A type left out is unreachable — it has no wire name, its members are not readable, and no query can narrow to it — while its own descendants stay reachable if they opted in, since the base link skips over types that did not.
 
-The members of a base that did not opt in are another matter. When the base is in the model assembly, every opted-in type deriving from it exposes them as its own, as if they were declared there: reflection reads inherited members, and the generator reads the base's metadata the same way. A base in another assembly is the one the generator cannot read, so a member inherited from one is refused at startup rather than exposed to a client that could never see it. An override is one member, described where it is nearest, and carrying the attributes of every declaration along the chain.
+The members of a base that did not opt in are another matter. When the base is in the model assembly, every opted-in type deriving from it exposes them as its own, as if they were declared there: reflection reads inherited members, and the generator reads the base's metadata the same way. That holds for a generic base too, read with the arguments the deriving type supplies: `Order : Entity<int>` exposes `Entity`'s `Id` as an `int`, and a base passing its own parameter on passes on the argument it was given. A base in another assembly, generic or not, is the one the generator cannot read, so a member inherited from one is refused at startup rather than exposed to a client that could never see it.
+
+An override is one member, described where it is nearest, and carrying the attributes of every declaration it overrides, as reflection's inherit walk reads them — an opted-in base's declaration included, so a member hidden on the base stays hidden on every type deriving from it. A member hiding another with `new`, virtual or not, overrides nothing: it starts again, and carries none of what it hides. The generator can merge only the declarations in the model assembly, so an override of a member declared in another assembly repeats any `[QueryIgnore]`, `[Sensitive]`, `[Attachment]`, `[QueryableCollection]`, `[Key]` or `[CommandIgnore]` that declaration carries; one left to the other assembly is refused at startup, naming the attribute to repeat. Refusing rather than ignoring it is deliberate: each of them restricts, and ignoring one would expose what its author hid. Hiding such a member, by overriding it with `[QueryIgnore]`, is the other way out, and what the other assembly's declaration carries is then not read at all.
+
+A generic type itself cannot opt in — it has no members a client could name until its parameters are filled in — so the generator refuses one (`SCRY018`), and so does the server. The types deriving from it opt in instead.
 
 An opted-in derived type is itself a source (`Query.Vehicle`), *and* something a query rooted at the base can narrow to with [`OfType`](querying.md#narrowing-to-a-derived-type). The generated model inherits the base's, declaring only the members the CLR type declares, so the base's members are readable before and after the narrowing and the derived ones only after.
 
@@ -634,7 +638,7 @@ The constraints are checked twice, at the build that writes the model and again 
 - The row's key must be derivable: `[Key]` where written, else a member named `Id`, else `{TypeName}Id` (`SCRY007`).
 - The type must have an [attachment policy](policies.md#attachment-policies), or the server refuses to start.
 
-`ContentType` is optional and says what the bytes are — the media type the fetch is served as, and what tooling names a download from. Leaving it unset serves `application/octet-stream`, which says only that they are bytes. A value that is not a `type/subtype` fails at server startup. See [Content type](attachments.md#content-type).
+`ContentType` is optional and says what the bytes are — the media type the fetch is served as, and what tooling names a download from. Leaving it unset serves `application/octet-stream`, which says only that they are bytes. A value that is not a `type/subtype` fails at server startup. An override of an attachment serves the type the declaration it overrides gave, unless it carries an `[Attachment]` of its own. See [Content type](attachments.md#content-type).
 
 
 ## `[AttachmentWith]`
@@ -665,6 +669,8 @@ public int Headcount { get; set; }
 <!-- endSnippet -->
 
 The client never references the model assembly, so a deprecation would otherwise stop at the boundary. It is replicated instead: onto the generated query model, onto the member, and onto the `ScryQuery` entry point, so a query written against a deprecated source or member warns where it is written.
+
+A member overriding a deprecated one is deprecated too, as C# treats it — a use of an override binds to the declaration it overrides — so the nearest deprecation along the override chain is the one replicated. A type's deprecation is its own: a type deriving from a deprecated one is not deprecated unless it says so.
 
 This is the deprecation window that `[QueryIgnore]` has no room for. The two are a sequence:
 
@@ -701,11 +707,11 @@ A policy registered in code via `ScryOptions.AddPolicy<TEntity, TPolicy>()` take
 public class DeleteEmployee { public int Id { get; set; } }
 ```
 
-Declares a [command](commands.md): a write, sent by the client through the generated `Query.Commands` and bound on the server into this class. Its public read-write properties are its payload — scalars, enums, `byte[]`, nullables of those, and lists of those.
+Declares a [command](commands.md): a write, sent by the client through the generated `Query.Commands` and bound on the server into this class. Its public read-write properties are its payload — scalars, enums, `byte[]`, nullables of those, and lists of those — including those it inherits from a base in the model assembly, generic or not, as a source's members are ([Inheritance](#inheritance)).
 
 - The type, where given, is the source the command acts on. The command carries that source's key as a property named like the key member or `{Target}{Key}`, and the target's query model gains a `bool` capability member, `Can{Command}`, computed from the command's policy.
 - `Name` renames the command on the wire.
-- `Result` names the class the command answers with.
+- `Result` names the class the command answers with. It is declared in the model assembly and is not generic, open or closed — the generator refuses one (`SCRY015`), as the server does — though it may derive from a generic base.
 - `Policy` names an `ICommandPolicy<TCommand>` or `ICommandPolicy<TCommand, TEntity>`. Server-only, like `[ReturnableWith]`: the generator ignores it. `ScryOptions.AddCommandPolicy` takes precedence.
 
 A command class is not a source: it opts nothing into the query surface, and a type may not carry both.
@@ -713,7 +719,7 @@ A command class is not a source: it opts nothing into the query surface, and a t
 
 ## `[CommandIgnore]`
 
-Keeps a command property out of the payload, for the server to fill: a client cannot send it, and the generated command class does not have it. A property carrying `[QueryIgnore]` instead is refused, since that attribute hides a member of a *source*.
+Keeps a command property out of the payload, for the server to fill: a client cannot send it, and the generated command class does not have it. A property carrying `[QueryIgnore]` instead is refused, since that attribute hides a member of a *source*. An override of a property declared in another assembly repeats the attribute, as the source attributes are repeated ([Inheritance](#inheritance)).
 
 
 ## Which members are exposed
@@ -817,7 +823,7 @@ An `enum` element is re-emitted to clients like any other exposed enum, even whe
 - **Collections whose element is neither an opted-in type nor a scalar** — a `List<T>` of a plain POCO stays invisible even with `[QueryableCollection]`.
 - **Complex types that are not themselves opted in.** Adding `[QueryableComplex]` to the target type makes it traversable.
 - **Write-only or non-public properties, indexers, and fields.**
-- **What the generator could not read** — a member inherited from a base in another assembly, an enum declared in another assembly, or a collection shape outside the set above. Each is refused at startup, naming the member, rather than exposed to a client that would then report itself stale.
+- **What the generator could not read** — a member inherited from a base in another assembly (generic or not), an enum declared in another assembly, an attribute only another assembly's declaration of an overridden member carries, or a collection shape outside the set above. Each is refused at startup, naming the member, rather than exposed to a client that would then report itself stale.
 
 
 ## Keeping the two readers aligned
@@ -831,4 +837,4 @@ They deliberately agree on classification, on which base type each model derives
 
 Where agreement has to be exact rather than merely parallel, the two compile one shared source file instead of two implementations: the [schema stamp](schema-versioning.md), the rule for [which source names are expressible](#naming-a-source), and the [collection shapes](#collections) a member may be declared as.
 
-`LockstepTests` in `Scry.Tests` is what holds them together: it runs the generator's reader over the test model — which carries every shape the two have ever described differently — and compares the stamp and every member with the server's own description.
+`LockstepTests` in `Scry.Tests` is what holds them together: it runs the generator's reader over the test model — which carries every shape the two have ever described differently — and compares the stamp and every member with the server's own description. `CompiledLockstepTests` does the same over models compiled per case, for the shapes kept out of the test model: generic bases, overrides through opted-in bases and members hidden with `new`, and overrides of members another assembly declares.

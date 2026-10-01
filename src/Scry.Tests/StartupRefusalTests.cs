@@ -1,11 +1,7 @@
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.EntityFrameworkCore;
-
 /// <summary>
 /// The model shapes <c>Schema.Build</c> refuses, each given a test. A shape that refuses to start
-/// cannot live in this assembly — the schema scans the whole assembly of the context it is built
-/// for, so one bad type would fail every fixture — so each case compiles its own model with Roslyn
+/// cannot live in this assembly — the schema scans the whole model assembly it is built for, so one
+/// bad type would fail every fixture — so each case compiles its own model (<see cref="CompiledModel"/>)
 /// and builds the schema over that. Pinned by message, since the message is the fix a host is told.
 /// </summary>
 public class StartupRefusalTests
@@ -75,54 +71,109 @@ public class StartupRefusalTests
         "[PreviousNames(\"Old\")] public class Plain { public int Id { get; set; } }",
         "has no wire name",
         DisplayName = "a previous name on a type that is not a source")]
+    [Arguments(
+        "public class Plain { public int Id { get; set; } }",
+        "Nothing in assembly",
+        DisplayName = "a model assembly with nothing opted in")]
+    [Arguments(
+        "[Queryable] public class E<T> { public int Id { get; set; } }",
+        "'E' carries [Queryable] but is generic",
+        DisplayName = "a generic type opted in")]
+    [Arguments(
+        "[Queryable(Name = \"E\")] public class E<T> { public int Id { get; set; } }",
+        "but is generic",
+        DisplayName = "a generic type opted in under a name")]
+    [Arguments(
+        "[QueryableComplex] public class C<T> { public int X { get; set; } } [Queryable] public class A { public int Id { get; set; } }",
+        "'C' carries [QueryableComplex] but is generic",
+        DisplayName = "a generic complex type")]
+    [Arguments(
+        "public abstract class E<T> { public T Day { get; set; } = default!; } [Queryable] public class A : E<System.DayOfWeek> { public int Id { get; set; } }",
+        "'DayOfWeek', an enum declared in assembly",
+        DisplayName = "a generic base filled in with a foreign enum")]
+    [Arguments(
+        "[Queryable] public class A : ForeignIgnoredBase { public int Id { get; set; } public override string Secret { get; set; } = \"\"; }",
+        "Repeat [QueryIgnore] on the override",
+        DisplayName = "an override losing a foreign [QueryIgnore]")]
+    [Arguments(
+        "[Queryable] public class A : ForeignSensitiveBase { public int Id { get; set; } public override string Salary { get; set; } = \"\"; }",
+        "Repeat [Sensitive] on the override",
+        DisplayName = "an override losing a foreign [Sensitive]")]
+    [Arguments(
+        "[Queryable] public class A : ForeignAttachmentBase { public int Id { get; set; } public override byte[]? Document { get; set; } }",
+        "Repeat [Attachment] on the override",
+        DisplayName = "an override losing a foreign [Attachment]")]
+    [Arguments(
+        "[Queryable] public class A : ForeignCollectionBase { public int Id { get; set; } public override List<string> Tags { get; set; } = []; }",
+        "Repeat [QueryableCollection] on the override",
+        DisplayName = "an override losing a foreign [QueryableCollection]")]
+    [Arguments(
+        "[Queryable] public class A : ForeignKeyBase { public int Id { get; set; } public override int Code { get; set; } }",
+        "Repeat [Key] on the override",
+        DisplayName = "an override losing a foreign [Key]")]
+    [Arguments(
+        "[Queryable] public class Monthly : ForeignKeylessBase { public int Month { get; set; } }",
+        "Repeat [Keyless] on 'Monthly'",
+        DisplayName = "a [Keyless] only a foreign base carries")]
+    [Arguments(
+        "public class Envelope<T> { public T Value { get; set; } = default!; } [Command(Result = typeof(Envelope<int>))] public class Touch { public int Id { get; set; } }",
+        "'Touch' answers with 'Envelope', which is generic",
+        DisplayName = "a command answering with a closed generic class")]
+    [Arguments(
+        "public class Envelope<T> { public int Count { get; set; } } [Command(Result = typeof(Envelope<>))] public class Touch { public int Id { get; set; } }",
+        "'Touch' answers with 'Envelope', which is generic",
+        DisplayName = "a command answering with an open generic class")]
+    [Arguments(
+        "[Command] public class Stamp : ForeignCommandIgnoredBase { public int Id { get; set; } public override string By { get; set; } = \"\"; }",
+        "Repeat [CommandIgnore] on the override",
+        DisplayName = "an override losing a foreign [CommandIgnore]")]
     public async Task RefusesToStart(string model, string expected)
     {
-        var exception = await Refusal(model);
+        var exception = Refusal(model);
 
         await Assert.That(exception.Message).Contains(expected);
     }
 
-    static async Task<Exception> Refusal(string model)
+    // The layout a model package invites: the annotated types in the package's assembly, the context
+    // declared by the host. Read from the context's assembly the model is empty, which is refused rather
+    // than served; named through ModelAssembly it is read where it lives.
+    [Test]
+    public async Task ReadsTheModelAssemblyItIsGiven()
     {
-        var source =
-            $$"""
-              using System.Linq;
-              using Microsoft.EntityFrameworkCore;
-              using Scry;
+        var model = CompiledModel.Compile(
+            """
+            [Queryable] public class A { public int Id { get; set; } }
+            [Command] public sealed class Ping { }
+            """);
+        var host = CompiledModel.Compile("public sealed class HostContext : DbContext { }");
+        var context = host.Assembly.GetType("HostContext")!;
 
+        var refusal = Assert.ThrowsExactly<Exception>(() => Schema.Build(new(context)));
+
+        var schema = Schema.Build(new(context)
+        {
+            ModelAssembly = model.Assembly
+        });
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(refusal.Message).Contains("ScryOptions.ModelAssembly");
+            await Assert.That(schema.TryGetSource("A", out _)).IsTrue();
+            await Assert.That(schema.TryGetCommand("Ping", out _)).IsTrue();
+        }
+    }
+
+    static Exception Refusal(string model)
+    {
+        var (assembly, _) = CompiledModel.Compile(
+            $$"""
               public sealed class ShapesContext : DbContext
               {
               }
 
               {{model}}
-              """;
-        var compilation = CSharpCompilation.Create(
-            $"Shapes{Guid.NewGuid():N}",
-            [CSharpSyntaxTree.ParseText(source)],
-            References(),
-            new(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
-
-        using var stream = new MemoryStream();
-        var emitted = compilation.Emit(stream);
-        var errors = emitted.Diagnostics.Where(_ => _.Severity == DiagnosticSeverity.Error).ToList();
-        await Assert.That(errors).IsEmpty().Because(string.Join("\n", errors));
-
-        var assembly = System.Reflection.Assembly.Load(stream.ToArray());
+              """);
         var options = new ScryOptions(assembly.GetType("ShapesContext")!);
         return Assert.ThrowsExactly<Exception>(() => Schema.Build(options));
-    }
-
-    static List<MetadataReference> References()
-    {
-        var trusted = (string) AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!;
-        var references = trusted
-            .Split(Path.PathSeparator)
-            .Where(_ => _.Length > 0)
-            .Select(MetadataReference (_) => MetadataReference.CreateFromFile(_))
-            .ToList();
-        references.Add(MetadataReference.CreateFromFile(typeof(QueryableAttribute).Assembly.Location));
-        references.Add(MetadataReference.CreateFromFile(typeof(ScryProcessor).Assembly.Location));
-        references.Add(MetadataReference.CreateFromFile(typeof(DbContext).Assembly.Location));
-        return references;
     }
 }
