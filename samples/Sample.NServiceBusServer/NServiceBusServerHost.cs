@@ -10,10 +10,11 @@ public static class NServiceBusServerHost
     {
         var builder = WebApplication.CreateBuilder(args);
         var database = await BackplaneHost.Database(args, "Sample.NServiceBusServer", "Sample.NServiceBusWorker");
-        BackplaneHost.AddData(builder.Services, database);
+        var services = builder.Services;
+        BackplaneHost.AddData(services, database);
 
         // begin-snippet: sampleNServiceBusBackplane
-        builder.Services.AddScry<SampleContext>(
+        services.AddScry<SampleContext>(
             _ =>
             {
                 BackplaneHost.Configure(_);
@@ -36,7 +37,7 @@ public static class NServiceBusServerHost
         // command. A full endpoint rather than a send-only one, which could send commands and would
         // hear nothing back.
         var endpoint = NServiceBusEndpoint.Create($"Sample.Web.{Port(args)}", args);
-        builder.Services.AddNServiceBusEndpoint(endpoint);
+        services.AddNServiceBusEndpoint(endpoint);
         // end-snippet
 
         var app = builder.Build();

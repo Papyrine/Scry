@@ -3,17 +3,18 @@
 // transport under MessagePipe here is Redis, so it needs one: docker run -p 6379:6379 redis
 var builder = WebApplication.CreateBuilder(args);
 var database = await BackplaneHost.Database(args, "Sample.MessagePipeServer");
-BackplaneHost.AddData(builder.Services, database);
+var services = builder.Services;
+BackplaneHost.AddData(services, database);
 
 // begin-snippet: sampleMessagePipeBackplane
 // MessagePipe and a distributed transport for it, registered as a host that uses MessagePipe for
 // anything else already has them. Scry asks for neither by name: it resolves MessagePipe's
 // distributed publisher and subscriber, and whichever transport backs them is the one used.
-builder.Services
+services
     .AddMessagePipe(_ => _.EnableAutoRegistration = false)
     .AddRedis(ConnectionMultiplexer.Connect(builder.Configuration["Redis"] ?? "localhost:6379"));
 
-builder.Services.AddScry<SampleContext>(
+services.AddScry<SampleContext>(
     _ =>
     {
         BackplaneHost.Configure(_);

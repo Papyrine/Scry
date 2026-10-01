@@ -17,7 +17,7 @@ public class CommandsPageTests
 {
     static ScryTestServer server = null!;
 
-    static readonly string[] seeded = ["Aaron", "Alice", "Bob", "Carol"];
+    static string[] seeded = ["Aaron", "Alice", "Bob", "Carol"];
 
     [Before(Class)]
     public static async Task StartServer() =>
@@ -178,7 +178,8 @@ public class CommandsPageTests
     }
 
     static AngleSharp.Dom.IElement? Row(IRenderedComponent<Commands> page, string name) =>
-        page.FindAll("#employees tbody tr").FirstOrDefault(_ => _.QuerySelector(".name")?.TextContent == name);
+        page.FindAll("#employees tbody tr")
+            .FirstOrDefault(_ => _.QuerySelector(".name")?.TextContent == name);
 
     static string Status(IRenderedComponent<Commands> page) =>
         page.Find("[data-testid=command-status]").TextContent;
@@ -197,12 +198,13 @@ public class CommandsPageTests
     static BunitContext Context(ScryTestServer server)
     {
         var context = new BunitContext();
+        var services = context.Services;
         var client = server.CreateScryClient();
         client.CommandWait = TimeSpan.FromSeconds(2);
         client.PendingWork.CompletedLinger = TimeSpan.FromMinutes(1);
-        context.Services.AddSingleton(client);
-        context.Services.AddSingleton(client.PendingWork);
-        context.Services.AddSingleton<ScryQuery>();
+        services.AddSingleton(client);
+        services.AddSingleton(client.PendingWork);
+        services.AddSingleton<ScryQuery>();
         return context;
     }
 }

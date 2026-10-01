@@ -3,15 +3,16 @@
 // Redis to talk to: docker run -p 6379:6379 redis
 var builder = WebApplication.CreateBuilder(args);
 var database = await BackplaneHost.Database(args, "Sample.RedisServer");
-BackplaneHost.AddData(builder.Services, database);
+var services = builder.Services;
+BackplaneHost.AddData(services, database);
 
 // begin-snippet: sampleRedisBackplane
 // The connection is the host's own, registered the way it would be for anything else that uses Redis.
-builder.Services
+services
     .AddSingleton<IConnectionMultiplexer>(
         _ => ConnectionMultiplexer.Connect(builder.Configuration["Redis"] ?? "localhost:6379"));
 
-builder.Services
+services
     .AddScry<SampleContext>(
     _ =>
     {

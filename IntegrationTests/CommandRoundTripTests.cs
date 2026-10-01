@@ -35,13 +35,14 @@ public class CommandRoundTripTests
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
-        builder.Services.AddDbContext<Sample.Model.SampleContext>(
+        var services = builder.Services;
+        services.AddDbContext<Sample.Model.SampleContext>(
             (services, options) => options
                 .UseSqlServer(database.ConnectionString)
                 .AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>()));
-        builder.Services.AddSampleCommandHandlers();
-        builder.Services.Configure<SampleCommandOptions>(_ => _.SlowDelay = TimeSpan.FromMilliseconds(1500));
-        builder.Services.AddScry<Sample.Model.SampleContext>(options =>
+        services.AddSampleCommandHandlers();
+        services.Configure<SampleCommandOptions>(_ => _.SlowDelay = TimeSpan.FromMilliseconds(1500));
+        services.AddScry<Sample.Model.SampleContext>(options =>
         {
             options.AddPocoSource(_ => Sample.Model.Holiday.Seed());
             options.AddAttachmentPolicy<Sample.Model.Department, AllowAttachmentPolicy>();

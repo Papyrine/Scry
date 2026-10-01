@@ -27,9 +27,10 @@ public class CachedPolicyPageTests
     public async Task DrivesTheCacheThroughItsThreeCases()
     {
         await using var context = new BunitContext();
-        context.Services.AddSingleton(server.CreateScryClient());
-        context.Services.AddSingleton<ScryQuery>();
-        context.Services.AddSingleton<IHttpClientFactory>(new SingleClientFactory(server.CreateClient()));
+        var services = context.Services;
+        services.AddSingleton(server.CreateScryClient());
+        services.AddSingleton<ScryQuery>();
+        services.AddSingleton<IHttpClientFactory>(new SingleClientFactory(server.CreateClient()));
 
         var page = context.Render<PermissionsPage>();
         await page.WaitForStateAsync(
