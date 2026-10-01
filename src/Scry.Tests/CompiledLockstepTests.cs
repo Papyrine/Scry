@@ -286,8 +286,8 @@ public class CompiledLockstepTests
     static async Task Agree(string model)
     {
         var (assembly, image) = CompiledModel.Compile(
-            $$"""
-              {{model}}
+            $"""
+              {model}
 
               public sealed class Context : DbContext;
               """);
