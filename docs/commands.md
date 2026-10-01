@@ -65,7 +65,7 @@ public class EmployeeCreated
 - `Result` names the class the command answers with. The client reads it typed.
 - `Name` renames the command on the wire, as `[Queryable(Name = ...)]` renames a source.
 - `[CommandIgnore]` keeps a property out of the payload, for the server to fill.
-- A payload property is a scalar, an enum, `byte[]`, a nullable of those, or a list of those. DataAnnotations on a property are checked before anything runs.
+- A payload property is a scalar, an enum declared in the model or one of the [BCL enums](annotations.md#scalars) every client has, `byte[]`, a nullable of those, or a list of those. DataAnnotations on a property are checked before anything runs.
 - A property inherited from a base in the model assembly, generic or not, is part of the payload as one the class declares. One inherited from a base in another assembly is refused at startup, as a source's would be ([Inheritance](annotations.md#inheritance)).
 
 A class that was a message before it was a command becomes one by annotating it. The sample's `RepriceOrder` is a message two NServiceBus endpoints already shared, and `[Command(typeof(Order))]` is all it took; the model still references nothing but `Scry.Annotations`.

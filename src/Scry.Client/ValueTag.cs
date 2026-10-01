@@ -21,8 +21,9 @@ static class ValueTag
             // server also accepts.
             char character => (character.ToString(), ClrTypeTag.String),
             bool flag => (flag ? "true" : "false", ClrTypeTag.Boolean),
-            // Compared against a day-of-week the server computes as a number, and not part of any
-            // model's schema, so this one enum travels as its value rather than by name.
+            // Compared against a day-of-week the server computes as a number, so this one enum travels
+            // as its value rather than by name. A member typed as DayOfWeek takes it too: the server
+            // parses a name or a number against the member's own enum.
             DayOfWeek day => (((int) day).ToString(culture), ClrTypeTag.Int32),
             Enum enumeration => (enumeration.ToString(), ClrTypeTag.Enum),
             int number => (number.ToString(culture), ClrTypeTag.Int32),

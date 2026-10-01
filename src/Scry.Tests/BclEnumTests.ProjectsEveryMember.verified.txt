@@ -1,0 +1,18 @@
+﻿[
+  {
+    Name: Opening,
+    DayOfWeek: Monday,
+    Clock: Utc
+  },
+  {
+    Name: Midweek,
+    DayOfWeek: Thursday,
+    Recess: Friday,
+    Clock: Local
+  },
+  {
+    Name: Weekend,
+    DayOfWeek: Saturday,
+    Recess: Sunday
+  }
+]

@@ -41,6 +41,10 @@ public class QueryBuilderTests
                 new("At", "global::System.TimeOnly", false, false),
                 new("Span", "global::System.TimeSpan", false, false),
                 new("Key", "global::System.Guid", false, false),
+                // BCL enums, which introspection never describes: every client has them already.
+                new("Weekday", "global::System.DayOfWeek", false, false),
+                new("Rest", "global::System.DayOfWeek?", false, false),
+                new("Clock", "global::System.DateTimeKind", false, false),
                 new("Rank", "int?", false, false),
                 new("Owner", "OwnerQueryModel?", false, true),
                 new("Tags", "global::System.Collections.Generic.IReadOnlyList<string>", true, false, true),
@@ -447,6 +451,9 @@ public class QueryBuilderTests
     [Arguments("global::System.TimeOnly", "07:05", "new TimeOnly(7, 5)")]
     [Arguments("global::System.TimeSpan", "1.02:03:04", "new TimeSpan(1, 2, 3, 4)")]
     [Arguments("global::System.Guid", "6F9619FF-8B86-D011-B42D-00C04FC964FF", "new Guid(\"6f9619ff-8b86-d011-b42d-00c04fc964ff\")")]
+    [Arguments("global::System.DayOfWeek", "Thursday", "global::System.DayOfWeek.Thursday")]
+    [Arguments("global::System.DayOfWeek?", "Sunday", "global::System.DayOfWeek.Sunday")]
+    [Arguments("global::System.DateTimeKind", "Utc", "global::System.DateTimeKind.Utc")]
     public async Task WritesAnInputAsALiteralAndReadsItBack(string type, string input, string literal)
     {
         await Assert.That(QueryBuilder.Literal(index, type, input)).IsEqualTo(literal);
@@ -467,6 +474,9 @@ public class QueryBuilderTests
     [Arguments("global::System.DateOnly", "2026-02-31")]
     [Arguments("global::System.TimeOnly", "25:00")]
     [Arguments("global::System.Guid", "not-a-guid")]
+    [Arguments("global::System.DayOfWeek", "Funday")]
+    [Arguments("global::System.DayOfWeek", "monday")]
+    [Arguments("global::System.DayOfWeek", "1")]
     public async Task RefusesAnInputThatIsNotAValueOfTheType(string type, string input) =>
         await Assert.That(QueryBuilder.Literal(index, type, input)).IsNull();
 
@@ -479,6 +489,23 @@ public class QueryBuilderTests
     public async Task ShowsNothingForCodeThatIsNotALiteral(string type, string code) =>
         await Assert.That(QueryBuilder.Display(index, type, code)).IsNull();
 
+    // A BCL enum is an enum to the builder though introspection lists no values for it: it offers the
+    // type's own, and reads a value back however a snippet names the type.
+    [Test]
+    [Arguments("global::System.DayOfWeek.Friday")]
+    [Arguments("System.DayOfWeek.Friday")]
+    [Arguments("DayOfWeek.Friday")]
+    public async Task ReadsABclEnumValueHoweverTheTypeIsNamed(string code)
+    {
+        using (Assert.Multiple())
+        {
+            await Assert.That(QueryBuilder.Kind(index, "global::System.DayOfWeek?")).IsEqualTo(ValueKind.Enum);
+            await Assert.That(QueryBuilder.EnumValues(index, "global::System.DayOfWeek")).IsEquivalentTo(Enum.GetNames<DayOfWeek>(), CollectionOrdering.Matching);
+            await Assert.That(QueryBuilder.Display(index, "global::System.DayOfWeek", code)).IsEqualTo("Friday");
+            await Assert.That(Describe(Read($"Query.Item.Where(_ => _.Weekday == {code})").Filters)).IsEqualTo($"Weekday Equal {code}");
+        }
+    }
+
     [Test]
     public async Task OffersTheComparisonsAType()
     {
@@ -489,6 +516,7 @@ public class QueryBuilderTests
             await Assert.That(QueryBuilder.Operators(index, "int")).DoesNotContain(FilterOperator.IsNull);
             await Assert.That(QueryBuilder.Operators(index, "int?")).Contains(FilterOperator.IsNull);
             await Assert.That(QueryBuilder.Operators(index, "Status")).DoesNotContain(FilterOperator.LessThan);
+            await Assert.That(QueryBuilder.Operators(index, "global::System.DayOfWeek?")).IsEquivalentTo([FilterOperator.Equal, FilterOperator.NotEqual, FilterOperator.IsNull, FilterOperator.IsNotNull], CollectionOrdering.Matching);
             await Assert.That(QueryBuilder.Operators(index, "bool")).IsEquivalentTo([FilterOperator.IsTrue, FilterOperator.IsFalse], CollectionOrdering.Matching);
             await Assert.That(QueryBuilder.Operators(index, "byte[]")).IsEmpty();
         }

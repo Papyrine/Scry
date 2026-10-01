@@ -460,6 +460,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Model: SignedContractQueryModel
     },
     {
+      Name: Sitting,
+      Kind: Entity,
+      Model: SittingQueryModel
+    },
+    {
       Name: Ticket,
       Kind: Entity,
       Model: TicketQueryModel
@@ -1446,6 +1451,72 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       IsSensitive: false
     },
     {
+      Model: SittingQueryModel,
+      Members: [
+        {
+          Name: Alternates,
+          TypeDisplay: global::System.Collections.Generic.IReadOnlyList<global::System.DayOfWeek>,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: true,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Clock,
+          TypeDisplay: global::System.DateTimeKind,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: DayOfWeek,
+          TypeDisplay: global::System.DayOfWeek,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Recess,
+          TypeDisplay: global::System.DayOfWeek?,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        }
+      ],
+      IsSensitive: false
+    },
+    {
       Model: TicketQueryModel,
       Members: [
         {
@@ -1703,10 +1774,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: _iDxyfe9QHEMpW7p
+  SchemaStamp: mrP2O3LNgmIwpKBP
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L1356' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L1427' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names, member names with the exact C# type spelling the source generator would emit, and the re-emitted enums. It carries **no** policies, resolvers, connection details, or CLR internals.

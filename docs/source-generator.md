@@ -179,7 +179,7 @@ Properties are `init`-only. A reference navigation is emitted as a nullable refe
 
 ### Re-emitted enums
 
-`ScryEnums.g.cs` contains every enum reachable from an exposed member, with its members in declaration order:
+`ScryEnums.g.cs` contains every enum of the model reachable from an exposed member, with its members in declaration order (a [BCL enum](annotations.md#scalars) a member is typed as is left out, since every client already has it):
 
 <!-- snippet: GeneratorTests.EntitiesViewPocoAndEnum#ScryEnums.g.verified.cs -->
 <a id='snippet-GeneratorTests.EntitiesViewPocoAndEnum#ScryEnums.g.verified.cs'></a>
@@ -274,7 +274,8 @@ builder.Services.AddScoped<ScryQuery>();
 | `byte[]` | `byte[]` (with ` = null!;`) |
 | `decimal` | `decimal` |
 | `DateTime`, `DateOnly`, `TimeOnly`, `DateTimeOffset`, `TimeSpan`, `Guid` | `global::System.X` |
-| an `enum` | the enum name, its members with their values, its underlying type, and `[Flags]`, re-emitted into `ScryEnums.g.cs` |
+| an `enum` declared in the model | the enum name, its members with their values, its underlying type, and `[Flags]`, re-emitted into `ScryEnums.g.cs` |
+| `DayOfWeek`, `DateTimeKind` | `global::System.X`, not re-emitted: every client already has them ([BCL enums](annotations.md#scalars)) |
 | another opted-in type | `{Type}QueryModel?` |
 | a nullable value type | the above with `?` |
 | anything else | omitted |

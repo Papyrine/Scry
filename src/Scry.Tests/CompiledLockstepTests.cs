@@ -283,6 +283,63 @@ public class CompiledLockstepTests
             }
             """);
 
+    // Enums of the base class library, which neither side re-emits: as a member's own type, a nullable,
+    // a collection's element, a generic base's argument, and a command's payload and result.
+    [Test]
+    public Task BclEnums() =>
+        Agree(
+            """
+            public abstract class Scheduled<TDay>
+            {
+                public TDay Day { get; set; } = default!;
+            }
+
+            [Queryable]
+            public class Sitting : Scheduled<DayOfWeek>
+            {
+                public int Id { get; set; }
+                public DayOfWeek? Recess { get; set; }
+                public DateTimeKind Clock { get; set; }
+                [QueryableCollection] public List<DayOfWeek> Alternates { get; set; } = [];
+                [QueryableCollection] public DateTimeKind[] Clocks { get; set; } = [];
+            }
+
+            public class Rescheduled
+            {
+                public DayOfWeek Day { get; set; }
+                public List<DateTimeKind?> Clocks { get; set; } = [];
+            }
+
+            [Command(typeof(Sitting), Result = typeof(Rescheduled))]
+            public class Reschedule
+            {
+                public int Id { get; set; }
+                public DayOfWeek Day { get; set; }
+                public DayOfWeek? Recess { get; set; }
+                public List<DayOfWeek> Alternates { get; set; } = [];
+                public DateTimeKind Clock { get; set; }
+            }
+            """);
+
+    // A model declaring its own System.DayOfWeek owns that enum: a definition, not a reference, so both
+    // sides describe and re-emit it as the model's, exactly as they would under any other name.
+    [Test]
+    public Task AModelDeclaredEnumNamedLikeABclOne() =>
+        Agree(
+            """
+            namespace System
+            {
+                public enum DayOfWeek { Moonday, Tuesday }
+            }
+
+            [Queryable]
+            public class Sitting
+            {
+                public int Id { get; set; }
+                public System.DayOfWeek Day { get; set; }
+            }
+            """);
+
     static async Task Agree(string model)
     {
         var (assembly, image) = CompiledModel.Compile(

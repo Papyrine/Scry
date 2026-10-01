@@ -157,6 +157,24 @@ public class Shift
 }
 
 /// <summary>
+/// Members typed as enums of the base class library. Declared outside the model, so neither side can
+/// describe them from it — but every client already has them, so both spell them as the BCL type and
+/// neither re-emits them.
+/// </summary>
+[Queryable]
+public class Sitting
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public DayOfWeek DayOfWeek { get; set; }
+    public DayOfWeek? Recess { get; set; }
+    public DateTimeKind Clock { get; set; }
+
+    [QueryableCollection]
+    public List<DayOfWeek> Alternates { get; set; } = [];
+}
+
+/// <summary>
 /// A complex value type mapped to JSON. Opted in with [QueryableComplex]: reachable only by
 /// traversing from <see cref="Employee"/> (e.g. Address.City), never as a root source. Zip is hidden.
 /// </summary>
@@ -831,6 +849,7 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
     public DbSet<Contract> Contracts => Set<Contract>();
     public DbSet<Shift> Shifts => Set<Shift>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<Sitting> Sittings => Set<Sitting>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder builder) =>
         builder.Properties<decimal>().HavePrecision(18, 2);
@@ -1139,6 +1158,34 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
                 Start = new(14, 5, 0),
                 Stamped = new(2026, 7, 19, 14, 5, 0, TimeSpan.Zero),
                 Signature = []
+            });
+
+        // One row per day kind, each disagreeing with the others on every member, and one with no
+        // recess at all, so a filter on the nullable member has a null to tell apart.
+        context.Sittings.AddRange(
+            new()
+            {
+                Name = "Opening",
+                DayOfWeek = DayOfWeek.Monday,
+                Recess = null,
+                Clock = DateTimeKind.Utc,
+                Alternates = [DayOfWeek.Wednesday, DayOfWeek.Friday]
+            },
+            new()
+            {
+                Name = "Midweek",
+                DayOfWeek = DayOfWeek.Thursday,
+                Recess = DayOfWeek.Friday,
+                Clock = DateTimeKind.Local,
+                Alternates = [DayOfWeek.Monday]
+            },
+            new()
+            {
+                Name = "Weekend",
+                DayOfWeek = DayOfWeek.Saturday,
+                Recess = DayOfWeek.Sunday,
+                Clock = DateTimeKind.Unspecified,
+                Alternates = []
             });
 
         context.Assets.AddRange(

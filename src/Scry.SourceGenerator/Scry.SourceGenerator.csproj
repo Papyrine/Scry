@@ -27,6 +27,7 @@
     <Compile Include="..\Shared\SchemaStamp.cs" Link="SchemaStamp.cs" />
     <Compile Include="..\Shared\CSharpIdentifier.cs" Link="CSharpIdentifier.cs" />
     <Compile Include="..\Shared\CollectionShapes.cs" Link="CollectionShapes.cs" />
+    <Compile Include="..\Shared\BclEnums.cs" Link="BclEnums.cs" />
     <!-- The lockstep test: Scry.Tests reads the test model with this reader and checks the stamp it
          computes against the server's, over a model carrying every shape the two have disagreed on. -->
     <InternalsVisibleTo Include="Scry.Tests" Key="$(ScryPublicKey)" />

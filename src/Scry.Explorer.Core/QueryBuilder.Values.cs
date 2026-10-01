@@ -37,8 +37,34 @@ public static partial class QueryBuilder
             "global::System.TimeOnly" => ValueKind.Time,
             "global::System.TimeSpan" => ValueKind.Duration,
             "global::System.Guid" => ValueKind.Guid,
-            _ when index.Enum(display) is not null => ValueKind.Enum,
+            _ when EnumValues(index, display) is not null => ValueKind.Enum,
             _ => ValueKind.None
+        };
+    }
+
+    static readonly string[] dayOfWeekValues = Enum.GetNames<DayOfWeek>();
+
+    static readonly string[] dateTimeKindValues = Enum.GetNames<DateTimeKind>();
+
+    /// <summary>
+    /// The values a member of an enum type can be compared with, or null for a type that is no enum:
+    /// one of the model's, as introspection describes it, or one of the BCL enums a model may use,
+    /// which introspection never describes because every client already has them.
+    /// </summary>
+    public static IReadOnlyList<string>? EnumValues(SchemaIndex index, string typeDisplay)
+    {
+        var display = typeDisplay.TrimEnd('?');
+        if (index.Enum(display) is { } described)
+        {
+            return described.Values;
+        }
+
+        // The spellings the server and the generator give the two (the shared BclEnums list).
+        return display switch
+        {
+            "global::System.DayOfWeek" => dayOfWeekValues,
+            "global::System.DateTimeKind" => dateTimeKindValues,
+            _ => null
         };
     }
 
@@ -118,7 +144,7 @@ public static partial class QueryBuilder
             ValueKind.Integer or ValueKind.Double => "0",
             ValueKind.Decimal => "0m",
             ValueKind.Single => "0f",
-            ValueKind.Enum when index.Enum(typeDisplay.TrimEnd('?')) is {Values: [var first, ..]} => $"{typeDisplay.TrimEnd('?')}.{CSharpIdentifier.Escape(first)}",
+            ValueKind.Enum when EnumValues(index, typeDisplay) is [var first, ..] => $"{typeDisplay.TrimEnd('?')}.{CSharpIdentifier.Escape(first)}",
             ValueKind.Date => "new DateOnly(2000, 1, 1)",
             ValueKind.DateTime => "new DateTime(2000, 1, 1)",
             ValueKind.DateTimeOffset => "new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero)",
@@ -188,7 +214,7 @@ public static partial class QueryBuilder
 
                 return null;
             case ValueKind.Enum:
-                if (index.Enum(display)!.Values.Contains(text))
+                if (EnumValues(index, display)!.Contains(text))
                 {
                     return $"{display}.{CSharpIdentifier.Escape(text)}";
                 }
@@ -335,11 +361,11 @@ public static partial class QueryBuilder
                 var display = typeDisplay.TrimEnd('?');
                 if (expression is MemberAccessExpressionSyntax
                     {
-                        Expression: IdentifierNameSyntax owner,
+                        Expression: var owner,
                         Name: IdentifierNameSyntax member
                     } &&
-                    owner.Identifier.ValueText == display &&
-                    index.Enum(display)!.Values.Contains(member.Identifier.ValueText))
+                    NamesEnum(owner.ToString(), display) &&
+                    EnumValues(index, display)!.Contains(member.Identifier.ValueText))
                 {
                     return member.Identifier.ValueText;
                 }
@@ -421,6 +447,27 @@ public static partial class QueryBuilder
             default:
                 return null;
         }
+    }
+
+    // Whether code names the enum a member is typed as: a model enum by its bare name, as Literal writes
+    // it; a BCL enum as Literal writes it (global::System.DayOfWeek), or as a snippet would more likely
+    // write it, under the System import every snippet has (DayOfWeek, System.DayOfWeek).
+    static bool NamesEnum(string owner, string display)
+    {
+        if (owner == display)
+        {
+            return true;
+        }
+
+        const string global = "global::";
+        if (!display.StartsWith(global, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var qualified = display[global.Length..];
+        return owner == qualified ||
+               owner == qualified[(qualified.LastIndexOf('.') + 1)..];
     }
 
     static string Moment(int year, int month, int day, int hour, int minute, int second)

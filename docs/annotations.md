@@ -94,7 +94,7 @@ public class Building : Asset
     public int Floors { get; set; }
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L194-L213' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableHierarchy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L212-L231' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableHierarchy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 That is default-deny applied to the hierarchy: adding a subclass to the model exposes nothing until it is annotated. A type left out is unreachable — it has no wire name, its members are not readable, and no query can narrow to it — while its own descendants stay reachable if they opted in, since the base link skips over types that did not.
@@ -132,7 +132,7 @@ public class SalesRegion
     public string Name { get; set; } = "";
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L457-L470' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSource' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L475-L488' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSource' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The generated entry point exposes the configured name, while the **model class name stays derived from the CLR type**:
@@ -465,7 +465,7 @@ public class Address
     public string Zip { get; set; } = "";
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L163-L174' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableComplex' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L181-L192' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableComplex' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 paired with the usual EF mapping on the owning entity:
@@ -477,7 +477,7 @@ builder.Entity<Employee>()
     .ComplexProperty(_ => _.Address)
     .ToJson();
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L841-L845' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L860-L864' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A complex type is **not a root source**: it produces no property on the generated `ScryQuery` and no server resolver. It is reachable only by traversing into it from an opted-in entity/view/POCO — for example `Employee.Address.City`. Its members follow the same exposure rules as any other type (`[QueryIgnore]` still hides `Zip`), and the traversal is bounded by `MaxNavigationDepth` like any navigation. How EF stores the type — a JSON column or separate columns — is transparent to Scry; the server rebinds the member path onto EF, which translates it either way.
@@ -505,7 +505,7 @@ builder.Entity<Employee>()
     .ComplexCollection(_ => _.PreviousAddresses)
     .ToJson();
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L847-L851' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexCollectionToJson' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L866-L870' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexCollectionToJson' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The element type being a complex type rather than a source changes nothing a client can see: the array is aggregable and flattenable exactly like a collection of entities, and the wire request is indistinguishable from one over a collection navigation. Because a complex type is never a source, it can carry no [row policy](policies.md) — attaching one is refused at startup rather than silently ignored, since a policy that cannot run reads as protection it is not providing:
@@ -612,7 +612,7 @@ public class Contract
     public byte[]? Document { get; set; }
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L573-L586' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentMember' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L591-L604' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentMember' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The other way to expose a `byte[]`, and the opposite trade from `[BinaryTransfer]`: the query never reads the value at all. What the client gets instead is a handle carrying the row's key, exchanged for the bytes by a second request whenever — or if ever — they are wanted. See [Attachments](attachments.md).
@@ -665,7 +665,7 @@ Unlike a row policy there is exactly one: the check is a yes/no decision rather 
 [Obsolete("Counts open roles too; use the Region rollup.")]
 public int Headcount { get; set; }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L481-L486' title='Snippet source file'>snippet source</a> | <a href='#snippet-obsoleteMember' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L499-L504' title='Snippet source file'>snippet source</a> | <a href='#snippet-obsoleteMember' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The client never references the model assembly, so a deprecation would otherwise stop at the boundary. It is replicated instead: onto the generated query model, onto the member, and onto the `ScryQuery` entry point, so a query written against a deprecated source or member warns where it is written.
@@ -750,9 +750,11 @@ flowchart TD
 
 ### Scalars
 
-`bool`, `char`, `sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `float`, `double`, `decimal`, `string`, `DateTime`, `DateOnly`, `TimeOnly`, `DateTimeOffset`, `TimeSpan`, `Guid`, `byte[]`, and any `enum` — plus the `Nullable<>` form of each value type.
+`bool`, `char`, `sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `float`, `double`, `decimal`, `string`, `DateTime`, `DateOnly`, `TimeOnly`, `DateTimeOffset`, `TimeSpan`, `Guid`, `byte[]`, any `enum` declared in the model assembly, and the BCL enums `DayOfWeek` and `DateTimeKind` — plus the `Nullable<>` form of each value type.
 
-An `enum` used by an exposed member is re-emitted into the generated client code (as `ScryEnums.g.cs`), so the client can compare against it without referencing the model. The members' values, the underlying type, and `[Flags]` are carried across, so a member means the same on both sides — including a combined flag, which travels by name and resolves through those values.
+An `enum` from the model used by an exposed member is re-emitted into the generated client code (as `ScryEnums.g.cs`), so the client can compare against it without referencing the model. The members' values, the underlying type, and `[Flags]` are carried across, so a member means the same on both sides — including a combined flag, which travels by name and resolves through those values.
+
+`DayOfWeek` and `DateTimeKind` are not re-emitted: every client already has them, so a member typed as one is generated as `global::System.DayOfWeek` (or `global::System.DateTimeKind`) and introspection lists no enum for it. The server parses a constant for such a member against the real enum — by name or by number, refusing anything the enum does not define — and answers by name. The set is closed: the generator sees only a type reference to a name it cannot look inside, so it accepts exactly the names it was told about, and the server refuses every other enum declared outside the model, BCL or not.
 
 Scalars can be used in predicates, ordering keys, group keys, aggregate selectors, and projection leaves.
 
@@ -776,7 +778,7 @@ A property whose type is a collection of another opted-in type is a **collection
 [QueryableCollection]
 public List<OrderLine> Lines { get; set; } = [];
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L390-L395' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableCollection' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L408-L413' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableCollection' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 An exposed collection is **aggregable, not projectable**. A client can ask a question about it — `Any`, `All`, `Count`, `Sum`, `Average`, `Min`, `Max`, which the database answers as a correlated subquery — but can never enumerate its rows, project it, traverse through it in a member path, or order by it. Every answer is a scalar, so a response can never carry an unbounded nested collection. See [subqueries](querying.md#collection-subqueries).
@@ -804,7 +806,7 @@ public List<string> Tags { get; set; } = [];
 [QueryableCollection]
 public List<int> Scores { get; set; } = [];
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L397-L406' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryablePrimitiveCollection' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L415-L424' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryablePrimitiveCollection' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 It opts in the same way and answers the same questions. The one difference is that its elements are values with no members, so a question reads the element *itself* — `_.Tags.Contains("urgent")`, `_.Tags.Any(tag => tag.StartsWith("ex"))`, `_.Scores.Sum()`. See [collections of values](querying.md#collections-of-values).
@@ -823,7 +825,7 @@ An `enum` element is re-emitted to clients like any other exposed enum, even whe
 - **Collections whose element is neither an opted-in type nor a scalar** — a `List<T>` of a plain POCO stays invisible even with `[QueryableCollection]`.
 - **Complex types that are not themselves opted in.** Adding `[QueryableComplex]` to the target type makes it traversable.
 - **Write-only or non-public properties, indexers, and fields.**
-- **What the generator could not read** — a member inherited from a base in another assembly (generic or not), an enum declared in another assembly, an attribute only another assembly's declaration of an overridden member carries, or a collection shape outside the set above. Each is refused at startup, naming the member, rather than exposed to a client that would then report itself stale.
+- **What the generator could not read** — a member inherited from a base in another assembly (generic or not), an enum declared in another assembly (other than the [BCL enums](#scalars) every client already has), an attribute only another assembly's declaration of an overridden member carries, or a collection shape outside the set above. Each is refused at startup, naming the member, rather than exposed to a client that would then report itself stale.
 
 
 ## Keeping the two readers aligned
@@ -835,6 +837,6 @@ Two independent components read the same attributes:
 
 They deliberately agree on classification, on which base type each model derives from, and on the C# type spelling each member gets — the server's introspection output reproduces the generator's emission exactly, which is what lets the [query explorer](explorer.md) synthesize an identical model in the browser. The server's copy is the one that matters for security: it is rebuilt at runtime from the real assembly and validates every request regardless of what the client was generated against.
 
-Where agreement has to be exact rather than merely parallel, the two compile one shared source file instead of two implementations: the [schema stamp](schema-versioning.md), the rule for [which source names are expressible](#naming-a-source), and the [collection shapes](#collections) a member may be declared as.
+Where agreement has to be exact rather than merely parallel, the two compile one shared source file instead of two implementations: the [schema stamp](schema-versioning.md), the rule for [which source names are expressible](#naming-a-source), the [collection shapes](#collections) a member may be declared as, and the [BCL enums](#scalars) a member may be typed as.
 
 `LockstepTests` in `Scry.Tests` is what holds them together: it runs the generator's reader over the test model — which carries every shape the two have ever described differently — and compares the stamp and every member with the server's own description. `CompiledLockstepTests` does the same over models compiled per case, for the shapes kept out of the test model: generic bases, overrides through opted-in bases and members hidden with `new`, and overrides of members another assembly declares.
