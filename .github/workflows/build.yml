@@ -104,6 +104,19 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: dotnet test --solution samples/Scry.Samples.slnx -c Release --no-build --report-trx --maximum-parallel-tests 4
 
+      # The model as a package: Sample.Model packed into the folder Sample.ModelPackageClient restores it
+      # from, then that client built against it, which fails if the model or the EF Core beneath it
+      # reached the client. Outside the samples solution, so built on its own; after the suites and gated
+      # like them, so it neither hides their results nor runs over a broken build.
+      - name: Pack the sample model
+        id: pack-model
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: pwsh
+        run: ./samples/Sample.ModelPackageClient/pack-model.ps1 -Configuration Release
+      - name: Build the model-package sample
+        if: ${{ !cancelled() && steps.pack-model.outcome == 'success' }}
+        run: dotnet build samples/Sample.ModelPackageClient -c Release -p:GeneratePackageOnBuild=false
+
       - name: Upload test results
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         uses: actions/upload-artifact@v7

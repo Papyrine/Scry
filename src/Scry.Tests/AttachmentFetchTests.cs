@@ -31,6 +31,16 @@ public class AttachmentFetchTests
     public async Task CarriesTheDeclaredContentType() =>
         await Assert.That(Fetch(1).ContentType).IsEqualTo("application/pdf");
 
+    // An override is the member the declaration it overrides made an attachment, so it serves the type
+    // that declaration gave, rather than the default its own lack of one would.
+    [Test]
+    public async Task AnOverrideServesTheContentTypeItInherits()
+    {
+        var meta = Schema.BuildTypeMeta(typeof(PhotoOverride), []);
+
+        await Assert.That(meta.Members["Photo"].ContentType).IsEqualTo("image/png");
+    }
+
     // A row that is there holding a value that is not. Distinct from the refusals below: the caller
     // may read it, and what it reads is nothing.
     [Test]
@@ -267,4 +277,20 @@ public class AttachmentFetchTests
 
         await Assert.That(exception.Message).Contains("Unsupported attachment request version");
     }
+
+    // Plain fixture types, opted into nothing, so they poison no schema built over this assembly.
+    // ReSharper disable UnusedMember.Local
+    class PhotoBase
+    {
+        public int Id { get; set; }
+
+        [Attachment(ContentType = "image/png")]
+        public virtual byte[]? Photo { get; set; }
+    }
+
+    class PhotoOverride : PhotoBase
+    {
+        public override byte[]? Photo { get; set; }
+    }
+    // ReSharper restore UnusedMember.Local
 }

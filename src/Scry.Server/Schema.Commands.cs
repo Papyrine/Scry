@@ -20,9 +20,9 @@ sealed partial class Schema
     /// Must stay in lockstep with <c>MetadataModelReader.ReadCommands</c>. Only the model assembly is read,
     /// as only it is read by the generator.
     /// </remarks>
-    static void BuildCommands(Schema schema, Type contextType, ScryOptions options)
+    static void BuildCommands(Schema schema, ScryOptions options)
     {
-        var assembly = contextType.Assembly;
+        var assembly = options.ModelAssembly;
         var found = assembly.GetTypes()
             .Select(_ => (Type: _, Attribute: _.GetCustomAttribute<CommandAttribute>(inherit: false)))
             .Where(_ => _.Attribute is not null)
@@ -157,7 +157,7 @@ sealed partial class Schema
             if (property.GetMethod is not {IsPublic: true} ||
                 property.SetMethod is not {IsPublic: true} ||
                 property.GetIndexParameters().Length > 0 ||
-                property.HasAttribute<CommandIgnoreAttribute>())
+                Carries<CommandIgnoreAttribute>(type, property))
             {
                 continue;
             }
@@ -190,6 +190,19 @@ sealed partial class Schema
             throw new($"'{command.Name}' answers with '{result.Name}', which is declared in assembly '{result.Assembly.GetName().Name}'. A client is generated from the model assembly alone, so a result class has to be declared there too.");
         }
 
+        // Mirrors the generator's SCRY015 for a generic result, open or closed.
+        if (result.IsGenericType)
+        {
+            var generic = result.Name;
+            var tick = generic.IndexOf('`');
+            if (tick > 0)
+            {
+                generic = generic[..tick];
+            }
+
+            throw new($"'{command.Name}' answers with '{generic}', which is generic. A result is emitted as one class of its own name, which a generic class has no single shape for. Answer with a class that is not generic: one deriving from the generic one, with its arguments filled in, keeps its members.");
+        }
+
         var properties = new List<PropertyInfo>();
         foreach (var property in result.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
@@ -213,7 +226,8 @@ sealed partial class Schema
 
     // The generator reads a class's members out of the model assembly's metadata, so a property inherited
     // from a base anywhere else is one it never sees — and a client missing a payload property the server
-    // expects is a stale client on every build.
+    // expects is a stale client on every build. A base in the model assembly, generic or not, is read on
+    // both sides.
     static void EnsureDeclaredInModel(Type type, PropertyInfo property, Assembly assembly)
     {
         if (property.DeclaringType is not { } declaring ||
@@ -393,7 +407,7 @@ sealed partial class Schema
             var shape = ScalarShape(type, enums);
             return new(property.Name, shape, NeedsNullDefault: shape is "string" or "byte[]", IsNavigation: false)
             {
-                Obsolete = ObsoleteOf(property)
+                Obsolete = ObsoleteAlongOverrides(property)
             };
         }
 
@@ -404,7 +418,7 @@ sealed partial class Schema
             NeedsNullDefault: true,
             IsNavigation: false)
         {
-            Obsolete = ObsoleteOf(property)
+            Obsolete = ObsoleteAlongOverrides(property)
         };
     }
 

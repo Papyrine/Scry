@@ -36,5 +36,10 @@
     <PackageVersion Include="MessagePipe.Redis" Version="1.8.2" />
     <!-- work around CVE: MessagePipe.Redis asks for MessagePack 3.1.4, which carries known advisories -->
     <PackageVersion Include="MessagePack" Version="3.1.10" />
+    <!-- Sample.ModelPackageClient restores Sample.Model as a package, from the folder pack-model.ps1 writes
+         and at the version it derives from the model's content. Unset everywhere else. -->
+    <PackageVersion Include="Sample.Model"
+                    Version="$(SampleModelPackageVersion)"
+                    Condition="'$(SampleModelPackageVersion)' != ''" />
   </ItemGroup>
 </Project>

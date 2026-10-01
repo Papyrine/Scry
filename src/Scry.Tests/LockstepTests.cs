@@ -19,31 +19,39 @@ public class LockstepTests
     }
 
     [Test]
-    public async Task GeneratorAndServerAgreeOnEveryMember()
-    {
-        var extract = MetadataModelReader.Read(typeof(TestContext).Assembly.Location);
-        var described = SharedProcessor.Instance.Describe();
+    public Task GeneratorAndServerAgreeOnEveryMember() =>
+        AgreeOnEveryMember(
+            MetadataModelReader.Read(typeof(TestContext).Assembly.Location),
+            SharedProcessor.Instance.Describe());
 
-        // Member by member, not only the stamp: a mismatch then names the member rather than a hash.
-        // The generator's spelling is the one it emits (an attachment is a handle, not its bytes),
-        // which is what the server's introspection reproduces.
+    [Test]
+    public Task GeneratorAndServerAgreeOnEveryCommand() =>
+        AgreeOnEveryCommand(
+            MetadataModelReader.Read(typeof(TestContext).Assembly.Location),
+            SharedProcessor.Instance.Describe());
+
+    // Member by member, not only the stamp: a mismatch then names the member rather than a hash.
+    // The generator's spelling is the one it emits (an attachment is a handle, not its bytes),
+    // which is what the server's introspection reproduces. The deprecation is compared too: it is out
+    // of the stamp, but the generated member and the explorer's are meant to carry the same one.
+    internal static async Task AgreeOnEveryMember(ModelExtract extract, ScryIntrospection described)
+    {
         foreach (var type in described.Types)
         {
             var generated = extract.Sources.Single(_ => _.ModelName == type.Model);
-            var serverMembers = type.Members.Select(_ => $"{_.Name} {_.TypeDisplay}").Order(StringComparer.Ordinal);
-            var generatorMembers = generated.Properties.Select(_ => $"{_.Name} {ScryGenerator.Display(_)}").Order(StringComparer.Ordinal);
+            var serverMembers = type.Members.Select(_ => $"{_.Name} {_.TypeDisplay}{Deprecation(_.Obsolete)}").Order(StringComparer.Ordinal);
+            var generatorMembers = generated.Properties.Select(_ => $"{_.Name} {ScryGenerator.Display(_)}{Deprecation(_.Obsolete)}").Order(StringComparer.Ordinal);
             await Assert.That(generatorMembers).IsEquivalentTo(serverMembers, CollectionOrdering.Matching).Because(type.Model);
         }
     }
 
+    static string Deprecation(string? obsolete) =>
+        obsolete is null ? "" : $" [Obsolete(\"{obsolete}\")]";
+
     // Command by command, for the same reason: the generator's payload is what a client sends and the
     // server's is what it binds, and the key and result they name have to be the same ones.
-    [Test]
-    public async Task GeneratorAndServerAgreeOnEveryCommand()
+    internal static async Task AgreeOnEveryCommand(ModelExtract extract, ScryIntrospection described)
     {
-        var extract = MetadataModelReader.Read(typeof(TestContext).Assembly.Location);
-        var described = SharedProcessor.Instance.Describe();
-
         await Assert.That(extract.Problems).IsEmpty();
         await Assert.That(extract.Commands.Select(_ => _.Name)).IsEquivalentTo(described.Commands.Select(_ => _.Name), CollectionOrdering.Matching);
         foreach (var command in described.Commands)
@@ -53,7 +61,7 @@ public class LockstepTests
             {
                 await Assert.That(generated.Target).IsEqualTo(command.Target).Because(command.Name);
                 await Assert.That(generated.Keys).IsEquivalentTo(command.Keys ?? [], CollectionOrdering.Matching).Because(command.Name);
-                await Assert.That(generated.Properties.Select(_ => $"{_.Name} {_.TypeDisplay}").Order(StringComparer.Ordinal)).IsEquivalentTo(command.Properties.Select(_ => $"{_.Name} {_.TypeDisplay}").Order(StringComparer.Ordinal), CollectionOrdering.Matching).Because(command.Name);
+                await Assert.That(generated.Properties.Select(_ => $"{_.Name} {_.TypeDisplay}{Deprecation(_.Obsolete)}").Order(StringComparer.Ordinal)).IsEquivalentTo(command.Properties.Select(_ => $"{_.Name} {_.TypeDisplay}{Deprecation(_.Obsolete)}").Order(StringComparer.Ordinal), CollectionOrdering.Matching).Because(command.Name);
                 await Assert.That(generated.ResultName).IsEqualTo(command.Result?.Name).Because(command.Name);
                 await Assert.That(generated.Obsolete).IsEqualTo(command.Obsolete).Because(command.Name);
             }
@@ -62,7 +70,7 @@ public class LockstepTests
         foreach (var result in described.Commands.Select(_ => _.Result).OfType<ScryResultInfo>())
         {
             var generated = extract.Results.Single(_ => _.Name == result.Name);
-            await Assert.That(generated.Properties.Select(_ => $"{_.Name} {_.TypeDisplay}").Order(StringComparer.Ordinal)).IsEquivalentTo(result.Properties.Select(_ => $"{_.Name} {_.TypeDisplay}").Order(StringComparer.Ordinal), CollectionOrdering.Matching).Because(result.Name);
+            await Assert.That(generated.Properties.Select(_ => $"{_.Name} {_.TypeDisplay}{Deprecation(_.Obsolete)}").Order(StringComparer.Ordinal)).IsEquivalentTo(result.Properties.Select(_ => $"{_.Name} {_.TypeDisplay}{Deprecation(_.Obsolete)}").Order(StringComparer.Ordinal), CollectionOrdering.Matching).Because(result.Name);
         }
     }
 

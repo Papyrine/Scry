@@ -38,6 +38,8 @@ Second, a project reference that exists purely for **build ordering**:
 
 `ReferenceOutputAssembly="false"` means no assembly reference is added — only the ordering constraint. Without it the generator races the model build and reads a stale or missing DLL.
 
+A model shipped as a NuGet package is pointed at the same way, with the path built from where restore put the package, and needs no ordering reference: see [The model as a package](model-package.md).
+
 Everything else is supplied by the `buildTransitive/Scry.Client.targets` file that ships in the `Scry.Client` package:
 
 <!-- snippet: buildTransitiveProps -->
@@ -70,10 +72,13 @@ Everything else is supplied by the `buildTransitive/Scry.Client.targets` file th
         BeforeTargets="CoreCompile"
         Condition="'$(ScryModelDll)' != '' and !Exists('$(ScryModelDll)')">
   <Error Text="Scry: the model assembly '$(ScryModelDll)' was not found.
-Reference the model project with ReferenceOutputAssembly=&quot;false&quot; so it builds first." />
+A model project: reference it with ReferenceOutputAssembly=&quot;false&quot; so it builds first.
+A model package: reference it with GeneratePathProperty=&quot;true&quot;, and build the path from the
+Pkg property that generates (see obj/*.nuget.g.props).
+See https://github.com/Papyrine/Scry/blob/main/docs/model-package.md" />
 </Target>
 ```
-<sup><a href='/src/Scry.Client/buildTransitive/Scry.Client.targets#L11-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-buildTransitiveProps' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Client/buildTransitive/Scry.Client.targets#L13-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-buildTransitiveProps' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -102,7 +107,7 @@ flowchart TD
 
 ### Project references instead of the package
 
-When referencing the projects directly (as the sample and integration tests do), the props file is not imported, so the wiring is written out explicitly:
+When referencing the projects directly (as the sample and integration tests do), the targets file is not imported, so the wiring is written out explicitly:
 
 <!-- snippet: clientGeneratorWiring -->
 <a id='snippet-clientGeneratorWiring'></a>
@@ -282,8 +287,11 @@ builder.Services.AddScoped<ScryQuery>();
 | `SCRY001` | Error | Failed to read the Scry model assembly. The message carries the underlying reason. |
 | `SCRY002` | Error | Two queryable types resolve to the same source name. |
 | `SCRY003` | Error | A source name cannot be written as a C# property name. |
+| `SCRY018` | Error | A generic type opts in. |
 
 `SCRY001` is reported when the DLL exists but cannot be parsed — corrupt, truncated, or not a managed assembly — and when the path is relative, which the shipped targets prevent by resolving it against the project.
+
+`SCRY018` refuses `[Queryable]`, `[QueryableView]`, `[QueryablePoco]` or `[QueryableComplex]` on an open generic type, which has no members a client could name until its parameters are filled in. The types deriving from it opt in instead: a generic base the model declares is read with the arguments each supplies ([Inheritance](annotations.md#inheritance)). The server refuses the same type at startup.
 
 `SCRY002` guards the source-name clash that would otherwise emit duplicate properties on `ScryQuery` and surface as a `CS0102` on generated code the user cannot see. Give one of the types a distinct [`Name`](annotations.md#naming-a-source). The server rejects the same clash at startup.
 
@@ -294,12 +302,17 @@ The `SCRY1xx` family is reported by the **LINQ analyzer**, which is packed in th
 
 ## Troubleshooting
 
-**Nothing is generated; `ScryQuery` does not exist.** The path in `ScryModelDll` is empty or does not resolve to an existing file, so the generator produces nothing at all rather than failing the build. Check the path against `$(Configuration)` and the model's target framework — a `Release` client pointing at a `Debug` model path is the usual cause. When consuming the NuGet package the `EnsureScryModel` target catches this and fails the build with:
+**Nothing is generated; `ScryQuery` does not exist.** The path in `ScryModelDll` is empty or does not resolve to an existing file, so the generator produces nothing at all rather than failing the build. Check the path against `$(Configuration)` and the model's target framework — a `Release` client pointing at a `Debug` model path is the usual cause. When consuming the NuGet package, the `EnsureScryModel` target catches a path that is set but names no file, and fails the build with:
 
 ```
 Scry: the model assembly '...' was not found.
-Reference the model project with ReferenceOutputAssembly="false" so it builds first.
+A model project: reference it with ReferenceOutputAssembly="false" so it builds first.
+A model package: reference it with GeneratePathProperty="true", and build the path from the
+Pkg property that generates (see obj/*.nuget.g.props).
+See https://github.com/Papyrine/Scry/blob/main/docs/model-package.md
 ```
+
+An empty `ScryModelDll` is not an error: a project can reference `Scry.Client` without generating anything, as an F# client's does through its query models project ([F#](fsharp.md)).
 
 **A source is missing from `ScryQuery`.** The type is not opted in. Add `[Queryable]`, `[QueryableView]`, or `[QueryablePoco]` — see [Annotations](annotations.md).
 

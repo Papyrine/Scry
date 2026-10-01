@@ -350,7 +350,7 @@ sealed partial class Schema
 
         return DescribeShape(member, enums) with
         {
-            Obsolete = ObsoleteOf(member.ClrProperty),
+            Obsolete = ObsoleteAlongOverrides(member.ClrProperty),
             IsSensitive = member.Sensitive
         };
     }
@@ -443,9 +443,9 @@ sealed partial class Schema
     /// otherwise. <c>[QueryIgnore]</c> is the hard stop.
     /// </summary>
     /// <remarks>
-    /// <c>inherit: false</c>, matching the metadata side (attributes there are declared-only) and the
-    /// opt-in attributes above. Must stay in lockstep with MetadataModelReader.ObsoleteOf, which the
-    /// generator reads the same attribute with.
+    /// <c>inherit: false</c>: a type's deprecation is its own on both sides, as the opt-in attributes
+    /// above are, and a property's is read by <see cref="ObsoleteAlongOverrides"/>. Must stay in
+    /// lockstep with MetadataModelReader.ObsoleteOf, which the generator reads the same attribute with.
     /// </remarks>
     static string? ObsoleteOf(MemberInfo member)
     {
@@ -460,6 +460,27 @@ sealed partial class Schema
         }
 
         return obsolete.Message;
+    }
+
+    /// <summary>
+    /// A property's deprecation: that of the nearest of its declarations along the override chain that
+    /// the model assembly holds. C# binds a use of an override to the declaration it overrides, so a
+    /// deprecated virtual deprecates every override of it — and the generator, which merges the
+    /// declarations it reads, describes it that way. A declaration in another assembly is one the
+    /// generator cannot read, so it is passed over here too.
+    /// </summary>
+    static string? ObsoleteAlongOverrides(PropertyInfo property)
+    {
+        foreach (var declaration in Declarations(property))
+        {
+            if (declaration.DeclaringType?.Assembly == property.DeclaringType?.Assembly &&
+                ObsoleteOf(declaration) is { } obsolete)
+            {
+                return obsolete;
+            }
+        }
+
+        return null;
     }
 
     // Mirrors MetadataModelReader's PrimitiveKeyword + ScalarKeyword so introspection type displays
@@ -534,9 +555,10 @@ sealed partial class Schema
         var schema = new Schema();
         var found = new List<(Type Type, string Name, SourceKind Kind)>();
 
-        foreach (var type in contextType.Assembly.GetTypes())
+        foreach (var type in options.ModelAssembly.GetTypes())
         {
             EnsureOneOptIn(type);
+            EnsureNotGeneric(type);
             if (TryClassify(type, out var kind, out var name))
             {
                 EnsureNameIsIdentifier(type, name);
@@ -661,7 +683,16 @@ sealed partial class Schema
         // Pass 2c: the commands, which need every source registered — a targeted one names its target's
         // source and is bound to its key — and which add their capability members to the types above
         // before anything describes, stamps, or walks them.
-        BuildCommands(schema, contextType, options);
+        BuildCommands(schema, options);
+
+        // A model read from the wrong assembly finds nothing to refuse, and would start serving an empty
+        // schema: every query an unknown source, every client stale. The usual cause is annotated types
+        // shipped apart from the context, which reads as this rather than as a model with no opt-ins.
+        if (schema.sources.Count == 0 &&
+            schema.commands.Count == 0)
+        {
+            throw new($"Nothing in assembly '{options.ModelAssembly.GetName().Name}' is opted in: no type carries [Queryable], [QueryableView], [QueryablePoco] or [Command], so a client would have nothing to query or send. The model is read from ScryOptions.ModelAssembly, which defaults to {contextType.Name}'s own assembly. Set it to the assembly that declares the annotated types.");
+        }
 
         // Pass 3: register the previous names sources still answer to. Deferred until every current
         // name is known, so a previous name can never shadow a live source whatever the discovery order.
@@ -973,6 +1004,50 @@ sealed partial class Schema
         }
     }
 
+    // An open generic type has no members a client could name until its parameters are filled in, and no
+    // query model it could be generated as; the generator refuses it as SCRY018. The types deriving from
+    // it opt in instead, and read its members with the arguments they supply. A generic command is
+    // refused by EnsureConcreteCommand, as the generator's SCRY017.
+    static void EnsureNotGeneric(Type type)
+    {
+        if (!type.IsGenericTypeDefinition)
+        {
+            return;
+        }
+
+        string? optIn = null;
+        if (type.HasAttribute<QueryableAttribute>(inherit: false))
+        {
+            optIn = "[Queryable]";
+        }
+        else if (type.HasAttribute<QueryableViewAttribute>(inherit: false))
+        {
+            optIn = "[QueryableView]";
+        }
+        else if (type.HasAttribute<QueryablePocoAttribute>(inherit: false))
+        {
+            optIn = "[QueryablePoco]";
+        }
+        else if (type.HasAttribute<QueryableComplexAttribute>(inherit: false))
+        {
+            optIn = "[QueryableComplex]";
+        }
+
+        if (optIn is null)
+        {
+            return;
+        }
+
+        var name = type.Name;
+        var tick = name.IndexOf('`');
+        if (tick > 0)
+        {
+            name = name[..tick];
+        }
+
+        throw new($"'{name}' carries {optIn} but is generic. A client is generated with a query model per opted-in type, and an open generic type has no members a client could name until its type parameters are filled in. Opt in the types deriving from it instead: a generic base in the model assembly gives each of them its members, with its parameters filled in.");
+    }
+
     // A blank Name is treated as unset, matching the generator.
     static string Named(string? configured, string fallback)
     {
@@ -984,8 +1059,31 @@ sealed partial class Schema
         return configured;
     }
 
-    static bool IsKeyless(Type type) =>
-        type.HasAttribute<KeylessAttribute>();
+    // Through inheritance, as EF reads it: a type deriving from a keyless one is keyless too. The
+    // generator walks the same chain, but only as far as the model assembly goes, so a [Keyless] only a
+    // base elsewhere carries would make the type a view here and an entity in every client.
+    static bool IsKeyless(Type type)
+    {
+        if (!type.HasAttribute<KeylessAttribute>())
+        {
+            return false;
+        }
+
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            if (current.Assembly != type.Assembly)
+            {
+                throw new($"'{type.Name}' is keyless only because '{current.Name}' in assembly '{current.Assembly.GetName().Name}' carries [Keyless]. A client is generated from the model assembly's metadata alone, so it could never see that, and every client would report itself stale. Repeat [Keyless] on '{type.Name}'.");
+            }
+
+            if (current.HasAttribute<KeylessAttribute>(inherit: false))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// A collation is the one configured value that reaches the database as SQL text rather than as a
@@ -1350,15 +1448,17 @@ sealed partial class Schema
         {
             if (property.GetMethod is not { IsPublic: true } ||
                 property.GetIndexParameters().Length > 0 ||
-                property.HasAttribute<QueryIgnoreAttribute>())
+                Carries<QueryIgnoreAttribute>(type, property))
             {
-                EnsureNoPreviousNames(type, property);
-                EnsureNoBinaryTransfer(type, property, "which is not exposed to clients. Remove it, or remove whatever excludes the member.");
-                EnsureNoAttachment(type, property, "which is not exposed to clients. Remove it, or remove whatever excludes the member.");
+                EnsureHiddenCarriesNothing(type, property);
                 continue;
             }
 
             EnsureReadableByTheGenerator(type, property, queryableTypes);
+            foreach (var attribute in describingAttributes)
+            {
+                EnsureStatedInModel(type, property, attribute);
+            }
 
             if (IsScalar(property.PropertyType))
             {
@@ -1440,8 +1540,8 @@ sealed partial class Schema
     /// Refuses a member the generator could never read. A client is generated from the model
     /// assembly's metadata alone, so a member inherited from a base in another assembly is invisible
     /// to it — while reflection here would expose it, and every client would then report itself
-    /// stale. A base in the model assembly is read on both sides whether or not it opted in, and an
-    /// opted-in base is the generated model's own base, so neither is refused.
+    /// stale. A base in the model assembly is read on both sides, generic or not and whether or not it
+    /// opted in, and an opted-in base is the generated model's own base, so neither is refused.
     /// </summary>
     static void EnsureReadableByTheGenerator(Type type, PropertyInfo property, HashSet<Type> queryableTypes)
     {
@@ -1455,6 +1555,113 @@ sealed partial class Schema
         }
 
         throw new($"'{type.Name}.{property.Name}' is inherited from '{declaring.Name}' in assembly '{declaring.Assembly.GetName().Name}'. A client is generated from the model assembly's metadata alone, so it could never see the member, and every client would report itself stale. Declare the member on a type in the model assembly, or hide it by overriding it with [QueryIgnore].");
+    }
+
+    // The attributes that change what a client is told about a member, beyond [QueryIgnore], which is
+    // read through Carries where it decides exposure. [BinaryTransfer] only changes how a value travels,
+    // [PreviousNames] is an alias the server alone answers to, and [Obsolete] is not inherited.
+    static Type[] describingAttributes =
+    [
+        typeof(SensitiveAttribute),
+        typeof(AttachmentAttribute),
+        typeof(QueryableCollectionAttribute),
+        typeof(KeyAttribute)
+    ];
+
+    /// <summary>
+    /// Whether <paramref name="property"/> carries <typeparamref name="T"/>, read through every
+    /// declaration it overrides — once <see cref="EnsureStatedInModel"/> has confirmed the generator
+    /// can see the same answer.
+    /// </summary>
+    static bool Carries<T>(Type type, PropertyInfo property)
+        where T : Attribute
+    {
+        EnsureStatedInModel(type, property, typeof(T));
+        return property.HasAttribute<T>();
+    }
+
+    /// <summary>
+    /// Refuses an attribute only a declaration in another assembly carries. Reflection reads an
+    /// attribute through every declaration a member overrides, in any assembly; the generator merges
+    /// the declarations it can read, which are the model assembly's alone. An override of a virtual
+    /// declared elsewhere would then be described one way here and another in every client.
+    /// </summary>
+    /// <remarks>
+    /// Refused rather than read from the model's declarations alone, which would also align the two:
+    /// every attribute checked here restricts, so ignoring one would expose what its author hid, put a
+    /// sensitive value in a URL, or hand an attachment's bytes back inline. A member declared outside
+    /// the model assembly is not checked: it is refused or hidden on its own terms.
+    /// </remarks>
+    static void EnsureStatedInModel(Type type, PropertyInfo property, Type attribute)
+    {
+        if (property.DeclaringType is not { } declaring ||
+            declaring.Assembly != type.Assembly ||
+            !Attribute.IsDefined(property, attribute, inherit: true))
+        {
+            return;
+        }
+
+        PropertyInfo? foreign = null;
+        foreach (var declaration in Declarations(property))
+        {
+            if (!Attribute.IsDefined(declaration, attribute, inherit: false))
+            {
+                continue;
+            }
+
+            if (declaration.DeclaringType?.Assembly == type.Assembly)
+            {
+                return;
+            }
+
+            foreign ??= declaration;
+        }
+
+        if (foreign?.DeclaringType is not { } foreignType)
+        {
+            return;
+        }
+
+        var name = attribute.Name[..^nameof(Attribute).Length];
+        throw new($"'{type.Name}.{property.Name}' overrides '{foreignType.Name}.{property.Name}' in assembly '{foreignType.Assembly.GetName().Name}', which carries [{name}]. The server reads an attribute through every declaration a member overrides, but a client is generated from the model assembly's metadata alone, so it could never see this one, and every client would report itself stale. Repeat [{name}] on the override in '{declaring.Name}', to state it where both sides can read it.");
+    }
+
+    // The declarations a property overrides, nearest first and itself included: the chain reflection's
+    // inherit walk reads attributes along.
+    static IEnumerable<PropertyInfo> Declarations(PropertyInfo property)
+    {
+        for (var current = property; current is not null; current = Overridden(current))
+        {
+            yield return current;
+        }
+    }
+
+    // The declaration a property overrides, as reflection finds it: only through an accessor that is
+    // virtual and takes over a slot rather than starting one, so a member hiding another with 'new'
+    // ends the chain.
+    static PropertyInfo? Overridden(PropertyInfo property)
+    {
+        var accessor = property.GetMethod ?? property.SetMethod;
+        if (accessor is null ||
+            !accessor.IsVirtual ||
+            (accessor.Attributes & MethodAttributes.VtableLayoutMask) == MethodAttributes.NewSlot)
+        {
+            return null;
+        }
+
+        for (var current = property.DeclaringType?.BaseType; current is not null; current = current.BaseType)
+        {
+            var declared = current
+                .GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                .FirstOrDefault(_ => _.Name == property.Name &&
+                                     _.GetIndexParameters().Length == 0);
+            if (declared is not null)
+            {
+                return declared;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -1525,13 +1732,47 @@ sealed partial class Schema
         }
     }
 
-    static void EnsureNoPreviousNames(Type type, PropertyInfo property)
+    const string notExposed = "which is not exposed to clients. Remove it, or remove whatever excludes the member.";
+
+    /// <summary>
+    /// Refuses, on a member kept from clients, what only an exposed member can use — where the model's
+    /// author wrote it. Read from the model assembly's declarations alone: a member a base in another
+    /// assembly declares is hidden by overriding it with <c>[QueryIgnore]</c>, the fix
+    /// <see cref="EnsureReadableByTheGenerator"/> names, and what that base's own declaration carries is
+    /// neither the author's to remove nor anything the generator reads.
+    /// </summary>
+    static void EnsureHiddenCarriesNothing(Type type, PropertyInfo property)
     {
-        if (PreviousNamesOf(property).Count > 0)
+        EnsureNoPreviousNames(type, property);
+
+        if (WrittenInModel<BinaryTransferAttribute>(type, property))
         {
-            throw new($"[PreviousNames] on '{type.Name}.{property.Name}', which is not exposed to clients. Remove it, or remove whatever excludes the member.");
+            throw new($"[BinaryTransfer] on '{type.Name}.{property.Name}', {notExposed}");
+        }
+
+        if (WrittenInModel<AttachmentAttribute>(type, property))
+        {
+            throw new($"[Attachment] on '{type.Name}.{property.Name}', {notExposed}");
         }
     }
+
+    // Only ever asked of a member that is not exposed, so read as EnsureHiddenCarriesNothing reads.
+    static void EnsureNoPreviousNames(Type type, PropertyInfo property)
+    {
+        if (ModelDeclarations(type, property).Any(_ => _.GetCustomAttribute<PreviousNamesAttribute>(inherit: false)?.Names.Count > 0))
+        {
+            throw new($"[PreviousNames] on '{type.Name}.{property.Name}', {notExposed}");
+        }
+    }
+
+    // The declarations of a property along its override chain that the model assembly holds: what the
+    // model's author wrote, and all the generator reads.
+    static IEnumerable<PropertyInfo> ModelDeclarations(Type type, PropertyInfo property) =>
+        Declarations(property).Where(_ => _.DeclaringType?.Assembly == type.Assembly);
+
+    static bool WrittenInModel<T>(Type type, PropertyInfo property)
+        where T : Attribute =>
+        ModelDeclarations(type, property).Any(_ => _.HasAttribute<T>(inherit: false));
 
     static void EnsureNoBinaryTransfer(Type type, PropertyInfo property, string reason)
     {

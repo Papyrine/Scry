@@ -13,6 +13,7 @@ SCRY005 | Scry | Error | [Attachment] is only valid on a queryable entity
 SCRY006 | Scry | Error | [Attachment] cannot combine with [BinaryTransfer]
 SCRY007 | Scry | Error | Attachment keys are not derivable
 SCRY008 | Scry | Error | A type opts in more than once
+SCRY018 | Scry | Error | A generic type opts in
 SCRY100 | Scry | Warning | LINQ operator is not supported by Scry
 SCRY101 | Scry | Warning | Cast is not supported by Scry
 SCRY102 | Scry | Warning | SelectMany with a result selector is not supported by Scry

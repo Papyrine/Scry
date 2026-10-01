@@ -438,6 +438,7 @@ A Blazor client has a companion: a [debug sidecar](docs/sidecar.md) that opens o
 - [Comparisons](docs/comparisons.md)
 - [Annotations](docs/annotations.md)
 - [Source generator](docs/source-generator.md)
+- [The model as a package](docs/model-package.md)
 - [F#](docs/fsharp.md)
 - [Writing queries](docs/querying.md)
 - [Server](docs/server.md)

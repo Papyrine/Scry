@@ -442,6 +442,19 @@ public sealed class ScryOptions(Type contextType)
     /// </summary>
     public bool AllowUnmappedSources { get; set; }
 
+    /// <summary>
+    /// The assembly read for opted-in types and commands — the one a client's <c>ScryModelDll</c>
+    /// names. Defaults to the context's own assembly. Set it where the annotated types ship apart
+    /// from the context: a model package whose context the host declares, or derives from one the
+    /// package declares.
+    /// </summary>
+    /// <remarks>
+    /// Only this assembly is read, as only it is read by the generator: a member, enum, or result
+    /// type declared anywhere else is refused at startup rather than exposed to a client that could
+    /// never see it.
+    /// </remarks>
+    public Assembly ModelAssembly { get; set; } = contextType.Assembly;
+
     internal Type ContextType { get; private set; } = contextType;
 
     internal Dictionary<Type, Func<IServiceProvider, IQueryable>> PocoSources { get; } = [];

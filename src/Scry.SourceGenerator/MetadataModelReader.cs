@@ -56,15 +56,20 @@ static class MetadataModelReader
             var decoder = new SignatureDecoder();
             var discovered = new List<Discovered>();
             var conflicts = ImmutableArray.CreateBuilder<string>();
+            var generics = ImmutableArray.CreateBuilder<string>();
             var commandTypes = new List<TypeDefinition>();
             foreach (var handle in reader.TypeDefinitions)
             {
                 var type = reader.GetTypeDefinition(handle);
-                if (!TryClassify(reader, type, decoder, out var kind, out var sourceName, out var conflict))
+                if (!TryClassify(reader, type, decoder, out var kind, out var sourceName, out var conflict, out var generic))
                 {
                     if (conflict is not null)
                     {
                         conflicts.Add($"'{reader.GetString(type.Name)}' carries {conflict}");
+                    }
+                    else if (generic is not null)
+                    {
+                        generics.Add($"'{WithoutArity(reader.GetString(type.Name))}' carries {generic}");
                     }
                     else if (HasAttribute(reader, type.GetCustomAttributes(), commandAttribute))
                     {
@@ -104,7 +109,7 @@ static class MetadataModelReader
                         entry.ModelName,
                         entry.Kind,
                         new(properties),
-                        NearestOptedInBase(reader, entry.Type, discoveredByFullName),
+                        NearestOptedInBase(reader, entry.Type, decoder, discoveredByFullName),
                         entry.Obsolete,
                         entry.ClrName,
                         IsSensitive: entry.IsSensitive));
@@ -118,7 +123,8 @@ static class MetadataModelReader
                 new(conflicts.ToImmutable()),
                 new(catalog.Commands),
                 new(catalog.Results),
-                new(catalog.Problems));
+                new(catalog.Problems),
+                new(generics.ToImmutable()));
         }
         catch (Exception exception)
         {
@@ -324,7 +330,7 @@ static class MetadataModelReader
             if (reader.GetString(method.Name) == ".ctor" &&
                 (method.Attributes & MethodAttributes.MemberAccessMask) == MethodAttributes.Public &&
                 (method.Attributes & MethodAttributes.Static) == 0 &&
-                method.DecodeSignature(decoder, genericContext: null).ParameterTypes.Length == 0)
+                method.DecodeSignature(decoder, ImmutableArray<DecodedType>.Empty).ParameterTypes.Length == 0)
             {
                 return true;
             }
@@ -347,7 +353,7 @@ static class MetadataModelReader
         ImmutableArray<CommandProblem>.Builder problems)
     {
         var properties = ImmutableArray.CreateBuilder<PropertyInfo>();
-        foreach (var (property, attributes) in PropertiesAlongTheChain(reader, type))
+        foreach (var (property, attributes, arguments) in PropertiesAlongTheChain(reader, type, decoder))
         {
             if (!HasPublicInstanceGetter(reader, property) ||
                 !HasPublicInstanceSetter(reader, property) ||
@@ -356,7 +362,7 @@ static class MetadataModelReader
                 continue;
             }
 
-            var signature = property.DecodeSignature(decoder, genericContext: null);
+            var signature = property.DecodeSignature(decoder, arguments);
             if (signature.ParameterTypes.Length > 0)
             {
                 continue;
@@ -392,46 +398,150 @@ static class MetadataModelReader
         return properties.ToImmutable();
     }
 
-    // Every property of the type and of its bases in this assembly, base-most first. A name declared more
-    // than once is one property, described by its nearest declaration and carrying every declaration's
-    // attributes — the walk DeclaredProperties makes, without its stop at an opted-in base.
-    static List<(PropertyDefinition Property, List<CustomAttributeHandle> Attributes)> PropertiesAlongTheChain(
+    // Every property of the type and of its bases in this assembly, base-most first, as a class lays its
+    // inherited members out — the server reads inherited members by reflection. A name declared more than
+    // once along the chain is one property, described by its nearest declaration. Each comes with the
+    // attributes of every declaration it overrides (AlongOverrides), and with the type arguments its
+    // declaring level is read with, which a generic base's signatures need.
+    //
+    // Given the opted-in types, members are collected only up to the first base that opted in: that base
+    // is the generated model's own base, whose members the model inherits rather than declares again.
+    // Its declarations are still read for what an override below it inherits.
+    static List<ChainProperty> PropertiesAlongTheChain(
         MetadataReader reader,
-        TypeDefinition type)
+        TypeDefinition type,
+        SignatureDecoder decoder,
+        Dictionary<string, Discovered>? optedIn = null)
     {
-        var levels = new List<List<(PropertyDefinition, List<CustomAttributeHandle>)>>();
-        var byName = new Dictionary<string, List<CustomAttributeHandle>>(StringComparer.Ordinal);
-        var current = type;
-        while (true)
+        var chain = Chain(reader, type, decoder).ToList();
+        var collecting = chain
+            .TakeWhile((level, index) => index == 0 || optedIn is null || !optedIn.ContainsKey(FullName(reader, level.Type)))
+            .Count();
+
+        var levels = new List<List<ChainProperty>>();
+        var described = new HashSet<string>(StringComparer.Ordinal);
+        for (var index = 0; index < collecting; index++)
         {
-            var level = new List<(PropertyDefinition, List<CustomAttributeHandle>)>();
-            foreach (var handle in current.GetProperties())
+            var collected = new List<ChainProperty>();
+            foreach (var handle in chain[index].Type.GetProperties())
             {
                 var property = reader.GetPropertyDefinition(handle);
                 var name = reader.GetString(property.Name);
-                var attributes = property.GetCustomAttributes().ToList();
-                if (byName.TryGetValue(name, out var nearer))
+
+                // A nearer declaration of the name already describes it, whether it overrides this one
+                // or hides it.
+                if (!described.Add(name))
                 {
-                    nearer.AddRange(attributes);
                     continue;
                 }
 
-                byName[name] = attributes;
-                level.Add((property, attributes));
+                collected.Add(new(property, AlongOverrides(reader, chain, index, property, name), chain[index].Arguments));
             }
 
-            levels.Add(level);
-            if (current.BaseType.IsNil ||
-                current.BaseType.Kind != HandleKind.TypeDefinition)
-            {
-                break;
-            }
-
-            current = reader.GetTypeDefinition((TypeDefinitionHandle)current.BaseType);
+            levels.Add(collected);
         }
 
         levels.Reverse();
         return levels.SelectMany(_ => _).ToList();
+    }
+
+    // The attributes of a declaration and of every declaration it overrides further up the chain, nearest
+    // first: reflection's inherit walk reads an overridden property's attributes along exactly that, and
+    // the server reads them by it. It ends at a declaration that overrides nothing, so a member hiding
+    // another with 'new' carries none of what it hides.
+    static List<CustomAttributeHandle> AlongOverrides(
+        MetadataReader reader,
+        List<Level> chain,
+        int index,
+        PropertyDefinition property,
+        string name)
+    {
+        var attributes = property.GetCustomAttributes().ToList();
+        var current = property;
+        for (var above = index + 1; above < chain.Count && Overrides(reader, current); above++)
+        {
+            if (DeclaredProperty(reader, chain[above].Type, name) is not { } overridden)
+            {
+                continue;
+            }
+
+            attributes.AddRange(overridden.GetCustomAttributes());
+            current = overridden;
+        }
+
+        return attributes;
+    }
+
+    // Whether a property overrides one a base declares: its accessor virtual, and taking over a slot the
+    // base made rather than starting one of its own. Mirrors Schema.Overridden, as reflection reads it.
+    static bool Overrides(MetadataReader reader, PropertyDefinition property)
+    {
+        var accessors = property.GetAccessors();
+        var accessor = accessors.Getter.IsNil ? accessors.Setter : accessors.Getter;
+        if (accessor.IsNil)
+        {
+            return false;
+        }
+
+        var attributes = reader.GetMethodDefinition(accessor).Attributes;
+        return (attributes & MethodAttributes.Virtual) != 0 &&
+               (attributes & MethodAttributes.VtableLayoutMask) != MethodAttributes.NewSlot;
+    }
+
+    static PropertyDefinition? DeclaredProperty(MetadataReader reader, TypeDefinition type, string name)
+    {
+        foreach (var handle in type.GetProperties())
+        {
+            var property = reader.GetPropertyDefinition(handle);
+            if (reader.GetString(property.Name) == name)
+            {
+                return property;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The type and its bases in this assembly, nearest first, each with the type arguments it is read
+    /// with: none for the type itself, and for a generic base the ones the level below supplied, so
+    /// <c>Order : Entity&lt;int&gt;</c> reads <c>Entity</c>'s <c>TKey</c> as <c>int</c>.
+    /// </summary>
+    /// <remarks>
+    /// Ends at a base outside this assembly, generic or not, which cannot be read here. The server
+    /// refuses a member inherited from one, so the walk ending is what keeps the two aligned.
+    /// </remarks>
+    static IEnumerable<Level> Chain(MetadataReader reader, TypeDefinition type, SignatureDecoder decoder)
+    {
+        var level = new Level(type, ImmutableArray<DecodedType>.Empty);
+        while (true)
+        {
+            yield return level;
+
+            var baseType = level.Type.BaseType;
+            if (baseType.IsNil)
+            {
+                yield break;
+            }
+
+            if (baseType.Kind == HandleKind.TypeDefinition)
+            {
+                level = new(reader.GetTypeDefinition((TypeDefinitionHandle) baseType), ImmutableArray<DecodedType>.Empty);
+                continue;
+            }
+
+            // A generic base is a specification, decoded in the context of the level below: a base that
+            // passes its own parameter on (AuditableEntity<TKey> : Entity<TKey>) passes on the argument
+            // it was given. Only an instantiation of one of the model's own types is followed.
+            if (baseType.Kind == HandleKind.TypeSpecification &&
+                reader.GetTypeSpecification((TypeSpecificationHandle) baseType).DecodeSignature(decoder, level.Arguments) is InstanceDecoded instance)
+            {
+                level = new(reader.GetTypeDefinition(instance.Definition), instance.Arguments);
+                continue;
+            }
+
+            yield break;
+        }
     }
 
     /// <summary>
@@ -535,6 +645,18 @@ static class MetadataModelReader
             return null;
         }
 
+        // Generic, whether the command named it open or with arguments: a result is emitted once, as a
+        // class of its own name, and a generic class has no one shape that class could take. The server
+        // refuses the same result.
+        if (type.GetGenericParameters().Count > 0)
+        {
+            problems.Add(
+                new(
+                    "SCRY015",
+                    $"'{clrName}' answers with '{WithoutArity(reader.GetString(type.Name))}', which is generic. A result is emitted as one class of its own name, which a generic class has no single shape for. Answer with a class that is not generic: one deriving from the generic one, with its arguments filled in, keeps its members."));
+            return null;
+        }
+
         var name = reader.GetString(type.Name);
         if (results.TryGetValue(name, out var existing))
         {
@@ -552,14 +674,14 @@ static class MetadataModelReader
 
         var properties = ImmutableArray.CreateBuilder<PropertyInfo>();
         var valid = true;
-        foreach (var (property, attributes) in PropertiesAlongTheChain(reader, type))
+        foreach (var (property, attributes, arguments) in PropertiesAlongTheChain(reader, type, decoder))
         {
             if (!HasPublicInstanceGetter(reader, property))
             {
                 continue;
             }
 
-            var signature = property.DecodeSignature(decoder, genericContext: null);
+            var signature = property.DecodeSignature(decoder, arguments);
             if (signature.ParameterTypes.Length > 0)
             {
                 continue;
@@ -765,30 +887,24 @@ static class MetadataModelReader
     }
 
     // Walks up the base chain to the first type that was itself opted in, skipping any that were not —
-    // so leaving a base out hides it without hiding its descendants. Must stay in lockstep with
+    // so leaving a base out hides it without hiding its descendants. A generic base is walked through
+    // like any other: it cannot opt in, but what it derives from can. Must stay in lockstep with
     // Schema's own base-linking, which does the same walk over reflection.
     static string? NearestOptedInBase(
         MetadataReader reader,
         TypeDefinition type,
+        SignatureDecoder decoder,
         Dictionary<string, Discovered> discovered)
     {
-        var current = type;
-        while (true)
+        foreach (var level in Chain(reader, type, decoder).Skip(1))
         {
-            // A base outside this assembly is a TypeReference, which cannot have been opted in here —
-            // the walk ends rather than trying to follow it.
-            if (current.BaseType.IsNil ||
-                current.BaseType.Kind != HandleKind.TypeDefinition)
-            {
-                return null;
-            }
-
-            current = reader.GetTypeDefinition((TypeDefinitionHandle)current.BaseType);
-            if (discovered.TryGetValue(FullName(reader, current), out var match))
+            if (discovered.TryGetValue(FullName(reader, level.Type), out var match))
             {
                 return match.ModelName;
             }
         }
+
+        return null;
     }
 
     static ImmutableArray<PropertyInfo> ReadProperties(
@@ -800,7 +916,7 @@ static class MetadataModelReader
         Dictionary<string, Discovered> discovered)
     {
         var properties = ImmutableArray.CreateBuilder<PropertyInfo>();
-        foreach (var (property, attributes) in DeclaredProperties(reader, type, discovered))
+        foreach (var (property, attributes, arguments) in PropertiesAlongTheChain(reader, type, decoder, discovered))
         {
             if (!HasPublicInstanceGetter(reader, property) ||
                 HasAttribute(reader, attributes, queryIgnoreAttribute))
@@ -808,7 +924,7 @@ static class MetadataModelReader
                 continue;
             }
 
-            var signature = property.DecodeSignature(decoder, genericContext: null);
+            var signature = property.DecodeSignature(decoder, arguments);
 
             // An indexer is a property with parameters, which no query names; reflection leaves it
             // out on the server too.
@@ -843,59 +959,6 @@ static class MetadataModelReader
         }
 
         return properties.ToImmutable();
-    }
-
-    // The properties a model exposes as its own: the type's, and those of every base in this assembly
-    // that did not opt in — the server reads inherited members by reflection, and a base that opted
-    // in is the generated model's own base instead, so the walk stops there. A name declared more
-    // than once along the chain (an override) is one member, described by its nearest declaration
-    // and carrying the attributes of every declaration, as reflection's inherit walk reads them.
-    static List<(PropertyDefinition Property, List<CustomAttributeHandle> Attributes)> DeclaredProperties(
-        MetadataReader reader,
-        TypeDefinition type,
-        Dictionary<string, Discovered> discovered)
-    {
-        var levels = new List<List<(PropertyDefinition, List<CustomAttributeHandle>)>>();
-        var byName = new Dictionary<string, List<CustomAttributeHandle>>(StringComparer.Ordinal);
-        var current = type;
-        while (true)
-        {
-            var level = new List<(PropertyDefinition, List<CustomAttributeHandle>)>();
-            foreach (var handle in current.GetProperties())
-            {
-                var property = reader.GetPropertyDefinition(handle);
-                var name = reader.GetString(property.Name);
-                var attributes = property.GetCustomAttributes().ToList();
-                if (byName.TryGetValue(name, out var nearer))
-                {
-                    nearer.AddRange(attributes);
-                    continue;
-                }
-
-                byName[name] = attributes;
-                level.Add((property, attributes));
-            }
-
-            levels.Add(level);
-
-            // A base outside this assembly is a TypeReference, which cannot be read here; the server
-            // refuses a member inherited from one, so the walk ending is what keeps the two aligned.
-            if (current.BaseType.IsNil ||
-                current.BaseType.Kind != HandleKind.TypeDefinition)
-            {
-                break;
-            }
-
-            current = reader.GetTypeDefinition((TypeDefinitionHandle)current.BaseType);
-            if (discovered.ContainsKey(FullName(reader, current)))
-            {
-                break;
-            }
-        }
-
-        // Base-most first, as a class lays its inherited members out.
-        levels.Reverse();
-        return levels.SelectMany(_ => _).ToList();
     }
 
     // A member an opted-in base already declares is the base model's, inherited by the derived model
@@ -1066,11 +1129,13 @@ static class MetadataModelReader
         SignatureDecoder decoder,
         out SourceKind kind,
         out string sourceName,
-        out string? conflict)
+        out string? conflict,
+        out string? generic)
     {
         kind = default;
         sourceName = reader.GetString(type.Name);
         conflict = null;
+        generic = null;
 
         SourceKind? found = null;
         var keyless = false;
@@ -1127,9 +1192,29 @@ static class MetadataModelReader
             return false;
         }
 
+        // An open generic type has no members a client could name until its parameters are filled in,
+        // and no query model it could be emitted as. Read as nothing and reported, as the server refuses
+        // it; the types deriving from it opt in instead, and read its members with their arguments.
+        if (type.GetGenericParameters().Count > 0)
+        {
+            generic = optIns[0];
+            return false;
+        }
+
         if (configuredName is not null)
         {
             sourceName = configuredName;
+        }
+
+        // EF reads [Keyless] through inheritance, so a type deriving from a keyless one is keyless too,
+        // and the server reads it as EF does. A base outside this assembly cannot be read here; the server
+        // refuses a [Keyless] that only such a base carries.
+        if (sourceKind == SourceKind.Entity &&
+            !keyless)
+        {
+            keyless = Chain(reader, type, decoder)
+                .Skip(1)
+                .Any(_ => HasAttribute(reader, _.Type.GetCustomAttributes(), keylessAttribute));
         }
 
         kind = sourceKind == SourceKind.Entity && keyless ? SourceKind.View : sourceKind;
@@ -1278,6 +1363,18 @@ static class MetadataModelReader
     static string FullName(MetadataReader reader, TypeDefinition type) =>
         Combine(reader.GetString(type.Namespace), reader.GetString(type.Name));
 
+    // A generic type's metadata name carries its arity ("Entity`1"); its name as written does not.
+    static string WithoutArity(string name)
+    {
+        var tick = name.IndexOf('`');
+        if (tick < 0)
+        {
+            return name;
+        }
+
+        return name.Substring(0, tick);
+    }
+
     static string Combine(string ns, string name)
     {
         if (ns.Length == 0)
@@ -1330,4 +1427,16 @@ static class MetadataModelReader
         string? Obsolete,
         string ClrName,
         bool IsSensitive);
+
+    /// <summary>A type along a base chain, and the type arguments its signatures are read with.</summary>
+    readonly record struct Level(TypeDefinition Type, ImmutableArray<DecodedType> Arguments);
+
+    /// <summary>
+    /// A property met along a base chain: its nearest declaration, the attributes of every declaration of
+    /// its name, and the type arguments of the level that declared it.
+    /// </summary>
+    readonly record struct ChainProperty(
+        PropertyDefinition Property,
+        List<CustomAttributeHandle> Attributes,
+        ImmutableArray<DecodedType> Arguments);
 }

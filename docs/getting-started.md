@@ -202,7 +202,7 @@ and add a build-ordering-only project reference:
 </ItemGroup>
 ```
 
-The `Scry.Client` package brings the generator and the MSBuild targets that feed it the path, so those two lines are the whole setup. [Source generator](source-generator.md) covers what a project needs when it references `Scry.SourceGenerator` directly instead of via the package.
+The `Scry.Client` package brings the generator and the MSBuild targets that feed it the path, so those two lines are the whole setup. [Source generator](source-generator.md) covers what a project needs when it references `Scry.SourceGenerator` directly instead of via the package, and [The model as a package](model-package.md) what changes when the model ships as a NuGet package rather than a project.
 
 Register the client and the generated entry point:
 

@@ -1,0 +1,83 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The console client again, generated from Sample.Model as a NuGet package rather than a project:
+    pack-model.ps1 packs the model into ./feed, and this restores it from there as a consumer of a
+    published model package would. Outside Scry.Samples.slnx, so a samples build that never ran the pack
+    is unaffected. See /docs/model-package.md.
+  -->
+  <Import Project="feed\Sample.Model.version.props" Condition="Exists('feed\Sample.Model.version.props')" />
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <RestoreAdditionalProjectSources>$(MSBuildThisFileDirectory)feed</RestoreAdditionalProjectSources>
+  </PropertyGroup>
+
+  <!-- begin-snippet: modelPackageReference -->
+  <ItemGroup>
+    <!-- Downloaded for the generator to read. Nothing from it is compiled against or shipped. -->
+    <PackageReference Include="Sample.Model"
+                      ExcludeAssets="all"
+                      PrivateAssets="all"
+                      GeneratePathProperty="true" />
+  </ItemGroup>
+  <PropertyGroup>
+    <!-- The model's own target framework, not this project's. -->
+    <ScryModelDll>$(PkgSample_Model)\lib\net10.0\Sample.Model.dll</ScryModelDll>
+  </PropertyGroup>
+  <!-- end-snippet -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Scry.Client\Scry.Client.csproj" />
+  </ItemGroup>
+
+  <!--
+    Generator wiring, written out because Scry.Client is a project here. A consumer of the Scry.Client
+    package has it from the package's buildTransitive targets.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Scry.SourceGenerator\Scry.SourceGenerator.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <CompilerVisibleProperty Include="ScryModelDll" />
+    <CompilerVisibleProperty Include="ScryModelStamp" />
+  </ItemGroup>
+
+  <!-- Resolved against the project before the compiler sees it, as the shipped targets do. -->
+  <PropertyGroup Condition="'$(ScryModelDll)' != ''">
+    <ScryModelDll>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(ScryModelDll)'))</ScryModelDll>
+  </PropertyGroup>
+
+  <Target Name="ComputeScryStamp"
+          AfterTargets="ResolveProjectReferences"
+          BeforeTargets="GenerateMSBuildEditorConfigFile;CoreCompile"
+          Condition="Exists('$(ScryModelDll)')">
+    <GetFileHash Files="$(ScryModelDll)" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="ScryModelStamp" />
+    </GetFileHash>
+  </Target>
+
+  <!-- Fails restore naming the fix, rather than with NuGet's complaint that Sample.Model has no version. -->
+  <Target Name="EnsureModelPackage"
+          BeforeTargets="Restore;CollectPackageReferences"
+          Condition="'$(SampleModelPackageVersion)' == ''">
+    <Error Text="Sample.Model has not been packed into $(MSBuildThisFileDirectory)feed. Run samples/Sample.ModelPackageClient/pack-model.ps1 first." />
+  </Target>
+
+  <!--
+    The recipe's whole point, checked on every build: the model package is downloaded for the generator
+    to read, and neither the model nor the EF Core beneath it reaches this project.
+  -->
+  <Target Name="EnsureModelPackageStaysOut" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <LeakedModelAssembly Include="@(ReferencePath)"
+                           Condition="'%(ReferencePath.Filename)' == 'Sample.Model' or $([System.String]::Copy('%(ReferencePath.Filename)').StartsWith('Microsoft.EntityFrameworkCore'))" />
+      <LeakedModelAssembly Include="@(ReferenceCopyLocalPaths)"
+                           Condition="'%(ReferenceCopyLocalPaths.Filename)' == 'Sample.Model' or $([System.String]::Copy('%(ReferenceCopyLocalPaths.Filename)').StartsWith('Microsoft.EntityFrameworkCore'))" />
+    </ItemGroup>
+    <Error Condition="'@(LeakedModelAssembly)' != ''"
+           Text="The model package reached this client: @(LeakedModelAssembly->'%(Filename)%(Extension)'->Distinct(), ', '). It is referenced only for the generator to read, so nothing from it may be compiled against or shipped." />
+  </Target>
+</Project>

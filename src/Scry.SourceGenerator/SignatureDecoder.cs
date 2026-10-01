@@ -21,6 +21,15 @@ sealed record BytesDecoded :
 sealed record CollectionDecoded(DecodedType Element) :
     DecodedType;
 
+/// <summary>
+/// An instantiation of a generic type the model declares itself, kept whole so a base it names can be
+/// read with the arguments the deriving type supplies: <c>Order : Entity&lt;int&gt;</c> reads
+/// <c>Entity</c>'s <c>TKey</c> as <c>int</c>. As a member's own type it is nothing Scry exposes, as the
+/// server leaves such a member out too.
+/// </summary>
+sealed record InstanceDecoded(TypeDefinitionHandle Definition, ImmutableArray<DecodedType> Arguments) :
+    DecodedType;
+
 /// <summary>Anything Scry does not expose (multi-dimensional arrays, generics other than Nullable and collections).</summary>
 sealed record OtherDecoded :
     DecodedType;
@@ -38,8 +47,12 @@ sealed record SerializedTypeDecoded(string? FullName) :
 /// serves as the custom-attribute type provider, which is only ever asked to decode the
 /// <c>string Name</c> named argument on the queryable attributes and the message on <c>[Obsolete]</c>.
 /// </summary>
+/// <remarks>
+/// The generic context is the type arguments of the type a signature belongs to: empty for a type read
+/// for itself, and for a generic base whatever the type deriving from it supplied.
+/// </remarks>
 sealed class SignatureDecoder :
-    ISignatureTypeProvider<DecodedType, object?>,
+    ISignatureTypeProvider<DecodedType, ImmutableArray<DecodedType>>,
     ICustomAttributeTypeProvider<DecodedType>
 {
     static OtherDecoded other = new();
@@ -61,8 +74,18 @@ sealed class SignatureDecoder :
 
     public DecodedType GetGenericInstantiation(DecodedType genericType, ImmutableArray<DecodedType> typeArguments)
     {
-        if (genericType is not NamedDecoded named ||
-            typeArguments.Length != 1)
+        if (genericType is not NamedDecoded named)
+        {
+            return other;
+        }
+
+        // One of the model's own: a base it names is read with these arguments filled in.
+        if (named.IsDefinition)
+        {
+            return new InstanceDecoded((TypeDefinitionHandle) named.Handle, typeArguments);
+        }
+
+        if (typeArguments.Length != 1)
         {
             return other;
         }
@@ -103,15 +126,26 @@ sealed class SignatureDecoder :
 
     public DecodedType GetFunctionPointerType(MethodSignature<DecodedType> signature) => other;
 
-    public DecodedType GetGenericMethodParameter(object? genericContext, int index) => other;
+    public DecodedType GetGenericMethodParameter(ImmutableArray<DecodedType> genericContext, int index) => other;
 
-    public DecodedType GetGenericTypeParameter(object? genericContext, int index) => other;
+    // A parameter of the type being read stands for the argument it was given. A type read for itself
+    // has none to give: a generic type cannot opt in, so only a generic base is ever read with any.
+    public DecodedType GetGenericTypeParameter(ImmutableArray<DecodedType> genericContext, int index)
+    {
+        if (genericContext.IsDefault ||
+            index >= genericContext.Length)
+        {
+            return other;
+        }
+
+        return genericContext[index];
+    }
 
     public DecodedType GetModifiedType(DecodedType modifier, DecodedType unmodifiedType, bool isRequired) => unmodifiedType;
 
     public DecodedType GetPinnedType(DecodedType elementType) => elementType;
 
-    public DecodedType GetTypeFromSpecification(MetadataReader r, object? genericContext, TypeSpecificationHandle handle, byte rawTypeKind) => other;
+    public DecodedType GetTypeFromSpecification(MetadataReader r, ImmutableArray<DecodedType> genericContext, TypeSpecificationHandle handle, byte rawTypeKind) => other;
 
     // ICustomAttributeTypeProvider. Scry reads string, bool and System.Type arguments; the member that
     // exists for enum-valued ones never needs to produce anything useful.
@@ -121,8 +155,11 @@ sealed class SignatureDecoder :
     public DecodedType GetSystemType() => systemType;
 
     // A type in the attribute's own assembly is written by its full name; one from anywhere else is
-    // assembly-qualified, so the name is cut at the first comma. A nested type's '+' is kept: no type
-    // Scry reads by name is nested, so one that is simply matches nothing.
+    // assembly-qualified, so the name is cut at the first comma. A generic instantiation spells its
+    // arguments in brackets after the name, each assembly-qualified, so the name is cut there first:
+    // what is left is the generic definition, which is what a reader refusing a generic needs to find.
+    // An array's '[]' is cut the same way, leaving its element. A nested type's '+' is kept: no type
+    // Scry reads by name is nested, so one that is matches nothing.
     public DecodedType GetTypeFromSerializedName(string? name)
     {
         if (name is null)
@@ -130,13 +167,13 @@ sealed class SignatureDecoder :
             return new SerializedTypeDecoded(null);
         }
 
-        var comma = name.IndexOf(',');
-        if (comma < 0)
+        var end = name.IndexOfAny([',', '[']);
+        if (end < 0)
         {
             return new SerializedTypeDecoded(name.Trim());
         }
 
-        return new SerializedTypeDecoded(name.Substring(0, comma).Trim());
+        return new SerializedTypeDecoded(name.Substring(0, end).Trim());
     }
 
     public PrimitiveTypeCode GetUnderlyingEnumType(DecodedType type) => PrimitiveTypeCode.Int32;

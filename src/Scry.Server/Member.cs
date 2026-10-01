@@ -17,7 +17,7 @@ sealed class Member
         Target = Element ?? Nullable.GetUnderlyingType(type) ?? type;
         BinaryTransfer = property?.HasAttribute<BinaryTransferAttribute>() == true;
         Sensitive = property?.HasAttribute<SensitiveAttribute>() == true;
-        ContentType = property?.GetCustomAttribute<AttachmentAttribute>(inherit: false)?.ContentType;
+        ContentType = property?.GetCustomAttribute<AttachmentAttribute>(inherit: true)?.ContentType;
     }
 
     /// <summary>
@@ -74,10 +74,11 @@ sealed class Member
     /// <remarks>
     /// Read through the override chain, as <c>[QueryIgnore]</c> is: the generator describes an
     /// overridden member with the attributes of every declaration along the chain
-    /// (<c>MetadataModelReader.DeclaredProperties</c>), so a base's marking reaches the derived model
-    /// there, and reading it declared-only here would let the same member into a URL and a cache the
-    /// client refuses it — with the two stamps disagreeing over it. The type-level attribute stays
-    /// declared-only on both sides.
+    /// (<c>MetadataModelReader.PropertiesAlongTheChain</c>), so a base's marking reaches the derived
+    /// model there, and reading it declared-only here would let the same member into a URL and a cache
+    /// the client refuses it — with the two stamps disagreeing over it. A marking only a declaration in
+    /// another assembly carries is one the generator cannot see, and is refused at startup
+    /// (<c>Schema.EnsureStatedInModel</c>). The type-level attribute stays declared-only on both sides.
     /// </remarks>
     public bool Sensitive { get; }
 
@@ -86,5 +87,10 @@ sealed class Member
     /// the fetch is served as, or null for <see cref="AttachmentMedia.Default"/>. Meaningless on any
     /// other kind of member, where the attribute cannot be.
     /// </summary>
+    /// <remarks>
+    /// Read through the override chain, as whether the member is an attachment at all is: an override
+    /// is the member the declaration it overrides made an attachment, and serves the type that
+    /// declaration gave unless it carries an <c>[Attachment]</c> of its own, which is then the nearer.
+    /// </remarks>
     public string? ContentType { get; }
 }
