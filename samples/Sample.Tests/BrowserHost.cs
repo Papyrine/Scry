@@ -11,6 +11,15 @@ public sealed class BrowserHost :
     // leaves behind are the same few every run.
     static int launches;
 
+    // Each server clones its database from one shared LocalDB template, which the first to start builds
+    // before it listens. Two building it at once deadlock: one CREATE DATABASE is the victim, and the
+    // other is then left a template file it cannot open, so every server after fails to start. The
+    // first launch therefore runs alone, and the rest start once it is listening — by which point the
+    // template is there to clone. A first launch that fails leaves the template unmarked, so the next
+    // launch runs alone in its place.
+    static SemaphoreSlim templateGate = new(1, 1);
+    static bool templateBuilt;
+
     Process server = null!;
     IPlaywright playwright = null!;
     string workDir = null!;
@@ -43,9 +52,26 @@ public sealed class BrowserHost :
         // UseStaticWebAssets() call means the WASM client is served in this environment too.
         server.StartInfo.Environment["DOTNET_ENVIRONMENT"] = "Development";
         server.StartInfo.Environment["SAMPLE_DATABASE"] = $"Browser{Interlocked.Increment(ref launches)}";
-        server.Start();
 
-        await WaitForServer(port);
+        if (Volatile.Read(ref templateBuilt))
+        {
+            await StartServer(port, TimeSpan.FromSeconds(30));
+        }
+        else
+        {
+            await templateGate.WaitAsync();
+            try
+            {
+                // Building the template from cold is most of a launch's time, so the one that may have
+                // to is given longer.
+                await StartServer(port, TimeSpan.FromMinutes(2));
+                Volatile.Write(ref templateBuilt, true);
+            }
+            finally
+            {
+                templateGate.Release();
+            }
+        }
 
         playwright = await Playwright.CreateAsync();
         Browser = await playwright.Chromium.LaunchAsync(
@@ -130,10 +156,19 @@ public sealed class BrowserHost :
         return port;
     }
 
-    static async Task WaitForServer(int port)
+    async Task StartServer(int port, TimeSpan timeout)
     {
-        for (var attempt = 0; attempt < 100; attempt++)
+        server.Start();
+
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
         {
+            // A server that has exited will never listen: say so now, rather than when the wait runs out.
+            if (server.HasExited)
+            {
+                throw new InvalidOperationException($"Sample.WebServer exited with code {server.ExitCode} before listening on port {port}.");
+            }
+
             try
             {
                 using var client = new TcpClient();
@@ -146,6 +181,6 @@ public sealed class BrowserHost :
             }
         }
 
-        throw new TimeoutException($"Sample.WebServer did not start listening on port {port}.");
+        throw new TimeoutException($"Sample.WebServer did not start listening on port {port} within {timeout}.");
     }
 }
