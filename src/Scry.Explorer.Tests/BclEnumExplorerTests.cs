@@ -4,13 +4,14 @@
 // what generated client code would.
 public class BclEnumExplorerTests
 {
-    [ScryModel("Sitting", "Id", "DayOfWeek", "Recess", "Clock")]
+    [ScryModel("Sitting", "Id", "DayOfWeek", "Recess", "Clock", "Status")]
     public class SittingQueryModel
     {
         public int Id { get; init; }
         public DayOfWeek DayOfWeek { get; init; }
         public DayOfWeek? Recess { get; init; }
         public DateTimeKind Clock { get; init; }
+        public System.Net.HttpStatusCode Status { get; init; }
         public IReadOnlyList<DayOfWeek> Alternates { get; init; } = null!;
     }
 
@@ -28,6 +29,7 @@ public class BclEnumExplorerTests
                 new("DayOfWeek", "global::System.DayOfWeek", NeedsNullDefault: false, IsNavigation: false),
                 new("Recess", "global::System.DayOfWeek?", NeedsNullDefault: false, IsNavigation: false),
                 new("Clock", "global::System.DateTimeKind", NeedsNullDefault: false, IsNavigation: false),
+                new("Status", "global::System.Net.HttpStatusCode", NeedsNullDefault: false, IsNavigation: false),
                 new("Alternates", "global::System.Collections.Generic.IReadOnlyList<global::System.DayOfWeek>", NeedsNullDefault: true, IsNavigation: false, IsCollection: true)
             ])
         ],
@@ -55,7 +57,7 @@ public class BclEnumExplorerTests
     static IQueryable<SittingQueryModel> Sitting =>
         client.Source<SittingQueryModel>("Sitting", typeof(SittingQueryModel).GetCustomAttribute<ScryModelAttribute>()!.Members);
 
-    const string snippet = "Query.Sitting.Where(_ => _.DayOfWeek == DayOfWeek.Thursday && _.Recess != null && _.Clock == DateTimeKind.Local && _.Alternates.Contains(DayOfWeek.Friday)).OrderByDescending(_ => _.DayOfWeek).Select(_ => new { _.Id, _.Recess, _.Clock })";
+    const string snippet = "Query.Sitting.Where(_ => _.DayOfWeek == DayOfWeek.Thursday && _.Recess != null && _.Clock == DateTimeKind.Local && _.Status == System.Net.HttpStatusCode.NotFound && _.Alternates.Contains(DayOfWeek.Friday)).OrderByDescending(_ => _.DayOfWeek).Select(_ => new { _.Id, _.Recess, _.Clock, _.Status })";
 
     [Test]
     public async Task SpellsTheBclTypeAndDeclaresNoEnumForIt()
@@ -67,6 +69,7 @@ public class BclEnumExplorerTests
             await Assert.That(source).Contains("public global::System.DayOfWeek DayOfWeek { get; init; }");
             await Assert.That(source).Contains("public global::System.DayOfWeek? Recess { get; init; }");
             await Assert.That(source).Contains("public global::System.DateTimeKind Clock { get; init; }");
+            await Assert.That(source).Contains("public global::System.Net.HttpStatusCode Status { get; init; }");
             await Assert.That(source).DoesNotContain("public enum");
         }
     }
@@ -86,9 +89,9 @@ public class BclEnumExplorerTests
     {
         var translated = executor.Translate(snippet);
         var generated = Sitting
-            .Where(_ => _.DayOfWeek == DayOfWeek.Thursday && _.Recess != null && _.Clock == DateTimeKind.Local && _.Alternates.Contains(DayOfWeek.Friday))
+            .Where(_ => _.DayOfWeek == DayOfWeek.Thursday && _.Recess != null && _.Clock == DateTimeKind.Local && _.Status == System.Net.HttpStatusCode.NotFound && _.Alternates.Contains(DayOfWeek.Friday))
             .OrderByDescending(_ => _.DayOfWeek)
-            .Select(_ => new {_.Id, _.Recess, _.Clock})
+            .Select(_ => new {_.Id, _.Recess, _.Clock, _.Status})
             .ToScryRequest();
 
         await Assert.That(ScryJson.Serialize(translated)).IsEqualTo(ScryJson.Serialize(generated));
@@ -107,5 +110,29 @@ public class BclEnumExplorerTests
         await Assert.That(ScryQueryRenderer.TryRender(request, out var code, out var refusal)).IsTrue().Because($"render refused: {refusal}");
         var translated = executor.Translate(code!);
         await Assert.That(ScryJson.Serialize(translated)).IsEqualTo(ScryJson.Serialize(request)).Because(code!);
+    }
+
+    // A captured HttpStatusCode travels by name, and renders back spelled in full: a snippet imports
+    // System, not System.Net, so the bare name would not resolve. The rendered snippet is a literal,
+    // which C# lowers to the number, so it sends the same value as 404 rather than the same bytes.
+    [Test]
+    public async Task ACapturedStatusCodeRendersBackInFull()
+    {
+        var status = System.Net.HttpStatusCode.NotFound;
+        var request = Sitting
+            .Where(_ => _.Status == status)
+            .Select(_ => new {_.Id, _.Status})
+            .ToScryRequest();
+
+        await Assert.That(ScryQueryRenderer.TryRender(request, out var code, out var refusal)).IsTrue().Because($"render refused: {refusal}");
+        var expected = Sitting
+            .Where(_ => _.Status == System.Net.HttpStatusCode.NotFound)
+            .Select(_ => new {_.Id, _.Status})
+            .ToScryRequest();
+        using (Assert.Multiple())
+        {
+            await Assert.That(code!).Contains("global::System.Net.HttpStatusCode.NotFound");
+            await Assert.That(ScryJson.Serialize(executor.Translate(code!))).IsEqualTo(ScryJson.Serialize(expected)).Because(code!);
+        }
     }
 }

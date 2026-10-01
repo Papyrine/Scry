@@ -5,7 +5,7 @@
 namespace Scry.Generated;
 
 /// <summary>Client query model for the 'Sitting' entity source.</summary>
-[global::Scry.ScryModel("Sitting", "Id", "Stage", "DayOfWeek", "Recess", "Clock", "CanReschedule")]
+[global::Scry.ScryModel("Sitting", "Id", "Stage", "DayOfWeek", "Recess", "Clock", "Status", "Retry", "CanReschedule")]
 public class SittingQueryModel
 {
     public int Id { get; init; }
@@ -13,6 +13,8 @@ public class SittingQueryModel
     public global::System.DayOfWeek DayOfWeek { get; init; }
     public global::System.DayOfWeek? Recess { get; init; }
     public global::System.DateTimeKind Clock { get; init; }
+    public global::System.Net.HttpStatusCode Status { get; init; }
+    public global::System.Net.HttpStatusCode? Retry { get; init; }
     public global::System.Collections.Generic.IReadOnlyList<global::System.DayOfWeek> Alternates { get; init; } = null!;
     /// <summary>Whether this caller may send 'Reschedule' against this row, as the server's policy for it decides.</summary>
     public bool CanReschedule { get; init; }

@@ -94,7 +94,7 @@ public class Building : Asset
     public int Floors { get; set; }
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L212-L231' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableHierarchy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L225-L244' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableHierarchy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 That is default-deny applied to the hierarchy: adding a subclass to the model exposes nothing until it is annotated. A type left out is unreachable — it has no wire name, its members are not readable, and no query can narrow to it — while its own descendants stay reachable if they opted in, since the base link skips over types that did not.
@@ -132,7 +132,7 @@ public class SalesRegion
     public string Name { get; set; } = "";
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L475-L488' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSource' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L488-L501' title='Snippet source file'>snippet source</a> | <a href='#snippet-namedSource' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The generated entry point exposes the configured name, while the **model class name stays derived from the CLR type**:
@@ -465,7 +465,7 @@ public class Address
     public string Zip { get; set; } = "";
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L181-L192' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableComplex' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L194-L205' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableComplex' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 paired with the usual EF mapping on the owning entity:
@@ -477,7 +477,7 @@ builder.Entity<Employee>()
     .ComplexProperty(_ => _.Address)
     .ToJson();
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L860-L864' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L874-L878' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexToJson' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A complex type is **not a root source**: it produces no property on the generated `ScryQuery` and no server resolver. It is reachable only by traversing into it from an opted-in entity/view/POCO — for example `Employee.Address.City`. Its members follow the same exposure rules as any other type (`[QueryIgnore]` still hides `Zip`), and the traversal is bounded by `MaxNavigationDepth` like any navigation. How EF stores the type — a JSON column or separate columns — is transparent to Scry; the server rebinds the member path onto EF, which translates it either way.
@@ -505,7 +505,7 @@ builder.Entity<Employee>()
     .ComplexCollection(_ => _.PreviousAddresses)
     .ToJson();
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L866-L870' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexCollectionToJson' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L880-L884' title='Snippet source file'>snippet source</a> | <a href='#snippet-complexCollectionToJson' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The element type being a complex type rather than a source changes nothing a client can see: the array is aggregable and flattenable exactly like a collection of entities, and the wire request is indistinguishable from one over a collection navigation. Because a complex type is never a source, it can carry no [row policy](policies.md) — attaching one is refused at startup rather than silently ignored, since a policy that cannot run reads as protection it is not providing:
@@ -612,7 +612,7 @@ public class Contract
     public byte[]? Document { get; set; }
 }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L591-L604' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentMember' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L604-L617' title='Snippet source file'>snippet source</a> | <a href='#snippet-attachmentMember' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The other way to expose a `byte[]`, and the opposite trade from `[BinaryTransfer]`: the query never reads the value at all. What the client gets instead is a handle carrying the row's key, exchanged for the bytes by a second request whenever — or if ever — they are wanted. See [Attachments](attachments.md).
@@ -665,7 +665,7 @@ Unlike a row policy there is exactly one: the check is a yes/no decision rather 
 [Obsolete("Counts open roles too; use the Region rollup.")]
 public int Headcount { get; set; }
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L499-L504' title='Snippet source file'>snippet source</a> | <a href='#snippet-obsoleteMember' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L512-L517' title='Snippet source file'>snippet source</a> | <a href='#snippet-obsoleteMember' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The client never references the model assembly, so a deprecation would otherwise stop at the boundary. It is replicated instead: onto the generated query model, onto the member, and onto the `ScryQuery` entry point, so a query written against a deprecated source or member warns where it is written.
@@ -750,11 +750,16 @@ flowchart TD
 
 ### Scalars
 
-`bool`, `char`, `sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `float`, `double`, `decimal`, `string`, `DateTime`, `DateOnly`, `TimeOnly`, `DateTimeOffset`, `TimeSpan`, `Guid`, `byte[]`, any `enum` declared in the model assembly, and the BCL enums `DayOfWeek` and `DateTimeKind` — plus the `Nullable<>` form of each value type.
+`bool`, `char`, `sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `float`, `double`, `decimal`, `string`, `DateTime`, `DateOnly`, `TimeOnly`, `DateTimeOffset`, `TimeSpan`, `Guid`, `byte[]`, any `enum` declared in the model assembly, and the BCL enums `DayOfWeek`, `DateTimeKind`, and `HttpStatusCode` — plus the `Nullable<>` form of each value type.
 
 An `enum` from the model used by an exposed member is re-emitted into the generated client code (as `ScryEnums.g.cs`), so the client can compare against it without referencing the model. The members' values, the underlying type, and `[Flags]` are carried across, so a member means the same on both sides — including a combined flag, which travels by name and resolves through those values.
 
-`DayOfWeek` and `DateTimeKind` are not re-emitted: every client already has them, so a member typed as one is generated as `global::System.DayOfWeek` (or `global::System.DateTimeKind`) and introspection lists no enum for it. The server parses a constant for such a member against the real enum — by name or by number, refusing anything the enum does not define — and answers by name. The set is closed: the generator sees only a type reference to a name it cannot look inside, so it accepts exactly the names it was told about, and the server refuses every other enum declared outside the model, BCL or not.
+`DayOfWeek`, `DateTimeKind`, and `System.Net.HttpStatusCode` are not re-emitted: every client already has them, so a member typed as one is generated as the BCL type itself (`global::System.DayOfWeek`, `global::System.Net.HttpStatusCode`) and introspection lists no enum for it. The server parses a constant for such a member against the real enum — by name or by number, refusing anything the enum does not define — and answers by name. The set is closed: the generator sees only a type reference to a name it cannot look inside, so it accepts exactly the names it was told about, and the server refuses every other enum declared outside the model, BCL or not.
+
+`HttpStatusCode` has two properties the other two do not:
+
+- **Some values have two names.** `Redirect` and `Found` are both 302, as are `Ambiguous` and `MultipleChoices` (300), `Moved` and `MovedPermanently` (301), `RedirectMethod` and `SeeOther` (303), and `RedirectKeepVerb` and `TemporaryRedirect` (307). A query may use either name and reaches the same rows, but a result carries whichever name the runtime gives the value, not necessarily the one a row was written with.
+- **It grows.** New runtimes add codes (.NET 5 added `EarlyHints` and `MisdirectedRequest`, among others). A value is answered by name, so a client running on a runtime that lacks a code the server returns cannot read that row. A client and server released together, as Scry assumes, run the same runtime; a client pinned to an older one is the case to watch.
 
 Scalars can be used in predicates, ordering keys, group keys, aggregate selectors, and projection leaves.
 
@@ -778,7 +783,7 @@ A property whose type is a collection of another opted-in type is a **collection
 [QueryableCollection]
 public List<OrderLine> Lines { get; set; } = [];
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L408-L413' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableCollection' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L421-L426' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryableCollection' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 An exposed collection is **aggregable, not projectable**. A client can ask a question about it — `Any`, `All`, `Count`, `Sum`, `Average`, `Min`, `Max`, which the database answers as a correlated subquery — but can never enumerate its rows, project it, traverse through it in a member path, or order by it. Every answer is a scalar, so a response can never carry an unbounded nested collection. See [subqueries](querying.md#collection-subqueries).
@@ -806,7 +811,7 @@ public List<string> Tags { get; set; } = [];
 [QueryableCollection]
 public List<int> Scores { get; set; } = [];
 ```
-<sup><a href='/src/Scry.Tests/TestModel.cs#L415-L424' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryablePrimitiveCollection' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/TestModel.cs#L428-L437' title='Snippet source file'>snippet source</a> | <a href='#snippet-queryablePrimitiveCollection' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 It opts in the same way and answers the same questions. The one difference is that its elements are values with no members, so a question reads the element *itself* — `_.Tags.Contains("urgent")`, `_.Tags.Any(tag => tag.StartsWith("ex"))`, `_.Scores.Sum()`. See [collections of values](querying.md#collections-of-values).

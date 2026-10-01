@@ -369,6 +369,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Model: BuildingQueryModel
     },
     {
+      Name: Callback,
+      Kind: Entity,
+      Model: CallbackQueryModel
+    },
+    {
       Name: Contract,
       Kind: Entity,
       Model: ContractQueryModel
@@ -565,6 +570,52 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
         }
       ],
       Base: AssetQueryModel,
+      IsSensitive: false
+    },
+    {
+      Model: CallbackQueryModel,
+      Members: [
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Retry,
+          TypeDisplay: global::System.Net.HttpStatusCode?,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Status,
+          TypeDisplay: global::System.Net.HttpStatusCode,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Url,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        }
+      ],
       IsSensitive: false
     },
     {
@@ -1774,10 +1825,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: mrP2O3LNgmIwpKBP
+  SchemaStamp: BSxNRf9Zn544Liux
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L1427' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L1478' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names, member names with the exact C# type spelling the source generator would emit, and the re-emitted enums. It carries **no** policies, resolvers, connection details, or CLR internals.

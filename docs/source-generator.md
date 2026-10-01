@@ -275,7 +275,7 @@ builder.Services.AddScoped<ScryQuery>();
 | `decimal` | `decimal` |
 | `DateTime`, `DateOnly`, `TimeOnly`, `DateTimeOffset`, `TimeSpan`, `Guid` | `global::System.X` |
 | an `enum` declared in the model | the enum name, its members with their values, its underlying type, and `[Flags]`, re-emitted into `ScryEnums.g.cs` |
-| `DayOfWeek`, `DateTimeKind` | `global::System.X`, not re-emitted: every client already has them ([BCL enums](annotations.md#scalars)) |
+| `DayOfWeek`, `DateTimeKind`, `HttpStatusCode` | `global::System.X` (`global::System.Net.HttpStatusCode`), not re-emitted: every client already has them ([BCL enums](annotations.md#scalars)) |
 | another opted-in type | `{Type}QueryModel?` |
 | a nullable value type | the above with `?` |
 | anything else | omitted |

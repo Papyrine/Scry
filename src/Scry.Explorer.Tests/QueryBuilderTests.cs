@@ -45,6 +45,7 @@ public class QueryBuilderTests
                 new("Weekday", "global::System.DayOfWeek", false, false),
                 new("Rest", "global::System.DayOfWeek?", false, false),
                 new("Clock", "global::System.DateTimeKind", false, false),
+                new("Outcome", "global::System.Net.HttpStatusCode", false, false),
                 new("Rank", "int?", false, false),
                 new("Owner", "OwnerQueryModel?", false, true),
                 new("Tags", "global::System.Collections.Generic.IReadOnlyList<string>", true, false, true),
@@ -454,6 +455,8 @@ public class QueryBuilderTests
     [Arguments("global::System.DayOfWeek", "Thursday", "global::System.DayOfWeek.Thursday")]
     [Arguments("global::System.DayOfWeek?", "Sunday", "global::System.DayOfWeek.Sunday")]
     [Arguments("global::System.DateTimeKind", "Utc", "global::System.DateTimeKind.Utc")]
+    [Arguments("global::System.Net.HttpStatusCode", "NotFound", "global::System.Net.HttpStatusCode.NotFound")]
+    [Arguments("global::System.Net.HttpStatusCode", "Redirect", "global::System.Net.HttpStatusCode.Redirect")]
     public async Task WritesAnInputAsALiteralAndReadsItBack(string type, string input, string literal)
     {
         await Assert.That(QueryBuilder.Literal(index, type, input)).IsEqualTo(literal);

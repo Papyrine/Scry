@@ -624,20 +624,36 @@ partial class QueryRenderer
             throw Refuse(RenderRefusal.UnsupportedShape);
         }
 
+        var name = EnumTypeName(type);
+
         // A numeric text is an undefined value, spelled as the cast that folds back to it.
         if (text.Length > 0 &&
             (char.IsAsciiDigit(text[0]) || text[0] == '-'))
         {
-            return $"({type.Name}){text}";
+            return $"({name}){text}";
         }
 
         var parts = text.Split(", ");
         if (parts.Length == 1)
         {
-            return $"{type.Name}.{parts[0]}";
+            return $"{name}.{parts[0]}";
         }
 
-        return $"({string.Join(" | ", parts.Select(_ => $"{type.Name}.{_}"))})";
+        return $"({string.Join(" | ", parts.Select(_ => $"{name}.{_}"))})";
+    }
+
+    // A snippet imports System and the models, so a model enum or DayOfWeek reads by its bare name. A
+    // BCL enum a model may use from a namespace below System — HttpStatusCode, in System.Net — is in
+    // no import, and is spelled as the generated models spell it.
+    static string EnumTypeName(Type type)
+    {
+        if (type.Namespace is { } space &&
+            space.StartsWith("System.", StringComparison.Ordinal))
+        {
+            return $"global::{type.FullName}";
+        }
+
+        return type.Name;
     }
 
     // A string-tagged constant is usually a string — but it is also how every type ValueTag has no

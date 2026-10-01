@@ -17,6 +17,8 @@ public partial class GeneratorTests
             public DayOfWeek DayOfWeek { get; set; }
             public DayOfWeek? Recess { get; set; }
             public DateTimeKind Clock { get; set; }
+            public System.Net.HttpStatusCode Status { get; set; }
+            public System.Net.HttpStatusCode? Retry { get; set; }
             [QueryableCollection] public List<DayOfWeek> Alternates { get; set; } = [];
         }
 
@@ -26,6 +28,7 @@ public partial class GeneratorTests
             public int Id { get; set; }
             public DayOfWeek Day { get; set; }
             public List<DateTimeKind?> Clocks { get; set; } = [];
+            public System.Net.HttpStatusCode Status { get; set; }
         }
         """;
 
@@ -51,22 +54,29 @@ public partial class GeneratorTests
             await Assert.That(enums).Contains("public enum Stage");
             await Assert.That(enums).DoesNotContain("DayOfWeek");
             await Assert.That(enums).DoesNotContain("DateTimeKind");
-            await Assert.That(result.Diagnostics.Where(_ => _.GetMessage().Contains("DayOfWeek") || _.GetMessage().Contains("DateTimeKind"))).IsEmpty();
+            await Assert.That(enums).DoesNotContain("HttpStatusCode");
+            await Assert.That(result.Diagnostics.Where(_ => NamesABclEnum(_.GetMessage()))).IsEmpty();
         }
 
-        // The generated code names the BCL types, which resolve without anything re-emitted for them.
-        // Scry.Client is deliberately not referenced, so only diagnostics naming the two are asserted on.
+        // The generated code names the BCL types, which resolve without anything re-emitted for them —
+        // HttpStatusCode from System.Net.Primitives as surely as the two from CoreLib. Scry.Client is
+        // deliberately not referenced, so only diagnostics naming the three are asserted on.
         var compilation = CSharpCompilation.Create(
             "Generated",
             sources.Select(_ => CSharpSyntaxTree.ParseText(_.SourceText.ToString())),
             ReferenceAssemblies(),
             new(OutputKind.DynamicallyLinkedLibrary));
         var unresolved = compilation.GetDiagnostics()
-            .Where(_ => _.GetMessage().Contains("DayOfWeek") || _.GetMessage().Contains("DateTimeKind"))
+            .Where(_ => NamesABclEnum(_.GetMessage()))
             .ToList();
 
         await Assert.That(unresolved).IsEmpty().Because(string.Join('\n', unresolved));
     }
+
+    static bool NamesABclEnum(string message) =>
+        message.Contains("DayOfWeek") ||
+        message.Contains("DateTimeKind") ||
+        message.Contains("HttpStatusCode");
 
     // A model declaring its own System.DayOfWeek holds a definition, not a reference: the enum is the
     // model's, re-emitted with the values the model gives it, exactly as under any other name.

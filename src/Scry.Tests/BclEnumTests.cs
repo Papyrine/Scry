@@ -240,7 +240,7 @@ public class BclEnumTests
 
     // The one constant a single-comparison filter carries, wherever in the request it sits: found in
     // the request as it is serialized, so what is asserted is what crosses the wire.
-    static ConstNode Constant(QueryRequest request)
+    internal static ConstNode Constant(QueryRequest request)
     {
         var constants = new List<ConstNode>();
         Collect(JsonSerializer.SerializeToNode(request, ScryJson.Options)!, constants);

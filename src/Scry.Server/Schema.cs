@@ -546,16 +546,8 @@ sealed partial class Schema
     /// has an enum of its own to describe, which the generator, reading it as a definition rather than
     /// a reference, re-emits too. Mirrors MetadataModelReader.Classify.
     /// </summary>
-    internal static string? BclEnumDisplay(Type type)
-    {
-        if (type.IsEnum &&
-            type.Assembly == typeof(object).Assembly)
-        {
-            return BclEnums.Display(type.FullName);
-        }
-
-        return null;
-    }
+    internal static string? BclEnumDisplay(Type type) =>
+        BclEnums.Display(type);
 
     public static Schema Build(ScryOptions options)
     {

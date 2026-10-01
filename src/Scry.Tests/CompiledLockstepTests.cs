@@ -302,12 +302,16 @@ public class CompiledLockstepTests
                 public DateTimeKind Clock { get; set; }
                 [QueryableCollection] public List<DayOfWeek> Alternates { get; set; } = [];
                 [QueryableCollection] public DateTimeKind[] Clocks { get; set; } = [];
+                public System.Net.HttpStatusCode Status { get; set; }
+                public System.Net.HttpStatusCode? Retry { get; set; }
+                [QueryableCollection] public List<System.Net.HttpStatusCode> Attempts { get; set; } = [];
             }
 
             public class Rescheduled
             {
                 public DayOfWeek Day { get; set; }
                 public List<DateTimeKind?> Clocks { get; set; } = [];
+                public System.Net.HttpStatusCode? Status { get; set; }
             }
 
             [Command(typeof(Sitting), Result = typeof(Rescheduled))]

@@ -11,6 +11,7 @@ public sealed class Reschedule
     public int Id { get; init; }
     public global::System.DayOfWeek Day { get; init; }
     public global::System.Collections.Generic.IReadOnlyList<global::System.DateTimeKind?> Clocks { get; init; } = null!;
+    public global::System.Net.HttpStatusCode Status { get; init; }
 }
 
 /// <summary>The commands this client may send, each answered with its outcome.</summary>

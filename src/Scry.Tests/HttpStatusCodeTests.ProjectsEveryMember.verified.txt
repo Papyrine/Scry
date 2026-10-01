@@ -1,0 +1,15 @@
+﻿[
+  {
+    Url: https://example.com/ok,
+    Status: OK
+  },
+  {
+    Url: https://example.com/busy,
+    Status: ServiceUnavailable,
+    Retry: OK
+  },
+  {
+    Url: https://example.com/moved,
+    Status: Found
+  }
+]

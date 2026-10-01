@@ -11,7 +11,7 @@ public sealed class ScryQuery
     /// A hash of the queryable surface this client was generated against. Attached to each
     /// request so the server can identify a client generated against a different model.
     /// </summary>
-    public const string SchemaStamp = "7gLExQI6gNWl3zOT";
+    public const string SchemaStamp = "pa5FBfuGdbgcy-TL";
 
     global::Scry.ScryClient client;
 
@@ -26,5 +26,5 @@ public sealed class ScryQuery
     public ScryCommands Commands { get; }
 
     public global::System.Linq.IQueryable<SittingQueryModel> Sitting =>
-        client.Source<SittingQueryModel>("Sitting", ["Id", "Stage", "DayOfWeek", "Recess", "Clock", "CanReschedule"]);
+        client.Source<SittingQueryModel>("Sitting", ["Id", "Stage", "DayOfWeek", "Recess", "Clock", "Status", "Retry", "CanReschedule"]);
 }

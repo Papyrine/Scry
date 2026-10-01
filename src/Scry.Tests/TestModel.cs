@@ -175,6 +175,19 @@ public class Sitting
 }
 
 /// <summary>
+/// An outbound call, typed with <see cref="System.Net.HttpStatusCode"/>: a BCL enum that lives outside
+/// CoreLib, and that names some values twice (Redirect and Found are both 302).
+/// </summary>
+[Queryable]
+public class Callback
+{
+    public int Id { get; set; }
+    public string Url { get; set; } = "";
+    public System.Net.HttpStatusCode Status { get; set; }
+    public System.Net.HttpStatusCode? Retry { get; set; }
+}
+
+/// <summary>
 /// A complex value type mapped to JSON. Opted in with [QueryableComplex]: reachable only by
 /// traversing from <see cref="Employee"/> (e.g. Address.City), never as a root source. Zip is hidden.
 /// </summary>
@@ -850,6 +863,7 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
     public DbSet<Shift> Shifts => Set<Shift>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<Sitting> Sittings => Set<Sitting>();
+    public DbSet<Callback> Callbacks => Set<Callback>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder builder) =>
         builder.Properties<decimal>().HavePrecision(18, 2);
@@ -1186,6 +1200,28 @@ public sealed class TestContext(DbContextOptions<TestContext> options) :
                 Recess = DayOfWeek.Sunday,
                 Clock = DateTimeKind.Unspecified,
                 Alternates = []
+            });
+
+        // A success, a failure that was retried, and a redirect stored under one of 302's two names,
+        // so a filter written with the other has to find it.
+        context.Callbacks.AddRange(
+            new()
+            {
+                Url = "https://example.com/ok",
+                Status = HttpStatusCode.OK,
+                Retry = null
+            },
+            new()
+            {
+                Url = "https://example.com/busy",
+                Status = HttpStatusCode.ServiceUnavailable,
+                Retry = HttpStatusCode.OK
+            },
+            new()
+            {
+                Url = "https://example.com/moved",
+                Status = HttpStatusCode.Found,
+                Retry = null
             });
 
         context.Assets.AddRange(

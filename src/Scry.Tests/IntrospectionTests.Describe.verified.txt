@@ -18,6 +18,11 @@
       Model: BuildingQueryModel
     },
     {
+      Name: Callback,
+      Kind: Entity,
+      Model: CallbackQueryModel
+    },
+    {
       Name: Contract,
       Kind: Entity,
       Model: ContractQueryModel
@@ -214,6 +219,52 @@
         }
       ],
       Base: AssetQueryModel,
+      IsSensitive: false
+    },
+    {
+      Model: CallbackQueryModel,
+      Members: [
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Retry,
+          TypeDisplay: global::System.Net.HttpStatusCode?,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Status,
+          TypeDisplay: global::System.Net.HttpStatusCode,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Url,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        }
+      ],
       IsSensitive: false
     },
     {
@@ -1423,5 +1474,5 @@
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: mrP2O3LNgmIwpKBP
+  SchemaStamp: BSxNRf9Zn544Liux
 }

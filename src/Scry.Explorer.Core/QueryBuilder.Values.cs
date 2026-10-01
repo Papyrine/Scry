@@ -46,6 +46,10 @@ public static partial class QueryBuilder
 
     static readonly string[] dateTimeKindValues = Enum.GetNames<DateTimeKind>();
 
+    // Every name, aliases included (Redirect and Found are both 302): a snippet may use either, so the
+    // builder has to read either back.
+    static readonly string[] httpStatusCodeValues = Enum.GetNames<System.Net.HttpStatusCode>();
+
     /// <summary>
     /// The values a member of an enum type can be compared with, or null for a type that is no enum:
     /// one of the model's, as introspection describes it, or one of the BCL enums a model may use,
@@ -64,6 +68,7 @@ public static partial class QueryBuilder
         {
             "global::System.DayOfWeek" => dayOfWeekValues,
             "global::System.DateTimeKind" => dateTimeKindValues,
+            "global::System.Net.HttpStatusCode" => httpStatusCodeValues,
             _ => null
         };
     }
