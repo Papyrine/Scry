@@ -8,8 +8,9 @@ public enum ScryQueryOutcome
 
     /// <summary>
     /// Rejected — by validation (the allow-list, a resource limit, a malformed pipeline) before
-    /// anything ran, or, for a stream, by <see cref="ScryOptions.MaxStreamRows"/> mid-read. Either
-    /// way the rejection is deliberate and its message is safe to show a client.
+    /// anything ran, or mid-read: for a stream by <see cref="ScryOptions.MaxStreamRows"/>, and for any
+    /// response by <see cref="ScryOptions.MaxResponseBytes"/>. Either way the rejection is deliberate
+    /// and its message is safe to show a client.
     /// </summary>
     Rejected,
 

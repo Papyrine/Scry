@@ -569,6 +569,11 @@ sealed partial class Schema
             throw new($"ScryOptions.{nameof(options.LimitWatchFraction)} must be greater than zero and at most one: it is the fraction of a limit a query has to reach to be reported, so 0.8 reports one that used eight tenths of it. Null reports nothing.");
         }
 
+        if (options.MaxResponseBytes is { } maxResponseBytes)
+        {
+            AtLeast(maxResponseBytes, 1, nameof(options.MaxResponseBytes), "It is the most a response may carry; null sets no limit.");
+        }
+
         EnsureSubscriptionOptions(options);
         EnsureCommandOptions(options);
 

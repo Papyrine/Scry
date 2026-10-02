@@ -193,6 +193,39 @@ public class SignalRTests
         await Assert.That(exception.Code).IsEqualTo(ScryErrorCode.SubscriptionLimit);
     }
 
+    // The hub hands back strings it holds whole, so the bound on what a response may carry applies to
+    // it as it does over HTTP — to a query, to each entry of a batch, and to a stream as it goes.
+    [Test]
+    public async Task TheResponseLimitAppliesOverTheHub()
+    {
+        await using var server = await Server.Start(database, _ => _.MaxResponseBytes = 30);
+        var names = server.Query.Employee
+            .OrderBy(_ => _.Name)
+            .Select(_ => new NameRow(_.Name));
+
+        var single = (await Assert.ThrowsExactlyAsync<ScryRequestException>(() => names.ToListAsync()))!;
+
+        var batch = server.Client.Batch();
+        var entry = names.InBatch(batch).ToListAsync();
+        await batch.SendAsync();
+        var batched = (await Assert.ThrowsExactlyAsync<ScryRequestException>(() => entry))!;
+
+        var streamed = (await Assert.ThrowsExactlyAsync<ScryRequestException>(
+            async () =>
+            {
+                await foreach (var _ in names.ToAsyncEnumerable())
+                {
+                }
+            }))!;
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(single.Body).Contains("larger than this server allows (30 bytes)");
+            await Assert.That(batched.Body).Contains("larger than this server allows (30 bytes)");
+            await Assert.That(streamed.Code).IsEqualTo(ScryErrorCode.Validation);
+        }
+    }
+
     // Stopping the enumeration stops the hub's stream, which ends the subscription and gives its
     // place back. The second one waits for that, asking again under the default policy.
     [Test]

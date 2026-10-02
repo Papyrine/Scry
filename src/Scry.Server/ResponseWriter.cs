@@ -202,9 +202,11 @@ static class ResponseWriter
     }
 
     /// <summary>
-    /// An entry already written by <see cref="WriteListAsync"/> or <see cref="WritePageAsync"/>. Those produce a
-    /// complete response envelope, which is exactly what the entry's <c>response</c> is — so it is
-    /// inserted as it stands rather than parsed back into a document to be written out again.
+    /// An entry already written — by <see cref="WriteListAsync"/>, <see cref="WritePageAsync"/>,
+    /// <see cref="WriteTerminal"/>, or <see cref="Write"/> for the alias-carrying envelope a drifted
+    /// client is answered with. Each produces a complete response envelope, which is exactly what the
+    /// entry's <c>response</c> is — so it is inserted as it stands rather than parsed back into a
+    /// document to be written out again.
     /// </summary>
     public static void WriteEntry(Utf8JsonWriter json, ReadOnlySpan<byte> written)
     {
@@ -224,18 +226,6 @@ static class ResponseWriter
     {
         using var json = new Utf8JsonWriter(output);
         ScryJson.Write(json, fallback);
-    }
-
-    /// <summary>
-    /// An entry the row writer could not produce — a terminal result, or the alias-carrying envelope a
-    /// drifted client is answered with — serialized into the envelope being written.
-    /// </summary>
-    public static void WriteEntry(Utf8JsonWriter json, QueryResponse fallback)
-    {
-        json.WriteStartObject();
-        json.WritePropertyName(response);
-        ScryJson.Write(json, fallback);
-        json.WriteEndObject();
     }
 
     /// <summary>

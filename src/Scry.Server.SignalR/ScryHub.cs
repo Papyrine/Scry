@@ -44,17 +44,21 @@ public class ScryHub(ScryProcessor processor, ScryOptions options, IServiceProvi
         try
         {
             using var output = new PooledBufferWriter();
+            var limited = ResponseBudget.For(options)?.Charging(output) ?? output;
             var fallback = await processor.TryExecuteBufferedAsync(
                 parsed,
                 Data,
                 services,
                 RequestHeaders,
                 new HeaderDictionary(),
-                output,
+                limited,
                 cancel: Context.ConnectionAborted);
+
+            // Written through the same budget, so the envelope a drifted client is answered with is
+            // bounded as any other.
             if (fallback is not null)
             {
-                return ScryJson.Serialize(fallback);
+                ResponseWriter.Write(limited, fallback);
             }
 
             return Encoding.UTF8.GetString(output.WrittenMemory.Span);
@@ -89,6 +93,7 @@ public class ScryHub(ScryProcessor processor, ScryOptions options, IServiceProvi
                 new HeaderDictionary(),
                 output,
                 binary: null,
+                budget: ResponseBudget.For(options),
                 cancel: Context.ConnectionAborted);
             return Encoding.UTF8.GetString(output.WrittenMemory.Span);
         }
@@ -122,7 +127,8 @@ public class ScryHub(ScryProcessor processor, ScryOptions options, IServiceProvi
                 services,
                 RequestHeaders,
                 new HeaderDictionary(),
-                cancel);
+                cancel,
+                budget: ResponseBudget.For(options));
         }
         catch (Exception exception) when (!cancel.IsCancellationRequested)
         {

@@ -51,7 +51,7 @@ Every query records a duration, whatever its outcome, so query counts come off t
 | Value | Meaning |
 | --- | --- |
 | `success` | Validated, executed, every row delivered. |
-| `rejected` | Refused by validation — or a stream truncated by `MaxStreamRows`. |
+| `rejected` | Refused by validation — or a stream truncated by `MaxStreamRows`, or a response that reached `MaxResponseBytes`. |
 | `failed` | Validation passed; execution threw. |
 | `canceled` | A streamed read that ended before the last row: canceled, or its consumer stopped reading. |
 | `denied` | A [row policy denied a row](policies.md#what-a-denied-row-produces) the query read, and reports denials rather than hiding them. |

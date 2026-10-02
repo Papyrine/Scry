@@ -191,6 +191,24 @@ public class McpTests
         }
     }
 
+    // An agent's answer is held whole before it is handed over, so it is bounded as any other.
+    [Test]
+    public async Task AnAnswerPastTheResponseLimitIsAValidationError()
+    {
+        await using var server = await Server.Start(database, ScryMcpAccess.Read, _ => _.MaxResponseBytes = 50);
+        await using var client = await server.Connect();
+
+        var result = await Query(client, "Ledger", """[{"$type":"select","projection":{"members":["Id"]}}]""");
+        var error = Error(result);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(result.IsError).IsTrue();
+            await Assert.That(error.Code).IsEqualTo(ScryErrorCode.Validation);
+            await Assert.That(error.Error).Contains("larger than this server allows (50 bytes)");
+        }
+    }
+
     [Test]
     public async Task ACommandIsAnsweredWithItsReceipt()
     {
