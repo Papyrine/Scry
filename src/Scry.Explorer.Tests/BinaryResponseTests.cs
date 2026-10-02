@@ -175,4 +175,46 @@ public class BinaryResponseTests
 
         await Assert.That(exception!.Message).Contains("without a JSON part");
     }
+
+    // The envelope is the final section: a part after it is one it could not have referenced, and a
+    // second envelope would otherwise silently replace the first.
+    [Test]
+    public async Task BinaryPartAfterTheJsonPartFailsClosed()
+    {
+        var part = new ByteArrayContent([0x01]);
+        part.Headers.ContentType = new(ScryBinary.PartContentType);
+        var content = new MultipartContent("mixed", "scry-boundary")
+        {
+            new StringContent(Envelope("""[{"avatar":{"$bin":0}}]"""), Encoding.UTF8, "application/json"),
+            part
+        };
+
+        using var response = new HttpResponseMessage
+        {
+            Content = content
+        };
+
+        var exception = await Assert.ThrowsExactlyAsync<ScryWireException>(() => BinaryResponseReader.ReadAsync(response));
+
+        await Assert.That(exception!.Message).Contains("continued past its JSON part");
+    }
+
+    [Test]
+    public async Task SecondJsonPartFailsClosed()
+    {
+        var content = new MultipartContent("mixed", "scry-boundary")
+        {
+            new StringContent(Envelope("[]"), Encoding.UTF8, "application/json"),
+            new StringContent(Envelope("[]"), Encoding.UTF8, "application/json")
+        };
+
+        using var response = new HttpResponseMessage
+        {
+            Content = content
+        };
+
+        var exception = await Assert.ThrowsExactlyAsync<ScryWireException>(() => BinaryResponseReader.ReadAsync(response));
+
+        await Assert.That(exception!.Message).Contains("continued past its JSON part");
+    }
 }

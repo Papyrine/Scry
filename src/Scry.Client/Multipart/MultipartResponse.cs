@@ -46,6 +46,13 @@ static class MultipartResponse
         byte[]? envelope = null;
         while (await reader.ReadNextSectionAsync(cancel) is { } section)
         {
+            // The envelope is the final section, so anything after it — a second envelope, or a part
+            // it could not have referenced — is a malformed response rather than one to read past.
+            if (envelope is not null)
+            {
+                throw new ScryWireException("A multipart response continued past its JSON part.");
+            }
+
             if (IsBinary(section))
             {
                 parts.Add(await ReadPartBytes(section, cancel));
