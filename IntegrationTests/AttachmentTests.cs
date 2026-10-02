@@ -1,6 +1,7 @@
 // UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
 // Core's own ToListAsync/CountAsync IQueryable extensions and collide with the Scry client terminals.
 using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
+// ReSharper disable AutoPropertyCanBeMadeGetOnly.Local
 
 // ReSharper disable NotAccessedPositionalProperty.Local
 
