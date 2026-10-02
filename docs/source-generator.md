@@ -253,15 +253,16 @@ Register it alongside the client:
 <!-- snippet: clientRegistration -->
 <a id='snippet-clientRegistration'></a>
 ```cs
-builder.Services.AddHttpClient(
+var services = builder.Services;
+services.AddHttpClient(
     "scry",
     _ => _.BaseAddress = new(builder.HostEnvironment.BaseAddress));
-builder.Services.AddScryClient(
+services.AddScryClient(
     "/api/query",
     _ => _.GetRequiredService<IHttpClientFactory>().CreateClient("scry"));
-builder.Services.AddScoped<ScryQuery>();
+services.AddScoped<ScryQuery>();
 ```
-<sup><a href='/samples/Sample.WebClient/Program.cs#L14-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Program.cs#L14-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 

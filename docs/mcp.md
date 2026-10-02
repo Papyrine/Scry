@@ -100,7 +100,7 @@ The sample does all three, at `/mcp`:
 ```cs
 app.MapScryMcp("/mcp");
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L148-L150' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScryMcpSample' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L149-L151' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScryMcpSample' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -207,7 +207,7 @@ var answer = await client.CallToolAsync(
         ["pipeline"] = JsonDocument.Parse("""[{"$type":"count"}]""").RootElement
     });
 ```
-<sup><a href='/IntegrationTests/McpTests.cs#L81-L100' title='Snippet source file'>snippet source</a> | <a href='#snippet-mcpClientConnect' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/IntegrationTests/McpTests.cs#L78-L97' title='Snippet source file'>snippet source</a> | <a href='#snippet-mcpClientConnect' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ### Checking it works
