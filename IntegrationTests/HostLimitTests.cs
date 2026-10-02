@@ -1,7 +1,6 @@
 // UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
 // Core's own ToListAsync/CountAsync IQueryable extensions and collide with the Scry client terminals.
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc;
+
 using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 
 /// <summary>
@@ -29,8 +28,9 @@ public class HostLimitTests
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseUrls("http://127.0.0.1:0");
-        builder.Services.AddDbContext<Sample.Model.SampleContext>(_ => _.UseSqlServer(unusable));
-        builder.Services.AddScry<Sample.Model.SampleContext>(
+        var services = builder.Services;
+        services.AddDbContext<Sample.Model.SampleContext>(_ => _.UseSqlServer(unusable));
+        services.AddScry<Sample.Model.SampleContext>(
             options =>
             {
                 options.AddPocoSource(_ => Sample.Model.Holiday.Seed());

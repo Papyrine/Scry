@@ -1,9 +1,17 @@
 ﻿global using System.Net;
 global using System.Text;
+global using System.Text.Encodings.Web;
 global using System.Text.Json;
+global using Microsoft.AspNetCore.Authentication;
 global using Microsoft.AspNetCore.Builder;
+global using Microsoft.AspNetCore.Hosting;
+global using Microsoft.AspNetCore.Mvc;
 global using Microsoft.AspNetCore.TestHost;
 global using Microsoft.Extensions.DependencyInjection;
+global using Microsoft.Extensions.Logging;
+global using Microsoft.Extensions.Options;
+global using ModelContextProtocol.Client;
+global using ModelContextProtocol.Protocol;
 global using Scry;
 global using Scry.Generated;
 global using TUnit.Assertions.Enums;

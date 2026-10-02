@@ -1,8 +1,6 @@
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
-using Microsoft.Extensions.Logging;
 // UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
 // Core's own IQueryable extensions and collide with the Scry client terminals.
 using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
