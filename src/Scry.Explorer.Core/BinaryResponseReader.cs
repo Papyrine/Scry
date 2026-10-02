@@ -21,27 +21,29 @@ namespace Scry;
 public static class BinaryResponseReader
 {
     /// <summary>
-    /// The response body as JSON. A plain response is returned as it arrived; a multipart one is
+    /// The response body as UTF-8 JSON. A plain response is returned as it arrived; a multipart one is
     /// reassembled. Error responses are never multipart, so a failure reads as its own body either way.
     /// </summary>
-    public static async Task<string> ReadAsync(HttpResponseMessage response, Cancel cancel = default)
+    /// <remarks>
+    /// Bytes rather than text: the caller both parses the body and prettifies it for display, and each
+    /// reads UTF-8 directly — so the only string made is the displayed one.
+    /// </remarks>
+    public static async Task<ReadOnlyMemory<byte>> ReadAsync(HttpResponseMessage response, Cancel cancel = default)
     {
         if (!MultipartResponse.TryGetBoundary(response, out var boundary))
         {
-            return await response.Content.ReadAsStringAsync(cancel);
+            return await response.Content.ReadAsByteArrayAsync(cancel);
         }
 
         var (envelope, parts) = await MultipartResponse.ReadAsync(response, boundary, cancel);
-        // The explorer's product is JSON text either way, so this is the one caller that does want the
-        // envelope as a string — the typed client keeps the bytes and parses them into its own model.
-        return Inline(Encoding.UTF8.GetString(envelope.Span), parts);
+        return Inline(envelope, parts);
     }
 
     /// <summary>
     /// Replaces every <c>{"$bin":n}</c> placeholder in the envelope with the base64 of the part it
     /// names, leaving the rest of the document byte-identical.
     /// </summary>
-    public static string Inline(string envelope, IReadOnlyList<byte[]> parts)
+    public static ReadOnlyMemory<byte> Inline(ReadOnlyMemory<byte> envelope, IReadOnlyList<byte[]> parts)
     {
         using var document = JsonDocument.Parse(envelope);
         var buffer = new ArrayBufferWriter<byte>();
@@ -50,7 +52,7 @@ public static class BinaryResponseReader
             Write(json, document.RootElement, parts);
         }
 
-        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+        return buffer.WrittenMemory;
     }
 
     static void Write(Utf8JsonWriter json, JsonElement element, IReadOnlyList<byte[]> parts)

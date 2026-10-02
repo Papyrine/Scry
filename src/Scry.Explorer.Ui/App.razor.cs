@@ -1114,6 +1114,19 @@ public partial class App
         }
     }
 
+    static string Prettify(ReadOnlyMemory<byte> utf8)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(utf8);
+            return JsonSerializer.Serialize(document.RootElement, indented);
+        }
+        catch
+        {
+            return Encoding.UTF8.GetString(utf8.Span);
+        }
+    }
+
     MarkupString WireMarkup =>
         Highlighted(ref wireHighlight, wireJson!, Highlight.Json);
 
