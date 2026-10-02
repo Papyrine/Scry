@@ -1,15 +1,12 @@
-namespace Scry;
-
 /// <summary>
 /// Receives <see cref="ScryCommandCompleted"/> on the Scry server that dispatched the command, and
 /// finishes the command there. Found by NServiceBus's assembly scanning like any other handler.
 /// </summary>
 /// <remarks>
-/// Public because NServiceBus constructs it. It does nothing a host would call. A completion for a
-/// command the server does not hold in flight — finished already, pruned, or redelivered — changes
-/// nothing, since a command finishes once.
+/// A completion for a command the server does not hold in flight — finished already, pruned, or
+/// redelivered — changes nothing, since a command finishes once.
 /// </remarks>
-public sealed class ScryCommandCompletedHandler(IServiceProvider services) :
+sealed class ScryCommandCompletedHandler(IServiceProvider services) :
     IHandleMessages<ScryCommandCompleted>
 {
     /// <inheritdoc />

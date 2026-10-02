@@ -1,14 +1,9 @@
-namespace Scry;
-
 /// <summary>
 /// Receives <see cref="ScryChanged"/> on an endpoint that serves live queries, and hands it on. Found
 /// by NServiceBus's assembly scanning like any other handler, which is what subscribes the endpoint
 /// to the event.
 /// </summary>
-/// <remarks>
-/// Public because NServiceBus constructs it. It does nothing a host would call.
-/// </remarks>
-public sealed class ScryChangedHandler(IServiceProvider services) :
+sealed class ScryChangedHandler(IServiceProvider services) :
     IHandleMessages<ScryChanged>
 {
     /// <inheritdoc />

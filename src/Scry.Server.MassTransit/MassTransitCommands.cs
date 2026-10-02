@@ -30,10 +30,10 @@ sealed class MassTransitDispatcher(IServiceProvider services, BusCommands claims
 
 /// <summary>Finishes a command on the server when its consumer says how it ended.</summary>
 /// <remarks>
-/// Public because MassTransit constructs it. A completion for a command this node does not hold in
-/// flight — another node's, or one already finished — changes nothing.
+/// A completion for a command this node does not hold in flight — another node's, or one already
+/// finished — changes nothing.
 /// </remarks>
-public sealed class MassTransitCommandCompletedConsumer(ScryProcessor processor) :
+sealed class MassTransitCommandCompletedConsumer(ScryProcessor processor) :
     IConsumer<MassTransitCommandCompleted>
 {
     /// <inheritdoc />

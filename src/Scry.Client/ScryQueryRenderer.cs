@@ -1,7 +1,5 @@
-namespace Scry;
-
 /// <summary>Why <see cref="ScryQueryRenderer.TryRender(QueryRequest, out string?, out RenderRefusal)"/> declined to render a request.</summary>
-public enum RenderRefusal
+enum RenderRefusal
 {
     None,
 
@@ -30,7 +28,7 @@ public enum RenderRefusal
 /// round-trips: translating it through <c>ToScryRequest</c> produces the original request,
 /// byte for byte.
 /// </summary>
-public static class ScryQueryRenderer
+static class ScryQueryRenderer
 {
     /// <summary>Renders the request, or returns false where no faithful snippet exists.</summary>
     public static bool TryRender(QueryRequest request, [NotNullWhen(true)] out string? code) =>

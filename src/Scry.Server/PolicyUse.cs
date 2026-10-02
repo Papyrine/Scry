@@ -1,11 +1,9 @@
-namespace Scry;
-
 /// <summary>
 /// One policy in a source's chain, with what its denials produce. Paired rather than carried on the
 /// policy type itself because the same policy can be attached to several types, and a host can want a
 /// denial to fail one source's queries while quietly narrowing another's.
 /// </summary>
-public readonly record struct PolicyUse(Type Policy, DeniedRowHandling Handling)
+readonly record struct PolicyUse(Type Policy, DeniedRowHandling Handling)
 {
     /// <summary>
     /// The policy object to use, where the schema built one rather than leaving it to be resolved per

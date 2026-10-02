@@ -1,7 +1,5 @@
-namespace Scry;
-
 /// <summary>A registered queryable source (entity, view, or POCO).</summary>
-public sealed class ScrySource(
+sealed class ScrySource(
     string name,
     Type clrType,
     SourceKind kind,

@@ -16,6 +16,10 @@
          at a line longer than that buffer, and at a stream that ends without a newline is worth testing
          directly rather than only through a stream that happens to produce those. -->
     <InternalsVisibleTo Include="Scry.Tests" Key="$(ScryPublicKey)" />
+    <!-- What proves the query renderer is the round trip: render a request, compile the snippet with the
+         explorer's executor, and compare the two requests' bytes. Only these tests have the explorer to
+         compile it with; the sidecar is the renderer's one caller outside them. -->
+    <InternalsVisibleTo Include="Scry.Explorer.Tests" Key="$(ScryPublicKey)" />
     <!-- A second transport for the same client. What it needs that is not public is how a failure
          becomes the exception this client raises for it, so that a query refused over a hub is
          caught by the code that catches one refused over HTTP. Shipped with this package, so the
