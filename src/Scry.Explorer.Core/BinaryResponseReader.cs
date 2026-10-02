@@ -14,12 +14,21 @@ namespace Scry;
 /// bytes through <c>ScryJson.DeserializePayload</c>, which the explorer cannot use because its rows
 /// are <see cref="JsonElement"/>s rather than a projected type.
 /// <para>
+/// Up to <see cref="InlineLimit"/>, that is. A larger part is replaced by a short description of
+/// itself: inlined, its base64 would be copied into the parsed document, the indented response text,
+/// its highlighting, and a table cell — several times its size in a WASM heap, for a value nobody can
+/// read in a 12rem cell or a wall of JSON.
+/// </para>
+/// <para>
 /// The single-response shape only: the explorer neither batches nor streams, and a stream numbers its
 /// parts per row rather than per document.
 /// </para>
 /// </remarks>
 public static class BinaryResponseReader
 {
+    /// <summary>The largest part, in bytes, inlined as base64; a larger one is described instead.</summary>
+    public const int InlineLimit = 64 * 1024;
+
     /// <summary>
     /// The response body as UTF-8 JSON. A plain response is returned as it arrived; a multipart one is
     /// reassembled. Error responses are never multipart, so a failure reads as its own body either way.
@@ -41,7 +50,8 @@ public static class BinaryResponseReader
 
     /// <summary>
     /// Replaces every <c>{"$bin":n}</c> placeholder in the envelope with the base64 of the part it
-    /// names, leaving the rest of the document byte-identical.
+    /// names — or, past <see cref="InlineLimit"/>, a string giving its size — leaving the rest of the
+    /// document byte-identical.
     /// </summary>
     public static ReadOnlyMemory<byte> Inline(ReadOnlyMemory<byte> envelope, IReadOnlyList<byte[]> parts)
     {
@@ -62,6 +72,12 @@ public static class BinaryResponseReader
             case JsonValueKind.Object:
                 if (TryPart(element, parts, out var bytes))
                 {
+                    if (bytes.Length > InlineLimit)
+                    {
+                        json.WriteStringValue(Describe(bytes.Length));
+                        return;
+                    }
+
                     json.WriteBase64StringValue(bytes);
                     return;
                 }
@@ -91,6 +107,13 @@ public static class BinaryResponseReader
                 return;
         }
     }
+
+    /// <summary>
+    /// What a part too large to inline is shown as. Bracketed so it cannot be read as base64, which
+    /// has no '[' in its alphabet.
+    /// </summary>
+    public static string Describe(int length) =>
+        string.Create(CultureInfo.InvariantCulture, $"[binary: {length:N0} bytes]");
 
     /// <summary>
     /// The part an object names, if it is a placeholder. A projected member name comes from the

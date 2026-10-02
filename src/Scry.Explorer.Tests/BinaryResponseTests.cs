@@ -67,6 +67,27 @@ public class BinaryResponseTests
     }
 
     [Test]
+    public async Task InlinesAPartAtTheLimit()
+    {
+        var bytes = new byte[BinaryResponseReader.InlineLimit];
+        var json = Inline(Envelope("""[{"avatar":{"$bin":0}}]"""), [bytes]);
+
+        await Assert.That(json).IsEqualTo(Envelope($$"""[{"avatar":"{{Convert.ToBase64String(bytes)}}"}]"""));
+    }
+
+    // Past the limit the value would cost the browser several times its size to show, as text nobody
+    // can read — so it is described rather than inlined.
+    [Test]
+    public async Task DescribesAPartPastTheLimit()
+    {
+        var json = Inline(
+            Envelope("""[{"avatar":{"$bin":0}}]"""),
+            [new byte[BinaryResponseReader.InlineLimit + 1]]);
+
+        await Assert.That(json).IsEqualTo(Envelope("""[{"avatar":"[binary: 65,537 bytes]"}]"""));
+    }
+
+    [Test]
     public async Task PlaceholderIndexOutOfRangeFailsClosed()
     {
         var exception = Assert.ThrowsExactly<ScryWireException>(
