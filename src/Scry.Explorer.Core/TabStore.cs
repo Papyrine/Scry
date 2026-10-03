@@ -209,12 +209,13 @@ public sealed class TabStore
             var loaded = JsonSerializer.Deserialize<Stored>(json, StorageJson.Options);
             var readable = loaded?.Tabs?
                 .Where(_ => _ is not null)
-                .Select(_ => new TabState
-                {
-                    Id = string.IsNullOrEmpty(_!.Id) ? Guid.NewGuid().ToString("n") : _.Id,
-                    Query = _.Query ?? "",
-                    Title = _.Title
-                })
+                .Select(_ =>
+                    new TabState
+                    {
+                        Id = string.IsNullOrEmpty(_!.Id) ? Guid.NewGuid().ToString("n") : _.Id,
+                        Query = _.Query ?? "",
+                        Title = _.Title
+                    })
                 .ToList();
             if (readable is {Count: > 0})
             {

@@ -222,10 +222,11 @@ public sealed class HistoryStore
             items.AddRange(
                 queries
                     .Where(_ => !string.IsNullOrWhiteSpace(_))
-                    .Select(_ => new HistoryItem
-                    {
-                        Query = _!
-                    }));
+                    .Select(_ =>
+                        new HistoryItem
+                        {
+                            Query = _!
+                        }));
             Evict();
         }
         catch (JsonException)

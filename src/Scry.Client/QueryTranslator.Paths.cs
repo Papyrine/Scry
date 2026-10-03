@@ -55,20 +55,30 @@ sealed partial class QueryTranslator
     static Node StripPrefix(Node node, int prefix) =>
         node switch
         {
-            MemberNode member => new MemberNode([..member.Path.Skip(prefix)]),
-            SubqueryNode subquery => subquery with { Path = [..subquery.Path.Skip(prefix)] },
-            InSourceNode inSource => inSource with { Value = StripPrefix(inSource.Value, prefix) },
+            MemberNode member => new MemberNode([.. member.Path.Skip(prefix)]),
+            SubqueryNode subquery => subquery with
+            {
+                Path = [.. subquery.Path.Skip(prefix)]
+            },
+            InSourceNode inSource => inSource with
+            {
+                Value = StripPrefix(inSource.Value, prefix)
+            },
             BinaryNode binary => new BinaryNode(binary.Op, StripPrefix(binary.Left, prefix), StripPrefix(binary.Right, prefix)),
             UnaryNode unary => new UnaryNode(unary.Op, StripPrefix(unary.Operand, prefix)),
-            CollateNode collate => collate with { Target = StripPrefix(collate.Target, prefix) },
+            CollateNode collate => collate with
+            {
+                Target = StripPrefix(collate.Target, prefix)
+            },
             ConditionalNode conditional => new ConditionalNode(
                 StripPrefix(conditional.Test, prefix),
                 StripPrefix(conditional.IfTrue, prefix),
                 StripPrefix(conditional.IfFalse, prefix)),
-            CallNode call => new CallNode(
-                call.Function,
-                StripPrefix(call.Target, prefix),
-                [..call.Arguments.Select(_ => StripPrefix(_, prefix))]),
+            CallNode call =>
+                new CallNode(
+                    call.Function,
+                    StripPrefix(call.Target, prefix),
+                    [.. call.Arguments.Select(_ => StripPrefix(_, prefix))]),
             _ => node
         };
 

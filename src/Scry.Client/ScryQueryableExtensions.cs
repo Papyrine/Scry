@@ -479,7 +479,7 @@ public static partial class ScryQueryableExtensions
             ? ScryModels.Of(element)?.Members
             : provider.DefaultProjection;
 
-        if (members is not { Count: > 0 } ||
+        if (members is not {Count: > 0} ||
             terminal is
                 CountOp or
                 LongCountOp or
@@ -487,9 +487,9 @@ public static partial class ScryQueryableExtensions
                 AllOp or
                 AggregateOp ||
             terminal is
-                FirstOp { Predicate: not null } or
-                SingleOp { Predicate: not null } or
-                LastOp { Predicate: not null } ||
+                FirstOp {Predicate: not null} or
+                SingleOp {Predicate: not null} or
+                LastOp {Predicate: not null} ||
             // A join carries its own projection, since a member has to name which side it reads.
             pipeline.Any(_ => _ is
                 SelectOp or
@@ -502,7 +502,7 @@ public static partial class ScryQueryableExtensions
 
         pipeline.Add(
             new SelectOp(
-                new([..members.Select(_ => new ProjectionMember(_, new NodeValue(new MemberNode([_]))))])));
+                new([.. members.Select(_ => new ProjectionMember(_, new NodeValue(new MemberNode([_]))))])));
     }
 
     /// <summary>
@@ -557,12 +557,12 @@ public static partial class ScryQueryableExtensions
 
         return new(
         [
-            ..model.Attachments.Select(
-                attachment => new AttachmentBinding(
-                    [attachment],
+            .. model.Attachments.Select(_ =>
+                new AttachmentBinding(
+                    [_],
                     model.Source,
-                    attachment,
-                    [..keys.Select(IReadOnlyList<string> (key) => [key])]))
+                    _,
+                    [.. keys.Select(IReadOnlyList<string> (key) => [key])]))
         ]);
     }
 
