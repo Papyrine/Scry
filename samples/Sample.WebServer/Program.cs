@@ -36,7 +36,8 @@
         // again at once. Resolved rather than constructed: AddScry registers it, wired to the same
         // place the server listens.
         // begin-snippet: changeInterceptor
-        builder.Services
+        var services = builder.Services;
+        services
             .AddDbContext<SampleContext>((services, options) => options
                 .UseSqlServer(database.ConnectionString)
                 .AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>()));
@@ -44,17 +45,17 @@
 
         // The sample's own authorization data, and the policy that reads it. The policy is resolved
         // from here rather than constructed, which is what lets it take a dependency at all.
-        builder.Services.AddSingleton<RegionGrants>();
-        builder.Services.AddSingleton<RegionAccessPolicy>();
+        services.AddSingleton<RegionGrants>();
+        services.AddSingleton<RegionAccessPolicy>();
 
         // begin-snippet: sampleCommandHandlers
         // The handlers for the model's commands — every one of them, since a server with commands on
         // routes them all — and what they are tuned by, from the Sample:Commands section.
-        builder.Services.AddSampleCommandHandlers(builder.Configuration);
+        services.AddSampleCommandHandlers(builder.Configuration);
         // end-snippet
 
         // begin-snippet: serverRegistration
-        builder.Services
+        services
             .AddScry<SampleContext>(_ =>
             {
                 // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
@@ -114,15 +115,15 @@
         // end-snippet
 
         // For MapScryHub below. Scry.Server.SignalR needs nothing registered beyond SignalR itself.
-        builder.Services.AddSignalR();
+        services.AddSignalR();
 
         // For MapScryMcp below.
-        builder.Services.AddScryMcp();
+        services.AddScryMcp();
 
         // Scry's telemetry is dormant until something subscribes; opting in is one AddSource and one
         // AddMeter. See /docs/observability.md for the spans, instruments, and tags.
         // begin-snippet: openTelemetry
-        builder.Services.AddOpenTelemetry()
+        services.AddOpenTelemetry()
             .WithTracing(_ => _.AddSource(ScryInstrumentation.ActivitySourceName))
             .WithMetrics(_ => _.AddMeter(ScryInstrumentation.MeterName));
         // end-snippet

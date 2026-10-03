@@ -6,10 +6,17 @@ public class BinaryResponseTests
     static string Envelope(string payload) =>
         $$"""{"version":2,"kind":"List","payload":{{payload}},"stamp":"abc"}""";
 
+    // The reader works in UTF-8; the expectations stay as text so they read as the JSON they are.
+    static string Inline(string envelope, IReadOnlyList<byte[]> parts) =>
+        Encoding.UTF8.GetString(BinaryResponseReader.Inline(Encoding.UTF8.GetBytes(envelope), parts).Span);
+
+    static async Task<string> Read(HttpResponseMessage response) =>
+        Encoding.UTF8.GetString((await BinaryResponseReader.ReadAsync(response)).Span);
+
     [Test]
     public async Task InlinesAPlaceholderAsBase64()
     {
-        var json = BinaryResponseReader.Inline(
+        var json = Inline(
             Envelope("""[{"name":"Alice","avatar":{"$bin":0}}]"""),
             [[0x01, 0x02, 0x03]]);
 
@@ -22,7 +29,7 @@ public class BinaryResponseTests
     public async Task InlinedBytesMatchTheUndivertedEncoding()
     {
         byte[] bytes = [0xFB, 0xFF, 0x3E, 0x00];
-        var json = BinaryResponseReader.Inline(Envelope("""[{"avatar":{"$bin":0}}]"""), [bytes]);
+        var json = Inline(Envelope("""[{"avatar":{"$bin":0}}]"""), [bytes]);
 
         await Assert.That(json).Contains(JsonSerializer.Serialize(bytes));
     }
@@ -30,7 +37,7 @@ public class BinaryResponseTests
     [Test]
     public async Task NullStaysInlineBesidePlaceholders()
     {
-        var json = BinaryResponseReader.Inline(
+        var json = Inline(
             Envelope("""[{"avatar":null},{"avatar":{"$bin":0}}]"""),
             [[0x0A]]);
 
@@ -42,7 +49,7 @@ public class BinaryResponseTests
     [Test]
     public async Task ResolvesPlaceholdersNestedAndOutOfOrder()
     {
-        var json = BinaryResponseReader.Inline(
+        var json = Inline(
             Envelope("""[{"badge":{"$bin":1},"department":{"logo":{"$bin":0}}}]"""),
             [[0x01], [0x02]]);
 
@@ -56,14 +63,35 @@ public class BinaryResponseTests
     {
         var envelope = Envelope("""[{"name":"Alice","avatar":"AQID"}]""");
 
-        await Assert.That(BinaryResponseReader.Inline(envelope, [])).IsEqualTo(envelope);
+        await Assert.That(Inline(envelope, [])).IsEqualTo(envelope);
+    }
+
+    [Test]
+    public async Task InlinesAPartAtTheLimit()
+    {
+        var bytes = new byte[BinaryResponseReader.InlineLimit];
+        var json = Inline(Envelope("""[{"avatar":{"$bin":0}}]"""), [bytes]);
+
+        await Assert.That(json).IsEqualTo(Envelope($$"""[{"avatar":"{{Convert.ToBase64String(bytes)}}"}]"""));
+    }
+
+    // Past the limit the value would cost the browser several times its size to show, as text nobody
+    // can read — so it is described rather than inlined.
+    [Test]
+    public async Task DescribesAPartPastTheLimit()
+    {
+        var json = Inline(
+            Envelope("""[{"avatar":{"$bin":0}}]"""),
+            [new byte[BinaryResponseReader.InlineLimit + 1]]);
+
+        await Assert.That(json).IsEqualTo(Envelope("""[{"avatar":"[binary: 65,537 bytes]"}]"""));
     }
 
     [Test]
     public async Task PlaceholderIndexOutOfRangeFailsClosed()
     {
         var exception = Assert.ThrowsExactly<ScryWireException>(
-            () => BinaryResponseReader.Inline(Envelope("""[{"avatar":{"$bin":1}}]"""), [[0x01]]));
+            () => Inline(Envelope("""[{"avatar":{"$bin":1}}]"""), [[0x01]]));
 
         await Assert.That(exception.Message).Contains("references part 1");
     }
@@ -72,7 +100,7 @@ public class BinaryResponseTests
     public async Task NegativePartIndexFailsClosed()
     {
         var exception = Assert.ThrowsExactly<ScryWireException>(
-            () => BinaryResponseReader.Inline(Envelope("""[{"avatar":{"$bin":-1}}]"""), [[0x01]]));
+            () => Inline(Envelope("""[{"avatar":{"$bin":-1}}]"""), [[0x01]]));
 
         await Assert.That(exception.Message).Contains("references part -1");
     }
@@ -88,7 +116,7 @@ public class BinaryResponseTests
     [Arguments("99999999999")]
     public async Task NonIntegerPartIndexFailsClosed(string index)
     {
-        var exception = Assert.ThrowsExactly<ScryWireException>(() => BinaryResponseReader.Inline(Envelope($$$"""[{"avatar":{"$bin":{{{index}}}}}]"""), [[0x01]]));
+        var exception = Assert.ThrowsExactly<ScryWireException>(() => Inline(Envelope($$$"""[{"avatar":{"$bin":{{{index}}}}}]"""), [[0x01]]));
 
         await Assert.That(exception.Message).Contains("Expected a part index");
     }
@@ -97,7 +125,7 @@ public class BinaryResponseTests
     public async Task PlaceholderWithExtraPropertiesFailsClosed()
     {
         var exception = Assert.ThrowsExactly<ScryWireException>(
-            () => BinaryResponseReader.Inline(Envelope("""[{"avatar":{"$bin":0,"other":1}}]"""), [[0x01]]));
+            () => Inline(Envelope("""[{"avatar":{"$bin":0,"other":1}}]"""), [[0x01]]));
 
         await Assert.That(exception.Message).Contains("carry only");
     }
@@ -109,7 +137,7 @@ public class BinaryResponseTests
     {
         var envelope = Envelope("""[{"department":{"name":"Engineering","id":1}}]""");
 
-        await Assert.That(BinaryResponseReader.Inline(envelope, [[0x01]])).IsEqualTo(envelope);
+        await Assert.That(Inline(envelope, [[0x01]])).IsEqualTo(envelope);
     }
 
     [Test]
@@ -126,7 +154,7 @@ public class BinaryResponseTests
             Content = content
         };
 
-        var json = await BinaryResponseReader.ReadAsync(response);
+        var json = await Read(response);
 
         await Assert.That(json).IsEqualTo(Envelope("""[{"avatar":"AQID"}]"""));
     }
@@ -142,7 +170,7 @@ public class BinaryResponseTests
             Content = new StringContent(body, Encoding.UTF8, "application/json")
         };
 
-        await Assert.That(await BinaryResponseReader.ReadAsync(response)).IsEqualTo(body);
+        await Assert.That(await Read(response)).IsEqualTo(body);
     }
 
     [Test]
@@ -174,5 +202,47 @@ public class BinaryResponseTests
         var exception = await Assert.ThrowsExactlyAsync<ScryWireException>(() => BinaryResponseReader.ReadAsync(response));
 
         await Assert.That(exception!.Message).Contains("without a JSON part");
+    }
+
+    // The envelope is the final section: a part after it is one it could not have referenced, and a
+    // second envelope would otherwise silently replace the first.
+    [Test]
+    public async Task BinaryPartAfterTheJsonPartFailsClosed()
+    {
+        var part = new ByteArrayContent([0x01]);
+        part.Headers.ContentType = new(ScryBinary.PartContentType);
+        var content = new MultipartContent("mixed", "scry-boundary")
+        {
+            new StringContent(Envelope("""[{"avatar":{"$bin":0}}]"""), Encoding.UTF8, "application/json"),
+            part
+        };
+
+        using var response = new HttpResponseMessage
+        {
+            Content = content
+        };
+
+        var exception = await Assert.ThrowsExactlyAsync<ScryWireException>(() => BinaryResponseReader.ReadAsync(response));
+
+        await Assert.That(exception!.Message).Contains("continued past its JSON part");
+    }
+
+    [Test]
+    public async Task SecondJsonPartFailsClosed()
+    {
+        var content = new MultipartContent("mixed", "scry-boundary")
+        {
+            new StringContent(Envelope("[]"), Encoding.UTF8, "application/json"),
+            new StringContent(Envelope("[]"), Encoding.UTF8, "application/json")
+        };
+
+        using var response = new HttpResponseMessage
+        {
+            Content = content
+        };
+
+        var exception = await Assert.ThrowsExactlyAsync<ScryWireException>(() => BinaryResponseReader.ReadAsync(response));
+
+        await Assert.That(exception!.Message).Contains("continued past its JSON part");
     }
 }

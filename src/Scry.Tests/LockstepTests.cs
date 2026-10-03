@@ -105,7 +105,54 @@ public class LockstepTests
     {
         var exception = Assert.ThrowsExactly<Exception>(() => Schema.CommandPayload(typeof(ForeignEnumCommand), typeof(LockstepTests).Assembly));
 
-        await Assert.That(exception.Message).Contains("'ForeignEnumCommand.Day' is a 'DayOfWeek', which a command cannot carry");
+        await Assert.That(exception.Message).IsEqualTo("'ForeignEnumCommand.Comparison' is a 'StringComparison', which a command cannot carry. A payload property is a scalar, an enum declared in the model, a byte[], a nullable of those, or a list of them; anything the server fills itself belongs behind [CommandIgnore].");
+    }
+
+    // A BCL enum is on every client already, so a payload may carry one — as a value, a nullable, or a
+    // list — and the generator classifies it the same way (CompiledLockstepTests.BclEnums).
+    [Test]
+    public async Task AcceptsPayloadBclEnums()
+    {
+        var payload = Schema.CommandPayload(typeof(BclEnumCommand), typeof(LockstepTests).Assembly);
+
+        await Assert.That(payload.Select(_ => _.Name)).IsEquivalentTo(["Alternates", "Clock", "Day", "Recess"], CollectionOrdering.Matching);
+    }
+
+    // The four BCL-enum members of Sitting, spelled identically on both sides as the BCL type, and
+    // described as an enum by neither: no client re-emits a type it already has.
+    [Test]
+    public async Task BclEnumsAreSpelledAsThemselvesAndNeverDescribed()
+    {
+        var extract = MetadataModelReader.Read(typeof(TestContext).Assembly.Location);
+        var described = SharedProcessor.Instance.Describe();
+
+        var generated = extract.Sources
+            .Single(_ => _.ModelName == "SittingQueryModel")
+            .Properties
+            .Where(_ => _.Name != "Id" && _.Name != "Name")
+            .Select(_ => $"{_.Name} {ScryGenerator.Display(_)}")
+            .Order(StringComparer.Ordinal);
+        var served = described.Types
+            .Single(_ => _.Model == "SittingQueryModel")
+            .Members
+            .Where(_ => _.Name != "Id" && _.Name != "Name")
+            .Select(_ => $"{_.Name} {_.TypeDisplay}")
+            .Order(StringComparer.Ordinal);
+
+        string[] expected =
+        [
+            "Alternates global::System.Collections.Generic.IReadOnlyList<global::System.DayOfWeek>",
+            "Clock global::System.DateTimeKind",
+            "DayOfWeek global::System.DayOfWeek",
+            "Recess global::System.DayOfWeek?"
+        ];
+        using (Assert.Multiple())
+        {
+            await Assert.That(generated).IsEquivalentTo(expected, CollectionOrdering.Matching);
+            await Assert.That(served).IsEquivalentTo(expected, CollectionOrdering.Matching);
+            await Assert.That(extract.Enums.Select(_ => _.Name)).DoesNotContain("DayOfWeek").And.DoesNotContain("DateTimeKind");
+            await Assert.That(described.Enums.Select(_ => _.Name)).DoesNotContain("DayOfWeek").And.DoesNotContain("DateTimeKind");
+        }
     }
 
     [Test]
@@ -207,7 +254,17 @@ public class LockstepTests
     {
         var exception = Assert.ThrowsExactly<Exception>(() => Schema.BuildTypeMeta(typeof(ForeignEnumRow), []));
 
-        await Assert.That(exception.Message).Contains("'DayOfWeek', an enum declared in assembly");
+        await Assert.That(exception.Message).IsEqualTo("'ForeignEnumRow.Comparison' is a 'StringComparison', an enum declared in assembly 'System.Private.CoreLib'. A client re-emits an enum from the model assembly's metadata alone, so it could never see this one, and every client would report itself stale. Declare the enum in the model assembly, or exclude the member with [QueryIgnore].");
+    }
+
+    // The BCL allow-list is closed: an enum of the BCL that is not on it is refused like any other
+    // foreign enum, as a collection's element as much as a member's own type.
+    [Test]
+    public async Task RefusesACollectionOfAnEnumFromAnotherAssembly()
+    {
+        var exception = Assert.ThrowsExactly<Exception>(() => Schema.BuildTypeMeta(typeof(ForeignEnumCollectionRow), []));
+
+        await Assert.That(exception.Message).IsEqualTo("'ForeignEnumCollectionRow.Comparisons' is a 'StringComparison', an enum declared in assembly 'System.Private.CoreLib'. A client re-emits an enum from the model assembly's metadata alone, so it could never see this one, and every client would report itself stale. Declare the enum in the model assembly, or exclude the member with [QueryIgnore].");
     }
 
     [Test]
@@ -238,7 +295,13 @@ public class LockstepTests
 
     class ForeignEnumRow
     {
-        public DayOfWeek Day { get; set; }
+        public StringComparison Comparison { get; set; }
+    }
+
+    class ForeignEnumCollectionRow
+    {
+        [QueryableCollection]
+        public List<StringComparison> Comparisons { get; set; } = [];
     }
 
     class OddCollectionRow
@@ -265,7 +328,15 @@ public class LockstepTests
 
     class ForeignEnumCommand
     {
+        public StringComparison Comparison { get; set; }
+    }
+
+    class BclEnumCommand
+    {
         public DayOfWeek Day { get; set; }
+        public DayOfWeek? Recess { get; set; }
+        public DateTimeKind Clock { get; set; }
+        public List<DayOfWeek> Alternates { get; set; } = [];
     }
 
     class MixedCommand

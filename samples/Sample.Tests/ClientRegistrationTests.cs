@@ -32,8 +32,8 @@ public class ClientRegistrationTests
         // Resolving is the whole of what this overload does differently — it reaches the same
         // ScryClient the named form does, by a different route — so the round trip is covered by the
         // test below rather than repeated here.
-        await Assert.That(scope.ServiceProvider.GetRequiredService<ScryQuery>()).IsNotNull();
-        await Assert.That(scope.ServiceProvider.GetRequiredService<ScryClient>()).IsSameReferenceAs(scope.ServiceProvider.GetRequiredService<ScryClient>());
+        await Assert.That(provider.GetRequiredService<ScryQuery>()).IsNotNull();
+        await Assert.That(provider.GetRequiredService<ScryClient>()).IsSameReferenceAs(provider.GetRequiredService<ScryClient>());
     }
 
     [Test]
@@ -54,7 +54,7 @@ public class ClientRegistrationTests
         await using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
 
-        var query = scope.ServiceProvider.GetRequiredService<ScryQuery>();
+        var query = provider.GetRequiredService<ScryQuery>();
         var rows = await query.Employee
             .OrderBy(_ => _.Name)
             .Select(_ => new NameRow(_.Name))
@@ -80,8 +80,8 @@ public class ClientRegistrationTests
 
         // Scoped, not transient: the client records the stamp each response advertises and reports
         // drift at most once, which a fresh instance per injection would reset.
-        var first = scope.ServiceProvider.GetRequiredService<ScryClient>();
-        var second = scope.ServiceProvider.GetRequiredService<ScryClient>();
+        var first = provider.GetRequiredService<ScryClient>();
+        var second = provider.GetRequiredService<ScryClient>();
 
         await Assert.That(first).IsSameReferenceAs(second);
 

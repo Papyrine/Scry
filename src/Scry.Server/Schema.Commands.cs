@@ -239,8 +239,9 @@ sealed partial class Schema
         throw new($"'{type.Name}.{property.Name}' is inherited from '{declaring.Name}' in assembly '{declaring.Assembly.GetName().Name}'. A client is generated from the model assembly's metadata alone, so it could never see the property. Declare it on a type in the model assembly, or keep it out of the payload with [CommandIgnore].");
     }
 
-    // A scalar, an enum the generator can re-emit, a byte[], a nullable of those, or a collection of them
-    // in a shape the generator reads. Mirrors MetadataModelReader.ClassifyValue.
+    // A scalar, an enum the generator can re-emit or a BCL enum it need not, a byte[], a nullable of
+    // those, or a collection of them in a shape the generator reads. Mirrors
+    // MetadataModelReader.ClassifyValue.
     static bool IsValueShape(Type type, Assembly assembly)
     {
         Type? value = null;
@@ -261,7 +262,8 @@ sealed partial class Schema
 
         var underlying = Nullable.GetUnderlyingType(value) ?? value;
         return !underlying.IsEnum ||
-               underlying.Assembly == assembly;
+               underlying.Assembly == assembly ||
+               BclEnumDisplay(underlying) is not null;
     }
 
     /// <summary>

@@ -282,11 +282,11 @@
         var shown = code is null ? "" : QueryBuilder.Display(Index, type, code) ?? "";
         var invalidClass = invalid.Contains(key) ? "builder-input invalid" : "builder-input";
         if (kind == ValueKind.Enum &&
-            Index.Enum(type.TrimEnd('?')) is { } enumInfo)
+            QueryBuilder.EnumValues(Index, type) is { } enumValues)
         {
             return @<select class="builder-select" data-testid="builder-value" aria-label="@label"
                             value="@shown" @onchange="_ => onChange(Text(_))">
-                @foreach (var value in enumInfo.Values)
+                @foreach (var value in enumValues)
                 {
                     <option value="@value">@value</option>
                 }

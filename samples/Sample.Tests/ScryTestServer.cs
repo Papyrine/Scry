@@ -95,7 +95,8 @@ public sealed class ScryTestServer :
                 EnvironmentName = environment
             });
         builder.WebHost.UseTestServer();
-        builder.Services.AddDbContext<SampleContext>((services, options) =>
+        var services = builder.Services;
+        services.AddDbContext<SampleContext>((services, options) =>
         {
             options.UseSqlServer(database.ConnectionString);
             if (liveQueries)
@@ -103,12 +104,12 @@ public sealed class ScryTestServer :
                 options.AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>());
             }
         });
-        builder.Services.AddSingleton<RegionGrants>();
-        builder.Services.AddSingleton<RegionAccessPolicy>();
+        services.AddSingleton<RegionGrants>();
+        services.AddSingleton<RegionAccessPolicy>();
         if (commands)
         {
-            builder.Services.AddSampleCommandHandlers();
-            builder.Services.Configure<SampleCommandOptions>(
+            services.AddSampleCommandHandlers();
+            services.Configure<SampleCommandOptions>(
                 _ =>
                 {
                     _.SlowDelay = slowDelay ?? _.SlowDelay;
@@ -116,7 +117,7 @@ public sealed class ScryTestServer :
                 });
         }
 
-        builder.Services.AddScry<SampleContext>(options =>
+        services.AddScry<SampleContext>(options =>
         {
             options.AddPocoSource(_ => Holiday.Seed());
             options.AddAttachmentPolicy<Department, HandbookPolicy>();
@@ -150,7 +151,7 @@ public sealed class ScryTestServer :
 
         if (liveQueries)
         {
-            builder.Services.AddSignalR();
+            services.AddSignalR();
         }
 
         var app = builder.Build();

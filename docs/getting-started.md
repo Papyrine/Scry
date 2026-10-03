@@ -105,7 +105,7 @@ Register the `DbContext` as usual, then register Scry against it:
 <!-- snippet: serverRegistration -->
 <a id='snippet-serverRegistration'></a>
 ```cs
-builder.Services
+services
     .AddScry<SampleContext>(_ =>
     {
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
@@ -159,7 +159,7 @@ builder.Services
         _.Mcp = ScryMcpAccess.ReadWrite;
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L56-L114' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L57-L115' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddScry<TContext>` scans `typeof(TContext).Assembly` once at startup, builds the allow-list schema, and registers it as a singleton along with the `ScryProcessor`.
@@ -173,7 +173,7 @@ Then map the endpoint:
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L135-L137' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L136-L138' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 That is a single HTTP endpoint which accepts a serialized query and returns the projected rows. It answers `POST`, where the query is the body, and `GET`, where the query [rides in the URL](wire-format.md#the-url-form) so the response can be cached and revalidated. See [Server](server.md) for all options, and [Row policies](policies.md) for row-level filtering.
@@ -209,15 +209,16 @@ Register the client and the generated entry point:
 <!-- snippet: clientRegistration -->
 <a id='snippet-clientRegistration'></a>
 ```cs
-builder.Services.AddHttpClient(
+var services = builder.Services;
+services.AddHttpClient(
     "scry",
     _ => _.BaseAddress = new(builder.HostEnvironment.BaseAddress));
-builder.Services.AddScryClient(
+services.AddScryClient(
     "/api/query",
     _ => _.GetRequiredService<IHttpClientFactory>().CreateClient("scry"));
-builder.Services.AddScoped<ScryQuery>();
+services.AddScoped<ScryQuery>();
 ```
-<sup><a href='/samples/Sample.WebClient/Program.cs#L14-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Program.cs#L14-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddScryClient` registers a `ScryClient` that sends to the given endpoint using the `HttpClient` the delegate resolves — here a **named** one, so Scry's base address, and any handler pipeline it grows, stay separate from every other call the app makes. `ScryQuery` is generated into the `Scry.Generated` namespace.

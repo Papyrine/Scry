@@ -78,7 +78,7 @@ Two settings, and nothing else:
 <!-- snippet: serverRegistration -->
 <a id='snippet-serverRegistration'></a>
 ```cs
-builder.Services
+services
     .AddScry<SampleContext>(_ =>
     {
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
@@ -132,7 +132,7 @@ builder.Services
         _.Mcp = ScryMcpAccess.ReadWrite;
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L56-L114' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L57-L115' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `QueryFreshness` is what the rows are current as of. Null — the default — writes no `ETag` and answers nothing conditionally, so a server that never sets it behaves exactly as it did before any of this existed. Returning null from it skips one request rather than turning the feature off, so a source that cannot answer right now degrades to a full response.
@@ -268,13 +268,13 @@ Registered into the named client's pipeline, with the store held apart from it �
 <!-- snippet: clientCacheRegistration -->
 <a id='snippet-clientCacheRegistration'></a>
 ```cs
-builder.Services.AddSingleton<QueryCache>();
-builder.Services.AddTransient<QueryCacheHandler>();
-builder.Services
+services.AddSingleton<QueryCache>();
+services.AddTransient<QueryCacheHandler>();
+services
     .AddHttpClient("scry")
     .AddHttpMessageHandler<QueryCacheHandler>();
 ```
-<sup><a href='/samples/Sample.WebClient/Program.cs#L35-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCacheRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Program.cs#L36-L42' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientCacheRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Above the handler nothing changes: the same `ScryClient`, the same generated models, the same rows.

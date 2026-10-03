@@ -4,7 +4,12 @@
 /// globally. Null in scope means never divert: the non-HTTP surface and every path that predates
 /// binary transfer stay bit-identical by construction.
 /// </summary>
-sealed class BinaryPartCollector
+/// <param name="budget">
+/// What the response may still carry. A part is spent from it as it is collected, which is the point
+/// at which it is committed to being sent — so a result that would cross the limit stops reading rows
+/// rather than collecting the rest first.
+/// </param>
+sealed class BinaryPartCollector(ResponseBudget? budget = null)
 {
     List<byte[]> parts = [];
 
@@ -15,6 +20,7 @@ sealed class BinaryPartCollector
     /// <summary>Adds a diverted value, returning the index its placeholder references it by.</summary>
     public int Add(byte[] bytes)
     {
+        budget?.Spend(bytes.Length);
         parts.Add(bytes);
         return parts.Count - 1;
     }

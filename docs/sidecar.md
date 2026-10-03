@@ -16,12 +16,12 @@ Register the sidecar's services and attach its capture handler to the named clie
 <!-- snippet: sidecarRegistration -->
 <a id='snippet-sidecarRegistration'></a>
 ```cs
-builder.Services.AddScrySidecar();
-builder.Services
+services.AddScrySidecar();
+services
     .AddHttpClient("scry")
     .AddHttpMessageHandler<ScrySidecarHandler>();
 ```
-<sup><a href='/samples/Sample.WebClient/Program.cs#L46-L51' title='Snippet source file'>snippet source</a> | <a href='#snippet-sidecarRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Program.cs#L47-L52' title='Snippet source file'>snippet source</a> | <a href='#snippet-sidecarRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Then render the panel once, above the router:

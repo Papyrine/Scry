@@ -88,9 +88,13 @@ public class StartupRefusalTests
         "'C' carries [QueryableComplex] but is generic",
         DisplayName = "a generic complex type")]
     [Arguments(
-        "public abstract class E<T> { public T Day { get; set; } = default!; } [Queryable] public class A : E<System.DayOfWeek> { public int Id { get; set; } }",
-        "'DayOfWeek', an enum declared in assembly",
+        "public abstract class E<T> { public T Day { get; set; } = default!; } [Queryable] public class A : E<System.StringComparison> { public int Id { get; set; } }",
+        "'A.Day' is a 'StringComparison', an enum declared in assembly 'System.Private.CoreLib'. A client re-emits an enum from the model assembly's metadata alone, so it could never see this one, and every client would report itself stale. Declare the enum in the model assembly, or exclude the member with [QueryIgnore].",
         DisplayName = "a generic base filled in with a foreign enum")]
+    [Arguments(
+        "[Queryable] public class A { public int Id { get; set; } [QueryableCollection] public List<System.StringComparison> Comparisons { get; set; } = []; }",
+        "'A.Comparisons' is a 'StringComparison', an enum declared in assembly 'System.Private.CoreLib'. A client re-emits an enum from the model assembly's metadata alone, so it could never see this one, and every client would report itself stale. Declare the enum in the model assembly, or exclude the member with [QueryIgnore].",
+        DisplayName = "a collection of a foreign enum")]
     [Arguments(
         "[Queryable] public class A : ForeignIgnoredBase { public int Id { get; set; } public override string Secret { get; set; } = \"\"; }",
         "Repeat [QueryIgnore] on the override",

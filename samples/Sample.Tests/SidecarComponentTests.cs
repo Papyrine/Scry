@@ -50,7 +50,8 @@ public class SidecarComponentTests
             }
         };
         await using var context = Context(options);
-        context.Services.AddSingleton(new FakeCurrentUser(IsDeveloper: true));
+        var services = context.Services;
+        services.AddSingleton(new FakeCurrentUser(IsDeveloper: true));
 
         var component = context.Render<ScrySidecar>();
         await component.WaitForStateAsync(
@@ -297,8 +298,9 @@ public class SidecarComponentTests
         ScrySidecarStore store)
     {
         context.JSInterop.Mode = JSRuntimeMode.Loose;
-        context.Services.AddSingleton(options);
-        context.Services.AddSingleton(store);
+        var services = context.Services;
+        services.AddSingleton(options);
+        services.AddSingleton(store);
         var component = context.Render<ScrySidecar>();
         await component.WaitForStateAsync(
             () => component.FindAll("[data-testid=sidecar-toggle]").Count == 1,

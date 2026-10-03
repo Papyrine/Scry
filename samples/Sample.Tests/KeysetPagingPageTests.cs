@@ -12,8 +12,9 @@ public class KeysetPagingPageTests
         var server = await SharedScryServer.InstanceAsync();
 
         await using var context = new BunitContext();
-        context.Services.AddSingleton(server.CreateScryClient());
-        context.Services.AddSingleton<ScryQuery>();
+        var services = context.Services;
+        services.AddSingleton(server.CreateScryClient());
+        services.AddSingleton<ScryQuery>();
 
         var page = context.Render<KeysetPage>();
         await page.WaitForStateAsync(

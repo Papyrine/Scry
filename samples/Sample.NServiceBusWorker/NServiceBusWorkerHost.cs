@@ -8,14 +8,15 @@ public static class NServiceBusWorkerHost
     {
         var builder = Host.CreateApplicationBuilder(args);
         var database = Database(args);
+        var services = builder.Services;
 
         // begin-snippet: sampleNServiceBusWorker
         // Change reporting on its own, and NServiceBus as what carries it to the servers.
-        builder.Services.AddScryNServiceBusBackplane();
+        services.AddScryNServiceBusBackplane();
 
         // The interceptor is what knows which entities a save touched. It reports to the registration
         // above, which is why it is resolved rather than constructed.
-        builder.Services.AddDbContext<SampleContext>(
+        services.AddDbContext<SampleContext>(
             (services, options) => options
                 .UseSqlServer(database)
                 .AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>()));
@@ -26,7 +27,7 @@ public static class NServiceBusWorkerHost
         var endpoint = NServiceBusEndpoint.Create("Sample.Worker", args);
         endpoint.UseScryChanges();
         endpoint.UseScryCommands();
-        builder.Services.AddNServiceBusEndpoint(endpoint);
+        services.AddNServiceBusEndpoint(endpoint);
         // end-snippet
 
         return builder.Build();

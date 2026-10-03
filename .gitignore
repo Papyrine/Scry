@@ -14,3 +14,4 @@ samples/Sample.ModelPackageClient/feed/
 BenchmarkDotNet.Artifacts/
 *.lnk
 TestResults/
+/.claude

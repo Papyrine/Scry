@@ -12,8 +12,9 @@ public class IndexPageTests
         var server = await SharedScryServer.InstanceAsync();
 
         await using var context = new BunitContext();
-        context.Services.AddSingleton(server.CreateScryClient());
-        context.Services.AddSingleton<ScryQuery>();
+        var services = context.Services;
+        services.AddSingleton(server.CreateScryClient());
+        services.AddSingleton<ScryQuery>();
 
         var page = context.Render<IndexPage>();
 
@@ -43,14 +44,15 @@ public class IndexPageTests
     public async Task RendersStalePromptWhenQueryFailsStale()
     {
         await using var context = new BunitContext();
-        context.Services.AddSingleton(
+        var services = context.Services;
+        services.AddSingleton(
             new ScryClient((_, _) =>
             Task.FromException<QueryResponse>(
                 new ScryStaleClientException(
                     "Property 'Renamed' is not allow-listed on 'Employee'. The request's schema stamp does " +
                     "not match this server's model, so the client was generated against a different model " +
                     "surface — regenerate the client."))));
-        context.Services.AddSingleton<ScryQuery>();
+        services.AddSingleton<ScryQuery>();
 
         var page = context.Render<IndexPage>();
         await page.WaitForStateAsync(
@@ -78,8 +80,9 @@ public class IndexPageTests
         // TestServer client — no socket or handler resources — and the server owns its own lifetime,
         // so it is intentionally left undisposed here (ScryClient does not own it, and the container
         // won't dispose an AddSingleton instance either).
-        context.Services.AddSingleton(ScryClient.ForHttp(server.CreateClient(), "/api/missing"));
-        context.Services.AddSingleton<ScryQuery>();
+        var services = context.Services;
+        services.AddSingleton(ScryClient.ForHttp(server.CreateClient(), "/api/missing"));
+        services.AddSingleton<ScryQuery>();
 
         var page = context.Render<IndexPage>();
         await page.WaitForStateAsync(

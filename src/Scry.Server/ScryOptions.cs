@@ -391,6 +391,34 @@ public sealed class ScryOptions(Type contextType)
     public int ResponseSpillThreshold { get; set; } = 64 * 1024;
 
     /// <summary>
+    /// The most a query's response may carry, in bytes — its JSON and its raw
+    /// <c>[BinaryTransfer]</c> parts together — or null, the default, for no limit.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="MaxPageSize"/> and <see cref="MaxProjectionMembers"/> bound how many rows and members
+    /// a query asks for, never how large each value is, so a thousand rows of <c>varbinary(max)</c>
+    /// pass both. This bounds what they add up to.
+    /// </para>
+    /// <para>
+    /// How a response that reaches it ends depends on what has already gone out. One still held whole
+    /// — which every result carrying binary parts is — is refused as a <c>400</c> saying so. One already
+    /// past <see cref="ResponseSpillThreshold"/> has committed its status, so it is truncated, exactly
+    /// as any failure part-way through it is. A stream ends with an error marker, as one reaching
+    /// <see cref="MaxStreamRows"/> does. A batch counts what its entries carry, not the envelope around
+    /// them, and refuses the entry that would cross it as its own result, answering the rest.
+    /// </para>
+    /// <para>
+    /// It bounds what accumulates, not the size of one value: the database hands a column over whole,
+    /// so a single value is in memory before it can be measured. It applies to the HTTP endpoints, the
+    /// SignalR hub and MCP. A live query's answer is bounded by <see cref="MaxSubscriptionBytes"/>
+    /// instead, and the overloads of <see cref="ScryProcessor"/> that return a result as objects leave
+    /// serializing it to their caller.
+    /// </para>
+    /// </remarks>
+    public int? MaxResponseBytes { get; set; }
+
+    /// <summary>
     /// The collation applied when a client asks for a case-sensitive string comparison. Null — the
     /// default — rejects such a request instead, so the feature is opt-in per deployment.
     /// </summary>

@@ -172,7 +172,7 @@ Register and map on the server:
 <!-- snippet: serverRegistration -->
 <a id='snippet-serverRegistration'></a>
 ```cs
-builder.Services
+services
     .AddScry<SampleContext>(_ =>
     {
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
@@ -226,7 +226,7 @@ builder.Services
         _.Mcp = ScryMcpAccess.ReadWrite;
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L56-L114' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L57-L115' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddPocoSource` supplies the rows for a `[QueryablePoco]` type — see [POCO sources](docs/server.md#poco-sources).
@@ -236,7 +236,7 @@ builder.Services
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L135-L137' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L136-L138' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Point the client at the model by path — no reference:
@@ -407,7 +407,7 @@ public class EmployeeCreated
     public int Id { get; set; }
 }
 ```
-<sup><a href='/samples/Sample.Model/Commands/EmployeeCommands.cs#L5-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-commandMessages' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Model/Commands/EmployeeCommands.cs#L3-L44' title='Snippet source file'>snippet source</a> | <a href='#snippet-commandMessages' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 A targeted command adds a `Can{Command}` member to its target's query model, computed from the command's policy in the database, so a screen enables a row's button from the row itself — and inside a live query that is decided again on every answer. A command that takes longer than the server's sync window is answered `Pending`, followed to its end on the same response, and listed in a pending-work panel. What it wrote reaches the screen through the live queries that read it. Commands are off until a server sets `MaxPendingCommands`, and can be carried to a worker over NServiceBus, MassTransit, Rebus or Wolverine. See [Commands](docs/commands.md).

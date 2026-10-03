@@ -641,6 +641,14 @@ public sealed partial class ScryProcessor
     /// <remarks>
     /// Only an envelope failure throws; a rejected or failed entry is written as its own result exactly
     /// as <c>ExecuteBatch</c> reports one.
+    /// <para>
+    /// <paramref name="budget"/> counts what the entries carry — each one's result and parts — and not
+    /// the envelope around them. An entry is checked against it as it is written into its own buffer
+    /// and charged as it is copied into the envelope, so one that would cross it is refused as its own
+    /// result rather than failing the entries already answered, and, having charged nothing, leaves the
+    /// budget to the entries after it. That refusal is not counted either: an entry the budget turned
+    /// away has to be able to say so.
+    /// </para>
     /// </remarks>
     internal async Task ExecuteBatchBufferedAsync(
         QueryBatchRequest request,
@@ -651,6 +659,7 @@ public sealed partial class ScryProcessor
         IBufferWriter<byte> output,
         BinaryPartCollector? binary,
         ResponseSpill? spill = null,
+        ResponseBudget? budget = null,
         Cancel cancel = default)
     {
         var started = Stopwatch.GetTimestamp();
@@ -670,7 +679,7 @@ public sealed partial class ScryProcessor
         ResponseWriter.BeginBatch(json);
         foreach (var query in request.Queries)
         {
-            await WriteEntryAsync(json, entry, query, data, services, requestHeaders, responseHeaders, binary, cancel);
+            await WriteEntryAsync(json, entry, query, data, services, requestHeaders, responseHeaders, binary, budget, cancel);
 
             // Between entries, never inside one: an entry is written to a buffer of its own and inserted
             // whole precisely so a failure part-way through its rows is still reported as that entry's
@@ -731,25 +740,36 @@ public sealed partial class ScryProcessor
         IHeaderDictionary requestHeaders,
         IHeaderDictionary responseHeaders,
         BinaryPartCollector? binary,
+        ResponseBudget? budget,
         Cancel cancel)
     {
         entry.Reset();
 
-        QueryResponse? fallback;
         try
         {
             // No spill: an entry is inserted into the envelope only once it is whole, which is the
             // whole reason it is written into a buffer of its own.
-            fallback = await TryExecuteBufferedAsync(
+            var output = budget?.Checking(entry) ?? entry;
+            var fallback = await TryExecuteBufferedAsync(
                 query,
                 data,
                 services,
                 requestHeaders,
                 responseHeaders,
-                entry,
+                output,
                 spill: null,
                 binary,
                 cancel);
+
+            // The writer declined this one, so the buffer is untouched and the envelope is serialized
+            // into it — which makes it an entry like any other: checked as it is written, charged once
+            // it is whole, and inserted the one way.
+            if (fallback is not null)
+            {
+                ResponseWriter.Write(output, fallback);
+            }
+
+            budget?.Spend(entry.WrittenCount);
         }
         catch (ScryValidationException exception)
         {
@@ -782,13 +802,7 @@ public sealed partial class ScryProcessor
             return;
         }
 
-        if (fallback is null)
-        {
-            ResponseWriter.WriteEntry(json, entry.WrittenMemory.Span);
-            return;
-        }
-
-        ResponseWriter.WriteEntry(json, fallback);
+        ResponseWriter.WriteEntry(json, entry.WrittenMemory.Span);
     }
 
     // One entry, reported rather than thrown. The catches mirror the HTTP endpoint's: a validation
@@ -889,13 +903,14 @@ public sealed partial class ScryProcessor
         IHeaderDictionary requestHeaders,
         IHeaderDictionary responseHeaders,
         Cancel cancel = default,
-        BinaryPartCollector? binary = null)
+        BinaryPartCollector? binary = null,
+        ResponseBudget? budget = null)
     {
         var (begin, rows, recorder) = StreamCore(request, data, services, requestHeaders, responseHeaders, binary);
         // Whether any row can divert — known from the plan before the first byte, which is what lets
         // the transport commit to a multipart content type up front, data-independently.
         var diverting = binary is not null && rows.Plan.BinarySlots is not null;
-        return (begin, diverting, Lines(rows, options.MaxStreamRows, recorder, cancel));
+        return (begin, diverting, Lines(rows, options.MaxStreamRows, budget, recorder, cancel));
     }
 
     /// <summary>
@@ -909,7 +924,8 @@ public sealed partial class ScryProcessor
         IHeaderDictionary requestHeaders,
         IHeaderDictionary responseHeaders,
         Cancel cancel = default,
-        BinaryPartCollector? binary = null)
+        BinaryPartCollector? binary = null,
+        ResponseBudget? budget = null)
     {
         var drifted = request.Stamp is { } requestStamp && requestStamp != schema.Stamp;
         var recorder = QueryRecorder.Start(schema, options, request, services, streamed: true);
@@ -952,7 +968,7 @@ public sealed partial class ScryProcessor
         }
 
         var diverting = binary is not null && rows.Plan.BinarySlots is not null;
-        return (Begin(drifted), diverting, Lines(rows, options.MaxStreamRows, recorder, cancel));
+        return (Begin(drifted), diverting, Lines(rows, options.MaxStreamRows, budget, recorder, cancel));
     }
 
     (ScryStreamMarker Begin, QueryExecutor.RowSet Rows, QueryRecorder Recorder) StreamCore(
@@ -1034,6 +1050,7 @@ public sealed partial class ScryProcessor
     static async IAsyncEnumerable<ReadOnlyMemory<byte>> Lines(
         QueryExecutor.RowSet rows,
         int? maxRows,
+        ResponseBudget? budget,
         QueryRecorder recorder,
         [EnumeratorCancellation] Cancel cancel)
     {
@@ -1054,8 +1071,7 @@ public sealed partial class ScryProcessor
                     json.Reset(buffer);
                 }
 
-                writer.WriteRow(json, ResponseWriter.Row(row, rows), rows.Binary);
-                await json.FlushAsync(cancel);
+                WriteLine(writer, json, buffer, ResponseWriter.Row(row, rows), rows.Binary, budget, recorder);
                 yield return buffer.WrittenMemory;
             }
         }
@@ -1067,6 +1083,33 @@ public sealed partial class ScryProcessor
             }
 
             buffer.Dispose();
+        }
+    }
+
+    // Apart from Lines because a catch cannot hold a yield. The line is spent with its newline, which
+    // is part of what the transport sends for it; a row's binary parts were spent as it collected them.
+    // Recorded here because Raw cannot see the refusal: it happens after Raw has handed the row over.
+    static void WriteLine(
+        PlanShapeWriter writer,
+        Utf8JsonWriter json,
+        PooledBufferWriter buffer,
+        object[] row,
+        BinaryPartCollector? binary,
+        ResponseBudget? budget,
+        QueryRecorder recorder)
+    {
+        try
+        {
+            writer.WriteRow(json, row, binary);
+            json.Flush();
+            budget?.Spend(buffer.WrittenCount + 1);
+        }
+        catch (ScryValidationException exception)
+        {
+            // Thrown rather than returned, as MaxStreamRows is: the transport turns it into the stream's
+            // error marker, so the client sees a truncated result as a failure.
+            recorder.Rejected(exception);
+            throw;
         }
     }
 

@@ -196,7 +196,7 @@ app.MapScryExplorer(_ =>
     _.EnableGuard = _ => true;
 });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L210-L218' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L211-L219' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 | Option | Default | Meaning |
@@ -265,7 +265,7 @@ way back from.
 
 The column appears only where a row is identifiable: the source has to declare an attachment, and the result has to carry the key it is fetched by. A query that projected the key away, or one that went through `Distinct`, `GroupBy`, `SelectMany`, a join, or a set operator — all of which rewrite what a row *is* — gets no column, matching what a generated client refuses to bind. The fetch is authorized on its own terms whatever the query did, by the member's [`IAttachmentPolicy`](attachments.md#security) and the source's [row policies](policies.md), so the offer widens nothing: it saves writing the request, not the permission to make it.
 
-**Read a binary member.** A [`[BinaryTransfer]`](annotations.md) `byte[]` does not travel inside the JSON payload — the server sends it as a raw multipart part and leaves a `{"$bin":n}` placeholder where the value was ([Binary transfer](wire-format.md#binary-transfer)). The explorer reassembles that response and folds the parts back in as base64, so a diverted member tables, exports, and copies exactly as the same `byte[]` would without the attribute — which is the whole of what the attribute claims. The *Response* pane shows the reassembled envelope rather than the multipart body it arrived as.
+**Read a binary member.** A [`[BinaryTransfer]`](annotations.md) `byte[]` does not travel inside the JSON payload — the server sends it as a raw multipart part and leaves a `{"$bin":n}` placeholder where the value was ([Binary transfer](wire-format.md#binary-transfer)). The explorer reassembles that response and folds the parts back in as base64, so a diverted member tables, exports, and copies exactly as the same `byte[]` would without the attribute — which is the whole of what the attribute claims. A part over 64 KiB is the exception: it shows as `[binary: n bytes]` rather than its base64, which the browser would otherwise hold several copies of to render text nobody can read. The *Response* pane shows the reassembled envelope rather than the multipart body it arrived as.
 
 **Format it.** *Format* rewrites the query in the style above: the chain down the page, and a
 projection down the page after it. A line is broken only where breaking it says something — the chain
@@ -369,6 +369,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Model: BuildingQueryModel
     },
     {
+      Name: Callback,
+      Kind: Entity,
+      Model: CallbackQueryModel
+    },
+    {
       Name: Contract,
       Kind: Entity,
       Model: ContractQueryModel
@@ -458,6 +463,11 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       Name: SignedContract,
       Kind: Entity,
       Model: SignedContractQueryModel
+    },
+    {
+      Name: Sitting,
+      Kind: Entity,
+      Model: SittingQueryModel
     },
     {
       Name: Ticket,
@@ -560,6 +570,52 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
         }
       ],
       Base: AssetQueryModel,
+      IsSensitive: false
+    },
+    {
+      Model: CallbackQueryModel,
+      Members: [
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Retry,
+          TypeDisplay: global::System.Net.HttpStatusCode?,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Status,
+          TypeDisplay: global::System.Net.HttpStatusCode,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Url,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        }
+      ],
       IsSensitive: false
     },
     {
@@ -1446,6 +1502,72 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
       IsSensitive: false
     },
     {
+      Model: SittingQueryModel,
+      Members: [
+        {
+          Name: Alternates,
+          TypeDisplay: global::System.Collections.Generic.IReadOnlyList<global::System.DayOfWeek>,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: true,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Clock,
+          TypeDisplay: global::System.DateTimeKind,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: DayOfWeek,
+          TypeDisplay: global::System.DayOfWeek,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Recess,
+          TypeDisplay: global::System.DayOfWeek?,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        }
+      ],
+      IsSensitive: false
+    },
+    {
       Model: TicketQueryModel,
       Members: [
         {
@@ -1703,10 +1825,10 @@ The UI reads the schema from `{Route}/introspect` on load. The same guard applie
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: _iDxyfe9QHEMpW7p
+  SchemaStamp: BSxNRf9Zn544Liux
 }
 ```
-<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L1356' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Tests/IntrospectionTests.Describe.verified.txt#L1-L1478' title='Snippet source file'>snippet source</a> | <a href='#snippet-IntrospectionTests.Describe.verified.txt' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The contract carries only what tooling needs: source names and kinds, the generated model names, member names with the exact C# type spelling the source generator would emit, and the re-emitted enums. It carries **no** policies, resolvers, connection details, or CLR internals.

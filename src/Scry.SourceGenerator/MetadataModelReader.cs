@@ -1036,6 +1036,14 @@ static class MetadataModelReader
                 var enumName = CollectEnum(reader, (TypeDefinitionHandle) definition.Handle, enums);
                 return new("", nullable ? $"{enumName}?" : enumName, NeedsNullDefault: false);
 
+            // An enum of the base class library, which every client already has: spelled as the BCL
+            // type and never collected, so ScryEnums.g.cs does not declare it again. Only a reference
+            // qualifies — a model declaring its own type of the same name is a definition, and is the
+            // model's enum above. Mirrors Schema.BclEnumDisplay.
+            case NamedDecoded {IsDefinition: false} reference
+                when BclEnums.Display(reference.FullName) is { } bclEnum:
+                return new("", nullable ? $"{bclEnum}?" : bclEnum, NeedsNullDefault: false);
+
             case NamedDecoded navigation
                 when modelByFullName.TryGetValue(navigation.FullName, out var modelName):
                 // Reference navigation to another queryable type: nullable, no initializer.

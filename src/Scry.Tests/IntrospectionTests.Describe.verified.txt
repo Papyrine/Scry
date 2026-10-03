@@ -18,6 +18,11 @@
       Model: BuildingQueryModel
     },
     {
+      Name: Callback,
+      Kind: Entity,
+      Model: CallbackQueryModel
+    },
+    {
       Name: Contract,
       Kind: Entity,
       Model: ContractQueryModel
@@ -107,6 +112,11 @@
       Name: SignedContract,
       Kind: Entity,
       Model: SignedContractQueryModel
+    },
+    {
+      Name: Sitting,
+      Kind: Entity,
+      Model: SittingQueryModel
     },
     {
       Name: Ticket,
@@ -209,6 +219,52 @@
         }
       ],
       Base: AssetQueryModel,
+      IsSensitive: false
+    },
+    {
+      Model: CallbackQueryModel,
+      Members: [
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Retry,
+          TypeDisplay: global::System.Net.HttpStatusCode?,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Status,
+          TypeDisplay: global::System.Net.HttpStatusCode,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Url,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        }
+      ],
       IsSensitive: false
     },
     {
@@ -1095,6 +1151,72 @@
       IsSensitive: false
     },
     {
+      Model: SittingQueryModel,
+      Members: [
+        {
+          Name: Alternates,
+          TypeDisplay: global::System.Collections.Generic.IReadOnlyList<global::System.DayOfWeek>,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: true,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Clock,
+          TypeDisplay: global::System.DateTimeKind,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: DayOfWeek,
+          TypeDisplay: global::System.DayOfWeek,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Id,
+          TypeDisplay: int,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Name,
+          TypeDisplay: string,
+          NeedsNullDefault: true,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        },
+        {
+          Name: Recess,
+          TypeDisplay: global::System.DayOfWeek?,
+          NeedsNullDefault: false,
+          IsNavigation: false,
+          IsCollection: false,
+          IsAttachment: false,
+          IsSensitive: false,
+          IsCapability: false
+        }
+      ],
+      IsSensitive: false
+    },
+    {
       Model: TicketQueryModel,
       Members: [
         {
@@ -1352,5 +1474,5 @@
   QueryEndpoint: /api/query,
   QueryUrlLimit: 4096,
   SqlPreview: false,
-  SchemaStamp: _iDxyfe9QHEMpW7p
+  SchemaStamp: BSxNRf9Zn544Liux
 }

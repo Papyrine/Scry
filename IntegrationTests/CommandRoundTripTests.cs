@@ -1,7 +1,10 @@
 using Sample.CommandHandlers;
+using Sample.Model;
 // UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
 // Core's own IQueryable extensions and collide with the Scry client terminals.
 using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
+using Status = Scry.Generated.Status;
+
 // These drive a live query's enumerator by hand and end it by disposing it.
 // ReSharper disable MethodSupportsCancellation
 
@@ -15,16 +18,16 @@ using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 [DependsOn<HttpRoundTripTests.StaleClient>(nameof(HttpRoundTripTests.StaleClient.AClientThatDoesNotKnowRetriesInABody), ProceedOnFailure = true)]
 public class CommandRoundTripTests
 {
-    static SqlInstance<Sample.Model.SampleContext> sqlInstance = new(
+    static SqlInstance<SampleContext> sqlInstance = new(
         constructInstance: _ => new(_.Options),
         buildTemplate: _ =>
         {
-            Sample.Model.SampleContext.Initialize(_);
+            SampleContext.Initialize(_);
             return Task.CompletedTask;
         });
 
     static WebApplication app = null!;
-    static SqlDatabase<Sample.Model.SampleContext> database = null!;
+    static SqlDatabase<SampleContext> database = null!;
     static ScryClient client = null!;
     static ScryQuery query = null!;
 
@@ -35,17 +38,18 @@ public class CommandRoundTripTests
 
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
-        builder.Services.AddDbContext<Sample.Model.SampleContext>(
+        var services = builder.Services;
+        services.AddDbContext<SampleContext>(
             (services, options) => options
                 .UseSqlServer(database.ConnectionString)
                 .AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>()));
-        builder.Services.AddSampleCommandHandlers();
-        builder.Services.Configure<SampleCommandOptions>(_ => _.SlowDelay = TimeSpan.FromMilliseconds(1500));
-        builder.Services.AddScry<Sample.Model.SampleContext>(options =>
+        services.AddSampleCommandHandlers();
+        services.Configure<SampleCommandOptions>(_ => _.SlowDelay = TimeSpan.FromMilliseconds(1500));
+        services.AddScry<SampleContext>(options =>
         {
-            options.AddPocoSource(_ => Sample.Model.Holiday.Seed());
-            options.AddAttachmentPolicy<Sample.Model.Department, AllowAttachmentPolicy>();
-            options.AddAttachmentPolicy<Sample.Model.Employee, AllowPhotoAttachmentPolicy>();
+            options.AddPocoSource(_ => Holiday.Seed());
+            options.AddAttachmentPolicy<Department, AllowAttachmentPolicy>();
+            options.AddAttachmentPolicy<Employee, AllowPhotoAttachmentPolicy>();
             options.MaxSubscriptions = 10;
             options.SubscriptionThrottle = TimeSpan.Zero;
             options.SubscriptionPollInterval = null;

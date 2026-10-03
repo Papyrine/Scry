@@ -12,19 +12,20 @@ class Program
         // the plain AddScryClient(endpoint) overload is equally correct: the browser backs HttpClient
         // there, so there is no socket pool or DNS lifetime for the factory to manage.
         // begin-snippet: clientRegistration
-        builder.Services.AddHttpClient(
+        var services = builder.Services;
+        services.AddHttpClient(
             "scry",
             _ => _.BaseAddress = new(builder.HostEnvironment.BaseAddress));
-        builder.Services.AddScryClient(
+        services.AddScryClient(
             "/api/query",
             _ => _.GetRequiredService<IHttpClientFactory>().CreateClient("scry"));
-        builder.Services.AddScoped<ScryQuery>();
+        services.AddScoped<ScryQuery>();
         // end-snippet
 
         // The sample's own endpoints — the grant state behind the cached row policy — are not Scry's,
         // so they get a client of their own rather than the one below, whose whole job is to answer
         // repeats without asking. This page asks on purpose.
-        builder.Services.AddHttpClient(
+        services.AddHttpClient(
             "api",
             _ => _.BaseAddress = new(builder.HostEnvironment.BaseAddress));
 
@@ -33,9 +34,9 @@ class Program
         // The store is the singleton because the handler is not: the factory rotates handlers, and a
         // cache that rotated with them would forget everything every couple of minutes.
         // begin-snippet: clientCacheRegistration
-        builder.Services.AddSingleton<QueryCache>();
-        builder.Services.AddTransient<QueryCacheHandler>();
-        builder.Services
+        services.AddSingleton<QueryCache>();
+        services.AddTransient<QueryCacheHandler>();
+        services
             .AddHttpClient("scry")
             .AddHttpMessageHandler<QueryCacheHandler>();
         // end-snippet
@@ -44,8 +45,8 @@ class Program
         // panel toggled by Alt+Q. Registered after the cache handler so what it sees is the real
         // wire exchange — the If-None-Match request and the raw 304 — rather than the replay.
         // begin-snippet: sidecarRegistration
-        builder.Services.AddScrySidecar();
-        builder.Services
+        services.AddScrySidecar();
+        services
             .AddHttpClient("scry")
             .AddHttpMessageHandler<ScrySidecarHandler>();
         // end-snippet
@@ -54,11 +55,11 @@ class Program
         // publishes a live query's answers into. Told not to scan, which is slow in a browser and
         // finds nothing here — the page subscribes with a delegate rather than a handler class.
         // begin-snippet: messagePipeRegistration
-        builder.Services.AddMessagePipe(_ => _.EnableAutoRegistration = false);
+        services.AddMessagePipe(_ => _.EnableAutoRegistration = false);
         // end-snippet
 
         // Which transport the /live pages ask over, for the switch they share.
-        builder.Services.AddScoped<Sample.WebClient.Pages.Live.LiveTransport>();
+        services.AddScoped<Sample.WebClient.Pages.Live.LiveTransport>();
 
         return builder.Build().RunAsync();
     }

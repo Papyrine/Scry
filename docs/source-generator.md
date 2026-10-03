@@ -179,7 +179,7 @@ Properties are `init`-only. A reference navigation is emitted as a nullable refe
 
 ### Re-emitted enums
 
-`ScryEnums.g.cs` contains every enum reachable from an exposed member, with its members in declaration order:
+`ScryEnums.g.cs` contains every enum of the model reachable from an exposed member, with its members in declaration order (a [BCL enum](annotations.md#scalars) a member is typed as is left out, since every client already has it):
 
 <!-- snippet: GeneratorTests.EntitiesViewPocoAndEnum#ScryEnums.g.verified.cs -->
 <a id='snippet-GeneratorTests.EntitiesViewPocoAndEnum#ScryEnums.g.verified.cs'></a>
@@ -253,15 +253,16 @@ Register it alongside the client:
 <!-- snippet: clientRegistration -->
 <a id='snippet-clientRegistration'></a>
 ```cs
-builder.Services.AddHttpClient(
+var services = builder.Services;
+services.AddHttpClient(
     "scry",
     _ => _.BaseAddress = new(builder.HostEnvironment.BaseAddress));
-builder.Services.AddScryClient(
+services.AddScryClient(
     "/api/query",
     _ => _.GetRequiredService<IHttpClientFactory>().CreateClient("scry"));
-builder.Services.AddScoped<ScryQuery>();
+services.AddScoped<ScryQuery>();
 ```
-<sup><a href='/samples/Sample.WebClient/Program.cs#L14-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Program.cs#L14-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -274,7 +275,8 @@ builder.Services.AddScoped<ScryQuery>();
 | `byte[]` | `byte[]` (with ` = null!;`) |
 | `decimal` | `decimal` |
 | `DateTime`, `DateOnly`, `TimeOnly`, `DateTimeOffset`, `TimeSpan`, `Guid` | `global::System.X` |
-| an `enum` | the enum name, its members with their values, its underlying type, and `[Flags]`, re-emitted into `ScryEnums.g.cs` |
+| an `enum` declared in the model | the enum name, its members with their values, its underlying type, and `[Flags]`, re-emitted into `ScryEnums.g.cs` |
+| `DayOfWeek`, `DateTimeKind`, `HttpStatusCode` | `global::System.X` (`global::System.Net.HttpStatusCode`), not re-emitted: every client already has them ([BCL enums](annotations.md#scalars)) |
 | another opted-in type | `{Type}QueryModel?` |
 | a nullable value type | the above with `?` |
 | anything else | omitted |

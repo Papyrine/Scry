@@ -190,9 +190,10 @@ public class PendingWorkComponentTests
         await using var held = new HeldReceipts();
         var stub = new CommandStub(held.Step());
         await using var context = new BunitContext();
-        context.Services.AddScoped(_ => new HttpClient(stub.Handler()) {BaseAddress = new("http://localhost")});
-        context.Services.AddScryClient("/api/query");
-        var client = context.Services.GetRequiredService<ScryClient>();
+        var services = context.Services;
+        services.AddScoped(_ => new HttpClient(stub.Handler()) {BaseAddress = new("http://localhost")});
+        services.AddScryClient("/api/query");
+        var client = services.GetRequiredService<ScryClient>();
         client.CommandWait = TimeSpan.Zero;
 
         var component = context.Render<ScryPendingWork>();

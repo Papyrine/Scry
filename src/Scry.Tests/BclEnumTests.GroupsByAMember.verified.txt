@@ -1,0 +1,13 @@
+﻿[
+  {
+    Count: 1
+  },
+  {
+    Recess: Sunday,
+    Count: 1
+  },
+  {
+    Recess: Friday,
+    Count: 1
+  }
+]

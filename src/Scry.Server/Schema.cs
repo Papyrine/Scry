@@ -411,6 +411,17 @@ sealed partial class Schema
         var nullable = underlying is not null;
         var actual = underlying ?? type;
 
+        // A BCL enum is on every client already, so it is spelled as itself and never described.
+        if (BclEnumDisplay(actual) is { } bclEnum)
+        {
+            if (nullable)
+            {
+                return $"{bclEnum}?";
+            }
+
+            return bclEnum;
+        }
+
         if (actual.IsEnum)
         {
             enums.TryAdd(actual.Name, DescribeEnum(actual));
@@ -527,8 +538,17 @@ sealed partial class Schema
             // byte[] has no ScalarKeyword counterpart; the metadata side reaches it via SignatureDecoder's
             // GetSZArrayType -> BytesDecoded, since arrays are not NamedDecoded.
             "System.Byte[]" => "byte[]",
-            _ => type.Name
+            _ => BclEnumDisplay(type) ?? type.Name
         };
+
+    /// <summary>
+    /// How a BCL enum a member may be typed as is spelled in generated code, or null for any other
+    /// type. Asked of the type itself, not just its name: a model declaring its own <c>System.DayOfWeek</c>
+    /// has an enum of its own to describe, which the generator, reading it as a definition rather than
+    /// a reference, re-emits too. Mirrors MetadataModelReader.Classify.
+    /// </summary>
+    internal static string? BclEnumDisplay(Type type) =>
+        BclEnums.Display(type);
 
     public static Schema Build(ScryOptions options)
     {
@@ -548,6 +568,11 @@ sealed partial class Schema
         if (options.LimitWatchFraction is <= 0 or > 1)
         {
             throw new($"ScryOptions.{nameof(options.LimitWatchFraction)} must be greater than zero and at most one: it is the fraction of a limit a query has to reach to be reported, so 0.8 reports one that used eight tenths of it. Null reports nothing.");
+        }
+
+        if (options.MaxResponseBytes is { } maxResponseBytes)
+        {
+            AtLeast(maxResponseBytes, 1, nameof(options.MaxResponseBytes), "It is the most a response may carry; null sets no limit.");
         }
 
         EnsureSubscriptionOptions(options);
@@ -743,7 +768,8 @@ sealed partial class Schema
                      })
                      .Where(_ => _ is not null)
                      .Select(_ => Nullable.GetUnderlyingType(_!) ?? _!)
-                     .Where(_ => _.IsEnum)
+                     // A BCL enum is not the model's to rename, and its values carry no [PreviousNames].
+                     .Where(_ => _.IsEnum && BclEnumDisplay(_) is null)
                      .Distinct())
         {
             var previous = BuildEnumPreviousNames(enumType);
@@ -1671,13 +1697,15 @@ sealed partial class Schema
 
     /// <summary>
     /// The same refusal for an enum: the generator re-emits one from the model assembly's metadata,
-    /// and cannot read the members of one declared elsewhere.
+    /// and cannot read the members of one declared elsewhere. A BCL enum is exempt — every client has
+    /// it already, so there is nothing to re-emit (<see cref="BclEnums"/>).
     /// </summary>
     static void EnsureEnumInModelAssembly(Type type, PropertyInfo property, Type valueType)
     {
         var underlying = Nullable.GetUnderlyingType(valueType) ?? valueType;
         if (!underlying.IsEnum ||
-            underlying.Assembly == type.Assembly)
+            underlying.Assembly == type.Assembly ||
+            BclEnumDisplay(underlying) is not null)
         {
             return;
         }

@@ -488,6 +488,96 @@ public class BinaryTransferTests
         return app;
     }
 
+    /// <summary>
+    /// A result carrying parts is held whole until its envelope exists, so one past the limit has
+    /// sent nothing and can still be refused as a status — which is what makes the limit worth having
+    /// on exactly the results that cost the server most to hold.
+    /// </summary>
+    [Test]
+    public async Task ABinaryResultPastTheResponseLimitIsRefusedWithAStatus()
+    {
+        await using var bounded = await StartBounded(200);
+        using var boundedHttp = bounded.GetTestClient();
+
+        using var content = new StringContent(listRequest, Encoding.UTF8, "application/json");
+        using var response = await boundedHttp.PostAsync("/api/query", content);
+        var body = await response.Content.ReadAsStringAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+            await Assert.That(body).Contains("larger than this server allows (200 bytes)");
+        }
+    }
+
+    /// <summary>
+    /// The entry that would cross the limit is refused as its own result, and the one before it is
+    /// still answered: a batch does not lose what fitted to what did not.
+    /// </summary>
+    [Test]
+    public async Task ABatchRefusesOnlyTheEntryThatCrossesTheResponseLimit()
+    {
+        var first = $$"""{"version":1,"queries":[{{NamedRequest("alpha")}}]}""";
+        var (_, alone) = await PostRaw("/api/query/batch", first);
+
+        // Room for the first entry with less to spare than the second entry's parts alone come to.
+        await using var bounded = await StartBounded(alone.Length + 100);
+        using var boundedHttp = bounded.GetTestClient();
+
+        var batch = $$"""{"version":1,"queries":[{{NamedRequest("alpha")}},{{listRequest}}]}""";
+        var (contentType, body) = await PostRaw(boundedHttp, "/api/query/batch", batch);
+        var sections = await ParseMultipart(body, await BoundaryOf(contentType));
+        var envelope = Encoding.UTF8.GetString(sections[^1].Content);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(envelope).Contains("""{"name":"alpha","payload":{"$bin":0}}""");
+            await Assert.That(envelope).Contains("larger than this server allows");
+            await Assert.That(envelope).DoesNotContain("\"full\"");
+        }
+    }
+
+    // Past the begin marker the status is sent, so the limit ends the stream the way MaxStreamRows does.
+    [Test]
+    public async Task AStreamPastTheResponseLimitEndsWithAFailure()
+    {
+        await using var bounded = await StartBounded(100);
+        using var boundedHttp = bounded.GetTestClient();
+
+        var (contentType, body) = await PostRaw(boundedHttp, "/api/query/stream", listRequest);
+        var sections = await ParseMultipart(body, await BoundaryOf(contentType));
+        var lines = sections
+            .Where(_ => _.Headers["Content-Type"] == ScryStream.ContentType)
+            .SelectMany(LinesOf)
+            .ToArray();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(lines[1]).Contains("""{"name":"alpha","payload":{"$bin":0}}""");
+            await Assert.That(lines[^1]).Contains($"\"{ScryStream.MarkerProperty}\":\"{ScryStream.Error}\"");
+            await Assert.That(lines[^1]).Contains("larger than this server allows (100 bytes)");
+            await Assert.That(Encoding.UTF8.GetString(body)).DoesNotContain($"\"{ScryStream.MarkerProperty}\":\"{ScryStream.End}\"");
+        }
+    }
+
+    // A second server, because the response limit is fixed at startup and the fixture's own has none.
+    static async Task<WebApplication> StartBounded(int maxResponseBytes)
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddDbContext<BinaryContext>(_ => _.UseSqlServer(database.ConnectionString));
+        builder.Services.AddScry<BinaryContext>(_ =>
+        {
+            _.AllowUnmappedSources = true;
+            _.MaxResponseBytes = maxResponseBytes;
+        });
+
+        var app = builder.Build();
+        app.MapScry("/api/query");
+        await app.StartAsync();
+        return app;
+    }
+
     // A second server, because the row limit is fixed at startup and the fixture's own server has none.
     static async Task<WebApplication> StartLimited(int maxStreamRows)
     {
