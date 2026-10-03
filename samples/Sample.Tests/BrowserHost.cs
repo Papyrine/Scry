@@ -125,20 +125,8 @@ public sealed class BrowserHost :
         var tfm = baseDir.Name;
         var config = baseDir.Parent!.Name;
 
-        var dir = baseDir;
-        while (dir is not null &&
-               !Directory.Exists(Path.Combine(dir.FullName, "Sample.WebServer")))
-        {
-            dir = dir.Parent;
-        }
-
-        if (dir is null)
-        {
-            throw new DirectoryNotFoundException(
-                "Could not locate the Sample.WebServer project from the test output directory.");
-        }
-
-        var dll = Path.Combine(dir.FullName, "Sample.WebServer", "bin", config, tfm, "Sample.WebServer.dll");
+        var dll = Path.GetFullPath(
+            Path.Combine(ProjectFiles.SolutionDirectory, "Sample.WebServer", "bin", config, tfm, "Sample.WebServer.dll"));
         if (File.Exists(dll))
         {
             return dll;
