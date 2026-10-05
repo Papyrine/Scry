@@ -206,7 +206,8 @@ public static partial class ScryServiceExtensions
         ScryStreamMarker begin;
         bool diverting;
         IAsyncEnumerable<ReadOnlyMemory<byte>> rows;
-        var collector = new BinaryPartCollector();
+        var budget = ResponseBudget.For(options);
+        var collector = new BinaryPartCollector(budget);
         try
         {
             var db = (DbContext)services.GetRequiredService(options.ContextType);
@@ -223,7 +224,8 @@ public static partial class ScryServiceExtensions
                 context.Request.Headers,
                 context.Response.Headers,
                 context.RequestAborted,
-                collector);
+                collector,
+                budget);
         }
         catch (ScryValidationException exception)
         {
@@ -345,7 +347,8 @@ public static partial class ScryServiceExtensions
             // every entry to serialize the envelope around them. An entry the writer cannot reproduce
             // is serialized into the same envelope; the bytes are what ExecuteBatch would have produced.
             using var spill = new ResponseSpill(context, options.ResponseSpillThreshold);
-            var collector = new BinaryPartCollector();
+            var budget = ResponseBudget.For(options);
+            var collector = new BinaryPartCollector(budget);
             await processor.ExecuteBatchBufferedAsync(
                 request,
                 db,
@@ -355,6 +358,7 @@ public static partial class ScryServiceExtensions
                 spill.Output,
                 collector,
                 spill,
+                budget,
                 context.RequestAborted);
 
             // Something is already on the wire, which nothing on a model carrying a binary member is
@@ -541,14 +545,19 @@ public static partial class ScryServiceExtensions
             // envelope comes back as a QueryResponse to be serialized the general way; the two
             // produce identical bytes.
             using var spill = new ResponseSpill(context, options.ResponseSpillThreshold);
-            var collector = new BinaryPartCollector();
+
+            // One budget for the JSON and the parts, since the limit is on what the response carries
+            // and either can be most of it.
+            var budget = ResponseBudget.For(options);
+            var output = budget?.Charging(spill.Output) ?? spill.Output;
+            var collector = new BinaryPartCollector(budget);
             var fallback = await processor.TryExecuteBufferedAsync(
                 request,
                 db,
                 services,
                 context.Request.Headers,
                 context.Response.Headers,
-                spill.Output,
+                output,
                 spill,
                 collector,
                 context.RequestAborted,
@@ -559,7 +568,7 @@ public static partial class ScryServiceExtensions
             // dropped. Past here the response is one span whichever produced it.
             if (fallback is not null)
             {
-                ResponseWriter.Write(spill.Output, fallback);
+                ResponseWriter.Write(output, fallback);
             }
 
             // Something is already on the wire, which only a plan carrying no binary slot is ever

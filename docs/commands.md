@@ -57,7 +57,7 @@ public class EmployeeCreated
     public int Id { get; set; }
 }
 ```
-<sup><a href='/samples/Sample.Model/Commands/EmployeeCommands.cs#L5-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-commandMessages' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.Model/Commands/EmployeeCommands.cs#L3-L44' title='Snippet source file'>snippet source</a> | <a href='#snippet-commandMessages' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 - `[Command(typeof(Employee))]` targets a row: the command acts on one `Employee`, whose key it carries as a property named like the key member (`Id`) or `{Target}{Key}` (`EmployeeId`). The target is also what the command's policy decides row by row, and what the server reports changed when the command completes.
@@ -523,7 +523,7 @@ With NServiceBus, the package that carries changes between servers carries comma
 // and the worker's reply to this endpoint is what finishes it.
 _.UseNServiceBusCommands(_ => _.For<RepriceOrder>());
 ```
-<sup><a href='/samples/Sample.NServiceBusServer/NServiceBusServerHost.cs#L25-L30' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleNServiceBusCommands' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.NServiceBusServer/NServiceBusServerHost.cs#L26-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleNServiceBusCommands' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: useNServiceBusCommands -->

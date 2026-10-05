@@ -149,10 +149,10 @@ sealed partial class Schema
 
     IReadOnlyList<EnumAlias> BuildEnumAliases() =>
     [
-        ..enumPreviousNames
+        .. enumPreviousNames
             .SelectMany(entry => entry.Value
                 .GroupBy(_ => _.Value)
-                .Select(group => new EnumAlias(entry.Key.Name, group.Key, [..group.Select(_ => _.Key).Order(StringComparer.Ordinal)])))
+                .Select(group => new EnumAlias(entry.Key.Name, group.Key, [.. group.Select(_ => _.Key).Order(StringComparer.Ordinal)])))
             .OrderBy(_ => _.EnumName, StringComparer.Ordinal)
             .ThenBy(_ => _.ValueName, StringComparer.Ordinal)
     ];
@@ -196,7 +196,7 @@ sealed partial class Schema
                 .Select(_ => _.Result)
                 .OfType<ScryResultInfo>()
                 .DistinctBy(_ => _.Name, StringComparer.Ordinal)
-                .Select(_ => (_.Name, _.Properties.Select(property => (property.Name, property.TypeDisplay)).ToList()))
+                .Select(_ => (_.Name, _.Properties.Select(_ => (_.Name, _.TypeDisplay)).ToList()))
                 .ToList());
     }
 
@@ -245,7 +245,7 @@ sealed partial class Schema
             members.Add(("~keys", string.Join(' ', keys)));
         }
 
-        if (Sensitivity(type) is { Length: > 0 } sensitive)
+        if (Sensitivity(type) is {Length: > 0} sensitive)
         {
             members.Add(("~sensitive", sensitive));
         }
@@ -305,10 +305,11 @@ sealed partial class Schema
 
         var sourceInfos = sources.Values
             .OrderBy(_ => _.Name, StringComparer.Ordinal)
-            .Select(_ => new ScrySourceInfo(_.Name, _.Kind.ToString(), $"{_.ClrType.Name}QueryModel")
-            {
-                Obsolete = ObsoleteOf(_.ClrType)
-            })
+            .Select(_ =>
+                new ScrySourceInfo(_.Name, _.Kind.ToString(), $"{_.ClrType.Name}QueryModel")
+                {
+                    Obsolete = ObsoleteOf(_.ClrType)
+                })
             .ToList();
 
         // Before the enums are listed: an enum a command's payload or result names is re-emitted to
@@ -569,6 +570,11 @@ sealed partial class Schema
             throw new($"ScryOptions.{nameof(options.LimitWatchFraction)} must be greater than zero and at most one: it is the fraction of a limit a query has to reach to be reported, so 0.8 reports one that used eight tenths of it. Null reports nothing.");
         }
 
+        if (options.MaxResponseBytes is { } maxResponseBytes)
+        {
+            AtLeast(maxResponseBytes, 1, nameof(options.MaxResponseBytes), "It is the most a response may carry; null sets no limit.");
+        }
+
         EnsureSubscriptionOptions(options);
         EnsureCommandOptions(options);
 
@@ -740,7 +746,7 @@ sealed partial class Schema
 
             // Any one refusal refuses the member: the policies all narrow, so a chain is only as
             // readable through a collection as its least permissive link says it is.
-            if (elementPolicies.FirstOrDefault(_ => _.Handling.CollectionNavigation == DeniedCollectionMode.Refuse) is { Policy: not null } refusing)
+            if (elementPolicies.FirstOrDefault(_ => _.Handling.CollectionNavigation == DeniedCollectionMode.Refuse) is {Policy: not null} refusing)
             {
                 throw new(
                     $"'{owner.Name}.{member.Name}' is a [QueryableCollection] of '{element.Name}', which carries row policy '{refusing.Policy.Name}'. Aggregating it would count rows that policy hides. Set CollectionNavigation on the policy — Hide reads the collection through it, Error fails a query that would have skipped a denied row — or remove the attribute.");
@@ -1346,7 +1352,11 @@ sealed partial class Schema
         }
 
         var type = meta.ClrType.Name;
-        foreach (var convention in new[] {"Id", $"{type}Id"})
+        foreach (var convention in new[]
+                 {
+                     "Id",
+                     $"{type}Id"
+                 })
         {
             if (candidates.FirstOrDefault(_ => string.Equals(_.Name, convention, StringComparison.Ordinal)) is { } match)
             {
@@ -1467,7 +1477,7 @@ sealed partial class Schema
 
         foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
-            if (property.GetMethod is not { IsPublic: true } ||
+            if (property.GetMethod is not {IsPublic: true} ||
                 property.GetIndexParameters().Length > 0 ||
                 Carries<QueryIgnoreAttribute>(type, property))
             {

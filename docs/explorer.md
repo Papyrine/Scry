@@ -196,7 +196,7 @@ app.MapScryExplorer(_ =>
     _.EnableGuard = _ => true;
 });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L210-L218' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L211-L219' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 | Option | Default | Meaning |
@@ -265,7 +265,7 @@ way back from.
 
 The column appears only where a row is identifiable: the source has to declare an attachment, and the result has to carry the key it is fetched by. A query that projected the key away, or one that went through `Distinct`, `GroupBy`, `SelectMany`, a join, or a set operator — all of which rewrite what a row *is* — gets no column, matching what a generated client refuses to bind. The fetch is authorized on its own terms whatever the query did, by the member's [`IAttachmentPolicy`](attachments.md#security) and the source's [row policies](policies.md), so the offer widens nothing: it saves writing the request, not the permission to make it.
 
-**Read a binary member.** A [`[BinaryTransfer]`](annotations.md) `byte[]` does not travel inside the JSON payload — the server sends it as a raw multipart part and leaves a `{"$bin":n}` placeholder where the value was ([Binary transfer](wire-format.md#binary-transfer)). The explorer reassembles that response and folds the parts back in as base64, so a diverted member tables, exports, and copies exactly as the same `byte[]` would without the attribute — which is the whole of what the attribute claims. The *Response* pane shows the reassembled envelope rather than the multipart body it arrived as.
+**Read a binary member.** A [`[BinaryTransfer]`](annotations.md) `byte[]` does not travel inside the JSON payload — the server sends it as a raw multipart part and leaves a `{"$bin":n}` placeholder where the value was ([Binary transfer](wire-format.md#binary-transfer)). The explorer reassembles that response and folds the parts back in as base64, so a diverted member tables, exports, and copies exactly as the same `byte[]` would without the attribute — which is the whole of what the attribute claims. A part over 64 KiB is the exception: it shows as `[binary: n bytes]` rather than its base64, which the browser would otherwise hold several copies of to render text nobody can read. The *Response* pane shows the reassembled envelope rather than the multipart body it arrived as.
 
 **Format it.** *Format* rewrites the query in the style above: the chain down the page, and a
 projection down the page after it. A line is broken only where breaking it says something — the chain

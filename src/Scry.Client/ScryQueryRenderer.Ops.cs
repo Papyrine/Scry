@@ -329,20 +329,30 @@ partial class QueryRenderer
     static Node PrependPrefix(Node node, IReadOnlyList<string> prefix) =>
         node switch
         {
-            MemberNode member => new MemberNode([..prefix, ..member.Path]),
-            SubqueryNode subquery => subquery with {Path = [..prefix, ..subquery.Path]},
-            InSourceNode inSource => inSource with {Value = PrependPrefix(inSource.Value, prefix)},
+            MemberNode member => new MemberNode([.. prefix, .. member.Path]),
+            SubqueryNode subquery => subquery with
+            {
+                Path = [.. prefix, .. subquery.Path]
+            },
+            InSourceNode inSource => inSource with
+            {
+                Value = PrependPrefix(inSource.Value, prefix)
+            },
             BinaryNode binary => new BinaryNode(binary.Op, PrependPrefix(binary.Left, prefix), PrependPrefix(binary.Right, prefix)),
             UnaryNode unary => new UnaryNode(unary.Op, PrependPrefix(unary.Operand, prefix)),
-            CollateNode collate => collate with {Target = PrependPrefix(collate.Target, prefix)},
+            CollateNode collate => collate with
+            {
+                Target = PrependPrefix(collate.Target, prefix)
+            },
             ConditionalNode conditional => new ConditionalNode(
                 PrependPrefix(conditional.Test, prefix),
                 PrependPrefix(conditional.IfTrue, prefix),
                 PrependPrefix(conditional.IfFalse, prefix)),
-            CallNode call => new CallNode(
-                call.Function,
-                PrependPrefix(call.Target, prefix),
-                [..call.Arguments.Select(_ => PrependPrefix(_, prefix))]),
+            CallNode call =>
+                new CallNode(
+                    call.Function,
+                    PrependPrefix(call.Target, prefix),
+                    [.. call.Arguments.Select(_ => PrependPrefix(_, prefix))]),
             _ => node
         };
 

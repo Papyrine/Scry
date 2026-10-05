@@ -210,7 +210,7 @@ protected override void OnModelCreating(ModelBuilder builder)
 <!-- snippet: serverRegistration -->
 <a id='snippet-serverRegistration'></a>
 ```cs
-builder.Services
+services
     .AddScry<SampleContext>(_ =>
     {
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
@@ -264,7 +264,7 @@ builder.Services
         _.Mcp = ScryMcpAccess.ReadWrite;
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L56-L114' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L57-L115' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Holiday` has no table, so its data is registered explicitly — see [POCO sources](server.md#poco-sources). `MaxPageSize` is lowered from the default 1000 to 200.
@@ -274,7 +274,7 @@ builder.Services
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L135-L137' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L136-L138' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: mapExplorer -->
@@ -288,7 +288,7 @@ app.MapScryExplorer(_ =>
     _.EnableGuard = _ => true;
 });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L210-L218' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L211-L219' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The sample always exposes the explorer so it can be browsed without setting an environment. A real app should leave the default Development-only guard in place, or replace it with an authorization check — see [Query explorer](explorer.md).
@@ -342,15 +342,16 @@ Because the sample uses project references rather than the NuGet package, the ge
 <!-- snippet: clientRegistration -->
 <a id='snippet-clientRegistration'></a>
 ```cs
-builder.Services.AddHttpClient(
+var services = builder.Services;
+services.AddHttpClient(
     "scry",
     _ => _.BaseAddress = new(builder.HostEnvironment.BaseAddress));
-builder.Services.AddScryClient(
+services.AddScryClient(
     "/api/query",
     _ => _.GetRequiredService<IHttpClientFactory>().CreateClient("scry"));
-builder.Services.AddScoped<ScryQuery>();
+services.AddScoped<ScryQuery>();
 ```
-<sup><a href='/samples/Sample.WebClient/Program.cs#L14-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebClient/Program.cs#L14-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-clientRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 
@@ -576,7 +577,7 @@ app.MapPost(
         return Results.NoContent();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L171-L191' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L172-L192' title='Snippet source file'>snippet source</a> | <a href='#snippet-cachedPolicyReadThrough' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The third has to be, or the change never reaches a query at all:
@@ -596,7 +597,7 @@ app.MapPost(
         return Results.NoContent();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L157-L169' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L158-L170' title='Snippet source file'>snippet source</a> | <a href='#snippet-invalidateCachedPolicy' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `Order.Revision` is `[QueryIgnore]`d — a version column is server machinery, not query surface, and clients never see it. `Sample.Tests\CachedPolicyPageTests.cs` drives the page and asserts those three counts, so the table above is checked rather than claimed.

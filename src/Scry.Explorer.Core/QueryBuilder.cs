@@ -109,7 +109,12 @@ public static partial class QueryBuilder
 
     // An attachment has no value to compare, and a collection is aggregated rather than compared.
     static bool IsComparable(SchemaIndex index, ScryMemberInfo member) =>
-        member is {IsNavigation: false, IsCollection: false, IsAttachment: false} &&
+        member is
+        {
+            IsNavigation: false,
+            IsCollection: false,
+            IsAttachment: false
+        } &&
         Kind(index, member.TypeDisplay) != ValueKind.None;
 
     /// <summary>

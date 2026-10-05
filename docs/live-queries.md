@@ -360,7 +360,7 @@ _.MaxSubscriptions = 100;
 // another node, a script run by hand.
 _.UseDeltaChanges<SampleContext>();
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L94-L103' title='Snippet source file'>snippet source</a> | <a href='#snippet-liveQueryRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L95-L104' title='Snippet source file'>snippet source</a> | <a href='#snippet-liveQueryRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The route is `POST {pattern}/subscribe`, mapped inside `MapScry` beside the rest, so whatever authorization convention guards a query guards the stream of its answers.
@@ -475,12 +475,13 @@ Three things report a change, and a fourth covers what none of them can see.
 <!-- snippet: changeInterceptor -->
 <a id='snippet-changeInterceptor'></a>
 ```cs
-builder.Services
+var services = builder.Services;
+services
     .AddDbContext<SampleContext>((services, options) => options
         .UseSqlServer(database.ConnectionString)
         .AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>()));
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L38-L43' title='Snippet source file'>snippet source</a> | <a href='#snippet-changeInterceptor' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L38-L44' title='Snippet source file'>snippet source</a> | <a href='#snippet-changeInterceptor' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 **The host.** What never passes through `SaveChanges` — `ExecuteUpdate`, raw SQL, an import — no interceptor can see. `ScryChanges` is where the host says so:
@@ -501,7 +502,7 @@ app.MapPost(
         return Results.NoContent();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L195-L208' title='Snippet source file'>snippet source</a> | <a href='#snippet-changesNotify' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L196-L209' title='Snippet source file'>snippet source</a> | <a href='#snippet-changesNotify' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Invalidating a [cached policy](policies.md) reports a change too. No row was written, but which rows a caller may see is part of what a live query answers.
@@ -590,11 +591,11 @@ Where the database can say when it was last written, it already does: `UseDeltaC
 <a id='snippet-sampleRedisBackplane'></a>
 ```cs
 // The connection is the host's own, registered the way it would be for anything else that uses Redis.
-builder.Services
+services
     .AddSingleton<IConnectionMultiplexer>(
         _ => ConnectionMultiplexer.Connect(builder.Configuration["Redis"] ?? "localhost:6379"));
 
-builder.Services
+services
     .AddScry<SampleContext>(
     _ =>
     {
@@ -606,7 +607,7 @@ builder.Services
         _.UseRedisBackplane();
     });
 ```
-<sup><a href='/samples/Sample.RedisServer/Program.cs#L8-L25' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleRedisBackplane' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.RedisServer/Program.cs#L9-L26' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleRedisBackplane' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 <!-- snippet: sampleMessagePipeBackplane -->
@@ -615,18 +616,18 @@ builder.Services
 // MessagePipe and a distributed transport for it, registered as a host that uses MessagePipe for
 // anything else already has them. Scry asks for neither by name: it resolves MessagePipe's
 // distributed publisher and subscriber, and whichever transport backs them is the one used.
-builder.Services
+services
     .AddMessagePipe(_ => _.EnableAutoRegistration = false)
     .AddRedis(ConnectionMultiplexer.Connect(builder.Configuration["Redis"] ?? "localhost:6379"));
 
-builder.Services.AddScry<SampleContext>(
+services.AddScry<SampleContext>(
     _ =>
     {
         BackplaneHost.Configure(_);
         _.UseMessagePipeBackplane();
     });
 ```
-<sup><a href='/samples/Sample.MessagePipeServer/Program.cs#L8-L22' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleMessagePipeBackplane' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.MessagePipeServer/Program.cs#L9-L23' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleMessagePipeBackplane' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 What travels names entities and never rows. Whoever can write to a backplane can cause live queries to be asked again — which costs what the throttle lets it cost — and nothing else: every answer still comes from running the query through its policies. Delivery may be at most once; a message a node misses costs a live query nothing worse than waiting for its poll.
@@ -653,11 +654,11 @@ The NServiceBus package exists for a case the others do not cover as well: the w
 <a id='snippet-sampleNServiceBusWorker'></a>
 ```cs
 // Change reporting on its own, and NServiceBus as what carries it to the servers.
-builder.Services.AddScryNServiceBusBackplane();
+services.AddScryNServiceBusBackplane();
 
 // The interceptor is what knows which entities a save touched. It reports to the registration
 // above, which is why it is resolved rather than constructed.
-builder.Services.AddDbContext<SampleContext>(
+services.AddDbContext<SampleContext>(
     (services, options) => options
         .UseSqlServer(database)
         .AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>()));
@@ -668,9 +669,9 @@ builder.Services.AddDbContext<SampleContext>(
 var endpoint = NServiceBusEndpoint.Create("Sample.Worker", args);
 endpoint.UseScryChanges();
 endpoint.UseScryCommands();
-builder.Services.AddNServiceBusEndpoint(endpoint);
+services.AddNServiceBusEndpoint(endpoint);
 ```
-<sup><a href='/samples/Sample.NServiceBusWorker/NServiceBusWorkerHost.cs#L12-L30' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleNServiceBusWorker' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.NServiceBusWorker/NServiceBusWorkerHost.cs#L13-L31' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleNServiceBusWorker' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The handler is an ordinary one. Nothing in it mentions Scry: it saves, and the save is what gets reported.
@@ -706,7 +707,7 @@ The server hears it through its own endpoint:
 <!-- snippet: sampleNServiceBusBackplane -->
 <a id='snippet-sampleNServiceBusBackplane'></a>
 ```cs
-builder.Services.AddScry<SampleContext>(
+services.AddScry<SampleContext>(
     _ =>
     {
         BackplaneHost.Configure(_);
@@ -727,9 +728,9 @@ builder.Services.AddScry<SampleContext>(
 // command. A full endpoint rather than a send-only one, which could send commands and would
 // hear nothing back.
 var endpoint = NServiceBusEndpoint.Create($"Sample.Web.{Port(args)}", args);
-builder.Services.AddNServiceBusEndpoint(endpoint);
+services.AddNServiceBusEndpoint(endpoint);
 ```
-<sup><a href='/samples/Sample.NServiceBusServer/NServiceBusServerHost.cs#L15-L40' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleNServiceBusBackplane' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.NServiceBusServer/NServiceBusServerHost.cs#L16-L41' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleNServiceBusBackplane' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The same endpoint carries [commands](commands.md): `UseNServiceBusCommands` claims `RepriceOrder`, sends it to the worker, and finishes it when the worker's `UseScryCommands` replies — beside the `ScryChanged` publish, through the same message context, after the same handlers. The client that sent the command gets its outcome; every client reading orders gets the new rows.

@@ -8,7 +8,7 @@
 <!-- snippet: serverRegistration -->
 <a id='snippet-serverRegistration'></a>
 ```cs
-builder.Services
+services
     .AddScry<SampleContext>(_ =>
     {
         // Holiday is a [QueryablePoco]: it has no table, so the server supplies its rows. Every
@@ -62,7 +62,7 @@ builder.Services
         _.Mcp = ScryMcpAccess.ReadWrite;
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L56-L114' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L57-L115' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddPocoSource` registers the data for a `[QueryablePoco]` type — see [POCO sources](#poco-sources) below. `MaxPageSize` is one of the [limits](#options).
@@ -91,7 +91,7 @@ Failures surface at startup, not at first request:
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L135-L137' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L136-L138' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Up to seven routes, from the one call:
@@ -299,11 +299,21 @@ Applying a collation also costs an index. `WHERE col COLLATE X = @p` is not SARG
 
 ### Response size
 
-`ResponseSpillThreshold` is not one of the limits above: crossing it rejects nothing and bounds nothing a client may ask for. It is the size in bytes past which a response stops being held whole.
+`ResponseSpillThreshold` is not one of the limits above: crossing it rejects nothing and bounds nothing a client may ask for. It is the size in bytes past which a response stops being held whole. `MaxResponseBytes` is the limit beside it: the most a response may carry at all.
 
 | Option | Default | Does |
 | --- | --- | --- |
 | `ResponseSpillThreshold` | 65536 (64 KB) | Under it, a response is sent as one body declaring a `Content-Length`. Over it, the response is sent as it is written, so what is resident is bounded by the threshold rather than by the result. Zero holds every response whole, as every response once was. |
+| `MaxResponseBytes` | unset | Nothing by default. Set it to cap what one response carries — its JSON and its [binary transfer](wire-format.md#binary-transfer) parts together, counted as they are written. |
+
+`MaxPageSize` and `MaxProjectionMembers` bound how many rows and members a query asks for, never how large each value is, so a thousand rows of `varbinary(max)` pass both. `MaxResponseBytes` bounds what they add up to. How a response that reaches it ends depends on what has already gone out:
+
+- **Held whole** — under the threshold, or carrying binary parts, which is always held whole: refused as a `400` saying so. A result carrying parts is the one that costs the server most to hold, and it is also the one that can always be refused cleanly.
+- **Past the threshold:** the status is already sent, so the response is truncated, exactly as any failure part-way through one is.
+- **A stream** ends with an error marker, as one reaching `MaxStreamRows` does.
+- **A batch** counts what its entries carry, not the envelope around them, and refuses the entry that would cross the limit as that entry's own result. The entries before it are still answered, and the budget it would have used is still there for the entries after it.
+
+It bounds what accumulates rather than the size of one value: the database hands a column over whole, so a single value is in memory before it can be measured. It applies to the HTTP endpoints, the SignalR hub and MCP. A live query's answer has [`MaxSubscriptionBytes`](live-queries.md) instead, and the `ScryProcessor` overloads that return a result as objects leave serializing it to their caller.
 
 A result that fits behaves exactly as every result did before the threshold existed — nothing reaches the wire until the whole envelope exists, so a failure part-way through reading the rows is still answered as a `400` or a `500` with a body. Past it the status is long since committed and a failure can only truncate the response, which a reader can always tell from a complete one; see [Wire format](wire-format.md#response) for why.
 

@@ -6,6 +6,8 @@ using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 /// </summary>
 static class ScryServer
 {
+    static readonly TimeSpan patience = TimeSpan.FromSeconds(60);
+
     public static void Add(IServiceCollection services, TimeSpan? window, Action<ScryOptions> dispatch, bool second = false)
     {
         services.AddDbContext<BusContext>(_ => _.UseSqlServer("Server=.;Database=NeverOpened"));
@@ -13,7 +15,9 @@ static class ScryServer
         {
             options.AllowUnmappedSources = true;
             options.MaxPendingCommands = 10;
-            options.CommandSyncWindow = window ?? TimeSpan.FromSeconds(20);
+            // As long as Send waits: a starved runner has taken 40 seconds to handle a command, and a
+            // shorter window turns that into a Pending receipt the within-the-window tests do not expect.
+            options.CommandSyncWindow = window ?? patience;
             dispatch(options);
             if (second)
             {
@@ -30,10 +34,10 @@ static class ScryServer
         var services = scope.ServiceProvider;
         var request = CommandRequest.Create(command, id ?? Guid.NewGuid(), JsonSerializer.SerializeToElement(payload, ScryJson.Options));
         List<CommandReceipt> receipts = [];
-        using var patience = new CancelSource(TimeSpan.FromSeconds(60));
+        using var source = new CancelSource(patience);
         await foreach (var receipt in services
                            .GetRequiredService<ScryProcessor>()
-                           .SendCommand(request, services.GetRequiredService<BusContext>(), services, new HeaderDictionary(), caller, patience.Token))
+                           .SendCommand(request, services.GetRequiredService<BusContext>(), services, new HeaderDictionary(), caller, source.Token))
         {
             receipts.Add(receipt);
         }

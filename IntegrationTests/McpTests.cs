@@ -1,7 +1,3 @@
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.Extensions.Logging;
-using ModelContextProtocol.Client;
-using ModelContextProtocol.Protocol;
 // UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
 // Core's own IQueryable extensions and collide with the Scry client terminals.
 using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
@@ -21,15 +17,16 @@ public class McpTests
         database = await LedgerData.Instance.Build();
 
     [After(Class)]
-    public static async Task DropDatabase() =>
-        await database.DisposeAsync();
+    public static ValueTask DropDatabase() =>
+        database.DisposeAsync();
 
     [Test]
     public async Task OffMapsNothing()
     {
         await using var server = await Server.Start(database, ScryMcpAccess.Off);
 
-        using var response = await server.Http().PostAsync("/mcp", new StringContent("{}", Encoding.UTF8, "application/json"));
+        var http = server.Http();
+        using var response = await http.PostAsync("/mcp", new StringContent("{}", Encoding.UTF8, "application/json"));
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
     }
@@ -194,6 +191,24 @@ public class McpTests
         }
     }
 
+    // An agent's answer is held whole before it is handed over, so it is bounded as any other.
+    [Test]
+    public async Task AnAnswerPastTheResponseLimitIsAValidationError()
+    {
+        await using var server = await Server.Start(database, ScryMcpAccess.Read, _ => _.MaxResponseBytes = 50);
+        await using var client = await server.Connect();
+
+        var result = await Query(client, "Ledger", """[{"$type":"select","projection":{"members":["Id"]}}]""");
+        var error = Error(result);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(result.IsError).IsTrue();
+            await Assert.That(error.Code).IsEqualTo(ScryErrorCode.Validation);
+            await Assert.That(error.Error).Contains("larger than this server allows (50 bytes)");
+        }
+    }
+
     [Test]
     public async Task ACommandIsAnsweredWithItsReceipt()
     {
@@ -325,26 +340,27 @@ public class McpTests
             builder.WebHost.UseTestServer();
             builder.Logging.ClearProviders();
             var gate = new LedgerGate();
-            builder.Services.AddSingleton(gate);
-            builder.Services.AddScoped<LedgerCaller>();
-            builder.Services.AddDbContext<LedgerContext>(
+            var services = builder.Services;
+            services.AddSingleton(gate);
+            services.AddScoped<LedgerCaller>();
+            services.AddDbContext<LedgerContext>(
                 (services, options) => options
                     .UseSqlServer(database.ConnectionString)
                     .AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>()));
-            builder.Services.AddScry<LedgerContext>(options =>
+            services.AddScry<LedgerContext>(options =>
             {
                 options.AllowUnmappedSources = true;
                 options.MaxPendingCommands = 100;
                 options.Mcp = access;
                 configure?.Invoke(options);
             });
-            builder.Services.AddScryMcp();
-            builder.Services.AddScoped<ICommandHandler<RenameLedger>, RenameLedgerHandler>();
-            builder.Services.AddScoped<ICommandHandler<OpenLedger, LedgerOpened>, OpenLedgerHandler>();
-            builder.Services
+            services.AddScryMcp();
+            services.AddScoped<ICommandHandler<RenameLedger>, RenameLedgerHandler>();
+            services.AddScoped<ICommandHandler<OpenLedger, LedgerOpened>, OpenLedgerHandler>();
+            services
                 .AddAuthentication("Test")
                 .AddScheme<AuthenticationSchemeOptions, HeaderUserHandler>("Test", _ => { });
-            builder.Services.AddAuthorization();
+            services.AddAuthorization();
 
             var app = builder.Build();
             try
@@ -380,7 +396,7 @@ public class McpTests
         }
 
         // An agent connected as the named user.
-        public async Task<McpClient> Connect(string? user = null)
+        public Task<McpClient> Connect(string? user = null)
         {
             var transport = new HttpClientTransport(
                 new()
@@ -390,7 +406,7 @@ public class McpTests
                 },
                 Http(user),
                 ownsHttpClient: true);
-            return await McpClient.CreateAsync(transport);
+            return McpClient.CreateAsync(transport);
         }
 
         // Holds every rename open until the test completes what this returns.

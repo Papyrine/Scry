@@ -143,7 +143,8 @@ public class HistoryStoreTests
                 Query.Employee
                     .Where(_ => _.Active)
                     .Select(_ => new { _.Name })
-                """)).IsEqualTo("Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name })");
+                """))
+            .IsEqualTo("Query.Employee.Where(_ => _.Active).Select(_ => new { _.Name })");
 
     [Test]
     public async Task FlattensSeparateStatementsWithASpace() =>
@@ -151,7 +152,8 @@ public class HistoryStoreTests
                 """
                 var since = new DateOnly(2026, 1, 1);
                 Query.Employee
-                """)).IsEqualTo("var since = new DateOnly(2026, 1, 1); Query.Employee");
+                """))
+            .IsEqualTo("var since = new DateOnly(2026, 1, 1); Query.Employee");
 
     [Test]
     public async Task ShowsTheLabelInsteadOfTheQueryWhenThereIsOne()

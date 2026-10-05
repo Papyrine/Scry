@@ -1,10 +1,6 @@
 // UseSqlServer only — importing the whole Microsoft.EntityFrameworkCore namespace would pull in EF
 // Core's own ToListAsync/CountAsync IQueryable extensions and collide with the Scry client terminals.
 using System.Net.ServerSentEvents;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using static Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions;
 using SampleContext = Sample.Model.SampleContext;
 // These drive a live query's enumerator by hand and end it by disposing it, which is what the
@@ -808,7 +804,7 @@ public class SubscriptionHttpTests
     sealed class TicketHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
-        System.Text.Encodings.Web.UrlEncoder encoder) :
+        UrlEncoder encoder) :
         AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
     {
         public static TimeSpan? ExpiresIn { get; set; }

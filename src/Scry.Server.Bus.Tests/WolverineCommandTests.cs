@@ -9,11 +9,30 @@ using Wolverine.ErrorHandling;
 /// </summary>
 public class WolverineCommandTests
 {
+    // One host for each window rather than one a test: Wolverine compiles a host's handler chains on its
+    // first message, one host at a time, so five hosts sending at once each waited out all five compiles.
+    static IHost host = null!;
+    static IHost pendingHost = null!;
+
+    [Before(Class)]
+    public static async Task StartHosts()
+    {
+        host = await Start();
+        pendingHost = await Start(window: TimeSpan.Zero);
+    }
+
+    [After(Class)]
+    public static async Task StopHosts()
+    {
+        await pendingHost.StopAsync();
+        await host.StopAsync();
+        pendingHost.Dispose();
+        host.Dispose();
+    }
+
     [Test]
     public async Task SendsThroughTheBusAndCompletesWithinTheWindow()
     {
-        using var host = await Start();
-
         var receipts = await ScryServer.Send(host.Services, "ShipParcel", new {label = "wolverine-within"});
 
         await Assert.That(receipts.Select(_ => _.Status)).IsEquivalentTo([CommandStatus.Completed], CollectionOrdering.Matching);
@@ -22,9 +41,7 @@ public class WolverineCommandTests
     [Test]
     public async Task ARemoteWorkerCompletesTheCommand()
     {
-        using var host = await Start(window: TimeSpan.Zero);
-
-        var receipts = await ScryServer.Send(host.Services, "ShipParcel", new {label = "wolverine-pending"});
+        var receipts = await ScryServer.Send(pendingHost.Services, "ShipParcel", new {label = "wolverine-pending"});
 
         await Assert.That(receipts.Select(_ => _.Status)).IsEquivalentTo([CommandStatus.Pending, CommandStatus.Completed], CollectionOrdering.Matching);
     }
@@ -32,7 +49,6 @@ public class WolverineCommandTests
     [Test]
     public async Task CarriesTheHeaders()
     {
-        using var host = await Start();
         var id = Guid.NewGuid();
 
         await ScryServer.Send(host.Services, "ShipParcel", new {label = "wolverine-headers"}, id, caller: "alice");
@@ -43,8 +59,6 @@ public class WolverineCommandTests
     [Test]
     public async Task ATypedResultTravelsBack()
     {
-        using var host = await Start();
-
         var receipts = await ScryServer.Send(host.Services, "WeighParcel", new {grams = 21});
 
         await Assert.That(receipts.Last().Result!.Value.GetProperty("grams").GetInt32()).IsEqualTo(42);
@@ -53,8 +67,6 @@ public class WolverineCommandTests
     [Test]
     public async Task AHandlerThatExhaustsRetriesIsReportedAsFailed()
     {
-        using var host = await Start();
-
         var receipts = await ScryServer.Send(host.Services, "ShipParcel", new {label = "wolverine-failing", fail = true});
 
         using (Assert.Multiple())
@@ -67,7 +79,6 @@ public class WolverineCommandTests
     [Test]
     public async Task TheAdapterClaimsOnlyWhatItWasTold()
     {
-        using var host = await Start();
         var dispatcher = host.Services.GetRequiredService<WolverineDispatcher>();
 
         using (Assert.Multiple())
@@ -80,9 +91,9 @@ public class WolverineCommandTests
     [Test]
     public async Task TwoAdaptersClaimingOneCommandRefuseStartup()
     {
-        using var host = await Start(second: true);
+        using var second = await Start(second: true);
 
-        var exception = Assert.ThrowsExactly<Exception>(() => ScryServer.EnsureDispatchable(host.Services));
+        var exception = Assert.ThrowsExactly<Exception>(() => ScryServer.EnsureDispatchable(second.Services));
 
         await Assert.That(exception.Message).Contains("claimed by");
     }

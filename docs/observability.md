@@ -10,11 +10,11 @@ The names are constants on `ScryInstrumentation`; this is the [sample server](sa
 <!-- snippet: openTelemetry -->
 <a id='snippet-openTelemetry'></a>
 ```cs
-builder.Services.AddOpenTelemetry()
+services.AddOpenTelemetry()
     .WithTracing(_ => _.AddSource(ScryInstrumentation.ActivitySourceName))
     .WithMetrics(_ => _.AddMeter(ScryInstrumentation.MeterName));
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L124-L128' title='Snippet source file'>snippet source</a> | <a href='#snippet-openTelemetry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L125-L129' title='Snippet source file'>snippet source</a> | <a href='#snippet-openTelemetry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Nothing in Scry depends on OpenTelemetry — the traces are a plain `ActivitySource` and the metrics a plain `Meter`, so any `ActivityListener`/`MeterListener`-based collector works the same way.
@@ -51,7 +51,7 @@ Every query records a duration, whatever its outcome, so query counts come off t
 | Value | Meaning |
 | --- | --- |
 | `success` | Validated, executed, every row delivered. |
-| `rejected` | Refused by validation — or a stream truncated by `MaxStreamRows`. |
+| `rejected` | Refused by validation — or a stream truncated by `MaxStreamRows`, or a response that reached `MaxResponseBytes`. |
 | `failed` | Validation passed; execution threw. |
 | `canceled` | A streamed read that ended before the last row: canceled, or its consumer stopped reading. |
 | `denied` | A [row policy denied a row](policies.md#what-a-denied-row-produces) the query read, and reports denials rather than hiding them. |

@@ -186,6 +186,53 @@ public class ResponseSpillTests
         await Assert.That(response.Content.Headers.ContentLength).IsEqualTo(body.Length);
     }
 
+    // Nothing has gone out, so a response past MaxResponseBytes is still a status with a body saying why.
+    [Test]
+    public async Task AResponsePastTheLimitBeforeTheWatermarkIsRefused()
+    {
+        await using var app = await Start(64 * 1024, () => Wide(3), maxResponseBytes: 300);
+        using var http = app.GetTestClient();
+
+        using var response = await Send(http, listRequest);
+        var body = await response.Content.ReadAsStringAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+            await Assert.That(body).Contains("larger than this server allows (300 bytes)");
+        }
+    }
+
+    /// <summary>
+    /// Past the threshold the limit can only truncate, as any failure there does — and it is counted
+    /// over what was sent, not what is held, or a response that drains would never reach it.
+    /// </summary>
+    [Test]
+    public async Task AResponsePastTheLimitAfterTheWatermarkIsTruncated()
+    {
+        await using var app = await Start(1024, () => Wide(600), maxResponseBytes: 32 * 1024);
+        using var http = app.GetTestClient();
+
+        using var response = await Send(http, listRequest, HttpCompletionOption.ResponseHeadersRead);
+
+        string? body = null;
+        try
+        {
+            body = await response.Content.ReadAsStringAsync();
+        }
+        catch (Exception)
+        {
+            // The other way a truncation presents: the body ended before the host said it would.
+        }
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+            await Assert.That(body is null || !body.Contains("\"stamp\"")).IsTrue().Because($"a truncated response must not look complete, but was: {body?.Length} chars");
+            await Assert.That(body is null || body.Length <= 32 * 1024).IsTrue().Because("nothing past the limit may be sent");
+        }
+    }
+
     static async Task<string> Post(HttpClient http, string request, string path = "/api/query")
     {
         using var response = await Send(http, request, path: path);
@@ -231,7 +278,7 @@ public class ResponseSpillTests
 
     // A server per test, because the threshold is fixed at startup and so is the source that fails.
     // The connection string is never opened: every query here reads the poco source.
-    static async Task<WebApplication> Start(int threshold, Func<IEnumerable<Sample.Model.Holiday>> rows)
+    static async Task<WebApplication> Start(int threshold, Func<IEnumerable<Sample.Model.Holiday>> rows, int? maxResponseBytes = null)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -240,6 +287,7 @@ public class ResponseSpillTests
         builder.Services.AddScry<Sample.Model.SampleContext>(options =>
         {
             options.ResponseSpillThreshold = threshold;
+            options.MaxResponseBytes = maxResponseBytes;
             options.AddPocoSource(_ => rows());
             // Department.Handbook is an [Attachment], and startup refuses a source whose attachment
             // nothing authorizes. No test here fetches it, so an allow-all satisfies the check.

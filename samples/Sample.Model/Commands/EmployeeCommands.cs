@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace Sample.Model;
 
 // begin-snippet: commandMessages
