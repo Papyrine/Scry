@@ -14,7 +14,7 @@ static class NavigationPolicyProbe
     {
         // Denials are not probed here: this asks whether each rewrite translates, and running the
         // reporting query as well would make startup depend on what the data happens to hold.
-        var navigations = new NavigationPolicy(schema, model, sources);
+        var navigations = new NavigationPolicy(schema, () => model, sources);
         foreach (var meta in schema.Types)
         {
             // Only real entities own a navigation EF can key on. A complex type reaching a source is
