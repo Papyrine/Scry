@@ -1,0 +1,103 @@
+﻿[
+  {
+    Kind: Page,
+    Source: Employee,
+    Caller: alice,
+    Node: node-1,
+    Sensitive: false,
+    Request: {"version":1,"root":"Employee","pipeline":[{"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},{"$type":"select","projection":{"members":["Name"]}},{"$type":"page","size":2}]},
+    Outcome: Released,
+    Released: 2,
+    Response: _VeWAPCQYy_H1hR_1IQR_lRo_4Jk_EQtYC6iL9vl4NQ,
+    Fields: [
+      Employee.Name: Returned,
+      Employee.Name: Read
+    ],
+    Units: [
+      {
+        Address: 0btsLdVTkQjQz26l-tHBz_vkmdYaMZ03w3-ffSpZgYA,
+        Kind: Row,
+        Content: {"name":"Aaron"},
+        Erased: false,
+        Rows: [
+          Employee[3]
+        ]
+      },
+      {
+        Ordinal: 1,
+        Address: jYZOwqul4Zp8OTk262vnlMtwXAsvxzg337Edi61ZUgk,
+        Kind: Row,
+        Content: {"name":"Alice"},
+        Erased: false,
+        Rows: [
+          Employee[1]
+        ]
+      }
+    ]
+  },
+  {
+    Kind: Single,
+    Source: Employee,
+    Caller: alice,
+    Node: node-1,
+    Sensitive: false,
+    Request: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"call","function":"StringStartsWith","target":{"$type":"member","path":"Name"},"arguments":[{"$type":"const","value":"A","tag":"String"}]}},{"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},{"$type":"select","projection":{"members":["Name"]}},{"$type":"first","orDefault":true}]},
+    Outcome: Released,
+    Released: 1,
+    Response: mHXmWFB9F9ClKx5hAZHJuT055Ropd6Rscmgrer4m4j4,
+    Fields: [
+      Employee.Name: Returned,
+      Employee.Name: Read
+    ],
+    Units: [
+      {
+        Address: 0btsLdVTkQjQz26l-tHBz_vkmdYaMZ03w3-ffSpZgYA,
+        Kind: Row,
+        Content: {"name":"Aaron"},
+        Erased: false,
+        Rows: [
+          Employee[3]
+        ]
+      }
+    ]
+  },
+  {
+    Kind: Single,
+    Source: Employee,
+    Caller: alice,
+    Node: node-1,
+    Sensitive: false,
+    Request: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"call","function":"StringStartsWith","target":{"$type":"member","path":"Name"},"arguments":[{"$type":"const","value":"Z","tag":"String"}]}},{"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},{"$type":"select","projection":{"members":["Name"]}},{"$type":"first","orDefault":true}]},
+    Outcome: Released,
+    Released: 0,
+    Response: 47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU,
+    Fields: [
+      Employee.Name: Returned,
+      Employee.Name: Read
+    ],
+    Units: []
+  },
+  {
+    Kind: Scalar,
+    Source: Employee,
+    Caller: alice,
+    Node: node-1,
+    Sensitive: false,
+    Request: {"version":1,"root":"Employee","pipeline":[{"$type":"where","predicate":{"$type":"member","path":"Active"}},{"$type":"count"}]},
+    Outcome: Released,
+    Released: 1,
+    Response: Z10G6fxGsp2G36xzqltNQcJnGFgAV5wWbp95YiFcCt4,
+    Fields: [
+      Employee.Active: Read
+    ],
+    Units: [
+      {
+        Address: YZ5S8IzgFTA369g9aT4APYBFDEqeuqIShj4XLYUncZ4,
+        Kind: Scalar,
+        Content: 3,
+        Erased: false,
+        Rows: []
+      }
+    ]
+  }
+]

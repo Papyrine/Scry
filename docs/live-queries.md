@@ -847,6 +847,8 @@ ASP.NET rate limiting counts a live query as one request, whatever it goes on to
 
 Every answer is the query run again through its row policies, never a cached result and never shared between two subscriptions. So a change the caller may not see produces no answer, and when an answer arrives says nothing that asking again would not have: the answer is compared before it is sent, and a heartbeat is sent on a fixed clock that a run cannot delay.
 
+Where the [disclosure audit](disclosure-audit.md) is on, each answer that is sent is recorded as an answer of its own. A run whose answer had not changed sends nothing, so it records nothing.
+
 Two things are slower to reach a live query than a query asked once, and both are bounded. A policy input the query does not show — a claim, the clock, a list loaded in C# — reaches it within `SubscriptionPollInterval`. A revoked authentication reaches it within `SubscriptionLifetime` or the ticket's expiry. Scoped services, a policy's own included, live as long as the subscription does.
 
 See [Security model](security.md#live-queries).

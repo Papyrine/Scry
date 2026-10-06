@@ -1,0 +1,36 @@
+﻿dr.osei received 3: List of Patient (never closed), Stream of Patient (Truncated, 2), List of Patient (Released, 2)
+  Patient.Name: 3
+  Patient.Diagnosis: 0
+  Patient.WardId: 0
+  Ward.Name: 0
+  Note.Text: 0
+  Admission.PatientId: 0
+(nobody) received 1: Single of Patient (Released, 1)
+  Patient.Name: 1
+  Patient.Diagnosis: 0
+  Patient.WardId: 0
+  Ward.Name: 0
+  Note.Text: 0
+  Admission.PatientId: 0
+Patient[1]: dr.osei #0 via '' p5DkJXuKOpS_I0mOOefHHwdYBUaDWocUSLm7sTR-5Vs, dr.osei #0 via '' p5DkJXuKOpS_I0mOOefHHwdYBUaDWocUSLm7sTR-5Vs
+Patient[2]: (nobody) #0 via '' Ro1EWlm8lRJHRrEj5tJPa_Jzjk8w3VG8xor6Pu9ttyo, dr.osei #1 via '' Ro1EWlm8lRJHRrEj5tJPa_Jzjk8w3VG8xor6Pu9ttyo, dr.osei #1 via '' Ro1EWlm8lRJHRrEj5tJPa_Jzjk8w3VG8xor6Pu9ttyo
+Patient[3]: dr.osei #0 via '' nS0nIU78t2X1RgeV1_GLkTQ5lq9Wm2sNMW3c5c3LsA0
+Ward[1]: 
+Admission[1,2]: 
+WardCensus["North"]: 
+List of Patient for dr.osei on ward-1, sensitive False, Released, 2
+  read Patient.Name Returned False
+  0: {"name":"Ada"} <- Patient[1] via ''
+  1: {"name":"Brook"} <- Patient[2] via ''
+Stream of Patient for dr.osei on ward-1, sensitive False, Truncated, 2
+  read Patient.Name Returned False
+  0: {"name":"Ada"} <- Patient[1] via ''
+  1: {"name":"Brook"} <- Patient[2] via ''
+  2: {"name":"Chidi"} <- Patient[3] via ''
+List of Patient for dr.osei on ward-1, sensitive False, never closed
+  read Patient.Name Returned False
+  0: {"name":"Chidi"} <- Patient[3] via ''
+Single of Patient for (nobody) on ward-1, sensitive False, Released, 1
+  read Patient.Name Returned False
+  0: {"name":"Brook"} <- Patient[2] via ''
+Patient keyed True: Name False

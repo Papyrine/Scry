@@ -84,7 +84,7 @@ public static partial class ScryServiceExtensions
 
         Advertise(context, processor, options);
         var db = (DbContext) services.GetRequiredService(options.ContextType);
-        return WriteCommandJson(context, ScryJson.SerializeToUtf8(processor.Capabilities(db, services, context.Request.Headers)));
+        return WriteCommandJson(context, ScryJson.SerializeToUtf8(processor.Capabilities(db, services, context.Request.Headers, options.Caller(context))));
     }
 
     // A final first receipt is a response of its own; a pending one is the first event of a stream that

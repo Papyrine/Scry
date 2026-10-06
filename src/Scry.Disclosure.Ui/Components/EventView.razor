@@ -1,0 +1,126 @@
+@namespace Scry
+
+@*
+    One answer, with what it carried. The only view that shows content, so the only one whose opening
+    names the answer in the record: whoever opens it is from then on among those who received its rows.
+*@
+<section class="view" data-testid="event-view" data-ready="@Ready">
+    @if (failure is not null)
+    {
+        <p class="error" data-testid="event-error">@failure</p>
+    }
+    else if (answer is not null)
+    {
+        <p class="note" data-testid="event-recorded">
+            Opening this answer was recorded. @Reader is now among those who received its rows.
+        </p>
+
+        <dl class="facts">
+            <div><dt>Sent to</dt><dd data-testid="event-caller">@Caller</dd></div>
+            <div><dt>When (UTC)</dt><dd class="mono" data-testid="event-when">@When</dd></div>
+            <div><dt>Answer</dt><dd data-testid="event-kind">@Kind</dd></div>
+            <div><dt>How it ended</dt><dd data-testid="event-outcome">@Ended</dd></div>
+            <div><dt>Answered by</dt><dd>@Node</dd></div>
+            <div><dt>Id</dt><dd class="mono" data-testid="event-id">@Id</dd></div>
+            @if (answer.Stamp is not null)
+            {
+                <div><dt>Schema stamp</dt><dd class="mono" data-testid="event-stamp">@answer.Stamp</dd></div>
+            }
+            @if (answer.Event.Correlation is not null)
+            {
+                <div><dt>Part of</dt><dd class="mono" data-testid="event-correlation">@answer.Event.Correlation</dd></div>
+            }
+        </dl>
+
+        <header class="results-head">
+            <h2>What left</h2>
+            @if (CanExport)
+            {
+                <span class="exports">
+                    Export
+                    <button type="button" class="link" data-testid="export-csv" @onclick="ExportCsv">CSV</button>
+                    <button type="button" class="link" data-testid="export-json" @onclick="ExportJson">JSON</button>
+                </span>
+            }
+        </header>
+        @if (note is not null)
+        {
+            <p class="note" data-testid="event-note">@note</p>
+        }
+        <pre data-testid="event-payload">@Payload</pre>
+
+        @if (HasUnits)
+        {
+            <h2>Unit by unit</h2>
+            <table class="grid" data-testid="event-units">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Read from</th>
+                        <th>Carried</th>
+                        <th>Version</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var unit in answer.Units)
+                    {
+                        <tr class="@UnitClass(unit)">
+                            <td class="mono">@unit.Ordinal</td>
+                            <td>
+                                @foreach (var row in unit.Rows)
+                                {
+                                    <a class="chip" href="@RowHref(row)" title="@Reached(row)" data-testid="unit-row">@Shown(row)</a>
+                                }
+                            </td>
+                            <td class="mono wrap">@Carried(unit)</td>
+                            <td class="mono" title="@unit.Address">@Version(unit)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        @if (HasFields)
+        {
+            <h2>Members it read</h2>
+            <table class="grid" data-testid="event-fields">
+                <thead>
+                    <tr>
+                        <th>Member</th>
+                        <th>What the answer did with it</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var field in answer.Fields)
+                    {
+                        <tr>
+                            <td class="mono">@Named(field)</td>
+                            <td>@Did(field)</td>
+                            <td>
+                                @if (field.Sensitive)
+                                {
+                                    <span class="chip sensitive">sensitive</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        @if (answer.Request is not null)
+        {
+            <h2>What was asked</h2>
+            <pre data-testid="event-request">@Request</pre>
+        }
+    }
+    else if (Loading)
+    {
+        <p class="muted loading-hint">Reading the answer…</p>
+    }
+    else
+    {
+        <p class="muted" data-testid="event-unasked">Open an answer from one of the lists to see what it carried.</p>
+    }
+</section>

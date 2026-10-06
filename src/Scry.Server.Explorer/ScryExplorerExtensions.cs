@@ -158,7 +158,7 @@ public static class ScryExplorerExtensions
             return Results.NotFound();
         }
 
-        var introspection = processor.Describe() with
+        var introspection = processor.Describe(context.RequestServices) with
         {
             QueryEndpoint = options.QueryEndpoint,
             // Advertised so the UI can offer the SQL pane only where it would work, rather than

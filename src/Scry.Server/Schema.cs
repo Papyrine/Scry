@@ -577,6 +577,7 @@ sealed partial class Schema
 
         EnsureSubscriptionOptions(options);
         EnsureCommandOptions(options);
+        EnsureDisclosureOptions(options);
 
         var schema = new Schema();
         var found = new List<(Type Type, string Name, SourceKind Kind)>();
@@ -1166,6 +1167,43 @@ sealed partial class Schema
         }
 
         Positive(options.CommandRetention, nameof(options.CommandRetention), "It is how long a finished command's outcome is kept for a client asking again.");
+    }
+
+    /// <summary>
+    /// Refuses a disclosure audit beside conditional answers, and settings no audit could run with.
+    /// </summary>
+    /// <remarks>
+    /// A <c>304</c> runs nothing: no policy, no recorder, no row. It tells a caller that the copy it
+    /// kept is still the answer, so the caller reads rows this server has no way to say were read — and
+    /// the audit exists to say exactly that. A host that asked for both asked for two things that
+    /// cannot both hold, and is told so here rather than left with a record that is quietly short.
+    /// </remarks>
+    static void EnsureDisclosureOptions(ScryOptions options)
+    {
+        if (options.Disclosure is not { } disclosure)
+        {
+            return;
+        }
+
+        if (options.QueryFreshness is not null)
+        {
+            throw new($"The disclosure audit records every answer sent, and ScryOptions.{nameof(options.QueryFreshness)} answers a repeated query with a 304 that sends nothing and runs nothing — so the rows a caller goes on reading from its own copy would go unrecorded. Leave {nameof(options.QueryFreshness)} unset where the audit is on.");
+        }
+
+        if (disclosure.StreamChunkBytes < 0)
+        {
+            throw new($"ScryDisclosureOptions.{nameof(disclosure.StreamChunkBytes)} must be zero or greater. It is how much of a stream is held back while the record of it is accepted; zero holds back one row at a time.");
+        }
+
+        if (disclosure.AddressKey is {Length: < 16})
+        {
+            throw new($"ScryDisclosureOptions.{nameof(disclosure.AddressKey)} must be at least 16 bytes. It is the key every address is an HMAC under, and a short one can be searched for; 32 random bytes is the usual choice.");
+        }
+
+        if (string.IsNullOrWhiteSpace(disclosure.Node))
+        {
+            throw new($"ScryDisclosureOptions.{nameof(disclosure.Node)} must name this node. It is recorded on every event, and is what tells two servers' records apart.");
+        }
     }
 
     static void AtLeast(int value, int least, string option, string what)

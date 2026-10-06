@@ -41,3 +41,16 @@ The sources are entity sets on the same unreachable context, rather than the in-
 `Filtered` is the plain path and the baseline. The other arms each add one shape whose preparation has a cost of its own — temporal reads, a membership list, a join, a row policy, a deduplicated projection — and the setup reads back each arm's SQL and refuses to run unless it contains the operator the arm names. `Translated` carries the baseline on into EF's own pre-execution work (funcletizing, hashing, the compiled-query lookup, the command text), so the server's share can be read against the provider's. `Deserialize` is the request's JSON alone.
 
 These arms carry no transport and no execution, so their absolute figures are the cost of preparation itself, and allocations are the number to compare between runs. The one thing the endpoint does that `Stream` does not is the sensitivity walk, which the client shares and which costs one pass over the request.
+
+
+## The disclosure audit
+
+`DisclosureBenchmarks` measures what the [disclosure audit](../docs/disclosure-audit.md) adds to an answer. All three arms are the HTTP endpoint answering the same wide list, so they share the transport constant and can be read against each other directly, which the pair at the top cannot.
+
+`Off` is a host that never turned the audit on, and the baseline. `Recorded` has it on over a sink that discards what it is handed, so the arm is the capture alone: each row hashed and copied into the batch, its key read and written, the batch built. `Journaled` puts the journal in front of that sink, which adds a write and a flush to disk before the answer is sent.
+
+The setup refuses to run unless all three answered with the same bytes. The hosts write no logs. A host's console lines for a request come to about 3 KB, where recording adds under 8 KB to a one-row answer, so left on they would be a good part of the smallest difference here.
+
+`Off` is the same request `ResponseBenchmarks.Endpoint` sends to the same endpoint, so the two agree to within what those log lines cost, which is about 3 KB a request. Neither can say by itself that a host with the audit off pays nothing for it, since both run the code as it now is. That was measured once, by running `ResponseBenchmarks.Endpoint` on the commit before the audit existed and on the one after, and `docs/performance.md` records the two sets of figures. It is the comparison to repeat after a change that touches the response path.
+
+The journaled arm's time is the disk's. It is the one figure here that says more about the machine than about the code, and the least steady: BenchmarkDotNet reported one of its three runs as bimodal.

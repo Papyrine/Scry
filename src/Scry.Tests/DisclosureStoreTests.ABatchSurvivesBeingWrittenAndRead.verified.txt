@@ -1,0 +1,102 @@
+﻿{
+  EventId: 0198a000-0000-7000-8000-000000000001,
+  Sequence: 3,
+  Begin: {
+    Id: 0198a000-0000-7000-8000-000000000001,
+    At: 2026-03-01 12:00 +0,
+    Kind: Page,
+    Source: Employee,
+    Caller: alice,
+    Subscribed: true,
+    Delivery: Confirmed,
+    Request: KZ9Ai72kbjZ_X6FnJkq8-PY4mqQUdE52dv6i6gig3yE,
+    Shape: m601NqoZGK85WDoM1bXN8LdefBSW1qDNKLSA_EmKh7k,
+    Sensitive: true,
+    Stamp: a-stamp,
+    Correlation: trace-1/2,
+    Node: node-1
+  },
+  ShapeAddress: m601NqoZGK85WDoM1bXN8LdefBSW1qDNKLSA_EmKh7k,
+  Fields: [
+    {
+      Source: Employee,
+      Member: Name,
+      Use: Returned,
+      Sensitive: false
+    },
+    {
+      Source: Employee,
+      Member: Avatar,
+      Use: Returned,
+      Sensitive: true
+    },
+    {
+      Source: Employee,
+      Member: Active,
+      Use: Read,
+      Sensitive: false
+    }
+  ],
+  Units: [
+    {
+      Content: 0btsLdVTkQjQz26l-tHBz_vkmdYaMZ03w3-ffSpZgYA
+    },
+    {
+      Ordinal: 1,
+      Content: ktniU9NkMSdCp-uUXplIpjeok_QgXFbXLpf8JoFH2p4
+    }
+  ],
+  Entities: [
+    {
+      Source: Employee,
+      Key: [2],
+      Via: 
+    },
+    {
+      Slot: 1,
+      Source: Department,
+      Key: [1],
+      Via: Department
+    },
+    {
+      Ordinal: 1,
+      Source: Employee,
+      Key: ["A",7],
+      Via: 
+    }
+  ],
+  Contents: [
+    {
+      Address: 0btsLdVTkQjQz26l-tHBz_vkmdYaMZ03w3-ffSpZgYA,
+      Kind: Row,
+      Length: 16,
+      Held: true,
+      Text: {"name":"Aaron"}
+    },
+    {
+      Address: ktniU9NkMSdCp-uUXplIpjeok_QgXFbXLpf8JoFH2p4,
+      Kind: Bytes,
+      Length: 2048,
+      Held: false,
+      Text: 
+    }
+  ],
+  Close: {
+    Outcome: Truncated,
+    Units: 1,
+    At: 2026-03-01 12:00:02 +0,
+    Response: wQV3Vc3eUuS5qWwebByl0suNgQ6tTY6GYyAOnBA7xUM
+  },
+  Review: {
+    Id: 0198a000-0000-7000-8000-000000000002,
+    At: 2026-03-01 12:05 +0,
+    Question: Export,
+    Reviewer: dana,
+    Parameters: KvmDkta72d4TwQ_BEy56-HPKoaQ7H9c39wIH00hrSwk,
+    Results: 12,
+    Events: [
+      0198a000-0000-7000-8000-000000000001
+    ],
+    Node: node-2
+  }
+}

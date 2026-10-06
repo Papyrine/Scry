@@ -42,7 +42,7 @@ static class ScryMcpTools
     static CallToolResult DescribeSchema(IServiceProvider services)
     {
         var request = Request.From(services);
-        var introspection = request.Processor.Describe();
+        var introspection = request.Processor.Describe(request.Services, request.Recorded);
         // An agent that may not write is not told what writing would look like.
         if (request.Options.Mcp != ScryMcpAccess.ReadWrite)
         {
@@ -85,7 +85,8 @@ static class ScryMcpTools
                 request.Headers,
                 new HeaderDictionary(),
                 limited,
-                cancel: cancel);
+                cancel: cancel,
+                caller: request.Recorded);
 
             // Written through the same budget, so the envelope a drifted client is answered with is
             // bounded as any other.
@@ -150,7 +151,7 @@ static class ScryMcpTools
     static CallToolResult Capabilities(IServiceProvider services)
     {
         var request = Request.From(services);
-        return Answer(ScryJson.Serialize(request.Processor.Capabilities(request.Data, request.Services, request.Headers)));
+        return Answer(ScryJson.Serialize(request.Processor.Capabilities(request.Data, request.Services, request.Headers, request.Caller)));
     }
 
     // The receipt as it stands: final where the command finished within the sync window, otherwise the
@@ -260,5 +261,8 @@ static class ScryMcpTools
         public IHeaderDictionary Headers => http.Request.Headers;
 
         public string? Caller => Options.Caller(http);
+
+        // Who an answer is recorded under, where the disclosure audit is on; null where it is off.
+        public string? Recorded => Options.DisclosureCaller(http);
     }
 }

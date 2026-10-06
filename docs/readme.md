@@ -24,6 +24,7 @@ Type-safe, serializable LINQ from a client to a server-side EF Core model.
 | [Row policies](policies.md) | `IReturnablePolicy<T>` for tenant scoping, soft delete, and row-level security. |
 | [Attachments](attachments.md) | `[Attachment]`: a binary member fetched on demand by row key, not carried by the query. |
 | [Observability](observability.md) | The traces, metrics, and per-query audit hook the server emits. |
+| [Disclosure audit](disclosure-audit.md) | A record of everything the server sent to each caller: what is captured, the guarantee, the stores, and the explorer that reads the record back. |
 | [Caching and 304](caching.md) | Answering a repeated query with `304 Not Modified`, using Delta for the database timestamp. |
 | [Performance](performance.md) | What a response costs to write and to read, measured, and how to re-run the benchmarks. |
 | [Security model](security.md) | The threat model, every enforcement layer, and what Scry does *not* protect. |
@@ -81,6 +82,8 @@ Sample.Model (EF Core + [Queryable])
 | [Scry.Server.MassTransit](https://nuget.org/packages/Scry.Server.MassTransit/) | Opt-in: commands carried over MassTransit. |
 | [Scry.Server.Rebus](https://nuget.org/packages/Scry.Server.Rebus/) | Opt-in: commands carried over Rebus. |
 | [Scry.Server.Wolverine](https://nuget.org/packages/Scry.Server.Wolverine/) | Opt-in: commands carried over Wolverine. |
+| [Scry.Server.Disclosure.SqlServer](https://nuget.org/packages/Scry.Server.Disclosure.SqlServer/) | Opt-in: the [disclosure audit](disclosure-audit.md) kept in SQL Server, a record of everything the server sent to each caller. |
+| [Scry.Server.Disclosure.Explorer](https://nuget.org/packages/Scry.Server.Disclosure.Explorer/) | Opt-in: a browser explorer over that record, for whoever has to answer who saw what. |
 
 `Scry.SourceGenerator` is not published on its own — it is packed inside `Scry.Client` as an analyzer, so referencing `Scry.Client` is all a client project needs.
 

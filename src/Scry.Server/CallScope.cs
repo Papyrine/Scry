@@ -38,4 +38,10 @@ readonly record struct CallScope(
     /// nothing for the question.
     /// </summary>
     public SubscriptionRun? Subscription { get; init; }
+
+    /// <summary>
+    /// Where this call's answer is recorded as it is written, when the host turned the disclosure
+    /// audit on. Null otherwise, which is the one check every write site makes.
+    /// </summary>
+    public DisclosureCapture? Disclosure { get; init; }
 }

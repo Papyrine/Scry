@@ -46,21 +46,23 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     {
         var plan = Walk(request, db, scope);
         Prepare(plan, scope);
+        var capture = scope.Disclosure;
         if (plan.Fold is { } fold)
         {
-            return Materialize(fold.Finish(Execution.Run(fold.Query, fold.Call)));
+            return Materialize(Disclosed(fold.Finish(Execution.Run(fold.Query, fold.Call)), capture));
         }
 
         if (plan.Page is { } page)
         {
-            return Envelope(page.Finish(page.Rows.ToList()));
+            return Envelope(Disclosed(page.Finish(page.Rows.ToList()), capture));
         }
 
         var set = plan.Rows!.Value;
+        capture?.Begin(ScryDisclosureKind.List);
         var shaped = new List<Dictionary<string, object?>>();
         foreach (var row in set.Rows)
         {
-            shaped.Add(ShapeRow(row!, set));
+            shaped.Add(ShapeRow(row!, set, capture));
         }
 
         return ListResponse(shaped);
@@ -74,24 +76,82 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     {
         var plan = Walk(request, db, scope);
         await PrepareAsync(plan, scope, cancel);
+        var capture = scope.Disclosure;
         if (plan.Fold is { } fold)
         {
-            return Materialize(fold.Finish(await Execution.RunAsync(fold.Query, fold.Call, cancel)));
+            return Materialize(Disclosed(fold.Finish(await Execution.RunAsync(fold.Query, fold.Call, cancel)), capture));
         }
 
         if (plan.Page is { } page)
         {
-            return Envelope(page.Finish(await Execution.ReadAsync(page.Rows, cancel)));
+            return Envelope(Disclosed(page.Finish(await Execution.ReadAsync(page.Rows, cancel)), capture));
         }
 
         var set = plan.Rows!.Value;
+        capture?.Begin(ScryDisclosureKind.List);
         var shaped = new List<Dictionary<string, object?>>();
         await foreach (var row in Enumerate(set, cancel))
         {
-            shaped.Add(ShapeRow(row, set));
+            shaped.Add(ShapeRow(row, set, capture));
         }
 
         return ListResponse(shaped);
+    }
+
+    // What the general path hands the disclosure audit, where it is on: the same units the writer
+    // would have recorded, taken from the same projected values before they are shaped into the
+    // dictionaries the serializer reads.
+    static Terminal Disclosed(Terminal terminal, DisclosureCapture? capture)
+    {
+        if (capture is null)
+        {
+            return terminal;
+        }
+
+        if (terminal.Kind == ResultKind.Scalar)
+        {
+            capture.Begin(ScryDisclosureKind.Scalar);
+            capture.AddScalar(terminal.Value);
+            return terminal;
+        }
+
+        // A single row the query matched none of is an answer too, and is recorded as one with no
+        // unit: the caller learned there was nothing.
+        capture.Begin(ScryDisclosureKind.Single);
+        if (terminal.Row is { } row)
+        {
+            capture.AddRow(terminal.Plan!, row);
+        }
+
+        return terminal;
+    }
+
+    static PageSet Disclosed(PageSet paged, DisclosureCapture? capture)
+    {
+        if (capture is null)
+        {
+            return paged;
+        }
+
+        capture.Begin(ScryDisclosureKind.Page);
+        foreach (var row in paged.Rows)
+        {
+            capture.AddRow(paged.Plan, row);
+        }
+
+        return paged;
+    }
+
+    static Dictionary<string, object?> ShapeRow(object row, RowSet set, DisclosureCapture? capture)
+    {
+        if (capture is null)
+        {
+            return ShapeRow(row, set);
+        }
+
+        var values = ResponseWriter.Row(row, set);
+        capture.AddRow(set.Plan, values);
+        return Shape(values, set.Plan, set.Binary);
     }
 
     static QueryResponse Envelope(PageSet paged)
@@ -170,27 +230,44 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
         await PrepareAsync(plan, scope, cancel);
 
+        // Told what kind of answer this is before the writer's first row: a response that is sent as
+        // it is written has its record begun before its end is known.
+        var capture = scope.Disclosure;
+
         // A terminal folded its rows away, so there is nothing to spill and permission stays withheld.
         if (plan.Fold is { } fold)
         {
             var folded = fold.Finish(await Execution.RunAsync(fold.Query, fold.Call, cancel));
-            return (folded.Kind, ResponseWriter.WriteTerminal(output, folded, stamp));
+            capture?.Begin(Disclosure(folded.Kind));
+            return (folded.Kind, ResponseWriter.WriteTerminal(output, folded, stamp, capture));
         }
 
         if (plan.Page is { } page)
         {
             var paged = page.Finish(await Execution.ReadAsync(page.Rows, cancel));
             spill?.AllowSpill(paged.Plan.BinarySlots is null);
+            capture?.Begin(ScryDisclosureKind.Page);
             return (
                 ResultKind.Page,
-                await ResponseWriter.WritePageAsync(output, spill, paged, stamp, cancel));
+                await ResponseWriter.WritePageAsync(output, spill, paged, stamp, capture, cancel));
         }
 
         var rowSet = plan.Rows!.Value;
         spill?.AllowSpill(rowSet.Plan.BinarySlots is null);
+        capture?.Begin(ScryDisclosureKind.List);
         return (
             ResultKind.List,
-            await ResponseWriter.WriteListAsync(output, spill, rowSet, stamp, cancel));
+            await ResponseWriter.WriteListAsync(output, spill, rowSet, stamp, capture, cancel));
+    }
+
+    static ScryDisclosureKind Disclosure(ResultKind kind)
+    {
+        if (kind == ResultKind.Scalar)
+        {
+            return ScryDisclosureKind.Scalar;
+        }
+
+        return ScryDisclosureKind.Single;
     }
 
     /// <summary>
@@ -272,6 +349,10 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         }
     }
 
+    /// <summary>The same, for a row already read out into its values.</summary>
+    internal static Dictionary<string, object?> ShapeValues(object[] values, RowSet set) =>
+        Shape(values, set.Plan, set.Binary);
+
     /// <summary>Shapes one row of a <see cref="RowSet"/> into its response object.</summary>
     internal static Dictionary<string, object?> ShapeRow(object row, RowSet set)
     {
@@ -351,6 +432,34 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         bool buildOnly = false)
     {
         var source = validator.Validate(request);
+
+        // What the disclosure audit learns while the query is rebound: the members it read, and
+        // which rows each row of the answer is read from. Handed over once the walk is whole, so the
+        // record of an answer says what it was made of before its first row is written.
+        DisclosurePlanner? planner = null;
+        if (scope.Disclosure is not null &&
+            options.Disclosure is { } audit)
+        {
+            planner = new(schema, db.Model, audit, inMemory: source.Kind == SourceKind.Poco);
+        }
+
+        var plan = Walk(request, db, scope, buildOnly, source, planner);
+        if (planner is not null)
+        {
+            scope.Disclosure!.Describe(planner);
+        }
+
+        return plan;
+    }
+
+    Plan Walk(
+        QueryRequest request,
+        DbContext db,
+        CallScope scope,
+        bool buildOnly,
+        ScrySource source,
+        DisclosurePlanner? planner)
+    {
         var elementType = source.ClrType;
 
         // A query that runs reads rows, so a cached policy's answers are brought up to date for it. A
@@ -393,7 +502,8 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 (name, include) => ResolveSource(name, db, scope, include),
                 buildOnly ? null : probes),
             // Decides each command's capability once for this call, however often the query reads it.
-            new(schema, new(scope.Services, db, scope.RequestHeaders, scope.ResponseHeaders)));
+            new(schema, new(scope.Services, db, scope.RequestHeaders, scope.ResponseHeaders)),
+            planner);
 
         var query = source.Resolve(db, scope.Services);
         query = ApplyPolicy(query, source, db, scope);
@@ -734,7 +844,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 return new(probes, Aggregate(builder, query, aggregate, elementType), null, null);
         }
 
-        var (projected, plan) = BuildProjected(builder, query, elementType, groupBy, select, groupFilter);
+        // Deduplicated rows are rows of no source, and a key read beside one would be a column the
+        // database deduplicated on as well.
+        var (projected, plan) = BuildProjected(builder, query, elementType, groupBy, select, groupFilter, identified: !distinct);
 
         if (distinct)
         {
@@ -792,7 +904,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         }
 
         var (outerKey, innerKey) = builder.BuildJoinKeys(join.OuterKey, outerType, join.InnerKey, innerType);
-        var (selector, shape, binarySlots) = builder.BuildJoinProjection(join.Result, outerType, innerType, join.Kind);
+        var (selector, shape, binarySlots, entities) = builder.BuildJoinProjection(join.Result, outerType, innerType, join.Kind);
 
         var joined = (IQueryable<object[]>)QueryComposition.Compose(
             outer,
@@ -805,7 +917,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 Expression.Quote(innerKey),
                 Expression.Quote(selector)));
 
-        return (joined, new(selector, shape, binarySlots));
+        return (joined, new(selector, shape, binarySlots, entities));
     }
 
     /// <summary>
@@ -904,7 +1016,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         }
 
         scope.Cached.Refresh();
-        return fetch.Finish(Execution.Run(fetch.Rows, fetch.Call));
+        return Disclosed(fetch, fetch.Finish(Execution.Run(fetch.Rows, fetch.Call)), scope.Disclosure);
     }
 
     public async ValueTask<ScryAttachmentResult> FetchAttachmentAsync(AttachmentRequest request, DbContext db, CallScope scope, Cancel cancel)
@@ -915,7 +1027,40 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         }
 
         await scope.Cached.RefreshAsync(cancel);
-        return fetch.Finish(await Execution.RunAsync(fetch.Rows, fetch.Call, cancel));
+        return Disclosed(fetch, fetch.Finish(await Execution.RunAsync(fetch.Rows, fetch.Call, cancel)), scope.Disclosure);
+    }
+
+    // What an attachment that was found is recorded as: the row it is a member of, the member, and
+    // the bytes by their digest — the same digest the same bytes have when a query returns them, so
+    // the two are one content. A row whose value is absent is recorded as that: the caller learned the
+    // row is there and holds nothing. One that was not found sent nothing, and is not recorded.
+    static ScryAttachmentResult Disclosed(AttachmentFetch fetch, ScryAttachmentResult result, DisclosureCapture? capture)
+    {
+        if (capture is null ||
+            !result.Found ||
+            fetch.Field is not { } field)
+        {
+            return result;
+        }
+
+        capture.Begin(ScryDisclosureKind.Attachment);
+        capture.ContentType = result.ContentType;
+        capture.Describe([field], field.Sensitive);
+        if (fetch.Key is { } key)
+        {
+            capture.AddEntity(slot: 0, field.Source, key, via: "");
+        }
+
+        if (result.Value is { } bytes)
+        {
+            capture.AddBinary(bytes);
+        }
+        else
+        {
+            capture.AddScalar(null);
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -925,6 +1070,12 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     /// </summary>
     readonly record struct AttachmentFetch(IQueryable Rows, MethodCallExpression Call, string? ContentType)
     {
+        /// <summary>The member being fetched, as the disclosure audit names it. Null where the audit is off.</summary>
+        public ScryDisclosureField? Field { get; init; }
+
+        /// <summary>The row's key as the disclosure audit records keys, where the row has one it can name.</summary>
+        public string? Key { get; init; }
+
         public ScryAttachmentResult Finish(object? row)
         {
             if (row is object[] found)
@@ -1034,7 +1185,23 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             Expression.NewArrayInit(typeof(object), Expression.Convert(Expression.Property(parameter, member.ClrProperty), typeof(object))),
             parameter);
         var rows = ApplySelect(query, selector);
-        return new(rows, QueryComposition.Call("SingleOrDefault", [typeof(object[])], rows.Expression), context.ContentType);
+        var fetch = new AttachmentFetch(rows, QueryComposition.Call("SingleOrDefault", [typeof(object[])], rows.Expression), context.ContentType);
+        if (scope.Disclosure is null ||
+            options.Disclosure is not { } audit)
+        {
+            return fetch;
+        }
+
+        // The wire names the row by key in name order; the record keeps a key in the key's own.
+        return fetch with
+        {
+            Field = new(
+                DisclosurePlanner.SourceName(schema, source.ClrType),
+                member.Name,
+                ScryDisclosureFieldUse.Returned,
+                member.Sensitive || meta.Sensitive),
+            Key = DisclosurePlanner.OrderedKey(db.Model, audit, source.ClrType, keys, values)
+        };
     }
 
     /// <summary>
@@ -1103,7 +1270,8 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         Type elementType,
         GroupByOp? groupBy,
         SelectOp? select,
-        Node? groupFilter)
+        Node? groupFilter,
+        bool identified)
     {
         if (groupBy is not null)
         {
@@ -1120,8 +1288,8 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         }
 
         var plan = select is null
-            ? builder.BuildDefaultProjection(elementType)
-            : builder.BuildProjection(select.Projection, elementType);
+            ? builder.BuildDefaultProjection(elementType, identified)
+            : builder.BuildProjection(select.Projection, elementType, identified);
         return (ApplySelect(query, plan.Selector), plan);
     }
 
@@ -1442,7 +1610,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             // that resumes it — is total.
             foreach (var (key, _) in keys.Skip(orderings.Count))
             {
-                query = ApplyOrder(query, builder.BuildKeySelector(key, elementType), descending: false, then: true);
+                // The server's own addition to the ordering, so nothing the query is recorded as
+                // having read.
+                query = ApplyOrder(query, builder.BuildKeySelector(key, elementType, asked: false), descending: false, then: true);
             }
 
             order = CursorCodec.OrderStamp(source.Name, steps, keys);
@@ -1467,9 +1637,9 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         }
 
         var effectiveKeys = seekSafe ? keys : Array.Empty<(Node Key, bool Descending)>();
-        var (selector, shape, binarySlots, keyCount) = builder.BuildPageProjection(select?.Projection, effectiveKeys, elementType);
+        var (selector, shape, binarySlots, keyCount, entities) = builder.BuildPageProjection(select?.Projection, effectiveKeys, elementType);
         var projected = ApplySelect(query, selector);
-        var plan = new ProjectionPlan(selector, shape, binarySlots);
+        var plan = new ProjectionPlan(selector, shape, binarySlots, entities);
 
         // Fetch one extra row to detect a further page without issuing a second COUNT query. Composed
         // through ApplyPaging rather than Queryable.Take so the count is bound, not inlined.

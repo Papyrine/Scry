@@ -17,6 +17,7 @@
 | `Sample.FSharp.Tests` | The F# queries run through the server, hosted in-process, with the requests and rows snapshotted. |
 | `Sample.RedisServer`, `Sample.MessagePipeServer` | A minimal server each, for running twice: a [backplane](#live-queries-across-more-than-one-process) carrying changes from one node to the other. |
 | `Sample.NServiceBusServer`, `Sample.NServiceBusWorker` | The same over NServiceBus, plus a worker whose handler writes from another process. |
+| `Sample.DisclosureServer` | A host with the [disclosure audit](#a-record-of-what-was-sent) on: a record of everything it sends, kept in SQL Server, and the explorer over that record. |
 | `Sample.ModelPackageClient` | The console client's first query, generated from `Sample.Model` packed as a NuGet package. Outside the solution: see [The model as a package](#the-model-as-a-package). |
 
 The three desktop and console clients are there to show that the client half is not tied to a browser.
@@ -826,6 +827,77 @@ data: {"version":1,"id":"6e0f…","status":"Pending","stamp":"…"}
 event: result
 data: {"version":1,"id":"6e0f…","status":"Completed","stamp":"…"}
 ```
+
+
+## A record of what was sent
+
+`Sample.DisclosureServer` is a host of its own with the [disclosure audit](disclosure-audit.md) on. Every answer is a committed row in the application's own database before it is sent, and an answer the database does not take is not given:
+
+<!-- snippet: sampleDisclosureAudit -->
+<a id='snippet-sampleDisclosureAudit'></a>
+```cs
+services
+    .AddScry<SampleContext>(_ =>
+    {
+        // What the model needs before any server will start: see Sample.WebServer.
+        _.AddPocoSource(_ => Holiday.Seed());
+        _.AddAttachmentPolicy<Department, SignedIn<Department>>();
+        _.AddAttachmentPolicy<Employee, SignedIn<Employee>>();
+
+        // Every answer is a committed row in this database before it is sent, and an answer
+        // the database does not take is not given. The application's own database, so that
+        // recording adds nothing that can be down to the path of an answer.
+        _.UseSqlServerDisclosureAudit(
+            database.ConnectionString,
+            store =>
+            {
+                // Each batch of the record linked to the one before, so that a change to what
+                // was recorded shows. A server with ledger tables has them as well, and they
+                // are the stronger of the two; this is what the explorer's check reads.
+                store.HashChain = true;
+                store.Clock = clock;
+            },
+            audit =>
+            {
+                audit.Node = "sample";
+                audit.Clock = clock;
+
+                // A row is recorded by its key, and a source with none has to be given one or
+                // owned up to: a view by what its rows are grouped on, a list from memory by
+                // nothing at all.
+                audit.Key<EmployeeSummary>(_ => _.Department);
+                audit.Unkeyed<Holiday>();
+            });
+    });
+```
+<sup><a href='/samples/Sample.DisclosureServer/Program.cs#L49-L83' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleDisclosureAudit' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+```bash
+dotnet run --project samples/Sample.DisclosureServer
+```
+
+Everything the audit records, it records under a name, so the host has a stand-in for signing in: be `alice`, ask a few queries in the query explorer at `/scry`, then be `auditor` and open `/scry-disclosures` to see who was sent what. The stand-in takes whoever a link says the visitor is. It is there so the sample can show the audit without also being a sample of authentication, and is not a pattern to copy.
+
+<!-- snippet: mapDisclosureExplorer -->
+<a id='snippet-mapDisclosureExplorer'></a>
+```cs
+// The record, read back. Shut to everybody but the one person whose job it is — a real host
+// puts its own authorization here, and RequireAuthorization on what this returns.
+app.MapScryDisclosureExplorer(_ =>
+{
+    _.EnableGuard = DemoSignIn.IsReviewer;
+    _.EnableExport = DemoSignIn.IsReviewer;
+
+    // Off unless a host turns it on, and it cannot be taken back: on here so there is
+    // something to try it against.
+    _.EnableErase = DemoSignIn.IsReviewer;
+});
+```
+<sup><a href='/samples/Sample.DisclosureServer/Program.cs#L98-L110' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapDisclosureExplorer' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+It is apart from `Sample.WebServer` because that one answers a repeated query with a `304`, and a server with the audit on refuses to start beside conditional requests.
 
 
 ## Integration tests

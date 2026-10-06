@@ -1,0 +1,29 @@
+﻿{
+  Sensitive: false,
+  Fields: [
+    Order.Lines: Traversed,
+    Order.Region: Read,
+    OrderLine.Sku: Returned,
+    OrderLine.Sku: Read
+  ],
+  Units: [
+    {
+      Content: {"sku":"A-1"},
+      Rows: [
+        OrderLine[1]
+      ]
+    },
+    {
+      Content: {"sku":"A-2"},
+      Rows: [
+        OrderLine[2]
+      ]
+    },
+    {
+      Content: {"sku":"B-1"},
+      Rows: [
+        OrderLine[3]
+      ]
+    }
+  ]
+}

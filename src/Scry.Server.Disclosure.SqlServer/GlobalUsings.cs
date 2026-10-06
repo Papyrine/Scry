@@ -1,0 +1,9 @@
+global using System.Buffers;
+global using System.Data;
+global using System.Runtime.InteropServices;
+global using System.Security.Cryptography;
+global using Microsoft.Data.SqlClient;
+global using Microsoft.Extensions.DependencyInjection;
+global using Microsoft.Extensions.DependencyInjection.Extensions;
+global using Microsoft.Extensions.Hosting;
+global using Scry;

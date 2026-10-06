@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!--
+    The header's crystal-ball brand mark (App.razor), restated with explicit colors: a favicon renders
+    outside the page, so currentColor and the app's CSS variables cannot reach it. The media query
+    tracks the OS scheme — the in-app theme toggle cannot retint a tab icon.
+  -->
+  <style>
+    .stroke { fill: none; stroke: #6d28d9; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .fill { fill: #6d28d9; }
+    @media (prefers-color-scheme: dark) {
+      .stroke { stroke: #a78bfa; }
+      .fill { fill: #a78bfa; }
+    }
+  </style>
+  <circle class="stroke" cx="12" cy="10" r="6.5" />
+  <path class="stroke" d="M8 20h8" />
+  <path class="fill" d="M9.3 6.6c.35.9.55 1.1 1.45 1.45-.9.35-1.1.55-1.45 1.45-.35-.9-.55-1.1-1.45-1.45.9-.35 1.1-.55 1.45-1.45z" />
+</svg>

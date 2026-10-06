@@ -82,7 +82,7 @@ A batch is a single request that costs more than one query, which makes it worth
 
 ## Observability
 
-Nothing special is needed. Each entry produces its own [span, metrics, and audit entry](observability.md), so a batch is not a blind spot in the trail — what was asked is what is recorded, and a batch asked more than once. The entries' spans nest under one `scry.batch` span tagged with `scry.batch.size`. A batch refused whole — more entries than `MaxBatchSize`, or an unsupported wire version — ran no entry, so the refusal is recorded once as its own: a `rejected` metric under the source `(batch)`, the `scry.batch` span marked, and one audit entry carrying the batch.
+Nothing special is needed. Where the [disclosure audit](disclosure-audit.md) is on, each entry that was answered is an event of its own in it, and the entries of one batch share a correlation id. Each entry produces its own [span, metrics, and audit entry](observability.md), so a batch is not a blind spot in the trail — what was asked is what is recorded, and a batch asked more than once. The entries' spans nest under one `scry.batch` span tagged with `scry.batch.size`. A batch refused whole — more entries than `MaxBatchSize`, or an unsupported wire version — ran no entry, so the refusal is recorded once as its own: a `rejected` metric under the source `(batch)`, the `scry.batch` span marked, and one audit entry carrying the batch.
 
 
 ## Transports

@@ -7,6 +7,7 @@
     <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.12" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.12" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.12" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
     <!-- Scry.Client.SignalR's one dependency. The server half needs none: a hub is the shared framework's. -->
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.12" />
@@ -30,6 +31,9 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
     <PackageVersion Include="EfLocalDb" Version="27.2.3" />
+    <!-- Scry.Server.Disclosure.SqlServer's one dependency. At the version EfLocalDb already brings to
+         the tests, so that pinning it here moves nothing else in the tree. -->
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.1.1" />
     <!-- Pinned to 5.3.0 (do not bump without running the Explorer UI tests). 5.6.0 is the next published
          version — nuget.org has no 5.4.x/5.5.x — and it calls System.Threading.Volatile.ReadBarrier, which
          the net10 mono-wasm interpreter does not implement: the managed fallback recurses into itself and

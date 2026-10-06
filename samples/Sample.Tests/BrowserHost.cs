@@ -1,8 +1,8 @@
 ﻿/// <summary>
-/// The real Sample.WebServer, launched as its own process, and a headless Chromium to drive it: one
-/// pair per browser fixture.
+/// A real sample server, launched as its own process, and a headless Chromium to drive it: one pair
+/// per browser fixture. Sample.WebServer, unless a fixture's host says another.
 /// </summary>
-public sealed class BrowserHost :
+public class BrowserHost :
     TUnit.Core.Interfaces.IAsyncInitializer,
     IAsyncDisposable
 {
@@ -16,9 +16,24 @@ public sealed class BrowserHost :
     // other is then left a template file it cannot open, so every server after fails to start. The
     // first launch therefore runs alone, and the rest start once it is listening — by which point the
     // template is there to clone. A first launch that fails leaves the template unmarked, so the next
-    // launch runs alone in its place.
-    static SemaphoreSlim templateGate = new(1, 1);
-    static bool templateBuilt;
+    // launch runs alone in its place. One of these for each server project, since each has a LocalDB
+    // instance, and so a template, of its own.
+    sealed class Template
+    {
+        public SemaphoreSlim Gate { get; } = new(1, 1);
+
+        public bool Built;
+    }
+
+    static ConcurrentDictionary<string, Template> templates = new();
+
+    /// <summary>The sample project whose server this launches.</summary>
+    protected virtual string Project => "Sample.WebServer";
+
+    /// <summary>Anything more the server is to be told through its environment.</summary>
+    protected virtual void Configure(IDictionary<string, string?> environment)
+    {
+    }
 
     Process server = null!;
     IPlaywright playwright = null!;
@@ -52,24 +67,26 @@ public sealed class BrowserHost :
         // UseStaticWebAssets() call means the WASM client is served in this environment too.
         server.StartInfo.Environment["DOTNET_ENVIRONMENT"] = "Development";
         server.StartInfo.Environment["SAMPLE_DATABASE"] = $"Browser{Interlocked.Increment(ref launches)}";
+        Configure(server.StartInfo.Environment);
 
-        if (Volatile.Read(ref templateBuilt))
+        var template = templates.GetOrAdd(Project, _ => new());
+        if (Volatile.Read(ref template.Built))
         {
             await StartServer(port, TimeSpan.FromSeconds(30));
         }
         else
         {
-            await templateGate.WaitAsync();
+            await template.Gate.WaitAsync();
             try
             {
                 // Building the template from cold is most of a launch's time, so the one that may have
                 // to is given longer.
                 await StartServer(port, TimeSpan.FromMinutes(2));
-                Volatile.Write(ref templateBuilt, true);
+                Volatile.Write(ref template.Built, true);
             }
             finally
             {
-                templateGate.Release();
+                template.Gate.Release();
             }
         }
 
@@ -118,7 +135,7 @@ public sealed class BrowserHost :
         }
     }
 
-    static string LocateServerDll()
+    string LocateServerDll()
     {
         // .../samples/Sample.Tests/bin/<config>/<tfm>/ — mirror <config>/<tfm> onto the server output.
         var baseDir = new DirectoryInfo(AppContext.BaseDirectory);
@@ -126,13 +143,13 @@ public sealed class BrowserHost :
         var config = baseDir.Parent!.Name;
 
         var dll = Path.GetFullPath(
-            Path.Combine(ProjectFiles.SolutionDirectory, "Sample.WebServer", "bin", config, tfm, "Sample.WebServer.dll"));
+            Path.Combine(ProjectFiles.SolutionDirectory, Project, "bin", config, tfm, $"{Project}.dll"));
         if (File.Exists(dll))
         {
             return dll;
         }
 
-        throw new FileNotFoundException("Sample.WebServer build output not found; build the sample first.", dll);
+        throw new FileNotFoundException($"{Project} build output not found; build the sample first.", dll);
     }
 
     static int GetFreePort()
@@ -154,7 +171,7 @@ public sealed class BrowserHost :
             // A server that has exited will never listen: say so now, rather than when the wait runs out.
             if (server.HasExited)
             {
-                throw new InvalidOperationException($"Sample.WebServer exited with code {server.ExitCode} before listening on port {port}.");
+                throw new InvalidOperationException($"{Project} exited with code {server.ExitCode} before listening on port {port}.");
             }
 
             try
@@ -169,6 +186,6 @@ public sealed class BrowserHost :
             }
         }
 
-        throw new TimeoutException($"Sample.WebServer did not start listening on port {port} within {timeout}.");
+        throw new TimeoutException($"{Project} did not start listening on port {port} within {timeout}.");
     }
 }

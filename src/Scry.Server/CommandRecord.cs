@@ -38,6 +38,13 @@ sealed class CommandRecord(CommandRequest request, CommandMeta meta, string? cal
     /// </summary>
     public IServiceScopeFactory? AuditScopes { get; set; }
 
+    /// <summary>
+    /// The target row's key as the disclosure audit records keys, where the audit is on and the
+    /// command has a target. Worked out when the command is accepted, which is the one time the model
+    /// that says what order a key is in is to hand.
+    /// </summary>
+    public string? DisclosureKey { get; set; }
+
     /// <summary>The real failure, for the audit trail, where the client was shown a fixed message.</summary>
     public Exception? Failure { get; private set; }
 

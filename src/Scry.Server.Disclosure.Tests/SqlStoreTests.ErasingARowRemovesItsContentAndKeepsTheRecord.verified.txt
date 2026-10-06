@@ -1,0 +1,41 @@
+﻿dr.osei received 1: List of Patient (Released, 3)
+  Patient.Name: 1
+  Patient.Diagnosis: 0
+  Patient.WardId: 0
+  Ward.Name: 0
+  Note.Text: 0
+  Admission.PatientId: 0
+nurse.kim received 2: List of Patient (Released, 3), List of Patient (Released, 2)
+  Patient.Name: 2
+  Patient.Diagnosis: 1
+  Patient.WardId: 0
+  Ward.Name: 1
+  Note.Text: 0
+  Admission.PatientId: 0
+Patient[1]: nurse.kim #0 via '' p5DkJXuKOpS_I0mOOefHHwdYBUaDWocUSLm7sTR-5Vs, nurse.kim #0 via '' GEE8NIDBBtb6HbAqvbpI5k2nPVdDz4agFBDlmFwjsag, dr.osei #0 via '' p5DkJXuKOpS_I0mOOefHHwdYBUaDWocUSLm7sTR-5Vs
+Patient[2]: nurse.kim #1 via '' Ro1EWlm8lRJHRrEj5tJPa_Jzjk8w3VG8xor6Pu9ttyo, nurse.kim #1 via '' j5-BKegzdpWE6X4K_knMTqTKRLkc5ow3UZLGdrUdfqU, dr.osei #1 via '' Ro1EWlm8lRJHRrEj5tJPa_Jzjk8w3VG8xor6Pu9ttyo
+Patient[3]: nurse.kim #2 via '' nS0nIU78t2X1RgeV1_GLkTQ5lq9Wm2sNMW3c5c3LsA0, dr.osei #2 via '' nS0nIU78t2X1RgeV1_GLkTQ5lq9Wm2sNMW3c5c3LsA0
+Ward[1]: nurse.kim #0 via 'Ward' GEE8NIDBBtb6HbAqvbpI5k2nPVdDz4agFBDlmFwjsag, nurse.kim #1 via 'Ward' j5-BKegzdpWE6X4K_knMTqTKRLkc5ow3UZLGdrUdfqU
+Admission[1,2]: 
+WardCensus["North"]: 
+List of Patient for dr.osei on ward-1, sensitive False, Released, 3
+  asked {"version":1,"root":"Patient","pipeline":[{"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},{"$type":"select","projection":{"members":["Name"]}}]}
+  read Patient.Name Returned False; Patient.Name Read False
+  0: {"name":"Ada"} <- Patient[1] via ''
+  1: {"name":"Brook"} <- Patient[2] via ''
+  2: {"name":"Chidi"} <- Patient[3] via ''
+List of Patient for nurse.kim on ward-1, sensitive True, Released, 2
+  asked {"version":1,"root":"Patient","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Ward","Name"]},"right":{"$type":"const","value":"North","tag":"String"}}},{"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},{"$type":"select","projection":{"members":["Name","Diagnosis",{"name":"Ward","value":{"$type":"node","node":{"$type":"member","path":["Ward","Name"]}}}]}}]}
+  read Patient.Diagnosis Returned True; Patient.Name Returned False; Patient.Name Read False; Patient.Ward Traversed False; Ward.Name Returned False; Ward.Name Read False
+  0: (erased, was 52) <- Patient[1] via '', Ward[1] via 'Ward'
+  1: {"name":"Brook","diagnosis":"Asthma","ward":"North"} <- Patient[2] via '', Ward[1] via 'Ward'
+List of Patient for nurse.kim on ward-1, sensitive False, Released, 3
+  asked {"version":1,"root":"Patient","pipeline":[{"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},{"$type":"select","projection":{"members":["Name"]}}]}
+  read Patient.Name Returned False; Patient.Name Read False
+  0: {"name":"Ada"} <- Patient[1] via ''
+  1: {"name":"Brook"} <- Patient[2] via ''
+  2: {"name":"Chidi"} <- Patient[3] via ''
+Patient keyed True: Diagnosis True, Name False, Ward False
+Ward keyed True: Name False
+erased Patient[1] by records.officer: 0
+erased Patient[1] by records.officer: 2
