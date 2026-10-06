@@ -7,11 +7,29 @@ using MassTransit;
 /// </summary>
 public class MassTransitCommandTests
 {
+    // One host for each window rather than one a test: a bus a test, all starting at once, is what a
+    // starved runner spent its time on, until a command outlasted the 60 seconds Send waits.
+    static IHost host = null!;
+    static IHost pendingHost = null!;
+
+    [Before(Class)]
+    public static async Task StartHosts()
+    {
+        host = await Start();
+        pendingHost = await Start(window: TimeSpan.Zero);
+    }
+
+    [After(Class)]
+    public static async Task StopHosts()
+    {
+        await pendingHost.StopAsync();
+        await host.StopAsync();
+        pendingHost.Dispose();
+        host.Dispose();
+    }
     [Test]
     public async Task SendsThroughTheBusAndCompletesWithinTheWindow()
     {
-        using var host = await Start();
-
         var receipts = await ScryServer.Send(host.Services, "ShipParcel", new {label = "mt-within"});
 
         await Assert.That(receipts.Select(_ => _.Status)).IsEquivalentTo([CommandStatus.Completed], CollectionOrdering.Matching);
@@ -20,9 +38,7 @@ public class MassTransitCommandTests
     [Test]
     public async Task ARemoteWorkerCompletesTheCommand()
     {
-        using var host = await Start(window: TimeSpan.Zero);
-
-        var receipts = await ScryServer.Send(host.Services, "ShipParcel", new {label = "mt-pending"});
+        var receipts = await ScryServer.Send(pendingHost.Services, "ShipParcel", new {label = "mt-pending"});
 
         await Assert.That(receipts.Select(_ => _.Status)).IsEquivalentTo([CommandStatus.Pending, CommandStatus.Completed], CollectionOrdering.Matching);
     }
@@ -30,7 +46,6 @@ public class MassTransitCommandTests
     [Test]
     public async Task CarriesTheHeaders()
     {
-        using var host = await Start();
         var id = Guid.NewGuid();
 
         await ScryServer.Send(host.Services, "ShipParcel", new {label = "mt-headers"}, id, caller: "alice");
@@ -41,8 +56,6 @@ public class MassTransitCommandTests
     [Test]
     public async Task ATypedResultTravelsBack()
     {
-        using var host = await Start();
-
         var receipts = await ScryServer.Send(host.Services, "WeighParcel", new {grams = 21});
 
         await Assert.That(receipts.Last().Result!.Value.GetProperty("grams").GetInt32()).IsEqualTo(42);
@@ -51,8 +64,6 @@ public class MassTransitCommandTests
     [Test]
     public async Task AHandlerThatExhaustsRetriesIsReportedAsFailed()
     {
-        using var host = await Start();
-
         var receipts = await ScryServer.Send(host.Services, "ShipParcel", new {label = "mt-failing", fail = true});
 
         using (Assert.Multiple())
@@ -65,7 +76,6 @@ public class MassTransitCommandTests
     [Test]
     public async Task TheAdapterClaimsOnlyWhatItWasTold()
     {
-        using var host = await Start();
         var dispatcher = host.Services.GetRequiredService<MassTransitDispatcher>();
 
         using (Assert.Multiple())
@@ -80,9 +90,9 @@ public class MassTransitCommandTests
     [Test]
     public async Task TwoAdaptersClaimingOneCommandRefuseStartup()
     {
-        using var host = await Start(second: true);
+        using var second = await Start(second: true);
 
-        var exception = Assert.ThrowsExactly<Exception>(() => ScryServer.EnsureDispatchable(host.Services));
+        var exception = Assert.ThrowsExactly<Exception>(() => ScryServer.EnsureDispatchable(second.Services));
 
         await Assert.That(exception.Message).Contains("claimed by");
     }

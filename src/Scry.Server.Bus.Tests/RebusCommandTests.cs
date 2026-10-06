@@ -12,11 +12,27 @@ using Rebus.Transport.InMem;
 /// </summary>
 public class RebusCommandTests
 {
+    // One pair for each window rather than one a test: two hosts a test, all starting at once, is what
+    // a starved runner spent its time on, until a command came close to the 60 seconds Send waits.
+    static Pair pair = null!;
+    static Pair pendingPair = null!;
+
+    [Before(Class)]
+    public static async Task StartPairs()
+    {
+        pair = await Pair.Start();
+        pendingPair = await Pair.Start(window: TimeSpan.Zero);
+    }
+
+    [After(Class)]
+    public static async Task StopPairs()
+    {
+        await pendingPair.DisposeAsync();
+        await pair.DisposeAsync();
+    }
     [Test]
     public async Task SendsThroughTheBusAndCompletesWithinTheWindow()
     {
-        await using var pair = await Pair.Start();
-
         var receipts = await ScryServer.Send(pair.Server.Services, "ShipParcel", new {label = "rebus-within"});
 
         await Assert.That(receipts.Select(_ => _.Status)).IsEquivalentTo([CommandStatus.Completed], CollectionOrdering.Matching);
@@ -25,9 +41,7 @@ public class RebusCommandTests
     [Test]
     public async Task ARemoteWorkerCompletesTheCommand()
     {
-        await using var pair = await Pair.Start(window: TimeSpan.Zero);
-
-        var receipts = await ScryServer.Send(pair.Server.Services, "ShipParcel", new {label = "rebus-pending"});
+        var receipts = await ScryServer.Send(pendingPair.Server.Services, "ShipParcel", new {label = "rebus-pending"});
 
         await Assert.That(receipts.Select(_ => _.Status)).IsEquivalentTo([CommandStatus.Pending, CommandStatus.Completed], CollectionOrdering.Matching);
     }
@@ -35,7 +49,6 @@ public class RebusCommandTests
     [Test]
     public async Task CarriesTheHeaders()
     {
-        await using var pair = await Pair.Start();
         var id = Guid.NewGuid();
 
         await ScryServer.Send(pair.Server.Services, "ShipParcel", new {label = "rebus-headers"}, id, caller: "alice");
@@ -46,8 +59,6 @@ public class RebusCommandTests
     [Test]
     public async Task ATypedResultTravelsBack()
     {
-        await using var pair = await Pair.Start();
-
         var receipts = await ScryServer.Send(pair.Server.Services, "WeighParcel", new {grams = 21});
 
         await Assert.That(receipts.Last().Result!.Value.GetProperty("grams").GetInt32()).IsEqualTo(42);
@@ -56,8 +67,6 @@ public class RebusCommandTests
     [Test]
     public async Task AHandlerThatExhaustsRetriesIsReportedAsFailed()
     {
-        await using var pair = await Pair.Start();
-
         var receipts = await ScryServer.Send(pair.Server.Services, "ShipParcel", new {label = "rebus-failing", fail = true});
 
         using (Assert.Multiple())
@@ -70,7 +79,6 @@ public class RebusCommandTests
     [Test]
     public async Task TheAdapterClaimsOnlyWhatItWasTold()
     {
-        await using var pair = await Pair.Start();
         var dispatcher = pair.Server.Services.GetRequiredService<RebusDispatcher>();
 
         using (Assert.Multiple())
@@ -83,9 +91,9 @@ public class RebusCommandTests
     [Test]
     public async Task TwoAdaptersClaimingOneCommandRefuseStartup()
     {
-        await using var pair = await Pair.Start(second: true);
+        await using var second = await Pair.Start(second: true);
 
-        var exception = Assert.ThrowsExactly<Exception>(() => ScryServer.EnsureDispatchable(pair.Server.Services));
+        var exception = Assert.ThrowsExactly<Exception>(() => ScryServer.EnsureDispatchable(second.Server.Services));
 
         await Assert.That(exception.Message).Contains("claimed by");
     }

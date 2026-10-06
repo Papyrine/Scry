@@ -7,6 +7,10 @@ using Wolverine.ErrorHandling;
 /// the middleware sends — or, where the error policy sends the message to the error queue, by the
 /// failure it adds.
 /// </summary>
+// A group of its own, so nothing else in the assembly runs beside it: Wolverine compiles its handler
+// chains with Roslyn on a host's first message, and on a starved runner that compile took the pool the
+// other buses' commands were waiting on.
+[ParallelGroup("Wolverine")]
 public class WolverineCommandTests
 {
     // One host for each window rather than one a test: Wolverine compiles a host's handler chains on its
