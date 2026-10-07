@@ -16,7 +16,12 @@
 /// </para>
 /// </remarks>
 /// <param name="schema">The allow-list schema backing the policy-filtered sources.</param>
-/// <param name="model">The EF model, used to resolve each navigation's foreign key.</param>
+/// <param name="model">
+/// The EF model, used to resolve each navigation's foreign key. Asked for only when a traversal needs
+/// it: reading a context's model is what first initializes the context, and a query that steps into
+/// no policied source — every query over a source supplied from memory — would pay for that and use
+/// none of it.
+/// </param>
 /// <param name="sources">Resolves a source's name and use to its policy-filtered <see cref="IQueryable"/>.</param>
 /// <param name="probes">
 /// Where a traversal's probe is planned, for the executor to ask before the query runs — or null
@@ -24,7 +29,7 @@
 /// </param>
 sealed class NavigationPolicy(
     Schema schema,
-    IModel model,
+    Func<IModel> model,
     Func<string, Func<PolicyUse, bool>?, IQueryable> sources,
     List<DeniedRowProbe>? probes = null)
 {
@@ -163,7 +168,7 @@ sealed class NavigationPolicy(
     /// </summary>
     Expression KeyMatch(Expression row, Expression owner, Type ownerType, Member navigation, Type target)
     {
-        var entityType = model.FindEntityType(ownerType) ??
+        var entityType = model().FindEntityType(ownerType) ??
                          throw new($"'{ownerType.Name}' is not an entity type in the model, so the navigation '{navigation.Name}' into policied '{target.Name}' has no foreign key to correlate on. A policied source reached this way cannot be filtered; remove the policy, or stop exposing the navigation.");
 
         var found = entityType.FindNavigation(navigation.Name) ??

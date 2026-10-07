@@ -24,18 +24,18 @@ Nine scalar members per row, which is a wide enough row that shaping and seriali
 
 | Result | Rows | Dictionaries + `JsonElement` + serialize | Written from projected rows |
 | --- | --- | --- | --- |
-| List | 1000 | 2390 KB / 5692 µs | **910 KB / 1914 µs** |
-| List | 100 | 254 KB / 1110 µs | **146 KB / 1223 µs** |
-| List | 1 | 20 KB / 850 µs | 64 KB / 1134 µs |
-| Page | 1000 | 2410 KB / 3369 µs | **929 KB / 1630 µs** |
-| Page | 100 | 260 KB / 925 µs | **151 KB / 1127 µs** |
-| Page | 1 | 23 KB / 783 µs | 67 KB / 1249 µs |
+| List | 1000 | 2391 KB / 3097 µs | **905 KB / 1354 µs** |
+| List | 100 | 256 KB / 602 µs | **143 KB** / 896 µs |
+| List | 1 | 22 KB / 473 µs | 61 KB / 870 µs |
+| Page | 1000 | 2433 KB / 3247 µs | **948 KB / 1779 µs** |
+| Page | 100 | 269 KB / 967 µs | **157 KB** / 1199 µs |
+| Page | 1 | 32 KB / 826 µs | 71 KB / 1134 µs |
 
-A page costs what a list costs — 929 KB against 910 KB at a thousand rows — because it is the same rows through the same writer, with the `items`/`hasMore`/`cursor` envelope written around them.
+A page costs what a list costs — 948 KB against 905 KB at a thousand rows — because it is the same rows through the same writer, with the `items`/`hasMore`/`cursor` envelope written around them. The rest of the gap is the ordering a page requires, which the list here does not ask for.
 
 The general path serves every transport that is not the HTTP endpoint, which is what `ScryProcessor.Execute` returns, and the endpoint itself falls back to it for a result the writer cannot reproduce byte-for-byte. `FastWriterGoldenTests` pins that the two agree exactly.
 
-What that fallback costs is a third arm of the same benchmark. Today the only result that takes it is the one answered to a drifted client — a request whose schema stamp disagrees with the server's, so the response carries the enum alias table — and at a thousand rows it allocates **2591 KB** against the writer's 910 KB. That is the general path's own cost plus the HTTP constant and nothing beyond it: the envelope is serialized into the same response buffer a written result fills, rather than into an array of its own for the single write that sends it.
+What that fallback costs is a third arm of the same benchmark. Today the only result that takes it is the one answered to a drifted client — a request whose schema stamp disagrees with the server's, so the response carries the enum alias table — and at a thousand rows it allocates **2588 KB** against the writer's 905 KB. That is the general path's own cost plus the HTTP constant and nothing beyond it: the envelope is serialized into the same response buffer a written result fills, rather than into an array of its own for the single write that sends it.
 
 
 ### Outgrowing the buffer
@@ -55,11 +55,11 @@ A batch is the same work repeated, so the entry count is what varies here and th
 
 | Entries | Rows each | Dictionaries + `JsonElement` + serialize | Written from projected rows |
 | --- | --- | --- | --- |
-| 1 | 100 | 254 KB / 640 µs | **148 KB** / 873 µs |
-| 5 | 100 | 1270 KB / 3632 µs | **582 KB / 3413 µs** |
-| 20 | 100 | 5079 KB / 12876 µs | **2200 KB** / 12903 µs |
+| 1 | 100 | 256 KB / 640 µs | **144 KB** / 935 µs |
+| 5 | 100 | 1280 KB / 3426 µs | **567 KB** / 3475 µs |
+| 20 | 100 | 5117 KB / 12663 µs | **2146 KB** / 12623 µs |
 
-Per entry, taken as the growth from 1 entry to 20, the general path costs 254 KB and the writer costs 108 KB — **−57%**. The clock is a wash at this width, for the reason the single-response table shows: a hundred rows is about where the two arms cross.
+Per entry, taken as the growth from 1 entry to 20, the general path costs 256 KB and the writer costs 105 KB — **−59%**. The clock is a wash at this width, for the reason the single-response table shows: a hundred rows is about where the two arms cross.
 
 What separates the two is that the general path builds a dictionary per row and a `JsonElement` per entry, and the envelope then serializes every one of those elements a second time. The batch endpoint writes each entry's rows into the envelope as it goes, so the payload's bytes are produced once.
 
@@ -72,8 +72,8 @@ A terminal — a count, an aggregate, a `First` — costs the same whatever the 
 
 | Per entry | Dictionary + `JsonElement` + serialize | Written from the projected values |
 | --- | --- | --- |
-| Scalar | 8.4 KB | 8.7 KB |
-| Single row | 22.1 KB | 28.5 KB |
+| Scalar | 9.6 KB | 10.0 KB |
+| Single row | 24.3 KB | 26.2 KB |
 | *List of one row, for comparison* | *19.8 KB* | *25.4 KB* |
 
 Read the third row before the second. A list of one row goes through the writer that has always written lists, and it carries the same gap — so what the second row shows is not a terminal costing more than it used to, but the fixed cost the writer pays for any result and amortizes over the rows in it. One row never amortizes it, whatever result shape the row arrived in. This is the same effect that makes the single-row entries of the tables above read the way they do.
@@ -87,13 +87,13 @@ What the server spends on a request before the database is asked: validating it,
 
 | Shape | Before | After |
 | --- | --- | --- |
-| A predicate and a projection | 6.70 KB | **5.55 KB** |
-| Temporal reads, one through a nullable | 6.39 KB | **5.20 KB** |
-| A membership list | 6.09 KB | **4.67 KB** |
-| An inner join | 5.03 KB | **4.42 KB** |
-| A row policy | 6.87 KB | **5.61 KB** |
-| A deduplicated projection, ordered | 6.73 KB | **4.65 KB** |
-| The baseline carried into EF's translation | 13.95 KB | **12.79 KB** |
+| A predicate and a projection | 6.70 KB | **5.82 KB** |
+| Temporal reads, one through a nullable | 6.39 KB | **5.48 KB** |
+| A membership list | 6.09 KB | **4.95 KB** |
+| An inner join | 5.03 KB | **4.69 KB** |
+| A row policy | 6.87 KB | **5.88 KB** |
+| A deduplicated projection, ordered | 6.73 KB | **4.92 KB** |
+| The baseline carried into EF's translation | 13.95 KB | **13.05 KB** |
 | *The request's JSON alone, for comparison* | *4.17 KB* | *4.17 KB* |
 
 The whole of a preparation is a few microseconds and a few kilobytes, which is what a source generator on the server side could never have improved on: nothing here is compiled per request, and the projection is the client's, so there is no shape to generate ahead of time. What the *before* column paid was reflection that ran per request rather than once — a `Set<T>` invoked reflectively per source resolution, a generic method closed and a provider's untyped `CreateQuery` invoked per composed operator, a temporal part and an optional's `Value` looked up by name per node, a policy applied through `MethodInfo.Invoke`, and the row writer's key spelled as a string on every request. Each is now a delegate or a lookup made once, and the *after* column is the difference.
@@ -105,10 +105,10 @@ The last row is the same request carried on into EF's pre-execution work — fun
 
 | | Rows | Body as a string, payload via `JsonElement` | Body as the UTF-8 it arrived as |
 | --- | --- | --- | --- |
-| Response | 1000 | 912 KB / 906 µs | **400 KB / 651 µs** |
-| Response | 100 | 89 KB / 87 µs | **41 KB / 65 µs** |
-| Response | 1 | 2.1 KB / 1.5 µs | **1.4 KB / 1.0 µs** |
-| One streamed row | — | 888 B / 978 ns | **384 B / 421 ns** |
+| Response | 1000 | 1011 KB / 955 µs | **499 KB / 646 µs** |
+| Response | 100 | 99 KB / 86 µs | **51 KB / 64 µs** |
+| Response | 1 | 2.3 KB / 1.5 µs | **1.6 KB / 1.0 µs** |
+| One streamed row | — | 1064 B / 1102 ns | **488 B / 403 ns** |
 
 The client reads the bytes as they arrived. The string-and-`JsonElement` arm is measured beside it because that is the shape most transports reach for by default, and because the gap between them is what `QueryResponse` holding its payload as bytes until something asks for it buys.
 
@@ -119,16 +119,16 @@ At a thousand rows the reading arm makes no gen-2 collections at all, against 14
 
 **Allocations are the reliable figure.** They reproduce between runs to within a few bytes. Times move with whatever else the machine is doing — two runs of the same build here differed by a third or more on the wall clock (one arm by 43%) while the allocation columns were identical to the byte. Treat the timings as approximate and the ratios as more meaningful than the absolutes.
 
-**Only the fast arm pays HTTP.** It goes through the real endpoint over a loopback round trip; the general-path arm calls the processor directly. So each fast row carries a fixed cost the row beside it does not, which is why at **one row it looks worse** — 2.9× the allocations for a page. Nothing is wrong there; the constant dominates. Read the growth from 1 row to 1000 instead, which is what each path adds per row:
+**Only the fast arm pays HTTP.** It goes through the real endpoint over a loopback round trip; the general-path arm calls the processor directly. So each fast row carries a fixed cost the row beside it does not, which is why at **one row it looks worse** — 2.8× the allocations for a list. Nothing is wrong there; the constant dominates. Read the growth from 1 row to 1000 instead, which is what each path adds per row:
 
 | Per row | Dictionaries + `JsonElement` + serialize | Written from projected rows | |
 | --- | --- | --- | --- |
-| List | 2.37 KB / 4.85 µs | 0.85 KB / 0.78 µs | −64% / −84% |
-| Page | 2.39 KB / 2.59 µs | 0.86 KB / 0.38 µs | −64% / −85% |
+| List | 2.37 KB / 2.63 µs | 0.85 KB / 0.48 µs | −64% / −82% |
+| Page | 2.40 KB / 2.42 µs | 0.88 KB / 0.65 µs | −63% / −73% |
 
 The crossover is around a hundred rows.
 
-**These are one machine's numbers,** taken on Windows 11 with .NET 10.0.11 (x64, RyuJIT AVX2) under BenchmarkDotNet 0.15.2, on a developer machine rather than dedicated hardware. They are here to show the shape of the difference and to make a regression obvious, not as a specification. Re-run them rather than trusting them.
+**These are one machine's numbers,** taken on Windows 11 with .NET 10.0.12 (x64, RyuJIT AVX2) under BenchmarkDotNet 0.15.2, on a developer machine rather than dedicated hardware. They are here to show the shape of the difference and to make a regression obvious, not as a specification. Re-run them rather than trusting them.
 
 
 ## Where the difference comes from
