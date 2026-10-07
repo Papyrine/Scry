@@ -440,7 +440,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
         if (scope.Disclosure is not null &&
             options.Disclosure is { } audit)
         {
-            planner = new(schema, db.Model, audit, inMemory: source.Kind == SourceKind.Poco);
+            planner = new(schema, () => db.Model, audit, inMemory: source.Kind == SourceKind.Poco);
         }
 
         var plan = Walk(request, db, scope, buildOnly, source, planner);

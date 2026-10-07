@@ -17,7 +17,7 @@
 /// serialized: both writers go by the plan's shape, which does not know they are there.
 /// </para>
 /// </remarks>
-sealed class DisclosurePlanner(Schema schema, IModel model, ScryDisclosureOptions settings, bool inMemory)
+sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosureOptions settings, bool inMemory)
 {
     /// <summary>
     /// Where an expression stands relative to the rows of the answer: whose member a read off it is,
@@ -420,7 +420,13 @@ sealed class DisclosurePlanner(Schema schema, IModel model, ScryDisclosureOption
     }
 
     /// <summary>The same, for a caller with no request in hand: the startup check, a command's target.</summary>
-    public static IReadOnlyList<PropertyInfo>? Key(IModel model, ScryDisclosureOptions settings, Type type)
+    public static IReadOnlyList<PropertyInfo>? Key(IModel model, ScryDisclosureOptions settings, Type type) =>
+        Key(() => model, settings, type);
+
+    // The model is asked for only once nothing the host declared answers. Reading a context's model
+    // is what first initializes the context, and a query over a source supplied from memory, keyed by
+    // the host, would pay for that and use none of it.
+    static IReadOnlyList<PropertyInfo>? Key(Func<IModel> model, ScryDisclosureOptions settings, Type type)
     {
         for (var declared = type; declared is not null; declared = declared.BaseType)
         {
@@ -430,7 +436,7 @@ sealed class DisclosurePlanner(Schema schema, IModel model, ScryDisclosureOption
             }
         }
 
-        if (model.FindEntityType(type)?.FindPrimaryKey() is not { } primary)
+        if (model().FindEntityType(type)?.FindPrimaryKey() is not { } primary)
         {
             return null;
         }

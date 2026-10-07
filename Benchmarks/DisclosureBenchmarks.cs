@@ -84,7 +84,7 @@ public class DisclosureBenchmarks
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
 
-        // A host writes a line or two to the console for every request it answers: about 3 KB of
+        // A host writes a line or two to the console for every request it answers: a few kilobytes of
         // allocation each time, where recording adds under 8 KB to a one-row answer. Left on, the
         // logging would be a good part of the smallest difference this benchmark is here to show.
         builder.Logging.ClearProviders();
