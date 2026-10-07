@@ -99,7 +99,8 @@ public sealed partial class ScryProcessor
                 continue;
             }
 
-            if (Acknowledged(audit, type) ||
+            if (audit.Excludes(type) ||
+                Acknowledged(audit, type) ||
                 DisclosurePlanner.Key(model, audit, type) is not null)
             {
                 continue;
@@ -296,7 +297,7 @@ public sealed partial class ScryProcessor
         DisclosureCapture? capture = null;
         try
         {
-            capture = Disclose(request, request.Root, caller: null, services, responseHeaders);
+            capture = Disclose(request, request.Root, caller: null, services, responseHeaders, alone: true);
             var scope = new CallScope(services, requestHeaders, responseHeaders)
             {
                 Disclosure = capture
@@ -309,7 +310,7 @@ public sealed partial class ScryProcessor
                 result.Found)
             {
                 capture.Commit();
-                recorder.Disclosure = capture.Id;
+                recorder.Disclosure = capture.Event;
             }
 
             // Rows are 1 for a value handed over and 0 for everything withheld, which keeps a run of
@@ -365,7 +366,7 @@ public sealed partial class ScryProcessor
         DisclosureCapture? capture = null;
         try
         {
-            capture = Disclose(request, request.Root, caller, services, responseHeaders);
+            capture = Disclose(request, request.Root, caller, services, responseHeaders, alone: true);
             var scope = new CallScope(services, requestHeaders, responseHeaders)
             {
                 Disclosure = capture
@@ -375,7 +376,7 @@ public sealed partial class ScryProcessor
                 result.Found)
             {
                 await capture.CommitAsync(cancel);
-                recorder.Disclosure = capture.Id;
+                recorder.Disclosure = capture.Event;
             }
 
             recorder.Succeeded(ResultKind.Single, result.Found ? 1 : 0);
@@ -522,7 +523,7 @@ public sealed partial class ScryProcessor
             if (capture is not null)
             {
                 capture.Commit();
-                recorder.Disclosure = capture.Id;
+                recorder.Disclosure = capture.Event;
             }
 
             recorder.Succeeded(response);
@@ -649,7 +650,7 @@ public sealed partial class ScryProcessor
                 }
 
                 await capture.CommitAsync(cancel);
-                recorder.Disclosure = capture.Id;
+                recorder.Disclosure = capture.Event;
                 recorder.Succeeded(fallback);
                 capture.Released();
                 return null;
@@ -675,7 +676,7 @@ public sealed partial class ScryProcessor
             if (capture is not null)
             {
                 await capture.CommitAsync(cancel);
-                recorder.Disclosure = capture.Id;
+                recorder.Disclosure = capture.Event;
             }
 
             recorder.Succeeded(kind, rows);
@@ -1201,6 +1202,15 @@ public sealed partial class ScryProcessor
                     Disclosure = capture
                 },
                 cancel);
+
+            // A stream of nothing but what the host left out of the record is not recorded, and is
+            // sent as it would be with the audit off rather than held back a chunk at a time.
+            if (capture is {Recording: null})
+            {
+                await capture.DisposeAsync();
+                capture = null;
+            }
+
             streaming = true;
         }
         catch (ScryValidationException exception) when (drifted)
@@ -1264,6 +1274,12 @@ public sealed partial class ScryProcessor
                 Binary = binary,
                 Disclosure = capture
             });
+            if (capture is {Recording: null})
+            {
+                capture.Dispose();
+                capture = null;
+            }
+
             streaming = true;
         }
         catch (ScryValidationException exception) when (drifted)

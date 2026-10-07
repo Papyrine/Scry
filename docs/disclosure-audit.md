@@ -648,6 +648,33 @@ The audit hook's entry has no caller, and a plain query needs none. The disclosu
 The name is read from the authenticated principal, never from something the client supplied: it is what every answer is recorded under.
 
 
+## Leaving a source out
+
+The audit covers every source unless the host leaves one out:
+
+```cs
+audit.Exclude<Holiday>();
+audit.Exclude<Country>();
+```
+
+This is for a source whose rows are nobody's to ask after: a calendar, a list of countries. An answer that reads nothing but excluded sources is not recorded. It is sent as it would be with the audit off: the response is not marked `no-store` for the audit's sake, nobody has to be named, a stream is not held back, and an attachment or a command receipt of such a row leaves nothing.
+
+The rule is about the answer and errs towards the record. An answer that reads an excluded source and one that is not is recorded whole, the excluded source's part included:
+
+| The answer reads | Recorded |
+| --- | --- |
+| Excluded sources only | No |
+| An excluded root, and a recorded source through a navigation, a join, a subquery or a set operation | Yes, whole |
+| A recorded root, and an excluded source reached from it | Yes, whole |
+| An excluded source, filtered or ordered by a member of a recorded one | Yes, whole |
+
+Whole, because a record with part of an answer left out could not be put back together into what was sent, and because a filter is a read: an excluded source narrowed by what a recorded one holds says something about the recorded one. So leaving a source out never hides what was sent of another. A query rooted at an excluded source is refused for want of a caller only once it is found to read something recorded.
+
+Said of a type, it holds for the types derived from it. An excluded source needs neither `Key<T>` nor `Unkeyed<T>` for the server to start; where a recorded answer reads one with no key, its rows are recorded as content with no row to hang them on.
+
+Leaving a source out is not a way to keep a member out of the record. A member is recorded wherever an answer that returns it is, and what is left out is decided source by source.
+
+
 ## Erasure
 
 An append-only ledger and an erasure request pull in opposite directions.
@@ -773,12 +800,11 @@ Off: a null check where a capture would be made. On, per row: one SHA-256 over t
 ## Open questions
 
 1. **The size of the entity index.** It holds one row per disclosed row per event, so it can outgrow the data it describes. Addressing a whole response's unit list once would collapse repeated identical answers to one event row.
-2. **Scoping by source.** The audit covers the whole server. Auditing only some sources would cut the cost; a join across an audited and an unaudited source needs a rule first.
-3. **"Which version".** A version is the content address of the unit. A row-version column named by the host, as a cached policy takes one, would compare versions across different projections.
-4. **Retention.** Append-only ledger tables cannot be trimmed in place.
-5. **Recording revalidation in place of forbidding it**, as an opt-in mode for a host that wants both.
-6. **Caller detail.** One string today. An agent acting for a user over MCP may warrant both identities.
-7. **The hub's subscription caller.** A hub subscription is counted against the connection's user identifier while commands go by `ScryOptions.Caller`. The audit records the same caller for both; the limit key is left alone.
-8. **Reading what was accepted a moment ago.** The SQL Server store answers from what has been moved on. A reader that waited for the outbox to empty would read its own writes, at the cost of a question waiting on the mover.
-9. **Checking a long chain.** A check of the whole chain can outlast a request. A bounded range is checked per call, and the last result is kept.
-10. **A reader-only host.** The explorer records through the audit's own settings, so its host configures the audit as a serving node does, model included. An explorer over a reader and a sink alone would run where the model is not.
+2. **"Which version".** A version is the content address of the unit. A row-version column named by the host, as a cached policy takes one, would compare versions across different projections.
+3. **Retention.** Append-only ledger tables cannot be trimmed in place.
+4. **Recording revalidation in place of forbidding it**, as an opt-in mode for a host that wants both.
+5. **Caller detail.** One string today. An agent acting for a user over MCP may warrant both identities.
+6. **The hub's subscription caller.** A hub subscription is counted against the connection's user identifier while commands go by `ScryOptions.Caller`. The audit records the same caller for both; the limit key is left alone.
+7. **Reading what was accepted a moment ago.** The SQL Server store answers from what has been moved on. A reader that waited for the outbox to empty would read its own writes, at the cost of a question waiting on the mover.
+8. **Checking a long chain.** A check of the whole chain can outlast a request. A bounded range is checked per call, and the last result is kept.
+9. **A reader-only host.** The explorer records through the audit's own settings, so its host configures the audit as a serving node does, model included. An explorer over a reader and a sink alone would run where the model is not.

@@ -31,6 +31,9 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
     public readonly record struct Origin(string Source, string Prefix, string Via, bool Rooted, Expression Row);
 
     HashSet<ScryDisclosureField> fields = [];
+
+    // Every type whose rows the query was found to read, however it came by them.
+    HashSet<Type> read = [];
     Dictionary<Expression, Origin> origins = [];
     Dictionary<Type, (string Source, string Prefix)> elements = [];
     Dictionary<Type, IReadOnlyList<PropertyInfo>?> keys = [];
@@ -39,6 +42,18 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
 
     // The rows the projection now being built reaches, in the order they were first reached.
     List<(string Source, string Via, IReadOnlyList<Expression> Key)> reached = [];
+
+    /// <summary>Says the query reads rows of a type: its root, another source it names, a navigation's far end.</summary>
+    public void Reads(Type type) =>
+        read.Add(Nullable.GetUnderlyingType(type) ?? type);
+
+    /// <summary>
+    /// Whether everything the query reads is a source the host left out of the record, so that its
+    /// answer is not recorded. One read of anything else and the whole answer is.
+    /// </summary>
+    public bool Excluded =>
+        read.Count > 0 &&
+        read.All(settings.Excludes);
 
     /// <summary>What a member read now is being read for.</summary>
     public ScryDisclosureFieldUse Use { get; set; } = ScryDisclosureFieldUse.Read;
@@ -511,8 +526,11 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
     /// that is a source. So a row read as a <c>Vehicle</c> and asked about as an <c>Asset</c> is one
     /// row, as it is in the database.
     /// </summary>
-    public string SourceName(Type type) =>
-        SourceName(schema, type);
+    public string SourceName(Type type)
+    {
+        Reads(type);
+        return SourceName(schema, type);
+    }
 
     public static string SourceName(Schema schema, Type type)
     {

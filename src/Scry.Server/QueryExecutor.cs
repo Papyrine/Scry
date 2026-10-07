@@ -46,7 +46,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     {
         var plan = Walk(request, db, scope);
         Prepare(plan, scope);
-        var capture = scope.Disclosure;
+        var capture = scope.Disclosure?.Recording;
         if (plan.Fold is { } fold)
         {
             return Materialize(Disclosed(fold.Finish(Execution.Run(fold.Query, fold.Call)), capture));
@@ -76,7 +76,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     {
         var plan = Walk(request, db, scope);
         await PrepareAsync(plan, scope, cancel);
-        var capture = scope.Disclosure;
+        var capture = scope.Disclosure?.Recording;
         if (plan.Fold is { } fold)
         {
             return Materialize(Disclosed(fold.Finish(await Execution.RunAsync(fold.Query, fold.Call, cancel)), capture));
@@ -232,7 +232,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
 
         // Told what kind of answer this is before the writer's first row: a response that is sent as
         // it is written has its record begun before its end is known.
-        var capture = scope.Disclosure;
+        var capture = scope.Disclosure?.Recording;
 
         // A terminal folded its rows away, so there is nothing to spill and permission stays withheld.
         if (plan.Fold is { } fold)
@@ -441,12 +441,16 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             options.Disclosure is { } audit)
         {
             planner = new(schema, () => db.Model, audit, inMemory: source.Kind == SourceKind.Poco);
+            planner.Reads(source.ClrType);
         }
 
         var plan = Walk(request, db, scope, buildOnly, source, planner);
+
+        // A query that read nothing but sources the host left out of the record is not recorded:
+        // settled here, and from here on its capture answers as no capture at all.
         if (planner is not null)
         {
-            scope.Disclosure!.Describe(planner);
+            scope.Disclosure!.Settle(planner);
         }
 
         return plan;
@@ -488,6 +492,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 probes.Add(setProbe);
             }
 
+            Reads(planner, name);
             return ResolveSource(name, db, scope);
         };
         var builder = new ExpressionBuilder(
@@ -499,7 +504,11 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             new(
                 schema,
                 () => db.Model,
-                (name, include) => ResolveSource(name, db, scope, include),
+                (name, include) =>
+                {
+                    Reads(planner, name);
+                    return ResolveSource(name, db, scope, include);
+                },
                 buildOnly ? null : probes),
             // Decides each command's capability once for this call, however often the query reads it.
             new(schema, new(scope.Services, db, scope.RequestHeaders, scope.ResponseHeaders)),
@@ -741,6 +750,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
                 probes.Add(operandProbe);
             }
 
+            Reads(planner, set.Root);
             var otherSource = ResolveSource(set.Root, db, scope);
             var otherType = otherSource.ElementType;
             if (set.OperandOps is { } operandOps)
@@ -990,6 +1000,17 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
     {
         var scope = new CallScope(services, new HeaderDictionary(), new HeaderDictionary());
         NavigationPolicyProbe.Run(schema, db.Model, (name, include) => ResolveSource(name, db, scope, include), db);
+    }
+
+    // Tells the disclosure audit that a query reads another source by name: a join's other side, a
+    // set operation's, a membership test's, a policied navigation's target.
+    void Reads(DisclosurePlanner? planner, string name)
+    {
+        if (planner is not null &&
+            schema.TryGetSource(name, out var named))
+        {
+            planner.Reads(named.ClrType);
+        }
     }
 
     IQueryable ResolveSource(string name, DbContext db, CallScope scope, Func<PolicyUse, bool>? include = null)

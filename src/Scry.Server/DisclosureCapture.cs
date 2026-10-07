@@ -71,6 +71,73 @@ sealed class DisclosureCapture(
     /// <summary>The event's id: what an audit entry names to say this answer was recorded.</summary>
     public Guid Id { get; } = Guid.CreateVersion7();
 
+    /// <summary>The same, or null where the answer turned out to be one the host left out of the record.</summary>
+    public Guid? Event
+    {
+        get
+        {
+            if (silent)
+            {
+                return null;
+            }
+
+            return Id;
+        }
+    }
+
+    /// <summary>
+    /// Set, to the response's headers, on a capture for a query whose root the host left out of the
+    /// record. Whether its answer is recorded waits on what else it reads, and until then the
+    /// response is not marked and nobody has been required to be named.
+    /// </summary>
+    public IHeaderDictionary? Undecided { get; set; }
+
+    // Set once such a query was found to read nothing but what the host left out. Everything gathered
+    // from then on goes nowhere: nothing is handed to the sink, and there is no event.
+    bool silent;
+
+    /// <summary>
+    /// This capture, or null where the answer turned out not to be recorded: what a writer is handed,
+    /// so that such an answer is written as it would be with the audit off.
+    /// </summary>
+    public DisclosureCapture? Recording
+    {
+        get
+        {
+            if (silent)
+            {
+                return null;
+            }
+
+            return this;
+        }
+    }
+
+    /// <summary>
+    /// Takes what the query was found to read, and decides what was left undecided. False where the
+    /// answer is not to be recorded.
+    /// </summary>
+    public bool Settle(DisclosurePlanner planner)
+    {
+        if (Undecided is { } headers)
+        {
+            Undecided = null;
+            if (planner.Excluded)
+            {
+                silent = true;
+                return false;
+            }
+
+            // Recorded after all, so owed what every recorded answer is: a name to be recorded
+            // under, and a response no cache may keep.
+            runtime.Require(caller);
+            headers.CacheControl = "no-store";
+        }
+
+        Describe(planner);
+        return true;
+    }
+
     /// <summary>What ties this event to others made for the same request.</summary>
     public string? Correlation { get; set; }
 
@@ -453,6 +520,11 @@ sealed class DisclosureCapture(
     // owed a close saying nothing of that batch went, whether or not the sink has its beginning.
     async ValueTask HandAsync(ScryDisclosureBatch batch, Cancel cancel)
     {
+        if (silent)
+        {
+            return;
+        }
+
         try
         {
             await runtime.AppendAsync(batch, services, cancel);
@@ -467,6 +539,11 @@ sealed class DisclosureCapture(
 
     void Hand(ScryDisclosureBatch batch)
     {
+        if (silent)
+        {
+            return;
+        }
+
         try
         {
             runtime.Append(batch, services);

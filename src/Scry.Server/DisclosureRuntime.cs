@@ -48,13 +48,18 @@ sealed class DisclosureRuntime(ScryDisclosureOptions settings, ScryOptions optio
     public string? Caller(string? stated, IServiceProvider services)
     {
         var caller = stated ?? Resolve(services);
+        Require(caller);
+        return caller;
+    }
+
+    /// <summary>Refuses an answer that is to be recorded and has nobody to be recorded under.</summary>
+    public void Require(string? caller)
+    {
         if (caller is null &&
             !settings.AllowAnonymous)
         {
             throw new ScryDisclosureException($"The disclosure audit is on and this call has no caller to be recorded under, so it was not answered. ScryOptions.Caller names the caller over HTTP, the hub and MCP; ScryDisclosureOptions.{nameof(ScryDisclosureOptions.Caller)} names it for any other transport. Set {nameof(ScryDisclosureOptions.AllowAnonymous)} where an answer may be recorded against nobody.");
         }
-
-        return caller;
     }
 
     string? Resolve(IServiceProvider services)
@@ -79,6 +84,17 @@ sealed class DisclosureRuntime(ScryDisclosureOptions settings, ScryOptions optio
     /// <param name="services">The call's services.</param>
     public DisclosureCapture Begin(object? request, string source, string? caller, IServiceProvider services) =>
         new(this, services, request, source, Caller(caller, services));
+
+    /// <summary>
+    /// Starts recording an answer that may turn out to need no record: a query whose root the host
+    /// left out, which is recorded only if it reads something that was not. Nobody is required to be
+    /// named until that is known.
+    /// </summary>
+    public DisclosureCapture BeginUndecided(object? request, string source, string? caller, IServiceProvider services, IHeaderDictionary responseHeaders) =>
+        new(this, services, request, source, caller ?? Resolve(services))
+        {
+            Undecided = responseHeaders
+        };
 
     public void Append(ScryDisclosureBatch batch, IServiceProvider services)
     {

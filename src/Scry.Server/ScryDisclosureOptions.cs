@@ -120,6 +120,50 @@ public sealed class ScryDisclosureOptions
         Keys.Remove(typeof(TSource));
     }
 
+    /// <summary>
+    /// Leaves a source out of the record: an answer that reads nothing but excluded sources is not
+    /// recorded, is not marked <c>no-store</c> for the audit's sake, and needs no caller. For a
+    /// source whose rows are nobody's to ask after — a list of countries, a calendar of holidays.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The rule is about the answer, and errs towards recording. An answer that reads an excluded
+    /// source and one that is not — through a navigation, a join, a subquery, a set operation, in a
+    /// filter as much as in a projection — is recorded whole, the excluded source's part included:
+    /// leaving that part out would leave a record that could not be put back together into what was
+    /// sent. So excluding a source never hides what was sent of another.
+    /// </para>
+    /// <para>
+    /// Said of a type, it holds for the types derived from it. An excluded source needs neither a
+    /// key nor <see cref="Unkeyed{TSource}"/> for the server to start; where an answer that is
+    /// recorded reads one with no key, its rows are recorded as content with no row to hang them on.
+    /// </para>
+    /// </remarks>
+    public void Exclude<TSource>() =>
+        Excluded.Add(typeof(TSource));
+
+    internal HashSet<Type> Excluded { get; } = [];
+
+    // Said of a type or of one it derives from, as a key and an acknowledgement are.
+    internal bool Excludes(Type type)
+    {
+        if (Excluded.Count == 0)
+        {
+            return false;
+        }
+
+        type = Nullable.GetUnderlyingType(type) ?? type;
+        for (var declared = type; declared is not null; declared = declared.BaseType)
+        {
+            if (Excluded.Contains(declared))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     static PropertyInfo Member<TSource>(Expression<Func<TSource, object?>> member)
     {
         var body = member.Body;

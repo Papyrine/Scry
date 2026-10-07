@@ -93,6 +93,22 @@ public class DisclosureKeyTests
         }
     }
 
+    // A source left out of the record is one the host has already decided about: it is asked for
+    // neither a key nor an acknowledgement that it has none.
+    [Test]
+    public async Task ASourceLeftOutOfTheRecordNeedsNoKey()
+    {
+        await using var database = await Clinic.Instance.Build();
+        var (excluded, _) = Audited(
+            _ =>
+            {
+                _.Exclude<Note>();
+                _.Exclude<WardCensus>();
+            });
+
+        excluded.ValidateAgainstModel(database.Context);
+    }
+
     // A key the host declares is what the rows are recorded by; a source acknowledged as having none
     // is recorded as what was sent, with no row to ask about.
     [Test]

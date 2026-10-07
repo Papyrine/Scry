@@ -28,11 +28,29 @@ public sealed partial class ScryProcessor
         string? caller,
         IServiceProvider services,
         IHeaderDictionary responseHeaders,
-        string? correlation = null)
+        string? correlation = null,
+        bool alone = false)
     {
         if (disclosure is null)
         {
             return null;
+        }
+
+        // A source the host left out of the record. What reads its rows and nothing else — an
+        // attachment of one — is not recorded. A query rooted at it may go on to read a source that
+        // is recorded, which is known only once it has been walked: so its record is begun, and
+        // what every recorded answer is owed waits until then.
+        if (schema.TryGetSource(source, out var root) &&
+            disclosure.Settings.Excludes(root.ClrType))
+        {
+            if (alone)
+            {
+                return null;
+            }
+
+            var undecided = disclosure.BeginUndecided(request, source, caller, services, responseHeaders);
+            undecided.Correlation = correlation;
+            return undecided;
         }
 
         responseHeaders.CacheControl = "no-store";
@@ -75,7 +93,7 @@ public sealed partial class ScryProcessor
             try
             {
                 capture.Deny();
-                recorder.Disclosure = capture.Id;
+                recorder.Disclosure = capture.Event;
             }
             catch (Exception refused)
             {
@@ -94,7 +112,7 @@ public sealed partial class ScryProcessor
             try
             {
                 await capture.DenyAsync(cancel);
-                recorder.Disclosure = capture.Id;
+                recorder.Disclosure = capture.Event;
             }
             catch (Exception refused)
             {
@@ -219,6 +237,13 @@ public sealed partial class ScryProcessor
         var source = "";
         if (record.Meta.Target is { } target)
         {
+            // A receipt says what became of a command against a row, and a row of a source the
+            // host left out of the record is not one anybody is asked after.
+            if (disclosure.Settings.Excludes(target.ClrType))
+            {
+                return;
+            }
+
             source = DisclosurePlanner.SourceName(schema, target.ClrType);
         }
 
@@ -251,7 +276,7 @@ public sealed partial class ScryProcessor
             {
                 capture.Delivery = delivery;
                 await capture.CommitAsync(cancel);
-                recorder.Disclosure = capture.Id;
+                recorder.Disclosure = capture.Event;
             }
 
             if (run.Fallback is { } fallback)
@@ -419,7 +444,7 @@ public sealed partial class ScryProcessor
                 throw;
             }
 
-            recorder.Disclosure = capture.Id;
+            recorder.Disclosure = capture.Event;
             return true;
         }
 
@@ -519,7 +544,7 @@ public sealed partial class ScryProcessor
                     throw;
                 }
 
-                recorder.Disclosure = capture.Id;
+                recorder.Disclosure = capture.Event;
                 recorder.Succeeded(handed);
                 return;
             }
@@ -534,7 +559,7 @@ public sealed partial class ScryProcessor
             {
                 // Not the request's token: a caller that went away is the commonest way to get here.
                 await capture.EndAsync(outcome, handed, Cancel.None);
-                recorder.Disclosure = capture.Id;
+                recorder.Disclosure = capture.Event;
             }
             catch (Exception)
             {
