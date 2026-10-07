@@ -496,7 +496,33 @@
     flex-basis: 100%;
 }
 
-/* The whole label is the check box: caret, box and name toggle together. */
+/* A navigation's caret, a button of its own: opening one projects nothing. */
+.builder-expand {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.12rem 0 0.12rem 0.1rem;
+    color: var(--muted);
+    background: none;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.builder-expand:hover {
+    background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+
+.builder-expand:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: -1px;
+}
+
+/* Beside a caret button, which has already taken the left padding. */
+.builder-toggle.builder-toggle-bare {
+    padding-left: 0;
+}
+
+/* The whole label is the check box: on a scalar, the caret's spacer too. */
 .builder-toggle {
     display: inline-flex;
     align-items: center;

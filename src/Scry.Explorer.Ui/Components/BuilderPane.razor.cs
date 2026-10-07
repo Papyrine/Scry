@@ -32,6 +32,10 @@ public partial class BuilderPane
     // The value inputs whose last entry was not a value of their type, by input.
     readonly HashSet<string> invalid = [];
 
+    // The navigations opened or closed by hand, by source and member. One never touched is open
+    // exactly when the query projects into it.
+    readonly Dictionary<string, bool> expanded = [];
+
     string startSource = "";
 
     static readonly (string Terminal, string Label)[] terminals =
@@ -81,6 +85,16 @@ public partial class BuilderPane
         }
 
         return "false";
+    }
+
+    bool IsOpen(string key, bool projected)
+    {
+        if (expanded.TryGetValue(key, out var open))
+        {
+            return open;
+        }
+
+        return projected;
     }
 
     Task Change(Func<BuilderQuery, BuilderQuery?> change) =>

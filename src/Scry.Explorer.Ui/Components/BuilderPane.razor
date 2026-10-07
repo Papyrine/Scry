@@ -70,7 +70,7 @@
                                 }
                                 else if (QueryBuilder.Target(Index, member) is { } target)
                                 {
-                                    @NestedRow(member, target, query.Columns ?? [])
+                                    @NestedRow(query.Source, member, target, query.Columns ?? [])
                                 }
                             }
                             @CodeColumns(null, query.Columns ?? [])
@@ -169,29 +169,38 @@
         </li>;
     }
 
-    // A navigation: checked when the query projects into it, open on the target's scalars when it does.
-    RenderFragment NestedRow(ScryMemberInfo member, string target, IReadOnlyList<BuilderColumn> columns)
+    // A navigation: checked when the query projects into it. The caret opens it on the target's scalars
+    // without projecting any of them; the check box projects the ones a starter query would pick.
+    RenderFragment NestedRow(string source, ScryMemberInfo member, string target, IReadOnlyList<BuilderColumn> columns)
     {
         var nested = columns.OfType<NestedColumn>().FirstOrDefault(_ => _.Member == member.Name);
         string[] path = [member.Name];
+        var key = $"{source}/{member.Name}";
+        var open = IsOpen(key, nested is not null);
+        var inner = nested?.Columns ?? [];
         return @<li class="builder-node" @key="member.Name">
-            <button type="button" class="builder-toggle" role="checkbox" aria-checked="@Checked(nested is not null)"
+            <button type="button" class="builder-expand" aria-expanded="@Checked(open)"
+                    data-testid="builder-expand" data-path="@member.Name"
+                    title="@(open ? "Hide" : "Show") the columns of @member.Name" aria-label="@(open ? "Hide" : "Show") the columns of @member.Name"
+                    @onclick="() => expanded[key] = !open">
+                @Caret(true, open)
+            </button>
+            <button type="button" class="builder-toggle builder-toggle-bare" role="checkbox" aria-checked="@Checked(nested is not null)"
                     data-testid="builder-column" data-path="@member.Name"
                     title="Project into @member.Name: a nested object carrying its own columns"
                     @onclick="() => Change(_ => QueryBuilder.ToggleNested(Index, _, path))">
-                @Caret(true, nested is not null)
                 @Check(nested is not null)
                 <span class="builder-member">@member.Name</span>
             </button>
             <span class="builder-type mono">@Index.Resolve(member.TypeDisplay).Display</span>
-            @if (nested is not null)
+            @if (open)
             {
                 <ul class="builder-tree builder-children">
-                    @foreach (var inner in QueryBuilder.Projectable(Index, target).Where(_ => !_.IsNavigation))
+                    @foreach (var scalar in QueryBuilder.Projectable(Index, target).Where(_ => !_.IsNavigation))
                     {
-                        @ColumnRow([member.Name, inner.Name], inner, nested.Columns)
+                        @ColumnRow([member.Name, scalar.Name], scalar, inner)
                     }
-                    @CodeColumns(member.Name, nested.Columns)
+                    @CodeColumns(member.Name, inner)
                 </ul>
             }
         </li>;
