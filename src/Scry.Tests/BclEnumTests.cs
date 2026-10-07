@@ -16,7 +16,10 @@ public class BclEnumTests
 
         var rows = await client.Source<Sitting>("Sitting")
             .Where(_ => _.DayOfWeek == DayOfWeek.Thursday)
-            .Select(_ => new {_.Name})
+            .Select(_ => new
+            {
+                _.Name
+            })
             .ToListAsync();
 
         await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(["Midweek"], CollectionOrdering.Matching);
@@ -30,7 +33,13 @@ public class BclEnumTests
 
         var rows = await client.Source<Sitting>("Sitting")
             .OrderBy(_ => _.Id)
-            .Select(_ => new {_.Name, _.DayOfWeek, _.Recess, _.Clock})
+            .Select(_ => new
+            {
+                _.Name,
+                _.DayOfWeek,
+                _.Recess,
+                _.Clock
+            })
             .ToListAsync();
 
         await Verify(rows);
@@ -45,7 +54,10 @@ public class BclEnumTests
 
         var rows = await client.Source<Sitting>("Sitting")
             .Where(_ => _.DayOfWeek == day)
-            .Select(_ => new {_.Name})
+            .Select(_ => new
+            {
+                _.Name
+            })
             .ToListAsync();
 
         await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(["Weekend"], CollectionOrdering.Matching);
@@ -59,11 +71,18 @@ public class BclEnumTests
 
         var friday = await client.Source<Sitting>("Sitting")
             .Where(_ => _.Recess == DayOfWeek.Friday)
-            .Select(_ => new {_.Name})
+            .Select(_ => new
+            {
+                _.Name
+            })
             .ToListAsync();
         var none = await client.Source<Sitting>("Sitting")
             .Where(_ => _.Recess == null)
-            .Select(_ => new {_.Name, _.Recess})
+            .Select(_ => new
+            {
+                _.Name,
+                _.Recess
+            })
             .ToListAsync();
 
         using (Assert.Multiple())
@@ -82,12 +101,18 @@ public class BclEnumTests
 
         var descending = await client.Source<Sitting>("Sitting")
             .OrderByDescending(_ => _.DayOfWeek)
-            .Select(_ => new {_.Name})
+            .Select(_ => new
+            {
+                _.Name
+            })
             .ToListAsync();
         var byClock = await client.Source<Sitting>("Sitting")
             .OrderBy(_ => _.Clock)
             .ThenBy(_ => _.DayOfWeek)
-            .Select(_ => new {_.Name})
+            .Select(_ => new
+            {
+                _.Name
+            })
             .ToListAsync();
 
         using (Assert.Multiple())
@@ -106,7 +131,11 @@ public class BclEnumTests
 
         var groups = await client.Source<Sitting>("Sitting")
             .GroupBy(_ => _.Recess)
-            .Select(_ => new {Recess = _.Key, Count = _.Count()})
+            .Select(_ => new
+            {
+                Recess = _.Key,
+                Count = _.Count()
+            })
             .ToListAsync();
 
         await Verify(groups.OrderBy(_ => _.Recess));
@@ -120,11 +149,19 @@ public class BclEnumTests
 
         var containing = await client.Source<Sitting>("Sitting")
             .Where(_ => _.Alternates.Contains(DayOfWeek.Friday))
-            .Select(_ => new {_.Name})
+            .Select(_ => new
+            {
+                _.Name
+            })
             .ToListAsync();
         var counts = await client.Source<Sitting>("Sitting")
             .OrderBy(_ => _.Id)
-            .Select(_ => new {_.Name, Count = _.Alternates.Count})
+            .Select(_
+                => new
+                {
+                    _.Name,
+                    _.Alternates.Count
+                })
             .ToListAsync();
 
         using (Assert.Multiple())
@@ -142,7 +179,11 @@ public class BclEnumTests
 
         var rows = await client.Source<Sitting>("Sitting")
             .Where(_ => _.Clock == DateTimeKind.Local)
-            .Select(_ => new {_.Name, _.Clock})
+            .Select(_ => new
+            {
+                _.Name,
+                _.Clock
+            })
             .ToListAsync();
 
         using (Assert.Multiple())
@@ -188,7 +229,10 @@ public class BclEnumTests
 
         var rows = await client.Source<Sitting>("Sitting")
             .Where(_ => _.Clock == clock)
-            .Select(_ => new {_.Name})
+            .Select(_ => new
+            {
+                _.Name
+            })
             .ToListAsync();
 
         await Assert.That(rows.Select(_ => _.Name)).IsEquivalentTo(["Opening"], CollectionOrdering.Matching);
@@ -226,8 +270,7 @@ public class BclEnumTests
     {
         await using var context = TestContext.CreateSeeded();
 
-        var exception = Assert.ThrowsExactly<ScryValidationException>(
-            () => SharedProcessor.Instance.Execute(DayRequest(value, tag), context));
+        var exception = Assert.ThrowsExactly<ScryValidationException>(() => SharedProcessor.Instance.Execute(DayRequest(value, tag), context));
 
         await Assert.That(exception.Message).IsEqualTo($"'{value}' is not a value of enum 'DayOfWeek'.");
     }
@@ -260,7 +303,7 @@ public class BclEnumTests
                 if (json.TryGetPropertyValue("$type", out var type) &&
                     type?.GetValue<string>() == "const")
                 {
-                    constants.Add((ConstNode) json.Deserialize<Node>(ScryJson.Options)!);
+                    constants.Add((ConstNode)json.Deserialize<Node>(ScryJson.Options)!);
                     return;
                 }
 
