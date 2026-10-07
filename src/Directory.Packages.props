@@ -72,7 +72,7 @@
     <PackageVersion Include="Verify.SourceGenerators" Version="2.5.0" />
     <PackageVersion Include="HttpMultipart" Version="1.1.0" />
     <PackageVersion Include="Polyfill" Version="11.4.3" />
-    <PackageVersion Include="ProjectDefaults" Version="1.0.182" />
+    <PackageVersion Include="ProjectDefaults" Version="1.0.184" />
     <PackageVersion Include="MarkdownSnippets.MsBuild" Version="28.5.0" />
     <PackageVersion Include="NaughtyStrings" Version="3.0.0" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />

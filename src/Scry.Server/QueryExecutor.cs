@@ -498,7 +498,7 @@ sealed class QueryExecutor(Schema schema, ScryOptions options)
             // is built, asked with the others before anything this query runs.
             new(
                 schema,
-                db.Model,
+                () => db.Model,
                 (name, include) => ResolveSource(name, db, scope, include),
                 buildOnly ? null : probes),
             // Decides each command's capability once for this call, however often the query reads it.

@@ -1533,6 +1533,49 @@ public class UiSnapshotTests :
         await page.Locator("[data-testid='builder-filter']").WaitForAsync();
     }
 
+    // A navigation's caret opens it and no more: its columns are listed unchecked and the query is
+    // untouched, so one of them can be picked without first unpicking the rest.
+    [Test]
+    public async Task ExplorerBuilderOpensANavigationWithoutProjectingIt()
+    {
+        var page = await NewPageAsync();
+        await page.GoToExplorerAsync(BaseUrl);
+        await page.Locator("[data-testid='tab-add']").ClickAsync();
+        await page.Locator("[data-testid='rail-builder']").ClickAsync();
+
+        await page.Locator("[data-testid='builder-start-source']").SelectOptionAsync("Employee");
+        await page.Locator("[data-testid='builder-start']").ClickAsync();
+        await WaitForEditorAsync(page, "Query.Employee");
+
+        await page.Locator("[data-testid='builder-expand'][data-path='Department']").ClickAsync();
+        var name = page.Locator("[data-testid='builder-column'][data-path='Department.Name']");
+        await Assertions.Expect(name).ToHaveAttributeAsync("aria-checked", "false");
+        await Assertions.Expect(page.Locator("[data-testid='builder-column'][data-path='Department']")).ToHaveAttributeAsync("aria-checked", "false");
+        await Assertions.Expect(page.Locator("[data-testid='builder-columns'] [aria-checked='true']")).ToHaveCountAsync(0);
+        await WaitForEditorAsync(page, "Query.Employee");
+
+        await name.ClickAsync();
+        await WaitForEditorAsync(
+            page,
+            """
+            Query.Employee
+                .Select(_ =>
+                    new
+                    {
+                        Department =
+                            new
+                            {
+                                _.Department!.Name
+                            }
+                    })
+            """);
+
+        // Closing it hides the columns and leaves the one picked in the query.
+        await page.Locator("[data-testid='builder-expand'][data-path='Department']").ClickAsync();
+        await Assertions.Expect(name).ToHaveCountAsync(0);
+        await Assertions.Expect(page.Locator("[data-testid='builder-column'][data-path='Department']")).ToHaveAttributeAsync("aria-checked", "true");
+    }
+
     // The pane is a reading of the editor: what is typed shows up in it, and what it cannot read it
     // says so about and leaves alone, starting anything new in a tab of its own.
     [Test]

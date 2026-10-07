@@ -15,12 +15,14 @@ public static class Requests
 
     /// <summary>
     /// The same projection bounded as a page. A page is rows like a list is, so it is written the same
-    /// way; what it adds is the envelope around them.
+    /// way; what it adds is the envelope around them. Ordered by the key, since a page of rows in no
+    /// defined order is refused.
     /// </summary>
     public static QueryRequest Page(int size) =>
         QueryRequest.Create(
             "MemRow",
             [
+                new OrderByOp(Member("Id"), Descending: false),
                 Select("Id", "Name", "Region", "Grade", "Active", "Amount", "Ticks", "Created", "Score"),
                 new PageOp(size)
             ]);
