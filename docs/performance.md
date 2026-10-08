@@ -42,9 +42,9 @@ What that fallback costs is a third arm of the same benchmark. Today the only re
 
 A response that outgrows [`ResponseSpillThreshold`](server.md#response-size) — 64 KB by default — is drained to the response as it is written instead of grown to hold the whole result. A wide row here is a little over 200 bytes, so the thousand-row figures above measure the drained path and the hundred-row ones do not: the tables happen to straddle the threshold.
 
-Total allocations are the same either way — 908 KB at a thousand rows, against the 910 KB the same benchmark measured before the threshold existed. The same bytes are produced and written; what differs is how many of them are resident at once. Held whole, a large list is resident twice over, as the projected rows and as the serialized bytes, and the buffer settles at the size of the result. Drained, the buffer settles at the threshold and the rows are pulled one at a time.
+Total allocations are the same either way. The same bytes are produced and written; what differs is how many of them are resident at once. Held whole, a large list is resident twice over, as the projected rows and as the serialized bytes, and the buffer settles at the size of the result. Drained, the buffer settles at the threshold and the rows are pulled one at a time.
 
-So this is a peak-memory change that the allocation column cannot show, and it is not free: past the threshold a response gives up its `Content-Length` — a length can only describe a body that is already whole when the headers go out — and gives up answering a failure part-way through with a `500`. [Wire format](wire-format.md#response) sets out what a reader sees instead.
+So this is a difference in peak memory that the allocation column cannot show, and it is not free: past the threshold a response gives up its `Content-Length` — a length can only describe a body that is already whole when the headers go out — and gives up answering a failure part-way through with a `500`. [Wire format](wire-format.md#response) sets out what a reader sees instead.
 
 Everything the endpoint asks the database is asked asynchronously — the rows of a list or a page, a folded terminal, a denied-row probe, a cached policy's refresh, an attachment's bytes — so writing a response never holds a request thread on the database, and a caller that goes away cancels the round trip it was waiting on. That does not show here either: the benchmark reads an in-memory source, where there is nothing to await.
 
@@ -76,7 +76,7 @@ A terminal — a count, an aggregate, a `First` — costs the same whatever the 
 | Single row | 24.3 KB | 26.2 KB |
 | *List of one row, for comparison* | *19.8 KB* | *25.4 KB* |
 
-Read the third row before the second. A list of one row goes through the writer that has always written lists, and it carries the same gap — so what the second row shows is not a terminal costing more than it used to, but the fixed cost the writer pays for any result and amortizes over the rows in it. One row never amortizes it, whatever result shape the row arrived in. This is the same effect that makes the single-row entries of the tables above read the way they do.
+Read the third row before the second. A list of one row goes through the same writer, and it carries the same gap — so what the second row shows is not a cost of terminals, but the fixed cost the writer pays for any result and amortizes over the rows in it. One row never amortizes it, whatever result shape the row arrived in. This is the same effect that makes the single-row entries of the tables above read the way they do.
 
 What a terminal gets out of going through the writer is the rest of the table: it is one path for every result kind, so a terminal is written by the code the golden tests already hold to the general path byte for byte, rather than being the one shape that keeps its own.
 
@@ -85,20 +85,20 @@ What a terminal gets out of going through the writer is the rest of the table: i
 
 What the server spends on a request before the database is asked: validating it, resolving its source, applying its policies, rebinding it onto EF, and planning its projection. `PreparationBenchmarks` prepares each request through `ScryProcessor.Stream` and drops the rows unread, so nothing executes and nothing crosses HTTP. The sources are entity sets on an unreachable context, so the composition goes through EF's own provider — which compiles nothing until a query is enumerated — rather than the in-memory provider the other benchmarks read, which compiles the whole tree on every enumeration and would bury this cost.
 
-| Shape | Before | After |
-| --- | --- | --- |
-| A predicate and a projection | 6.70 KB | **5.82 KB** |
-| Temporal reads, one through a nullable | 6.39 KB | **5.48 KB** |
-| A membership list | 6.09 KB | **4.95 KB** |
-| An inner join | 5.03 KB | **4.69 KB** |
-| A row policy | 6.87 KB | **5.88 KB** |
-| A deduplicated projection, ordered | 6.73 KB | **4.92 KB** |
-| The baseline carried into EF's translation | 13.95 KB | **13.05 KB** |
-| *The request's JSON alone, for comparison* | *4.17 KB* | *4.17 KB* |
+| Shape | Allocated |
+| --- | --- |
+| A predicate and a projection | 5.82 KB |
+| Temporal reads, one through a nullable | 5.48 KB |
+| A membership list | 4.95 KB |
+| An inner join | 4.69 KB |
+| A row policy | 5.88 KB |
+| A deduplicated projection, ordered | 4.92 KB |
+| The baseline carried into EF's translation | 13.05 KB |
+| *The request's JSON alone, for comparison* | *4.17 KB* |
 
-The whole of a preparation is a few microseconds and a few kilobytes, which is what a source generator on the server side could never have improved on: nothing here is compiled per request, and the projection is the client's, so there is no shape to generate ahead of time. What the *before* column paid was reflection that ran per request rather than once — a `Set<T>` invoked reflectively per source resolution, a generic method closed and a provider's untyped `CreateQuery` invoked per composed operator, a temporal part and an optional's `Value` looked up by name per node, a policy applied through `MethodInfo.Invoke`, and the row writer's key spelled as a string on every request. Each is now a delegate or a lookup made once, and the *after* column is the difference.
+The whole of a preparation is a few microseconds and a few kilobytes, which is what a source generator on the server side could not improve on: nothing here is compiled per request, and the projection is the client's, so there is no shape to generate ahead of time. Nor is anything reflected per request. Resolving a source's set, composing an operator, reading a temporal part or an optional's `Value`, applying a policy and keying the row writer are each a delegate or a lookup made once.
 
-The last row is the same request carried on into EF's pre-execution work — funcletizing, hashing, the compiled-query lookup, the command text — so the server's share can be read against the provider's. Read the allocation columns; the timings of these arms move by a third between runs, as the note below says, and the difference between two arms of two microseconds is inside that.
+The last row is the same request carried on into EF's pre-execution work — funcletizing, hashing, the compiled-query lookup, the command text — so the server's share can be read against the provider's. The table gives allocations only; the timings of these arms move by a third between runs, as the note below says, and the difference between two arms of two microseconds is inside that.
 
 
 ## Reading a response
@@ -134,7 +134,7 @@ The crossover is around a hundred rows.
 ## Where the difference comes from
 
 - **The writer walks the projection's shape.** The projection produces an `object[]` of the requested leaves, and the writer walks a name tree — member names camel-cased and JSON-escaped when the tree is built rather than per row — writing values straight out of that array.
-- **A shape's writer is built once for the process.** The tree is held by shape, not by the plan that asked for it, so a projection sent a second time reuses the first one's writer. Building it is a node and an escaped name per member; over a thousand rows that is nothing, and over one row it was the largest thing on the request. Shapes are the client's, so the table stops growing at a bound and a shape arriving past it builds its own writer, which is what every shape did before the table existed.
+- **A shape's writer is built once for the process.** The tree is held by shape, not by the plan that asked for it, so a projection sent a second time reuses the first one's writer. Building it is a node and an escaped name per member; over a thousand rows that is nothing, and over one row it would be the largest thing on the request. Shapes are the client's, so the table stops growing at a bound and a shape arriving past it builds its own writer for that request.
 - **The payload's bytes are produced once.** The writer emits the complete envelope, version through stamp, as it goes. The general path serializes rows into a document and then serializes that document into the response, so the same bytes are produced twice with a parse in between; a batch pays that per entry, and its envelope is the second pass over all of them at once.
 - **UTF-8 end to end.** A request and a response are both serialized to UTF-8 and read as UTF-8 on both sides. Decoding a body to a string transcodes the whole of it for the JSON reader to transcode straight back.
 - **A response is read once, into the array it keeps.** The client asks for the headers first and reads the body straight off the connection into an array sized from the length the server declared; a binary part is read into its own array the same way. Left to HttpClient, a body is copied into a stream of its own and then out of it again. The declared length sizes the array and is never trusted for the read: a body that ends short of it is reported as a wire failure.
