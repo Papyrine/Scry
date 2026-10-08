@@ -4,7 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- work around CVE -->
-    <PackageVersion Include="AngleSharp" Version="1.8.3" />
+    <PackageVersion Include="AngleSharp" Version="1.8.4" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
     <PackageVersion Include="EfLocalDb" Version="27.2.3" />
@@ -15,16 +15,16 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.12" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.19.1" />
-    <PackageVersion Include="TUnit" Version="1.72.16" />
+    <PackageVersion Include="TUnit" Version="1.73.5" />
     <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Playwright" Version="1.63.0" />
     <PackageVersion Include="ProjectFiles" Version="1.6.0" />
-    <PackageVersion Include="Verify.TUnit" Version="33.3.1" />
+    <PackageVersion Include="Verify.TUnit" Version="33.3.2" />
     <PackageVersion Include="Verify.AngleSharp" Version="5.1.2" />
     <PackageVersion Include="Verify.Bunit" Version="14.1.0" />
     <PackageVersion Include="Verify.Playwright" Version="3.1.1" />
     <PackageVersion Include="Verify.Http" Version="7.5.1" />
-    <PackageVersion Include="DiffEngine" Version="20.7.0" />
+    <PackageVersion Include="DiffEngine" Version="20.7.2" />
     <!-- Under central package management the F# SDK drops its implicit FSharp.Core reference, so the
          F# projects reference it by hand and the version lives here like any other. -->
     <PackageVersion Include="FSharp.Core" Version="10.1.401" />
