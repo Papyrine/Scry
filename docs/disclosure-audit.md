@@ -71,13 +71,13 @@ services
             });
     });
 ```
-<sup><a href='/samples/Sample.DisclosureServer/Program.cs#L49-L83' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleDisclosureAudit' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.DisclosureServer/Program.cs#L48-L82' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleDisclosureAudit' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Turning it on changes four things about a server, each of them a refusal to do something the record could not account for:
 
 - **An answer the sink does not accept is not sent.** See [the write-ahead guarantee](#fail-closed-the-write-ahead-guarantee).
-- **Every recorded response is `Cache-Control: no-store`**, and the server refuses to start beside `QueryFreshness`. See [Caching](#caching).
+- **A recorded response is `Cache-Control: no-store`**, unless the caller can ask whether it is still current, and then the asking is recorded. See [Caching](#caching).
 - **Every answer is recorded under a caller**, and an answer for nobody is refused. See [Who the caller is](#who-the-caller-is).
 - **Every source has to say what identifies a row of it.** An entity's primary key is found in the model. A view, a list supplied from memory, or a table mapped with no key has none, and the server refuses to start until the host has given each one a key with `Key<T>` or acknowledged that it has none with `Unkeyed<T>`. See [Key capture](#key-capture).
 
@@ -153,7 +153,7 @@ Off, the audit costs one null check where a capture would be made: no hidden col
 | Row identity | Hidden trailing key slots on the projection plan, the mechanism keyset paging already relies on. Read from the database, never serialised. |
 | Guarantee | Write-ahead: no byte of recorded content is released to a transport before the sink accepted the record describing it. It never under-records; over-records are bounded and marked. |
 | Durable accept | `IScryDisclosureSink`. Shipped: an in-memory store, a local journal file, and a SQL Server store whose accept is one row in an outbox table. |
-| Caching | With the audit on, recorded responses are `Cache-Control: no-store` with no `ETag`, and startup is refused while `QueryFreshness` is set. A `304` cannot occur. |
+| Caching | A recorded response is `no-store`, except one asked by URL on a server with `QueryFreshness` set. That one may be kept by the caller's own cache, has to be asked about before each reuse, and the `304` that answers is recorded as a confirmation before it is sent. |
 | Caller | Required. A disclosure with no caller is refused unless `AllowAnonymous` is set. |
 | Erasure | Content in a separate table that can be deleted from; ledger tables hold addresses only; an optional HMAC key so a leftover address cannot be confirmed by guessing. Crypto-shredding is designed and deferred. |
 | UI | A Blazor WASM app embedded in a server package, over the reader seam, so it works on any store. Erase and export sit behind guards of their own. |
@@ -190,7 +190,6 @@ Every entry is reached through `ScryProcessor`, so HTTP, the SignalR hub, MCP an
 
 Out of scope, each with its reason:
 
-- **`304 Not Modified`** cannot occur with the audit on. See [Caching](#caching).
 - **The paging cursor, the `ETag`, an SSE event id, `Scry-Schema-Stamp`** are sealed ciphertext or fingerprints. None is readable content.
 - **Error bodies other than a denial.** A `400` echoes the caller's own text and schema names; a `500` is fixed text. No row value is formatted into any of them.
 - **Headers a row or attachment policy writes** (`ScryPolicyContext.ResponseHeaders`) are the host's own channel, written by host code.
@@ -628,13 +627,17 @@ public interface IScryDisclosureBlobStore
 
 ## Caching
 
-With the audit on, every response carrying recorded content is sent `Cache-Control: no-store` and carries no `ETag`, and the server refuses to start while `ScryOptions.QueryFreshness` is set. Both, because either alone leaves a gap:
+A caller that was sent an answer has been recorded as receiving it, and reading its own copy again tells it nothing new. Being told that the copy is still current does: that is a fact about the data at a later time. So what the audit has to record about a cache is each time the server says so, and what it has to prevent is a copy being reused without the server being asked.
 
-- A `304` runs nothing, no policies and no recorder, so the server cannot say what the caller's copy holds.
-- `private, no-cache` *stores*: the rows sit on the caller's disk and the next user of that browser profile reads them with no request at all.
-- A host that asked for both asked for two things that cannot both hold, and is told so at startup, as it is for an unscoped `ETag`.
+- **A response nobody can ask about again is kept by nobody.** A recorded answer is sent `Cache-Control: no-store`: one asked in a request body, any answer on a server with no `ScryOptions.QueryFreshness`, and any answer that returns a `[Sensitive]` member.
+- **A response that can be asked about may be kept, by the caller alone.** A query asked by URL on a server with `QueryFreshness` set is sent `private, no-cache` with an `ETag`, as it is without the audit. `no-cache` stores and forbids reuse without asking, so every reuse is a request.
+- **The answer to that request is recorded before it is given.** A `304` writes an event with the earlier answer's kind, source, request and shape, marked `Confirmed`, with no units: this caller was told at this time that the answer to this request still stands. A sink that will not take it means the caller is not told, and gets a `500`.
 
-So revalidation is not recorded; it is ruled out. What is left is a host that widens `Cache-Control` above the endpoint, or puts an output cache of its own in front of Scry. That goes on the [review checklist](security.md#review-checklist).
+A `304` runs nothing, so what it is recorded from is remembered: the server keeps, for each query asked by URL, what its answer was recorded as. That depends on the query and the server's settings and on nothing else, so it is the same for every caller. A server that remembers nothing of a query, after a restart or on a node that never answered it, does not answer `304`. It answers in full, which is recorded the ordinary way and remembered from then on. At most 4096 queries are remembered, and past that all are forgotten: which queries are asked is the caller's to choose.
+
+A query that reads nothing but [sources left out](#leaving-a-source-out) is remembered as that, and its `304` is given with nothing recorded.
+
+What a `304` does not do is run the row policies, with or without the audit: a caller whose grant was revoked is still told its copy stands unless what the grant depends on is in `CacheScope`. [Caching](caching.md) covers that, and it is on the [review checklist](security.md#review-checklist) with what is left to the host here: one that widens `Cache-Control` above the endpoint, or puts an output cache of its own in front of Scry.
 
 
 ## Who the caller is
@@ -705,7 +708,7 @@ app.MapScryDisclosureExplorer(_ =>
     _.EnableErase = DemoSignIn.IsReviewer;
 });
 ```
-<sup><a href='/samples/Sample.DisclosureServer/Program.cs#L98-L110' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapDisclosureExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.DisclosureServer/Program.cs#L97-L109' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapDisclosureExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 It needs a host with the audit on and something registered as `IScryDisclosureReader`, and says so at startup where either is missing. The SQL Server store registers itself, and so does an in-memory store handed to `UseDisclosureAudit`.
@@ -802,9 +805,8 @@ Off: a null check where a capture would be made. On, per row: one SHA-256 over t
 1. **The size of the entity index.** It holds one row per disclosed row per event, so it can outgrow the data it describes. Addressing a whole response's unit list once would collapse repeated identical answers to one event row.
 2. **"Which version".** A version is the content address of the unit. A row-version column named by the host, as a cached policy takes one, would compare versions across different projections.
 3. **Retention.** Append-only ledger tables cannot be trimmed in place.
-4. **Recording revalidation in place of forbidding it**, as an opt-in mode for a host that wants both.
-5. **Caller detail.** One string today. An agent acting for a user over MCP may warrant both identities.
-6. **The hub's subscription caller.** A hub subscription is counted against the connection's user identifier while commands go by `ScryOptions.Caller`. The audit records the same caller for both; the limit key is left alone.
-7. **Reading what was accepted a moment ago.** The SQL Server store answers from what has been moved on. A reader that waited for the outbox to empty would read its own writes, at the cost of a question waiting on the mover.
-8. **Checking a long chain.** A check of the whole chain can outlast a request. A bounded range is checked per call, and the last result is kept.
-9. **A reader-only host.** The explorer records through the audit's own settings, so its host configures the audit as a serving node does, model included. An explorer over a reader and a sink alone would run where the model is not.
+4. **Caller detail.** One string today. An agent acting for a user over MCP may warrant both identities.
+5. **The hub's subscription caller.** A hub subscription is counted against the connection's user identifier while commands go by `ScryOptions.Caller`. The audit records the same caller for both; the limit key is left alone.
+6. **Reading what was accepted a moment ago.** The SQL Server store answers from what has been moved on. A reader that waited for the outbox to empty would read its own writes, at the cost of a question waiting on the mover.
+7. **Checking a long chain.** A check of the whole chain can outlast a request. A bounded range is checked per call, and the last result is kept.
+8. **A reader-only host.** The explorer records through the audit's own settings, so its host configures the audit as a serving node does, model included. An explorer over a reader and a sink alone would run where the model is not.

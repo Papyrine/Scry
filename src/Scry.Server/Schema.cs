@@ -1170,24 +1170,13 @@ sealed partial class Schema
     }
 
     /// <summary>
-    /// Refuses a disclosure audit beside conditional answers, and settings no audit could run with.
+    /// Refuses settings no disclosure audit could run with.
     /// </summary>
-    /// <remarks>
-    /// A <c>304</c> runs nothing: no policy, no recorder, no row. It tells a caller that the copy it
-    /// kept is still the answer, so the caller reads rows this server has no way to say were read — and
-    /// the audit exists to say exactly that. A host that asked for both asked for two things that
-    /// cannot both hold, and is told so here rather than left with a record that is quietly short.
-    /// </remarks>
     static void EnsureDisclosureOptions(ScryOptions options)
     {
         if (options.Disclosure is not { } disclosure)
         {
             return;
-        }
-
-        if (options.QueryFreshness is not null)
-        {
-            throw new($"The disclosure audit records every answer sent, and ScryOptions.{nameof(options.QueryFreshness)} answers a repeated query with a 304 that sends nothing and runs nothing — so the rows a caller goes on reading from its own copy would go unrecorded. Leave {nameof(options.QueryFreshness)} unset where the audit is on.");
         }
 
         if (disclosure.StreamChunkBytes < 0)

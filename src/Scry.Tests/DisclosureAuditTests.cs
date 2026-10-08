@@ -320,14 +320,28 @@ public class DisclosureAuditTests
         await Assert.That(headers["Cache-Control"].ToString()).IsEqualTo("no-store");
     }
 
-    // A 304 sends nothing and runs nothing, so the rows a caller goes on reading from its own copy
-    // could not be recorded. A host that asks for both is told at startup, not left with a short record.
+    // Where the host has said how to tell that nothing changed, an answer asked by URL may be kept
+    // by the caller's own cache: it has to ask before using its copy, and being told the copy is
+    // still current is recorded. An answer asked any other way is still kept by nobody.
     [Test]
-    public async Task TheAuditRefusesToStartBesideConditionalAnswers()
+    public async Task AnAnswerThatCanBeAskedAboutAgainMayBeKept()
     {
-        var exception = Assert.ThrowsExactly<Exception>(() => Disclosures.Audited(_ => _.QueryFreshness = (_, _) => new("1")));
+        var (processor, _) = Disclosures.Audited(_ => _.QueryFreshness = (_, _) => new("1"));
+        var byUrl = new HeaderDictionary
+        {
+            ["Cache-Control"] = "private, no-cache"
+        };
+        var byBody = new HeaderDictionary();
 
-        await Assert.That(exception.Message).Contains("304");
+        await using var context = TestContext.CreateSeeded();
+        await processor.TryExecuteBufferedAsync(Disclosures.Names(), context, EmptyServiceProvider.Instance, new HeaderDictionary(), byUrl, new ArrayBufferWriter<byte>(), fromUrl: true);
+        await Disclosures.Buffered(processor, Disclosures.Names(), responseHeaders: byBody);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(byUrl["Cache-Control"].ToString()).IsEqualTo("private, no-cache");
+            await Assert.That(byBody["Cache-Control"].ToString()).IsEqualTo("no-store");
+        }
     }
 
     [Test]

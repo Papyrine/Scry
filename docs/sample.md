@@ -870,7 +870,7 @@ services
             });
     });
 ```
-<sup><a href='/samples/Sample.DisclosureServer/Program.cs#L49-L83' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleDisclosureAudit' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.DisclosureServer/Program.cs#L48-L82' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleDisclosureAudit' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 ```bash
@@ -894,10 +894,10 @@ app.MapScryDisclosureExplorer(_ =>
     _.EnableErase = DemoSignIn.IsReviewer;
 });
 ```
-<sup><a href='/samples/Sample.DisclosureServer/Program.cs#L98-L110' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapDisclosureExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.DisclosureServer/Program.cs#L97-L109' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapDisclosureExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
-It is apart from `Sample.WebServer` because that one answers a repeated query with a `304`, and a server with the audit on refuses to start beside conditional requests.
+It is apart from `Sample.WebServer` so that the record holds nothing but what was asked of it here, and so that the larger sample runs with nothing recorded.
 
 
 ## Integration tests

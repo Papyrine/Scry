@@ -7,9 +7,8 @@
 // /scry-disclosures: who was sent which row, what a caller received, and whether a caller ever saw
 // a member — see /docs/disclosure-audit.md.
 //
-// A host of its own, apart from Sample.WebServer, because that one answers a repeated query with a
-// 304 and this one cannot: a 304 runs nothing, so there would be nothing to record, and a server
-// with the audit on refuses to start beside conditional requests.
+// A host of its own, apart from Sample.WebServer, so that the record holds nothing but what was
+// asked of it here, and so that the larger sample runs with nothing recorded.
 class Program
 {
     // A LocalDB instance of this sample's own. The other samples and the test projects share one,

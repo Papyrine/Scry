@@ -529,6 +529,20 @@ public static partial class ScryServiceExtensions
         await context.Response.Body.FlushAsync(context.RequestAborted);
     }
 
+    // What a query asked by URL is remembered under, where the disclosure audit will have a 304
+    // for it to record. Null everywhere else, so nothing is hashed for nobody to read.
+    static string? Revalidates(HttpContext context, ScryOptions options, bool url)
+    {
+        if (!url ||
+            options.Disclosure is null ||
+            options.QueryFreshness is null)
+        {
+            return null;
+        }
+
+        return QueryEtag.Query(context.Request);
+    }
+
     static async Task Handle(HttpContext context)
     {
         var services = context.RequestServices;
@@ -555,8 +569,18 @@ public static partial class ScryServiceExtensions
             // point of not doing the work — and after Cache-Control above, so a 304 carries both
             // directives: a client merges a 304's headers into the response it kept, and `no-cache`
             // alone would strip `private` from its stored copy.
-            if (await QueryEtag.NotModified(context, processor, options))
+            try
             {
+                if (await QueryEtag.NotModified(context, processor, options))
+                {
+                    return;
+                }
+            }
+            // The one thing that can fail here that is the server's: the disclosure audit would not
+            // take the record of telling the caller its copy is still current. So it is not told.
+            catch (ScryDisclosureException) when (!context.RequestAborted.IsCancellationRequested)
+            {
+                await WriteError(context, StatusCodes.Status500InternalServerError, "Query execution failed.", ScryErrorCode.ExecutionFailed);
                 return;
             }
         }
@@ -614,7 +638,8 @@ public static partial class ScryServiceExtensions
                 collector,
                 context.RequestAborted,
                 url,
-                caller: options.DisclosureCaller(context));
+                caller: options.DisclosureCaller(context),
+                revalidates: Revalidates(context, options, url));
 
             // The writer declined this one, so the buffer it was handed is untouched — the envelope is
             // serialized into it rather than into a right-sized array that would be written once and

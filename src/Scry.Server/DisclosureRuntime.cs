@@ -5,8 +5,32 @@
 /// </summary>
 sealed class DisclosureRuntime(ScryDisclosureOptions settings, ScryOptions options, string stamp)
 {
+    // How many queries are remembered before all of them are forgotten. Which queries are asked is
+    // the caller's to choose, so what is kept about them has a ceiling, and a forgotten query costs
+    // one full answer to learn again.
+    const int Remembered = 4096;
+
     Lock gate = new();
     IScryDisclosureSink? sink;
+
+    // What each query asked by URL was recorded as, by the fingerprint of the URL: what a 304 for it
+    // is recorded from, since a 304 runs nothing to learn it by.
+    ConcurrentDictionary<string, DisclosureMemo> memos = new(StringComparer.Ordinal);
+
+    /// <summary>Remembers what an answer to a query asked by URL was recorded as.</summary>
+    public void Remember(string query, DisclosureMemo memo)
+    {
+        if (memos.Count >= Remembered)
+        {
+            memos.Clear();
+        }
+
+        memos[query] = memo;
+    }
+
+    /// <summary>What an earlier answer to the same query was recorded as, where one is remembered.</summary>
+    public bool Recall(string query, [MaybeNullWhen(false)] out DisclosureMemo memo) =>
+        memos.TryGetValue(query, out memo);
 
     public ScryDisclosureOptions Settings => settings;
 

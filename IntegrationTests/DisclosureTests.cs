@@ -374,7 +374,8 @@ public partial class DisclosureTests
             bool sql = false,
             Func<ScryMemoryDisclosureStore, IScryDisclosureSink>? sink = null,
             Func<IEnumerable<Sample.Model.Holiday>>? rows = null,
-            int? threshold = null)
+            int? threshold = null,
+            Action<ScryOptions>? extra = null)
         {
             var store = new ScryMemoryDisclosureStore();
             var builder = WebApplication.CreateBuilder();
@@ -413,6 +414,7 @@ public partial class DisclosureTests
                 }
 
                 options.UseDisclosureAudit(sink?.Invoke(store) ?? store, Rows);
+                extra?.Invoke(options);
             });
             services.AddScryMcp();
 
@@ -448,6 +450,26 @@ public partial class DisclosureTests
             }
 
             return null;
+        }
+
+        // Asks by URL, as a client that may be answered from what it holds does: with the tag of the
+        // copy it kept, where it has one.
+        public async Task<HttpResponseMessage> Get(string request, string? tag = null, string? user = "tester")
+        {
+            var client = app.GetTestClient();
+            var encoded = QueryUrl.Encode(ScryJson.DeserializeRequest(Encoding.UTF8.GetBytes(request)));
+            using var message = new HttpRequestMessage(HttpMethod.Get, $"/api/query?{QueryUrl.Parameter}={encoded}");
+            if (tag is not null)
+            {
+                message.Headers.TryAddWithoutValidation("If-None-Match", tag);
+            }
+
+            if (user is not null)
+            {
+                message.Headers.Add("X-User", user);
+            }
+
+            return await client.SendAsync(message);
         }
 
         public async Task<HttpResponseMessage> Send(

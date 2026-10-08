@@ -71,6 +71,35 @@ sealed class DisclosureCapture(
     /// <summary>The event's id: what an audit entry names to say this answer was recorded.</summary>
     public Guid Id { get; } = Guid.CreateVersion7();
 
+    /// <summary>
+    /// Set on the record of a <c>304</c>: the answer a caller was told is still current. The event is
+    /// then that answer's over again — its request, its shape — with nothing sent.
+    /// </summary>
+    public DisclosureMemo? Confirms { get; set; }
+
+    /// <summary>
+    /// Set where the response may be kept by the caller's own cache and asked about again, because
+    /// the host has said how to tell that nothing changed. Such a response is not marked
+    /// <c>no-store</c>: asking again is a request, and a request is recorded.
+    /// </summary>
+    public bool Storable { get; set; }
+
+    /// <summary>
+    /// What to remember of this answer so that a later <c>304</c> for the same query can be recorded
+    /// without running it: whether it was recorded at all, and what its record names.
+    /// </summary>
+    public DisclosureMemo Memo()
+    {
+        if (silent)
+        {
+            return DisclosureMemo.Unrecorded;
+        }
+
+        return new(source, kind, asked, shape?.Address, sensitive);
+    }
+
+    ScryDisclosureAddress? asked;
+
     /// <summary>The same, or null where the answer turned out to be one the host left out of the record.</summary>
     public Guid? Event
     {
@@ -131,7 +160,10 @@ sealed class DisclosureCapture(
             // Recorded after all, so owed what every recorded answer is: a name to be recorded
             // under, and a response no cache may keep.
             runtime.Require(caller);
-            headers.CacheControl = "no-store";
+            if (!Storable)
+            {
+                headers.CacheControl = "no-store";
+            }
         }
 
         Describe(planner);
@@ -625,8 +657,17 @@ sealed class DisclosureCapture(
     // as far as having something to record.
     ScryDisclosureEvent Header()
     {
-        ScryDisclosureAddress? asked = null;
-        if (Asked() is { } bytes)
+        var recalled = shape?.Address;
+        var marked = sensitive;
+        if (Confirms is { } memo)
+        {
+            // Nothing is asked again and nothing is read again: the event names what the answer it
+            // confirms named, which the store already holds.
+            asked = memo.Request;
+            recalled = memo.Shape;
+            marked = memo.Sensitive;
+        }
+        else if (Asked() is { } bytes)
         {
             var address = Tagged(ScryDisclosureContentKind.Request, bytes);
             Hold(address, ScryDisclosureContentKind.Request, bytes);
@@ -640,8 +681,8 @@ sealed class DisclosureCapture(
             Delivery = Delivery,
             ContentType = ContentType,
             Request = asked,
-            Shape = shape?.Address,
-            Sensitive = sensitive,
+            Shape = recalled,
+            Sensitive = marked,
             Stamp = runtime.Stamp,
             Correlation = Correlation,
             Node = runtime.Settings.Node

@@ -13,14 +13,14 @@ public sealed partial class ScryProcessor
     byte[]? described;
 
     /// <summary>
-    /// Starts the record of one answer, where the disclosure audit is on, and marks the response as
-    /// one no cache may keep. Null where the audit is off.
+    /// Starts the record of one answer, where the disclosure audit is on, and says whether the
+    /// response may be kept. Null where the audit is off.
     /// </summary>
     /// <remarks>
-    /// Both in one step because they are one decision. A copy a cache keeps is read again with no
-    /// request at all — by the same caller later, or by whoever uses that browser profile next — and
-    /// a read with no request is one nothing here can record. <c>private, no-cache</c> would not do:
-    /// it revalidates before reuse, and still stores.
+    /// Both in one step because they are one decision. A caller told that its copy is still current
+    /// has been told something, so a copy may be kept only where every reuse of it is a request this
+    /// server answers and records: <c>storable</c>, which leaves the response
+    /// <c>private, no-cache</c>. Anything else is marked <c>no-store</c>.
     /// </remarks>
     DisclosureCapture? Disclose(
         object request,
@@ -29,7 +29,8 @@ public sealed partial class ScryProcessor
         IServiceProvider services,
         IHeaderDictionary responseHeaders,
         string? correlation = null,
-        bool alone = false)
+        bool alone = false,
+        bool storable = false)
     {
         if (disclosure is null)
         {
@@ -50,14 +51,64 @@ public sealed partial class ScryProcessor
 
             var undecided = disclosure.BeginUndecided(request, source, caller, services, responseHeaders);
             undecided.Correlation = correlation;
+            undecided.Storable = storable;
             return undecided;
         }
 
-        responseHeaders.CacheControl = "no-store";
+        // A response the caller may ask about again is left for its own cache to keep: asking again
+        // is a request, and the 304 that answers it is recorded. Anything else is kept by nobody.
+        if (!storable)
+        {
+            responseHeaders.CacheControl = "no-store";
+        }
+
         var capture = disclosure.Begin(request, source, caller, services);
         capture.Correlation = correlation;
+        capture.Storable = storable;
         return capture;
     }
+
+    /// <summary>
+    /// Records that a caller was told the answer it holds to a query is still current, before it is
+    /// told. False where that cannot be recorded because nothing is remembered of the query — after
+    /// a restart, or on a node that never answered it — and the query is to be answered in full
+    /// instead, which is recorded the ordinary way and remembered from then on.
+    /// </summary>
+    /// <param name="query">The fingerprint of the URL the query was asked by.</param>
+    /// <param name="caller">Who is asking.</param>
+    /// <param name="services">The request's services.</param>
+    /// <param name="cancel">Ends the wait on the sink.</param>
+    internal async ValueTask<bool> ConfirmAsync(string query, string? caller, IServiceProvider services, Cancel cancel)
+    {
+        if (disclosure is null)
+        {
+            return true;
+        }
+
+        if (!disclosure.Recall(query, out var memo))
+        {
+            return false;
+        }
+
+        if (ReferenceEquals(memo, DisclosureMemo.Unrecorded))
+        {
+            return true;
+        }
+
+        await using var capture = disclosure.Begin(request: null, memo.Source, caller, services);
+        capture.Confirms = memo;
+        capture.Delivery = ScryDisclosureDelivery.Confirmed;
+        capture.Begin(memo.Kind);
+        await capture.CommitAsync(cancel);
+        capture.Released();
+        return true;
+    }
+
+    // Whether an answer may be kept by the caller's cache and asked about again: one asked by URL,
+    // on a server whose host has said how to tell that nothing changed.
+    bool Storable(bool fromUrl) =>
+        fromUrl &&
+        options.QueryFreshness is not null;
 
     /// <summary>
     /// What ties the answers of one request together in the record: the entries of a batch, the

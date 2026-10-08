@@ -315,10 +315,11 @@ public sealed class ScryOptions(Type contextType)
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Off, nothing is recorded and nothing is paid. On, every recorded response is sent
-    /// <c>Cache-Control: no-store</c>, and a server that also sets <see cref="QueryFreshness"/>
-    /// refuses to start: a <c>304</c> runs nothing, so it could not be recorded, and a stored copy is
-    /// read by the next user of the browser with no request at all.
+    /// Off, nothing is recorded and nothing is paid. On, a recorded response is sent
+    /// <c>Cache-Control: no-store</c> unless the caller can ask whether it is still current: a query
+    /// asked by URL on a server with <see cref="QueryFreshness"/> set may be kept by the caller's own
+    /// cache, has to be asked about before each reuse, and the <c>304</c> that answers is recorded
+    /// before it is sent.
     /// </para>
     /// <para>
     /// Every answer is recorded under a caller. <see cref="Caller"/> names them over HTTP, the hub

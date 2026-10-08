@@ -599,7 +599,8 @@ public sealed partial class ScryProcessor
         bool fromUrl = false,
         SubscriptionRun? subscription = null,
         string? caller = null,
-        string? correlation = null)
+        string? correlation = null,
+        string? revalidates = null)
     {
         var drifted = request.Stamp is { } requestStamp &&
                       requestStamp != schema.Stamp;
@@ -612,7 +613,7 @@ public sealed partial class ScryProcessor
         try
         {
             ApplySensitivity(request, responseHeaders, fromUrl);
-            capture = Disclose(request, request.Root, caller, services, responseHeaders, correlation);
+            capture = Disclose(request, request.Root, caller, services, responseHeaders, correlation, storable: Storable(fromUrl));
             capture?.Subscribed = subscription is not null;
             var scope = new CallScope(services, requestHeaders, responseHeaders)
             {
@@ -681,6 +682,14 @@ public sealed partial class ScryProcessor
 
             recorder.Succeeded(kind, rows);
             capture?.Released();
+
+            // What a 304 for this query will be recorded from, since it will run nothing to learn it.
+            if (revalidates is not null &&
+                capture is not null)
+            {
+                disclosure!.Remember(revalidates, capture.Memo());
+            }
+
             return null;
         }
         catch (ScryValidationException exception) when (drifted)
