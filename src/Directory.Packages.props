@@ -20,10 +20,10 @@
     <PackageVersion Include="MassTransit" Version="9.2.3" />
     <PackageVersion Include="Rebus" Version="8.9.5" />
     <PackageVersion Include="Rebus.ServiceProvider" Version="10.7.2" />
-    <PackageVersion Include="WolverineFx" Version="6.46.0" />
+    <PackageVersion Include="WolverineFx" Version="6.48.1" />
     <!-- Core Wolverine no longer compiles handler chains at runtime. The adapter needs neither; the tests
          run in dynamic mode, so they bring the compiler. A host picks this or static codegen itself. -->
-    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.46.0" />
+    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.48.1" />
     <!-- Scry.Server.Mcp's one dependency: the official MCP SDK's streamable-HTTP server. -->
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
@@ -66,9 +66,9 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.Scripting" Version="5.3.0" Pinned="true" />
     <PackageVersion Include="Basic.Reference.Assemblies.Net100" Version="1.8.12" />
     <PackageVersion Include="BlazorMonaco" Version="3.5.0" />
-    <PackageVersion Include="TUnit" Version="1.72.16" />
-    <PackageVersion Include="Verify" Version="33.3.2-beta.1" />
-    <PackageVersion Include="Verify.TUnit" Version="33.3.2-beta.1" />
+    <PackageVersion Include="TUnit" Version="1.73.5" />
+    <PackageVersion Include="Verify" Version="33.3.2" />
+    <PackageVersion Include="Verify.TUnit" Version="33.3.2" />
     <PackageVersion Include="Verify.SourceGenerators" Version="2.5.0" />
     <PackageVersion Include="HttpMultipart" Version="1.1.0" />
     <PackageVersion Include="Polyfill" Version="11.4.3" />
@@ -76,6 +76,6 @@
     <PackageVersion Include="MarkdownSnippets.MsBuild" Version="28.5.0" />
     <PackageVersion Include="NaughtyStrings" Version="3.0.0" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
-    <PackageVersion Include="DiffEngine" Version="20.7.0" />
+    <PackageVersion Include="DiffEngine" Version="20.7.2" />
   </ItemGroup>
 </Project>
