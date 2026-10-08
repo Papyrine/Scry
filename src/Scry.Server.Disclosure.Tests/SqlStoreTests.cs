@@ -111,7 +111,7 @@ public class SqlStoreTests
             await Assert.That(status.Pending).IsEqualTo(0);
             await Assert.That(status.Events).IsEqualTo(1);
             await Assert.That((await kept.Reconstruct(batch.EventId))!.Units).Count().IsEqualTo(1);
-            await Assert.That(await Count(database, "DisclosureUnit")).IsEqualTo(1);
+            await Assert.That(await Count(database, "DisclosureUnits")).IsEqualTo(1);
         }
     }
 
@@ -133,8 +133,11 @@ public class SqlStoreTests
         using (Assert.Multiple())
         {
             await Assert.That(await Count(database, "DisclosureEvent")).IsEqualTo(3);
-            await Assert.That(await Count(database, "DisclosureUnit")).IsEqualTo(9);
-            await Assert.That(await Count(database, "DisclosureEntity")).IsEqualTo(9);
+            await Assert.That(await Count(database, "DisclosureUnits")).IsEqualTo(9);
+            await Assert.That(await Count(database, "DisclosureEntities")).IsEqualTo(9);
+
+            // Nine as the record is read, and three as it is kept: the three answers are one list.
+            await Assert.That(await Count(database, "DisclosureManifestUnit")).IsEqualTo(3);
             await Assert.That(await Count(database, "DisclosureContent")).IsEqualTo(4);
             await Assert.That(await Count(database, "DisclosureShape")).IsEqualTo(1);
             await Assert.That(await Count(database, "DisclosureField")).IsEqualTo(2);
@@ -163,7 +166,7 @@ public class SqlStoreTests
         {
             await Assert.That(moved.Sum()).IsLessThanOrEqualTo(120);
             await Assert.That(await Count(database, "DisclosureEvent")).IsEqualTo(120);
-            await Assert.That(await Count(database, "DisclosureUnit")).IsEqualTo(120);
+            await Assert.That(await Count(database, "DisclosureUnits")).IsEqualTo(120);
             await Assert.That(await Count(database, "DisclosureOutbox")).IsEqualTo(0);
         }
 
@@ -233,7 +236,7 @@ public class SqlStoreTests
         using (Assert.Multiple())
         {
             await Assert.That(all.Select(_ => _.Event.Id)).IsEquivalentTo(batches.Select(_ => _.EventId));
-            await Assert.That(await Count(database, "DisclosureUnit")).IsEqualTo(240);
+            await Assert.That(await Count(database, "DisclosureUnits")).IsEqualTo(240);
             await Assert.That(await Count(database, "DisclosureOutbox")).IsEqualTo(0);
             await Assert.That(check.Intact).IsTrue();
             await Assert.That(check.Records).IsEqualTo(240);
@@ -274,13 +277,48 @@ public class SqlStoreTests
         var delete = await Assert.ThrowsExactlyAsync<SqlException>(() => Execute(database, "DELETE FROM [scry].[DisclosureEvent]"));
         using (Assert.Multiple())
         {
-            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM sys.tables WHERE [name] LIKE N'Disclosure%' AND [ledger_type] = 3")).IsEqualTo(11);
+            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM sys.tables WHERE [name] LIKE N'Disclosure%' AND [ledger_type] = 3")).IsEqualTo(15);
             await Assert.That(update!.Message).Contains("append only Ledger table");
             await Assert.That(delete!.Message).Contains("append only Ledger table");
             await Assert.That((await kept.Reconstruct(batch.EventId))!.Units).Count().IsEqualTo(1);
 
             // What an erasure removes, and what leaves once it has been moved on, are not in them.
             await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM sys.tables WHERE [name] IN (N'DisclosureContent', N'DisclosureOutbox', N'DisclosureSource') AND [ledger_type] = 0")).IsEqualTo(3);
+        }
+    }
+
+    // The same answer given again is the same list of units, and the record keeps the list once: what
+    // a repeat adds is one event naming it. Asked of the record, each time is still its own answer.
+    [Test]
+    public async Task AnAnswerGivenAgainAddsAnEventAndNoRows()
+    {
+        await using var database = await Clinic.Instance.Build();
+        var memory = new ScryMemoryDisclosureStore();
+        await using var kept = Store(database);
+        var who = new Who();
+        var processor = Processor(new Both(memory, kept), who);
+
+        processor.Execute(Clinic.Names(), database.Context);
+        await kept.DrainAsync();
+        var once = await Scalar<int>(database, "SELECT COUNT(*) FROM [scry].[DisclosureManifestUnit]");
+        processor.Execute(Clinic.Names(), database.Context);
+        who.Name = "nurse.kim";
+        processor.Execute(Clinic.Names(), database.Context);
+        await kept.DrainAsync();
+
+        var received = await kept.ReceiversOf("Patient", [1]).ToListAsync();
+        var told = await memory.ReceiversOf("Patient", [1]).ToListAsync();
+        using (Assert.Multiple())
+        {
+            await Assert.That(once).IsGreaterThan(0);
+            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [scry].[DisclosureManifestUnit]")).IsEqualTo(once);
+            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [scry].[DisclosureManifest]")).IsEqualTo(1);
+            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [scry].[DisclosureAnswer]")).IsEqualTo(3);
+            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [scry].[DisclosureUnit]")).IsEqualTo(0);
+            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [scry].[DisclosureEntity]")).IsEqualTo(0);
+            await Assert.That(received).Count().IsEqualTo(3);
+            await Assert.That(received.Select(_ => _.Event.Caller)).IsEquivalentTo(told.Select(_ => _.Event.Caller), CollectionOrdering.Matching);
+            await Assert.That((await kept.Reconstruct(received[0].Event.Id))!.Units).Count().IsEqualTo(once);
         }
     }
 
@@ -299,8 +337,8 @@ public class SqlStoreTests
 
         await plain.AppendAsync(Clinic.Batch(1), Cancel.None);
         await plain.DrainAsync();
-        await Execute(database, "UPDATE [plain].[DisclosureUnit] SET [Sequence] = [Sequence]");
-        await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [plain].[DisclosureUnit]")).IsEqualTo(1);
+        await Execute(database, "UPDATE [plain].[DisclosureManifestUnit] SET [Ordinal] = [Ordinal]");
+        await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [plain].[DisclosureManifestUnit]")).IsEqualTo(1);
 
         // Only a server that has ledger tables has the column that says which tables are.
         if (await Ledgers(database))
@@ -333,7 +371,7 @@ public class SqlStoreTests
         var whole = await kept.VerifyChainAsync();
         var head = (await kept.Status()).ChainHead;
         var changed = (await kept.ReceivedBy("dr.osei", DateTimeOffset.MinValue, DateTimeOffset.MaxValue).ToListAsync())[1].Event.Id;
-        await Execute(database, $"UPDATE [scry].[DisclosureEntity] SET [RowKey] = N'[2]' WHERE [EventId] = '{changed}' AND [Ordinal] = 0");
+        await Execute(database, $"UPDATE [scry].[DisclosureManifestEntity] SET [RowKey] = N'[2]' WHERE [Manifest] = (SELECT [Manifest] FROM [scry].[DisclosureAnswer] WHERE [EventId] = '{changed}') AND [Ordinal] = 0");
         var broken = await kept.VerifyChainAsync();
         var link = await Scalar<long>(database, $"SELECT [Link] FROM [scry].[DisclosureChain] WHERE [EventId] = '{changed}'");
 

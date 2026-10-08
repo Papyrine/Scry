@@ -167,11 +167,13 @@ public class ConditionalQueryTests
     {
         var query = new ScryQuery(server.CreateScryClient());
 
-        // Both shapes run before either tag is taken: the first run of the second would otherwise move
-        // the timestamp under the first's tag, and the comparison below would fail for that alone.
-        await Active(query, "Sales").ToListAsync();
-        var engineering = await Warm(query, "Engineering");
+        // The tag that is compared at the end is the last thing taken, with nothing run after it but
+        // the request it is compared in. Running the other shape can move the timestamp — its first
+        // run does, and so can a later one where the test before this wrote to the database — and a
+        // tag taken ahead of that would be stale for that alone. Which test runs before this one is
+        // not this test's to say.
         var sales = await Warm(query, "Sales");
+        var engineering = await Warm(query, "Engineering");
 
         await Assert.That(sales).IsNotEqualTo(engineering);
 

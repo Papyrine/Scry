@@ -66,6 +66,25 @@ static class DemoSignIn
         app.MapGet("/", (HttpContext context) => Results.Content(Home(context.User.Identity?.Name), "text/html"));
     }
 
+    // Two questions asked the way a browser asks for a page, by URL: one the record keeps, and one
+    // of a source the sample leaves out of it.
+    static string orders = Asked(QueryRequest.Create("Order", [new CountOp()]));
+
+    static string holidays = Asked(
+        QueryRequest.Create(
+            "Holiday",
+            [
+                new SelectOp(
+                    new(
+                    [
+                        new("Name", new NodeValue(new MemberNode(["Name"]))),
+                        new("Date", new NodeValue(new MemberNode(["Date"])))
+                    ]))
+            ]));
+
+    static string Asked(QueryRequest request) =>
+        $"/api/query?{QueryUrl.Parameter}={QueryUrl.Encode(request)}";
+
     public static bool IsReviewer(HttpContext context) =>
         context.User.Identity?.Name == Reviewer;
 
@@ -76,7 +95,7 @@ static class DemoSignIn
 
     static string Home(string? name)
     {
-        var who = "nobody. Every answer is recorded under a name, so a query asked now is refused";
+        var who = "nobody. Every recorded answer is recorded under a name, so a query asked now is refused unless it is for something left out of the record";
         if (name is not null)
         {
             who = $"<b>{WebUtility.HtmlEncode(name)}</b> (<a href=\"/demo/sign-out\">sign out</a>)";
@@ -100,6 +119,8 @@ static class DemoSignIn
                      </p>
                      <ol>
                          <li><a href="/scry">Ask something</a> in the query explorer. Whatever is answered is recorded under your name before it is sent.</li>
+                         <li>Ask <a href="{{orders}}">how many orders there are</a> by URL, then reload it. The first answer is recorded as sent. The reload is answered from the copy your browser kept, with a <code>304</code>, and that is recorded as a confirmation.</li>
+                         <li>Ask for <a href="{{holidays}}">the holidays</a>. The sample leaves the calendar out of the record, so nothing is recorded and nobody has to be signed in.</li>
                          <li>Become <a href="/demo/sign-in?as={{Reviewer}}">{{Reviewer}}</a> and <a href="/scry-disclosures/">see who was sent what</a>. Reading the record is recorded too.</li>
                      </ol>
                  </body>

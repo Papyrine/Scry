@@ -28,8 +28,14 @@ public partial class DisclosureTests
             .ReceivedBy("tester", DateTimeOffset.MinValue, DateTimeOffset.MaxValue)
             .ToListAsync();
         events.Reverse();
+
+        // The confirmation says nothing was sent, so it is no answer to whether the caller was sent
+        // a member: that is the first answer's to give, and it gives it once.
+        var sent = await server.Store.MemberReceivedBy("tester", "Holiday", "Name").ToListAsync();
         using (Assert.Multiple())
         {
+            await Assert.That(sent).Count().IsEqualTo(1);
+            await Assert.That(sent[0].Event.Delivery).IsEqualTo(ScryDisclosureDelivery.Sent);
             await Assert.That(first.StatusCode).IsEqualTo(HttpStatusCode.OK);
             await Assert.That(first.Headers.CacheControl!.ToString()).IsEqualTo("no-cache, private");
             await Assert.That(second.StatusCode).IsEqualTo(HttpStatusCode.NotModified);

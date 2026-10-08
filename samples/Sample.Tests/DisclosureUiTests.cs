@@ -194,6 +194,10 @@ public class DisclosureUiTests :
         await Become(page, Reviewer);
         await Explore(page, "caller?caller=gus.status");
         await Answered(page, "events");
+
+        // The question just asked is in the record a step behind its answer, and the page that says
+        // who has been reading is drawn once.
+        await Host.Settled();
         await page.Locator("[data-testid='rail-status']").ClickAsync();
         await Answered(page, "status-view");
 
@@ -317,5 +321,74 @@ public class DisclosureUiTests :
         await page.ReloadAsync();
         await Answered(page, "status-view");
         await Assert.That(await page.EvaluateAsync<string>("() => document.documentElement.dataset.theme")).IsEqualTo("dark");
+    }
+
+    // A question asked by URL can be asked about again: the second asking is answered 304, with
+    // nothing sent, and shows in the record as a confirmation of the first. Opened, it names the same
+    // request and carried nothing.
+    [Test]
+    public async Task BeingToldACopyStillStandsShowsAsAConfirmation()
+    {
+        const string orders = """{"version":1,"root":"Order","pipeline":[{"$type":"count"}]}""";
+        var url = $"/api/query?{QueryUrl.Parameter}={QueryUrl.Encode(Encoding.UTF8.GetBytes(orders))}";
+        var page = await SignedIn("kit.again");
+
+        // Asked the way a cache asks, with the tag of the copy it holds, and through the page's own
+        // sign-in. Not from the page's script: a script that names a tag of its own is taken by the
+        // browser to want a fresh answer, and says so, which is a request this server answers in full.
+        var first = await page.APIRequest.GetAsync($"{BaseUrl}{url}");
+        var tag = first.Headers["etag"];
+        var second = await page.APIRequest.GetAsync(
+            $"{BaseUrl}{url}",
+            new()
+            {
+                Headers = new Dictionary<string, string>
+                {
+                    ["If-None-Match"] = tag
+                }
+            });
+        using (Assert.Multiple())
+        {
+            await Assert.That(first.Status).IsEqualTo(200);
+            await Assert.That(first.Headers["cache-control"]).IsEqualTo("private, no-cache");
+            await Assert.That(second.Status).IsEqualTo(304);
+        }
+
+        await Become(page, Reviewer);
+        await Explore(page, "caller?caller=kit.again");
+        await Answered(page, "events");
+        var answers = page.Locator("[data-testid='events-table'] tbody tr");
+        await Assertions.Expect(answers).ToHaveCountAsync(2);
+        await Assertions.Expect(answers.Filter(new() {HasText = "confirmed"})).ToHaveCountAsync(1);
+
+        // Newest first, so the confirmation is the first line.
+        await answers.First.Locator("[data-testid='open-event']").ClickAsync();
+        await Answered(page, "event-view");
+        await Assertions.Expect(page.Locator("[data-testid='event-kind']")).ToHaveTextAsync("Scalar of Order, confirmed as what the caller already held");
+        await Assertions.Expect(page.Locator("[data-testid='event-outcome']")).ToContainTextAsync("Released, with nothing sent");
+        await Assertions.Expect(page.Locator("[data-testid='event-request']")).ToContainTextAsync("\"root\": \"Order\"");
+    }
+
+    // The sample leaves the calendar out of the record. Asking for it is answered, by somebody with
+    // a name and by nobody at all, and leaves nothing to be read back.
+    [Test]
+    public async Task ASourceLeftOutLeavesNothingInTheRecord()
+    {
+        const string holidays = """{"version":1,"root":"Holiday","pipeline":[{"$type":"select","projection":{"members":["Name","Date"]}}]}""";
+        var page = await SignedIn("lou.calendar");
+        await Assert.That(await Ask(page, holidays)).IsEqualTo(200);
+        await Assert.That(await Ask(page, Names)).IsEqualTo(200);
+
+        await page.GotoAsync($"{BaseUrl}/demo/sign-out");
+        await Assert.That(await Ask(page, holidays)).IsEqualTo(200);
+        await Assert.That(await Ask(page, Names)).IsEqualTo(500);
+
+        // One answer under the name: the employees. The calendar left none.
+        await Become(page, Reviewer);
+        await Explore(page, "caller?caller=lou.calendar");
+        await Answered(page, "events");
+        var answers = page.Locator("[data-testid='events-table'] tbody tr");
+        await Assertions.Expect(answers).ToHaveCountAsync(1);
+        await Assertions.Expect(answers).ToContainTextAsync(["Employee"]);
     }
 }

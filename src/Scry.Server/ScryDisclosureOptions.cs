@@ -101,7 +101,7 @@ public sealed class ScryDisclosureOptions
             throw new ArgumentException($"A key for '{typeof(TSource).Name}' names at least one member. A source that has nothing to identify a row by is acknowledged with {nameof(Unkeyed)} instead.");
         }
 
-        Keys[typeof(TSource)] = [.. members.Select(Member)];
+        Keys[typeof(TSource)] = [.. members.Select(_ => Member(_, "A key member"))];
         Acknowledged.Remove(typeof(TSource));
     }
 
@@ -142,7 +142,71 @@ public sealed class ScryDisclosureOptions
     public void Exclude<TSource>() =>
         Excluded.Add(typeof(TSource));
 
+    /// <summary>
+    /// Leaves members of a source out of the record, by the same rule as a source: an answer that
+    /// reads nothing but excluded members and excluded sources is not recorded, is not marked
+    /// <c>no-store</c> for the audit's sake, and needs no caller. For a member whose values are
+    /// nobody's to ask after while the rest of the row is — the name a list of rows is picked from,
+    /// beside what the row holds.
+    /// </summary>
+    /// <param name="members">
+    /// The members left out, each a property of the source, as <c>_ =&gt; _.Name</c>.
+    /// </param>
+    /// <remarks>
+    /// <para>
+    /// A read is a read wherever it is: in a projection, a filter, an ordering, a grouping, an
+    /// aggregate. An answer that reads an excluded member and anything that is not — another member
+    /// of the row, a member of another source — is recorded whole, the excluded member's values
+    /// included. So this decides which answers are recorded, and is no way to keep a value out of an
+    /// answer that is: a recorded answer is recorded as it was sent.
+    /// </para>
+    /// <para>
+    /// An answer that reads a source and no member of it — a count of its rows — is recorded: it
+    /// read the rows, and excluding a member says nothing of them. What goes unrecorded is what the
+    /// excluded members held, and how many rows there were of them.
+    /// </para>
+    /// <para>
+    /// Said of a type, it holds for the types derived from it. A member that holds a value of
+    /// several parts is left out with everything in it.
+    /// </para>
+    /// </remarks>
+    public void Exclude<TSource>(params Expression<Func<TSource, object?>>[] members)
+    {
+        if (members.Length == 0)
+        {
+            throw new ArgumentException($"Leaving members of '{typeof(TSource).Name}' out names at least one. The source itself is left out with {nameof(Exclude)}<{typeof(TSource).Name}>(), given nothing.");
+        }
+
+        foreach (var member in members)
+        {
+            ExcludedMembers.Add((typeof(TSource), Member(member, "A member left out").Name));
+        }
+    }
+
     internal HashSet<Type> Excluded { get; } = [];
+
+    internal HashSet<(Type Source, string Member)> ExcludedMembers { get; } = [];
+
+    // Said of a type or of one it derives from, as the exclusion of a source is.
+    internal bool Excludes(Type type, string member)
+    {
+        if (ExcludedMembers.Count == 0)
+        {
+            return false;
+        }
+
+        type = Nullable.GetUnderlyingType(type) ?? type;
+        foreach (var (source, name) in ExcludedMembers)
+        {
+            if (name == member &&
+                source.IsAssignableFrom(type))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     // Said of a type or of one it derives from, as a key and an acknowledgement are.
     internal bool Excludes(Type type)
@@ -164,7 +228,7 @@ public sealed class ScryDisclosureOptions
         return false;
     }
 
-    static PropertyInfo Member<TSource>(Expression<Func<TSource, object?>> member)
+    static PropertyInfo Member<TSource>(Expression<Func<TSource, object?>> member, string what)
     {
         var body = member.Body;
 
@@ -179,7 +243,7 @@ public sealed class ScryDisclosureOptions
             return property;
         }
 
-        throw new ArgumentException($"A key member is a property read straight off the row, as _ => _.Code; '{member}' is not one.");
+        throw new ArgumentException($"{what} is a property read straight off the row, as _ => _.Code; '{member}' is not one.");
     }
 
     internal Dictionary<Type, IReadOnlyList<PropertyInfo>> Keys { get; } = [];

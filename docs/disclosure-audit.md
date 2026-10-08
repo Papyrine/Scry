@@ -64,14 +64,31 @@ services
                 audit.Clock = clock;
 
                 // A row is recorded by its key, and a source with none has to be given one or
-                // owned up to: a view by what its rows are grouped on, a list from memory by
-                // nothing at all.
+                // owned up to: a view by what its rows are grouped on.
                 audit.Key<EmployeeSummary>(_ => _.Department);
-                audit.Unkeyed<Holiday>();
+
+                // Left out of the record: a calendar is nobody's to ask after, and neither is
+                // the logo or the handbook a department publishes. An answer of nothing but
+                // these is sent as it would be with the audit off. One that reads anything
+                // else is recorded whole, these included.
+                audit.Exclude<Holiday>();
+                audit.Exclude<Department>(_ => _.Logo, _ => _.Handbook);
             });
+
+        // A query asked by URL may be kept by the caller's own cache, which has to ask before
+        // using its copy again. Being told the copy still stands is a 304, and is recorded
+        // before it is said. Nothing writes to this sample's rows once it has started, so an
+        // answer stands for as long as the server does. A real host reads a change marker
+        // here, as Sample.WebServer does with Delta — and then keeps the record in a database
+        // of its own: Delta reads the database's log position, which every answer recorded
+        // beside the rows would move, so no recorded answer would ever be found unchanged.
+        _.QueryFreshness = (_, _) => new(started);
+
+        // Whose cache an answer belongs in: the caller's, since what is sent depends on who asks.
+        _.CacheScope = _ => _.User.Identity?.Name;
     });
 ```
-<sup><a href='/samples/Sample.DisclosureServer/Program.cs#L48-L82' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleDisclosureAudit' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.DisclosureServer/Program.cs#L52-L103' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleDisclosureAudit' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Turning it on changes four things about a server, each of them a refusal to do something the record could not account for:
@@ -518,8 +535,9 @@ public static ScryOptions UseSqlServerDisclosureAudit(
 
 The accept is one committed `INSERT` of the serialized batch into an outbox table, unique on `(EventId, Sequence)`. Pointed at the application's own database it adds no dependency to the request path, and it survives the loss of the node. What was accepted is then moved, a step behind every answer, into the tables the record is read from.
 
-- **Append-only, suitable for ledger tables** (inserts only; `LEDGER = ON (APPEND_ONLY = ON)` where the server supports it, which `LedgerTables` can force either way): `DisclosureBatch` (which batches the record has had), `DisclosureEvent`, `DisclosureClose`, `DisclosureUnit`, `DisclosureEntity`, `DisclosureShape`, `DisclosureField`, `DisclosureReview`, `DisclosureReviewEvent`, `DisclosureErasure`, and the optional `DisclosureChain`.
+- **Append-only, suitable for ledger tables** (inserts only; `LEDGER = ON (APPEND_ONLY = ON)` where the server supports it, which `LedgerTables` can force either way): `DisclosureBatch` (which batches the record has had), `DisclosureEvent`, `DisclosureClose`, `DisclosureUnit`, `DisclosureEntity`, `DisclosureManifest`, `DisclosureManifestUnit`, `DisclosureManifestEntity`, `DisclosureAnswer`, `DisclosureShape`, `DisclosureField`, `DisclosureReview`, `DisclosureReviewEvent`, `DisclosureErasure`, and the optional `DisclosureChain`.
 - **Mutable**: `DisclosureOutbox`; `DisclosureContent`, or `IScryDisclosureBlobStore` for content kept outside the database; and `DisclosureSource`, a summary of which sources the record holds anything of.
+- **An answer given again adds one row.** An answer that arrived whole is kept as the list of units it was made of: each unit's place and content, and the rows it was read from. The list has an address over all of that and is kept once (`DisclosureManifest` and its two tables), and each answer made of it names it (`DisclosureAnswer`). So the same thousand rows asked for every minute are a thousand unit rows once and an event a minute, where they were a thousand rows a minute. Two answers share a list only where they are the same rows in the same order: one row different is another list, with nothing shared between the two. An answer that arrived in pieces, a stream or a response sent as it was written, or that was not handed on whole, keeps rows of its own in `DisclosureUnit` and `DisclosureEntity`, since its list is not known until its end and its end may not be the whole of it. Everything that reads units reads the views `DisclosureUnits` and `DisclosureEntities`, which are both kinds together.
 - **Nothing a caller chose is an index key.** A caller's name, a source, a member and a row's key are kept as text of any length and found by a SHA-256 of them (`CallerHash`, `RowHash` over the source and the key together, `FieldHash` over the source and the member), then held to the text itself. So no value is too long to record, and none is cut short to fit. Those columns have a binary collation: a name is the name of exactly those characters, whatever the database's own collation says of case and accents.
 - **The mover** takes outbox rows in the order they were accepted, writes the rows the record lacks in one transaction, and deletes exactly the outbox rows it read. One mover at a time across nodes, under an application lock that an erasure also takes. A batch is moved exactly once; one that arrives again, as a journal's does after a crash, is recognised by `(EventId, Sequence)` and dropped. Content crosses to the content table only where the table does not already hold its bytes, so a row sent a thousand times is written once. A batch that will not read back is set aside in the outbox and reported by the store's status, so it cannot hold up what was accepted after it.
 - **Reads are a step behind.** A question is answered from what has been moved on, which trails what was accepted by the time one move takes: milliseconds on the node that accepted it, up to `DrainInterval` for a batch another node accepted. The store's status says how much is waiting.
@@ -635,7 +653,11 @@ A caller that was sent an answer has been recorded as receiving it, and reading 
 
 A `304` runs nothing, so what it is recorded from is remembered: the server keeps, for each query asked by URL, what its answer was recorded as. That depends on the query and the server's settings and on nothing else, so it is the same for every caller. A server that remembers nothing of a query, after a restart or on a node that never answered it, does not answer `304`. It answers in full, which is recorded the ordinary way and remembered from then on. At most 4096 queries are remembered, and past that all are forgotten: which queries are asked is the caller's to choose.
 
+A confirmation is recorded against the caller and the request, and not against the rows. It has no units, since nothing was sent and nothing was run to say which rows the copy holds, so it is listed under what a caller received in a range of time and is not listed under who received a row, or under whether a caller was sent a member. The answer it confirms is: the same caller's earlier event for the same request, which names the rows and holds what was sent. Naming the rows on the confirmation as well would mean remembering which answer each caller holds, where the server remembers only what each query is recorded as.
+
 A query that reads nothing but [sources left out](#leaving-a-source-out) is remembered as that, and its `304` is given with nothing recorded.
+
+**A freshness source has to look past the record.** One that watches the database the record is kept in sees the record's own writes. [Delta](caching.md), which reads the database's log position, is moved by every recorded answer, its own included: the `ETag` an answer leaves with is already out of date once the answer has been recorded, and no recorded answer is ever found unchanged. Beside such a source the record belongs in a database of its own, or the source has to be one that watches the application's tables and nothing else.
 
 What a `304` does not do is run the row policies, with or without the audit: a caller whose grant was revoked is still told its copy stands unless what the grant depends on is in `CacheScope`. [Caching](caching.md) covers that, and it is on the [review checklist](security.md#review-checklist) with what is left to the host here: one that widens `Cache-Control` above the endpoint, or puts an output cache of its own in front of Scry.
 
@@ -675,7 +697,26 @@ Whole, because a record with part of an answer left out could not be put back to
 
 Said of a type, it holds for the types derived from it. An excluded source needs neither `Key<T>` nor `Unkeyed<T>` for the server to start; where a recorded answer reads one with no key, its rows are recorded as content with no row to hang them on.
 
-Leaving a source out is not a way to keep a member out of the record. A member is recorded wherever an answer that returns it is, and what is left out is decided source by source.
+### Leaving a member out
+
+A member of a source is left out the same way, by the same rule:
+
+```cs
+audit.Exclude<Product>(_ => _.Name, _ => _.Code);
+```
+
+This is for a member whose values are nobody's to ask after while the rest of the row is: the name a list of rows is picked from, beside what the row holds. An answer that reads nothing but excluded members and excluded sources is not recorded, and is sent as it would be with the audit off. An attachment that is an excluded member is fetched unrecorded.
+
+| The answer reads | Recorded |
+| --- | --- |
+| Excluded members only, in a projection, a filter, an ordering or an aggregate | No |
+| An excluded member and another member of the same row, even to filter by | Yes, whole |
+| An excluded member reached through a navigation from another row | Yes, whole: the navigation is a member of the row it was reached from |
+| The rows and no member of them, as a count of them is | Yes |
+
+It decides which answers are recorded, and is no way to keep a value out of an answer that is: a recorded answer is recorded as it was sent, the excluded member's values included, and the member is named among what it returned. What goes unrecorded is what the excluded members held, and how many rows there were of them.
+
+Said of a type, it holds for the types derived from it. A member that holds a value of several parts is left out with everything in it. A member is named as a property read straight off the row.
 
 
 ## Erasure
@@ -708,7 +749,7 @@ app.MapScryDisclosureExplorer(_ =>
     _.EnableErase = DemoSignIn.IsReviewer;
 });
 ```
-<sup><a href='/samples/Sample.DisclosureServer/Program.cs#L97-L109' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapDisclosureExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.DisclosureServer/Program.cs#L118-L130' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapDisclosureExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 It needs a host with the audit on and something registered as `IScryDisclosureReader`, and says so at startup where either is missing. The SQL Server store registers itself, and so does an in-memory store handed to `UseDisclosureAudit`.
@@ -802,7 +843,7 @@ Off: a null check where a capture would be made. On, per row: one SHA-256 over t
 
 ## Open questions
 
-1. **The size of the entity index.** It holds one row per disclosed row per event, so it can outgrow the data it describes. Addressing a whole response's unit list once would collapse repeated identical answers to one event row.
+1. **Lists that differ by a row.** An answer given again is kept as one list. Two answers that differ by one row are two whole lists, and so is each answer of a stream. Keeping a list as runs it shares with others would cover both, at the cost of every read putting the runs back together. The in-memory store keeps every answer's units as they arrived.
 2. **"Which version".** A version is the content address of the unit. A row-version column named by the host, as a cached policy takes one, would compare versions across different projections.
 3. **Retention.** Append-only ledger tables cannot be trimmed in place.
 4. **Caller detail.** One string today. An agent acting for a user over MCP may warrant both identities.

@@ -24,6 +24,19 @@ sealed class DisclosureStaging(DisclosureSql sql)
     DataTable entities = Table(
         ("EventId", typeof(Guid)), ("Ordinal", typeof(int)), ("Slot", typeof(int)), ("Sequence", typeof(int)),
         ("RowHash", typeof(byte[])), ("Source", typeof(string)), ("RowKey", typeof(string)), ("Via", typeof(string)));
+    DataTable manifests = Table(
+        ("Manifest", typeof(byte[])), ("Units", typeof(int)));
+    DataTable manifestUnits = Table(
+        ("Manifest", typeof(byte[])), ("Ordinal", typeof(int)), ("Content", typeof(byte[])));
+    DataTable manifestEntities = Table(
+        ("Manifest", typeof(byte[])), ("Ordinal", typeof(int)), ("Slot", typeof(int)), ("RowHash", typeof(byte[])),
+        ("Source", typeof(string)), ("RowKey", typeof(string)), ("Via", typeof(string)));
+    DataTable answers = Table(
+        ("EventId", typeof(Guid)), ("Sequence", typeof(int)), ("Manifest", typeof(byte[])));
+
+    // The lists this round has already staged, so that one named by several of its answers is staged once.
+    HashSet<string> listed = new(StringComparer.Ordinal);
+
     DataTable fields = Table(
         ("Shape", typeof(byte[])), ("Position", typeof(int)), ("FieldHash", typeof(byte[])), ("FieldUse", typeof(byte)),
         ("Source", typeof(string)), ("Member", typeof(string)), ("Sensitive", typeof(bool)));
@@ -112,23 +125,60 @@ sealed class DisclosureStaging(DisclosureSql sql)
             }
         }
 
-        foreach (var unit in batch.Units)
+        // An answer that arrived whole in one batch is kept as the list of units it was made of,
+        // which is kept once however many answers were made of it. One that arrived in pieces — a
+        // stream, a response sent as it was written — or was not handed on whole keeps its own rows:
+        // the list is not known until its end, and its end may not be the whole of it.
+        if (DisclosureManifest.Whole(batch))
         {
-            units.Rows.Add(batch.EventId, unit.Ordinal, batch.Sequence, unit.Content.ToArray());
-        }
+            var manifest = DisclosureManifest.Address(batch);
+            answers.Rows.Add(batch.EventId, batch.Sequence, manifest);
+            var fresh = listed.Add(Convert.ToHexString(manifest));
+            if (fresh)
+            {
+                manifests.Rows.Add(manifest, batch.Units.Count);
+                foreach (var unit in batch.Units)
+                {
+                    manifestUnits.Rows.Add(manifest, unit.Ordinal, unit.Content.ToArray());
+                }
+            }
 
-        foreach (var entity in batch.Entities)
+            foreach (var entity in batch.Entities)
+            {
+                seen[entity.Source] = true;
+                if (fresh)
+                {
+                    manifestEntities.Rows.Add(
+                        manifest,
+                        entity.Ordinal,
+                        entity.Slot,
+                        DisclosureSql.RowHash(entity.Source, entity.Key),
+                        entity.Source,
+                        entity.Key,
+                        entity.Via);
+                }
+            }
+        }
+        else
         {
-            seen[entity.Source] = true;
-            entities.Rows.Add(
-                batch.EventId,
-                entity.Ordinal,
-                entity.Slot,
-                batch.Sequence,
-                DisclosureSql.RowHash(entity.Source, entity.Key),
-                entity.Source,
-                entity.Key,
-                entity.Via);
+            foreach (var unit in batch.Units)
+            {
+                units.Rows.Add(batch.EventId, unit.Ordinal, batch.Sequence, unit.Content.ToArray());
+            }
+
+            foreach (var entity in batch.Entities)
+            {
+                seen[entity.Source] = true;
+                entities.Rows.Add(
+                    batch.EventId,
+                    entity.Ordinal,
+                    entity.Slot,
+                    batch.Sequence,
+                    DisclosureSql.RowHash(entity.Source, entity.Key),
+                    entity.Source,
+                    entity.Key,
+                    entity.Via);
+            }
         }
 
         foreach (var content in batch.Contents)
@@ -249,6 +299,8 @@ sealed class DisclosureStaging(DisclosureSql sql)
              FROM #entity s WHERE NOT EXISTS (SELECT 1 FROM {sql.Entity} x WHERE x.[EventId] = s.[EventId] AND x.[Ordinal] = s.[Ordinal] AND x.[Slot] = s.[Slot]);
              """,
             cancel);
+
+        await Listed(connection, transaction, cancel);
 
         // The fields before the shape they belong to, since it is the shape's being absent that
         // says its fields are.
@@ -384,6 +436,45 @@ sealed class DisclosureStaging(DisclosureSql sql)
     }
 
     // One table's rows: to a temporary table by bulk copy, and from there into the record.
+    // The lists the round's whole answers were made of, and which answer names which. A list's
+    // rows are written only where the record has no such list, which is decided once for all three
+    // of its tables: a list is whole or it is not there.
+    async Task Listed(SqlConnection connection, SqlTransaction transaction, Cancel cancel)
+    {
+        if (answers.Rows.Count == 0)
+        {
+            return;
+        }
+
+        await Stage(connection, transaction, manifests, "#manifest", "[Manifest] binary(32) NOT NULL PRIMARY KEY, [Units] int NOT NULL", cancel);
+        await Stage(connection, transaction, manifestUnits, "#munit", "[Manifest] binary(32) NOT NULL, [Ordinal] int NOT NULL, [Content] binary(32) NOT NULL", cancel);
+        await Stage(
+            connection,
+            transaction,
+            manifestEntities,
+            "#mentity",
+            "[Manifest] binary(32) NOT NULL, [Ordinal] int NOT NULL, [Slot] int NOT NULL, [RowHash] binary(32) NOT NULL, [Source] nvarchar(max) NOT NULL, [RowKey] nvarchar(max) NOT NULL, [Via] nvarchar(max) NOT NULL",
+            cancel);
+        await Stage(connection, transaction, answers, "#answer", "[EventId] uniqueidentifier NOT NULL, [Sequence] int NOT NULL, [Manifest] binary(32) NOT NULL", cancel);
+        await Run(
+            connection,
+            transaction,
+            $"""
+             SELECT s.[Manifest], s.[Units] INTO #fresh FROM #manifest s
+             WHERE NOT EXISTS (SELECT 1 FROM {sql.Manifest} x WHERE x.[Manifest] = s.[Manifest]);
+             INSERT INTO {sql.ManifestUnit} ([Manifest], [Ordinal], [Content])
+             SELECT s.[Manifest], s.[Ordinal], s.[Content] FROM #munit s JOIN #fresh f ON f.[Manifest] = s.[Manifest];
+             INSERT INTO {sql.ManifestEntity} ([Manifest], [Ordinal], [Slot], [RowHash], [Source], [RowKey], [Via])
+             SELECT s.[Manifest], s.[Ordinal], s.[Slot], s.[RowHash], s.[Source], s.[RowKey], s.[Via] FROM #mentity s JOIN #fresh f ON f.[Manifest] = s.[Manifest];
+             INSERT INTO {sql.Manifest} ([Manifest], [Units]) SELECT f.[Manifest], f.[Units] FROM #fresh f;
+             INSERT INTO {sql.Answer} ([EventId], [Sequence], [Manifest])
+             SELECT s.[EventId], s.[Sequence], s.[Manifest] FROM #answer s
+             WHERE NOT EXISTS (SELECT 1 FROM {sql.Answer} x WHERE x.[EventId] = s.[EventId]);
+             DROP TABLE #fresh, #manifest, #munit, #mentity, #answer;
+             """,
+            cancel);
+    }
+
     static async Task Apply(
         SqlConnection connection,
         SqlTransaction transaction,

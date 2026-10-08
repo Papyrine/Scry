@@ -45,6 +45,10 @@ class Program
         // suite does, so that a screenshot of the record shows the same times on every run.
         var clock = Clock();
 
+        // What says nothing has changed since an answer was given: when this server started, since
+        // nothing writes to its rows after that.
+        var started = DateTimeOffset.UtcNow.Ticks.ToString(CultureInfo.InvariantCulture);
+
         // begin-snippet: sampleDisclosureAudit
         services
             .AddScry<SampleContext>(_ =>
@@ -73,11 +77,28 @@ class Program
                         audit.Clock = clock;
 
                         // A row is recorded by its key, and a source with none has to be given one or
-                        // owned up to: a view by what its rows are grouped on, a list from memory by
-                        // nothing at all.
+                        // owned up to: a view by what its rows are grouped on.
                         audit.Key<EmployeeSummary>(_ => _.Department);
-                        audit.Unkeyed<Holiday>();
+
+                        // Left out of the record: a calendar is nobody's to ask after, and neither is
+                        // the logo or the handbook a department publishes. An answer of nothing but
+                        // these is sent as it would be with the audit off. One that reads anything
+                        // else is recorded whole, these included.
+                        audit.Exclude<Holiday>();
+                        audit.Exclude<Department>(_ => _.Logo, _ => _.Handbook);
                     });
+
+                // A query asked by URL may be kept by the caller's own cache, which has to ask before
+                // using its copy again. Being told the copy still stands is a 304, and is recorded
+                // before it is said. Nothing writes to this sample's rows once it has started, so an
+                // answer stands for as long as the server does. A real host reads a change marker
+                // here, as Sample.WebServer does with Delta — and then keeps the record in a database
+                // of its own: Delta reads the database's log position, which every answer recorded
+                // beside the rows would move, so no recorded answer would ever be found unchanged.
+                _.QueryFreshness = (_, _) => new(started);
+
+                // Whose cache an answer belongs in: the caller's, since what is sent depends on who asks.
+                _.CacheScope = _ => _.User.Identity?.Name;
             });
         // end-snippet
 

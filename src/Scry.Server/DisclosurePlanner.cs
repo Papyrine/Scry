@@ -28,12 +28,24 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
     /// <param name="Via">How the answer's row reaches that row: empty for the row itself.</param>
     /// <param name="Rooted">Whether this is reached from a row of the answer, rather than inside a subquery.</param>
     /// <param name="Row">The expression for the row itself, which its key is read off.</param>
-    public readonly record struct Origin(string Source, string Prefix, string Via, bool Rooted, Expression Row);
+    public readonly record struct Origin(string Source, string Prefix, string Via, bool Rooted, Expression Row)
+    {
+        /// <summary>
+        /// Set inside a member the host left out of the record that holds a value of several parts:
+        /// everything read beneath it is read of that member.
+        /// </summary>
+        public bool Left { get; init; }
+    }
 
     HashSet<ScryDisclosureField> fields = [];
 
     // Every type whose rows the query was found to read, however it came by them.
     HashSet<Type> read = [];
+
+    // The sources the query read a member of, apart by whether the host left that member out of the
+    // record: one with a member read that was not left out is recorded, whatever else was.
+    HashSet<string> kept = new(StringComparer.Ordinal);
+    HashSet<string> left = new(StringComparer.Ordinal);
     Dictionary<Expression, Origin> origins = [];
     Dictionary<Type, (string Source, string Prefix)> elements = [];
     Dictionary<Type, IReadOnlyList<PropertyInfo>?> keys = [];
@@ -53,7 +65,22 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
     /// </summary>
     public bool Excluded =>
         read.Count > 0 &&
-        read.All(settings.Excludes);
+        read.All(Unrecorded);
+
+    // A type's rows are not recorded where the host left the source out, or where every member the
+    // query read of it was left out. One with no member read at all — a count of its rows — was
+    // still read, and is recorded.
+    bool Unrecorded(Type type)
+    {
+        if (settings.Excludes(type))
+        {
+            return true;
+        }
+
+        var name = SourceName(schema, type);
+        return left.Contains(name) &&
+               !kept.Contains(name);
+    }
 
     /// <summary>What a member read now is being read for.</summary>
     public ScryDisclosureFieldUse Use { get; set; } = ScryDisclosureFieldUse.Read;
@@ -146,6 +173,20 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
         var name = origin.Prefix + member.Name;
         var sensitive = member.Sensitive || meta.Sensitive;
 
+        // Whether this is a read of a member the host left out of the record: the member itself, read
+        // off the row, or anything beneath one that holds a value of several parts.
+        var excluded = origin.Left;
+        if (origin.Prefix.Length == 0 &&
+            settings.Excludes(owner, member.Name))
+        {
+            excluded = true;
+        }
+
+        origin = origin with
+        {
+            Left = excluded
+        };
+
         if (member.Kind == MemberKind.Capability)
         {
             // Recorded as itself where it is returned. What it was computed from is the command
@@ -173,6 +214,7 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
                     new(SourceName(member.Target), Prefix: "", Via(origin.Via, member.Name), origin.Rooted, value));
             }
 
+            // Still inside the member where it is one left out: what follows is read of it.
             return Remember(
                 value,
                 origin with
@@ -193,17 +235,32 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
 
             Record(origin, name, traversed, sensitive);
             LastElement = Elements(origin, name, element);
+            return Beside(origin);
+        }
+
+        var reading = Use;
+        if (!last)
+        {
+            reading = ScryDisclosureFieldUse.Traversed;
+        }
+
+        Record(origin, name, reading, sensitive);
+        return Beside(origin);
+    }
+
+    // The row a member was read off, once the member has been: what is read next off the same row
+    // is another member, and is not beneath this one.
+    static Origin Beside(Origin origin)
+    {
+        if (origin.Prefix.Length > 0)
+        {
             return origin;
         }
 
-        var read = Use;
-        if (!last)
+        return origin with
         {
-            read = ScryDisclosureFieldUse.Traversed;
-        }
-
-        Record(origin, name, read, sensitive);
-        return origin;
+            Left = false
+        };
     }
 
     /// <summary>
@@ -259,6 +316,14 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
         var field = new ScryDisclosureField(origin.Source, member, use, sensitive);
         fields.Add(field);
         capturing?.Add(field);
+        if (origin.Left)
+        {
+            left.Add(origin.Source);
+        }
+        else
+        {
+            kept.Add(origin.Source);
+        }
 
         // Something of another row left with this one, so that row is one the answer names: its key
         // is read with it. Only for a row reached from the answer's own — one read inside a subquery
@@ -275,6 +340,15 @@ sealed class DisclosurePlanner(Schema schema, Func<IModel> model, ScryDisclosure
     public void Leaf(ParameterExpression row, TypeMeta meta, Member member)
     {
         var origin = Start(row);
+        if (origin.Prefix.Length == 0 &&
+            settings.Excludes(row.Type, member.Name))
+        {
+            origin = origin with
+            {
+                Left = true
+            };
+        }
+
         var use = ScryDisclosureFieldUse.Returned;
         if (member.Kind == MemberKind.Capability)
         {

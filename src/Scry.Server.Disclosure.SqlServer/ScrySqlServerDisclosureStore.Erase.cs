@@ -26,8 +26,8 @@ public sealed partial class ScrySqlServerDisclosureStore
         // a piece another row happened to be sent as goes too.
         var carried =
             $"""
-             SELECT u.[Content] FROM {sql.Entity} n
-             JOIN {sql.Unit} u ON u.[EventId] = n.[EventId] AND u.[Ordinal] = n.[Ordinal]
+             SELECT u.[Content] FROM {sql.Entities} n
+             JOIN {sql.Units} u ON u.[EventId] = n.[EventId] AND u.[Ordinal] = n.[Ordinal]
              WHERE n.[RowHash] = @row AND n.[Source] = @source AND n.[RowKey] = @key
              """;
 
@@ -277,8 +277,8 @@ public sealed partial class ScrySqlServerDisclosureStore
             connection,
             $"""
              SELECT {sql.Columns} FROM {sql.Event} e {sql.Ended} WHERE e.[EventId] = @event AND e.[Sequence] = @sequence;
-             SELECT u.[Ordinal], u.[Content] FROM {sql.Unit} u WHERE u.[EventId] = @event AND u.[Sequence] = @sequence ORDER BY u.[Ordinal];
-             SELECT n.[Ordinal], n.[Slot], n.[Source], n.[RowKey], n.[Via] FROM {sql.Entity} n WHERE n.[EventId] = @event AND n.[Sequence] = @sequence ORDER BY n.[Ordinal], n.[Slot];
+             SELECT u.[Ordinal], u.[Content] FROM {sql.Units} u WHERE u.[EventId] = @event AND u.[Sequence] = @sequence ORDER BY u.[Ordinal];
+             SELECT n.[Ordinal], n.[Slot], n.[Source], n.[RowKey], n.[Via] FROM {sql.Entities} n WHERE n.[EventId] = @event AND n.[Sequence] = @sequence ORDER BY n.[Ordinal], n.[Slot];
              SELECT x.[Outcome], x.[Units], x.[At], x.[Response] FROM {sql.Close} x WHERE x.[EventId] = @event AND x.[Sequence] = @sequence;
              SELECT r.[ReviewId], r.[At], r.[Reviewer], r.[Question], r.[Parameters], r.[Results], r.[Node] FROM {sql.Review} r WHERE r.[ReviewId] = @event AND @sequence = 0;
              SELECT v.[EventId] FROM {sql.ReviewEvent} v WHERE v.[ReviewId] = @event AND @sequence = 0;

@@ -34,6 +34,12 @@ sealed class DisclosureSql
         Close = $"{s}.[DisclosureClose]";
         Unit = $"{s}.[DisclosureUnit]";
         Entity = $"{s}.[DisclosureEntity]";
+        Manifest = $"{s}.[DisclosureManifest]";
+        ManifestUnit = $"{s}.[DisclosureManifestUnit]";
+        ManifestEntity = $"{s}.[DisclosureManifestEntity]";
+        Answer = $"{s}.[DisclosureAnswer]";
+        Units = $"{s}.[DisclosureUnits]";
+        Entities = $"{s}.[DisclosureEntities]";
         Shape = $"{s}.[DisclosureShape]";
         Field = $"{s}.[DisclosureField]";
         Content = $"{s}.[DisclosureContent]";
@@ -55,6 +61,25 @@ sealed class DisclosureSql
     }
 
     public string Schema { get; }
+
+    /// <summary>The list of units an answer was made of, kept once however many answers were made of it.</summary>
+    public string Manifest { get; }
+
+    public string ManifestUnit { get; }
+
+    public string ManifestEntity { get; }
+
+    /// <summary>Which list an answer that was sent whole was made of.</summary>
+    public string Answer { get; }
+
+    /// <summary>
+    /// Every unit of every event, whichever way it is kept: its own rows, or the rows of the list its
+    /// answer names. What everything that reads units reads, so that none of it knows there are two.
+    /// </summary>
+    public string Units { get; }
+
+    /// <summary>The same, for the rows units were read from.</summary>
+    public string Entities { get; }
 
     public string Outbox { get; }
 
@@ -223,6 +248,55 @@ sealed class DisclosureSql
             CONSTRAINT [PK_DisclosureEntity] PRIMARY KEY CLUSTERED ([EventId], [Ordinal], [Slot])
             """);
         Index(script, s, "DisclosureEntity", "IX_DisclosureEntity_Row", "([RowHash]) INCLUDE ([EventId], [Ordinal])");
+
+        // An answer sent whole is the same list of units as every other answer of the same rows, so
+        // the list is kept once, by an address over everything in it, and each such answer names it.
+        // The same query asked a thousand times is then a thousand events and one list.
+        Table(script, s, "DisclosureManifest",
+            """
+            [Manifest] binary(32) NOT NULL CONSTRAINT [PK_DisclosureManifest] PRIMARY KEY CLUSTERED,
+            [Units] int NOT NULL
+            """);
+        Table(script, s, "DisclosureManifestUnit",
+            """
+            [Manifest] binary(32) NOT NULL,
+            [Ordinal] int NOT NULL,
+            [Content] binary(32) NOT NULL,
+            CONSTRAINT [PK_DisclosureManifestUnit] PRIMARY KEY CLUSTERED ([Manifest], [Ordinal])
+            """);
+        Table(script, s, "DisclosureManifestEntity",
+            """
+            [Manifest] binary(32) NOT NULL,
+            [Ordinal] int NOT NULL,
+            [Slot] int NOT NULL,
+            [RowHash] binary(32) NOT NULL,
+            [Source] nvarchar(max) COLLATE Latin1_General_100_BIN2 NOT NULL,
+            [RowKey] nvarchar(max) COLLATE Latin1_General_100_BIN2 NOT NULL,
+            [Via] nvarchar(max) COLLATE Latin1_General_100_BIN2 NOT NULL,
+            CONSTRAINT [PK_DisclosureManifestEntity] PRIMARY KEY CLUSTERED ([Manifest], [Ordinal], [Slot])
+            """);
+        Index(script, s, "DisclosureManifestEntity", "IX_DisclosureManifestEntity_Row", "([RowHash]) INCLUDE ([Ordinal])");
+        Table(script, s, "DisclosureAnswer",
+            """
+            [EventId] uniqueidentifier NOT NULL CONSTRAINT [PK_DisclosureAnswer] PRIMARY KEY CLUSTERED,
+            [Sequence] int NOT NULL,
+            [Manifest] binary(32) NOT NULL
+            """);
+        Index(script, s, "DisclosureAnswer", "IX_DisclosureAnswer_Manifest", "([Manifest]) INCLUDE ([Sequence])");
+        View(script, s, "DisclosureUnits",
+            $"""
+             SELECT u.[EventId], u.[Ordinal], u.[Sequence], u.[Content] FROM {s}.[DisclosureUnit] u
+             UNION ALL
+             SELECT a.[EventId], m.[Ordinal], a.[Sequence], m.[Content] FROM {s}.[DisclosureAnswer] a
+             JOIN {s}.[DisclosureManifestUnit] m ON m.[Manifest] = a.[Manifest]
+             """);
+        View(script, s, "DisclosureEntities",
+            $"""
+             SELECT n.[EventId], n.[Ordinal], n.[Slot], n.[Sequence], n.[RowHash], n.[Source], n.[RowKey], n.[Via] FROM {s}.[DisclosureEntity] n
+             UNION ALL
+             SELECT a.[EventId], m.[Ordinal], m.[Slot], a.[Sequence], m.[RowHash], m.[Source], m.[RowKey], m.[Via] FROM {s}.[DisclosureAnswer] a
+             JOIN {s}.[DisclosureManifestEntity] m ON m.[Manifest] = a.[Manifest]
+             """);
         Table(script, s, "DisclosureShape",
             """
             [Address] binary(32) NOT NULL CONSTRAINT [PK_DisclosureShape] PRIMARY KEY CLUSTERED
@@ -295,6 +369,14 @@ sealed class DisclosureSql
     {
         script.AppendLine($"    IF OBJECT_ID(N'{schema}.[{name}]', N'U') IS NULL");
         script.AppendLine($"        EXEC(N'CREATE TABLE {schema}.[{name}] ({string.Join(' ', columns.Split('\n').Select(_ => _.Trim()))})' + @ledger);");
+        script.AppendLine();
+    }
+
+    // Made through EXEC because a view has to be the only statement of its batch.
+    static void View(StringBuilder script, string schema, string name, string select)
+    {
+        script.AppendLine($"    IF OBJECT_ID(N'{schema}.[{name}]', N'V') IS NULL");
+        script.AppendLine($"        EXEC(N'CREATE VIEW {schema}.[{name}] AS {string.Join(' ', select.Split('\n').Select(_ => _.Trim()))}');");
         script.AppendLine();
     }
 

@@ -42,7 +42,7 @@ public sealed partial class ScryProcessor
         // is recorded, which is known only once it has been walked: so its record is begun, and
         // what every recorded answer is owed waits until then.
         if (schema.TryGetSource(source, out var root) &&
-            disclosure.Settings.Excludes(root.ClrType))
+            LeftOut(disclosure.Settings, root.ClrType, request, alone))
         {
             if (alone)
             {
@@ -102,6 +102,26 @@ public sealed partial class ScryProcessor
         await capture.CommitAsync(cancel);
         capture.Released();
         return true;
+    }
+
+    // Whether what is asked may turn out to need no record. An attachment is one member of one row,
+    // so it is known here: its source was left out, or the member was. A query is known only once it
+    // has been walked, so any query rooted at a source left out is undecided — and so is every query
+    // on a server with members left out, since which members a query reads is what the walk finds.
+    static bool LeftOut(ScryDisclosureOptions settings, Type root, object request, bool alone)
+    {
+        if (settings.Excludes(root))
+        {
+            return true;
+        }
+
+        if (alone)
+        {
+            return request is AttachmentRequest attachment &&
+                   settings.Excludes(root, attachment.Member);
+        }
+
+        return settings.ExcludedMembers.Count > 0;
     }
 
     // Whether an answer may be kept by the caller's cache and asked about again: one asked by URL,

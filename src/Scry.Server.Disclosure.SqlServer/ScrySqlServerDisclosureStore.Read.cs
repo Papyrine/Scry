@@ -24,9 +24,9 @@ public sealed partial class ScrySqlServerDisclosureStore
         // not a disclosure, to its caller or to anybody shown the event afterwards.
         var releases =
             $"""
-             FROM {sql.Entity} n
+             FROM {sql.Entities} n
              JOIN {sql.Event} e ON e.[EventId] = n.[EventId]
-             JOIN {sql.Unit} u ON u.[EventId] = n.[EventId] AND u.[Ordinal] = n.[Ordinal]
+             JOIN {sql.Units} u ON u.[EventId] = n.[EventId] AND u.[Ordinal] = n.[Ordinal]
              {sql.Ended}
              """;
 
@@ -36,7 +36,7 @@ public sealed partial class ScrySqlServerDisclosureStore
             $"""
              n.[RowHash] = @row AND n.[Source] = @source AND n.[RowKey] = @key
              AND (c.[Units] IS NULL OR n.[Ordinal] < c.[Units])
-             AND NOT EXISTS (SELECT 1 FROM {sql.Entity} m WHERE m.[EventId] = n.[EventId] AND m.[Ordinal] = n.[Ordinal] AND m.[Slot] < n.[Slot] AND m.[RowHash] = n.[RowHash] AND m.[Source] = n.[Source] AND m.[RowKey] = n.[RowKey])
+             AND NOT EXISTS (SELECT 1 FROM {sql.Entities} m WHERE m.[EventId] = n.[EventId] AND m.[Ordinal] = n.[Ordinal] AND m.[Slot] < n.[Slot] AND m.[RowHash] = n.[RowHash] AND m.[Source] = n.[Source] AND m.[RowKey] = n.[RowKey])
              """;
         var query =
             $"""
@@ -148,10 +148,10 @@ public sealed partial class ScrySqlServerDisclosureStore
             $"""
              AND EXISTS (SELECT 1 FROM {sql.Field} f WHERE f.[Shape] = e.[Shape] AND f.[FieldHash] = @field AND f.[FieldUse] = @returned AND f.[Source] = @source AND f.[Member] = @member)
              AND (
-                 EXISTS (SELECT 1 FROM {sql.Entity} n WHERE n.[EventId] = e.[EventId] AND n.[Source] = @source AND n.[Ordinal] < ISNULL(c.[Units], 2147483647))
+                 EXISTS (SELECT 1 FROM {sql.Entities} n WHERE n.[EventId] = e.[EventId] AND n.[Source] = @source AND n.[Ordinal] < ISNULL(c.[Units], 2147483647))
                  OR (
-                     NOT EXISTS (SELECT 1 FROM {sql.Entity} n WHERE n.[EventId] = e.[EventId] AND n.[Source] = @source)
-                     AND EXISTS (SELECT 1 FROM {sql.Unit} u WHERE u.[EventId] = e.[EventId] AND u.[Ordinal] < ISNULL(c.[Units], 2147483647))
+                     NOT EXISTS (SELECT 1 FROM {sql.Entities} n WHERE n.[EventId] = e.[EventId] AND n.[Source] = @source)
+                     AND EXISTS (SELECT 1 FROM {sql.Units} u WHERE u.[EventId] = e.[EventId] AND u.[Ordinal] < ISNULL(c.[Units], 2147483647))
                  )
              )
              """,
@@ -287,8 +287,8 @@ public sealed partial class ScrySqlServerDisclosureStore
                          $"""
                           SELECT {sql.Columns} FROM {sql.Event} e {sql.Ended} WHERE e.[EventId] = @event;
                           SELECT f.[Source], f.[Member], f.[FieldUse], f.[Sensitive] FROM {sql.Field} f JOIN {sql.Event} e ON e.[Shape] = f.[Shape] WHERE e.[EventId] = @event ORDER BY f.[Position];
-                          SELECT u.[Ordinal], u.[Content], k.[Kind], k.[Length], k.[Bytes], k.[Elsewhere], k.[Erased] FROM {sql.Unit} u LEFT JOIN {sql.Content} k ON k.[Address] = u.[Content] WHERE u.[EventId] = @event ORDER BY u.[Ordinal];
-                          SELECT n.[Ordinal], n.[Slot], n.[Source], n.[RowKey], n.[Via] FROM {sql.Entity} n WHERE n.[EventId] = @event ORDER BY n.[Ordinal], n.[Slot];
+                          SELECT u.[Ordinal], u.[Content], k.[Kind], k.[Length], k.[Bytes], k.[Elsewhere], k.[Erased] FROM {sql.Units} u LEFT JOIN {sql.Content} k ON k.[Address] = u.[Content] WHERE u.[EventId] = @event ORDER BY u.[Ordinal];
+                          SELECT n.[Ordinal], n.[Slot], n.[Source], n.[RowKey], n.[Via] FROM {sql.Entities} n WHERE n.[EventId] = @event ORDER BY n.[Ordinal], n.[Slot];
                           """))
         {
             command.Parameters.AddWithValue("@event", eventId);
