@@ -117,7 +117,10 @@ public class BrowserHost :
 
         if (server is {HasExited: false})
         {
-            server.Kill(entireProcessTree: true);
+            // The server alone, and not what it started. LocalDB runs an instance's engine as a
+            // child of whichever process first asked for it, which is the first server launched:
+            // ending that server's tree ends the engine under every other server still using it.
+            server.Kill();
             // Give the process a moment to exit before the working directory is removed.
             server.WaitForExit(milliseconds: 5000);
         }
