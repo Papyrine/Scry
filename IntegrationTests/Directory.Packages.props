@@ -3,9 +3,9 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="TUnit" Version="1.73.5" />
+    <PackageVersion Include="TUnit" Version="1.73.19" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
-    <PackageVersion Include="EfLocalDb" Version="27.2.3" />
+    <PackageVersion Include="EfLocalDb" Version="27.2.4" />
     <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.12" />
   </ItemGroup>
 </Project>
