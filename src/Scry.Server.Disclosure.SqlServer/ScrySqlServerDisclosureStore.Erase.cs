@@ -26,8 +26,7 @@ public sealed partial class ScrySqlServerDisclosureStore
         // a piece another row happened to be sent as goes too.
         var carried =
             $"""
-             SELECT u.[Content] FROM {sql.Entities} n
-             JOIN {sql.Units} u ON u.[EventId] = n.[EventId] AND u.[Ordinal] = n.[Ordinal]
+             SELECT n.[Content] FROM {sql.Entities} n
              WHERE n.[RowHash] = @row AND n.[Source] = @source AND n.[RowKey] = @key
              """;
 

@@ -26,16 +26,22 @@ sealed class DisclosureStaging(DisclosureSql sql)
         ("RowHash", typeof(byte[])), ("Source", typeof(string)), ("RowKey", typeof(string)), ("Via", typeof(string)));
     DataTable manifests = Table(
         ("Manifest", typeof(byte[])), ("Units", typeof(int)));
-    DataTable manifestUnits = Table(
-        ("Manifest", typeof(byte[])), ("Ordinal", typeof(int)), ("Content", typeof(byte[])));
-    DataTable manifestEntities = Table(
-        ("Manifest", typeof(byte[])), ("Ordinal", typeof(int)), ("Slot", typeof(int)), ("RowHash", typeof(byte[])),
+    DataTable manifestRuns = Table(
+        ("Manifest", typeof(byte[])), ("Start", typeof(int)), ("Run", typeof(byte[])));
+    DataTable runs = Table(
+        ("Run", typeof(byte[])), ("Units", typeof(int)));
+    DataTable runUnits = Table(
+        ("Run", typeof(byte[])), ("Offset", typeof(int)), ("Content", typeof(byte[])));
+    DataTable runEntities = Table(
+        ("Run", typeof(byte[])), ("Offset", typeof(int)), ("Slot", typeof(int)), ("RowHash", typeof(byte[])),
         ("Source", typeof(string)), ("RowKey", typeof(string)), ("Via", typeof(string)));
     DataTable answers = Table(
-        ("EventId", typeof(Guid)), ("Sequence", typeof(int)), ("Manifest", typeof(byte[])));
+        ("EventId", typeof(Guid)), ("Sequence", typeof(int)), ("Start", typeof(int)), ("Manifest", typeof(byte[])));
 
-    // The lists this round has already staged, so that one named by several of its answers is staged once.
+    // The lists and the runs this round has already staged, so that one named by several of its
+    // batches is staged once.
     HashSet<string> listed = new(StringComparer.Ordinal);
+    HashSet<string> ran = new(StringComparer.Ordinal);
 
     DataTable fields = Table(
         ("Shape", typeof(byte[])), ("Position", typeof(int)), ("FieldHash", typeof(byte[])), ("FieldUse", typeof(byte)),
@@ -125,37 +131,29 @@ sealed class DisclosureStaging(DisclosureSql sql)
             }
         }
 
-        // An answer that arrived whole in one batch is kept as the list of units it was made of,
-        // which is kept once however many answers were made of it. One that arrived in pieces — a
-        // stream, a response sent as it was written — or was not handed on whole keeps its own rows:
-        // the list is not known until its end, and its end may not be the whole of it.
-        if (DisclosureManifest.Whole(batch))
+        foreach (var entity in batch.Entities)
         {
-            var manifest = DisclosureManifest.Address(batch);
-            answers.Rows.Add(batch.EventId, batch.Sequence, manifest);
-            var fresh = listed.Add(Convert.ToHexString(manifest));
-            if (fresh)
-            {
-                manifests.Rows.Add(manifest, batch.Units.Count);
-                foreach (var unit in batch.Units)
-                {
-                    manifestUnits.Rows.Add(manifest, unit.Ordinal, unit.Content.ToArray());
-                }
-            }
+            seen[entity.Source] = true;
+        }
 
-            foreach (var entity in batch.Entities)
+        // The units a batch carries are kept as a list, which is kept once however many batches
+        // carried it, made of runs that are each kept once however many lists they are part of. That
+        // goes for a part of an answer as for a whole one: a stream's chunk is a list at the place in
+        // the answer it starts. How much of an answer was handed on is its close's to say, and is
+        // read from there whichever way the units are kept.
+        if (DisclosureManifest.Of(batch) is { } list)
+        {
+            answers.Rows.Add(batch.EventId, batch.Sequence, list.Start, list.Address);
+            if (listed.Add(Convert.ToHexString(list.Address)))
             {
-                seen[entity.Source] = true;
-                if (fresh)
+                manifests.Rows.Add(list.Address, list.Units.Count);
+                foreach (var run in list.Runs)
                 {
-                    manifestEntities.Rows.Add(
-                        manifest,
-                        entity.Ordinal,
-                        entity.Slot,
-                        DisclosureSql.RowHash(entity.Source, entity.Key),
-                        entity.Source,
-                        entity.Key,
-                        entity.Via);
+                    manifestRuns.Rows.Add(list.Address, run.Start, run.Address);
+                    if (ran.Add(Convert.ToHexString(run.Address)))
+                    {
+                        Add(list, run);
+                    }
                 }
             }
         }
@@ -168,7 +166,6 @@ sealed class DisclosureStaging(DisclosureSql sql)
 
             foreach (var entity in batch.Entities)
             {
-                seen[entity.Source] = true;
                 entities.Rows.Add(
                     batch.EventId,
                     entity.Ordinal,
@@ -214,6 +211,28 @@ sealed class DisclosureStaging(DisclosureSql sql)
             foreach (var shown in review.Events.Distinct())
             {
                 reviewed.Rows.Add(review.Id, shown);
+            }
+        }
+    }
+
+    // One run of a list: each of its units by how far into the run it is, with its rows.
+    void Add(DisclosureManifest list, DisclosureRun run)
+    {
+        runs.Rows.Add(run.Address, run.Units);
+        for (var offset = 0; offset < run.Units; offset++)
+        {
+            var unit = list.Units[run.Start + offset];
+            runUnits.Rows.Add(run.Address, offset, unit.Content.ToArray());
+            foreach (var entity in list.Rows[unit.Ordinal])
+            {
+                runEntities.Rows.Add(
+                    run.Address,
+                    offset,
+                    entity.Slot,
+                    DisclosureSql.RowHash(entity.Source, entity.Key),
+                    entity.Source,
+                    entity.Key,
+                    entity.Via);
             }
         }
     }
@@ -435,10 +454,10 @@ sealed class DisclosureStaging(DisclosureSql sql)
         return bytes.ToArray();
     }
 
-    // One table's rows: to a temporary table by bulk copy, and from there into the record.
-    // The lists the round's whole answers were made of, and which answer names which. A list's
-    // rows are written only where the record has no such list, which is decided once for all three
-    // of its tables: a list is whole or it is not there.
+    // The lists the round's batches carried, the runs those are made of, and which batch names
+    // which list. A run's rows are written only where the record has no such run, and a list's only
+    // where it has no such list, each decided once for all of its tables: a run or a list is whole
+    // or it is not there.
     async Task Listed(SqlConnection connection, SqlTransaction transaction, Cancel cancel)
     {
         if (answers.Rows.Count == 0)
@@ -446,35 +465,43 @@ sealed class DisclosureStaging(DisclosureSql sql)
             return;
         }
 
-        await Stage(connection, transaction, manifests, "#manifest", "[Manifest] binary(32) NOT NULL PRIMARY KEY, [Units] int NOT NULL", cancel);
-        await Stage(connection, transaction, manifestUnits, "#munit", "[Manifest] binary(32) NOT NULL, [Ordinal] int NOT NULL, [Content] binary(32) NOT NULL", cancel);
+        await Stage(connection, transaction, runs, "#run", "[Run] binary(32) NOT NULL PRIMARY KEY, [Units] int NOT NULL", cancel);
+        await Stage(connection, transaction, runUnits, "#runit", "[Run] binary(32) NOT NULL, [Offset] int NOT NULL, [Content] binary(32) NOT NULL", cancel);
         await Stage(
             connection,
             transaction,
-            manifestEntities,
-            "#mentity",
-            "[Manifest] binary(32) NOT NULL, [Ordinal] int NOT NULL, [Slot] int NOT NULL, [RowHash] binary(32) NOT NULL, [Source] nvarchar(max) NOT NULL, [RowKey] nvarchar(max) NOT NULL, [Via] nvarchar(max) NOT NULL",
+            runEntities,
+            "#rentity",
+            "[Run] binary(32) NOT NULL, [Offset] int NOT NULL, [Slot] int NOT NULL, [RowHash] binary(32) NOT NULL, [Source] nvarchar(max) NOT NULL, [RowKey] nvarchar(max) NOT NULL, [Via] nvarchar(max) NOT NULL",
             cancel);
-        await Stage(connection, transaction, answers, "#answer", "[EventId] uniqueidentifier NOT NULL, [Sequence] int NOT NULL, [Manifest] binary(32) NOT NULL", cancel);
+        await Stage(connection, transaction, manifests, "#manifest", "[Manifest] binary(32) NOT NULL PRIMARY KEY, [Units] int NOT NULL", cancel);
+        await Stage(connection, transaction, manifestRuns, "#mrun", "[Manifest] binary(32) NOT NULL, [Start] int NOT NULL, [Run] binary(32) NOT NULL", cancel);
+        await Stage(connection, transaction, answers, "#answer", "[EventId] uniqueidentifier NOT NULL, [Sequence] int NOT NULL, [Start] int NOT NULL, [Manifest] binary(32) NOT NULL", cancel);
         await Run(
             connection,
             transaction,
             $"""
+             SELECT s.[Run], s.[Units] INTO #freshrun FROM #run s
+             WHERE NOT EXISTS (SELECT 1 FROM {sql.Run} x WHERE x.[Run] = s.[Run]);
+             INSERT INTO {sql.RunUnit} ([Run], [Offset], [Content])
+             SELECT s.[Run], s.[Offset], s.[Content] FROM #runit s JOIN #freshrun f ON f.[Run] = s.[Run];
+             INSERT INTO {sql.RunEntity} ([Run], [Offset], [Slot], [RowHash], [Source], [RowKey], [Via])
+             SELECT s.[Run], s.[Offset], s.[Slot], s.[RowHash], s.[Source], s.[RowKey], s.[Via] FROM #rentity s JOIN #freshrun f ON f.[Run] = s.[Run];
+             INSERT INTO {sql.Run} ([Run], [Units]) SELECT f.[Run], f.[Units] FROM #freshrun f;
              SELECT s.[Manifest], s.[Units] INTO #fresh FROM #manifest s
              WHERE NOT EXISTS (SELECT 1 FROM {sql.Manifest} x WHERE x.[Manifest] = s.[Manifest]);
-             INSERT INTO {sql.ManifestUnit} ([Manifest], [Ordinal], [Content])
-             SELECT s.[Manifest], s.[Ordinal], s.[Content] FROM #munit s JOIN #fresh f ON f.[Manifest] = s.[Manifest];
-             INSERT INTO {sql.ManifestEntity} ([Manifest], [Ordinal], [Slot], [RowHash], [Source], [RowKey], [Via])
-             SELECT s.[Manifest], s.[Ordinal], s.[Slot], s.[RowHash], s.[Source], s.[RowKey], s.[Via] FROM #mentity s JOIN #fresh f ON f.[Manifest] = s.[Manifest];
+             INSERT INTO {sql.ManifestRun} ([Manifest], [Start], [Run])
+             SELECT s.[Manifest], s.[Start], s.[Run] FROM #mrun s JOIN #fresh f ON f.[Manifest] = s.[Manifest];
              INSERT INTO {sql.Manifest} ([Manifest], [Units]) SELECT f.[Manifest], f.[Units] FROM #fresh f;
-             INSERT INTO {sql.Answer} ([EventId], [Sequence], [Manifest])
-             SELECT s.[EventId], s.[Sequence], s.[Manifest] FROM #answer s
-             WHERE NOT EXISTS (SELECT 1 FROM {sql.Answer} x WHERE x.[EventId] = s.[EventId]);
-             DROP TABLE #fresh, #manifest, #munit, #mentity, #answer;
+             INSERT INTO {sql.Answer} ([EventId], [Sequence], [Start], [Manifest])
+             SELECT s.[EventId], s.[Sequence], s.[Start], s.[Manifest] FROM #answer s
+             WHERE NOT EXISTS (SELECT 1 FROM {sql.Answer} x WHERE x.[EventId] = s.[EventId] AND x.[Sequence] = s.[Sequence]);
+             DROP TABLE #freshrun, #fresh, #run, #runit, #rentity, #manifest, #mrun, #answer;
              """,
             cancel);
     }
 
+    // One table's rows: to a temporary table by bulk copy, and from there into the record.
     static async Task Apply(
         SqlConnection connection,
         SqlTransaction transaction,

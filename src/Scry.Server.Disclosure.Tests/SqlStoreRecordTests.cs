@@ -179,6 +179,125 @@ public class SqlStoreRecordTests
         await Assert.That(erased.Units).IsEqualTo(1);
     }
 
+    // An answer of a thousand rows, the same answer with one row changed, and the same with a row
+    // more near its start. Each is a list of its own, and the lists are mostly the same runs: what
+    // the second and third add is the run the difference is in, and not a thousand units again. A
+    // row more moves every unit after it along by one, and the runs after it are still the runs
+    // they were. Read back, each answer is every one of its units in its place.
+    [Test]
+    public async Task AnswersThatDifferByARowShareTheRest()
+    {
+        await using var database = await Clinic.Instance.Build();
+        var memory = new ScryMemoryDisclosureStore();
+        await using var kept = Store(database);
+        var both = new Both(memory, kept);
+
+        var patients = Enumerable.Range(1, 1000).ToList();
+        var changed = patients.ToList();
+        changed[500] = 5000;
+        var longer = patients.ToList();
+        longer.Insert(10, 6000);
+
+        var first = Begin(1, ScryDisclosureKind.List);
+        await both.AppendAsync(Answer(first, patients), Cancel.None);
+        await kept.DrainAsync();
+        var once = await Count(database, "DisclosureRunUnit");
+        var lines = await Count(database, "DisclosureManifestRun");
+
+        var second = Begin(2, ScryDisclosureKind.List);
+        var third = Begin(3, ScryDisclosureKind.List);
+        var again = Begin(4, ScryDisclosureKind.List);
+        await both.AppendAsync(Answer(second, changed), Cancel.None);
+        await both.AppendAsync(Answer(third, longer), Cancel.None);
+        await both.AppendAsync(Answer(again, patients), Cancel.None);
+        await kept.DrainAsync();
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(once).IsEqualTo(1000);
+            await Assert.That(lines).IsGreaterThan(8);
+
+            // A run is at most 256 units, and a difference can touch the run it is in and the one after.
+            await Assert.That(await Count(database, "DisclosureRunUnit")).IsLessThanOrEqualTo(once + 2 * 512);
+            await Assert.That(await Count(database, "DisclosureManifest")).IsEqualTo(3);
+            await Assert.That(await Count(database, "DisclosureAnswer")).IsEqualTo(4);
+            await Assert.That(await Count(database, "DisclosureUnit")).IsEqualTo(0);
+            await Assert.That(await Count(database, "DisclosureUnits")).IsEqualTo(4001);
+            foreach (var answer in (ScryDisclosureEvent[]) [first, second, third, again])
+            {
+                await Assert.That(await Units(kept, answer.Id)).IsEqualTo(await Units(memory, answer.Id));
+            }
+
+            await Assert.That(await Places(kept, 501)).IsEqualTo(await Places(memory, 501));
+            await Assert.That(await Places(kept, 5000)).IsEqualTo(await Places(memory, 5000));
+            await Assert.That(await Places(kept, 6000)).IsEqualTo(await Places(memory, 6000));
+            await Assert.That(await Places(kept, 1000)).IsEqualTo("999, 999, 1000, 999");
+        }
+    }
+
+    // A stream's chunks are lists too, each at the place in the answer it starts. The same stream
+    // read again adds an event and a line for each chunk, and no units.
+    [Test]
+    public async Task AStreamGivenAgainAddsNoUnits()
+    {
+        await using var database = await Clinic.Instance.Build();
+        var memory = new ScryMemoryDisclosureStore();
+        await using var kept = Store(database);
+        var both = new Both(memory, kept);
+        var patients = Enumerable.Range(1, 300).ToList();
+
+        var first = Begin(1, ScryDisclosureKind.Stream);
+        var second = Begin(2, ScryDisclosureKind.Stream);
+        foreach (var begin in (ScryDisclosureEvent[]) [first, second])
+        {
+            await both.AppendAsync(Clinic.Part(begin.Id, 0, begin, names), Cancel.None);
+            await both.AppendAsync(Clinic.Part(begin.Id, 1, rows: Rows(patients, 0, 200)), Cancel.None);
+            await both.AppendAsync(Clinic.Part(begin.Id, 2, rows: Rows(patients, 200, 100)), Cancel.None);
+            await both.AppendAsync(Clinic.Part(begin.Id, 3, close: Close(ScryDisclosureOutcome.Released, 300)), Cancel.None);
+            await kept.DrainAsync();
+        }
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(await Count(database, "DisclosureRunUnit")).IsEqualTo(300);
+            await Assert.That(await Count(database, "DisclosureManifest")).IsEqualTo(2);
+            await Assert.That(await Count(database, "DisclosureAnswer")).IsEqualTo(4);
+            await Assert.That(await Count(database, "DisclosureUnit")).IsEqualTo(0);
+            await Assert.That(await Units(kept, second.Id)).IsEqualTo(await Units(memory, second.Id));
+            await Assert.That(await Places(kept, 250)).IsEqualTo("249, 249");
+        }
+    }
+
+    static ScryDisclosureBatch Answer(ScryDisclosureEvent begin, List<int> patients) =>
+        Clinic.Part(begin.Id, 0, begin, names, Close(ScryDisclosureOutcome.Released, patients.Count), Rows(patients, 0, patients.Count));
+
+    // The rows of a part of an answer: each patient at its place in the whole of it.
+    static (int Ordinal, ScryDisclosureContent Content, string? Source, string? Key)[] Rows(List<int> patients, int from, int count) =>
+    [
+        .. patients
+            .Skip(from)
+            .Take(count)
+            .Select((patient, index) => (
+                from + index,
+                Clinic.Content(ScryDisclosureContentKind.Row, $"{{\"name\":\"Patient {patient}\"}}"),
+                (string?) "Patient",
+                (string?) $"[{patient}]"))
+    ];
+
+    // An answer as a store gives it back: every unit's place, content and rows.
+    static async Task<string> Units(IScryDisclosureReader reader, Guid id)
+    {
+        var answer = (await reader.Reconstruct(id))!;
+        return string.Join('\n', answer.Units.Select(_ => $"{_.Ordinal} {_.Content.Address} {string.Join(',', _.Entities.Select(_ => _.Key))}"));
+    }
+
+    // Where in each answer a patient was, oldest answer first.
+    static async Task<string> Places(IScryDisclosureReader reader, int patient)
+    {
+        var received = await reader.ReceiversOf("Patient", [patient]).ToListAsync();
+        return string.Join(", ", received.OrderBy(_ => _.Event.At).Select(_ => _.Ordinal));
+    }
+
     static ScryDisclosureEvent Begin(int minute, ScryDisclosureKind kind, string? caller = "dr.osei") =>
         new(Guid.CreateVersion7(), start.AddMinutes(minute), kind, "Patient")
         {

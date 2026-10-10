@@ -26,7 +26,6 @@ public sealed partial class ScrySqlServerDisclosureStore
             $"""
              FROM {sql.Entities} n
              JOIN {sql.Event} e ON e.[EventId] = n.[EventId]
-             JOIN {sql.Units} u ON u.[EventId] = n.[EventId] AND u.[Ordinal] = n.[Ordinal]
              {sql.Ended}
              """;
 
@@ -42,14 +41,14 @@ public sealed partial class ScrySqlServerDisclosureStore
             $"""
              SELECT TOP (@page) q.* FROM
              (
-                 SELECT {sql.Columns}, n.[Ordinal], u.[Content], n.[Via],
+                 SELECT {sql.Columns}, n.[Ordinal], n.[Content], n.[Via],
                         CAST(NULL AS uniqueidentifier) AS [ReviewId], CAST(NULL AS datetimeoffset(7)) AS [ReviewedAt], CAST(NULL AS nvarchar(max)) AS [Reviewer],
                         CAST(NULL AS tinyint) AS [Question], CAST(NULL AS binary(32)) AS [Parameters], CAST(NULL AS int) AS [Results], CAST(NULL AS nvarchar(max)) AS [ReviewNode],
                         e.[At] AS [When], e.[EventId] AS [Mark]
                  {releases}
                  WHERE {released}
                  UNION ALL
-                 SELECT {sql.Columns}, n.[Ordinal], u.[Content], n.[Via],
+                 SELECT {sql.Columns}, n.[Ordinal], n.[Content], n.[Via],
                         r.[ReviewId], r.[At], r.[Reviewer], r.[Question], r.[Parameters], r.[Results], r.[Node],
                         r.[At], r.[ReviewId]
                  {releases}

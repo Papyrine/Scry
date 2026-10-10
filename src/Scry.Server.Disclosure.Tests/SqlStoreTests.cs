@@ -137,7 +137,7 @@ public class SqlStoreTests
             await Assert.That(await Count(database, "DisclosureEntities")).IsEqualTo(9);
 
             // Nine as the record is read, and three as it is kept: the three answers are one list.
-            await Assert.That(await Count(database, "DisclosureManifestUnit")).IsEqualTo(3);
+            await Assert.That(await Count(database, "DisclosureRunUnit")).IsEqualTo(3);
             await Assert.That(await Count(database, "DisclosureContent")).IsEqualTo(4);
             await Assert.That(await Count(database, "DisclosureShape")).IsEqualTo(1);
             await Assert.That(await Count(database, "DisclosureField")).IsEqualTo(2);
@@ -277,7 +277,7 @@ public class SqlStoreTests
         var delete = await Assert.ThrowsExactlyAsync<SqlException>(() => Execute(database, "DELETE FROM [scry].[DisclosureEvent]"));
         using (Assert.Multiple())
         {
-            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM sys.tables WHERE [name] LIKE N'Disclosure%' AND [ledger_type] = 3")).IsEqualTo(15);
+            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM sys.tables WHERE [name] LIKE N'Disclosure%' AND [ledger_type] = 3")).IsEqualTo(17);
             await Assert.That(update!.Message).Contains("append only Ledger table");
             await Assert.That(delete!.Message).Contains("append only Ledger table");
             await Assert.That((await kept.Reconstruct(batch.EventId))!.Units).Count().IsEqualTo(1);
@@ -300,7 +300,7 @@ public class SqlStoreTests
 
         processor.Execute(Clinic.Names(), database.Context);
         await kept.DrainAsync();
-        var once = await Scalar<int>(database, "SELECT COUNT(*) FROM [scry].[DisclosureManifestUnit]");
+        var once = await Scalar<int>(database, "SELECT COUNT(*) FROM [scry].[DisclosureRunUnit]");
         processor.Execute(Clinic.Names(), database.Context);
         who.Name = "nurse.kim";
         processor.Execute(Clinic.Names(), database.Context);
@@ -311,7 +311,7 @@ public class SqlStoreTests
         using (Assert.Multiple())
         {
             await Assert.That(once).IsGreaterThan(0);
-            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [scry].[DisclosureManifestUnit]")).IsEqualTo(once);
+            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [scry].[DisclosureRunUnit]")).IsEqualTo(once);
             await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [scry].[DisclosureManifest]")).IsEqualTo(1);
             await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [scry].[DisclosureAnswer]")).IsEqualTo(3);
             await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [scry].[DisclosureUnit]")).IsEqualTo(0);
@@ -337,8 +337,8 @@ public class SqlStoreTests
 
         await plain.AppendAsync(Clinic.Batch(1), Cancel.None);
         await plain.DrainAsync();
-        await Execute(database, "UPDATE [plain].[DisclosureManifestUnit] SET [Ordinal] = [Ordinal]");
-        await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [plain].[DisclosureManifestUnit]")).IsEqualTo(1);
+        await Execute(database, "UPDATE [plain].[DisclosureRunUnit] SET [Offset] = [Offset]");
+        await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [plain].[DisclosureRunUnit]")).IsEqualTo(1);
 
         // Only a server that has ledger tables has the column that says which tables are.
         if (await Ledgers(database))
@@ -371,7 +371,7 @@ public class SqlStoreTests
         var whole = await kept.VerifyChainAsync();
         var head = (await kept.Status()).ChainHead;
         var changed = (await kept.ReceivedBy("dr.osei", DateTimeOffset.MinValue, DateTimeOffset.MaxValue).ToListAsync())[1].Event.Id;
-        await Execute(database, $"UPDATE [scry].[DisclosureManifestEntity] SET [RowKey] = N'[2]' WHERE [Manifest] = (SELECT [Manifest] FROM [scry].[DisclosureAnswer] WHERE [EventId] = '{changed}') AND [Ordinal] = 0");
+        await Execute(database, $"UPDATE [scry].[DisclosureRunEntity] SET [RowKey] = N'[2]' WHERE [Run] = (SELECT TOP (1) l.[Run] FROM [scry].[DisclosureManifestRun] l JOIN [scry].[DisclosureAnswer] a ON a.[Manifest] = l.[Manifest] WHERE a.[EventId] = '{changed}' ORDER BY l.[Start]) AND [Offset] = 0");
         var broken = await kept.VerifyChainAsync();
         var link = await Scalar<long>(database, $"SELECT [Link] FROM [scry].[DisclosureChain] WHERE [EventId] = '{changed}'");
 

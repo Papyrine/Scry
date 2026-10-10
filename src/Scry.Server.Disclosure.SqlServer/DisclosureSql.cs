@@ -35,8 +35,10 @@ sealed class DisclosureSql
         Unit = $"{s}.[DisclosureUnit]";
         Entity = $"{s}.[DisclosureEntity]";
         Manifest = $"{s}.[DisclosureManifest]";
-        ManifestUnit = $"{s}.[DisclosureManifestUnit]";
-        ManifestEntity = $"{s}.[DisclosureManifestEntity]";
+        ManifestRun = $"{s}.[DisclosureManifestRun]";
+        Run = $"{s}.[DisclosureRun]";
+        RunUnit = $"{s}.[DisclosureRunUnit]";
+        RunEntity = $"{s}.[DisclosureRunEntity]";
         Answer = $"{s}.[DisclosureAnswer]";
         Units = $"{s}.[DisclosureUnits]";
         Entities = $"{s}.[DisclosureEntities]";
@@ -62,23 +64,33 @@ sealed class DisclosureSql
 
     public string Schema { get; }
 
-    /// <summary>The list of units an answer was made of, kept once however many answers were made of it.</summary>
+    /// <summary>A list of units, kept once however many answers were made of it.</summary>
     public string Manifest { get; }
 
-    public string ManifestUnit { get; }
+    /// <summary>The runs a list is made of, and where in it each starts.</summary>
+    public string ManifestRun { get; }
 
-    public string ManifestEntity { get; }
+    /// <summary>A run of units, kept once however many lists it is part of.</summary>
+    public string Run { get; }
 
-    /// <summary>Which list an answer that was sent whole was made of.</summary>
+    public string RunUnit { get; }
+
+    public string RunEntity { get; }
+
+    /// <summary>Which list each batch of an answer carried, and where in the answer the list starts.</summary>
     public string Answer { get; }
 
     /// <summary>
-    /// Every unit of every event, whichever way it is kept: its own rows, or the rows of the list its
-    /// answer names. What everything that reads units reads, so that none of it knows there are two.
+    /// Every unit of every event, whichever way it is kept: its own rows, or the rows of the runs of
+    /// the list its batch names, each at the place the three starts add up to. What everything that
+    /// reads units reads, so that none of it knows there are two.
     /// </summary>
     public string Units { get; }
 
-    /// <summary>The same, for the rows units were read from.</summary>
+    /// <summary>
+    /// The same, for the rows units were read from, each with the content of its unit — so that
+    /// going from a row to what was sent of it is a seek within a run and not a search of an answer.
+    /// </summary>
     public string Entities { get; }
 
     public string Outbox { get; }
@@ -249,53 +261,76 @@ sealed class DisclosureSql
             """);
         Index(script, s, "DisclosureEntity", "IX_DisclosureEntity_Row", "([RowHash]) INCLUDE ([EventId], [Ordinal])");
 
-        // An answer sent whole is the same list of units as every other answer of the same rows, so
-        // the list is kept once, by an address over everything in it, and each such answer names it.
-        // The same query asked a thousand times is then a thousand events and one list.
-        Table(script, s, "DisclosureManifest",
+        // What a batch carries is a list of units, and the same rows asked for again are the same
+        // list: it is kept once, by an address, and each batch names it. The same query asked a
+        // thousand times is then a thousand events and one list.
+        //
+        // A list is in turn kept as the runs it is made of, each kept once by an address of its own.
+        // Two lists that differ by a row are the same runs but for the one the row is in, so the
+        // second adds that run and a line for each of the others, and not every unit over again.
+        Table(script, s, "DisclosureRun",
             """
-            [Manifest] binary(32) NOT NULL CONSTRAINT [PK_DisclosureManifest] PRIMARY KEY CLUSTERED,
+            [Run] binary(32) NOT NULL CONSTRAINT [PK_DisclosureRun] PRIMARY KEY CLUSTERED,
             [Units] int NOT NULL
             """);
-        Table(script, s, "DisclosureManifestUnit",
+        Table(script, s, "DisclosureRunUnit",
             """
-            [Manifest] binary(32) NOT NULL,
-            [Ordinal] int NOT NULL,
+            [Run] binary(32) NOT NULL,
+            [Offset] int NOT NULL,
             [Content] binary(32) NOT NULL,
-            CONSTRAINT [PK_DisclosureManifestUnit] PRIMARY KEY CLUSTERED ([Manifest], [Ordinal])
+            CONSTRAINT [PK_DisclosureRunUnit] PRIMARY KEY CLUSTERED ([Run], [Offset])
             """);
-        Table(script, s, "DisclosureManifestEntity",
+        Table(script, s, "DisclosureRunEntity",
             """
-            [Manifest] binary(32) NOT NULL,
-            [Ordinal] int NOT NULL,
+            [Run] binary(32) NOT NULL,
+            [Offset] int NOT NULL,
             [Slot] int NOT NULL,
             [RowHash] binary(32) NOT NULL,
             [Source] nvarchar(max) COLLATE Latin1_General_100_BIN2 NOT NULL,
             [RowKey] nvarchar(max) COLLATE Latin1_General_100_BIN2 NOT NULL,
             [Via] nvarchar(max) COLLATE Latin1_General_100_BIN2 NOT NULL,
-            CONSTRAINT [PK_DisclosureManifestEntity] PRIMARY KEY CLUSTERED ([Manifest], [Ordinal], [Slot])
+            CONSTRAINT [PK_DisclosureRunEntity] PRIMARY KEY CLUSTERED ([Run], [Offset], [Slot])
             """);
-        Index(script, s, "DisclosureManifestEntity", "IX_DisclosureManifestEntity_Row", "([RowHash]) INCLUDE ([Ordinal])");
+        Index(script, s, "DisclosureRunEntity", "IX_DisclosureRunEntity_Row", "([RowHash])");
+        Table(script, s, "DisclosureManifest",
+            """
+            [Manifest] binary(32) NOT NULL CONSTRAINT [PK_DisclosureManifest] PRIMARY KEY CLUSTERED,
+            [Units] int NOT NULL
+            """);
+        Table(script, s, "DisclosureManifestRun",
+            """
+            [Manifest] binary(32) NOT NULL,
+            [Start] int NOT NULL,
+            [Run] binary(32) NOT NULL,
+            CONSTRAINT [PK_DisclosureManifestRun] PRIMARY KEY CLUSTERED ([Manifest], [Start])
+            """);
+        Index(script, s, "DisclosureManifestRun", "IX_DisclosureManifestRun_Run", "([Run])");
         Table(script, s, "DisclosureAnswer",
             """
-            [EventId] uniqueidentifier NOT NULL CONSTRAINT [PK_DisclosureAnswer] PRIMARY KEY CLUSTERED,
+            [EventId] uniqueidentifier NOT NULL,
             [Sequence] int NOT NULL,
-            [Manifest] binary(32) NOT NULL
+            [Start] int NOT NULL,
+            [Manifest] binary(32) NOT NULL,
+            CONSTRAINT [PK_DisclosureAnswer] PRIMARY KEY CLUSTERED ([EventId], [Sequence])
             """);
-        Index(script, s, "DisclosureAnswer", "IX_DisclosureAnswer_Manifest", "([Manifest]) INCLUDE ([Sequence])");
+        Index(script, s, "DisclosureAnswer", "IX_DisclosureAnswer_Manifest", "([Manifest]) INCLUDE ([Start])");
         View(script, s, "DisclosureUnits",
             $"""
              SELECT u.[EventId], u.[Ordinal], u.[Sequence], u.[Content] FROM {s}.[DisclosureUnit] u
              UNION ALL
-             SELECT a.[EventId], m.[Ordinal], a.[Sequence], m.[Content] FROM {s}.[DisclosureAnswer] a
-             JOIN {s}.[DisclosureManifestUnit] m ON m.[Manifest] = a.[Manifest]
+             SELECT a.[EventId], a.[Start] + l.[Start] + r.[Offset] AS [Ordinal], a.[Sequence], r.[Content] FROM {s}.[DisclosureAnswer] a
+             JOIN {s}.[DisclosureManifestRun] l ON l.[Manifest] = a.[Manifest]
+             JOIN {s}.[DisclosureRunUnit] r ON r.[Run] = l.[Run]
              """);
         View(script, s, "DisclosureEntities",
             $"""
-             SELECT n.[EventId], n.[Ordinal], n.[Slot], n.[Sequence], n.[RowHash], n.[Source], n.[RowKey], n.[Via] FROM {s}.[DisclosureEntity] n
+             SELECT n.[EventId], n.[Ordinal], n.[Slot], n.[Sequence], n.[RowHash], n.[Source], n.[RowKey], n.[Via], u.[Content] FROM {s}.[DisclosureEntity] n
+             JOIN {s}.[DisclosureUnit] u ON u.[EventId] = n.[EventId] AND u.[Ordinal] = n.[Ordinal]
              UNION ALL
-             SELECT a.[EventId], m.[Ordinal], m.[Slot], a.[Sequence], m.[RowHash], m.[Source], m.[RowKey], m.[Via] FROM {s}.[DisclosureAnswer] a
-             JOIN {s}.[DisclosureManifestEntity] m ON m.[Manifest] = a.[Manifest]
+             SELECT a.[EventId], a.[Start] + l.[Start] + r.[Offset] AS [Ordinal], r.[Slot], a.[Sequence], r.[RowHash], r.[Source], r.[RowKey], r.[Via], u.[Content] FROM {s}.[DisclosureAnswer] a
+             JOIN {s}.[DisclosureManifestRun] l ON l.[Manifest] = a.[Manifest]
+             JOIN {s}.[DisclosureRunEntity] r ON r.[Run] = l.[Run]
+             JOIN {s}.[DisclosureRunUnit] u ON u.[Run] = r.[Run] AND u.[Offset] = r.[Offset]
              """);
         Table(script, s, "DisclosureShape",
             """
