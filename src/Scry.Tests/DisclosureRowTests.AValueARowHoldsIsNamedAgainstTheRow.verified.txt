@@ -1,0 +1,45 @@
+﻿{
+  Held: {
+    Sensitive: true,
+    Fields: [
+      Employee.Address.City: Returned, sensitive,
+      Employee.Address.Country: Read, sensitive,
+      Employee.Name: Returned,
+      Employee.Name: Read,
+      Employee.PreviousAddresses: Aggregated,
+      Employee.PreviousAddresses.Country: Read, sensitive
+    ],
+    Units: [
+      {
+        Content: {"name":"Aaron","city":"London","past":0},
+        Rows: [
+          Employee[3]
+        ]
+      },
+      {
+        Content: {"name":"Alice","city":"London","past":1},
+        Rows: [
+          Employee[1]
+        ]
+      }
+    ]
+  },
+  Flattened: {
+    Sensitive: true,
+    Fields: [
+      Employee.PreviousAddresses: Traversed,
+      Employee.PreviousAddresses.City: Returned, sensitive,
+      Employee.PreviousAddresses.Country: Read, sensitive
+    ],
+    Units: [
+      {
+        Content: {"city":"Berlin"},
+        Rows: []
+      },
+      {
+        Content: {"city":"Berlin"},
+        Rows: []
+      }
+    ]
+  }
+}

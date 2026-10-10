@@ -34,7 +34,57 @@ public static partial class ScryServiceExtensions
             register(services);
         }
 
+        if (options.Disclosure is { } disclosure)
+        {
+            AddDisclosure(services, disclosure);
+        }
+
         return services;
+    }
+
+    // The sink goes into the container so that one instance serves everything that records — the
+    // processor, and a reviewer's screen recording what it showed — and so that the container is what
+    // disposes one it built. A sink the host handed over as an instance stays the host's to dispose.
+    static void AddDisclosure(IServiceCollection services, ScryDisclosureOptions disclosure)
+    {
+        disclosure.Services?.Invoke(services);
+
+        // A journal is built here even over a sink the host handed over: it holds files and a thread,
+        // and the container closing it is what ships what is left when the host stops.
+        if (disclosure is {Sink: { } sink, JournalDirectory: null})
+        {
+            services.TryAddSingleton(sink);
+        }
+        else
+        {
+            services.TryAddSingleton(disclosure.Build);
+        }
+
+        // A store is usually more than a sink: what reads the record back, erases from it, says how
+        // it stands. One handed over as the sink is handed out as whichever of those it also is, so
+        // that a screen over the record finds them without the host registering each.
+        if (disclosure.Sink is IScryDisclosureReader reader)
+        {
+            services.TryAddSingleton(reader);
+        }
+
+        if (disclosure.Sink is IScryDisclosureEraser eraser)
+        {
+            services.TryAddSingleton(eraser);
+        }
+
+        if (disclosure.Sink is IScryDisclosureStatus status)
+        {
+            services.TryAddSingleton(status);
+        }
+
+        if (disclosure.Sink is IScryDisclosureVerifier verifier)
+        {
+            services.TryAddSingleton(verifier);
+        }
+
+        // Where a call's transport did not say who is asking, the current request is what does.
+        services.AddHttpContextAccessor();
     }
 
     /// <summary>
@@ -225,7 +275,8 @@ public static partial class ScryServiceExtensions
                 context.Response.Headers,
                 context.RequestAborted,
                 collector,
-                budget);
+                budget,
+                options.DisclosureCaller(context));
         }
         catch (ScryValidationException exception)
         {
@@ -359,7 +410,8 @@ public static partial class ScryServiceExtensions
                 collector,
                 spill,
                 budget,
-                context.RequestAborted);
+                context.RequestAborted,
+                options.DisclosureCaller(context));
 
             // Something is already on the wire, which nothing on a model carrying a binary member is
             // ever allowed to put there — so the collector is empty by construction.
@@ -477,6 +529,20 @@ public static partial class ScryServiceExtensions
         await context.Response.Body.FlushAsync(context.RequestAborted);
     }
 
+    // What a query asked by URL is remembered under, where the disclosure audit will have a 304
+    // for it to record. Null everywhere else, so nothing is hashed for nobody to read.
+    static string? Revalidates(HttpContext context, ScryOptions options, bool url)
+    {
+        if (!url ||
+            options.Disclosure is null ||
+            options.QueryFreshness is null)
+        {
+            return null;
+        }
+
+        return QueryEtag.Query(context.Request);
+    }
+
     static async Task Handle(HttpContext context)
     {
         var services = context.RequestServices;
@@ -503,8 +569,18 @@ public static partial class ScryServiceExtensions
             // point of not doing the work — and after Cache-Control above, so a 304 carries both
             // directives: a client merges a 304's headers into the response it kept, and `no-cache`
             // alone would strip `private` from its stored copy.
-            if (await QueryEtag.NotModified(context, processor, options))
+            try
             {
+                if (await QueryEtag.NotModified(context, processor, options))
+                {
+                    return;
+                }
+            }
+            // The one thing that can fail here that is the server's: the disclosure audit would not
+            // take the record of telling the caller its copy is still current. So it is not told.
+            catch (ScryDisclosureException) when (!context.RequestAborted.IsCancellationRequested)
+            {
+                await WriteError(context, StatusCodes.Status500InternalServerError, "Query execution failed.", ScryErrorCode.ExecutionFailed);
                 return;
             }
         }
@@ -561,7 +637,9 @@ public static partial class ScryServiceExtensions
                 spill,
                 collector,
                 context.RequestAborted,
-                url);
+                url,
+                caller: options.DisclosureCaller(context),
+                revalidates: Revalidates(context, options, url));
 
             // The writer declined this one, so the buffer it was handed is untouched — the envelope is
             // serialized into it rather than into a right-sized array that would be written once and
@@ -650,7 +728,14 @@ public static partial class ScryServiceExtensions
         try
         {
             var db = (DbContext) services.GetRequiredService(options.ContextType);
-            var result = await processor.FetchAttachmentAsync(request, db, services, context.Request.Headers, context.Response.Headers, context.RequestAborted);
+            var result = await processor.FetchAttachmentAsync(
+                request,
+                db,
+                services,
+                context.Request.Headers,
+                context.Response.Headers,
+                context.RequestAborted,
+                options.DisclosureCaller(context));
 
             // Refused, absent, and policy-filtered arrive here as one answer and leave as one status.
             // A body would only give a caller holding a guessed key something to tell them apart by.

@@ -38,12 +38,18 @@ static class ResponseWriter
     /// thread on the database. <paramref name="spill"/> is what makes that worth doing: a list is the
     /// one result whose size the server does not bound, and given permission it is sent as it is
     /// written rather than held whole. Null — the batch's per-entry buffer — never sends anything early.
+    /// <para>
+    /// <paramref name="capture"/> is where the disclosure audit records each row as it is written,
+    /// and null where that audit is off. What it has gathered is accepted before every drain: bytes
+    /// that leave early leave on record.
+    /// </para>
     /// </remarks>
     public static async ValueTask<int> WriteListAsync(
         IBufferWriter<byte> output,
         ResponseSpill? spill,
         QueryExecutor.RowSet set,
         string schemaStamp,
+        DisclosureCapture? capture,
         Cancel cancel)
     {
         await using var json = new Utf8JsonWriter(output);
@@ -57,13 +63,18 @@ static class ResponseWriter
         var rows = 0;
         await foreach (var row in QueryExecutor.Enumerate(set, cancel))
         {
-            writer.WriteRow(json, Row(row, set), set.Binary);
+            WriteRow(json, set.Plan, writer, Row(row, set), set.Binary, capture);
             rows++;
             if (spill?.ShouldDrain(json.BytesPending) == true)
             {
                 // Flushed first: until it is, the writer holds a span into the buffer that draining
                 // hands straight back for overwriting.
                 await json.FlushAsync(cancel);
+                if (capture is not null)
+                {
+                    await capture.FlushAsync(cancel);
+                }
+
                 await spill.DrainAsync(cancel);
             }
         }
@@ -91,6 +102,7 @@ static class ResponseWriter
         ResponseSpill? spill,
         QueryExecutor.PageSet set,
         string schemaStamp,
+        DisclosureCapture? capture,
         Cancel cancel)
     {
         await using var json = new Utf8JsonWriter(output);
@@ -105,10 +117,15 @@ static class ResponseWriter
         var writer = set.Plan.Writer;
         foreach (var row in set.Rows)
         {
-            writer.WriteRow(json, row, set.Binary);
+            WriteRow(json, set.Plan, writer, row, set.Binary, capture);
             if (spill?.ShouldDrain(json.BytesPending) == true)
             {
                 await json.FlushAsync(cancel);
+                if (capture is not null)
+                {
+                    await capture.FlushAsync(cancel);
+                }
+
                 await spill.DrainAsync(cancel);
             }
         }
@@ -133,7 +150,11 @@ static class ResponseWriter
     /// Returns what the result counts — one row or none for a single, and nothing for a scalar, which
     /// folded the rows away.
     /// </summary>
-    public static int? WriteTerminal(IBufferWriter<byte> output, QueryExecutor.Terminal terminal, string schemaStamp)
+    public static int? WriteTerminal(
+        IBufferWriter<byte> output,
+        QueryExecutor.Terminal terminal,
+        string schemaStamp,
+        DisclosureCapture? capture)
     {
         using var json = new Utf8JsonWriter(output);
         json.WriteStartObject();
@@ -144,7 +165,15 @@ static class ResponseWriter
         {
             json.WriteString(kind, scalar);
             json.WritePropertyName(payload);
-            PlanShapeWriter.WriteValue(json, terminal.Value);
+            if (capture is null)
+            {
+                PlanShapeWriter.WriteValue(json, terminal.Value);
+            }
+            else
+            {
+                capture.WriteScalar(json, terminal.Value);
+            }
+
             rows = null;
         }
         else
@@ -153,7 +182,8 @@ static class ResponseWriter
             json.WritePropertyName(payload);
             if (terminal.Row is { } row)
             {
-                terminal.Plan!.Writer.WriteRow(json, row, terminal.Binary);
+                var plan = terminal.Plan!;
+                WriteRow(json, plan, plan.Writer, row, terminal.Binary, capture);
                 rows = 1;
             }
             else
@@ -169,6 +199,25 @@ static class ResponseWriter
         json.WriteEndObject();
         json.Flush();
         return rows;
+    }
+
+    // One row, through the disclosure audit's capture where there is one: it writes the row itself,
+    // so what it recorded and what was sent are the same bytes rather than two writes that agree.
+    static void WriteRow(
+        Utf8JsonWriter json,
+        ProjectionPlan plan,
+        PlanShapeWriter writer,
+        object[] row,
+        BinaryPartCollector? binary,
+        DisclosureCapture? capture)
+    {
+        if (capture is null)
+        {
+            writer.WriteRow(json, row, binary);
+            return;
+        }
+
+        capture.WriteRow(json, plan, row, binary);
     }
 
     public static object[] Row(object row, QueryExecutor.RowSet set)
@@ -483,6 +532,43 @@ sealed class PlanShapeWriter
 
     public void WriteRow(Utf8JsonWriter json, object[] row, BinaryPartCollector? binary = null) =>
         WriteObject(json, root, row, binary);
+
+    /// <summary>
+    /// Writes a row as the disclosure audit records it: the object <see cref="WriteRow"/> writes, with
+    /// each binary value named by its digest and length rather than carried. So the record of a row
+    /// does not depend on whether its bytes travelled inline or as a part, and does not hold them.
+    /// </summary>
+    /// <remarks>
+    /// Apart from <see cref="WriteObject"/> rather than a mode of it, so that writing a row for a host
+    /// with the audit off is the code it always was. Takes no collector: a row is written this way
+    /// beside its wire form, never instead of it, and only the wire form may claim a part's index.
+    /// </remarks>
+    public void WriteCanonicalRow(Utf8JsonWriter json, object[] row, DisclosureCapture capture) =>
+        WriteCanonical(json, root, row, capture);
+
+    static void WriteCanonical(Utf8JsonWriter json, Node node, object[] row, DisclosureCapture capture)
+    {
+        json.WriteStartObject();
+        foreach (var child in node.Children!)
+        {
+            json.WritePropertyName(child.Encoded);
+            if (child.Children is not null)
+            {
+                WriteCanonical(json, child, row, capture);
+                continue;
+            }
+
+            if (row[child.Slot] is byte[] bytes)
+            {
+                capture.WriteDigest(json, bytes);
+                continue;
+            }
+
+            WriteValue(json, row[child.Slot]);
+        }
+
+        json.WriteEndObject();
+    }
 
     static void WriteObject(Utf8JsonWriter json, Node node, object[] row, BinaryPartCollector? binary)
     {

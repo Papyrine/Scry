@@ -53,6 +53,61 @@ sealed class QueryRecorder(
         unit: "{failure}",
         description: "Change probes and backplane operations that failed. A live query waits for its poll instead.");
 
+    // Finer at the low end than a query's: an accept is one append, and the question it answers is
+    // what recording added to a response that was otherwise ready to go.
+    static Histogram<double> disclosureDuration = meter.CreateHistogram<double>(
+        "scry.server.disclosure.duration",
+        unit: "s",
+        description: "Duration of one disclosure audit accept: how long an answer waited for the sink to hold the record of it.",
+        advice: new()
+        {
+            HistogramBucketBoundaries = [0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5]
+        });
+
+    /// <summary>
+    /// One batch handed to the disclosure sink: how long the sink took, and whether it accepted. A
+    /// refusal is an answer that was not sent.
+    /// </summary>
+    public static void DisclosureAccepted(TimeSpan elapsed, Exception? failure)
+    {
+        if (failure is null)
+        {
+            disclosureDuration.Record(elapsed.TotalSeconds, new KeyValuePair<string, object?>("scry.outcome", "accepted"));
+            return;
+        }
+
+        disclosureDuration.Record(
+            elapsed.TotalSeconds,
+            new TagList
+            {
+                { "scry.outcome", "refused" },
+                { "error.type", failure.GetType().FullName }
+            });
+    }
+
+    // What a disclosure journal has accepted that the store behind it has not: the backlog. Rising
+    // without falling is a store that is not keeping up, or cannot be reached.
+    static UpDownCounter<long> journalBytes = meter.CreateUpDownCounter<long>(
+        "scry.server.disclosure.journal.bytes",
+        unit: "By",
+        description: "Bytes a disclosure journal holds that the store behind it has not yet accepted.");
+
+    static Counter<long> journalRefusals = meter.CreateCounter<long>(
+        "scry.server.disclosure.journal.refusals",
+        unit: "{refusal}",
+        description: "Times the store behind a disclosure journal refused a record. The journal keeps it and asks again.");
+
+    public static void JournalBytes(long change)
+    {
+        if (change != 0)
+        {
+            journalBytes.Add(change);
+        }
+    }
+
+    public static void JournalRefused(Exception exception) =>
+        journalRefusals.Add(1, new KeyValuePair<string, object?>("error.type", exception.GetType().FullName));
+
     public static void SubscriptionOpened() =>
         activeSubscriptions.Add(1);
 
@@ -71,6 +126,13 @@ sealed class QueryRecorder(
     long started = Stopwatch.GetTimestamp();
     Activity? activity = StartActivity(source, member, request, attachment);
     bool completed;
+
+    /// <summary>
+    /// The disclosure audit's event for this answer, set once the sink has accepted any of it and
+    /// before the query is completed, so the audit entry can name it. Left null where nothing was
+    /// accepted, which is every answer that was never sent.
+    /// </summary>
+    public Guid? Disclosure { get; set; }
 
     /// <summary>
     /// Starts the clock and, when something is listening, the activity. The source tag is the root
@@ -306,7 +368,8 @@ sealed class QueryRecorder(
                 Sensitive = request is not null &&
                             sensitive is not null &&
                             SensitiveWalk.Inspect(request, sensitive.IsSensitive).InConstant,
-                ApproachedLimits = Approached(outcome)
+                ApproachedLimits = Approached(outcome),
+                Disclosure = Disclosure
             };
             auditor.Record(entry);
         }

@@ -1,0 +1,13 @@
+global using System.Globalization;
+global using System.Security.Cryptography;
+global using System.Text.Encodings.Web;
+global using System.Text.Json;
+global using System.Text.Json.Serialization.Metadata;
+global using System.Text.RegularExpressions;
+global using Microsoft.AspNetCore.Builder;
+global using Microsoft.AspNetCore.Http;
+global using Microsoft.AspNetCore.Routing;
+global using Microsoft.Extensions.DependencyInjection;
+global using Microsoft.Extensions.Hosting;
+global using Microsoft.Net.Http.Headers;
+global using Scry;

@@ -9,7 +9,9 @@
 /// omission a rejection rather than an unfiltered read. <c>navigations</c> is the same idea for a
 /// member path that steps into a policied source, and is omitted on the same terms.
 /// <c>capabilities</c> decides a capability member for the call; where it is omitted a capability reads
-/// as false, which is the answer that grants nothing.
+/// as false, which is the answer that grants nothing. <c>disclosure</c> is told what each member was
+/// read for and which rows a projection reaches, where the disclosure audit is on; where it is off
+/// there is none, and nothing is told.
 /// </remarks>
 [SuppressMessage("Performance", "CA1822:Mark members as static")]
 sealed class ExpressionBuilder(
@@ -17,13 +19,47 @@ sealed class ExpressionBuilder(
     ScryOptions options,
     Func<string, IQueryable>? sources = null,
     NavigationPolicy? navigations = null,
-    CapabilityContext? capabilities = null)
+    CapabilityContext? capabilities = null,
+    DisclosurePlanner? disclosure = null)
 {
+    // Says what members are read for from here until Leave is handed what this returns. Build
+    // re-enters itself — an aggregate builds a predicate, a projection leaf builds an aggregate — so
+    // what a member is being read for is whatever the innermost of these said.
+    ScryDisclosureFieldUse Enter(ScryDisclosureFieldUse use)
+    {
+        if (disclosure is null)
+        {
+            return use;
+        }
+
+        var outer = disclosure.Use;
+        disclosure.Use = use;
+        return outer;
+    }
+
+    void Leave(ScryDisclosureFieldUse outer) =>
+        disclosure?.Use = outer;
+
+    // What a fold inside the current position reads its values for: folded into something returned,
+    // they left as an aggregate; folded into a filter, they were read as everything in a filter is.
+    ScryDisclosureFieldUse Folded()
+    {
+        if (disclosure is null ||
+            disclosure.Use == ScryDisclosureFieldUse.Returned)
+        {
+            return ScryDisclosureFieldUse.Aggregated;
+        }
+
+        return disclosure.Use;
+    }
+
     /// <summary>Builds a predicate lambda <c>TElement =&gt; bool</c>.</summary>
     public LambdaExpression BuildPredicate(Node predicate, Type type)
     {
         var parameter = Expression.Parameter(type, "e");
+        var outer = Enter(ScryDisclosureFieldUse.Read);
         var body = Build(predicate, parameter, typeof(bool));
+        Leave(outer);
         return Expression.Lambda(EnsureCondition(body), parameter);
     }
 
@@ -46,9 +82,15 @@ sealed class ExpressionBuilder(
     public (LambdaExpression Selector, Type Element) BuildCollectionSelector(IReadOnlyList<string> path, Type type)
     {
         var parameter = Expression.Parameter(type, "e");
+        var outer = Enter(ScryDisclosureFieldUse.Traversed);
         var collection = BuildMemberAccess(parameter, path);
+        Leave(outer);
         var element = Schema.CollectionElement(collection.Type) ??
                       throw new ScryValidationException($"'{string.Join('.', path)}' is not a collection.");
+
+        // The rows are the collection's from here on, and a member read off one is still a member of
+        // the row that held the collection where the elements are no source of their own.
+        disclosure?.Flattened(element, disclosure.LastElement);
 
         // The lambda is typed to return IEnumerable<T> so the Queryable.SelectMany overload binds
         // regardless of how the navigation is declared. The delegate type carries that, rather than a
@@ -61,12 +103,39 @@ sealed class ExpressionBuilder(
     }
 
     /// <summary>Builds a key selector lambda <c>TElement =&gt; TKey</c>.</summary>
-    public LambdaExpression BuildKeySelector(Node key, Type type)
+    /// <param name="key">The key.</param>
+    /// <param name="type">The row it is read off.</param>
+    /// <param name="asked">
+    /// Whether the key is one the query named. A page's tiebreak is the server's own addition, and
+    /// is no part of what the disclosure audit records the query as having read.
+    /// </param>
+    public LambdaExpression BuildKeySelector(Node key, Type type, bool asked = true)
     {
         var parameter = Expression.Parameter(type, "e");
+        var outer = Enter(ScryDisclosureFieldUse.Read);
+        var unasked = Unasked(!asked);
         var body = Build(key, parameter, null);
+        Asked(unasked);
+        Leave(outer);
         return Expression.Lambda(body, parameter);
     }
+
+    // Stops the disclosure audit being told about what is read from here until Asked is handed what
+    // this returns: the server's own additions to a query, which the query did not ask for.
+    bool Unasked(bool unasked = true)
+    {
+        if (disclosure is null)
+        {
+            return false;
+        }
+
+        var outer = disclosure.Suspended;
+        disclosure.Suspended = outer || unasked;
+        return outer;
+    }
+
+    void Asked(bool outer) =>
+        disclosure?.Suspended = outer;
 
     // The keys the current query grouped by, in order, once more than one — what a member read inside
     // a grouped projection or a HAVING predicate is resolved against. Null while a single key is in
@@ -83,11 +152,30 @@ sealed class ExpressionBuilder(
         if (keys.Count == 1)
         {
             compositeKeys = null;
-            return BuildKeySelector(keys[0], type);
+            disclosure?.BeginKey();
+            var single = BuildKeySelector(keys[0], type);
+            disclosure?.Grouped([disclosure.EndKey()]);
+            return single;
         }
 
         var parameter = Expression.Parameter(type, "e");
-        var values = keys.Select(_ => Build(_, parameter, null)).ToList();
+        var outer = Enter(ScryDisclosureFieldUse.Read);
+        var values = new List<Expression>(keys.Count);
+        var read = new List<IReadOnlyList<ScryDisclosureField>>(keys.Count);
+        foreach (var key in keys)
+        {
+            // What each key read is remembered apart, so that a grouped projection returning one of
+            // them returns the members that one was made from and not its neighbours'.
+            disclosure?.BeginKey();
+            values.Add(Build(key, parameter, null));
+            if (disclosure is not null)
+            {
+                read.Add(disclosure.EndKey());
+            }
+        }
+
+        disclosure?.Grouped(read);
+        Leave(outer);
         var row = DistinctRow.ByArity[values.Count - 1].MakeGenericType([..values.Select(_ => _.Type)]);
         var (constructor, members) = DistinctRow.Describe(row);
 
@@ -99,15 +187,39 @@ sealed class ExpressionBuilder(
     /// Builds a selector <c>TElement =&gt; object[]</c> projecting the requested scalar leaves, plus a
     /// shape describing how to fold the array back into (possibly nested) JSON.
     /// </summary>
-    public ProjectionPlan BuildProjection(Projection projection, Type type)
+    /// <param name="projection">What the query selects.</param>
+    /// <param name="type">The row it selects from.</param>
+    /// <param name="identified">
+    /// Whether a projected row is a row of the source, so that the disclosure audit may read its key
+    /// beside it. False for a projection about to be deduplicated: a key column would change which
+    /// rows the database calls distinct.
+    /// </param>
+    public ProjectionPlan BuildProjection(Projection projection, Type type, bool identified = true)
     {
         var parameter = Expression.Parameter(type, "e");
         var leaves = new List<Expression>();
         var shape = new List<IReadOnlyList<string>>();
         var binary = new List<bool>();
+        if (identified)
+        {
+            disclosure?.Begin(parameter);
+        }
+
         Flatten(projection, parameter, [], leaves, shape, binary);
+        var entities = Reached(leaves, identified);
         var selector = Expression.Lambda(ToObjectArray(leaves), parameter);
-        return new(selector, shape, Normalize(binary));
+        return new(selector, shape, Normalize(binary), entities);
+    }
+
+    // The keys of the rows a projection reached, appended after every leaf that is written.
+    IReadOnlyList<DisclosureSlot>? Reached(List<Expression> leaves, bool identified = true)
+    {
+        if (!identified)
+        {
+            return null;
+        }
+
+        return disclosure?.End(leaves);
     }
 
     /// <summary>
@@ -116,7 +228,7 @@ sealed class ExpressionBuilder(
     /// One materialization then yields both the shaped rows and the last row's key values (for the next
     /// cursor). <c>Shape</c> describes only the leading projection slots.
     /// </summary>
-    public (LambdaExpression Selector, IReadOnlyList<IReadOnlyList<string>> Shape, IReadOnlyList<bool>? BinarySlots, int KeyCount) BuildPageProjection(
+    public (LambdaExpression Selector, IReadOnlyList<IReadOnlyList<string>> Shape, IReadOnlyList<bool>? BinarySlots, int KeyCount, IReadOnlyList<DisclosureSlot>? Entities) BuildPageProjection(
         Projection? projection,
         IReadOnlyList<(Node Key, bool Descending)> keys,
         Type type)
@@ -125,6 +237,7 @@ sealed class ExpressionBuilder(
         var leaves = new List<Expression>();
         var shape = new List<IReadOnlyList<string>>();
         var binary = new List<bool>();
+        disclosure?.Begin(parameter);
 
         if (projection is null)
         {
@@ -135,7 +248,7 @@ sealed class ExpressionBuilder(
 
             foreach (var member in meta.Members.Values.Where(_ => _.Kind is MemberKind.Scalar or MemberKind.Capability))
             {
-                leaves.Add(Leaf(parameter, member));
+                leaves.Add(Leaf(parameter, meta, member));
                 shape.Add([member.Name]);
                 binary.Add(member.BinaryTransfer);
             }
@@ -145,14 +258,21 @@ sealed class ExpressionBuilder(
             Flatten(projection, parameter, [], leaves, shape, binary);
         }
 
-        // Trailing slots: the ordering-key values, used only to build the next page's cursor.
+        // Trailing slots: the ordering-key values, used only to build the next page's cursor. Read
+        // for the server's own use, so no part of what the query is recorded as having read — the
+        // ordering that named them was.
+        var unasked = Unasked();
         foreach (var (key, _) in keys)
         {
             leaves.Add(Build(key, parameter, null));
         }
 
+        Asked(unasked);
+
+        // After the cursor's slots, which are found by counting on from the shape's.
+        var entities = Reached(leaves);
         var selector = Expression.Lambda(ToObjectArray(leaves), parameter);
-        return (selector, shape, Normalize(binary), keys.Count);
+        return (selector, shape, Normalize(binary), keys.Count, entities);
     }
 
     /// <summary>
@@ -168,6 +288,9 @@ sealed class ExpressionBuilder(
     {
         var parameter = Expression.Parameter(type, "e");
 
+        // The keys are the ordering's, already recorded where the ordering was built, and the
+        // server's own tiebreak, which was never asked for.
+        var unasked = Unasked();
         Expression? disjunction = null;
         for (var i = 0; i < keys.Count; i++)
         {
@@ -183,6 +306,7 @@ sealed class ExpressionBuilder(
             disjunction = disjunction is null ? term : Expression.OrElse(disjunction, term);
         }
 
+        Asked(unasked);
         return Expression.Lambda(disjunction!, parameter);
     }
 
@@ -324,7 +448,7 @@ sealed class ExpressionBuilder(
     /// a request that named no members: a generated client always sends an explicit projection, so its
     /// response keys are its own names rather than the server's.
     /// </summary>
-    public ProjectionPlan BuildDefaultProjection(Type type)
+    public ProjectionPlan BuildDefaultProjection(Type type, bool identified = true)
     {
         if (!schema.TryGetType(type, out var meta))
         {
@@ -335,20 +459,27 @@ sealed class ExpressionBuilder(
         var leaves = new List<Expression>();
         var shape = new List<IReadOnlyList<string>>();
         var binary = new List<bool>();
+        if (identified)
+        {
+            disclosure?.Begin(parameter);
+        }
+
         foreach (var member in meta.Members.Values.Where(_ => _.Kind is MemberKind.Scalar or MemberKind.Capability))
         {
-            leaves.Add(Leaf(parameter, member));
+            leaves.Add(Leaf(parameter, meta, member));
             shape.Add([member.Name]);
             binary.Add(member.BinaryTransfer);
         }
 
+        var entities = Reached(leaves, identified);
         var selector = Expression.Lambda(ToObjectArray(leaves), parameter);
-        return new(selector, shape, Normalize(binary));
+        return new(selector, shape, Normalize(binary), entities);
     }
 
     // A scalar of the row read off it, or a capability decided for it.
-    Expression Leaf(ParameterExpression row, Member member)
+    Expression Leaf(ParameterExpression row, TypeMeta meta, Member member)
     {
+        disclosure?.Leaf(row, meta, member);
         if (member.Kind == MemberKind.Capability)
         {
             return Capability(member, row);
@@ -378,7 +509,7 @@ sealed class ExpressionBuilder(
     /// Under a left join the inner row can be absent, so a non-nullable value read from that side is
     /// widened to its nullable form; without that the shaper would fault materializing a SQL NULL.
     /// </remarks>
-    public (LambdaExpression Selector, IReadOnlyList<IReadOnlyList<string>> Shape, IReadOnlyList<bool>? BinarySlots) BuildJoinProjection(
+    public (LambdaExpression Selector, IReadOnlyList<IReadOnlyList<string>> Shape, IReadOnlyList<bool>? BinarySlots, IReadOnlyList<DisclosureSlot>? Entities) BuildJoinProjection(
         IReadOnlyList<JoinMember> members,
         Type outerType,
         Type innerType,
@@ -396,6 +527,15 @@ sealed class ExpressionBuilder(
         var shape = new List<IReadOnlyList<string>>(members.Count);
         var binary = new List<bool>(members.Count);
 
+        // A joined row is read from a row of each side, and is recorded as both. The side an outer
+        // join can leave unmatched is a row that may not be there; a group's rows are folded away.
+        disclosure?.Begin(outer, optional: kind == JoinKind.Right);
+        if (!grouped)
+        {
+            disclosure?.Begin(inner, "inner", optional: kind == JoinKind.Left);
+        }
+
+        var reading = Enter(ScryDisclosureFieldUse.Returned);
         foreach (var member in members)
         {
             if (member.Aggregate is { } aggregate)
@@ -427,7 +567,9 @@ sealed class ExpressionBuilder(
             shape.Add([member.Name]);
         }
 
-        return (Expression.Lambda(ToObjectArray(leaves), outer, inner), shape, Normalize(binary));
+        Leave(reading);
+        var entities = Reached(leaves);
+        return (Expression.Lambda(ToObjectArray(leaves), outer, inner), shape, Normalize(binary), entities);
     }
 
     /// <summary>
@@ -435,6 +577,19 @@ sealed class ExpressionBuilder(
     /// on, so a nullable difference between them is reconciled here rather than faulting.
     /// </summary>
     public (LambdaExpression Outer, LambdaExpression Inner) BuildJoinKeys(
+        Node outerKey,
+        Type outerType,
+        Node innerKey,
+        Type innerType)
+    {
+        // Read to decide which rows meet, and for nothing else.
+        var outer = Enter(ScryDisclosureFieldUse.Read);
+        var keys = JoinKeys(outerKey, outerType, innerKey, innerType);
+        Leave(outer);
+        return keys;
+    }
+
+    (LambdaExpression Outer, LambdaExpression Inner) JoinKeys(
         Node outerKey,
         Type outerType,
         Node innerKey,
@@ -591,7 +746,9 @@ sealed class ExpressionBuilder(
             }
 
             // Reading the group is what Build already does when the row is a grouping.
+            var outer = Enter(ScryDisclosureFieldUse.Returned);
             leaves.Add(Box(Build(value.Node, parameter, null)));
+            Leave(outer);
             shape.Add([member.Name]);
         }
 
@@ -619,14 +776,18 @@ sealed class ExpressionBuilder(
                 // describes may be absent, so a value-typed leaf is widened to carry that null,
                 // exactly as a flat path through the same navigation is.
                 case NodeValue value:
+                    var returning = Enter(ScryDisclosureFieldUse.Returned);
                     var leaf = Build(value.Node, root, null);
+                    Leave(returning);
                     leaves.Add(policied ? Widened(leaf) : leaf);
                     shape.Add(jsonPath);
                     binary?.Add(value.Node is MemberNode memberNode && IsBinaryPath(memberNode.Path, root.Type));
                     break;
 
                 case NestedValue nested:
+                    var stepping = Enter(ScryDisclosureFieldUse.Traversed);
                     var navTarget = BuildMemberAccess(root, nested.Path, out var throughPolicy);
+                    Leave(stepping);
                     Flatten(nested.Projection, navTarget, jsonPath, leaves, shape, binary, policied || throughPolicy);
                     break;
 
@@ -681,7 +842,9 @@ sealed class ExpressionBuilder(
     public LambdaExpression BuildAggregateSelector(Node selector, Type type, AggregateFn function)
     {
         var parameter = Expression.Parameter(type, "e");
+        var outer = Enter(ScryDisclosureFieldUse.Aggregated);
         var body = Build(selector, parameter, null);
+        Leave(outer);
 
         if (function is AggregateFn.Min or AggregateFn.Max)
         {
@@ -828,7 +991,13 @@ sealed class ExpressionBuilder(
     /// </summary>
     Expression BuildSubquery(SubqueryNode subquery, Expression row)
     {
+        // The collection is folded to one value, so its own name is read the way that value is: as
+        // an aggregate where the value is returned, and as a filter reads where it is not.
+        var folded = Folded();
+        var outer = Enter(folded);
         var collection = BuildMemberAccess(row, subquery.Path);
+        Leave(outer);
+        var of = disclosure?.LastElement ?? default;
         var element = Schema.CollectionElement(collection.Type) ??
                       throw new ScryValidationException($"'{string.Join('.', subquery.Path)}' is not a collection.");
 
@@ -841,7 +1010,7 @@ sealed class ExpressionBuilder(
             source = Expression.Call(
                 QueryComposition.Close(enumerableWhere, element),
                 source,
-                ElementLambda(filter, element, typeof(bool)));
+                ElementLambda(filter, element, typeof(bool), ScryDisclosureFieldUse.Read, of));
         }
 
         switch (subquery.Function)
@@ -853,14 +1022,17 @@ sealed class ExpressionBuilder(
                 return Expression.Call(
                     QueryComposition.Close(enumerableAll, element),
                     source,
-                    ElementLambda(subquery.Predicate!, element, typeof(bool)));
+                    ElementLambda(subquery.Predicate!, element, typeof(bool), ScryDisclosureFieldUse.Read, of));
 
             case SubqueryFn.Count:
                 return Expression.Call(QueryComposition.Close(enumerableCount, element), source);
         }
 
         var parameter = Expression.Parameter(element, "x");
+        disclosure?.Element(parameter, of);
+        var selecting = Enter(folded);
         var body = Build(subquery.Selector!, parameter, null);
+        Leave(selecting);
 
         // Min/Max over an empty collection is SQL NULL, so the selected value is made nullable rather
         // than faulting when a row has no elements.
@@ -943,6 +1115,7 @@ sealed class ExpressionBuilder(
         var inner = sources(inSource.Root);
         var element = inner.ElementType;
 
+        // The other source's members decide the answer and are no part of it.
         if (inSource.Predicate is { } predicate)
         {
             inner = QueryComposition.Compose(
@@ -951,11 +1124,11 @@ sealed class ExpressionBuilder(
                     "Where",
                     [element],
                     inner.Expression,
-                    Expression.Quote(ElementLambda(predicate, element, typeof(bool)))));
+                    Expression.Quote(ElementLambda(predicate, element, typeof(bool), ScryDisclosureFieldUse.Read))));
         }
 
         var value = Build(inSource.Value, row, null);
-        var selector = ElementLambda(inSource.Selector, element, null);
+        var selector = ElementLambda(inSource.Selector, element, null, ScryDisclosureFieldUse.Read);
 
         // The tested value and the candidates must agree on type for Contains to bind, and either
         // side may be the optional one. An optional member tested against required keys is the only
@@ -998,10 +1171,26 @@ sealed class ExpressionBuilder(
             _ is { Name: "Contains", IsGenericMethodDefinition: true } &&
             _.GetParameters().Length == 2);
 
-    LambdaExpression ElementLambda(Node node, Type element, Type? expected)
+    // A lambda over the elements of a collection or the rows of another source. `of` says where an
+    // element stands when it is no source of its own, so a member read off it is named against the
+    // row that holds the collection.
+    LambdaExpression ElementLambda(
+        Node node,
+        Type element,
+        Type? expected,
+        ScryDisclosureFieldUse use,
+        (string Source, string Prefix) of = default)
     {
         var parameter = Expression.Parameter(element, "x");
-        return Expression.Lambda(Build(node, parameter, expected), parameter);
+        if (of.Source is not null)
+        {
+            disclosure?.Element(parameter, of);
+        }
+
+        var outer = Enter(use);
+        var body = Build(node, parameter, expected);
+        Leave(outer);
+        return Expression.Lambda(body, parameter);
     }
 
     // A member read against a group means the key. With one key that is the whole key; with several it
@@ -1030,6 +1219,9 @@ sealed class ExpressionBuilder(
     // match — names itself.
     Expression BuildGroupKeyAt(int index, Expression row)
     {
+        // The members a key was made from were read once, when the rows were grouped. Returned here,
+        // they are returned, and this is the only place that is seen.
+        disclosure?.GroupKey(index);
         var key = Expression.Property(row, GroupingKey(row.Type));
         if (compositeKeys is null)
         {
@@ -1062,7 +1254,10 @@ sealed class ExpressionBuilder(
     public LambdaExpression BuildGroupPredicate(Node predicate, Type element, Type key)
     {
         var parameter = Expression.Parameter(QueryComposition.Close(typeof(IGrouping<,>), key, element), "g");
-        return Expression.Lambda(EnsureCondition(Build(predicate, parameter, typeof(bool))), parameter);
+        var outer = Enter(ScryDisclosureFieldUse.Read);
+        var body = Build(predicate, parameter, typeof(bool));
+        Leave(outer);
+        return Expression.Lambda(EnsureCondition(body), parameter);
     }
 
     Expression BuildConditional(ConditionalNode conditional, Expression row)
@@ -1104,12 +1299,15 @@ sealed class ExpressionBuilder(
     Expression BuildMemberAccess(Expression root, IReadOnlyList<string> path, out bool policied)
     {
         var expression = root;
+        var origin = disclosure?.Start(root) ?? default;
 
         // Whether the path stepped into a source whose rows are policy-filtered. Such a step can yield
         // no row where a plain navigation would have yielded one, which is what the widening below is for.
         policied = false;
-        foreach (var segment in path)
+        for (var index = 0; index < path.Count; index++)
         {
+            var segment = path[index];
+
             // Traversing into an optional struct complex member (Nullable<T>): resolve against the
             // underlying type and unwrap via .Value before accessing the child property.
             var underlying = Nullable.GetUnderlyingType(expression.Type);
@@ -1125,58 +1323,14 @@ sealed class ExpressionBuilder(
                 expression = Expression.Property(expression, NullableValue(expression.Type));
             }
 
-            // Computed for the row the path has reached rather than read off it, and never traversed —
-            // the validator refuses a path continuing past one, and a bool has no members to continue to.
-            if (member.Kind == MemberKind.Capability)
+            expression = Step(expression, ownerType, member, ref policied);
+
+            // Told after the step, so that what follows a navigation is named against the row it
+            // reached and that row's key is read off the expression that reaches it.
+            if (disclosure is not null)
             {
-                expression = Capability(member, expression);
-                continue;
+                origin = disclosure.Step(origin, ownerType, meta, member, expression, index == path.Count - 1);
             }
-
-            if (member.Kind == MemberKind.Navigation)
-            {
-                // The member's own unwrap, for the same reason the owner was unwrapped: an optional
-                // struct member names its underlying type.
-                var target = member.Target;
-
-                // A navigation into a policied source is read through that source's policy rather than
-                // off the owner, so the rows it reaches are the rows a direct query would have returned.
-                if (navigations?.Applies(target) == true)
-                {
-                    expression = navigations.Correlate(expression, ownerType, member, target);
-                    policied = true;
-                    continue;
-                }
-
-                // Reached only where no rewriter was supplied, which is a context that cannot read
-                // another source. Refused rather than read off the owner, where the policy would
-                // silently not run.
-                if (navigations is null &&
-                    schema.TryGetPoliciedSource(target, out _))
-                {
-                    throw new ScryValidationException($"'{schema.WireName(ownerType)}.{member.Name}' navigates into a row-policied source, which cannot be filtered here.");
-                }
-            }
-
-            // A collection of a policied type is read through that source's policy too, so an aggregate
-            // over it counts what a direct query would have returned. Startup refuses the member
-            // outright unless the policy opted into being read this way, so reaching here means it did.
-            if (member.Element is { } element)
-            {
-                if (navigations?.Applies(element) == true)
-                {
-                    expression = navigations.CorrelateMany(expression, ownerType, member, element);
-                    continue;
-                }
-
-                if (navigations is null &&
-                    schema.TryGetPoliciedSource(element, out _))
-                {
-                    throw new ScryValidationException($"'{schema.WireName(ownerType)}.{member.Name}' is a collection of a row-policied source, which cannot be filtered here.");
-                }
-            }
-
-            expression = Expression.Property(expression, member.ClrProperty);
         }
 
         // A policied traversal yields SQL NULL for a row the policy hides, so a non-nullable value read
@@ -1184,10 +1338,66 @@ sealed class ExpressionBuilder(
         // same widening on the unmatched side of an outer join.
         if (policied)
         {
-            return Widened(expression);
+            var widened = Widened(expression);
+            disclosure?.Same(expression, widened);
+            return widened;
         }
 
         return expression;
+    }
+
+    // One step of a member path: the value of a member, read off the value the path has reached.
+    Expression Step(Expression expression, Type ownerType, Member member, ref bool policied)
+    {
+        // Computed for the row the path has reached rather than read off it, and never traversed —
+        // the validator refuses a path continuing past one, and a bool has no members to continue to.
+        if (member.Kind == MemberKind.Capability)
+        {
+            return Capability(member, expression);
+        }
+
+        if (member.Kind == MemberKind.Navigation)
+        {
+            // The member's own unwrap, for the same reason the owner was unwrapped: an optional
+            // struct member names its underlying type.
+            var target = member.Target;
+
+            // A navigation into a policied source is read through that source's policy rather than
+            // off the owner, so the rows it reaches are the rows a direct query would have returned.
+            if (navigations?.Applies(target) == true)
+            {
+                policied = true;
+                return navigations.Correlate(expression, ownerType, member, target);
+            }
+
+            // Reached only where no rewriter was supplied, which is a context that cannot read
+            // another source. Refused rather than read off the owner, where the policy would
+            // silently not run.
+            if (navigations is null &&
+                schema.TryGetPoliciedSource(target, out _))
+            {
+                throw new ScryValidationException($"'{schema.WireName(ownerType)}.{member.Name}' navigates into a row-policied source, which cannot be filtered here.");
+            }
+        }
+
+        // A collection of a policied type is read through that source's policy too, so an aggregate
+        // over it counts what a direct query would have returned. Startup refuses the member
+        // outright unless the policy opted into being read this way, so reaching here means it did.
+        if (member.Element is { } element)
+        {
+            if (navigations?.Applies(element) == true)
+            {
+                return navigations.CorrelateMany(expression, ownerType, member, element);
+            }
+
+            if (navigations is null &&
+                schema.TryGetPoliciedSource(element, out _))
+            {
+                throw new ScryValidationException($"'{schema.WireName(ownerType)}.{member.Name}' is a collection of a row-policied source, which cannot be filtered here.");
+            }
+        }
+
+        return Expression.Property(expression, member.ClrProperty);
     }
 
     // A value able to carry a null: the expression as it is where it already can, and lifted to its
@@ -2136,7 +2346,9 @@ sealed class ExpressionBuilder(
             // Any expression over the row, not only a member: a narrow member arrives under the
             // widening C# bound the fold's overload through, which the client carries as a cast.
             var valueParameter = Expression.Parameter(element, "x");
+            var distinctly = Enter(Folded());
             var valueBody = Build(distinctSelector, valueParameter, null);
+            Leave(distinctly);
 
             // SQL's distinct aggregates skip nulls where Distinct() keeps one, so a row whose value
             // is absent is filtered first — the same normalization the text aggregate applies, in the
@@ -2184,7 +2396,9 @@ sealed class ExpressionBuilder(
         }
 
         var selectorParameter = Expression.Parameter(element, "x");
+        var folding = Enter(Folded());
         var selectorBody = Build(selected, selectorParameter, null);
+        Leave(folding);
         if (aggregate.Function is AggregateFn.Sum or AggregateFn.Average)
         {
             selectorBody = PromoteForFold(selectorBody, aggregate.Function.ToString());

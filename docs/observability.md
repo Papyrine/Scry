@@ -91,6 +91,19 @@ A [command](commands.md) is an activity of its own, `scry.command {name}`, tagge
 The last is what to read against `MaxPendingCommands`. A gap between the two durations is time a command spent past its first answer — queued on a bus, or a handler that is slow.
 
 
+### The disclosure audit
+
+Where the [disclosure audit](disclosure-audit.md) is on, every answer waits for the record of it to be accepted, and that wait is measured:
+
+| Instrument | Type | Unit | Tags |
+| --- | --- | --- | --- |
+| `scry.server.disclosure.duration` | histogram | `s` | `scry.outcome` (`accepted` or `refused`), `error.type` (refusals only) |
+| `scry.server.disclosure.journal.bytes` | up-down counter | `By` | |
+| `scry.server.disclosure.journal.refusals` | counter | `{refusal}` | `error.type` |
+
+The first is what the audit adds to an answer. Its `refused` count is answers that were not given, which makes it an alert and not a statistic. The other two are a [journal](disclosure-audit.md#a-local-journal)'s: what it holds that the store behind it has not taken, and how often that store has said no. A backlog that rises without falling is a store that cannot be reached, and it ends at the journal's byte budget, past which answers fail.
+
+
 ## The audit hook
 
 For a per-query record with the full request — the level of detail metrics deliberately do not carry — register an `IScryAuditor`:
@@ -213,9 +226,16 @@ public sealed record ScryAuditEntry(
     /// has this to redact or drop on.
     /// </summary>
     public bool Sensitive { get; init; }
+
+    /// <summary>
+    /// The disclosure audit's event for this answer: what the record of everything sent is kept
+    /// under. Null where the disclosure audit is off, and where nothing was sent — a query that was
+    /// refused or failed, or one run of a live query whose answer had not changed.
+    /// </summary>
+    public Guid? Disclosure { get; init; }
 }
 ```
-<sup><a href='/src/Scry.Server/ScryAuditEntry.cs#L19-L118' title='Snippet source file'>snippet source</a> | <a href='#snippet-auditEntry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryAuditEntry.cs#L19-L125' title='Snippet source file'>snippet source</a> | <a href='#snippet-auditEntry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Semantics:
@@ -227,6 +247,7 @@ Semantics:
 - **A batch is audited per entry, not per request.** The trail records what was asked, and a [batch](batching.md) asked more than once; there is no entry for the batch itself. The one exception is a batch refused at its envelope, which ran no entry: that is recorded once as a `Rejected` entry carrying `Batch`, since nothing else would show a client sending oversized batches.
 - **Malformed bodies are not audited.** A payload that fails deserialization never becomes a request object, so it appears in metrics only.
 - **A command is audited with `Command` set** — the `CommandRequest` as sent — and `CommandStatus`, and no `Request`. One answered at once has one entry; one answered as pending has a second when it finishes, from a scope of its own, since the request that sent it is long gone. A refusal is one entry with no `CommandStatus`. `Error` is the real failure where the client was shown a fixed message.
+- **`Disclosure` ties an entry to the [disclosure audit](disclosure-audit.md)'s record of the same answer.** It is that event's id where the audit is on and something was sent, and null otherwise. For a live query's run that is also what says whether the run's answer went out, which the entry could not say before.
 - **`Request` is unredacted.** A constant compared against a [`[Sensitive]`](annotations.md#sensitive) member is in it as sent — the trail is the host's own, and reading the query is its point. The entry says so with `Sensitive`, for an auditor that forwards entries somewhere such a value must not go.
 
 

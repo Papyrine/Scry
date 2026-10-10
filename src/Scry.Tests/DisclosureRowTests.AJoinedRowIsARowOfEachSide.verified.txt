@@ -1,0 +1,34 @@
+﻿{
+  Sensitive: false,
+  Fields: [
+    Department.Id: Read,
+    Department.Name: Returned,
+    Employee.Active: Read,
+    Employee.DepartmentId: Read,
+    Employee.Name: Returned,
+    Employee.Name: Read
+  ],
+  Units: [
+    {
+      Content: {"employee":"Aaron","department":"Engineering"},
+      Rows: [
+        Employee[3],
+        Department[1] via inner
+      ]
+    },
+    {
+      Content: {"employee":"Alice","department":"Engineering"},
+      Rows: [
+        Employee[1],
+        Department[1] via inner
+      ]
+    },
+    {
+      Content: {"employee":"Carol","department":"Sales"},
+      Rows: [
+        Employee[2],
+        Department[2] via inner
+      ]
+    }
+  ]
+}

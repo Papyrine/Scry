@@ -20,6 +20,11 @@ public sealed partial class ScryProcessor
         Changes = new();
         PolicyCache = new(schema.CachedPolicies, Changes);
         subscriptions = new(options, Changes);
+        if (options.Disclosure is { } audit)
+        {
+            disclosure = new(audit, options, schema.Stamp);
+        }
+
         InitializeCommands();
     }
 
@@ -59,8 +64,66 @@ public sealed partial class ScryProcessor
     /// directed error otherwise. Called once at startup by <c>MapScry</c>; safe to call from other
     /// hosts that have a <see cref="DbContext"/>.
     /// </summary>
-    public void ValidateAgainstModel(DbContext data) =>
+    public void ValidateAgainstModel(DbContext data)
+    {
         schema.ValidateAgainstModel(data.Model, options.ContextType);
+        EnsureRowsCanBeNamed(data.Model);
+    }
+
+    /// <summary>
+    /// Confirms, where the disclosure audit is on, that every source has something a row of it can be
+    /// recorded by — or that the host has said it knows there is nothing.
+    /// </summary>
+    /// <remarks>
+    /// Asked of the model rather than of the annotations: a type mapped with <c>HasNoKey</c> is still a
+    /// <c>[Queryable]</c> to the schema, and a key EF holds in shadow is a key nothing here can read.
+    /// A source with no row identity is recorded as content alone, so who received a given row of it
+    /// can never be asked. That is a decision for a host to make, and is not made by default.
+    /// </remarks>
+    void EnsureRowsCanBeNamed(IModel model)
+    {
+        if (options.Disclosure is not { } audit)
+        {
+            return;
+        }
+
+        foreach (var source in schema.Sources.OrderBy(_ => _.Name, StringComparer.Ordinal))
+        {
+            var type = source.ClrType;
+
+            // Opted in and not mapped, which is allowed only where the host waived it: nothing is
+            // ever read from it, so there is nothing to record.
+            if (source.Kind != SourceKind.Poco &&
+                model.FindEntityType(type) is null)
+            {
+                continue;
+            }
+
+            if (audit.Excludes(type) ||
+                Acknowledged(audit, type) ||
+                DisclosurePlanner.Key(model, audit, type) is not null)
+            {
+                continue;
+            }
+
+            throw new($"The disclosure audit is on and '{source.Name}' ({type.Name}) has nothing a row of it can be recorded by: it is supplied from memory, or mapped with no key, or keyed by a value EF holds with no property to read it through. Say what identifies a row — _.Key<{type.Name}>(_ => _.Code) in UseDisclosureAudit's settings — or acknowledge that nothing does with _.Unkeyed<{type.Name}>(), which records what is sent from it as content with no row to ask about.");
+        }
+    }
+
+    // Said of a type or of one it derives from: a hierarchy with nothing to identify a row by has
+    // nothing to identify one of its subtypes' rows by either.
+    static bool Acknowledged(ScryDisclosureOptions audit, Type type)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            if (audit.Acknowledged.Contains(current))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Confirms every entity and view source is a type the context maps, throwing a directed error
@@ -187,6 +250,10 @@ public sealed partial class ScryProcessor
         // host may report a change before anything has saved through the interceptor.
         Changes.Attach(db.Model);
         Changes.Attach(services);
+
+        // Found now rather than on the first answer, so an audit that was asked for and has nowhere
+        // to record fails the deployment instead of every caller.
+        disclosure?.Attach(services);
     }
 
     /// <summary>Builds a processor from configuration (e.g. for tests or non-DI hosting).</summary>
@@ -227,14 +294,29 @@ public sealed partial class ScryProcessor
         var drifted = request.Stamp is { } requestStamp &&
                       requestStamp != schema.Stamp;
         var recorder = QueryRecorder.StartAttachment(schema, options, request, services);
+        DisclosureCapture? capture = null;
         try
         {
-            var scope = new CallScope(services, requestHeaders, responseHeaders);
+            capture = Disclose(request, request.Root, caller: null, services, responseHeaders, alone: true);
+            var scope = new CallScope(services, requestHeaders, responseHeaders)
+            {
+                Disclosure = capture
+            };
             var result = executor.FetchAttachment(request, data, scope);
+
+            // On record before it is handed over. A fetch that found nothing sent nothing, so there
+            // is nothing to record: refused, absent and hidden stay one answer here too.
+            if (capture is not null &&
+                result.Found)
+            {
+                capture.Commit();
+                recorder.Disclosure = capture.Event;
+            }
 
             // Rows are 1 for a value handed over and 0 for everything withheld, which keeps a run of
             // refusals visible in the metrics without saying which kind of refusal it was.
             recorder.Succeeded(ResultKind.Single, result.Found ? 1 : 0);
+            capture?.Released();
             return result;
         }
         catch (ScryValidationException exception) when (drifted)
@@ -259,6 +341,10 @@ public sealed partial class ScryProcessor
             recorder.Failed(exception);
             throw;
         }
+        finally
+        {
+            capture?.Dispose();
+        }
     }
 
     /// <summary>
@@ -271,16 +357,30 @@ public sealed partial class ScryProcessor
         IServiceProvider services,
         IHeaderDictionary requestHeaders,
         IHeaderDictionary responseHeaders,
-        Cancel cancel)
+        Cancel cancel,
+        string? caller = null)
     {
         var drifted = request.Stamp is { } requestStamp &&
                       requestStamp != schema.Stamp;
         var recorder = QueryRecorder.StartAttachment(schema, options, request, services);
+        DisclosureCapture? capture = null;
         try
         {
-            var scope = new CallScope(services, requestHeaders, responseHeaders);
+            capture = Disclose(request, request.Root, caller, services, responseHeaders, alone: true);
+            var scope = new CallScope(services, requestHeaders, responseHeaders)
+            {
+                Disclosure = capture
+            };
             var result = await executor.FetchAttachmentAsync(request, data, scope, cancel);
+            if (capture is not null &&
+                result.Found)
+            {
+                await capture.CommitAsync(cancel);
+                recorder.Disclosure = capture.Event;
+            }
+
             recorder.Succeeded(ResultKind.Single, result.Found ? 1 : 0);
+            capture?.Released();
             return result;
         }
         catch (ScryValidationException exception) when (drifted)
@@ -302,6 +402,13 @@ public sealed partial class ScryProcessor
         {
             recorder.Failed(exception);
             throw;
+        }
+        finally
+        {
+            if (capture is not null)
+            {
+                await capture.DisposeAsync();
+            }
         }
     }
 
@@ -374,17 +481,22 @@ public sealed partial class ScryProcessor
         IHeaderDictionary requestHeaders,
         IHeaderDictionary responseHeaders,
         BinaryPartCollector? binary,
-        bool fromUrl = false)
+        bool fromUrl = false,
+        string? caller = null,
+        string? correlation = null)
     {
         var drifted = request.Stamp is { } requestStamp &&
                       requestStamp != schema.Stamp;
         var recorder = QueryRecorder.Start(schema, options, request, services);
+        DisclosureCapture? capture = null;
         try
         {
             ApplySensitivity(request, responseHeaders, fromUrl);
+            capture = Disclose(request, request.Root, caller, services, responseHeaders, correlation);
             var scope = new CallScope(services, requestHeaders, responseHeaders)
             {
-                Binary = binary
+                Binary = binary,
+                Disclosure = capture
             };
             var response = executor.Execute(request, data, scope) with
             {
@@ -406,7 +518,16 @@ public sealed partial class ScryProcessor
                 };
             }
 
+            // On record before it is reported, and before it is returned: the sink holding the record
+            // is what lets the answer go, and an answer it refused is reported as the failure it is.
+            if (capture is not null)
+            {
+                capture.Commit();
+                recorder.Disclosure = capture.Event;
+            }
+
             recorder.Succeeded(response);
+            capture?.Released();
             return response;
         }
         // A rejected query from a client that was generated against a different model surface is far
@@ -433,13 +554,19 @@ public sealed partial class ScryProcessor
         {
             // Ahead of the catch below so a denial is not counted as the server having broken: the
             // query was fine, and the rows it asked for were not this caller's to read.
-            recorder.Denied(exception);
+            Denied(capture, recorder, exception);
             throw;
         }
         catch (Exception exception)
         {
             recorder.Failed(exception);
             throw;
+        }
+        finally
+        {
+            // Settles what the record is owed: nothing where the answer went or was never accepted,
+            // and a withdrawal where it was accepted and an auditor then failed the request.
+            capture?.Dispose();
         }
     }
 
@@ -453,6 +580,11 @@ public sealed partial class ScryProcessor
     /// <remarks>
     /// <paramref name="spill"/> is what may let a large result stop being resident; null keeps the
     /// whole envelope buffered, which is what the batch's per-entry buffer needs.
+    /// <para>
+    /// With the disclosure audit on nothing is returned at all: the drifted client's envelope is
+    /// written into <paramref name="output"/> here as well, so that it is whole before the record of
+    /// it is accepted. <paramref name="caller"/> is who that record is kept under.
+    /// </para>
     /// </remarks>
     internal async ValueTask<QueryResponse?> TryExecuteBufferedAsync(
         QueryRequest request,
@@ -465,18 +597,29 @@ public sealed partial class ScryProcessor
         BinaryPartCollector? binary = null,
         Cancel cancel = default,
         bool fromUrl = false,
-        SubscriptionRun? subscription = null)
+        SubscriptionRun? subscription = null,
+        string? caller = null,
+        string? correlation = null,
+        string? revalidates = null)
     {
         var drifted = request.Stamp is { } requestStamp &&
                       requestStamp != schema.Stamp;
         var recorder = QueryRecorder.Start(schema, options, request, services, subscribed: subscription is not null);
+        DisclosureCapture? capture = null;
+
+        // Set where a live query's run has left its record and its report to whoever decides whether
+        // the answer is sent. From there they are that caller's to settle, and are not settled here.
+        var parked = false;
         try
         {
             ApplySensitivity(request, responseHeaders, fromUrl);
+            capture = Disclose(request, request.Root, caller, services, responseHeaders, correlation, storable: Storable(fromUrl));
+            capture?.Subscribed = subscription is not null;
             var scope = new CallScope(services, requestHeaders, responseHeaders)
             {
                 Binary = binary,
-                Subscription = subscription
+                Subscription = subscription,
+                Disclosure = capture
             };
 
             // The alias table is carried on the envelope only for a drifted client; that rare envelope keeps
@@ -488,12 +631,65 @@ public sealed partial class ScryProcessor
                     Stamp = schema.Stamp,
                     EnumAliases = schema.EnumAliases
                 };
+                if (capture is null)
+                {
+                    recorder.Succeeded(fallback);
+                    return fallback;
+                }
+
+                // Written here rather than handed back for the caller to write, as it is where the
+                // audit is off. A transport's size limit refuses a response as it is written, and a
+                // refusal has to come before the record of the answer is accepted, never after it.
+                ResponseWriter.Write(output, fallback);
+                if (subscription is not null)
+                {
+                    subscription.Capture = capture;
+                    subscription.Recorder = recorder;
+                    subscription.Fallback = fallback;
+                    parked = true;
+                    return null;
+                }
+
+                await capture.CommitAsync(cancel);
+                recorder.Disclosure = capture.Event;
                 recorder.Succeeded(fallback);
-                return fallback;
+                capture.Released();
+                return null;
             }
 
             var (kind, rows) = await executor.ExecuteBufferedAsync(request, data, scope, schema.Stamp, output, spill, cancel);
+
+            // A live query's answer is sent only if it differs from the last one, which is decided
+            // after this returns. So neither the record nor the report is made here: both wait with
+            // the run, for the one who compares.
+            if (capture is not null &&
+                subscription is not null)
+            {
+                subscription.Capture = capture;
+                subscription.Recorder = recorder;
+                subscription.Kind = kind;
+                subscription.Rows = rows;
+                parked = true;
+                return null;
+            }
+
+            // On record before it is reported, and before the transport is handed the last of it.
+            if (capture is not null)
+            {
+                await capture.CommitAsync(cancel);
+                recorder.Disclosure = capture.Event;
+            }
+
             recorder.Succeeded(kind, rows);
+            capture?.Released();
+
+            // What a 304 for this query will be recorded from, since it will run nothing to learn it.
+            if (revalidates is not null &&
+                capture is not null)
+            {
+                disclosure!.Remember(revalidates, capture.Memo());
+            }
+
             return null;
         }
         catch (ScryValidationException exception) when (drifted)
@@ -515,7 +711,7 @@ public sealed partial class ScryProcessor
         }
         catch (ScryPermissionException exception)
         {
-            recorder.Denied(exception);
+            await DeniedAsync(capture, recorder, exception, cancel);
             throw;
         }
         catch (OperationCanceledException)
@@ -523,6 +719,7 @@ public sealed partial class ScryProcessor
             // Reading the rows asynchronously is what makes a client disconnect land here rather than
             // at the final write, and an abandoned request is not a query that failed. Ahead of the
             // catch below so it is not counted as one.
+            capture?.Abandoned();
             recorder.Canceled();
             throw;
         }
@@ -530,6 +727,17 @@ public sealed partial class ScryProcessor
         {
             recorder.Failed(exception);
             throw;
+        }
+        finally
+        {
+            // Settles what the record is owed: nothing where the answer went or was never accepted, a
+            // close where part of it had already left, and a withdrawal where it was accepted whole
+            // and an auditor then failed the request.
+            if (capture is not null &&
+                !parked)
+            {
+                await capture.DisposeAsync();
+            }
         }
     }
 
@@ -566,7 +774,18 @@ public sealed partial class ScryProcessor
         IHeaderDictionary requestHeaders,
         IHeaderDictionary responseHeaders)
     {
-        var rows = executor.Build(request, data, new(services, requestHeaders, responseHeaders));
+        // The SQL says more than rows do — table and column names, the shape of every policy that
+        // narrowed the query, the values bound into it — so who was shown it is recorded like any
+        // other answer.
+        using var capture = Disclose(request, request.Root, caller: null, services, responseHeaders);
+        capture?.Begin(ScryDisclosureKind.SqlPreview);
+        var rows = executor.Build(
+            request,
+            data,
+            new(services, requestHeaders, responseHeaders)
+            {
+                Disclosure = capture
+            });
 
         // Checked before asking, not after: EF's ToQueryString decides by executing the query and
         // inspecting what comes back, and for an in-memory source that means actually running it. It
@@ -578,7 +797,15 @@ public sealed partial class ScryProcessor
                 $"No SQL is available for source '{request.Root}': it is not backed by the database (a [QueryablePoco] source is supplied in memory).");
         }
 
-        return rows.Rows.ToQueryString();
+        var sql = rows.Rows.ToQueryString();
+        if (capture is not null)
+        {
+            capture.AddUnit(ScryDisclosureContentKind.Sql, Encoding.UTF8.GetBytes(sql));
+            capture.Commit();
+            capture.Released();
+        }
+
+        return sql;
     }
 
     /// <summary>Validates and executes a batch without a service provider (no DI-resolved policies).</summary>
@@ -616,16 +843,18 @@ public sealed partial class ScryProcessor
         IServiceProvider services,
         IHeaderDictionary requestHeaders,
         IHeaderDictionary responseHeaders,
-        BinaryPartCollector? binary)
+        BinaryPartCollector? binary,
+        string? caller = null)
     {
         var started = Stopwatch.GetTimestamp();
         using var activity = QueryRecorder.StartBatch(request.Queries.Count);
         RejectUnusableBatch(request, services, activity, started);
 
         var results = new List<QueryBatchResult>(request.Queries.Count);
+        var correlation = Correlate();
         foreach (var query in request.Queries)
         {
-            results.Add(ExecuteEntry(query, data, services, requestHeaders, responseHeaders, binary));
+            results.Add(ExecuteEntry(query, data, services, requestHeaders, responseHeaders, binary, caller, Correlated(correlation, results.Count)));
         }
 
         return QueryBatchResponse.Create(results) with {Stamp = schema.Stamp};
@@ -660,7 +889,8 @@ public sealed partial class ScryProcessor
         BinaryPartCollector? binary,
         ResponseSpill? spill = null,
         ResponseBudget? budget = null,
-        Cancel cancel = default)
+        Cancel cancel = default,
+        string? caller = null)
     {
         var started = Stopwatch.GetTimestamp();
         using var activity = QueryRecorder.StartBatch(request.Queries.Count);
@@ -677,9 +907,11 @@ public sealed partial class ScryProcessor
         using var entry = new PooledBufferWriter();
         await using var json = new Utf8JsonWriter(output);
         ResponseWriter.BeginBatch(json);
+        var correlation = Correlate();
+        var index = 0;
         foreach (var query in request.Queries)
         {
-            await WriteEntryAsync(json, entry, query, data, services, requestHeaders, responseHeaders, binary, budget, cancel);
+            await WriteEntryAsync(json, entry, query, data, services, requestHeaders, responseHeaders, binary, budget, caller, Correlated(correlation, index++), cancel);
 
             // Between entries, never inside one: an entry is written to a buffer of its own and inserted
             // whole precisely so a failure part-way through its rows is still reported as that entry's
@@ -741,6 +973,8 @@ public sealed partial class ScryProcessor
         IHeaderDictionary responseHeaders,
         BinaryPartCollector? binary,
         ResponseBudget? budget,
+        string? caller,
+        string? correlation,
         Cancel cancel)
     {
         entry.Reset();
@@ -759,7 +993,9 @@ public sealed partial class ScryProcessor
                 output,
                 spill: null,
                 binary,
-                cancel);
+                cancel,
+                caller: caller,
+                correlation: correlation);
 
             // The writer declined this one, so the buffer is untouched and the envelope is serialized
             // into it — which makes it an entry like any other: checked as it is written, charged once
@@ -815,13 +1051,15 @@ public sealed partial class ScryProcessor
         IServiceProvider services,
         IHeaderDictionary requestHeaders,
         IHeaderDictionary responseHeaders,
-        BinaryPartCollector? binary)
+        BinaryPartCollector? binary,
+        string? caller,
+        string? correlation)
     {
         try
         {
             return new()
             {
-                Response = Execute(query, data, services, requestHeaders, responseHeaders, binary)
+                Response = Execute(query, data, services, requestHeaders, responseHeaders, binary, caller: caller, correlation: correlation)
             };
         }
         catch (ScryValidationException exception)
@@ -887,8 +1125,14 @@ public sealed partial class ScryProcessor
         IHeaderDictionary responseHeaders,
         Cancel cancel = default)
     {
-        var (begin, rows, recorder) = StreamCore(request, data, services, requestHeaders, responseHeaders);
-        return (begin, Shape(rows, options.MaxStreamRows, recorder, cancel));
+        var (begin, rows, recorder, capture) = StreamCore(request, data, services, requestHeaders, responseHeaders);
+        if (capture is null)
+        {
+            return (begin, Shape(rows, options.MaxStreamRows, recorder, cancel));
+        }
+
+        // Held back a chunk at a time until the record of each is accepted.
+        return (begin, RecordedRows(rows, options.MaxStreamRows, recorder, capture, options.Disclosure!.StreamChunkBytes, cancel));
     }
 
     /// <summary>
@@ -904,13 +1148,31 @@ public sealed partial class ScryProcessor
         IHeaderDictionary responseHeaders,
         Cancel cancel = default,
         BinaryPartCollector? binary = null,
-        ResponseBudget? budget = null)
+        ResponseBudget? budget = null,
+        string? caller = null)
     {
-        var (begin, rows, recorder) = StreamCore(request, data, services, requestHeaders, responseHeaders, binary);
+        var (begin, rows, recorder, capture) = StreamCore(request, data, services, requestHeaders, responseHeaders, binary, caller);
         // Whether any row can divert — known from the plan before the first byte, which is what lets
         // the transport commit to a multipart content type up front, data-independently.
         var diverting = binary is not null && rows.Plan.BinarySlots is not null;
-        return (begin, diverting, Lines(rows, options.MaxStreamRows, budget, recorder, cancel));
+        return (begin, diverting, Streamed(rows, budget, recorder, capture, cancel));
+    }
+
+    // A stream's lines: as they are read, or — where the disclosure audit is on — held back a chunk at
+    // a time until the record of each chunk is accepted.
+    IAsyncEnumerable<ReadOnlyMemory<byte>> Streamed(
+        QueryExecutor.RowSet rows,
+        ResponseBudget? budget,
+        QueryRecorder recorder,
+        DisclosureCapture? capture,
+        Cancel cancel)
+    {
+        if (capture is null)
+        {
+            return Lines(rows, options.MaxStreamRows, budget, recorder, cancel);
+        }
+
+        return RecordedLines(rows, options.MaxStreamRows, budget, recorder, capture, options.Disclosure!.StreamChunkBytes, cancel);
     }
 
     /// <summary>
@@ -925,21 +1187,40 @@ public sealed partial class ScryProcessor
         IHeaderDictionary responseHeaders,
         Cancel cancel = default,
         BinaryPartCollector? binary = null,
-        ResponseBudget? budget = null)
+        ResponseBudget? budget = null,
+        string? caller = null)
     {
         var drifted = request.Stamp is { } requestStamp && requestStamp != schema.Stamp;
         var recorder = QueryRecorder.Start(schema, options, request, services, streamed: true);
         QueryExecutor.RowSet rows;
+        DisclosureCapture? capture = null;
+
+        // Whether the record has been handed to the stream that will fill it. Until it is, anything
+        // that ends this call ends the record with it.
+        var streaming = false;
         try
         {
+            capture = Disclose(request, request.Root, caller, services, responseHeaders);
+            capture?.Begin(ScryDisclosureKind.Stream);
             rows = await executor.StreamAsync(
                 request,
                 data,
                 new(services, requestHeaders, responseHeaders)
                 {
-                    Binary = binary
+                    Binary = binary,
+                    Disclosure = capture
                 },
                 cancel);
+
+            // A stream of nothing but what the host left out of the record is not recorded, and is
+            // sent as it would be with the audit off rather than held back a chunk at a time.
+            if (capture is {Recording: null})
+            {
+                await capture.DisposeAsync();
+                capture = null;
+            }
+
+            streaming = true;
         }
         catch (ScryValidationException exception) when (drifted)
         {
@@ -958,7 +1239,7 @@ public sealed partial class ScryProcessor
         }
         catch (ScryPermissionException exception)
         {
-            recorder.Denied(exception);
+            await DeniedAsync(capture, recorder, exception, cancel);
             throw;
         }
         catch (Exception exception)
@@ -966,28 +1247,49 @@ public sealed partial class ScryProcessor
             recorder.Failed(exception);
             throw;
         }
+        finally
+        {
+            if (capture is not null &&
+                !streaming)
+            {
+                await capture.DisposeAsync();
+            }
+        }
 
         var diverting = binary is not null && rows.Plan.BinarySlots is not null;
-        return (Begin(drifted), diverting, Lines(rows, options.MaxStreamRows, budget, recorder, cancel));
+        return (Begin(drifted), diverting, Streamed(rows, budget, recorder, capture, cancel));
     }
 
-    (ScryStreamMarker Begin, QueryExecutor.RowSet Rows, QueryRecorder Recorder) StreamCore(
+    (ScryStreamMarker Begin, QueryExecutor.RowSet Rows, QueryRecorder Recorder, DisclosureCapture? Capture) StreamCore(
         QueryRequest request,
         DbContext data,
         IServiceProvider services,
         IHeaderDictionary requestHeaders,
         IHeaderDictionary responseHeaders,
-        BinaryPartCollector? binary = null)
+        BinaryPartCollector? binary = null,
+        string? caller = null)
     {
         var drifted = request.Stamp is { } requestStamp && requestStamp != schema.Stamp;
         var recorder = QueryRecorder.Start(schema, options, request, services, streamed: true);
         QueryExecutor.RowSet rows;
+        DisclosureCapture? capture = null;
+        var streaming = false;
         try
         {
+            capture = Disclose(request, request.Root, caller, services, responseHeaders);
+            capture?.Begin(ScryDisclosureKind.Stream);
             rows = executor.Stream(request, data, new(services, requestHeaders, responseHeaders)
             {
-                Binary = binary
+                Binary = binary,
+                Disclosure = capture
             });
+            if (capture is {Recording: null})
+            {
+                capture.Dispose();
+                capture = null;
+            }
+
+            streaming = true;
         }
         catch (ScryValidationException exception) when (drifted)
         {
@@ -1010,7 +1312,7 @@ public sealed partial class ScryProcessor
         {
             // Thrown while the stream was being built, which is before its first byte — so a denial
             // still answers as a status rather than as an error marker mid-response.
-            recorder.Denied(exception);
+            Denied(capture, recorder, exception);
             throw;
         }
         catch (Exception exception)
@@ -1018,8 +1320,15 @@ public sealed partial class ScryProcessor
             recorder.Failed(exception);
             throw;
         }
+        finally
+        {
+            if (!streaming)
+            {
+                capture?.Dispose();
+            }
+        }
 
-        return (Begin(drifted), rows, recorder);
+        return (Begin(drifted), rows, recorder, capture);
     }
 
     ScryStreamMarker Begin(bool drifted) =>

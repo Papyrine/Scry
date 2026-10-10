@@ -22,6 +22,8 @@
   <Project Path="Scry.Server.Redis/Scry.Server.Redis.csproj" />
   <Project Path="Scry.Server.SignalR/Scry.Server.SignalR.csproj" />
   <Project Path="Scry.Server.Mcp/Scry.Server.Mcp.csproj" />
+  <Project Path="Scry.Server.Disclosure.SqlServer/Scry.Server.Disclosure.SqlServer.csproj" />
+  <Project Path="Scry.Server.Disclosure.Explorer/Scry.Server.Disclosure.Explorer.csproj" />
     <Project Path="Scry.Server.Explorer/Scry.Server.Explorer.csproj" />
   <Project Path="Scry.Explorer.Core/Scry.Explorer.Core.csproj" />
   <Project Path="Scry.SourceGenerator/Scry.SourceGenerator.csproj" />
@@ -29,5 +31,6 @@
   <Project Path="Scry.Tests/Scry.Tests.csproj" />
   <Project Path="Scry.Backplane.Tests/Scry.Backplane.Tests.csproj" />
   <Project Path="Scry.Server.Bus.Tests/Scry.Server.Bus.Tests.csproj" />
+  <Project Path="Scry.Server.Disclosure.Tests/Scry.Server.Disclosure.Tests.csproj" />
   <Project Path="Scry.Explorer.Tests/Scry.Explorer.Tests.csproj" />
 </Solution>

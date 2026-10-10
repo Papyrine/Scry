@@ -15,7 +15,7 @@ dotnet run -c Release --project Benchmarks -- --filter '*'
 
 Release is mandatory — BenchmarkDotNet refuses a Debug build. The project is deliberately in no solution; see the note in `CLAUDE.md` for why.
 
-The sources are [`Benchmarks/ResponseBenchmarks.cs`](../Benchmarks/ResponseBenchmarks.cs), [`Benchmarks/PageBenchmarks.cs`](../Benchmarks/PageBenchmarks.cs), [`Benchmarks/BatchBenchmarks.cs`](../Benchmarks/BatchBenchmarks.cs) and [`Benchmarks/TerminalBenchmarks.cs`](../Benchmarks/TerminalBenchmarks.cs) and [`Benchmarks/PreparationBenchmarks.cs`](../Benchmarks/PreparationBenchmarks.cs) for the server, and [`Benchmarks/ClientReadBenchmarks.cs`](../Benchmarks/ClientReadBenchmarks.cs) for the client. Rows come from an in-memory `[QueryablePoco]` source, so the measurement is shaping and serialization with no database and no I/O in it.
+The sources are [`Benchmarks/ResponseBenchmarks.cs`](../Benchmarks/ResponseBenchmarks.cs), [`Benchmarks/PageBenchmarks.cs`](../Benchmarks/PageBenchmarks.cs), [`Benchmarks/BatchBenchmarks.cs`](../Benchmarks/BatchBenchmarks.cs), [`Benchmarks/TerminalBenchmarks.cs`](../Benchmarks/TerminalBenchmarks.cs), [`Benchmarks/PreparationBenchmarks.cs`](../Benchmarks/PreparationBenchmarks.cs) and [`Benchmarks/DisclosureBenchmarks.cs`](../Benchmarks/DisclosureBenchmarks.cs) for the server, and [`Benchmarks/ClientReadBenchmarks.cs`](../Benchmarks/ClientReadBenchmarks.cs) for the client. Rows come from an in-memory `[QueryablePoco]` source, so the measurement is shaping and serialization with no database and no I/O in it. The one exception is the journaled arm of the disclosure benchmark, which is there to price a flush to disk.
 
 
 ## Writing a response
@@ -99,6 +99,32 @@ What the server spends on a request before the database is asked: validating it,
 The whole of a preparation is a few microseconds and a few kilobytes, which is what a source generator on the server side could not improve on: nothing here is compiled per request, and the projection is the client's, so there is no shape to generate ahead of time. Nor is anything reflected per request. Resolving a source's set, composing an operator, reading a temporal part or an optional's `Value`, applying a policy and keying the row writer are each a delegate or a lookup made once.
 
 The last row is the same request carried on into EF's pre-execution work — funcletizing, hashing, the compiled-query lookup, the command text — so the server's share can be read against the provider's. The table gives allocations only; the timings of these arms move by a third between runs, as the note below says, and the difference between two arms of two microseconds is inside that.
+
+
+## The disclosure audit
+
+What the [disclosure audit](disclosure-audit.md) adds to an answer. All three arms of `DisclosureBenchmarks` are the HTTP endpoint answering the same wide list, so they carry the same transport constant and can be read against each other as they stand, which the pairs above cannot.
+
+| Rows | Audit off | Recorded, the sink discarding it | Recorded through a journal |
+| --- | --- | --- | --- |
+| 1 | 57 KB / 815 µs | 64 KB / 898 µs | 71 KB / 1221 µs |
+| 100 | 139 KB / 825 µs | 210 KB / 1021 µs | 272 KB / 1583 µs |
+| 1000 | 902 KB / 1451 µs | 1373 KB / 1823 µs | 1960 KB / 4318 µs |
+
+**Off costs nothing that can be measured.** A host that never turned the audit on takes a null check where a capture would be made, and nothing else: no key is added to its projections and nothing is hashed. The endpoint arm of `ResponseBenchmarks`, run on the commit before the audit existed and again with the audit compiled in and off, allocated 124.92 KB against 124.58 KB at one row, 207.12 KB against 206.99 KB at a hundred, and 969.29 KB against 969.08 KB at a thousand, and the timings of the two runs differed by less than either run's own error. Both sides of that comparison were taken before the endpoint stopped initializing a context it did not use, which is why they read some 64 KB above every table here. The first column of this one reads a few kilobytes under the first table on the page because the hosts of this benchmark write no logs, where that one leaves the console logger on.
+
+**Recording is paid per row.** The middle arm has the audit on over a sink that discards what it is handed, so it is the capture alone: each row's bytes hashed and copied into the batch, its key read from a slot the answer does not carry and written into the record, the batch built. Taken as the growth from 1 row to 1000:
+
+| Per row | Audit off | Recorded | Through a journal |
+| --- | --- | --- | --- |
+| Allocated | 0.85 KB | 1.31 KB | 1.89 KB |
+| Time | 0.64 µs | 0.93 µs | 3.10 µs |
+
+So the capture adds about half a kilobyte and three tenths of a microsecond to a row a little over 200 bytes long, and about 7 KB to an answer whatever it holds. This row has no binary member, so it is serialized once either way: the bytes that are hashed are the bytes that are sent. A row with one is written a second time for the record, with the value named by its digest.
+
+**A durable accept is the disk's to price.** The journal adds a write and a flush before the answer is sent, and the flush is most of the third column at a small answer: a third of a millisecond on this machine in this run and two thirds in the one before it, with the rest in proportion to what is written. It is the one figure on this page that says more about the machine than about the code, and the least steady. The SQL outbox pays a committed insert in the same place, which nothing here measures: it is a round trip to a database, and the benchmark has none.
+
+Nor does the table show the database's share of recording. A key slot is a column added to the query, and a navigation a policy guards adds one correlated subquery for its key. The benchmark reads an in-memory source, where a key is a property read.
 
 
 ## Reading a response

@@ -60,7 +60,10 @@ public static partial class ScryServiceExtensions
                 context.Request.Headers,
                 context.Response.Headers,
                 options.Caller(context),
-                ending.Token),
+                ending.Token,
+                // What the client says it already holds. An answer that turns out to be that one is
+                // told to it as unchanged below, and is recorded as confirmed rather than as sent.
+                resumeFrom: context.Request.Headers[ScryLive.LastEventIdHeader].ToString()),
             ending);
 
         if (!await First(context, answers, drifted))

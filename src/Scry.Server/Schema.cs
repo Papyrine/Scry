@@ -577,6 +577,7 @@ sealed partial class Schema
 
         EnsureSubscriptionOptions(options);
         EnsureCommandOptions(options);
+        EnsureDisclosureOptions(options);
 
         var schema = new Schema();
         var found = new List<(Type Type, string Name, SourceKind Kind)>();
@@ -1166,6 +1167,37 @@ sealed partial class Schema
         }
 
         Positive(options.CommandRetention, nameof(options.CommandRetention), "It is how long a finished command's outcome is kept for a client asking again.");
+    }
+
+    /// <summary>
+    /// Refuses settings no disclosure audit could run with.
+    /// </summary>
+    static void EnsureDisclosureOptions(ScryOptions options)
+    {
+        if (options.Disclosure is not { } disclosure)
+        {
+            return;
+        }
+
+        if (disclosure.StreamChunkBytes < 0)
+        {
+            throw new($"ScryDisclosureOptions.{nameof(disclosure.StreamChunkBytes)} must be zero or greater. It is how much of a stream is held back while the record of it is accepted; zero holds back one row at a time.");
+        }
+
+        if (disclosure.RememberedQueries < 0)
+        {
+            throw new($"ScryDisclosureOptions.{nameof(disclosure.RememberedQueries)} must be zero or greater. It is how many queries asked by URL the server remembers the record of, to record a 304 from; zero remembers none, and every such query is answered in full.");
+        }
+
+        if (disclosure.AddressKey is {Length: < 16})
+        {
+            throw new($"ScryDisclosureOptions.{nameof(disclosure.AddressKey)} must be at least 16 bytes. It is the key every address is an HMAC under, and a short one can be searched for; 32 random bytes is the usual choice.");
+        }
+
+        if (string.IsNullOrWhiteSpace(disclosure.Node))
+        {
+            throw new($"ScryDisclosureOptions.{nameof(disclosure.Node)} must name this node. It is recorded on every event, and is what tells two servers' records apart.");
+        }
     }
 
     static void AtLeast(int value, int least, string option, string what)

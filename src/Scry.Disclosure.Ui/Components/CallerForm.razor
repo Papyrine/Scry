@@ -1,0 +1,22 @@
+@namespace Scry
+
+@* What a caller received, in a range of time. The answers it is given are listed by EventList. *@
+<form class="question" @onsubmit="Ask">
+    <label class="field grow">
+        <span>Caller</span>
+        <input data-testid="caller-name" @bind="caller" @bind:event="oninput" disabled="@nobody" placeholder="the name they are recorded under" autocomplete="off" spellcheck="false" />
+    </label>
+    <label class="check">
+        <input type="checkbox" data-testid="caller-nobody" @bind="nobody" />
+        <span>recorded against nobody</span>
+    </label>
+    <label class="field">
+        <span>From (UTC)</span>
+        <input class="@FromClass" data-testid="caller-from" @bind="from" @bind:event="oninput" placeholder="@Show.TimeHint" autocomplete="off" spellcheck="false" />
+    </label>
+    <label class="field">
+        <span>To (UTC)</span>
+        <input class="@ToClass" data-testid="caller-to" @bind="to" @bind:event="oninput" placeholder="@Show.TimeHint" autocomplete="off" spellcheck="false" />
+    </label>
+    <button type="submit" class="btn primary" data-testid="caller-ask" disabled="@Unaskable">Ask</button>
+</form>

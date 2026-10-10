@@ -1,0 +1,35 @@
+@namespace Scry
+
+@*
+    Whether a caller was ever sent a member of a source. The members offered are the ones some answer
+    read, which the record itself says; the answers that returned it are listed by EventList.
+*@
+<form class="question" @onsubmit="Ask">
+    <label class="field grow">
+        <span>Caller</span>
+        <input data-testid="member-caller" @bind="caller" @bind:event="oninput" disabled="@nobody" placeholder="the name they are recorded under" autocomplete="off" spellcheck="false" />
+    </label>
+    <label class="check">
+        <input type="checkbox" data-testid="member-nobody" @bind="nobody" />
+        <span>recorded against nobody</span>
+    </label>
+    <label class="field">
+        <span>Source</span>
+        <select data-testid="member-source" value="@source" @onchange="Chose">
+            @foreach (var option in Session.Sources)
+            {
+                <option value="@option.Name">@option.Name</option>
+            }
+        </select>
+    </label>
+    <label class="field">
+        <span>Member</span>
+        <select data-testid="member-name" @bind="member">
+            @foreach (var option in Members)
+            {
+                <option value="@option.Name">@Label(option)</option>
+            }
+        </select>
+    </label>
+    <button type="submit" class="btn primary" data-testid="member-ask" disabled="@Unaskable">Ask</button>
+</form>

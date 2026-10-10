@@ -1,0 +1,56 @@
+﻿dr.osei received 1: List of Patient (Released, 3)
+  Patient.Name: 1
+  Patient.Diagnosis: 0
+  Patient.WardId: 0
+  Ward.Name: 0
+  Note.Text: 0
+  Admission.PatientId: 0
+nurse.kim received 5: List of Admission (Released, 3), Scalar of Patient (Released, 1), List of Note (Released, 2), List of WardCensus (Released, 2), List of Patient (Released, 2)
+  Patient.Name: 1
+  Patient.Diagnosis: 1
+  Patient.WardId: 0
+  Ward.Name: 1
+  Note.Text: 1
+  Admission.PatientId: 0
+Patient[1]: nurse.kim #0 via '' GEE8NIDBBtb6HbAqvbpI5k2nPVdDz4agFBDlmFwjsag, dr.osei #0 via '' p5DkJXuKOpS_I0mOOefHHwdYBUaDWocUSLm7sTR-5Vs
+Patient[2]: nurse.kim #1 via '' j5-BKegzdpWE6X4K_knMTqTKRLkc5ow3UZLGdrUdfqU, dr.osei #1 via '' Ro1EWlm8lRJHRrEj5tJPa_Jzjk8w3VG8xor6Pu9ttyo
+Patient[3]: dr.osei #2 via '' nS0nIU78t2X1RgeV1_GLkTQ5lq9Wm2sNMW3c5c3LsA0
+Ward[1]: nurse.kim #0 via 'Ward' GEE8NIDBBtb6HbAqvbpI5k2nPVdDz4agFBDlmFwjsag, nurse.kim #1 via 'Ward' j5-BKegzdpWE6X4K_knMTqTKRLkc5ow3UZLGdrUdfqU
+Admission[1,2]: nurse.kim #0 via '' d_HrHk4yXU8fJ8a5vwBJdnZOjIYVRdRpHgwucaoLlhs
+WardCensus["North"]: nurse.kim #1 via '' MIPInU-rUhJuhzOH2FK1vz8mpVME6qOOSorrWFHr4sc
+List of Patient for dr.osei on ward-1, sensitive False, Released, 3
+  asked {"version":1,"root":"Patient","pipeline":[{"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},{"$type":"select","projection":{"members":["Name"]}}]}
+  read Patient.Name Returned False; Patient.Name Read False
+  0: {"name":"Ada"} <- Patient[1] via ''
+  1: {"name":"Brook"} <- Patient[2] via ''
+  2: {"name":"Chidi"} <- Patient[3] via ''
+List of Patient for nurse.kim on ward-1, sensitive True, Released, 2
+  asked {"version":1,"root":"Patient","pipeline":[{"$type":"where","predicate":{"$type":"binary","op":"Equal","left":{"$type":"member","path":["Ward","Name"]},"right":{"$type":"const","value":"North","tag":"String"}}},{"$type":"orderBy","key":{"$type":"member","path":"Name"},"descending":false},{"$type":"select","projection":{"members":["Name","Diagnosis",{"name":"Ward","value":{"$type":"node","node":{"$type":"member","path":["Ward","Name"]}}}]}}]}
+  read Patient.Diagnosis Returned True; Patient.Name Returned False; Patient.Name Read False; Patient.Ward Traversed False; Ward.Name Returned False; Ward.Name Read False
+  0: {"name":"Ada","diagnosis":"Fracture","ward":"North"} <- Patient[1] via '', Ward[1] via 'Ward'
+  1: {"name":"Brook","diagnosis":"Asthma","ward":"North"} <- Patient[2] via '', Ward[1] via 'Ward'
+List of WardCensus for nurse.kim on ward-1, sensitive False, Released, 2
+  asked {"version":1,"root":"WardCensus","pipeline":[{"$type":"orderBy","key":{"$type":"member","path":"Patients"},"descending":false},{"$type":"select","projection":{"members":["Patients"]}}]}
+  read WardCensus.Patients Returned False; WardCensus.Patients Read False
+  0: {"patients":1} <- WardCensus["South"] via ''
+  1: {"patients":2} <- WardCensus["North"] via ''
+List of Note for nurse.kim on ward-1, sensitive False, Released, 2
+  asked {"version":1,"root":"Note","pipeline":[{"$type":"orderBy","key":{"$type":"member","path":"Text"},"descending":false},{"$type":"select","projection":{"members":["Text"]}}]}
+  read Note.Text Returned False; Note.Text Read False
+  0: {"text":"Linen ordered"} <- 
+  1: {"text":"Night round done"} <- 
+Scalar of Patient for nurse.kim on ward-1, sensitive False, Released, 1
+  asked {"version":1,"root":"Patient","pipeline":[{"$type":"count"}]}
+  read 
+  0: 3 <- 
+List of Admission for nurse.kim on ward-1, sensitive False, Released, 3
+  asked {"version":1,"root":"Admission","pipeline":[{"$type":"orderBy","key":{"$type":"member","path":"Reason"},"descending":false},{"$type":"thenBy","key":{"$type":"member","path":"PatientId"},"descending":false},{"$type":"select","projection":{"members":["Reason"]}}]}
+  read Admission.PatientId Read False; Admission.Reason Returned False; Admission.Reason Read False
+  0: {"reason":"Cast removed"} <- Admission[1,2] via ''
+  1: {"reason":"Fall"} <- Admission[1,1] via ''
+  2: {"reason":"Fall"} <- Admission[3,1] via ''
+Admission keyed True: PatientId False, Reason False
+Note keyed False: Text False
+Patient keyed True: Diagnosis True, Name False, Ward False
+Ward keyed True: Name False
+WardCensus keyed True: Patients False

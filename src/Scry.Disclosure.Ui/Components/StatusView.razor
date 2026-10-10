@@ -1,0 +1,113 @@
+@namespace Scry
+
+@*
+    How the record stands: what it has yet to move on, whether what it keeps is still what was
+    written, what has been erased from it, and who has been reading it.
+*@
+<section class="view" data-testid="status-view" data-ready="@Ready">
+    @if (failure is not null)
+    {
+        <p class="error" data-testid="status-error">@failure</p>
+    }
+    else if (status is not null)
+    {
+        @if (status.Problem is not null)
+        {
+            <p class="error" data-testid="status-problem">@status.Problem</p>
+        }
+
+        @if (status.Known)
+        {
+            <dl class="facts">
+                <div><dt>Answers recorded</dt><dd data-testid="status-events">@Events</dd></div>
+                <div><dt>Waiting to be moved on</dt><dd data-testid="status-pending">@Pending</dd></div>
+                <div><dt>Oldest of those (UTC)</dt><dd class="mono">@Oldest</dd></div>
+                @if (status.ChainHead is not null)
+                {
+                    <div><dt>Chain head</dt><dd class="mono" data-testid="status-head" title="@status.ChainHead">@Head</dd></div>
+                }
+            </dl>
+        }
+        else
+        {
+            <p class="muted" data-testid="status-unknown">This store does not say how it stands.</p>
+        }
+
+        @if (CanVerify)
+        {
+            <header class="results-head">
+                <h2>Its own evidence</h2>
+                <button type="button" class="btn" data-testid="verify" disabled="@verifying" @onclick="Verify">Check the chain</button>
+            </header>
+            <p class="@CheckClass" data-testid="status-check">@Checked</p>
+            @if (verifyFailure is not null)
+            {
+                <p class="error" data-testid="verify-error">@verifyFailure</p>
+            }
+        }
+
+        <h2>Erased</h2>
+        @if (NoErasures)
+        {
+            <p class="muted" data-testid="erasures-none">Nothing has been erased from the record.</p>
+        }
+        else
+        {
+            <table class="grid" data-testid="erasures">
+                <thead>
+                    <tr>
+                        <th>When (UTC)</th>
+                        <th>Row</th>
+                        <th>By</th>
+                        <th>Removed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var erasure in status.Erasures)
+                    {
+                        <tr>
+                            <td class="mono nowrap">@When(erasure)</td>
+                            <td class="mono">@Row(erasure)</td>
+                            <td>@By(erasure)</td>
+                            <td>@Removed(erasure)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        <h2>Who has been reading it</h2>
+        @if (NoReviews)
+        {
+            <p class="muted" data-testid="reviews-none">Nobody has asked the record anything yet.</p>
+        }
+        else
+        {
+            <table class="grid" data-testid="reviews">
+                <thead>
+                    <tr>
+                        <th>When (UTC)</th>
+                        <th>Who</th>
+                        <th>Asked</th>
+                        <th>Answered with</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var review in status.Reviews)
+                    {
+                        <tr>
+                            <td class="mono nowrap">@When(review)</td>
+                            <td>@Who(review)</td>
+                            <td>@Asked(review)</td>
+                            <td>@Answered(review)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+    else
+    {
+        <p class="muted loading-hint">Asking the record how it stands…</p>
+    }
+</section>

@@ -8,6 +8,12 @@
       "port": 5249
     },
     {
+      "name": "disclosure-sample",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "samples/Sample.DisclosureServer", "--urls", "http://localhost:5251"],
+      "port": 5251
+    },
+    {
       "name": "blazorql-sample",
       "runtimeExecutable": "dotnet",
       "runtimeArgs": ["run", "--project", "D:/Code/BlazorQL/samples/BlazorQL.Sample", "--urls", "http://localhost:5310"],

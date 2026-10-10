@@ -1,0 +1,89 @@
+@namespace Scry
+
+@*
+    The fixed rail down the left edge: one link for each question the record answers, and one for how
+    the record itself stands. Every icon is an inline SVG path rather than an emoji or an icon font,
+    for the reason the query explorer's rail gives: a path paints the same on every machine, which is
+    what lets a screenshot baseline hold on one other than the machine that seeded it.
+*@
+<nav class="rail" aria-label="Questions">
+    <div class="rail-group">
+        <a class="@LinkClass(DisclosureLink.Row)"
+           href="@Href(DisclosureLink.Row)"
+           data-testid="rail-row"
+           title="Who received a row"
+           aria-label="Who received a row"
+           aria-current="@Current(DisclosureLink.Row)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="M3 9.5h18M3 14.5h18" />
+                <path d="M3 9.5h18v5H3z" fill="currentColor" fill-opacity="0.18" stroke="none" />
+            </svg>
+        </a>
+        <a class="@LinkClass(DisclosureLink.Caller)"
+           href="@Href(DisclosureLink.Caller)"
+           data-testid="rail-caller"
+           title="What a caller received"
+           aria-label="What a caller received"
+           aria-current="@Current(DisclosureLink.Caller)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <circle cx="12" cy="8" r="3.5" />
+                <path d="M5 20a7 7 0 0 1 14 0" />
+            </svg>
+        </a>
+        <a class="@LinkClass(DisclosureLink.Member)"
+           href="@Href(DisclosureLink.Member)"
+           data-testid="rail-member"
+           title="Whether a caller received a member"
+           aria-label="Whether a caller received a member"
+           aria-current="@Current(DisclosureLink.Member)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="M9.5 4v16M14.5 4v16" />
+                <path d="M9.5 4h5v16h-5z" fill="currentColor" fill-opacity="0.18" stroke="none" />
+            </svg>
+        </a>
+    </div>
+    <div class="rail-group">
+        <a class="@LinkClass(DisclosureLink.Status)"
+           href="@Href(DisclosureLink.Status)"
+           data-testid="rail-status"
+           title="How the record stands"
+           aria-label="How the record stands"
+           aria-current="@Current(DisclosureLink.Status)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6z" />
+                <path d="M9 12l2.2 2.2L15 10" />
+            </svg>
+        </a>
+        <button type="button"
+                class="rail-button"
+                data-testid="theme-toggle"
+                title="Cycle theme: System → Light → Dark"
+                aria-label="@ThemeLabel"
+                @onclick="OnThemeToggle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                @if (Light)
+                {
+                    <circle cx="12" cy="12" r="5" />
+                    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                }
+                else if (Dark)
+                {
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                }
+                else
+                {
+                    @* Half the dial filled: the theme is half this page's choice and half the OS's. *@
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none" />
+                }
+            </svg>
+        </button>
+    </div>
+</nav>

@@ -648,6 +648,29 @@ An agent reached through [MCP](mcp.md) is one more hostile client, and it is hel
 Put authorization on the endpoint, and prefer a bearer token to a cookie, as MCP's own authorization does. An agent asks what its user asks, and a row policy that scopes by the authenticated principal scopes the agent too.
 
 
+## The disclosure audit
+
+The [disclosure audit](disclosure-audit.md) records what was sent, where the audit hook records what was asked. It is off until a host gives it somewhere to record. On, the layers above still decide what a caller may be sent; the audit says afterwards what each caller was.
+
+**The record is the most sensitive data the host holds.** It is every row every caller was ever sent, by caller, in one place: a copy of whatever the allow-list exposes, kept past the life of the rows it copies, and indexed by exactly the questions an attacker would ask of it. Everything that follows is about not making that worse.
+
+- **Nothing is sent that is not recorded.** An answer is released to a transport only after the sink has accepted the record of it, and an answer the sink refuses is not given. A record can exist for an answer that never arrived, and is marked where the server lived to mark it. An answer cannot exist without its record.
+- **Recorded from what was sent, not from what was asked.** The capture sits below the row policies and the allow-list, where rows are written out. A row a policy hid was never written, so it is never recorded, and a member the allow-list hides is in no unit. The one thing recorded that the client was not sent is each row's key, which is what makes "who received this row" answerable. It is read from the model whether or not the client may name it, and is never sent.
+- **Under a caller.** An answer nobody can be named as having received is refused. The name is `ScryOptions.Caller`'s, read from the authenticated principal: a caller that names itself would be recorded as anyone it liked.
+- **Never reused unasked.** A recorded response is `Cache-Control: no-store`, unless the caller can ask whether it is still current. Then it is `private, no-cache`: kept by the caller's own cache, and reused only after asking. Being told a copy still stands is recorded before it is said, as a confirmation with nothing sent.
+- **Reading the record is recorded.** Every question the [disclosure explorer](disclosure-audit.md#the-disclosure-explorer) is asked is written to the record before it is answered, and a reviewer who opens an answer is from then on among those who received its rows.
+- **The explorer is shut until opened.** Development-only by default and a `404` where its guard says no, with exporting behind a guard of its own and erasing off everywhere until a host turns it on. Its page may call nothing but the origin it came from, may be framed by nobody, and asks its questions in request bodies, so a row's key and a caller's name reach no access log.
+
+What the audit leaves with the host:
+
+- **Protecting the store.** The tables, the content table or blob store, and a journal's directory, where content sits in the clear until it is shipped, need at least the protection of the data they describe. Where another process moves batches on, the login that serves queries needs to insert into the outbox and nothing more.
+- **Who may read it.** The explorer has guards and no notion of a role. `RequireAuthorization` on what `MapScryDisclosureExplorer` returns, and a reviewer read from the authenticated principal, are the host's to supply.
+- **What is left out.** `Exclude<T>` leaves a source, or named members of one, out of the record, and an answer that reads nothing else is then sent unrecorded and may be cached. It is for rows and values nobody will be asked about. An answer that reads anything else is recorded whole, so the choice cannot hide what was sent of anything that was not left out. What it does let through unrecorded is the excluded values themselves and how many rows held them, and it is the host's to make source by source and member by member.
+- **Retention and erasure.** The record is kept until it is erased. Erasing a row removes what was sent of it and keeps that it was sent, to whom and when: row keys and caller names stay. An `AddressKey` keeps an address left behind from being confirmed by guessing.
+- **Evidence that the record is unchanged.** Append-only ledger tables where the server has them, and a hash chain where it does not. A chain shows a row changed behind the record's back. It does not show its own end cut off unless its head is kept somewhere else.
+- **Anything that caches above Scry.** A host that widens `Cache-Control`, or puts an output cache in front of the endpoint, serves answers that nothing recorded.
+
+
 ## What Scry does not do
 
 **Authentication and authorization.** Scry has no notion of a user. Put it on the endpoint:
@@ -667,7 +690,7 @@ app.MapScry("/api/query")
 
 **Trusting a request header.** A row policy can read the call's headers off `ScryPolicyContext.RequestHeaders`, and the client can attach them [per query](querying.md#headers). Every one of them is chosen by the client and therefore attacker-controlled — a policy that scopes rows by `X-Tenant` scopes nothing, because an attacker sends a different `X-Tenant`. They are hint data: correlation ids, trace ids, a client build. Identity and tenancy come from the authenticated principal, resolved through `context.Services`.
 
-**Auditing, by default.** Nothing is recorded until something subscribes. The hooks exist — every query is reported to any registered [`IScryAuditor`](observability.md#the-audit-hook) with its full request AST and outcome, alongside [traces and metrics](observability.md) — but turning them on, and alerting on rejections, is deployment work.
+**Auditing, by default.** Nothing is recorded until something subscribes, and what was sent is not recorded at all until a host turns the [disclosure audit](#the-disclosure-audit) on. The hooks exist — every query is reported to any registered [`IScryAuditor`](observability.md#the-audit-hook) with its full request AST and outcome, alongside [traces and metrics](observability.md) — but turning them on, and alerting on rejections, is deployment work.
 
 **CORS, CSRF, TLS.** Ordinary ASP.NET Core concerns, mostly unchanged by Scry. The one thing the endpoints do themselves is refuse a body that is not `application/json` (a `415`): an HTML form can navigate a browser to a `POST` endpoint with a `text/plain` field shaped as JSON, but it cannot set that header, so requiring it keeps a cross-site page from executing a query — or fetching an [attachment](attachments.md#security) as a document — as whoever the browser sent. An anti-forgery token, where the host wants one, goes on top.
 
@@ -698,3 +721,8 @@ app.MapScry("/api/query")
 - [ ] Every targeted command has a policy that decides its rows for the caller, not merely one that returns true.
 - [ ] A SignalR hub that carries commands and authenticates by cookie keeps that cookie at `SameSite=Lax` or `Strict`, or checks the handshake's `Origin`.
 - [ ] Where a row policy answers by something the query does not read — a claim, the clock, a list loaded in C# — `SubscriptionPollInterval` is as short as a revoked permission may be allowed to last.
+- [ ] Where the [disclosure audit](disclosure-audit.md) is on, its store — the tables, the content, and any journal directory — is protected at least as well as the data it records, and is backed up and kept for as long as was decided, not by default.
+- [ ] The [disclosure explorer](disclosure-audit.md#the-disclosure-explorer) is either unmapped or behind `RequireAuthorization` and a real guard, its reviewer is read from the authenticated principal, and exporting and erasing are open only to those who may do each.
+- [ ] Nothing above the endpoint caches a recorded response or widens its `Cache-Control`: an answer served from a cache is one the record never heard of.
+- [ ] Every source with no key was given one with `Key<T>` on purpose, or acknowledged with `Unkeyed<T>` in the knowledge that who received a given row of it then cannot be asked.
+- [ ] A row key or a caller name that is itself personal data — an email address — is avoided or pseudonymised before it reaches the record, which keeps both after an erasure.

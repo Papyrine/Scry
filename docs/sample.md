@@ -17,6 +17,7 @@
 | `Sample.FSharp.Tests` | The F# queries run through the server, hosted in-process, with the requests and rows snapshotted. |
 | `Sample.RedisServer`, `Sample.MessagePipeServer` | A minimal server each, for running twice: a [backplane](#live-queries-across-more-than-one-process) carrying changes from one node to the other. |
 | `Sample.NServiceBusServer`, `Sample.NServiceBusWorker` | The same over NServiceBus, plus a worker whose handler writes from another process. |
+| `Sample.DisclosureServer` | A host with the [disclosure audit](#a-record-of-what-was-sent) on: a record of everything it sends, kept in SQL Server, and the explorer over that record. |
 | `Sample.ModelPackageClient` | The console client's first query, generated from `Sample.Model` packed as a NuGet package. Outside the solution: see [The model as a package](#the-model-as-a-package). |
 
 The three desktop and console clients are there to show that the client half is not tied to a browser.
@@ -826,6 +827,96 @@ data: {"version":1,"id":"6e0f…","status":"Pending","stamp":"…"}
 event: result
 data: {"version":1,"id":"6e0f…","status":"Completed","stamp":"…"}
 ```
+
+
+## A record of what was sent
+
+`Sample.DisclosureServer` is a host of its own with the [disclosure audit](disclosure-audit.md) on. Every answer is a committed row in the application's own database before it is sent, and an answer the database does not take is not given:
+
+<!-- snippet: sampleDisclosureAudit -->
+<a id='snippet-sampleDisclosureAudit'></a>
+```cs
+services
+    .AddScry<SampleContext>(_ =>
+    {
+        // What the model needs before any server will start: see Sample.WebServer.
+        _.AddPocoSource(_ => Holiday.Seed());
+        _.AddAttachmentPolicy<Department, SignedIn<Department>>();
+        _.AddAttachmentPolicy<Employee, SignedIn<Employee>>();
+
+        // Every answer is a committed row in this database before it is sent, and an answer
+        // the database does not take is not given. The application's own database, so that
+        // recording adds nothing that can be down to the path of an answer.
+        _.UseSqlServerDisclosureAudit(
+            database.ConnectionString,
+            store =>
+            {
+                // Each batch of the record linked to the one before, so that a change to what
+                // was recorded shows. A server with ledger tables has them as well, and they
+                // are the stronger of the two; this is what the explorer's check reads.
+                store.HashChain = true;
+                store.Clock = clock;
+            },
+            audit =>
+            {
+                audit.Node = "sample";
+                audit.Clock = clock;
+
+                // A row is recorded by its key, and a source with none has to be given one or
+                // owned up to: a view by what its rows are grouped on.
+                audit.Key<EmployeeSummary>(_ => _.Department);
+
+                // Left out of the record: a calendar is nobody's to ask after, and neither is
+                // the logo or the handbook a department publishes. An answer of nothing but
+                // these is sent as it would be with the audit off. One that reads anything
+                // else is recorded whole, these included.
+                audit.Exclude<Holiday>();
+                audit.Exclude<Department>(_ => _.Logo, _ => _.Handbook);
+            });
+
+        // A query asked by URL may be kept by the caller's own cache, which has to ask before
+        // using its copy again. Being told the copy still stands is a 304, and is recorded
+        // before it is said. Nothing writes to this sample's rows once it has started, so an
+        // answer stands for as long as the server does. A real host reads a change marker
+        // here, as Sample.WebServer does with Delta — and then keeps the record in a database
+        // of its own: Delta reads the database's log position, which every answer recorded
+        // beside the rows would move, so no recorded answer would ever be found unchanged.
+        _.QueryFreshness = (_, _) => new(started);
+
+        // Whose cache an answer belongs in: the caller's, since what is sent depends on who asks.
+        _.CacheScope = _ => _.User.Identity?.Name;
+    });
+```
+<sup><a href='/samples/Sample.DisclosureServer/Program.cs#L52-L103' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleDisclosureAudit' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+```bash
+dotnet run --project samples/Sample.DisclosureServer
+```
+
+Everything the audit records, it records under a name, so the host has a stand-in for signing in: be `alice`, ask a few queries in the query explorer at `/scry`, then be `auditor` and open `/scry-disclosures` to see who was sent what. The stand-in takes whoever a link says the visitor is. It is there so the sample can show the audit without also being a sample of authentication, and is not a pattern to copy.
+
+<!-- snippet: mapDisclosureExplorer -->
+<a id='snippet-mapDisclosureExplorer'></a>
+```cs
+// The record, read back. Shut to everybody but the one person whose job it is — a real host
+// puts its own authorization here, and RequireAuthorization on what this returns.
+app.MapScryDisclosureExplorer(_ =>
+{
+    _.EnableGuard = DemoSignIn.IsReviewer;
+    _.EnableExport = DemoSignIn.IsReviewer;
+
+    // Off unless a host turns it on, and it cannot be taken back: on here so there is
+    // something to try it against.
+    _.EnableErase = DemoSignIn.IsReviewer;
+});
+```
+<sup><a href='/samples/Sample.DisclosureServer/Program.cs#L118-L130' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapDisclosureExplorer' title='Start of snippet'>anchor</a></sup>
+<!-- endSnippet -->
+
+It is apart from `Sample.WebServer` so that the record holds nothing but what was asked of it here, and so that the larger sample runs with nothing recorded.
+
+Its front page has two questions to ask by URL. A count of the orders is recorded as sent, and reloading it is answered `304` and recorded as a confirmation. The holidays are a source the sample leaves out of the record, with a department's logo and handbook, so asking for them records nothing and needs nobody signed in.
 
 
 ## Integration tests

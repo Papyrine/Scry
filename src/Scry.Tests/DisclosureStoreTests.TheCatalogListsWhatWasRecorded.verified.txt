@@ -1,0 +1,22 @@
+﻿{
+  Sources: [
+    {
+      Name: Employee,
+      Keyed: true,
+      Members: [
+        {
+          Name: Active,
+          Sensitive: false
+        },
+        {
+          Name: Id,
+          Sensitive: false
+        },
+        {
+          Name: Name,
+          Sensitive: false
+        }
+      ]
+    }
+  ]
+}
