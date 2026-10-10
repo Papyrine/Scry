@@ -37,6 +37,9 @@ public partial class DisclosureTests
     const string holidays =
         """{"version":1,"root":"Holiday","pipeline":[{"$type":"select","projection":{"members":["Name","Date"]}}]}""";
 
+    const string holidayNames =
+        """{"version":1,"root":"Holiday","pipeline":[{"$type":"select","projection":{"members":["Name"]}}]}""";
+
     // One database and two servers over it for the whole corpus, one with the audit on and one
     // without: every entry of it only reads.
     static SqlDatabase<SampleContext> shared = null!;

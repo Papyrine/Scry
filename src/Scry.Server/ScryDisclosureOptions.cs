@@ -52,6 +52,14 @@ public sealed class ScryDisclosureOptions
     /// </summary>
     public int StreamChunkBytes { get; set; } = 16 * 1024;
 
+    /// <summary>
+    /// How many queries asked by URL the server remembers the record of, which is what a <c>304</c>
+    /// for one is recorded from. Default 4096. Past it all are forgotten, and a forgotten query is
+    /// answered in full the next time it is asked about. Zero remembers none, so no caller is told
+    /// that the copy it holds still stands.
+    /// </summary>
+    public int RememberedQueries { get; set; } = 4096;
+
     /// <summary>What this node is recorded as. The machine's name by default.</summary>
     public string Node { get; set; } = Environment.MachineName;
 

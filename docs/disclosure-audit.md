@@ -149,13 +149,21 @@ public sealed class ScryDisclosureOptions
     /// </summary>
     public int StreamChunkBytes { get; set; } = 16 * 1024;
 
+    /// <summary>
+    /// How many queries asked by URL the server remembers the record of, which is what a <c>304</c>
+    /// for one is recorded from. Default 4096. Past it all are forgotten, and a forgotten query is
+    /// answered in full the next time it is asked about. Zero remembers none, so no caller is told
+    /// that the copy it holds still stands.
+    /// </summary>
+    public int RememberedQueries { get; set; } = 4096;
+
     /// <summary>What this node is recorded as. The machine's name by default.</summary>
     public string Node { get; set; } = Environment.MachineName;
 
     /// <summary>The clock events are timed by. The system's by default.</summary>
     public TimeProvider Clock { get; set; } = TimeProvider.System;
 ```
-<sup><a href='/src/Scry.Server/ScryDisclosureOptions.cs#L8-L60' title='Snippet source file'>snippet source</a> | <a href='#snippet-disclosureOptions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server/ScryDisclosureOptions.cs#L8-L68' title='Snippet source file'>snippet source</a> | <a href='#snippet-disclosureOptions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Off, the audit costs one null check where a capture would be made: no hidden columns are read and nothing is hashed.
@@ -651,7 +659,7 @@ A caller that was sent an answer has been recorded as receiving it, and reading 
 - **A response that can be asked about may be kept, by the caller alone.** A query asked by URL on a server with `QueryFreshness` set is sent `private, no-cache` with an `ETag`, as it is without the audit. `no-cache` stores and forbids reuse without asking, so every reuse is a request.
 - **The answer to that request is recorded before it is given.** A `304` writes an event with the earlier answer's kind, source, request and shape, marked `Confirmed`, with no units: this caller was told at this time that the answer to this request still stands. A sink that will not take it means the caller is not told, and gets a `500`.
 
-A `304` runs nothing, so what it is recorded from is remembered: the server keeps, for each query asked by URL, what its answer was recorded as. That depends on the query and the server's settings and on nothing else, so it is the same for every caller. A server that remembers nothing of a query, after a restart or on a node that never answered it, does not answer `304`. It answers in full, which is recorded the ordinary way and remembered from then on. At most 4096 queries are remembered, and past that all are forgotten: which queries are asked is the caller's to choose.
+A `304` runs nothing, so what it is recorded from is remembered: the server keeps, for each query asked by URL, what its answer was recorded as. That depends on the query and the server's settings and on nothing else, so it is the same for every caller. A server that remembers nothing of a query, after a restart or on a node that never answered it, does not answer `304`. It answers in full, which is recorded the ordinary way and remembered from then on. Which queries are asked is the caller's to choose, so what is remembered has a ceiling: `RememberedQueries`, 4096 by default. At it all are forgotten, and each is answered in full the next time it is asked about. Zero remembers none, and no `304` is given for a recorded answer or for one left out of the record.
 
 A confirmation is recorded against the caller and the request, and not against the rows. It has no units, since nothing was sent and nothing was run to say which rows the copy holds, so it is listed under what a caller received in a range of time and is not listed under who received a row, or under whether a caller was sent a member. The answer it confirms is: the same caller's earlier event for the same request, which names the rows and holds what was sent. Naming the rows on the confirmation as well would mean remembering which answer each caller holds, where the server remembers only what each query is recorded as.
 

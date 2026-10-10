@@ -88,6 +88,57 @@ public partial class DisclosureTests
         }
     }
 
+    // What is remembered has a ceiling the host sets. At it everything is forgotten, so a query
+    // asked about after that is answered in full once more, and remembered again.
+    [Test]
+    public async Task OnlySoManyQueriesAreRemembered()
+    {
+        await using var server = await Server.Start(
+            database: null,
+            extra: _ =>
+            {
+                Conditional(_);
+                _.Disclosure!.RememberedQueries = 1;
+            });
+
+        using var first = await server.Get(holidays);
+        var tag = first.Headers.ETag!.ToString();
+        using var other = await server.Get(holidayNames);
+        using var forgotten = await server.Get(holidays, tag);
+        using var again = await server.Get(holidays, tag);
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(other.StatusCode).IsEqualTo(HttpStatusCode.OK);
+            await Assert.That(forgotten.StatusCode).IsEqualTo(HttpStatusCode.OK);
+            await Assert.That(again.StatusCode).IsEqualTo(HttpStatusCode.NotModified);
+            await Assert.That((await server.Store.Status()).Events).IsEqualTo(4);
+        }
+    }
+
+    // A server told to remember nothing never says a copy still stands: every asking is answered in
+    // full, and recorded as sent.
+    [Test]
+    public async Task AServerToldToRememberNothingAnswersInFull()
+    {
+        await using var server = await Server.Start(
+            database: null,
+            extra: _ =>
+            {
+                Conditional(_);
+                _.Disclosure!.RememberedQueries = 0;
+            });
+
+        using var first = await server.Get(holidays);
+        using var second = await server.Get(holidays, first.Headers.ETag!.ToString());
+
+        using (Assert.Multiple())
+        {
+            await Assert.That(second.StatusCode).IsEqualTo(HttpStatusCode.OK);
+            await Assert.That((await server.Store.Status()).Events).IsEqualTo(2);
+        }
+    }
+
     // A source left out of the record is confirmed as it was sent: with nothing recorded, and with
     // nobody needing a name.
     [Test]

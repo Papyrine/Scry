@@ -5,11 +5,6 @@
 /// </summary>
 sealed class DisclosureRuntime(ScryDisclosureOptions settings, ScryOptions options, string stamp)
 {
-    // How many queries are remembered before all of them are forgotten. Which queries are asked is
-    // the caller's to choose, so what is kept about them has a ceiling, and a forgotten query costs
-    // one full answer to learn again.
-    const int Remembered = 4096;
-
     Lock gate = new();
     IScryDisclosureSink? sink;
 
@@ -20,7 +15,16 @@ sealed class DisclosureRuntime(ScryDisclosureOptions settings, ScryOptions optio
     /// <summary>Remembers what an answer to a query asked by URL was recorded as.</summary>
     public void Remember(string query, DisclosureMemo memo)
     {
-        if (memos.Count >= Remembered)
+        var remembered = settings.RememberedQueries;
+        if (remembered == 0)
+        {
+            return;
+        }
+
+        // Which queries are asked is the caller's to choose, so what is kept about them has a
+        // ceiling: at it all of them are forgotten, and a forgotten query costs one full answer to
+        // learn again.
+        if (memos.Count >= remembered)
         {
             memos.Clear();
         }
