@@ -24,32 +24,17 @@ public class ConditionalQueryTests
     {
         var query = new ScryQuery(server.CreateScryClient());
 
-        await Active(query, "Engineering").ToListAsync();
+        var etag = await Warm(query, "Engineering");
 
-        var exception = await Undisturbed(
-            async () =>
-            {
-                var etag = await Warm(query, "Engineering");
-
-                // The same query, re-asked with what the server said last time. Headers are
-                // transport-only, so the request bytes — and therefore the fingerprint the ETag was
-                // built from — are unchanged.
-                try
-                {
-                    await Active(query, "Engineering")
-                        .WithHeader("If-None-Match", etag)
-                        .ToListAsync();
-                    return null;
-                }
-                catch (ScryRequestException refused)
-                {
-                    return refused;
-                }
-            });
+        // The same query, re-asked with what the server said last time. Headers are transport-only, so
+        // the request bytes — and therefore the fingerprint the ETag was built from — are unchanged.
+        var exception = await Assert.ThrowsExactlyAsync<ScryRequestException>(
+            () => Active(query, "Engineering")
+                .WithHeader("If-None-Match", etag)
+                .ToListAsync());
 
         // The raw client surfaces the 304 as a failure: on its own, a status with no body is not a
         // result it can materialize. QueryCacheHandler is what turns it into one — see below.
-        await Assert.That(exception).IsNotNull();
         await Assert.That(exception!.StatusCode).IsEqualTo(HttpStatusCode.NotModified);
     }
 
@@ -101,10 +86,6 @@ public class ConditionalQueryTests
 
         await using (var data = server.NewContext())
         {
-            // Read before the write, not after it: the log position usually trails a commit, but not
-            // always, and a wait that began from a value already moved would never end.
-            var unwritten = await data.GetLastTimeStamp();
-
             data.Employees.Add(
                 new()
                 {
@@ -117,8 +98,6 @@ public class ConditionalQueryTests
                     DepartmentId = data.Departments.Single(_ => _.Name == "Sales").Id
                 });
             await data.SaveChangesAsync();
-
-            await SettleAfterWrite(data, unwritten);
         }
 
         string? after = null;
@@ -189,26 +168,19 @@ public class ConditionalQueryTests
         // Both shapes run before either tag is taken: the first run of the second would otherwise move
         // the timestamp under the first's tag, and the comparison below would fail for that alone.
         await Active(query, "Sales").ToListAsync();
-        await Active(query, "Engineering").ToListAsync();
-
-        var (engineering, sales, answered) = await Undisturbed(
-            async () =>
-            {
-                var engineering = await Warm(query, "Engineering");
-                var sales = await Warm(query, "Sales");
-
-                // One query's ETag is never accepted for another: the fingerprint in it is of the
-                // request bytes, and these two ask different things.
-                string? answered = null;
-                await Active(query, "Engineering")
-                    .WithHeader("If-None-Match", sales)
-                    .OnResponseHeaders(_ => answered = _.ETag?.ToString())
-                    .ToListAsync();
-
-                return (engineering, sales, answered);
-            });
+        var engineering = await Warm(query, "Engineering");
+        var sales = await Warm(query, "Sales");
 
         await Assert.That(sales).IsNotEqualTo(engineering);
+
+        // One query's ETag is never accepted for another: the fingerprint in it is of the request
+        // bytes, and these two ask different things.
+        string? answered = null;
+        await Active(query, "Engineering")
+            .WithHeader("If-None-Match", sales)
+            .OnResponseHeaders(_ => answered = _.ETag?.ToString())
+            .ToListAsync();
+
         await Assert.That(answered).IsEqualTo(engineering);
     }
 
@@ -237,45 +209,34 @@ public class ConditionalQueryTests
     [Test]
     public async Task ConditionalExchange()
     {
+        var cache = new QueryCache();
+
+        var services = new ServiceCollection();
+        services.AddSingleton(cache);
+        services.AddTransient<QueryCacheHandler>();
+        var httpBuilder = services
+            .AddHttpClient(
+                "scry",
+                _ => _.BaseAddress = new("http://localhost/"))
+            .AddHttpMessageHandler<QueryCacheHandler>();
+
+        // Below the cache handler, so the recording is of what actually crossed the wire rather than
+        // of what the handler handed back.
+        var recording = httpBuilder.AddRecording();
+        httpBuilder.ConfigurePrimaryHttpMessageHandler(server.CreateHandler);
+
+        await using var provider = services.BuildServiceProvider();
+        var http = provider.GetRequiredService<IHttpClientFactory>().CreateClient("scry");
+        var query = new ScryQuery(ScryClient.ForHttp(http, "/api/query"));
+
         // Warmed through a client of its own, so the recorded pair starts where a real one does:
         // an empty cache. The warm-up itself matters because the first execution of a query shape can
         // move the database's timestamp by itself (statistics), which would make the pair below a miss
         // for a reason that has nothing to do with the exchange being shown.
         await Active(new(server.CreateScryClient()), "Engineering").ToListAsync();
 
-        // And then waited on, and the pair re-run if the timestamp moved under it anyway, because a
-        // warm-up only covers what this query does to the timestamp. Another test in this fixture
-        // wrote to the same database, and the log position that Delta reads keeps moving for a while
-        // after a write commits — long enough that the pair below can straddle it and be answered in
-        // full for a reason the exchange is not about. Each attempt gets a cache and a recording of
-        // its own, so what is asserted and snapshotted is one clean pair.
-        var (first, second, cache, sends) = await Undisturbed(
-            async () =>
-            {
-                var cache = new QueryCache();
-
-                var services = new ServiceCollection();
-                services.AddSingleton(cache);
-                services.AddTransient<QueryCacheHandler>();
-                var httpBuilder = services
-                    .AddHttpClient(
-                        "scry",
-                        _ => _.BaseAddress = new("http://localhost/"))
-                    .AddHttpMessageHandler<QueryCacheHandler>();
-
-                // Below the cache handler, so the recording is of what actually crossed the wire
-                // rather than of what the handler handed back.
-                var recording = httpBuilder.AddRecording();
-                httpBuilder.ConfigurePrimaryHttpMessageHandler(server.CreateHandler);
-
-                await using var provider = services.BuildServiceProvider();
-                var http = provider.GetRequiredService<IHttpClientFactory>().CreateClient("scry");
-                var query = new ScryQuery(ScryClient.ForHttp(http, "/api/query"));
-
-                var first = await Active(query, "Engineering").ToListAsync();
-                var second = await Active(query, "Engineering").ToListAsync();
-                return (first, second, cache, recording.Sends);
-            });
+        var first = await Active(query, "Engineering").ToListAsync();
+        var second = await Active(query, "Engineering").ToListAsync();
 
         using (Assert.Multiple())
         {
@@ -289,110 +250,24 @@ public class ConditionalQueryTests
         // The ETag and the If-None-Match it comes back as are scrubbed: the value carries the
         // database's log position, which moves with every write the machine has ever done. That they
         // match is what the 304 below proves.
-        await Verify(sends)
+        await Verify(recording.Sends)
             .ScrubMember("ETag")
             .ScrubMember("If-None-Match");
     }
 
     /// <summary>
-    /// Waits for the database's timestamp to catch up with a write that has already committed.
+    /// Runs a query once, then again to capture the ETag the server minted for it. The first execution
+    /// of a shape can move the timestamp by itself (statistics), after the server has already read it,
+    /// so the ETag on that first response would be stale before it was ever used.
     /// </summary>
     /// <remarks>
-    /// Not a test convenience: on SQL Server the log position Delta reads does not move the instant a
-    /// transaction commits — on LocalDB it trails by a couple of hundred milliseconds — so for that
-    /// long the previous ETag is still the current one and a repeated query is still answered 304.
-    /// That window is a property of the approach, not of this test; /docs/caching.md says what it means
-    /// for a read-after-write.
+    /// Nothing is waited on in between. <see cref="ScryTestServer"/> makes this fixture's database
+    /// behave as a production one does — the timestamp moves with the commit that moved it, and for
+    /// nothing else — so once the first run has returned, whatever it wrote has already been counted.
     /// </remarks>
-    static async Task SettleAfterWrite(SampleContext data, string unwritten)
-    {
-        var deadline = Stopwatch.StartNew();
-        while (await data.GetLastTimeStamp() == unwritten)
-        {
-            if (deadline.Elapsed > TimeSpan.FromSeconds(10))
-            {
-                Assert.Fail("The database timestamp never moved after a committed write.");
-            }
-
-            await Task.Delay(50);
-        }
-    }
-
-    /// <summary>
-    /// Waits until the database's timestamp has held still for long enough to be relied on, rather than
-    /// for it to move as <see cref="SettleAfterWrite"/> does.
-    /// </summary>
-    /// <remarks>
-    /// The two are the same property from opposite sides: a write's log position does not appear
-    /// instantly, and it does not stop moving instantly either. A test that asserts a 304 needs a
-    /// timestamp that will still be the same one a moment later, which is not something a single read
-    /// can tell — only a run of reads that agree.
-    /// </remarks>
-    static async Task Settle(SampleContext data)
-    {
-        var deadline = Stopwatch.StartNew();
-        var last = await data.GetLastTimeStamp();
-        var held = Stopwatch.StartNew();
-        while (held.Elapsed < TimeSpan.FromMilliseconds(300))
-        {
-            if (deadline.Elapsed > TimeSpan.FromSeconds(10))
-            {
-                Assert.Fail("The database timestamp never stopped moving.");
-            }
-
-            await Task.Delay(50);
-
-            var now = await data.GetLastTimeStamp();
-            if (now != last)
-            {
-                last = now;
-                held.Restart();
-            }
-        }
-    }
-
-    /// <summary>
-    /// Runs an exchange that depends on the database's timestamp holding still, and runs it again if
-    /// the timestamp moved while it was under way.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="Settle"/> can only say the timestamp has been still, never that it will stay so: the
-    /// server moves its own log now and then (a checkpoint, statistics) with no write from anyone. The
-    /// timestamp only ever advances, so reading it either side of the exchange catches any move the
-    /// server could have seen during it. The exchange asserts nothing itself — what it returns is
-    /// asserted on by the caller, once it is known to be about the exchange alone.
-    /// </remarks>
-    static async Task<T> Undisturbed<T>(Func<Task<T>> exchange)
-    {
-        await using var data = server.NewContext();
-        for (var attempt = 0; attempt < 5; attempt++)
-        {
-            await Settle(data);
-
-            var before = await data.GetLastTimeStamp();
-            var result = await exchange();
-            if (await data.GetLastTimeStamp() == before)
-            {
-                return result;
-            }
-        }
-
-        throw new("The database timestamp moved under every attempt at the exchange.");
-    }
-
-    /// <summary>
-    /// Runs a query once, waits for the database to settle, then runs it again to capture the ETag the
-    /// server minted for it. The first execution of a shape can move the timestamp by itself, and so can
-    /// whatever ran before it — seeding a fresh server, or another test's write — and an ETag captured
-    /// while it is still moving would be stale before it was ever used.
-    /// </summary>
     static async Task<string> Warm(ScryQuery query, string department)
     {
         await Active(query, department).ToListAsync();
-        await using (var data = server.NewContext())
-        {
-            await Settle(data);
-        }
 
         string? etag = null;
         await Active(query, department)
