@@ -20,10 +20,12 @@ public static class ScryDeltaExtensions
     /// changes on every request, since the marker moves for a write to anything at all.
     /// </para>
     /// <para>
-    /// The marker trails a commit rather than moving with it — a couple of hundred milliseconds on
-    /// SQL Server — so inside that window a client that has just written can be told its copy is
-    /// still current. A client that needs read-after-write sends <c>Cache-Control: no-cache</c>,
-    /// which skips the comparison and re-executes.
+    /// On SQL Server the marker counts a commit once its log records are flushed. A commit waits for
+    /// that flush by default, so the marker has moved by the time a write returns. Under delayed
+    /// durability it does not wait: the marker trails the commit, by tens of milliseconds and
+    /// sometimes more, and inside that window a client that has just written can be told its copy is
+    /// still current. A client that needs read-after-write there sends
+    /// <c>Cache-Control: no-cache</c>, which skips the comparison and re-executes.
     /// </para>
     /// <para>
     /// Where any source carries a row or attachment policy, its rows depend on who asked, and
@@ -74,9 +76,9 @@ public static class ScryDeltaExtensions
     /// catches everything the interceptor cannot see.
     /// </para>
     /// <para>
-    /// The marker trails a commit by a couple of hundred milliseconds on SQL Server, and is asked
-    /// every <see cref="ScryOptions.ChangeProbeInterval"/>, so that is how far behind a write this
-    /// alone can be.
+    /// The marker is asked every <see cref="ScryOptions.ChangeProbeInterval"/>, so that is how far
+    /// behind a write this alone can be — and, on a SQL Server database with delayed durability, the
+    /// tens of milliseconds the marker itself trails a commit by.
     /// </para>
     /// </remarks>
     public static ScryOptions UseDeltaChanges<TContext>(this ScryOptions options)

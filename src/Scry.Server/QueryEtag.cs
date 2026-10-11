@@ -35,8 +35,8 @@ static class QueryEtag
 
         // A client that has just written asks not to be told its own stale answer, and says so the
         // standard way. Honoured because the alternative is worse than a slow query: the marker a
-        // freshness source reads trails a commit, so inside that window a writer would be handed the
-        // rows it just replaced.
+        // freshness source reads can trail a commit — SQL Server's does under delayed durability — and
+        // inside that window a writer would be handed the rows it just replaced.
         if (RequestHeaders(context).CacheControl is {NoCache: true})
         {
             return false;
