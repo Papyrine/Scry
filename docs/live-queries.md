@@ -360,7 +360,7 @@ _.MaxSubscriptions = 100;
 // another node, a script run by hand.
 _.UseDeltaChanges<SampleContext>();
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L95-L104' title='Snippet source file'>snippet source</a> | <a href='#snippet-liveQueryRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L97-L106' title='Snippet source file'>snippet source</a> | <a href='#snippet-liveQueryRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The route is `POST {pattern}/subscribe`, mapped inside `MapScry` beside the rest, so whatever authorization convention guards a query guards the stream of its answers.
@@ -481,7 +481,7 @@ services
         .UseSqlServer(database.ConnectionString)
         .AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>()));
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L38-L44' title='Snippet source file'>snippet source</a> | <a href='#snippet-changeInterceptor' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L40-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-changeInterceptor' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 **The host.** What never passes through `SaveChanges` — `ExecuteUpdate`, raw SQL, an import — no interceptor can see. `ScryChanges` is where the host says so:
@@ -502,7 +502,7 @@ app.MapPost(
         return Results.NoContent();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L196-L209' title='Snippet source file'>snippet source</a> | <a href='#snippet-changesNotify' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L198-L211' title='Snippet source file'>snippet source</a> | <a href='#snippet-changesNotify' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Invalidating a [cached policy](policies.md) reports a change too. No row was written, but which rows a caller may see is part of what a live query answers.

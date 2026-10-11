@@ -159,7 +159,7 @@ services
         _.Mcp = ScryMcpAccess.ReadWrite;
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L57-L115' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L59-L117' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `AddScry<TContext>` scans `typeof(TContext).Assembly` once at startup, builds the allow-list schema, and registers it as a singleton along with the `ScryProcessor`.
@@ -173,7 +173,7 @@ Then map the endpoint:
 ```cs
 app.MapScry("/api/query");
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L136-L138' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L138-L140' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 That is a single HTTP endpoint which accepts a serialized query and returns the projected rows. It answers `POST`, where the query is the body, and `GET`, where the query [rides in the URL](wire-format.md#the-url-form) so the response can be cached and revalidated. See [Server](server.md) for all options, and [Row policies](policies.md) for row-level filtering.

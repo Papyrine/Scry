@@ -27,6 +27,8 @@
             database = await sqlInstance.Build(name);
         }
 
+        await QuietTheLog(database);
+
         var builder = WebApplication.CreateBuilder(args);
 
         // Serve the Blazor client's static web assets even when not running in the Development environment.
@@ -220,6 +222,32 @@
         app.MapFallbackToFile("index.html");
 
         await app.RunAsync();
+    }
+
+    // Two things about a database EfLocalDb creates get in the way of the change marker Delta reads,
+    // and neither is how a database is by default — see /docs/caching.md.
+    //
+    // EfLocalDb forces delayed durability, for speed: a commit returns before its log records are
+    // flushed, and the marker only counts a commit once they are. A write would show up tens of
+    // milliseconds after it returned, and a repeat of a query it affected would be answered 304 in
+    // between. Put back to the default, the marker has moved by the time the write returns.
+    //
+    // And Query Store writes to the database with nobody writing, which moves the marker too, so a
+    // repeat that should be a 304 would now and then be answered in full. A real database lives with
+    // that; a sample that exists to show the 304 is better off without it.
+    //
+    // The flush is for what the two statements before it wrote themselves, under the setting they
+    // were turning off.
+    static async Task QuietTheLog(SqlDatabase<SampleContext> database)
+    {
+        await using var command = database.Connection.CreateCommand();
+        command.CommandText =
+            """
+            alter database current set delayed_durability = disabled;
+            alter database current set query_store = off;
+            exec sp_flush_log;
+            """;
+        await command.ExecuteNonQueryAsync();
     }
 }
 

@@ -217,8 +217,9 @@ public sealed class ScryTestServer :
     }
 
     /// <summary>
-    /// Makes the log position Delta reads move when a write commits, and for nothing else, as it does
-    /// on a production database. Two things about a database EfLocalDb clones say otherwise.
+    /// Makes the log position Delta reads move when a write commits, and for nothing else, as
+    /// <c>Program.cs</c> does for the sample. Two things about a database EfLocalDb clones say
+    /// otherwise.
     /// </summary>
     /// <remarks>
     /// <para>

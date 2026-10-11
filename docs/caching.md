@@ -132,7 +132,7 @@ services
         _.Mcp = ScryMcpAccess.ReadWrite;
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L57-L115' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L59-L117' title='Snippet source file'>snippet source</a> | <a href='#snippet-serverRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 `QueryFreshness` is what the rows are current as of. Null — the default — writes no `ETag` and answers nothing conditionally, so a server that never sets it behaves exactly as it did before any of this existed. Returning null from it skips one request rather than turning the feature off, so a source that cannot answer right now degrades to a full response.
@@ -343,7 +343,7 @@ A URL-borne query reads the freshness token before doing anything else. That rea
 
 ## The sharp edges
 
-**A write is not always visible instantly.** On SQL Server the log position Delta reads counts a commit once its log records are flushed. A commit waits for that flush by default, so the position has moved by the time the write returns and the next query is answered in full. Under delayed durability it does not wait: the position trails the commit — by 15 to 160 milliseconds where it was measured, on LocalDB — and inside that window a client that has written can still be told its cached copy is current. The sample runs that way, because EfLocalDb forces delayed durability on the databases it creates. A client that needs read-after-write there sends `Cache-Control: no-cache`, which skips the comparison and re-executes; that is the standard escape and it is honoured. Beyond it, this suits data whose update frequency is low relative to reads, which is the assumption Delta states outright.
+**A write is not always visible instantly.** On SQL Server the log position Delta reads counts a commit once its log records are flushed. A commit waits for that flush by default, so the position has moved by the time the write returns and the next query is answered in full. Under delayed durability it does not wait: the position trails the commit — by 15 to 160 milliseconds where it was measured, on LocalDB — and inside that window a client that has written can still be told its cached copy is current. EfLocalDb, which the sample runs on, forces delayed durability on the databases it creates, so the sample turns it back off at startup. A client that needs read-after-write there sends `Cache-Control: no-cache`, which skips the comparison and re-executes; that is the standard escape and it is honoured. Beyond it, this suits data whose update frequency is low relative to reads, which is the assumption Delta states outright.
 
 **A command's write is a write like any other.** What a [command](commands.md) saved moves the freshness token as any save does, so a repeat of a query it affected re-executes once the token moves — subject to the same lag, where there is one. A screen that reads its own write the moment the outcome arrives either sends `no-cache` or reads it through a [live query](live-queries.md), which hears of the save at once and never goes through a conditional GET at all. A command's own routes are never answered conditionally: a receipt and a caller's capabilities are sent `no-store`, and the sample's handler keeps only URLs carrying a query.
 
