@@ -33,7 +33,7 @@
     <!-- Scry.Server.Disclosure.SqlServer's one dependency. At the version EfLocalDb already brings to
          the tests, so that pinning it here moves nothing else in the tree. -->
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.1.1" />
-    <PackageVersion Include="EfLocalDb" Version="27.2.4" />
+    <PackageVersion Include="EfLocalDb" Version="27.2.5" />
     <!-- Pinned to 5.3.0 (do not bump without running the Explorer UI tests). 5.6.0 is the next published
          version — nuget.org has no 5.4.x/5.5.x — and it calls System.Threading.Volatile.ReadBarrier, which
          the net10 mono-wasm interpreter does not implement: the managed fallback recurses into itself and

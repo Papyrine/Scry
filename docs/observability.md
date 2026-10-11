@@ -14,7 +14,7 @@ services.AddOpenTelemetry()
     .WithTracing(_ => _.AddSource(ScryInstrumentation.ActivitySourceName))
     .WithMetrics(_ => _.AddMeter(ScryInstrumentation.MeterName));
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L125-L129' title='Snippet source file'>snippet source</a> | <a href='#snippet-openTelemetry' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L127-L131' title='Snippet source file'>snippet source</a> | <a href='#snippet-openTelemetry' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Nothing in Scry depends on OpenTelemetry — the traces are a plain `ActivitySource` and the metrics a plain `Meter`, so any `ActivityListener`/`MeterListener`-based collector works the same way.

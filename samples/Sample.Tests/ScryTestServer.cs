@@ -89,6 +89,11 @@ public sealed class ScryTestServer :
             databaseSuffix: databaseSuffix,
             memberName: memberName);
 
+        if (conditionalRequests || deltaChanges)
+        {
+            await QuietTheLog(database);
+        }
+
         var builder = WebApplication.CreateBuilder(
             new WebApplicationOptions
             {
@@ -209,6 +214,39 @@ public sealed class ScryTestServer :
         await app.StartAsync();
 
         return new(app, database);
+    }
+
+    /// <summary>
+    /// Makes the log position Delta reads move when a write commits, and for nothing else, as
+    /// <c>Program.cs</c> does for the sample. Two things about a database EfLocalDb clones say
+    /// otherwise.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// EfLocalDb forces delayed durability on its template, for speed: a commit returns before its log
+    /// records are flushed, and the position Delta reads is that of the flushed log. So a write shows
+    /// up some tens of milliseconds after it committed, at a moment of the server's choosing — which
+    /// lands as readily in the middle of a later exchange as before it.
+    /// </para>
+    /// <para>
+    /// And Query Store, on by default, writes to a new database around half a second after it is
+    /// opened, with no write from anyone.
+    /// </para>
+    /// <para>
+    /// The flush is for what the two statements before it wrote themselves, under the setting they
+    /// were turning off.
+    /// </para>
+    /// </remarks>
+    static async Task QuietTheLog(SqlDatabase<SampleContext> database)
+    {
+        await using var command = database.Connection.CreateCommand();
+        command.CommandText =
+            """
+            alter database current set delayed_durability = disabled;
+            alter database current set query_store = off;
+            exec sp_flush_log;
+            """;
+        await command.ExecuteNonQueryAsync();
     }
 
     /// <summary>A context over this server's database, for a test that needs to write to it.</summary>

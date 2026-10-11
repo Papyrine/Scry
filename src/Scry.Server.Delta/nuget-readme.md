@@ -30,10 +30,12 @@ That is the whole wiring. Everything above it — the `ETag`, the `If-None-Match
 /// changes on every request, since the marker moves for a write to anything at all.
 /// </para>
 /// <para>
-/// The marker trails a commit rather than moving with it — a couple of hundred milliseconds on
-/// SQL Server — so inside that window a client that has just written can be told its copy is
-/// still current. A client that needs read-after-write sends <c>Cache-Control: no-cache</c>,
-/// which skips the comparison and re-executes.
+/// On SQL Server the marker counts a commit once its log records are flushed. A commit waits for
+/// that flush by default, so the marker has moved by the time a write returns. Under delayed
+/// durability it does not wait: the marker trails the commit, by tens of milliseconds and
+/// sometimes more, and inside that window a client that has just written can be told its copy is
+/// still current. A client that needs read-after-write there sends
+/// <c>Cache-Control: no-cache</c>, which skips the comparison and re-executes.
 /// </para>
 /// <para>
 /// Where any source carries a row or attachment policy, its rows depend on who asked, and
@@ -62,7 +64,7 @@ public static ScryOptions UseDeltaFreshness<TContext>(this ScryOptions options)
     return options;
 }
 ```
-<sup><a href='/src/Scry.Server.Delta/ScryDeltaExtensions.cs#L9-L54' title='Snippet source file'>snippet source</a> | <a href='#snippet-useDeltaFreshness' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.Delta/ScryDeltaExtensions.cs#L9-L56' title='Snippet source file'>snippet source</a> | <a href='#snippet-useDeltaFreshness' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Where a source carries a [row policy](https://github.com/Papyrine/Scry/blob/main/docs/policies.md), its rows depend on who asked, so `ScryOptions.CacheScope` has to say what a cached response belongs to — `MapScry` refuses to start otherwise.
@@ -106,9 +108,9 @@ The marker moves for another node, another system, a bulk update and raw SQL ali
 /// catches everything the interceptor cannot see.
 /// </para>
 /// <para>
-/// The marker trails a commit by a couple of hundred milliseconds on SQL Server, and is asked
-/// every <see cref="ScryOptions.ChangeProbeInterval"/>, so that is how far behind a write this
-/// alone can be.
+/// The marker is asked every <see cref="ScryOptions.ChangeProbeInterval"/>, so that is how far
+/// behind a write this alone can be — and, on a SQL Server database with delayed durability, the
+/// tens of milliseconds the marker itself trails a commit by.
 /// </para>
 /// </remarks>
 public static ScryOptions UseDeltaChanges<TContext>(this ScryOptions options)
@@ -132,7 +134,7 @@ public static ScryOptions UseDeltaChanges<TContext>(this ScryOptions options)
     return options;
 }
 ```
-<sup><a href='/src/Scry.Server.Delta/ScryDeltaExtensions.cs#L56-L102' title='Snippet source file'>snippet source</a> | <a href='#snippet-useDeltaChanges' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.Delta/ScryDeltaExtensions.cs#L58-L104' title='Snippet source file'>snippet source</a> | <a href='#snippet-useDeltaChanges' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Docs: [Caching and 304 Not Modified](https://github.com/Papyrine/Scry/blob/main/docs/caching.md), [Live queries](https://github.com/Papyrine/Scry/blob/main/docs/live-queries.md)

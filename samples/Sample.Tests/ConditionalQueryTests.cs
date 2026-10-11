@@ -98,8 +98,6 @@ public class ConditionalQueryTests
                     DepartmentId = data.Departments.Single(_ => _.Name == "Sales").Id
                 });
             await data.SaveChangesAsync();
-
-            await SettleAfterWrite(data);
         }
 
         string? after = null;
@@ -239,15 +237,6 @@ public class ConditionalQueryTests
         // for a reason that has nothing to do with the exchange being shown.
         await Active(new(server.CreateScryClient()), "Engineering").ToListAsync();
 
-        // And then waited on, because a warm-up only covers what this query does to the timestamp.
-        // Another test in this fixture wrote to the same database, and the log position that Delta
-        // reads keeps moving for a while after a write commits — long enough that the pair below can
-        // straddle it and be answered in full for a reason the exchange is not about.
-        await using (var data = server.NewContext())
-        {
-            await Settle(data);
-        }
-
         var first = await Active(query, "Engineering").ToListAsync();
         var second = await Active(query, "Engineering").ToListAsync();
 
@@ -269,76 +258,18 @@ public class ConditionalQueryTests
     }
 
     /// <summary>
-    /// Waits for the database's timestamp to catch up with a write that has already committed.
+    /// Runs a query once, then again to capture the ETag the server minted for it. The first execution
+    /// of a shape can move the timestamp by itself (statistics), after the server has already read it,
+    /// so the ETag on that first response would be stale before it was ever used.
     /// </summary>
     /// <remarks>
-    /// Not a test convenience: on SQL Server the log position Delta reads does not move the instant a
-    /// transaction commits — on LocalDB it trails by a couple of hundred milliseconds — so for that
-    /// long the previous ETag is still the current one and a repeated query is still answered 304.
-    /// That window is a property of the approach, not of this test; /docs/caching.md says what it means
-    /// for a read-after-write.
+    /// Nothing is waited on in between. <see cref="ScryTestServer"/> makes this fixture's database
+    /// behave as a production one does — the timestamp moves with the commit that moved it, and for
+    /// nothing else — so once the first run has returned, whatever it wrote has already been counted.
     /// </remarks>
-    static async Task SettleAfterWrite(SampleContext data)
-    {
-        var written = await data.GetLastTimeStamp();
-        var deadline = Stopwatch.StartNew();
-        while (await data.GetLastTimeStamp() == written)
-        {
-            if (deadline.Elapsed > TimeSpan.FromSeconds(10))
-            {
-                Assert.Fail("The database timestamp never moved after a committed write.");
-            }
-
-            await Task.Delay(50);
-        }
-    }
-
-    /// <summary>
-    /// Waits until the database's timestamp has held still for long enough to be relied on, rather than
-    /// for it to move as <see cref="SettleAfterWrite"/> does.
-    /// </summary>
-    /// <remarks>
-    /// The two are the same property from opposite sides: a write's log position does not appear
-    /// instantly, and it does not stop moving instantly either. A test that asserts a 304 needs a
-    /// timestamp that will still be the same one a moment later, which is not something a single read
-    /// can tell — only a run of reads that agree.
-    /// </remarks>
-    static async Task Settle(SampleContext data)
-    {
-        var deadline = Stopwatch.StartNew();
-        var last = await data.GetLastTimeStamp();
-        var held = Stopwatch.StartNew();
-        while (held.Elapsed < TimeSpan.FromMilliseconds(300))
-        {
-            if (deadline.Elapsed > TimeSpan.FromSeconds(10))
-            {
-                Assert.Fail("The database timestamp never stopped moving.");
-            }
-
-            await Task.Delay(50);
-
-            var now = await data.GetLastTimeStamp();
-            if (now != last)
-            {
-                last = now;
-                held.Restart();
-            }
-        }
-    }
-
-    /// <summary>
-    /// Runs a query once, waits for the database to settle, then runs it again to capture the ETag the
-    /// server minted for it. The first execution of a shape can move the timestamp by itself, and so can
-    /// whatever ran before it — seeding a fresh server, or another test's write — and an ETag captured
-    /// while it is still moving would be stale before it was ever used.
-    /// </summary>
     static async Task<string> Warm(ScryQuery query, string department)
     {
         await Active(query, department).ToListAsync();
-        await using (var data = server.NewContext())
-        {
-            await Settle(data);
-        }
 
         string? etag = null;
         await Active(query, department)

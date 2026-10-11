@@ -100,7 +100,7 @@ The sample does all three, at `/mcp`:
 ```cs
 app.MapScryMcp("/mcp");
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L149-L151' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScryMcpSample' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L151-L153' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapScryMcpSample' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 

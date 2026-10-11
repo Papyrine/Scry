@@ -360,7 +360,7 @@ _.MaxSubscriptions = 100;
 // another node, a script run by hand.
 _.UseDeltaChanges<SampleContext>();
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L95-L104' title='Snippet source file'>snippet source</a> | <a href='#snippet-liveQueryRegistration' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L97-L106' title='Snippet source file'>snippet source</a> | <a href='#snippet-liveQueryRegistration' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The route is `POST {pattern}/subscribe`, mapped inside `MapScry` beside the rest, so whatever authorization convention guards a query guards the stream of its answers.
@@ -481,7 +481,7 @@ services
         .UseSqlServer(database.ConnectionString)
         .AddInterceptors(services.GetRequiredService<ScryChangeInterceptor>()));
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L38-L44' title='Snippet source file'>snippet source</a> | <a href='#snippet-changeInterceptor' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L40-L46' title='Snippet source file'>snippet source</a> | <a href='#snippet-changeInterceptor' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 **The host.** What never passes through `SaveChanges` — `ExecuteUpdate`, raw SQL, an import — no interceptor can see. `ScryChanges` is where the host says so:
@@ -502,7 +502,7 @@ app.MapPost(
         return Results.NoContent();
     });
 ```
-<sup><a href='/samples/Sample.WebServer/Program.cs#L196-L209' title='Snippet source file'>snippet source</a> | <a href='#snippet-changesNotify' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.WebServer/Program.cs#L198-L211' title='Snippet source file'>snippet source</a> | <a href='#snippet-changesNotify' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Invalidating a [cached policy](policies.md) reports a change too. No row was written, but which rows a caller may see is part of what a live query answers.
@@ -532,9 +532,9 @@ Invalidating a [cached policy](policies.md) reports a change too. No row was wri
 /// catches everything the interceptor cannot see.
 /// </para>
 /// <para>
-/// The marker trails a commit by a couple of hundred milliseconds on SQL Server, and is asked
-/// every <see cref="ScryOptions.ChangeProbeInterval"/>, so that is how far behind a write this
-/// alone can be.
+/// The marker is asked every <see cref="ScryOptions.ChangeProbeInterval"/>, so that is how far
+/// behind a write this alone can be — and, on a SQL Server database with delayed durability, the
+/// tens of milliseconds the marker itself trails a commit by.
 /// </para>
 /// </remarks>
 public static ScryOptions UseDeltaChanges<TContext>(this ScryOptions options)
@@ -558,7 +558,7 @@ public static ScryOptions UseDeltaChanges<TContext>(this ScryOptions options)
     return options;
 }
 ```
-<sup><a href='/src/Scry.Server.Delta/ScryDeltaExtensions.cs#L56-L102' title='Snippet source file'>snippet source</a> | <a href='#snippet-useDeltaChanges' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.Delta/ScryDeltaExtensions.cs#L58-L104' title='Snippet source file'>snippet source</a> | <a href='#snippet-useDeltaChanges' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 **The poll.** `SubscriptionPollInterval` runs every live query on a timer whether or not anything reported a change, thirty seconds by default. It is what catches everything nothing reports: a policy that answers by a claim or the clock, a view over a table the query never names, a transaction committed outside EF. Reports make a live query fast; the poll makes it correct. A run that finds the answer unchanged sends nothing, so an idle poll costs a query and no bandwidth.
