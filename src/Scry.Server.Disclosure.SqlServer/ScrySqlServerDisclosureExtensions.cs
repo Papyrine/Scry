@@ -42,12 +42,7 @@ public static class ScrySqlServerDisclosureExtensions
                 services.TryAddSingleton<IScryDisclosureEraser>(kept);
                 services.TryAddSingleton<IScryDisclosureStatus>(kept);
 
-                // Only where there is a chain to check. With ledger tables the checking is the
-                // database's own, and a check of no chain would read as one that held.
-                if (settings.HashChain)
-                {
-                    services.TryAddSingleton<IScryDisclosureVerifier>(kept);
-                }
+                services.TryAddSingleton<IScryDisclosureVerifier>(kept);
 
                 services.AddHostedService(_ => new DisclosureDrainHost(kept));
             },

@@ -106,9 +106,14 @@ public sealed partial class ScrySqlServerDisclosureStore
             total += moved;
             if (moved < options.DrainBatches)
             {
-                return total;
+                break;
             }
         }
+
+        // After what was moved is committed, and outside the lock it was moved under: handing a
+        // segment on may take as long as the segment is large.
+        await RetireAsync(cancel);
+        return total;
     }
 
     async Task<int> DrainOnce(Cancel cancel)
@@ -156,27 +161,10 @@ public sealed partial class ScrySqlServerDisclosureStore
         }
 
         var unseen = await Unseen(connection, transaction, taken, cancel);
-        var staged = new DisclosureStaging(sql);
-        foreach (var batch in unseen)
+        if (unseen.Count > 0)
         {
-            staged.Add(batch);
+            await Record(connection, transaction, unseen, cancel);
         }
-
-        // Each link covering the one before, in the order the batches are moved on: so the chain is
-        // written under the same lock that makes this the only mover. Numbered by the chain itself
-        // rather than by where a batch sat in the outbox, since two batches accepted at once can
-        // commit in either order and the later-numbered one be moved first.
-        if (options.HashChain)
-        {
-            var (link, hash) = await Head(connection, transaction, cancel);
-            foreach (var batch in unseen)
-            {
-                link++;
-                hash = staged.Link(batch, link, hash);
-            }
-        }
-
-        await staged.Write(connection, transaction, options.Content, cancel);
 
         // Exactly the rows that were read, by position. A batch committed a moment later can hold a
         // lower position than one taken here, so "everything up to the last" would remove a batch
@@ -190,6 +178,102 @@ public sealed partial class ScrySqlServerDisclosureStore
             transaction);
         await remove.ExecuteNonQueryAsync(cancel);
         return taken.Count;
+    }
+
+    // What a round adds to the record: each batch into the segment it belongs in, and a link of the
+    // chain for each.
+    async Task Record(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        List<(ScryDisclosureBatch Batch, long Position, DateTimeOffset Accepted)> unseen,
+        Cancel cancel)
+    {
+        // Rolled on, where it is due, before anything of the round is written: like a log file, the
+        // record rolls when something is about to be added to it, and not on a timer of its own.
+        var segments = await Registry(connection, transaction, cancel);
+        var now = options.Clock.GetUtcNow();
+        if (await Due(connection, transaction, Current(segments), now, cancel))
+        {
+            await Roll(connection, transaction, segments, now, cancel);
+            segments = await Registry(connection, transaction, cancel);
+        }
+
+        var current = Current(segments).Number;
+        var homes = await Homes(connection, transaction, segments, cancel);
+        var staged = new SortedDictionary<int, DisclosureStaging>();
+        var links = new DataTable();
+        links.Columns.Add("Link", typeof(long));
+        links.Columns.Add("Segment", typeof(int));
+        links.Columns.Add("Version", typeof(byte));
+        links.Columns.Add("Digest", typeof(byte[]));
+        links.Columns.Add("Hash", typeof(byte[]));
+
+        // Each link covering the one before, in the order the batches are moved on: so the chain is
+        // written under the same lock that makes this the only mover. Numbered by the chain itself
+        // rather than by where a batch sat in the outbox, since two batches accepted at once can
+        // commit in either order and the later-numbered one be moved first.
+        var (link, hash) = await Head(connection, transaction, cancel);
+        foreach (var (batch, position, accepted) in unseen)
+        {
+            // A later part of an answer goes where the answer began, so that an answer is in one
+            // segment and leaves with it. Anything else goes to the segment being written to.
+            var segment = current;
+            if (batch.Begin is null &&
+                homes.TryGetValue(batch.EventId, out var home))
+            {
+                segment = home;
+            }
+
+            if (!staged.TryGetValue(segment, out var staging))
+            {
+                staged[segment] = staging = new(sql.Segment(segment));
+            }
+
+            link++;
+            var digest = DisclosureChain.Digest(batch);
+            hash = DisclosureChain.Hash(hash, digest);
+            links.Rows.Add(link, segment, DisclosureChain.Version, digest, hash);
+            staging.Add(batch, link, position, accepted);
+        }
+
+        foreach (var staging in staged.Values)
+        {
+            await staging.Write(connection, transaction, options.Content, cancel);
+        }
+
+        await DisclosureStaging.Apply(
+            connection,
+            transaction,
+            links,
+            "#link",
+            "[Link] bigint NOT NULL, [Segment] int NOT NULL, [Version] tinyint NOT NULL, [Digest] binary(32) NOT NULL, [Hash] binary(32) NOT NULL",
+            $"""
+             INSERT INTO {sql.Chain} ([Link], [Segment], [Version], [Digest], [Hash])
+             SELECT s.[Link], s.[Segment], s.[Version], s.[Digest], s.[Hash] FROM #link s;
+             """,
+            cancel);
+    }
+
+    // Which segment each answer the round adds to was begun in, for the answers begun before it and
+    // still in a segment that is being kept.
+    async Task<Dictionary<Guid, int>> Homes(SqlConnection connection, SqlTransaction transaction, List<ScryDisclosureSegment> segments, Cancel cancel)
+    {
+        var homes = new Dictionary<Guid, int>();
+        var kept = segments.Where(_ => _ is {Retired: null, Retiring: false}).Select(_ => _.Number).ToHashSet();
+        await using var command = Command(
+            connection,
+            $"SELECT DISTINCT b.[EventId], e.[Segment] FROM #batch b JOIN {sql.Event} e ON e.[EventId] = b.[EventId] WHERE b.[Readable] = 1;",
+            transaction);
+        await using var reader = await command.ExecuteReaderAsync(cancel);
+        while (await reader.ReadAsync(cancel))
+        {
+            if (kept.Contains(reader.GetInt32(1)))
+            {
+                homes[reader.GetGuid(0)] = reader.GetInt32(1);
+            }
+        }
+
+        return homes;
     }
 
     // The oldest of what is waiting, in the order it was accepted.
@@ -210,10 +294,10 @@ public sealed partial class ScrySqlServerDisclosureStore
         return taken;
     }
 
-    // Those of the taken batches the record has not already had, read back as batches, and marked
-    // as had. One that cannot be read is set aside rather than left at the head of the outbox, where
+    // Those of the taken batches the record has not already had, read back as batches, each with
+    // where and when it was accepted. One that cannot be read is set aside rather than left at the head of the outbox, where
     // it would stop everything behind it for good. Leaves #batch behind it, naming what was taken.
-    async Task<List<ScryDisclosureBatch>> Unseen(
+    async Task<List<(ScryDisclosureBatch Batch, long Position, DateTimeOffset Accepted)>> Unseen(
         SqlConnection connection,
         SqlTransaction transaction,
         List<(long Position, DateTimeOffset Accepted, Guid EventId, int Sequence, byte[] Batch)> taken,
@@ -247,7 +331,8 @@ public sealed partial class ScrySqlServerDisclosureStore
         }
 
         // Asked and then marked in two commands, each read to its end: a reader closed before its
-        // last statement has run does not say that the statement failed.
+        // last statement has run does not say that the statement failed. Asked of every segment
+        // there is: a batch that arrives a second time is one the record has had wherever it went.
         await using (var known = Command(
                          connection,
                          $"SELECT b.[Position] FROM #batch b WHERE b.[Readable] = 1 AND EXISTS (SELECT 1 FROM {sql.Batch} x WHERE x.[EventId] = b.[EventId] AND x.[Sequence] = b.[Sequence]);",
@@ -263,9 +348,6 @@ public sealed partial class ScrySqlServerDisclosureStore
         await using (var mark = Command(
                          connection,
                          $"""
-                          INSERT INTO {sql.Batch} ([EventId], [Sequence], [Position], [AcceptedAt])
-                          SELECT b.[EventId], b.[Sequence], b.[Position], b.[AcceptedAt] FROM #batch b
-                          WHERE b.[Readable] = 1 AND NOT EXISTS (SELECT 1 FROM {sql.Batch} x WHERE x.[EventId] = b.[EventId] AND x.[Sequence] = b.[Sequence]);
                           UPDATE o SET o.[Unreadable] = 1 FROM {sql.Outbox} o JOIN #batch b ON b.[Position] = o.[Position] WHERE b.[Readable] = 0;
                           """,
                          transaction))
@@ -274,7 +356,8 @@ public sealed partial class ScrySqlServerDisclosureStore
         }
 
         // In the order they were accepted, which is the order the chain links them in.
-        return [.. read.OrderBy(_ => _.Key).Select(_ => _.Value)];
+        var when = taken.ToDictionary(_ => _.Position, _ => _.Accepted);
+        return [.. read.OrderBy(_ => _.Key).Select(_ => (_.Value, _.Key, when[_.Key]))];
     }
 
     // A batch read back from what the outbox holds, or null for one that will not read — or that

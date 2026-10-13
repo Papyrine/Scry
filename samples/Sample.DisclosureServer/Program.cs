@@ -65,10 +65,11 @@ class Program
                     database.ConnectionString,
                     store =>
                     {
-                        // Each batch of the record linked to the one before, so that a change to what
-                        // was recorded shows. A server with ledger tables has them as well, and they
-                        // are the stronger of the two; this is what the explorer's check reads.
-                        store.HashChain = true;
+                        // The record is kept as a log is: a new segment of it each month, and
+                        // two years of them. The oldest is then dropped, and what it held can no
+                        // longer be asked. Set Retire to write it somewhere else first.
+                        store.RollAfter = TimeSpan.FromDays(30);
+                        store.Keep = 24;
                         store.Clock = clock;
                     },
                     audit =>

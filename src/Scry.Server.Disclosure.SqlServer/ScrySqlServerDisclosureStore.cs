@@ -4,7 +4,8 @@ namespace Scry;
 /// The disclosure audit kept in SQL Server. Accepting an answer is one committed <c>INSERT</c> into
 /// an outbox table, so it costs the request a round trip to a database it usually already depends
 /// on, and survives the loss of the node that accepted it. What was accepted is then moved into
-/// tables that are only ever added to, which are what the record is read from.
+/// tables that are only ever added to, which are what the record is read from, and linked into a
+/// chain of hashes that shows a change to any of it.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -53,6 +54,22 @@ public sealed partial class ScrySqlServerDisclosureStore :
             interval <= TimeSpan.Zero)
         {
             throw new ArgumentException($"{nameof(ScrySqlServerDisclosureOptions)}.{nameof(options.DrainInterval)} must be greater than zero. Null leaves moving batches on to the host.");
+        }
+
+        if (options.RollAfter is { } after &&
+            after <= TimeSpan.Zero)
+        {
+            throw new ArgumentException($"{nameof(ScrySqlServerDisclosureOptions)}.{nameof(options.RollAfter)} must be greater than zero. Null never starts a new segment of the record for its age.");
+        }
+
+        if (options.RollAtBytes is <= 0)
+        {
+            throw new ArgumentException($"{nameof(ScrySqlServerDisclosureOptions)}.{nameof(options.RollAtBytes)} must be greater than zero. Null never starts a new segment of the record for its size.");
+        }
+
+        if (options.Keep is < 1)
+        {
+            throw new ArgumentException($"{nameof(ScrySqlServerDisclosureOptions)}.{nameof(options.Keep)} must be at least one: the segment being written to is always kept. Null keeps every segment.");
         }
 
         this.options = options;

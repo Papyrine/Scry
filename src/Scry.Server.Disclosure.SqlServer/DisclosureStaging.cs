@@ -1,6 +1,6 @@
 /// <summary>
-/// The rows a round of moving batches on is about to add, gathered from every batch of the round and
-/// written in a few set-based statements rather than a statement per row. Each table's rows go to a
+/// The rows a round of moving batches on is about to add to one segment, gathered from every batch of
+/// the round that goes to it and written in a few set-based statements rather than a statement per row. Each table's rows go to a
 /// temporary table by bulk copy, and from there into the record with one <c>INSERT … SELECT</c>.
 /// </summary>
 /// <remarks>
@@ -9,8 +9,11 @@
 /// it, and the guard costs an index seek. For shapes and content it is the point: both are kept by
 /// address, and most of what a batch carries of either is already held.
 /// </remarks>
-sealed class DisclosureStaging(DisclosureSql sql)
+sealed class DisclosureStaging(DisclosureTables sql)
 {
+    DataTable batches = Table(
+        ("EventId", typeof(Guid)), ("Sequence", typeof(int)), ("Position", typeof(long)), ("AcceptedAt", typeof(DateTimeOffset)),
+        ("Link", typeof(long)));
     DataTable events = Table(
         ("EventId", typeof(Guid)), ("Sequence", typeof(int)), ("At", typeof(DateTimeOffset)), ("Caller", typeof(string)),
         ("CallerHash", typeof(byte[])), ("Kind", typeof(byte)), ("Subscribed", typeof(bool)), ("Delivery", typeof(byte)),
@@ -53,8 +56,6 @@ sealed class DisclosureStaging(DisclosureSql sql)
         ("Parameters", typeof(byte[])), ("Results", typeof(int)), ("Node", typeof(string)));
     DataTable reviewed = Table(
         ("ReviewId", typeof(Guid)), ("EventId", typeof(Guid)));
-    DataTable links = Table(
-        ("Link", typeof(long)), ("EventId", typeof(Guid)), ("Sequence", typeof(int)), ("Digest", typeof(byte[])), ("Hash", typeof(byte[])));
     DataTable sources = Table(
         ("SourceHash", typeof(byte[])), ("Source", typeof(string)), ("Keyed", typeof(bool)));
 
@@ -85,8 +86,10 @@ sealed class DisclosureStaging(DisclosureSql sql)
     static object Value(object? value) =>
         value ?? DBNull.Value;
 
-    public void Add(ScryDisclosureBatch batch)
+    /// <summary>Adds a batch: the link of the chain it is, and where and when it was accepted.</summary>
+    public void Add(ScryDisclosureBatch batch, long link, long position, DateTimeOffset accepted)
     {
+        batches.Rows.Add(batch.EventId, batch.Sequence, position, accepted, link);
         if (batch.Begin is {Source.Length: > 0} sourced)
         {
             seen.TryAdd(sourced.Source, false);
@@ -237,24 +240,25 @@ sealed class DisclosureStaging(DisclosureSql sql)
         }
     }
 
-    /// <summary>
-    /// Adds a batch to the chain as its <paramref name="link"/>th: a digest of what the record keeps
-    /// of it, and a hash over that and the link before. Returns the hash, which the next link covers.
-    /// </summary>
-    public byte[] Link(ScryDisclosureBatch batch, long link, byte[] previous)
-    {
-        var digest = DisclosureChain.Digest(batch);
-        var hash = DisclosureChain.Hash(previous, digest);
-        links.Rows.Add(link, batch.EventId, batch.Sequence, digest, hash);
-        return hash;
-    }
-
     public async Task Write(SqlConnection connection, SqlTransaction transaction, IScryDisclosureBlobStore? elsewhere, Cancel cancel)
     {
         foreach (var (source, keyed) in seen)
         {
             sources.Rows.Add(DisclosureSql.SourceHash(source), source, keyed);
         }
+
+        await Apply(
+            connection,
+            transaction,
+            batches,
+            "#had",
+            "[EventId] uniqueidentifier NOT NULL, [Sequence] int NOT NULL, [Position] bigint NOT NULL, [AcceptedAt] datetimeoffset(7) NOT NULL, [Link] bigint NOT NULL",
+            $"""
+             INSERT INTO {sql.Batch} ([EventId], [Sequence], [Position], [AcceptedAt], [Link])
+             SELECT s.[EventId], s.[Sequence], s.[Position], s.[AcceptedAt], s.[Link] FROM #had s
+             WHERE NOT EXISTS (SELECT 1 FROM {sql.Batch} x WHERE x.[EventId] = s.[EventId] AND x.[Sequence] = s.[Sequence]);
+             """,
+            cancel);
 
         await Apply(
             connection,
@@ -360,17 +364,6 @@ sealed class DisclosureStaging(DisclosureSql sql)
              INSERT INTO {sql.ReviewEvent} ([ReviewId], [EventId])
              SELECT s.[ReviewId], s.[EventId]
              FROM #reviewed s WHERE NOT EXISTS (SELECT 1 FROM {sql.ReviewEvent} x WHERE x.[ReviewId] = s.[ReviewId] AND x.[EventId] = s.[EventId]);
-             """,
-            cancel);
-        await Apply(
-            connection,
-            transaction,
-            links,
-            "#link",
-            "[Link] bigint NOT NULL, [EventId] uniqueidentifier NOT NULL, [Sequence] int NOT NULL, [Digest] binary(32) NOT NULL, [Hash] binary(32) NOT NULL",
-            $"""
-             INSERT INTO {sql.Chain} ([Link], [EventId], [Sequence], [Digest], [Hash])
-             SELECT s.[Link], s.[EventId], s.[Sequence], s.[Digest], s.[Hash] FROM #link s;
              """,
             cancel);
     }
@@ -502,7 +495,7 @@ sealed class DisclosureStaging(DisclosureSql sql)
     }
 
     // One table's rows: to a temporary table by bulk copy, and from there into the record.
-    static async Task Apply(
+    public static async Task Apply(
         SqlConnection connection,
         SqlTransaction transaction,
         DataTable rows,
@@ -555,6 +548,12 @@ sealed class DisclosureStaging(DisclosureSql sql)
 /// </summary>
 static class DisclosureChain
 {
+    /// <summary>
+    /// How a link's digest was made, kept on the link: a later way of making one then leaves the
+    /// links made this way checkable as they were.
+    /// </summary>
+    public const byte Version = 1;
+
     /// <summary>
     /// A digest of what the record keeps of a batch: its event, its units and the rows they were
     /// read from, its shape, its close, its review. Not its content, which is kept apart, can be

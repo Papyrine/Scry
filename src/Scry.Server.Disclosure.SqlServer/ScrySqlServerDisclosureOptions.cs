@@ -28,22 +28,64 @@ public sealed class ScrySqlServerDisclosureOptions
     public TimeSpan AcceptTimeout { get; set; } = TimeSpan.FromSeconds(15);
 
     /// <summary>
-    /// Whether the tables that are only ever added to are made as append-only ledger tables, which
-    /// the database itself then refuses to update or delete from. Null, the default, makes them so
-    /// where the server has ledger tables — SQL Server 2022 and Azure SQL — and plain where it does
-    /// not. True refuses to create them plain; false always does.
+    /// Whether the chain is kept in append-only ledger tables, which the database itself then refuses
+    /// to update or delete from. Null, the default, makes them so where the server has ledger tables
+    /// — SQL Server 2022 and Azure SQL — and plain where it does not. True refuses to create them
+    /// plain; false always does.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// The chain is a hash for every batch the record has had, each covering the one before, and is
+    /// what shows a change to anything recorded. It is the one part of the record kept for good. The
+    /// rest is in plain tables, so that the oldest of it can be dropped: a row put into a ledger
+    /// table is there until the database is dropped.
+    /// </para>
+    /// <para>
     /// Read when the tables are created, and never after: a table is what it was made as.
+    /// </para>
     /// </remarks>
     public bool? LedgerTables { get; set; }
 
     /// <summary>
-    /// Whether every batch is also linked into a hash chain, each record's hash covering the one
-    /// before it, so that a change to what was recorded shows as a break. Off by default. For a
-    /// server without ledger tables, which have the same property and are checked by the database.
+    /// How long a segment of the record is written to before a new one is started. Null, the
+    /// default, never starts one for its age.
     /// </summary>
-    public bool HashChain { get; set; }
+    /// <remarks>
+    /// The record is kept in segments, as a log is kept in files: one is written to, and the rest are
+    /// as they were left. A new one is started when something is about to be recorded and the one
+    /// being written to is this old, or <see cref="RollAtBytes"/> large.
+    /// <see cref="ScrySqlServerDisclosureStore.RollAsync"/> starts one when asked. Starting one makes
+    /// tables, whatever <see cref="CreateTables"/> says.
+    /// </remarks>
+    public TimeSpan? RollAfter { get; set; }
+
+    /// <summary>
+    /// How large a segment of the record grows, in bytes of the database, before a new one is
+    /// started. Null, the default, never starts one for its size.
+    /// </summary>
+    public long? RollAtBytes { get; set; }
+
+    /// <summary>
+    /// How many segments are kept. When there are more, the oldest is retired: handed to
+    /// <see cref="Retire"/> where that is set, and then dropped. Null, the default, keeps every one.
+    /// </summary>
+    /// <remarks>
+    /// What a retired segment held is gone from the record: who was sent what in it can no longer be
+    /// asked. What stays is its links in the chain, which say that it was there and is what a copy
+    /// of it can be checked against, and a line saying when it was retired and how much it held.
+    /// </remarks>
+    public int? Keep { get; set; }
+
+    /// <summary>
+    /// What is done with a segment before it is dropped: written somewhere else, usually. Null, the
+    /// default, drops it and keeps nothing.
+    /// </summary>
+    /// <remarks>
+    /// Called with the segment still in the record and no longer written to. It is dropped only once
+    /// this returns. If it throws, the segment stays, and it is called again the next time the record
+    /// is moved on, so it may be called for one segment more than once.
+    /// </remarks>
+    public Func<ScryDisclosureArchive, Cancel, Task>? Retire { get; set; }
 
     /// <summary>
     /// How often accepted batches are moved from the outbox into the tables a reader reads, where

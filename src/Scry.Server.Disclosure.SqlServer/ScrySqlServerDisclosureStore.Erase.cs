@@ -22,14 +22,6 @@ public sealed partial class ScrySqlServerDisclosureStore
         var row = DisclosureSql.RowHash(source, text);
         var at = options.Clock.GetUtcNow();
 
-        // Every piece of content a unit read from this row carried. Erasure wins over reconstruction:
-        // a piece another row happened to be sent as goes too.
-        var carried =
-            $"""
-             SELECT n.[Content] FROM {sql.Entities} n
-             WHERE n.[RowHash] = @row AND n.[Source] = @source AND n.[RowKey] = @key
-             """;
-
         await using var connection = await OpenAsync(cancel);
         await using var transaction = (SqlTransaction) await connection.BeginTransactionAsync(cancel);
 
@@ -45,15 +37,32 @@ public sealed partial class ScrySqlServerDisclosureStore
         {
         }
 
+        // Every piece of content a unit read from this row carried, in whichever segment. Erasure wins
+        // over reconstruction: a piece another row happened to be sent as goes too.
+        // Made by a statement with no parameters, which is what leaves a temporary table behind it
+        // for the statements after: one made by a statement that has them goes when it ends.
+        await using (var make = Command(connection, "CREATE TABLE #erase ([Address] binary(32) NOT NULL PRIMARY KEY);", transaction))
+        {
+            await make.ExecuteNonQueryAsync(cancel);
+        }
+
+        await using (var find = Command(
+                         connection,
+                         $"INSERT INTO #erase ([Address]) SELECT DISTINCT n.[Content] FROM {sql.Entities} n WHERE n.[RowHash] = @row AND n.[Source] = @source AND n.[RowKey] = @key;",
+                         transaction))
+        {
+            Row(find, row, source, text);
+            await find.ExecuteNonQueryAsync(cancel);
+        }
+
         // What is kept outside the database goes first. Said to be erased, it has to be: a record
         // that claimed so while the bytes sat in a bucket would be the one thing worse than neither.
         if (options.Content is { } elsewhere)
         {
             var kept = new List<ScryDisclosureAddress>();
-            await using (var find = Command(connection, $"SELECT k.[Address] FROM {sql.Content} k WITH (UPDLOCK) WHERE k.[Erased] = 0 AND k.[Elsewhere] = 1 AND k.[Address] IN ({carried});", transaction))
+            await using (var find = Command(connection, $"SELECT DISTINCT k.[Address] FROM {sql.Content} k JOIN #erase x ON x.[Address] = k.[Address] WHERE k.[Erased] = 0 AND k.[Elsewhere] = 1;", transaction))
+            await using (var reader = await find.ExecuteReaderAsync(cancel))
             {
-                Row(find, row, source, text);
-                await using var reader = await find.ExecuteReaderAsync(cancel);
                 while (await reader.ReadAsync(cancel))
                 {
                     kept.Add(ScryDisclosureAddress.From((byte[]) reader[0]));
@@ -66,18 +75,22 @@ public sealed partial class ScrySqlServerDisclosureStore
             }
         }
 
+        // A piece is kept in each segment it was sent in, and goes from every one of them. Counted
+        // once however many that is. The erasure itself is written to the segment being written to,
+        // and is retired with it: it names the row.
+        var segments = await Registry(connection, transaction, cancel);
+        var erasing = new StringBuilder();
+        erasing.AppendLine($"DECLARE @units int = (SELECT COUNT(*) FROM #erase x WHERE EXISTS (SELECT 1 FROM {sql.Content} k WHERE k.[Address] = x.[Address] AND k.[Erased] = 0));");
+        foreach (var segment in segments.Where(_ => _.Retired is null))
+        {
+            erasing.AppendLine($"UPDATE k SET k.[Bytes] = NULL, k.[Elsewhere] = 0, k.[Erased] = 1 FROM {sql.Segment(segment.Number).Content} k JOIN #erase x ON x.[Address] = k.[Address] WHERE k.[Erased] = 0;");
+        }
+
+        erasing.AppendLine($"INSERT INTO {sql.Segment(Current(segments).Number).Erasure} ([At], [By], [RowHash], [Source], [RowKey], [Units]) VALUES (@at, @by, @row, @source, @key, @units);");
+        erasing.AppendLine("DROP TABLE #erase;");
+        erasing.AppendLine("SELECT @units;");
         int units;
-        await using (var erase = Command(
-                         connection,
-                         $"""
-                          UPDATE k SET k.[Bytes] = NULL, k.[Elsewhere] = 0, k.[Erased] = 1
-                          FROM {sql.Content} k
-                          WHERE k.[Erased] = 0 AND k.[Address] IN ({carried});
-                          DECLARE @units int = @@ROWCOUNT;
-                          INSERT INTO {sql.Erasure} ([At], [By], [RowHash], [Source], [RowKey], [Units]) VALUES (@at, @by, @row, @source, @key, @units);
-                          SELECT @units;
-                          """,
-                         transaction))
+        await using (var erase = Command(connection, erasing.ToString(), transaction))
         {
             Row(erase, row, source, text);
             erase.Parameters.Add(new("@at", SqlDbType.DateTimeOffset) {Value = at});
@@ -102,7 +115,7 @@ public sealed partial class ScrySqlServerDisclosureStore
         await EnsureAsync(cancel);
         var read = new List<ScryDisclosureErasure>();
         await using (var connection = await OpenAsync(cancel))
-        await using (var command = Command(connection, $"SELECT x.[At], x.[By], x.[Source], x.[RowKey], x.[Units] FROM {sql.Erasure} x ORDER BY x.[Id] DESC;"))
+        await using (var command = Command(connection, $"SELECT x.[At], x.[By], x.[Source], x.[RowKey], x.[Units] FROM {sql.Erasure} x ORDER BY x.[At] DESC, x.[Segment] DESC, x.[Id] DESC;"))
         await using (var reader = await command.ExecuteReaderAsync(cancel))
         {
             while (await reader.ReadAsync(cancel))
@@ -123,16 +136,18 @@ public sealed partial class ScrySqlServerDisclosureStore
         await EnsureAsync(cancel);
         await using var connection = await OpenAsync(cancel);
 
-        // The count of events is the table's own row count rather than a count of its rows: one is a
-        // number the database already has, the other a scan of the largest table there is.
+        // The count of events is each segment's table's own row count rather than a count of its
+        // rows: one is a number the database already has, the other a scan of the largest tables
+        // there are.
         await using var command = Command(
             connection,
             $"""
              SELECT COUNT_BIG(*), ISNULL(SUM(CAST(DATALENGTH(o.[Batch]) AS bigint)), 0), MIN(o.[AcceptedAt]), ISNULL(SUM(CAST(o.[Unreadable] AS bigint)), 0) FROM {sql.Outbox} o;
-             SELECT ISNULL(SUM(p.[rows]), 0) FROM sys.partitions p WHERE p.[object_id] = OBJECT_ID(@events) AND p.[index_id] IN (0, 1);
+             SELECT ISNULL(SUM(p.[rows]), 0) FROM sys.partitions p JOIN sys.objects o ON o.[object_id] = p.[object_id] JOIN sys.schemas s ON s.[schema_id] = o.[schema_id]
+             WHERE o.[name] = N'DisclosureEvent' AND o.[type] = 'U' AND s.[name] LIKE @segments AND p.[index_id] IN (0, 1);
              SELECT TOP (1) l.[Hash] FROM {sql.Chain} l ORDER BY l.[Link] DESC;
              """);
-        command.Parameters.AddWithValue("@events", sql.Event);
+        command.Parameters.AddWithValue("@segments", sql.Schema.Replace("_", "[_]") + "[_][0-9][0-9][0-9][0-9][0-9][0-9]");
         await using var reader = await command.ExecuteReaderAsync(cancel);
         await reader.ReadAsync(cancel);
         var pending = reader.GetInt64(0);
@@ -200,14 +215,18 @@ public sealed partial class ScrySqlServerDisclosureStore
     public async Task<ScryDisclosureChainCheck> VerifyChainAsync(long? from = null, int count = 10_000, Cancel cancel = default)
     {
         await EnsureAsync(cancel);
-        var links = new List<(long Link, Guid EventId, int Sequence, byte[] Digest, byte[] Hash)>();
+        var links = new List<(long Link, int Segment, byte[] Digest, byte[] Hash)>();
+        var batches = new Dictionary<long, (Guid EventId, int Sequence)>();
         var previous = new byte[ScryDisclosureAddress.Size];
         await using var connection = await OpenAsync(cancel);
+        var kept = (await Registry(connection, null, cancel)).Where(_ => _.Retired is null).Select(_ => _.Number).ToHashSet();
         await using (var command = Command(
                          connection,
                          $"""
                           SELECT TOP (1) l.[Hash] FROM {sql.Chain} l WHERE @from IS NOT NULL AND l.[Link] < @from ORDER BY l.[Link] DESC;
-                          SELECT TOP (@count) l.[Link], l.[EventId], l.[Sequence], l.[Digest], l.[Hash] FROM {sql.Chain} l WHERE @from IS NULL OR l.[Link] >= @from ORDER BY l.[Link];
+                          SELECT TOP (@count) l.[Link], l.[Segment], l.[Digest], l.[Hash] FROM {sql.Chain} l WHERE @from IS NULL OR l.[Link] >= @from ORDER BY l.[Link];
+                          SELECT b.[Link], b.[EventId], b.[Sequence] FROM {sql.Batch} b
+                          WHERE b.[Link] IN (SELECT TOP (@count) l.[Link] FROM {sql.Chain} l WHERE @from IS NULL OR l.[Link] >= @from ORDER BY l.[Link]);
                           """))
         {
             command.Parameters.Add(new("@from", SqlDbType.BigInt) {Value = Value(from)});
@@ -221,16 +240,21 @@ public sealed partial class ScrySqlServerDisclosureStore
             await reader.NextResultAsync(cancel);
             while (await reader.ReadAsync(cancel))
             {
-                links.Add((reader.GetInt64(0), reader.GetGuid(1), reader.GetInt32(2), (byte[]) reader[3], (byte[]) reader[4]));
+                links.Add((reader.GetInt64(0), reader.GetInt32(1), (byte[]) reader[2], (byte[]) reader[3]));
+            }
+
+            await reader.NextResultAsync(cancel);
+            while (await reader.ReadAsync(cancel))
+            {
+                batches[reader.GetInt64(0)] = (reader.GetGuid(1), reader.GetInt32(2));
             }
         }
 
         long? broken = null;
-        foreach (var (link, id, sequence, digest, hash) in links)
+        foreach (var (link, segment, digest, hash) in links)
         {
-            var kept = await Recorded(connection, id, sequence, cancel);
-            if (!DisclosureChain.Digest(kept).AsSpan().SequenceEqual(digest) ||
-                !DisclosureChain.Hash(previous, digest).AsSpan().SequenceEqual(hash))
+            if (!DisclosureChain.Hash(previous, digest).AsSpan().SequenceEqual(hash) ||
+                !await Holds(connection, kept, batches, link, segment, digest, cancel))
             {
                 broken = link;
                 break;
@@ -244,6 +268,33 @@ public sealed partial class ScrySqlServerDisclosureStore
             BrokenAt = broken
         };
         return verified;
+    }
+
+    // Whether what a link was made from is still what the record holds. A link whose segment was
+    // retired has nothing left to be made from again, and holds by its place in the chain alone: its
+    // digest is what an archive of the segment is checked against. A link whose segment is still
+    // kept has to have its batch, and the batch has to make the digest again.
+    async Task<bool> Holds(
+        SqlConnection connection,
+        HashSet<int> kept,
+        Dictionary<long, (Guid EventId, int Sequence)> batches,
+        long link,
+        int segment,
+        byte[] digest,
+        Cancel cancel)
+    {
+        if (!kept.Contains(segment))
+        {
+            return true;
+        }
+
+        if (!batches.TryGetValue(link, out var batch))
+        {
+            return false;
+        }
+
+        var recorded = await Recorded(connection, batch.EventId, batch.Sequence, cancel);
+        return DisclosureChain.Digest(recorded).AsSpan().SequenceEqual(digest);
     }
 
     async ValueTask<ScryDisclosureChainCheck> IScryDisclosureVerifier.Verify(long? from, int count, Cancel cancel) =>

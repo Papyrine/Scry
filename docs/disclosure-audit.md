@@ -52,10 +52,11 @@ services
             database.ConnectionString,
             store =>
             {
-                // Each batch of the record linked to the one before, so that a change to what
-                // was recorded shows. A server with ledger tables has them as well, and they
-                // are the stronger of the two; this is what the explorer's check reads.
-                store.HashChain = true;
+                // The record is kept as a log is: a new segment of it each month, and
+                // two years of them. The oldest is then dropped, and what it held can no
+                // longer be asked. Set Retire to write it somewhere else first.
+                store.RollAfter = TimeSpan.FromDays(30);
+                store.Keep = 24;
                 store.Clock = clock;
             },
             audit =>
@@ -88,7 +89,7 @@ services
         _.CacheScope = _ => _.User.Identity?.Name;
     });
 ```
-<sup><a href='/samples/Sample.DisclosureServer/Program.cs#L52-L103' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleDisclosureAudit' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.DisclosureServer/Program.cs#L52-L104' title='Snippet source file'>snippet source</a> | <a href='#snippet-sampleDisclosureAudit' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 Turning it on changes four things about a server, each of them a refusal to do something the record could not account for:
@@ -180,7 +181,7 @@ Off, the audit costs one null check where a capture would be made: no hidden col
 | Durable accept | `IScryDisclosureSink`. Shipped: an in-memory store, a local journal file, and a SQL Server store whose accept is one row in an outbox table. |
 | Caching | A recorded response is `no-store`, except one asked by URL on a server with `QueryFreshness` set. That one may be kept by the caller's own cache, has to be asked about before each reuse, and the `304` that answers is recorded as a confirmation before it is sent. |
 | Caller | Required. A disclosure with no caller is refused unless `AllowAnonymous` is set. |
-| Erasure | Content in a separate table that can be deleted from; ledger tables hold addresses only; an optional HMAC key so a leftover address cannot be confirmed by guessing. Crypto-shredding is designed and deferred. |
+| Erasure | Content in a separate table that can be deleted from; the tables that are only added to hold addresses only; an optional HMAC key so a leftover address cannot be confirmed by guessing. Crypto-shredding is designed and deferred. |
 | UI | A Blazor WASM app embedded in a server package, over the reader seam, so it works on any store. Erase and export sit behind guards of their own. |
 | Reviewers | Looking at the store is a disclosure. Every question a reviewer asks is recorded through the same sink before it is answered. |
 
@@ -230,7 +231,7 @@ row written ─► capture (per call: canonicalise, hash, collect the rows it wa
             ─► IScryDisclosureSink.Append        ◄── returns only once the batch is durable
                   ├─ ScryMemoryDisclosureStore   (tests, small hosts)
                   ├─ ScryDisclosureJournal ─► any sink   (a local write-ahead file, shipped in the background)
-                  └─ SQL outbox table ─► mover ─► ledger tables + content table
+                  └─ SQL outbox table ─► mover ─► segments of tables + the chain
             ─► IScryDisclosureReader             (the three questions)
                   └─ Scry.Server.Disclosure.Explorer ─► Scry.Disclosure.Ui (browser)
 ```
@@ -482,7 +483,7 @@ One directory per process, held by a lock file. The journal survives a crash and
 
 ### SQL Server
 
-`Scry.Server.Disclosure.SqlServer` depends on `Microsoft.Data.SqlClient` alone, so the request path is one parameterised command. It is written for SQL Server 2017 and later, and for Azure SQL: the newest thing its statements ask of a server is `STRING_AGG`. Ledger tables are the one part that needs more, and the store does without them where the server has none.
+`Scry.Server.Disclosure.SqlServer` depends on `Microsoft.Data.SqlClient` alone, so the request path is one parameterised command. It is written for SQL Server 2017 and later, and for Azure SQL: the newest thing its statements ask of a server is `STRING_AGG`. Ledger tables, which the chain is kept in, are the one part that needs more, and the store does without them where the server has none.
 
 <!-- snippet: useSqlServerDisclosureAudit -->
 <a id='snippet-useSqlServerDisclosureAudit'></a>
@@ -525,12 +526,7 @@ public static ScryOptions UseSqlServerDisclosureAudit(
             services.TryAddSingleton<IScryDisclosureEraser>(kept);
             services.TryAddSingleton<IScryDisclosureStatus>(kept);
 
-            // Only where there is a chain to check. With ledger tables the checking is the
-            // database's own, and a check of no chain would read as one that held.
-            if (settings.HashChain)
-            {
-                services.TryAddSingleton<IScryDisclosureVerifier>(kept);
-            }
+            services.TryAddSingleton<IScryDisclosureVerifier>(kept);
 
             services.AddHostedService(_ => new DisclosureDrainHost(kept));
         },
@@ -538,18 +534,21 @@ public static ScryOptions UseSqlServerDisclosureAudit(
     return options;
 }
 ```
-<sup><a href='/src/Scry.Server.Disclosure.SqlServer/ScrySqlServerDisclosureExtensions.cs#L6-L57' title='Snippet source file'>snippet source</a> | <a href='#snippet-useSqlServerDisclosureAudit' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.Disclosure.SqlServer/ScrySqlServerDisclosureExtensions.cs#L6-L52' title='Snippet source file'>snippet source</a> | <a href='#snippet-useSqlServerDisclosureAudit' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The accept is one committed `INSERT` of the serialized batch into an outbox table, unique on `(EventId, Sequence)`. Pointed at the application's own database it adds no dependency to the request path, and it survives the loss of the node. What was accepted is then moved, a step behind every answer, into the tables the record is read from.
 
-- **Append-only, suitable for ledger tables** (inserts only; `LEDGER = ON (APPEND_ONLY = ON)` where the server supports it, which `LedgerTables` can force either way): `DisclosureBatch` (which batches the record has had), `DisclosureEvent`, `DisclosureClose`, `DisclosureUnit`, `DisclosureEntity`, `DisclosureRun`, `DisclosureRunUnit`, `DisclosureRunEntity`, `DisclosureManifest`, `DisclosureManifestRun`, `DisclosureAnswer`, `DisclosureShape`, `DisclosureField`, `DisclosureReview`, `DisclosureReviewEvent`, `DisclosureErasure`, and the optional `DisclosureChain`.
-- **Mutable**: `DisclosureOutbox`; `DisclosureContent`, or `IScryDisclosureBlobStore` for content kept outside the database; and `DisclosureSource`, a summary of which sources the record holds anything of.
-- **An answer given again adds one row, and one that differs by a row adds little more.** The units a batch carries are kept as a list, and a list as the runs it is made of. A run is some thirty units on average, each with its content's address and the rows it was read from, and has an address over all of that; it is kept once (`DisclosureRun` and its two tables). A list has an address over its runs and is kept once as a line for each of them (`DisclosureManifest`, `DisclosureManifestRun`), and each batch names the list it carried and where in the answer the list starts (`DisclosureAnswer`). So the same thousand rows asked for every minute are a thousand unit rows once and one row a minute. The same rows with one changed, added or taken away are a list of their own that shares every run but the one the difference is in: that run's units, and a line for each of the other runs. Where a run ends is decided by the units in it and not by how far into the list they are, which is what keeps a row more near the start from making every later run a new one. A stream's chunks are lists like any other, so a stream read again adds a row for each chunk. How much of an answer was handed on is its close's to say, whichever way its units are kept. `DisclosureUnit` and `DisclosureEntity` hold a batch's units as they arrived only where they do not follow one another, which no answer the server records does. Everything that reads units reads the views `DisclosureUnits` and `DisclosureEntities`, which put each unit back at its place.
+- **Kept in segments, as a log is kept in files.** A segment is a schema of its own, `scry_000001` and on, holding every table of the record: `DisclosureBatch` (which batches the record has had, and the link of the chain each is), `DisclosureEvent`, `DisclosureClose`, `DisclosureUnit`, `DisclosureEntity`, `DisclosureRun`, `DisclosureRunUnit`, `DisclosureRunEntity`, `DisclosureManifest`, `DisclosureManifestRun`, `DisclosureAnswer`, `DisclosureShape`, `DisclosureField`, `DisclosureReview`, `DisclosureReviewEvent`, `DisclosureErasure`, `DisclosureContent` and `DisclosureSource`. One segment is written to. A new one is started when something is about to be recorded and the one being written to is `RollAfter` old or `RollAtBytes` large, or when `RollAsync` is called. With neither set there is one segment, for good. Rows are only ever added to these tables, apart from the content an erasure removes, and they are plain tables: a segment has to be something that can be dropped.
+- **Read as one record.** The store's own schema holds a view of each table over every segment, and every question is asked of those. So an answer in the oldest segment is found as one in the newest is, each question costs a seek for each segment kept, and a later part of an answer is put in the segment the answer began in, so that an answer is in one segment and leaves with it.
+- **The oldest is retired when there are more than `Keep`.** It is marked first, and from then nothing more is written to it. It is handed to `Retire` where that is set, as an archive of every batch it was made from, in the order the chain links them and each with its shape and its content: what every sink takes, so a copy can be put into another store and asked the same questions. Then its tables are dropped, with whatever content it kept outside the database that no other segment was also sent. If `Retire` throws, the segment stays, and is handed on again the next time the record is moved on. What a retired segment held can no longer be asked. With `Keep` unset nothing is ever retired.
+- **Kept for good**: `DisclosureChain`, a hash for every batch, and `DisclosureSegment`, a line for each thing that happens to a segment: opened, rolled away from with where the chain then stood, being retired, and retired with how many batches and answers it held, how large it was and the span of time it covered. Both are only ever added to, and are append-only ledger tables where the server has them, which `LedgerTables` can force either way. Neither names a caller, a row or an answer. They are the only ledger tables there are, because a row put into one is there until the database is dropped: a dropped ledger table is renamed and kept, and so is the history of an updatable one.
+- **Outside the segments**: `DisclosureOutbox`, which a batch leaves once it has been moved on, and `IScryDisclosureBlobStore` for content kept outside the database.
+- **An answer given again adds one row, and one that differs by a row adds little more.** The units a batch carries are kept as a list, and a list as the runs it is made of. A run is some thirty units on average, each with its content's address and the rows it was read from, and has an address over all of that; it is kept once (`DisclosureRun` and its two tables). A list has an address over its runs and is kept once as a line for each of them (`DisclosureManifest`, `DisclosureManifestRun`), and each batch names the list it carried and where in the answer the list starts (`DisclosureAnswer`). So the same thousand rows asked for every minute are a thousand unit rows once and one row a minute. The same rows with one changed, added or taken away are a list of their own that shares every run but the one the difference is in: that run's units, and a line for each of the other runs. Where a run ends is decided by the units in it and not by how far into the list they are, which is what keeps a row more near the start from making every later run a new one. A stream's chunks are lists like any other, so a stream read again adds a row for each chunk. How much of an answer was handed on is its close's to say, whichever way its units are kept. `DisclosureUnit` and `DisclosureEntity` hold a batch's units as they arrived only where they do not follow one another, which no answer the server records does. Everything that reads units reads the views `DisclosureUnits` and `DisclosureEntities`, which put each unit back at its place. Runs and lists are shared within a segment and not between two, so the first answers after a new one is started keep their units again.
 - **Nothing a caller chose is an index key.** A caller's name, a source, a member and a row's key are kept as text of any length and found by a SHA-256 of them (`CallerHash`, `RowHash` over the source and the key together, `FieldHash` over the source and the member), then held to the text itself. So no value is too long to record, and none is cut short to fit. Those columns have a binary collation: a name is the name of exactly those characters, whatever the database's own collation says of case and accents.
 - **The mover** takes outbox rows in the order they were accepted, writes the rows the record lacks in one transaction, and deletes exactly the outbox rows it read. One mover at a time across nodes, under an application lock that an erasure also takes. A batch is moved exactly once; one that arrives again, as a journal's does after a crash, is recognised by `(EventId, Sequence)` and dropped. Content crosses to the content table only where the table does not already hold its bytes, so a row sent a thousand times is written once. A batch that will not read back is set aside in the outbox and reported by the store's status, so it cannot hold up what was accepted after it.
 - **Reads are a step behind.** A question is answered from what has been moved on, which trails what was accepted by the time one move takes: milliseconds on the node that accepted it, up to `DrainInterval` for a batch another node accepted. The store's status says how much is waiting.
-- **The hash chain** is optional: `Hash = SHA-256(Previous ‖ digest)` per batch, numbered by the chain itself, with `VerifyChainAsync` making each digest again from the rows as they now are. It is for editions without ledger tables. It shows a row changed, added or removed under a batch, and a link taken out. It cannot show its own end cut off, which is what keeping `ChainHead` somewhere else and asking `FindLinkAsync` for it is for.
+- **The chain is what shows a change.** `Hash = SHA-256(Previous ‖ digest)` for every batch, numbered by the chain itself and going on through every segment, with `VerifyChainAsync` making each digest again from the rows as they now are. It shows a row changed, added or removed under a batch, and a link taken out. A link whose segment was retired has nothing left to be made from again, and holds by its place alone; its digest is what a batch read from an archive of the segment is checked against. With plain tables under it the chain shows a change and does not prevent one, which a ledger table would. It cannot show its own end cut off, which is what keeping `ChainHead` somewhere else and asking `FindLinkAsync` for it is for.
 
 <!-- snippet: sqlServerDisclosureOptions -->
 <a id='snippet-sqlServerDisclosureOptions'></a>
@@ -580,22 +579,64 @@ public sealed class ScrySqlServerDisclosureOptions
     public TimeSpan AcceptTimeout { get; set; } = TimeSpan.FromSeconds(15);
 
     /// <summary>
-    /// Whether the tables that are only ever added to are made as append-only ledger tables, which
-    /// the database itself then refuses to update or delete from. Null, the default, makes them so
-    /// where the server has ledger tables — SQL Server 2022 and Azure SQL — and plain where it does
-    /// not. True refuses to create them plain; false always does.
+    /// Whether the chain is kept in append-only ledger tables, which the database itself then refuses
+    /// to update or delete from. Null, the default, makes them so where the server has ledger tables
+    /// — SQL Server 2022 and Azure SQL — and plain where it does not. True refuses to create them
+    /// plain; false always does.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// The chain is a hash for every batch the record has had, each covering the one before, and is
+    /// what shows a change to anything recorded. It is the one part of the record kept for good. The
+    /// rest is in plain tables, so that the oldest of it can be dropped: a row put into a ledger
+    /// table is there until the database is dropped.
+    /// </para>
+    /// <para>
     /// Read when the tables are created, and never after: a table is what it was made as.
+    /// </para>
     /// </remarks>
     public bool? LedgerTables { get; set; }
 
     /// <summary>
-    /// Whether every batch is also linked into a hash chain, each record's hash covering the one
-    /// before it, so that a change to what was recorded shows as a break. Off by default. For a
-    /// server without ledger tables, which have the same property and are checked by the database.
+    /// How long a segment of the record is written to before a new one is started. Null, the
+    /// default, never starts one for its age.
     /// </summary>
-    public bool HashChain { get; set; }
+    /// <remarks>
+    /// The record is kept in segments, as a log is kept in files: one is written to, and the rest are
+    /// as they were left. A new one is started when something is about to be recorded and the one
+    /// being written to is this old, or <see cref="RollAtBytes"/> large.
+    /// <see cref="ScrySqlServerDisclosureStore.RollAsync"/> starts one when asked. Starting one makes
+    /// tables, whatever <see cref="CreateTables"/> says.
+    /// </remarks>
+    public TimeSpan? RollAfter { get; set; }
+
+    /// <summary>
+    /// How large a segment of the record grows, in bytes of the database, before a new one is
+    /// started. Null, the default, never starts one for its size.
+    /// </summary>
+    public long? RollAtBytes { get; set; }
+
+    /// <summary>
+    /// How many segments are kept. When there are more, the oldest is retired: handed to
+    /// <see cref="Retire"/> where that is set, and then dropped. Null, the default, keeps every one.
+    /// </summary>
+    /// <remarks>
+    /// What a retired segment held is gone from the record: who was sent what in it can no longer be
+    /// asked. What stays is its links in the chain, which say that it was there and is what a copy
+    /// of it can be checked against, and a line saying when it was retired and how much it held.
+    /// </remarks>
+    public int? Keep { get; set; }
+
+    /// <summary>
+    /// What is done with a segment before it is dropped: written somewhere else, usually. Null, the
+    /// default, drops it and keeps nothing.
+    /// </summary>
+    /// <remarks>
+    /// Called with the segment still in the record and no longer written to. It is dropped only once
+    /// this returns. If it throws, the segment stays, and it is called again the next time the record
+    /// is moved on, so it may be called for one segment more than once.
+    /// </remarks>
+    public Func<ScryDisclosureArchive, Cancel, Task>? Retire { get; set; }
 
     /// <summary>
     /// How often accepted batches are moved from the outbox into the tables a reader reads, where
@@ -625,7 +666,7 @@ public sealed class ScrySqlServerDisclosureOptions
     public TimeProvider Clock { get; set; } = TimeProvider.System;
 }
 ```
-<sup><a href='/src/Scry.Server.Disclosure.SqlServer/ScrySqlServerDisclosureOptions.cs#L4-L75' title='Snippet source file'>snippet source</a> | <a href='#snippet-sqlServerDisclosureOptions' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/src/Scry.Server.Disclosure.SqlServer/ScrySqlServerDisclosureOptions.cs#L4-L117' title='Snippet source file'>snippet source</a> | <a href='#snippet-sqlServerDisclosureOptions' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 The store creates its schema and tables the first time it is used. A deployment that creates its own objects turns `CreateTables` off and runs `ScrySqlServerDisclosureStore.Script`, which can be run any number of times.
@@ -729,13 +770,13 @@ Said of a type, it holds for the types derived from it. A member that holds a va
 
 ## Erasure
 
-An append-only ledger and an erasure request pull in opposite directions.
+A record that is only added to and an erasure request pull in opposite directions.
 
-- **Ledger tables hold no content**: addresses, row keys, field names, callers, times.
-- **Content lives in a separate table, outside the ledger.** `IScryDisclosureEraser.EraseAsync` removes every piece of content in which a row appears and appends an `Erasure` record naming who asked. An event rebuilt afterwards reports the unit as erased. Erasure wins over reconstruction: content another row was also sent as goes too. A row sent again after it was erased is a new disclosure and is kept as one; content is kept by address, so the earlier events that sent the same bytes read whole again from then on.
-- **`AddressKey`** makes addresses HMACs, so an address left in the ledger for a value with few possibilities cannot be confirmed by guessing without the key.
+- **The tables that are only added to hold no content**: addresses, row keys, field names, callers, times.
+- **Content lives in a table of its own.** `IScryDisclosureEraser.EraseAsync` removes every piece of content in which a row appears and appends an `Erasure` record naming who asked. An event rebuilt afterwards reports the unit as erased. Erasure wins over reconstruction: content another row was also sent as goes too. A row sent again after it was erased is a new disclosure and is kept as one; content is kept by address, so the earlier events that sent the same bytes read whole again from then on.
+- **`AddressKey`** makes addresses HMACs, so an address left in the record for a value with few possibilities cannot be confirmed by guessing without the key.
 
-Deferred, and why: per-entity crypto-shredding, where each unit is encrypted under keys derived from the rows it mentions and erasing deletes the key, which also covers backups. It needs key creation in the mover, key storage with a backup lifetime of its own, rotation, and a rule for units naming several rows. That is a feature of its own, and nothing here blocks it: content is already separate and addresses are already opaque. Left as they are, deliberately: row keys and caller names in the ledger. A natural key such as an email address is the host's to avoid or to pseudonymise.
+Deferred, and why: per-entity crypto-shredding, where each unit is encrypted under keys derived from the rows it mentions and erasing deletes the key, which also covers backups. It needs key creation in the mover, key storage with a backup lifetime of its own, rotation, and a rule for units naming several rows. That is a feature of its own, and nothing here blocks it: content is already separate and addresses are already opaque. Left as they are, deliberately: row keys and caller names in the record, until the segment they are in is retired. In the SQL Server store a piece of content is kept in each segment it was sent in, and an erasure removes it from every one. A natural key such as an email address is the host's to avoid or to pseudonymise.
 
 
 ## The disclosure explorer
@@ -757,7 +798,7 @@ app.MapScryDisclosureExplorer(_ =>
     _.EnableErase = DemoSignIn.IsReviewer;
 });
 ```
-<sup><a href='/samples/Sample.DisclosureServer/Program.cs#L118-L130' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapDisclosureExplorer' title='Start of snippet'>anchor</a></sup>
+<sup><a href='/samples/Sample.DisclosureServer/Program.cs#L119-L131' title='Snippet source file'>snippet source</a> | <a href='#snippet-mapDisclosureExplorer' title='Start of snippet'>anchor</a></sup>
 <!-- endSnippet -->
 
 It needs a host with the audit on and something registered as `IScryDisclosureReader`, and says so at startup where either is missing. The SQL Server store registers itself, and so does an in-memory store handed to `UseDisclosureAudit`.
@@ -851,11 +892,11 @@ Off: a null check where a capture would be made. On, per row: one SHA-256 over t
 
 ## Open questions
 
-1. **What reading through runs costs on a large record.** Measured over five hundred answers of a thousand rows and over ten thousand of one, [no question is slower for it](performance.md#asking-the-record). Nothing has been measured on a record of millions of answers, or on a server with other work to do. The in-memory store shares nothing: it keeps every answer's units as they arrived.
+1. **What reading costs on a large record, and across many segments.** Measured over five hundred answers of a thousand rows and over ten thousand of one, in one segment, [no question is slower for runs or for the views over the segments](performance.md#asking-the-record). Nothing has been measured on a record of millions of answers, on a server with other work to do, or with more than one segment kept, where every question is a seek in each. The in-memory store shares nothing: it keeps every answer's units as they arrived.
 2. **"Which version".** A version is the content address of the unit. A row-version column named by the host, as a cached policy takes one, would compare versions across different projections.
-3. **Retention.** Append-only ledger tables cannot be trimmed in place.
+3. **Retention elsewhere.** The SQL Server store retires its oldest segment. The in-memory store keeps everything, and a journal keeps what it has not shipped. A segment is retired whole and by count: nothing retires what is older than a date, and nothing retires one source's rows and keeps another's.
 4. **Caller detail.** One string today. An agent acting for a user over MCP may warrant both identities.
 5. **The hub's subscription caller.** A hub subscription is counted against the connection's user identifier while commands go by `ScryOptions.Caller`. The audit records the same caller for both; the limit key is left alone.
 6. **Reading what was accepted a moment ago.** The SQL Server store answers from what has been moved on. A reader that waited for the outbox to empty would read its own writes, at the cost of a question waiting on the mover.
-7. **Checking a long chain.** A check of the whole chain can outlast a request. A bounded range is checked per call, and the last result is kept.
+7. **Checking a long chain.** A check of the whole chain can outlast a request. A bounded range is checked per call, and the last result is kept. The chain itself is never shortened: a link is some hundred bytes, and one is kept for every batch there has ever been.
 8. **A reader-only host.** The explorer records through the audit's own settings, so its host configures the audit as a serving node does, model included. An explorer over a reader and a sink alone would run where the model is not.

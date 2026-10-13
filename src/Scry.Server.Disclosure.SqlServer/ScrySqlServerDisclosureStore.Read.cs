@@ -285,8 +285,8 @@ public sealed partial class ScrySqlServerDisclosureStore
                          connection,
                          $"""
                           SELECT {sql.Columns} FROM {sql.Event} e {sql.Ended} WHERE e.[EventId] = @event;
-                          SELECT f.[Source], f.[Member], f.[FieldUse], f.[Sensitive] FROM {sql.Field} f JOIN {sql.Event} e ON e.[Shape] = f.[Shape] WHERE e.[EventId] = @event ORDER BY f.[Position];
-                          SELECT u.[Ordinal], u.[Content], k.[Kind], k.[Length], k.[Bytes], k.[Elsewhere], k.[Erased] FROM {sql.Units} u LEFT JOIN {sql.Content} k ON k.[Address] = u.[Content] WHERE u.[EventId] = @event ORDER BY u.[Ordinal];
+                          SELECT f.[Source], f.[Member], f.[FieldUse], f.[Sensitive] FROM {sql.Field} f JOIN {sql.Event} e ON e.[Shape] = f.[Shape] AND e.[Segment] = f.[Segment] WHERE e.[EventId] = @event ORDER BY f.[Position];
+                          SELECT u.[Ordinal], u.[Content], k.[Kind], k.[Length], k.[Bytes], k.[Elsewhere], k.[Erased] FROM {sql.Units} u LEFT JOIN {sql.Content} k ON k.[Address] = u.[Content] AND k.[Segment] = u.[Segment] WHERE u.[EventId] = @event ORDER BY u.[Ordinal];
                           SELECT n.[Ordinal], n.[Slot], n.[Source], n.[RowKey], n.[Via] FROM {sql.Entities} n WHERE n.[EventId] = @event ORDER BY n.[Ordinal], n.[Slot];
                           """))
         {
@@ -356,12 +356,16 @@ public sealed partial class ScrySqlServerDisclosureStore
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// A piece is kept once in each segment it was sent in. Asked for by its address alone, it is
+    /// the one that still has its bytes, where any has.
+    /// </remarks>
     public async ValueTask<ScryDisclosureContent?> Content(ScryDisclosureAddress address, Cancel cancel = default)
     {
         await EnsureAsync(cancel);
         Kept kept;
         await using (var connection = await OpenAsync(cancel))
-        await using (var command = Command(connection, $"SELECT k.[Kind], k.[Length], k.[Bytes], k.[Elsewhere], k.[Erased] FROM {sql.Content} k WHERE k.[Address] = @address;"))
+        await using (var command = Command(connection, $"SELECT TOP (1) k.[Kind], k.[Length], k.[Bytes], k.[Elsewhere], k.[Erased] FROM {sql.Content} k WHERE k.[Address] = @address ORDER BY CASE WHEN k.[Bytes] IS NOT NULL OR k.[Elsewhere] = 1 THEN 0 ELSE 1 END, k.[Segment] DESC;"))
         {
             command.Parameters.Add(new("@address", SqlDbType.Binary, 32) {Value = address.ToArray()});
             await using var reader = await command.ExecuteReaderAsync(cancel);
@@ -414,7 +418,7 @@ public sealed partial class ScrySqlServerDisclosureStore
         await EnsureAsync(cancel);
         var fields = new List<ScryDisclosureField>();
         await using var connection = await OpenAsync(cancel);
-        await using var command = Command(connection, $"SELECT f.[Source], f.[Member], f.[FieldUse], f.[Sensitive] FROM {sql.Field} f WHERE f.[Shape] = @shape ORDER BY f.[Position];");
+        await using var command = Command(connection, $"SELECT f.[Source], f.[Member], f.[FieldUse], f.[Sensitive] FROM {sql.Field} f WHERE f.[Shape] = @shape AND f.[Segment] = (SELECT MAX(x.[Segment]) FROM {sql.Field} x WHERE x.[Shape] = @shape) ORDER BY f.[Position];");
         command.Parameters.Add(new("@shape", SqlDbType.Binary, 32) {Value = address.ToArray()});
         await using var reader = await command.ExecuteReaderAsync(cancel);
         while (await reader.ReadAsync(cancel))
@@ -439,13 +443,13 @@ public sealed partial class ScrySqlServerDisclosureStore
         await using var command = Command(
             connection,
             $"""
-             SELECT s.[Source], s.[Keyed] FROM {sql.Source} s;
+             SELECT s.[Source], MAX(CAST(s.[Keyed] AS int)) FROM {sql.Source} s GROUP BY s.[Source];
              SELECT f.[Source], f.[Member], MAX(CAST(f.[Sensitive] AS int)) FROM {sql.Field} f GROUP BY f.[Source], f.[Member];
              """);
         await using var reader = await command.ExecuteReaderAsync(cancel);
         while (await reader.ReadAsync(cancel))
         {
-            sources[reader.GetString(0)] = (reader.GetBoolean(1), new(StringComparer.Ordinal));
+            sources[reader.GetString(0)] = (reader.GetInt32(1) != 0, new(StringComparer.Ordinal));
         }
 
         await reader.NextResultAsync(cancel);

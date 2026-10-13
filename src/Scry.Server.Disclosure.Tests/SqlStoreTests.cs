@@ -193,14 +193,12 @@ public class SqlStoreTests
             _ =>
             {
                 _.DrainBatches = 7;
-                _.HashChain = true;
             });
         await using var two = Store(
             database,
             _ =>
             {
                 _.DrainBatches = 7;
-                _.HashChain = true;
             });
         await one.EnsureCreatedAsync();
         var batches = Enumerable.Range(0, 240).Select(Clinic.Batch).ToList();
@@ -254,10 +252,11 @@ public class SqlStoreTests
         }
     }
 
-    // The tables the record is read from are only ever added to. Where the server has ledger tables
-    // they are made as append-only ones, and the database itself refuses to change a row.
+    // The chain is only ever added to. Where the server has ledger tables it is kept in append-only
+    // ones, and the database itself refuses to change a link. The record the chain is of is in plain
+    // tables, which is what lets the oldest of it be dropped.
     [Test]
-    public async Task WhereThereAreLedgerTablesTheRecordCannotBeRewritten()
+    public async Task WhereThereAreLedgerTablesTheChainCannotBeRewritten()
     {
         await using var database = await Clinic.Instance.Build();
         await using var kept = Store(database);
@@ -268,22 +267,22 @@ public class SqlStoreTests
         if (!await Ledgers(database))
         {
             // No ledger tables on this server, and no column in its catalog to say which tables are.
-            // The record was made in plain ones, and is read back from them like any other.
-            await Assert.That((await kept.Reconstruct(batch.EventId))!.Units).Count().IsEqualTo(1);
+            // The chain was made in a plain one, and holds like any other.
+            await Assert.That((await kept.VerifyChainAsync()).Intact).IsTrue();
             return;
         }
 
-        var update = await Assert.ThrowsExactlyAsync<SqlException>(() => Execute(database, "UPDATE [scry].[DisclosureUnit] SET [Ordinal] = 7"));
-        var delete = await Assert.ThrowsExactlyAsync<SqlException>(() => Execute(database, "DELETE FROM [scry].[DisclosureEvent]"));
+        var update = await Assert.ThrowsExactlyAsync<SqlException>(() => Execute(database, "UPDATE [scry].[DisclosureChain] SET [Segment] = 7"));
+        var delete = await Assert.ThrowsExactlyAsync<SqlException>(() => Execute(database, "DELETE FROM [scry].[DisclosureSegment]"));
         using (Assert.Multiple())
         {
-            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM sys.tables WHERE [name] LIKE N'Disclosure%' AND [ledger_type] = 3")).IsEqualTo(17);
+            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM sys.tables WHERE [name] LIKE N'Disclosure%' AND [ledger_type] = 3")).IsEqualTo(2);
             await Assert.That(update!.Message).Contains("append only Ledger table");
             await Assert.That(delete!.Message).Contains("append only Ledger table");
-            await Assert.That((await kept.Reconstruct(batch.EventId))!.Units).Count().IsEqualTo(1);
+            await Assert.That((await kept.VerifyChainAsync()).Intact).IsTrue();
 
-            // What an erasure removes, and what leaves once it has been moved on, are not in them.
-            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM sys.tables WHERE [name] IN (N'DisclosureContent', N'DisclosureOutbox', N'DisclosureSource') AND [ledger_type] = 0")).IsEqualTo(3);
+            // Everything else is plain: the outbox, and every table of a segment.
+            await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM sys.tables WHERE [name] LIKE N'Disclosure%' AND [ledger_type] = 0")).IsEqualTo(19);
         }
     }
 
@@ -337,7 +336,7 @@ public class SqlStoreTests
 
         await plain.AppendAsync(Clinic.Batch(1), Cancel.None);
         await plain.DrainAsync();
-        await Execute(database, "UPDATE [plain].[DisclosureRunUnit] SET [Offset] = [Offset]");
+        await Execute(database, "UPDATE [plain].[DisclosureChain] SET [Segment] = [Segment]");
         await Assert.That(await Scalar<int>(database, "SELECT COUNT(*) FROM [plain].[DisclosureRunUnit]")).IsEqualTo(1);
 
         // Only a server that has ledger tables has the column that says which tables are.
@@ -358,7 +357,6 @@ public class SqlStoreTests
             database,
             _ =>
             {
-                _.HashChain = true;
                 _.LedgerTables = false;
             });
         var processor = Processor(kept, new());
@@ -371,9 +369,9 @@ public class SqlStoreTests
         var whole = await kept.VerifyChainAsync();
         var head = (await kept.Status()).ChainHead;
         var changed = (await kept.ReceivedBy("dr.osei", DateTimeOffset.MinValue, DateTimeOffset.MaxValue).ToListAsync())[1].Event.Id;
-        await Execute(database, $"UPDATE [scry].[DisclosureRunEntity] SET [RowKey] = N'[2]' WHERE [Run] = (SELECT TOP (1) l.[Run] FROM [scry].[DisclosureManifestRun] l JOIN [scry].[DisclosureAnswer] a ON a.[Manifest] = l.[Manifest] WHERE a.[EventId] = '{changed}' ORDER BY l.[Start]) AND [Offset] = 0");
+        await Execute(database, $"UPDATE [scry_000001].[DisclosureRunEntity] SET [RowKey] = N'[2]' WHERE [Run] = (SELECT TOP (1) l.[Run] FROM [scry].[DisclosureManifestRun] l JOIN [scry].[DisclosureAnswer] a ON a.[Manifest] = l.[Manifest] WHERE a.[EventId] = '{changed}' ORDER BY l.[Start]) AND [Offset] = 0");
         var broken = await kept.VerifyChainAsync();
-        var link = await Scalar<long>(database, $"SELECT [Link] FROM [scry].[DisclosureChain] WHERE [EventId] = '{changed}'");
+        var link = await Scalar<long>(database, $"SELECT [Link] FROM [scry].[DisclosureBatch] WHERE [EventId] = '{changed}'");
 
         using (Assert.Multiple())
         {
@@ -399,7 +397,6 @@ public class SqlStoreTests
             database,
             _ =>
             {
-                _.HashChain = true;
                 _.LedgerTables = false;
             });
         foreach (var index in Enumerable.Range(0, 5))
@@ -428,7 +425,6 @@ public class SqlStoreTests
             database,
             _ =>
             {
-                _.HashChain = true;
                 _.LedgerTables = false;
             });
         foreach (var index in Enumerable.Range(0, 5))
