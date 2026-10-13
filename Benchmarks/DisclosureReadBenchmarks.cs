@@ -24,6 +24,10 @@ namespace Benchmarks;
 /// took and what it weighs are written beside the results, in the system's temporary directory, as
 /// <c>scry_bench_disclosure_*.txt</c>.
 /// </para>
+/// <para>
+/// Each record is also kept in six segments and in twenty-four, since a question is asked of every
+/// segment there is and what that costs is the number of them.
+/// </para>
 /// </remarks>
 [SimpleJob(warmupCount: 3, iterationCount: 12)]
 public class DisclosureReadBenchmarks
@@ -46,6 +50,13 @@ public class DisclosureReadBenchmarks
     [Params("Repeated", "Drifting", "Small")]
     public string Record { get; set; } = "Repeated";
 
+    /// <summary>
+    /// How many segments the record is kept in, the answers shared out evenly between them in the
+    /// order they were given. Every question is asked of all of them.
+    /// </summary>
+    [Params(1, 6, 24)]
+    public int Segments { get; set; } = 1;
+
     [GlobalSetup]
     public async Task Setup()
     {
@@ -53,7 +64,7 @@ public class DisclosureReadBenchmarks
         var layout = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(probe.Script)))[..8];
         await probe.DisposeAsync();
 
-        var database = $"ScryDisclosureBench_{Record}_{layout}";
+        var database = $"ScryDisclosureBench_{Record}_{Segments}_{layout}";
         store = new(new() {ConnectionString = Connection(database), DrainInterval = null});
         var expected = Record == "Small" ? small : answers;
         if (!await Filled(database, expected))
@@ -135,6 +146,7 @@ public class DisclosureReadBenchmarks
             for (var index = 0; index < small; index++)
             {
                 await store.AppendAsync(Answer(index, [1 + index % 100]), default);
+                await Roll(index, small);
             }
 
             return;
@@ -151,7 +163,27 @@ public class DisclosureReadBenchmarks
             }
 
             await store.AppendAsync(Answer(index, patients), default);
+            await Roll(index, answers);
         }
+    }
+
+    // A new segment after each even share of the answers but the last.
+    async Task Roll(int index, int total)
+    {
+        var given = index + 1;
+        if (Segments == 1 ||
+            given == total ||
+            given % (total / Segments) != 0 ||
+            given / (total / Segments) >= Segments)
+        {
+            return;
+        }
+
+        while (await store.DrainAsync() > 0)
+        {
+        }
+
+        await store.RollAsync();
     }
 
     static ScryDisclosureBatch Answer(int index, List<int> patients)
@@ -222,7 +254,7 @@ public class DisclosureReadBenchmarks
     async Task Weigh(string database, string layout, TimeSpan accepted, TimeSpan moved)
     {
         var report = new StringBuilder();
-        report.AppendLine($"{Record} ({layout}): accepted in {accepted.TotalSeconds:0.0} s, moved on in {moved.TotalSeconds:0.0} s");
+        report.AppendLine($"{Record} in {Segments} ({layout}): accepted in {accepted.TotalSeconds:0.0} s, moved on in {moved.TotalSeconds:0.0} s");
         await using var connection = new SqlConnection(Connection(database));
         await connection.OpenAsync();
         await using var command = new SqlCommand(
@@ -244,6 +276,6 @@ public class DisclosureReadBenchmarks
         }
 
         report.AppendLine($"  {"all of it",-28} {"",9}      {total,9} KB");
-        await File.WriteAllTextAsync(Path.Combine(Path.GetTempPath(), $"scry_bench_disclosure_{Record}_{layout}.txt"), report.ToString());
+        await File.WriteAllTextAsync(Path.Combine(Path.GetTempPath(), $"scry_bench_disclosure_{Record}_{Segments}_{layout}.txt"), report.ToString());
     }
 }

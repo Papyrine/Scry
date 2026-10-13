@@ -141,7 +141,26 @@ Each cell is the store as it kept a list whole, then the store as it keeps a lis
 
 **Reading through runs costs nothing that shows here.** A unit's place in an answer is added up from where its batch, its list and its run start, which is two more joins than a list kept whole needed, and no question is slower for it by more than the runs differ between themselves. These are timings of a database on a developer's machine and they move: the same build measured twice, a few minutes apart, gave figures a third apart and in one case two thirds apart. So the table says the two are alike, and does not say which is quicker. The one gain that is the code's is the first row of it. Asking who received a row has to count a row once where a unit was read from it twice, and that check now looks within the run the unit is in, where it used to search every answer the row was in.
 
-**Reading through the views over the segments costs nothing that shows either, with one segment.** The record is since kept in [segments](disclosure-audit.md#sql-server), and every question is asked of a view over all of them. With the one segment a store has until it is told to roll, the same questions took 10.0 ms, 0.8 ms, 1.4 ms and 10.1 ms of the repeated record, 10.9 ms, 0.8 ms, 1.4 ms and 12.2 ms of the drifting one, and 2.0 ms, 14.9 ms, 19.3 ms and 0.31 ms of the small one, in the order of the rows above: inside what two runs of one build differ by. What is not measured is a record of many segments. Each question is then a seek in each segment kept, so twenty-four of them should cost some twenty-four times the seeks, and nothing here says what that comes to.
+**Every segment kept is another place to look.** The record is since kept in [segments](disclosure-audit.md#sql-server), and every question is asked of a view over all of them. The same three records, with their answers shared out evenly between one segment, six and twenty-four, in the order they were given:
+
+| Question | Record | 1 segment | 6 | 24 |
+| --- | --- | --- | --- | --- |
+| Who received a row | Repeated | 9.4 ms | 26.9 ms | 107 ms |
+| | Drifting | 10.9 ms | 30.5 ms | 112 ms |
+| | Small | 1.8 ms | 8.6 ms | 22.9 ms |
+| What a caller received | Repeated | 1.1 ms | 1.0 ms | 1.7 ms |
+| | Drifting | 0.8 ms | 1.1 ms | 2.2 ms |
+| | Small | 14.8 ms | 27.2 ms | 45.9 ms |
+| Whether a caller was sent a member | Repeated | 1.1 ms | 2.9 ms | 12.0 ms |
+| | Drifting | 1.3 ms | 3.2 ms | 13.4 ms |
+| | Small | 20.2 ms | 49.9 ms | 206 ms |
+| An answer put back together | Repeated | 6.4 ms | 11.3 ms | 23.1 ms |
+| | Drifting | 7.5 ms | 9.9 ms | 25.6 ms |
+| | Small | 0.17 ms | 0.42 ms | 2.1 ms |
+
+With one segment, which is what a store has until it is told to roll, the figures are those of the table before, inside what two runs of one build differ by. After that the cost is the number of segments, and for most questions close to in proportion: who received a row is ten times dearer over twenty-four segments than over one, and whether a caller was sent a member the same. What a caller received grows least, since it is one seek of an index in each segment and a merge of what they find. Putting one answer back together should not grow at all, an answer being in one segment, and does, because the question is put to the view and so to every segment, where it could first ask which segment holds the answer. That is the cheapest of these to mend and has not been.
+
+A segment also keeps its own copy of what it shares. The repeated record is 2.6 MB in one segment, 13 MB in six and 52 MB in twenty-four, since each segment holds the thousand rows once and their content once; the drifting one is 20 MB, 24 MB and 58 MB, and the small one 15 MB, 20 MB and 36 MB. So segments are for retiring what is old, and are not free: a few long ones cost less to read and to keep than many short ones.
 
 **What runs save is space, and only where answers are alike without being the same.**
 
